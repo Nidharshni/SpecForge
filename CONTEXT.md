@@ -547,9 +547,16 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`specforge_parser::lex`): an identifier, a scheme ref ID (one lexeme), a number, a string (read as
   the grammar reads it, across lines; one the grammar would not close is marked unclosed and, if a
   `"…"`, ended at its line's end), a comment or a punctuation character. Navigation, the LSP's
-  document, the parser's recovery from unclosed strings and the formatter read text through it; a test
-  holds it to the grammar on the repository's spec. The prove pass's expression tokenizer is the one
+  document, the parser's recovery from unclosed strings and the formatter read text through it, and
+  where a top-level form starts is read from lexemes too (form start); a test holds it to the grammar
+  on the repository's spec. The prove pass's expression tokenizer is the one
   other reader (ADR 0023, ADR 0038).
+- **Form start**: a line whose first lexemes open a top-level form of the grammar (an import, a spec,
+  ref, define, union or entity block), indented no deeper than the top-level line before it
+  (`specforge_parser::lex::starts_top_level_form`). The parser's recovery ends an unclosed string before
+  one; the LSP's document closes every body, block and list left open at one, so a block being typed
+  never takes the forms after it. A test holds it to the grammar's top-level nodes on the repository's
+  spec, both ways (ADR 0038 D6).
 - **Cursor**: what the LSP knows about a position in an open document, read from the document's lexemes
   (`specforge_parser::lex`) and their block structure, never from the graph: the word under it, whether
   it is in code, a string or a comment, the entity block, field and reference list around it, and the
