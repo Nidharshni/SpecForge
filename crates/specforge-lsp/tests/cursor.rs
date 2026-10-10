@@ -1,7 +1,7 @@
 //! What the document module reads at a position (`Document::at`): the
 //! word, the place, the entity, field and `use` statement around it.
 
-use specforge_lsp::{Cursor, Document, EntityAt, Place};
+use specforge_lsp::{CompletionSite, Cursor, Document, EntityAt, Place};
 use specforge_test_macros::test as spec;
 use tower_lsp::lsp_types::Position;
 
@@ -211,4 +211,84 @@ fn a_use_statement_is_an_import_anywhere_on_it() {
     assert_eq!(import(find(text, "from", 0, 1)), Some("types/more"));
     assert_eq!(import(find(text, "all", 0, 1)), Some("types/all"));
     assert_eq!(import((3, 2)), None);
+}
+
+/// A body left unclosed, then a union, an inline ref and a closed block.
+const UNCLOSED: &str = concat!(
+    "behavior login \"Log in\" {\n",
+    "  contract \"Logs in.\"\n",
+    "\n",
+    "type status = \"active\" | \"inactive\"\n",
+    "\n",
+    "ref github.issue:org/repo#1 \"Tracking issue\"\n",
+    "\n",
+    "behavior logout \"Log out\" {\n",
+    "  contract \"Logs out.\"\n",
+    "}\n",
+);
+
+#[test]
+fn a_union_and_an_inline_ref_after_an_unclosed_body_are_read_into_it() {
+    let doc = doc(UNCLOSED);
+    let login = Some(EntityAt {
+        kind: "behavior",
+        id: Some("login"),
+    });
+    let fields = CompletionSite::Fields {
+        kind: "behavior",
+        prefix: "",
+    };
+    assert_eq!(at(&doc, 3, 7).entity(), login, "status");
+    assert_eq!(at(&doc, 5, 7).entity(), login, "the ref's ID");
+    assert_eq!(at(&doc, 4, 0).completion(), fields, "after the union");
+    // Stable: the body is still open before the union, and a block at
+    // column 1 with a `{` resumes.
+    assert_eq!(at(&doc, 2, 0).completion(), fields);
+    assert_eq!(
+        at(&doc, 7, 10).entity(),
+        Some(EntityAt {
+            kind: "behavior",
+            id: Some("logout")
+        })
+    );
+}
+
+#[test]
+fn a_bare_use_or_pub_at_column_1_ends_an_unclosed_body() {
+    let head = "behavior login \"Log in\" {\n  contract \"x\"\n\n";
+    let use_doc = doc(&format!("{head}use\n"));
+    assert_eq!(at(&use_doc, 3, 1).entity(), None);
+    let pub_doc = doc(&format!("{head}pub\n"));
+    assert_eq!(
+        at(&pub_doc, 3, 1).entity(),
+        Some(EntityAt {
+            kind: "pub",
+            id: None
+        })
+    );
+    // Stable: a `use` with its path ends the body.
+    let import_doc = doc(&format!("{head}use \"./a.spec\"\n"));
+    assert_eq!(at(&import_doc, 3, 1).import(), Some("./a.spec"));
+    assert_eq!(at(&import_doc, 3, 1).entity(), None);
+}
+
+#[test]
+fn a_form_ends_an_unclosed_body_only_at_column_1() {
+    let indented = doc("  behavior a \"A\" {\n    contract \"x\"\n\n  behavior b \"B\" {\n  }\n");
+    assert_eq!(
+        at(&indented, 3, 12).entity(),
+        Some(EntityAt {
+            kind: "behavior",
+            id: Some("a")
+        })
+    );
+    // Stable: a union indented deeper than the open form's line is no form.
+    let deeper = doc("behavior a \"A\" {\n  contract \"x\"\n  type t = A | B\n");
+    assert_eq!(
+        at(&deeper, 2, 8).entity(),
+        Some(EntityAt {
+            kind: "behavior",
+            id: Some("a")
+        })
+    );
 }

@@ -59,6 +59,26 @@ fn token<'a>(tokens: &'a [SemanticToken], text: &str) -> &'a SemanticToken {
 
 // -- provide_semantic_tokens --------------------------------------------------
 
+#[test]
+fn a_union_after_an_unclosed_body_is_classified_as_fields() {
+    let tokens = tokens_of(
+        concat!(
+            "behavior login \"Log in\" {\n",
+            "  contract \"Logs in.\"\n",
+            "\n",
+            "type status = \"active\" | \"inactive\"\n",
+            "\n",
+            "ref github.issue:org/repo#1 \"Tracking issue\"\n",
+        ),
+        kinds(&[("behavior", None), ("type", None)]),
+    );
+    assert_eq!(token(&tokens, "type").token_type, "property");
+    assert_eq!(token(&tokens, "ref").token_type, "property");
+    let status = token(&tokens, "status");
+    assert_eq!(status.token_type, "variable");
+    assert_ne!(status.modifiers & MOD_REFERENCE, 0);
+}
+
 #[spec(
     behavior = "provide_semantic_tokens",
     verify = "entity keywords classified as 'type'"
