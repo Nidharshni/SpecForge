@@ -1,10 +1,12 @@
 //! A document's lexemes (`specforge_parser::lex`), each with its role, and
 //! the entity bodies, nested blocks, expression groups, lists and parameter
 //! lists they open: the structure the cursor and the semantic tokens read.
+//! A line that starts a top-level form (`lex::starts_top_level_form`, the
+//! parser's rule) closes every frame left open before it.
 //! Nothing here names a kind or a field: kinds and fields are read as
 //! structure; the registries are consulted by the readers.
 
-use specforge_parser::lex::{Lexeme, LexemeKind, lex};
+use specforge_parser::lex::{self, Lexeme, LexemeKind, lex};
 use specforge_registry::{FieldRegistry, FieldType};
 
 /// What a lexeme is in its statement.
@@ -221,6 +223,7 @@ impl Syntax {
             state: Expect::Top,
             top: None,
             prev: None,
+            top_indent: 0,
         };
         walk.run();
         let mut syntax = walk.syntax;
@@ -356,6 +359,10 @@ struct Walk<'t> {
     top: Option<u32>,
     /// The last lexeme read that is not a comment.
     prev: Option<usize>,
+    /// The indentation of the last line begun with no frame open: a line
+    /// indented no deeper may start a top-level form, which closes every
+    /// frame open before it (`lex::starts_top_level_form`).
+    top_indent: usize,
 }
 
 impl Walk<'_> {
@@ -372,12 +379,24 @@ impl Walk<'_> {
             let newline = self
                 .prev
                 .is_some_and(|p| self.newline_between(self.syntax.lexemes[p].end, lexeme.start));
-            if self.top.is_some() && self.starts_a_block(i) {
-                // Recovery: a new top-level block closes whatever is open.
+            let first_on_line = newline || self.prev.is_none();
+            if first_on_line
+                && self.top.is_some()
+                && lex::starts_top_level_form(self.text, &self.syntax.lexemes[i..], self.top_indent)
+            {
+                // A line that starts a top-level form closes whatever is
+                // open (the parser's rule: a block being typed never takes
+                // the forms after it).
                 self.top = None;
                 self.state = Expect::Top;
             } else if newline {
                 self.state = self.at_line_end(self.state, Some(&lexeme));
+            }
+            if first_on_line
+                && self.top.is_none()
+                && let Some(indent) = lex::line_indent(self.text, lexeme.start)
+            {
+                self.top_indent = indent;
             }
             self.syntax.frame_of[i] = self.top;
             // A lexeme a state does not take ends the statement; it is
@@ -412,39 +431,6 @@ impl Walk<'_> {
 
     fn statement_start_of(&self, top: Option<u32>) -> Expect {
         statement_start(&self.syntax.frames, top)
-    }
-
-    /// Whether lexeme `i` starts a top-level block on a line of its own:
-    /// at column 1, an identifier followed by a name or a string and a `{`
-    /// on the same line, or `use` (the parser's recovery rule).
-    fn starts_a_block(&self, i: usize) -> bool {
-        let lexemes = &self.syntax.lexemes;
-        let lexeme = lexemes[i];
-        let at_line_start = lexeme.start == 0 || self.text.as_bytes()[lexeme.start - 1] == b'\n';
-        if !at_line_start || lexeme.kind != LexemeKind::Ident {
-            return false;
-        }
-        let word = lexeme.text(self.text);
-        if word == "use" || word == "pub" {
-            return true;
-        }
-        let Some(next) = lexemes.get(i + 1) else {
-            return false;
-        };
-        if !matches!(
-            next.kind,
-            LexemeKind::Ident | LexemeKind::RefId | LexemeKind::Str { .. }
-        ) || self.newline_between(lexeme.end, next.start)
-        {
-            return false;
-        }
-        let line_end = self.text[lexeme.start..]
-            .find('\n')
-            .map_or(self.text.len(), |at| lexeme.start + at);
-        lexemes[i + 1..]
-            .iter()
-            .take_while(|l| l.start < line_end)
-            .any(|l| l.is_punct('{'))
     }
 
     /// The lexeme after `i` that is not a comment, when it is on the same

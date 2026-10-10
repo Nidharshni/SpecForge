@@ -76,3 +76,55 @@ A spec in the repository that writes a string spanning lines whose closing quote
 another character outside the follow set: the follow set grows, or the grammar gives strings a follow
 rule. A grammar that makes a top-level form span lines before its first token that decides it: the
 resume rule reads more than one line.
+
+## Amendment: one form-start rule (2026-10-11, architecture plan 03)
+
+D2 stated where a top-level form starts as recovery's own rule (`recovery::is_block_start`, private). The
+LSP's document kept a second copy (`Walk::starts_a_block` in `specforge-lsp/src/document/syntax.rs`, written
+with ADR 0023 and documented as "the parser's recovery rule"), which the inventory of scanners above missed.
+The two disagreed. The LSP's copy had no union form, wanted a `{` after `ref scheme.kind:id "T"`, took a bare
+`use` or `pub`, took any line with a `{` after a name, and looked at column 1 only. So inside a body left
+unclosed (a block being typed), a union or an inline ref written after it was read as fields of that body:
+highlighted as fields, with the body's fields offered as completions after it, and the unclosed entity named
+by the cursor.
+
+**D6. One form-start rule, the lexer module's.** `specforge_parser::lex::starts_top_level_form(text, lexemes,
+max_indent)` says whether the first of `lexemes` is the first lexeme of a line, indented by no more than
+`max_indent` bytes (`lex::line_indent`), whose lexemes read one of D2's shapes; a title is a `"…"` closed on
+that line. The parser's recovery passes each line it scans, lexed alone. The LSP's document passes its own
+lexemes from the line's first one, with the indentation of the last line it began with nothing open, and
+closes every open body, block and list there. One corpus test holds the rule to the grammar's top-level
+nodes both ways: each starts a form line, read alone and read in its document, and no other line inside one
+does. A second corpus test, in the LSP, leaves every body of the repository's spec unclosed and requires the
+document to resume at each form.
+
+D3 now reads: the LSP asks the lexer whether a string is closed, whether a word is a scheme ref ID being
+typed, and where a top-level form starts.
+
+### Consequences
+
+- In the editor, a union, an inline `ref` or a `define` written after a body left unclosed is read as its
+  own form: highlighted as one, with keywords completed after it.
+- A bare `use` or `pub` at a line's start inside a body left unclosed no longer ends it; `use "`, `use {`
+  and `use *` do, as the grammar reads an import.
+- A document whose top-level forms are indented resumes at a form indented like the one before it, not only
+  at column 1.
+- A grammar change that adds a top-level form fails one test, and both readers follow when the rule does.
+- Unchanged: the LSP reads an unclosed `"""` to the end of the text (D1), where recovery ends it before the
+  next form line, so the editor shows the rest of such a document as a string while the graph keeps its
+  blocks.
+
+### Rejected
+
+- **Keep the LSP's copy, pinned equal to recovery's by a test**: two rules kept equal by a test, the
+  arrangement D2 removed from recovery.
+- **A lenient rule for the editor** (a bare `use` or `pub` ends a body): a rule with a mode per reader, which
+  D1's Rejected list rules out; in recovery it would also end a string at a prose line starting with `use`.
+- **The rule in a module of its own**: one function and a helper; `lex` is the module both readers import.
+- **The rule over a line's text, lexing inside**: the LSP holds its document's lexemes and would lex every
+  line of an open body twice.
+
+### What would reopen it
+
+D2's trigger: a grammar whose top-level form spans lines before the token that decides it (a title
+spanning lines is already no form start).

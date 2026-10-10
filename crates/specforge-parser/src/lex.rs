@@ -9,7 +9,8 @@
 //! an unclosed quote never swallows the rest of a document being typed.
 //! The parser's recovery from unclosed strings, the LSP's document, navigation
 //! and the formatter read text through this module and scan none themselves
-//! (ADR 0023, ADR 0038).
+//! (ADR 0023, ADR 0038). Where a top-level form starts is this module's too
+//! (`starts_top_level_form`): recovery and the LSP's document both ask it.
 //!
 //! This is the second reader of the language's text beside the grammar, and
 //! `expr::tokenize` is a third that is not built on it. `tokenize` reads the
@@ -86,6 +87,74 @@ impl Lexeme {
     /// Whether it is the punctuation character `c`.
     pub fn is_punct(&self, c: char) -> bool {
         self.kind == LexemeKind::Punct(c)
+    }
+}
+
+/// `"""`: what opens and closes a triple-quoted string.
+pub(crate) const TRIPLE: &str = "\"\"\"";
+
+/// The indentation of the line holding byte `at` of `text`, in bytes, when
+/// nothing but whitespace precedes `at` on that line: what a top-level
+/// form's line is measured by. `None` when a lexeme (or a string's tail)
+/// precedes it on its line.
+pub fn line_indent(text: &str, at: usize) -> Option<usize> {
+    let line_start = text[..at].rfind('\n').map_or(0, |nl| nl + 1);
+    text.as_bytes()[line_start..at]
+        .iter()
+        .all(u8::is_ascii_whitespace)
+        .then_some(at - line_start)
+}
+
+/// Whether the first of `lexemes` (lexemes of `text`, in order; any after
+/// its line are ignored) starts a line that opens a top-level form of the
+/// grammar, a child of `source_file`: it is the first lexeme of its line,
+/// that line is indented by at most `max_indent` bytes (`line_indent`), and
+/// the line's lexemes read `use` then a path, `{` or `*`; `pub use` and the
+/// same; `spec "Title" {`; `ref scheme.kind:id "Title"`; `kind name
+/// ["Title"] {` (a define block too); or `kind name =` (a union). A title
+/// is a `"…"` closed on that line.
+///
+/// The one rule of where a top-level form starts (ADR 0038 D6). The
+/// parser's recovery ends an unclosed string before such a line, passing
+/// each line it scans lexed alone; the LSP's document closes every body,
+/// block and list left open at one, passing its own lexemes. A test holds
+/// it to the grammar's top-level nodes in the repository's spec, both ways.
+pub fn starts_top_level_form(text: &str, lexemes: &[Lexeme], max_indent: usize) -> bool {
+    let Some(first) = lexemes.first() else {
+        return false;
+    };
+    if line_indent(text, first.start).is_none_or(|indent| indent > max_indent) {
+        return false;
+    }
+    let line_end = text[first.start..]
+        .find('\n')
+        .map_or(text.len(), |nl| first.start + nl);
+    let line = &lexemes[..lexemes.partition_point(|l| l.start < line_end)];
+    let kind = |i: usize| line.get(i).map(|l| l.kind);
+    let word = |i: usize| {
+        line.get(i)
+            .filter(|l| l.kind == LexemeKind::Ident)
+            .map(|l| l.text(text))
+    };
+    // A header's title: a `"…"` closed on this line.
+    let title = |i: usize| {
+        line.get(i).is_some_and(|l| {
+            l.kind == LexemeKind::Str { closed: true }
+                && l.end <= line_end
+                && !l.text(text).starts_with(TRIPLE)
+        })
+    };
+    let punct = |i: usize, c: char| kind(i) == Some(LexemeKind::Punct(c));
+    // An import's target: a path, bindings or `* as`.
+    let import =
+        |i: usize| kind(i).is_some_and(LexemeKind::is_str) || punct(i, '{') || punct(i, '*');
+    match word(0) {
+        Some("use") => import(1),
+        Some("pub") => word(1) == Some("use") && import(2),
+        Some("spec") => title(1) && punct(2, '{'),
+        Some("ref") => kind(1) == Some(LexemeKind::RefId) && title(2),
+        Some(_) if word(1).is_some() => punct(if title(2) { 3 } else { 2 }, '{') || punct(2, '='),
+        _ => false,
     }
 }
 

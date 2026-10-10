@@ -61,6 +61,29 @@ fn token<'a>(tokens: &'a [SemanticToken], text: &str) -> &'a SemanticToken {
 
 #[spec(
     behavior = "provide_semantic_tokens",
+    verify = "a union and an inline ref after an unclosed body are classified as top-level forms"
+)]
+fn a_union_and_an_inline_ref_after_an_unclosed_body_are_classified_as_forms() {
+    let tokens = tokens_of(
+        concat!(
+            "behavior login \"Log in\" {\n",
+            "  contract \"Logs in.\"\n",
+            "\n",
+            "type status = \"active\" | \"inactive\"\n",
+            "\n",
+            "ref github.issue:org/repo#1 \"Tracking issue\"\n",
+        ),
+        kinds(&[("behavior", None), ("type", None)]),
+    );
+    assert_eq!(token(&tokens, "type").token_type, "type");
+    assert_eq!(token(&tokens, "ref").token_type, "type");
+    let status = token(&tokens, "status");
+    assert_eq!(status.token_type, "function");
+    assert_ne!(status.modifiers & MOD_DECLARATION, 0);
+}
+
+#[spec(
+    behavior = "provide_semantic_tokens",
     verify = "entity keywords classified as 'type'"
 )]
 fn entity_keywords_classified_as_type() {
@@ -633,21 +656,6 @@ fn enum_and_bool_values_are_classified() {
     );
 }
 
-/// Every `.spec` file under `dir`, recursively.
-fn spec_files(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.is_dir() {
-            spec_files(&path, out);
-        } else if path.extension().is_some_and(|e| e == "spec") {
-            out.push(path);
-        }
-    }
-}
-
 /// Whether `node` has an ancestor of kind `kind`.
 fn within(node: tree_sitter::Node, kinds: &[&str]) -> bool {
     let mut parent = node.parent();
@@ -685,7 +693,7 @@ fn tokens_agree_with_the_grammar() {
         .filter_map(|(_, entry)| entry.declared.semantic_token.as_deref())
         .collect();
     let mut files = Vec::new();
-    spec_files(&root.join("spec"), &mut files);
+    crate::spec_files(&root.join("spec"), &mut files);
     assert!(files.len() > 150, "found only {} spec files", files.len());
     for path in &files {
         let text = std::fs::read_to_string(path).unwrap();
