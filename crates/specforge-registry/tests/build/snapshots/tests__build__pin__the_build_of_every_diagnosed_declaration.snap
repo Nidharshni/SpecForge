@@ -3,7 +3,7 @@ source: crates/specforge-registry/tests/build/pin.rs
 expression: digest(&build)
 ---
 {
-  "declaration_diagnostics": [
+  "diagnostics": [
     [
       "E030",
       "Error",
@@ -38,6 +38,61 @@ expression: digest(&build)
       "W145",
       "Warning",
       "extension '@pin/software': the order constraints of passes 'a', 'b' form a cycle; its passes run in declaration order"
+    ],
+    [
+      "W021",
+      "Warning",
+      "extension '@pin/software': kind 'note' declares lifecycle_field 'status', which is not one of its fields"
+    ],
+    [
+      "W021",
+      "Warning",
+      "extension '@pin/software': field 'limit' on kind 'rule' declares proof_role 'assumed': expected 'bound' or 'claim'"
+    ],
+    [
+      "W019",
+      "Warning",
+      "extension '@pin/software': unknown field type 'text' for field 'notes' on kind 'rule'"
+    ],
+    [
+      "E026",
+      "Error",
+      "entity kind 'behavior' registered by '@pin/product' conflicts with '@pin/software' (first registration wins)"
+    ],
+    [
+      "W018",
+      "Warning",
+      "edge type 'links_to' from '@pin/product' duplicates 'links_to' from '@pin/software' (first wins)"
+    ],
+    [
+      "I004",
+      "Info",
+      "extension '@pin/product': entity enhancement targets unknown kind 'nowhere_kind' (extension may not be installed)"
+    ],
+    [
+      "W017",
+      "Warning",
+      "entity kind 'thing' from '@pin/software' is testable but does not support verify statements"
+    ],
+    [
+      "W112",
+      "Warning",
+      "extension '@pin/software': unrecognized validation pattern kind 'bogus'"
+    ],
+    [
+      "W023",
+      "Warning",
+      "validation rule code 'W900' from '@pin/product' duplicates code from '@pin/software'"
+    ],
+    [
+      "E055",
+      "Error",
+      "MCP tool 'probe' of extension '@pin/product': input_schema must be a JSON object; the tool is not registered"
+    ],
+    [
+      "E039",
+      "Error",
+      "duplicate surface command ID 'hello': extension '@pin/product' conflicts with '@pin/software'"
     ]
   ],
   "edges": [
@@ -83,53 +138,6 @@ expression: digest(&build)
     "@pin/software:a",
     "@pin/software:b"
   ],
-  "registry_diagnostics": [
-    [
-      "W021",
-      "Warning",
-      "extension '@pin/software': kind 'note' declares lifecycle_field 'status', which is not one of its fields"
-    ],
-    [
-      "W021",
-      "Warning",
-      "extension '@pin/software': field 'limit' on kind 'rule' declares proof_role 'assumed': expected 'bound' or 'claim'"
-    ],
-    [
-      "W019",
-      "Warning",
-      "extension '@pin/software': unknown field type 'text' for field 'notes' on kind 'rule'"
-    ],
-    [
-      "E026",
-      "Error",
-      "entity kind 'behavior' registered by '@pin/product' conflicts with '@pin/software' (first registration wins)"
-    ],
-    [
-      "W018",
-      "Warning",
-      "edge type 'links_to' from '@pin/product' duplicates 'links_to' from '@pin/software' (first wins)"
-    ],
-    [
-      "I004",
-      "Info",
-      "extension '@pin/product': entity enhancement targets unknown kind 'nowhere_kind' (extension may not be installed)"
-    ],
-    [
-      "W017",
-      "Warning",
-      "entity kind 'thing' from '@pin/software' is testable but does not support verify statements"
-    ],
-    [
-      "W112",
-      "Warning",
-      "extension '@pin/software': unrecognized validation pattern kind 'bogus'"
-    ],
-    [
-      "W023",
-      "Warning",
-      "validation rule code 'W900' from '@pin/product' duplicates code from '@pin/software'"
-    ]
-  ],
   "rules": [
     [
       "W900",
@@ -148,18 +156,6 @@ expression: digest(&build)
       "",
       "behavior",
       "contract"
-    ]
-  ],
-  "surface_diagnostics": [
-    [
-      "E055",
-      "Error",
-      "MCP tool 'probe' of extension '@pin/product': input_schema must be a JSON object; the tool is not registered"
-    ],
-    [
-      "E039",
-      "Error",
-      "duplicate surface command ID 'hello': extension '@pin/product' conflicts with '@pin/software'"
     ]
   ]
 }

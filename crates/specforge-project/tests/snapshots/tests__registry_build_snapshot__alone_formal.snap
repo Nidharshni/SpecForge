@@ -3,17 +3,28 @@ source: crates/specforge-project/tests/registry_build_snapshot.rs
 expression: "digest(&load(&runtime, &[name]))"
 ---
 {
-  "absent_reference_targets": {
-    "axiom.assumes": "invariant",
-    "refinement.abstract_entity": "behavior",
-    "refinement.concrete_entity": "behavior"
-  },
-  "bidirectional_pairs": [],
-  "body_parser_kinds": [],
   "check_passes": [
     {
       "extension": "@specforge/formal",
       "name": "analysis_available"
+    }
+  ],
+  "diagnostics": [
+    {
+      "code": "E027",
+      "message": "extension '@specforge/formal' requires peer dependency '@specforge/software' ^1.0 which is not installed"
+    },
+    {
+      "code": "I004",
+      "message": "extension '@specforge/formal': entity enhancement targets unknown kind 'behavior' (extension may not be installed)"
+    },
+    {
+      "code": "I004",
+      "message": "extension '@specforge/formal': entity enhancement targets unknown kind 'event' (extension may not be installed)"
+    },
+    {
+      "code": "I004",
+      "message": "extension '@specforge/formal': entity enhancement targets unknown kind 'invariant' (extension may not be installed)"
     }
   ],
   "edges": {
@@ -652,6 +663,58 @@ expression: "digest(&load(&runtime, &[name]))"
       "target_kind": null
     }
   },
+  "graph_inputs": {
+    "absent_reference_targets": {
+      "axiom.assumes": "invariant",
+      "refinement.abstract_entity": "behavior",
+      "refinement.concrete_entity": "behavior"
+    },
+    "bidirectional_pairs": [],
+    "body_parser_kinds": [],
+    "derived_references": [],
+    "field_coercions": {
+      "axiom.assumes": "List",
+      "axiom.description": "Text",
+      "axiom.expression": "Text",
+      "axiom.justification": "Text",
+      "axiom.refs": "List",
+      "process.alphabet": "List",
+      "process.composition": "Text",
+      "process.description": "Text",
+      "process.initial_state": "Text",
+      "process.refs": "List",
+      "process.states": "List",
+      "process.sub_processes": "List",
+      "property.description": "Text",
+      "property.expression": "Text",
+      "property.property_type": "Text",
+      "property.refs": "List",
+      "property.scope": "Text",
+      "protocol.alphabet": "List",
+      "protocol.description": "Text",
+      "protocol.initial_state": "Text",
+      "protocol.refs": "List",
+      "protocol.states": "List",
+      "protocol.transitions": "List",
+      "refinement.description": "Text",
+      "refinement.invariant_deltas": "List",
+      "refinement.refs": "List"
+    },
+    "single_reference_fields": [
+      [
+        "refinement",
+        "abstract_entity"
+      ],
+      [
+        "refinement",
+        "chains_to"
+      ],
+      [
+        "refinement",
+        "concrete_entity"
+      ]
+    ]
+  },
   "kinds": {
     "axiom": {
       "allowed_verify_kinds": [],
@@ -749,27 +812,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "testable": false
     }
   },
-  "load_diagnostics": [
-    {
-      "code": "E027",
-      "message": "extension '@specforge/formal' requires peer dependency '@specforge/software' ^1.0 which is not installed"
-    }
-  ],
   "manifest_surfaces": [],
-  "registry_diagnostics": [
-    {
-      "code": "I004",
-      "message": "extension '@specforge/formal': entity enhancement targets unknown kind 'behavior' (extension may not be installed)"
-    },
-    {
-      "code": "I004",
-      "message": "extension '@specforge/formal': entity enhancement targets unknown kind 'event' (extension may not be installed)"
-    },
-    {
-      "code": "I004",
-      "message": "extension '@specforge/formal': entity enhancement targets unknown kind 'invariant' (extension may not be installed)"
-    }
-  ],
   "rules": [
     {
       "check": "no_incoming_edges",
@@ -1090,20 +1133,5 @@ expression: "digest(&load(&runtime, &[name]))"
       "wasm_function": null
     }
   ],
-  "single_reference_fields": [
-    [
-      "refinement",
-      "abstract_entity"
-    ],
-    [
-      "refinement",
-      "chains_to"
-    ],
-    [
-      "refinement",
-      "concrete_entity"
-    ]
-  ],
-  "surface_diagnostics": [],
   "surfaces": []
 }

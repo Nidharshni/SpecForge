@@ -9,7 +9,7 @@
 //! (step R1) must keep this order byte for byte.
 
 use specforge_common::Diagnostic;
-use specforge_extension_sdk::{ContributionsBuilder, ExtensionMeta};
+use specforge_extension_sdk::{ContributionsBuilder, ExtensionMeta, PeerDependency};
 use specforge_wasm::testing::InProcessRuntime;
 use std::sync::Arc;
 
@@ -18,11 +18,42 @@ use std::sync::Arc;
 /// command (E039); each also declares a rule whose check kind doesn't
 /// exist (W112).
 fn colliding_extensions() -> InProcessRuntime {
+    colliding_extensions_with(false, false)
+}
+
+/// `colliding_extensions`, and optionally: `@test/alpha` requires a peer that
+/// is not loaded (E027), and declares a second rule whose custom function its
+/// extension does not export (the probe's W112).
+fn colliding_extensions_with(peer: bool, custom: bool) -> InProcessRuntime {
     ["@test/alpha", "@test/beta"]
         .into_iter()
         .fold(InProcessRuntime::new(), |runtime, ext| {
             runtime.with(move || {
                 let mut c = ContributionsBuilder::new(ExtensionMeta::new(ext, "1.0.0"));
+                if peer && ext == "@test/alpha" {
+                    c.meta.peer_dependencies = vec![PeerDependency {
+                        name: "@test/missing".into(),
+                        version: "^1".into(),
+                        optional: false,
+                    }];
+                }
+                let mut rules = vec![serde_json::json!({
+                    "code": "W900",
+                    "severity": "warning",
+                    "message_template": "never fires",
+                    "check": format!("no_such_check_{}", &ext[6..]),
+                    "target_kind": "gadget"
+                })];
+                if custom && ext == "@test/alpha" {
+                    rules.push(serde_json::json!({
+                        "code": "W901",
+                        "severity": "warning",
+                        "message_template": "never answers",
+                        "check": "custom",
+                        "wasm_function": "missing_validator",
+                        "target_kind": "gadget"
+                    }));
+                }
                 // Declared as given (`raw_category`): a builder would refuse
                 // a rule whose check does not exist.
                 c.raw_category(
@@ -35,13 +66,7 @@ fn colliding_extensions() -> InProcessRuntime {
                 );
                 c.raw_category(
                     "validation_rules",
-                    serde_json::json!([{
-                        "code": "W900",
-                        "severity": "warning",
-                        "message_template": "never fires",
-                        "check": format!("no_such_check_{}", &ext[6..]),
-                        "target_kind": "gadget"
-                    }]),
+                    serde_json::Value::Array(rules),
                 );
                 c.raw_category(
                     "surfaces",
@@ -58,12 +83,21 @@ fn colliding_extensions() -> InProcessRuntime {
 }
 
 fn project() -> tempfile::TempDir {
+    project_with(false)
+}
+
+/// The project, optionally with a provider whose extension is not installed (W118).
+fn project_with(providers: bool) -> tempfile::TempDir {
     let dir = tempfile::TempDir::new().unwrap();
-    let config = serde_json::json!({
+    let mut config = serde_json::json!({
         "name": "order",
         "version": "0.1.0",
         "extensions": ["@test/alpha", "@test/beta"]
     });
+    if providers {
+        config["providers"] =
+            serde_json::json!([{"scheme": "gh", "alias": "work", "extension": "@acme/github"}]);
+    }
     std::fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
     specforge_installed::testing::install_configured(dir.path(), &specforge_project::builtins());
     // A duplicate ID: a graph diagnostic, between the registry ones and E039.
@@ -108,5 +142,35 @@ fn registry_diagnostics_keep_their_order() {
         let ctx = specforge_project::CompiledProject::compile(dir.path(), Some(runtime.clone()));
         let diagnostics = ctx.diagnostics();
         assert_eq!(render(&diagnostics), expected);
+    }
+}
+
+// A characterization, not linked (T3 links it): this project has no import
+// cycle, so `diagnostic_determinism` is not at risk from W113.
+#[test]
+fn the_environment_reports_before_the_sources() {
+    let dir = project_with(true);
+    let runtime = Arc::new(colliding_extensions_with(true, true));
+
+    for _ in 0..20 {
+        let ctx = specforge_project::CompiledProject::compile(dir.path(), Some(runtime.clone()));
+        let diagnostics = ctx.diagnostics();
+        let codes: Vec<&str> = diagnostics.iter().map(|d| d.code.as_str()).collect();
+        // Today: the declarations' E027, then provider registration, then the
+        // registries' (populate, rule parse, W023, the probe), the graph's
+        // E002, a check's W148, and the surface conflict last.
+        assert_eq!(
+            codes,
+            [
+                "E027", "W118", "E026", "W018", "W112", "W112", "W023", "W112", "E002", "W148",
+                "E039"
+            ]
+        );
+        let probe = diagnostics
+            .iter()
+            .filter(|d| d.code == "W112")
+            .last()
+            .unwrap();
+        assert!(probe.message.contains("could not be resolved"), "{probe:?}");
     }
 }

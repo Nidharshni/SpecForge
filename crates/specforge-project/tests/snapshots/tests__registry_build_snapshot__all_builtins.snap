@@ -3,21 +3,6 @@ source: crates/specforge-project/tests/registry_build_snapshot.rs
 expression: "digest(&load(&runtime, &all))"
 ---
 {
-  "absent_reference_targets": {},
-  "bidirectional_pairs": [
-    [
-      "behaviors",
-      "features"
-    ],
-    [
-      "enforced_by",
-      "invariants"
-    ]
-  ],
-  "body_parser_kinds": [
-    "port",
-    "type"
-  ],
   "check_passes": [
     {
       "extension": "@specforge/product",
@@ -28,6 +13,7 @@ expression: "digest(&load(&runtime, &all))"
       "name": "analysis_available"
     }
   ],
+  "diagnostics": [],
   "edges": {
     "AxiomAssumesInvariant": {
       "description": "Axiom assumes an invariant as foundational truth",
@@ -4275,6 +4261,281 @@ expression: "digest(&load(&runtime, &all))"
       "target_kind": null
     }
   },
+  "graph_inputs": {
+    "absent_reference_targets": {},
+    "bidirectional_pairs": [
+      [
+        "behaviors",
+        "features"
+      ],
+      [
+        "enforced_by",
+        "invariants"
+      ]
+    ],
+    "body_parser_kinds": [
+      "port",
+      "type"
+    ],
+    "derived_references": [
+      {
+        "field": "types",
+        "from": "MethodSignatures",
+        "source_kind": "port",
+        "target_kind": "type"
+      },
+      {
+        "field": "composed_types",
+        "from": "TypeExpressions",
+        "source_kind": "type",
+        "target_kind": "type"
+      }
+    ],
+    "field_coercions": {
+      "axiom.assumes": "List",
+      "axiom.description": "Text",
+      "axiom.expression": "Text",
+      "axiom.justification": "Text",
+      "axiom.refs": "List",
+      "behavior.abstract": "Bool",
+      "behavior.category": "Text",
+      "behavior.consumes": "List",
+      "behavior.contract": "Text",
+      "behavior.description": "Text",
+      "behavior.diagnostic": "Text",
+      "behavior.ensures": "List",
+      "behavior.features": "List",
+      "behavior.invariants": "List",
+      "behavior.maintains": "List",
+      "behavior.ports": "List",
+      "behavior.produces": "List",
+      "behavior.refs": "List",
+      "behavior.requires": "List",
+      "behavior.satisfies": "List",
+      "behavior.severity": "Text",
+      "behavior.status": "Text",
+      "behavior.sync": "List",
+      "behavior.types": "List",
+      "channel.description": "Text",
+      "channel.interaction_model": "Text",
+      "channel.reason": "Text",
+      "channel.status": "Text",
+      "channel.tags": "List",
+      "channel.url": "Text",
+      "constraint.category": "Text",
+      "constraint.constrains": "List",
+      "constraint.description": "Text",
+      "constraint.enforced_by": "List",
+      "constraint.governs_features": "List",
+      "constraint.metric": "Text",
+      "constraint.priority": "Text",
+      "constraint.protects": "List",
+      "constraint.refs": "List",
+      "constraint.scope": "Text",
+      "constraint.threshold": "Text",
+      "decision.affects_features": "List",
+      "decision.alternatives": "List",
+      "decision.authors": "List",
+      "decision.consequences": "List",
+      "decision.constraints": "List",
+      "decision.context": "Text",
+      "decision.date": "Text",
+      "decision.deciders": "List",
+      "decision.decision": "Text",
+      "decision.description": "Text",
+      "decision.invariants": "List",
+      "decision.reason": "Text",
+      "decision.refs": "List",
+      "decision.status": "Text",
+      "decision.tags": "List",
+      "deliverable.artifact_type": "Text",
+      "deliverable.contributors": "List",
+      "deliverable.depends_on": "List",
+      "deliverable.description": "Text",
+      "deliverable.journeys": "List",
+      "deliverable.milestones": "List",
+      "deliverable.modules": "List",
+      "deliverable.owner": "Text",
+      "deliverable.reason": "Text",
+      "deliverable.status": "Text",
+      "deliverable.tags": "List",
+      "deliverable.version": "Text",
+      "event.category": "Text",
+      "event.channel": "Text",
+      "event.channel_type": "Text",
+      "event.contract": "Text",
+      "event.description": "Text",
+      "event.follows_protocol": "List",
+      "event.participates_in": "List",
+      "event.refs": "List",
+      "event.sync": "List",
+      "failure_mode.affected_behaviors": "List",
+      "failure_mode.cause": "Text",
+      "failure_mode.description": "Text",
+      "failure_mode.detection": "Text",
+      "failure_mode.effect": "Text",
+      "failure_mode.mitigation": "Text",
+      "failure_mode.occurrence": "Text",
+      "failure_mode.post_detection": "Text",
+      "failure_mode.post_mitigation": "Text",
+      "failure_mode.post_occurrence": "Text",
+      "failure_mode.post_severity": "Text",
+      "failure_mode.refs": "List",
+      "failure_mode.risk": "Text",
+      "failure_mode.rpn": "Integer",
+      "failure_mode.severity": "Text",
+      "failure_mode.threatens_features": "List",
+      "feature.acceptance": "List",
+      "feature.contributors": "List",
+      "feature.depends_on": "List",
+      "feature.description": "Text",
+      "feature.effort": "Text",
+      "feature.features": "List",
+      "feature.owner": "Text",
+      "feature.priority": "Text",
+      "feature.problem": "Text",
+      "feature.reason": "Text",
+      "feature.refs": "List",
+      "feature.solution": "Text",
+      "feature.status": "Text",
+      "feature.tags": "List",
+      "feature.tests": "List",
+      "invariant.description": "Text",
+      "invariant.expression": "Text",
+      "invariant.guarantee": "Text",
+      "invariant.refs": "List",
+      "invariant.risk": "Text",
+      "journey.channels": "List",
+      "journey.description": "Text",
+      "journey.features": "List",
+      "journey.flow": "List",
+      "journey.priority": "Text",
+      "journey.tags": "List",
+      "milestone.behaviors": "List",
+      "milestone.blockers": "List",
+      "milestone.contributors": "List",
+      "milestone.depends_on": "List",
+      "milestone.description": "Text",
+      "milestone.exit_criteria": "List",
+      "milestone.features": "List",
+      "milestone.modules": "List",
+      "milestone.owner": "Text",
+      "milestone.priority": "Text",
+      "milestone.reason": "Text",
+      "milestone.refs": "List",
+      "milestone.start_date": "Text",
+      "milestone.status": "Text",
+      "milestone.tags": "List",
+      "milestone.target_date": "Text",
+      "module.depends_on": "List",
+      "module.description": "Text",
+      "module.family": "Text",
+      "module.features": "List",
+      "module.ports": "List",
+      "module.ports_defined": "List",
+      "module.reason": "Text",
+      "module.tags": "List",
+      "persona.description": "Text",
+      "persona.goals": "List",
+      "persona.key_features": "List",
+      "persona.pain_points": "List",
+      "persona.reason": "Text",
+      "persona.status": "Text",
+      "persona.tags": "List",
+      "persona.technical_level": "Text",
+      "port.category": "Text",
+      "port.description": "Text",
+      "port.direction": "Text",
+      "port.refs": "List",
+      "port.types": "List",
+      "process.alphabet": "List",
+      "process.composition": "Text",
+      "process.description": "Text",
+      "process.initial_state": "Text",
+      "process.refs": "List",
+      "process.states": "List",
+      "process.sub_processes": "List",
+      "property.description": "Text",
+      "property.expression": "Text",
+      "property.property_type": "Text",
+      "property.refs": "List",
+      "property.scope": "Text",
+      "protocol.alphabet": "List",
+      "protocol.description": "Text",
+      "protocol.initial_state": "Text",
+      "protocol.refs": "List",
+      "protocol.states": "List",
+      "protocol.transitions": "List",
+      "refinement.description": "Text",
+      "refinement.invariant_deltas": "List",
+      "refinement.refs": "List",
+      "release.changelog": "Text",
+      "release.contributors": "List",
+      "release.deliverables": "List",
+      "release.depends_on": "List",
+      "release.description": "Text",
+      "release.milestones": "List",
+      "release.owner": "Text",
+      "release.reason": "Text",
+      "release.refs": "List",
+      "release.release_date": "Text",
+      "release.status": "Text",
+      "release.tags": "List",
+      "release.target_date": "Text",
+      "release.version": "Text",
+      "term.aliases": "List",
+      "term.context": "Text",
+      "term.definition": "Text",
+      "term.see_also": "List",
+      "term.tags": "List",
+      "type.composed_types": "List",
+      "type.description": "Text",
+      "type.kind": "Text",
+      "type.refs": "List"
+    },
+    "single_reference_fields": [
+      [
+        "behavior",
+        "refines"
+      ],
+      [
+        "decision",
+        "superseded_by"
+      ],
+      [
+        "event",
+        "payload"
+      ],
+      [
+        "failure_mode",
+        "invariant"
+      ],
+      [
+        "journey",
+        "persona"
+      ],
+      [
+        "refinement",
+        "abstract_entity"
+      ],
+      [
+        "refinement",
+        "chains_to"
+      ],
+      [
+        "refinement",
+        "concrete_entity"
+      ],
+      [
+        "term",
+        "module"
+      ],
+      [
+        "type",
+        "extends"
+      ]
+    ]
+  },
   "kinds": {
     "axiom": {
       "allowed_verify_kinds": [],
@@ -4728,7 +4989,6 @@ expression: "digest(&load(&runtime, &all))"
       "testable": true
     }
   },
-  "load_diagnostics": [],
   "manifest_surfaces": [
     {
       "extension": "@specforge/product",
@@ -5907,7 +6167,6 @@ expression: "digest(&load(&runtime, &all))"
       }
     }
   ],
-  "registry_diagnostics": [],
   "rules": [
     {
       "check": "custom",
@@ -8025,49 +8284,6 @@ expression: "digest(&load(&runtime, &all))"
       "wasm_function": null
     }
   ],
-  "single_reference_fields": [
-    [
-      "behavior",
-      "refines"
-    ],
-    [
-      "decision",
-      "superseded_by"
-    ],
-    [
-      "event",
-      "payload"
-    ],
-    [
-      "failure_mode",
-      "invariant"
-    ],
-    [
-      "journey",
-      "persona"
-    ],
-    [
-      "refinement",
-      "abstract_entity"
-    ],
-    [
-      "refinement",
-      "chains_to"
-    ],
-    [
-      "refinement",
-      "concrete_entity"
-    ],
-    [
-      "term",
-      "module"
-    ],
-    [
-      "type",
-      "extends"
-    ]
-  ],
-  "surface_diagnostics": [],
   "surfaces": [
     {
       "export": "cmd__product_features",

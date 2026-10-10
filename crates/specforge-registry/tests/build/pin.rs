@@ -1,7 +1,8 @@
 //! Wave 0 pin: the registry build of declarations that drive every
 //! diagnostic the build reports, at once. It characterizes the build (no
 //! spec link): while the tests move behind `build_registries`, its
-//! snapshot must not change.
+//! snapshot must not change; it reads what the build answers, never its
+//! fields' layout.
 
 use serde_json::{Value, json};
 use specforge_common::Diagnostic;
@@ -137,9 +138,9 @@ fn pin_unnamed() -> ExtensionDeclaration {
     declare("", |_| {})
 }
 
-fn diagnostics(diagnostics: &[Diagnostic]) -> Value {
+fn rendered<'a>(diagnostics: impl IntoIterator<Item = &'a Diagnostic>) -> Value {
     diagnostics
-        .iter()
+        .into_iter()
         .map(|d| json!([d.code, format!("{:?}", d.severity), d.message]))
         .collect()
 }
@@ -172,9 +173,8 @@ fn digest(build: &RegistryBuild) -> Value {
         .collect();
     edges.sort();
     json!({
-        "declaration_diagnostics": diagnostics(&build.declaration_diagnostics),
-        "registry_diagnostics": diagnostics(&build.registry_diagnostics),
-        "surface_diagnostics": diagnostics(&build.surface_diagnostics),
+        // Every diagnostic the build reports, in its order (T3: `build.diagnostics()`).
+        "diagnostics": rendered(crate::support::diagnostics(build)),
         "rules": build
             .rules
             .iter()
