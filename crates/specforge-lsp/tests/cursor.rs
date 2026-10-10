@@ -4,6 +4,7 @@
 use specforge_lsp::{CompletionSite, Cursor, Document, EntityAt, Place};
 use specforge_test_macros::test as spec;
 use tower_lsp::lsp_types::Position;
+use tree_sitter_specforge::{field, kind};
 
 /// The document of `text`.
 fn doc(text: &str) -> Document {
@@ -227,20 +228,37 @@ const UNCLOSED: &str = concat!(
     "}\n",
 );
 
-#[test]
-fn a_union_and_an_inline_ref_after_an_unclosed_body_are_read_into_it() {
+#[spec(
+    behavior = "complete_keywords",
+    verify = "keywords are suggested after a top-level form that follows an unclosed body"
+)]
+fn a_union_and_an_inline_ref_end_an_unclosed_body() {
     let doc = doc(UNCLOSED);
-    let login = Some(EntityAt {
-        kind: "behavior",
-        id: Some("login"),
-    });
     let fields = CompletionSite::Fields {
         kind: "behavior",
         prefix: "",
     };
-    assert_eq!(at(&doc, 3, 7).entity(), login, "status");
-    assert_eq!(at(&doc, 5, 7).entity(), login, "the ref's ID");
-    assert_eq!(at(&doc, 4, 0).completion(), fields, "after the union");
+    assert_eq!(
+        at(&doc, 3, 7).entity(),
+        Some(EntityAt {
+            kind: "type",
+            id: Some("status")
+        }),
+        "status"
+    );
+    assert_eq!(
+        at(&doc, 5, 7).entity(),
+        Some(EntityAt {
+            kind: "ref",
+            id: Some("github.issue:org/repo#1")
+        }),
+        "the ref's ID"
+    );
+    assert_eq!(
+        at(&doc, 4, 0).completion(),
+        CompletionSite::Keywords { prefix: "" },
+        "after the union"
+    );
     // Stable: the body is still open before the union, and a block at
     // column 1 with a `{` resumes.
     assert_eq!(at(&doc, 2, 0).completion(), fields);
@@ -254,18 +272,16 @@ fn a_union_and_an_inline_ref_after_an_unclosed_body_are_read_into_it() {
 }
 
 #[test]
-fn a_bare_use_or_pub_at_column_1_ends_an_unclosed_body() {
+fn a_bare_use_or_pub_does_not_end_an_unclosed_body() {
     let head = "behavior login \"Log in\" {\n  contract \"x\"\n\n";
-    let use_doc = doc(&format!("{head}use\n"));
-    assert_eq!(at(&use_doc, 3, 1).entity(), None);
-    let pub_doc = doc(&format!("{head}pub\n"));
-    assert_eq!(
-        at(&pub_doc, 3, 1).entity(),
-        Some(EntityAt {
-            kind: "pub",
-            id: None
-        })
-    );
+    let login = Some(EntityAt {
+        kind: "behavior",
+        id: Some("login"),
+    });
+    for word in ["use", "pub"] {
+        let doc = doc(&format!("{head}{word}\n"));
+        assert_eq!(at(&doc, 3, 1).entity(), login, "{word}");
+    }
     // Stable: a `use` with its path ends the body.
     let import_doc = doc(&format!("{head}use \"./a.spec\"\n"));
     assert_eq!(at(&import_doc, 3, 1).import(), Some("./a.spec"));
@@ -273,13 +289,13 @@ fn a_bare_use_or_pub_at_column_1_ends_an_unclosed_body() {
 }
 
 #[test]
-fn a_form_ends_an_unclosed_body_only_at_column_1() {
+fn a_form_indented_like_the_open_one_ends_it() {
     let indented = doc("  behavior a \"A\" {\n    contract \"x\"\n\n  behavior b \"B\" {\n  }\n");
     assert_eq!(
         at(&indented, 3, 12).entity(),
         Some(EntityAt {
             kind: "behavior",
-            id: Some("a")
+            id: Some("b")
         })
     );
     // Stable: a union indented deeper than the open form's line is no form.
@@ -291,4 +307,81 @@ fn a_form_ends_an_unclosed_body_only_at_column_1() {
             id: Some("a")
         })
     );
+}
+
+#[spec(
+    behavior = "provide_semantic_tokens",
+    verify = "the document resumes at every top-level form of the repository's spec after an unclosed body"
+)]
+fn every_top_level_form_of_the_corpora_ends_an_unclosed_body() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut files = Vec::new();
+    for corpus in ["spec", "integrations/rust/spec", "examples"] {
+        crate::spec_files(&root.join(corpus), &mut files);
+    }
+    assert!(files.len() > 150, "found only {} spec files", files.len());
+    for path in &files {
+        let source = std::fs::read_to_string(path).unwrap();
+        let (_, tree) = specforge_parser::parse_incremental(&source, "corpus.spec", None);
+        let tree = tree.unwrap();
+        let top = tree.root_node();
+        assert!(!top.has_error(), "{}: does not parse", path.display());
+        let mut walker = top.walk();
+        let forms: Vec<tree_sitter::Node> = top
+            .named_children(&mut walker)
+            .filter(|n| n.kind() != kind::COMMENT)
+            .collect();
+        // Every block's closing brace blanked: each body is left unclosed.
+        let mut bytes = source.clone().into_bytes();
+        for form in &forms {
+            if bytes[form.end_byte() - 1] == b'}' {
+                bytes[form.end_byte() - 1] = b' ';
+            }
+        }
+        let text = String::from_utf8(bytes).unwrap();
+        let doc = doc(&text);
+        let named = |name: &str, node: tree_sitter::Node| {
+            node.child_by_field_name(name)
+                .map(|n| &text[n.byte_range()])
+        };
+        for form in &forms {
+            let start = form.start_position();
+            let where_ = format!("{}:{} {}", path.display(), start.row + 1, form.kind());
+            // Inside the form's first word (ASCII; only whitespace before it).
+            let cursor = at(&doc, start.row as u32, start.column as u32 + 1);
+            match form.kind() {
+                kind::USE_IMPORT | kind::PUB_USE_IMPORT => {
+                    assert!(cursor.import().is_some(), "{where_}");
+                }
+                kind::DEFINE_BLOCK => assert_eq!(cursor.entity(), None, "{where_}"),
+                kind::SPEC_BLOCK => assert_eq!(
+                    cursor.entity(),
+                    Some(EntityAt {
+                        kind: "spec",
+                        id: None
+                    }),
+                    "{where_}"
+                ),
+                kind::REF_BLOCK => {
+                    let inner = form.named_child(0).unwrap();
+                    assert_eq!(
+                        cursor.entity(),
+                        Some(EntityAt {
+                            kind: "ref",
+                            id: named(field::ID, inner)
+                        }),
+                        "{where_}"
+                    );
+                }
+                _ => assert_eq!(
+                    cursor.entity(),
+                    Some(EntityAt {
+                        kind: named(field::KIND, *form).unwrap(),
+                        id: named(field::NAME, *form),
+                    }),
+                    "{where_}"
+                ),
+            }
+        }
+    }
 }

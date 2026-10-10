@@ -21,6 +21,21 @@ mod served;
 mod session;
 mod state;
 
+/// Every `.spec` file under `dir`, recursively.
+pub fn spec_files(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            spec_files(&path, out);
+        } else if path.extension().is_some_and(|e| e == "spec") {
+            out.push(path);
+        }
+    }
+}
+
 /// The LSP range from (`start_line`, `start_character`) to (`end_line`,
 /// `end_character`): 0-based lines, UTF-16 columns.
 pub fn lsp_range(
