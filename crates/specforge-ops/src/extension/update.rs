@@ -624,4 +624,92 @@ mod tests {
             }
         }
     }
+
+    use crate::testing::declaring;
+    use specforge_wasm::testing::InProcessRuntime;
+
+    const A1_1: &[u8] = b"\0asm in-process @x/a 1.1.0";
+    const A2: &[u8] = b"\0asm in-process @x/a 2.0.0";
+    const B2: &[u8] = b"\0asm in-process @x/b 2.0.0";
+
+    /// `@x/a` 1.1.0 (wants `@x/b` ^1), `@x/a` 2.0.0 (wants ^2) and `@x/b` 2.0.0, served in process.
+    fn coupled_runtime() -> InProcessRuntime {
+        crate::testing::candidates()
+            .binary(A1_1, declaring("@x/a", "1.1.0", &[("@x/b", "^1", false)]))
+            .binary(A2, declaring("@x/a", "2.0.0", &[("@x/b", "^2", false)]))
+            .binary(B2, declaring("@x/b", "2.0.0", &[]))
+    }
+
+    /// `wasm` published with the declaration it declares in `runtime`.
+    fn served(runtime: &InProcessRuntime, wasm: &[u8]) -> Published {
+        Published::new(
+            wasm.to_vec(),
+            crate::publish::declare(runtime, wasm).unwrap().0,
+        )
+    }
+
+    /// A project locking `@x/a` 1.0.0 (wanting `@x/b` ^1) and `@x/b` 1.0.0, `@x/a` first or second.
+    fn coupled(a_first: bool) -> tempfile::TempDir {
+        let a = entry("@x/a", "1.0.0", "registry", &[("@x/b", "^1")]);
+        let b = entry("@x/b", "1.0.0", "registry", &[]);
+        project(if a_first { vec![a, b] } else { vec![b, a] })
+    }
+
+    /// Pin (plan 01 T0): which extension an update judges against which version depends on the
+    /// order the lock lists them in. T1 flips it.
+    #[test]
+    fn pin_the_lock_order_decides_an_update_that_moves_a_peer_and_its_dependent() {
+        let runtime = coupled_runtime();
+        // a -> 2.0.0 (wants b ^2) and b -> 2.0.0: fine together.
+        let together = || {
+            MemoryRegistry::new()
+                .serving(served(&runtime, A2))
+                .serving(served(&runtime, B2))
+        };
+        let a_first = coupled(true);
+        let outcome = update(&request(a_first.path(), true), &together(), &runtime).unwrap();
+        let failures: Vec<(&str, &str)> = outcome
+            .failures()
+            .map(|(n, e)| (n, e.code.as_ref()))
+            .collect();
+        assert_eq!(
+            failures,
+            [("@x/a", "R-RES-006"), ("@x/b", "R-RES-005")],
+            "a is judged against b 1.0.0, and b against the a it replaces"
+        );
+        let b_first = coupled(false);
+        assert!(
+            update(&request(b_first.path(), true), &together(), &runtime)
+                .unwrap()
+                .applied()
+        );
+
+        // a -> 1.1.0 (still wants b ^1) and b -> 2.0.0: never satisfiable together.
+        let apart = || {
+            MemoryRegistry::new()
+                .serving(served(&runtime, A1_1))
+                .serving(old("@x/b", "1.0.0"))
+                .serving(served(&runtime, B2))
+        };
+        let a_first = coupled(true);
+        let outcome = update(&request(a_first.path(), true), &apart(), &runtime).unwrap();
+        assert!(outcome.applied(), "{outcome:?}");
+        let lock = specforge_installed::read_lock_file(&lock_path(a_first.path())).unwrap();
+        let locked: Vec<(&str, &str)> = lock
+            .entries
+            .iter()
+            .map(|e| (e.name.as_str(), e.version.as_str()))
+            .collect();
+        assert_eq!(
+            locked,
+            [("@x/a", "1.1.0"), ("@x/b", "2.0.0")],
+            "a's peer ^1 is left unsatisfied"
+        );
+        let b_first = coupled(false);
+        assert!(
+            !update(&request(b_first.path(), true), &apart(), &runtime)
+                .unwrap()
+                .applied()
+        );
+    }
 }

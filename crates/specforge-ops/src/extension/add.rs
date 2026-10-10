@@ -1338,4 +1338,139 @@ mod tests {
             "the registry was asked nothing more"
         );
     }
+
+    /// Pin (plan 01 T0): `add` of a new version of a locked package judges its peers with
+    /// the package's previous lock entry still counted as a requirer. T1 flips it.
+    #[test]
+    fn pin_an_add_that_upgrades_a_locked_package_counts_its_previous_entry() {
+        let dir = add_project(vec![
+            entry("@x/b", "1.0.0", "registry", &[]),
+            entry("@x/a", "1.0.0", "registry", &[("@x/b", "^1")]),
+        ]);
+        let registry = MemoryRegistry::new()
+            .serving(Published::new(
+                b"\0asm b1".to_vec(),
+                declaration("@x/b", "1.0.0", &[]),
+            ))
+            .serving(Published::new(
+                b"\0asm b2".to_vec(),
+                declaration("@x/b", "2.0.0", &[]),
+            ))
+            .serving(Published::new(
+                b"\0asm a2".to_vec(),
+                declaration("@x/a", "2.0.0", &[("@x/b", "^2")]),
+            ));
+        let lock_before = std::fs::read(dir.path().join("specforge.lock")).unwrap();
+
+        let error = add(
+            &AddRequest {
+                root: dir.path(),
+                source: Source::Registry(PackageRef::parse("@x/a@2.0.0").unwrap()),
+                allow_unsigned: true,
+                trust: Trust::Refuse,
+                dry_run: false,
+            },
+            &registry,
+            &runtime(),
+        )
+        .unwrap_err();
+
+        assert_eq!(error.code, "R-RES-005", "{error:?}");
+        assert!(
+            error
+                .message
+                .contains("(@x/a wants @x/b ^1; @x/a wants @x/b ^2)"),
+            "{error:?}"
+        );
+        assert_eq!(
+            std::fs::read(dir.path().join("specforge.lock")).unwrap(),
+            lock_before
+        );
+    }
+
+    /// Pin (plan 01 T0): a locked extension an install breaks is named twice among the
+    /// requirers. T1 flips it.
+    #[test]
+    fn pin_a_locked_requirer_is_named_twice_when_an_install_breaks_it() {
+        let dir = add_project(vec![entry(
+            "@acme/app",
+            "1.0.0",
+            "registry",
+            &[("@sdk/greet", "^2.0")],
+        )]);
+        let registry =
+            MemoryRegistry::new().serving(Published::new(greet(), declaration_of(&greet())));
+
+        let error = add_greet(dir.path(), &registry).unwrap_err();
+
+        assert_eq!(error.code, "R-RES-005", "{error:?}");
+        assert!(
+            error
+                .message
+                .starts_with("installing '@sdk/greet' 0.1.0 breaks '@acme/app': "),
+            "{error:?}"
+        );
+        assert!(
+            error
+                .message
+                .contains("(@acme/app wants @sdk/greet ^2.0; @acme/app wants @sdk/greet ^2.0)"),
+            "{error:?}"
+        );
+        assert!(!installed(dir.path(), "@sdk/greet").exists());
+    }
+
+    /// Pin (plan 01 T0): whether a dry run of an extension that is already present previews it
+    /// or answers "already present" depends on where it comes from. T6 flips it.
+    #[test]
+    fn pin_a_dry_run_of_a_present_extension_depends_on_its_source() {
+        let dry = |root, source| AddRequest {
+            root,
+            source,
+            allow_unsigned: true,
+            trust: Trust::Refuse,
+            dry_run: true,
+        };
+
+        // A registry install, present: already present first.
+        let dir = add_project(Vec::new());
+        let registry =
+            MemoryRegistry::new().serving(Published::new(greet(), declaration_of(&greet())));
+        add_greet(dir.path(), &registry).unwrap();
+        let source = Source::Registry(PackageRef::parse("@sdk/greet@0.1.0").unwrap());
+        let outcome = add(&dry(dir.path(), source), &registry, &runtime())
+            .unwrap()
+            .outcome;
+        assert_eq!(
+            outcome,
+            AddOutcome::AlreadyPresent {
+                name: "@sdk/greet".into(),
+                version: "0.1.0".into()
+            }
+        );
+
+        // A local install, present: the preview first.
+        let dir = project_with(EMPTY_PROJECT);
+        let files = tempfile::tempdir().unwrap();
+        let wasm = files.path().join("greet.wasm");
+        std::fs::write(&wasm, GREET).unwrap();
+        let unconfigured = crate::registry::Unconfigured("add");
+        add(&local_request(dir.path(), &wasm), &unconfigured, &runtime()).unwrap();
+        let outcome = add(
+            &dry(dir.path(), Source::Local(wasm)),
+            &unconfigured,
+            &runtime(),
+        )
+        .unwrap()
+        .outcome;
+        assert!(matches!(outcome, AddOutcome::Planned { .. }), "{outcome:?}");
+
+        // A builtin, enabled: the preview first.
+        let dir =
+            project_with(r#"{"name":"p","version":"0.1.0","extensions":["@specforge/product"]}"#);
+        let source = Source::Builtin("@specforge/product");
+        let outcome = add(&dry(dir.path(), source), &unconfigured, &runtime())
+            .unwrap()
+            .outcome;
+        assert!(matches!(outcome, AddOutcome::Planned { .. }), "{outcome:?}");
+    }
 }

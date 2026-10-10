@@ -506,3 +506,60 @@ fn uses_vitest(path: &Path) -> bool {
                     .any(|deps| pkg[deps].get("vitest").is_some())
             })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testing::declaring;
+    use specforge_wasm::testing::InProcessRuntime;
+
+    const A: &[u8] = b"\0asm in-process @x/a 1.0.0";
+    const B: &[u8] = b"\0asm in-process @x/b 1.0.0";
+
+    /// `@x/a` 1.0.0 wanting `@x/b` ^2, and `@x/b` 1.0.0.
+    fn runtime() -> InProcessRuntime {
+        InProcessRuntime::new()
+            .binary(A, declaring("@x/a", "1.0.0", &[("@x/b", "^2", false)]))
+            .binary(B, declaring("@x/b", "1.0.0", &[]))
+    }
+
+    /// `a.wasm` and `b.wasm` written in a scratch directory, and the directory to init.
+    fn files() -> (tempfile::TempDir, Vec<String>, PathBuf) {
+        let scratch = tempfile::tempdir().unwrap();
+        std::fs::write(scratch.path().join("a.wasm"), A).unwrap();
+        std::fs::write(scratch.path().join("b.wasm"), B).unwrap();
+        let extensions = ["a.wasm", "b.wasm"]
+            .map(|f| scratch.path().join(f).display().to_string())
+            .to_vec();
+        let dir = scratch.path().join("demo");
+        (scratch, extensions, dir)
+    }
+
+    fn request<'a>(dir: &'a Path, extensions: &'a [String]) -> Request<'a> {
+        Request {
+            dir,
+            name: Some("demo"),
+            version: DEFAULT_VERSION,
+            extensions,
+        }
+    }
+
+    /// Pin (plan 01 T0): init judges its local installs' peers only once it writes, one
+    /// change per file. T2 flips it.
+    #[test]
+    fn pin_init_judges_its_local_installs_only_when_it_applies() {
+        let (_scratch, extensions, dir) = files();
+
+        let plan = plan(&request(&dir, &extensions), &runtime()).unwrap();
+        let error = apply(&dir, plan).unwrap_err();
+
+        assert_eq!(error.code, "E027", "{error:?}");
+        assert!(
+            error
+                .message
+                .starts_with("installing '@x/b' 1.0.0 breaks '@x/a': "),
+            "{error:?}"
+        );
+        assert!(!dir.exists(), "the failed init removed what it wrote");
+    }
+}
