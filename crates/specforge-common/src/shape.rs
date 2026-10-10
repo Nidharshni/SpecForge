@@ -111,7 +111,7 @@ pub fn flatten(into: &mut Value, inner: Value) {
                 object
             })
             .collect();
-        *into = one_of(merged, true);
+        *into = one_of(merged);
         return;
     }
     let (Some(target), Some(source)) = (into.as_object_mut(), inner.as_object()) else {
@@ -145,9 +145,13 @@ pub fn flatten(into: &mut Value, inner: Value) {
     }
 }
 
-/// `{"oneOf": branches}`, typed `object` when every branch is one.
+/// `{"oneOf": branches}`, typed `object` when every branch is one (decided
+/// from the branches, not from the syntax of the type they came from).
 #[doc(hidden)]
-pub fn one_of(branches: Vec<Value>, objects: bool) -> Value {
+pub fn one_of(branches: Vec<Value>) -> Value {
+    let objects = branches
+        .iter()
+        .all(|branch| branch.get("type") == Some(&json!("object")));
     if objects {
         json!({ "type": "object", "oneOf": branches })
     } else {
@@ -414,6 +418,12 @@ fn type_name(value: &Value) -> &'static str {
 mod tests {
     use super::violations;
     use serde_json::json;
+
+    #[test]
+    fn a_ref_is_not_followed_today() {
+        let schema = json!({"$defs": {"A": {"type": "string"}}, "$ref": "#/$defs/A"});
+        assert!(violations(&schema, &json!(1)).is_empty());
+    }
 
     #[test]
     fn one_of_needs_exactly_one_branch_and_any_of_at_least_one() {

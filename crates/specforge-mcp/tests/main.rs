@@ -11,6 +11,7 @@ mod mutation_outcome;
 mod operations_mgmt;
 mod operations_mutation;
 mod option_tables;
+mod output_schemas;
 mod prompt_golden;
 mod prompt_infer;
 mod prompt_pins;

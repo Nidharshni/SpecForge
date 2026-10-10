@@ -642,9 +642,10 @@ behavior follow_negotiated_mcp_revision "Follow the Negotiated MCP Revision" {
     MUST also carry that object as structuredContent, alongside the text
     block holding its JSON, and tools/list MUST give each tool whose result
     is an object an outputSchema that every structured result conforms to.
-    Each core tool's outputSchema is derived from its typed reply: every
-    object it closes lists its keys and states additionalProperties false,
-    every array states its items. A core tool's reply that its outputSchema
+    Each core tool's outputSchema is derived from its typed reply: its root
+    is an object schema (type object, a union's included), every object it
+    closes lists its keys and states additionalProperties false, every
+    array states its items. A core tool's reply that its outputSchema
     refuses MUST be a schema_mismatch error naming each violation, never
     structured content.
     A failed call of a tool with an outputSchema carries no
@@ -653,6 +654,7 @@ behavior follow_negotiated_mcp_revision "Follow the Negotiated MCP Revision" {
   """
   verify unit "a core tool's reply its output schema refuses is a schema_mismatch error, never structured content"
   verify unit "a core tool's output schema is derived from its typed reply: every object it closes lists its keys, every array its items"
+  verify unit "every core tool's outputSchema is an object schema at its root"
   verify unit "a 2025-03-26 session answers a batch with the response to each request"
   verify unit "a batch of notifications gets no response"
   verify unit "an empty batch is an invalid request"
