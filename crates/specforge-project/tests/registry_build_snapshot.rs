@@ -88,8 +88,7 @@ fn surfaces(s: &SurfaceDescriptor) -> Value {
 /// What every graph of the project is built with, as the environment answers it
 /// (`Environment::graph_config`), without the provider schemes.
 fn graph_inputs(env: &Environment) -> Value {
-    let config = env.graph_config();
-    // From T1 on: `let inputs = env.graph_config().inputs;` and `inputs.` below.
+    let config = env.graph_config().inputs;
     let bidirectional_pairs: Vec<Value> = config
         .bidirectional_pairs
         .iter()

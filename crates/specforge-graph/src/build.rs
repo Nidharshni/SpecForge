@@ -4,15 +4,15 @@ use specforge_common::{Diagnostic, SourceSpan, Sym, codes, structural};
 use specforge_parser::{Entity, FieldValue, REF_SCHEME_FIELD, SpecFile};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
-#[derive(Debug, Clone, Default)]
-pub struct GraphConfig {
-    /// Provider schemes that are installed (e.g., "gh", "jira").
-    /// Refs with schemes not in this set emit I005.
-    pub known_provider_schemes: HashSet<String>,
-    /// Bidirectional edge pairs from extensions. Each pair (forward_label, reverse_label)
-    /// represents a complementary relationship that should not be flagged as a cycle.
-    /// Example: `("invariants", "enforced_by")` means an invariants/enforced_by 2-hop
-    /// cycle is a known bidirectional relationship, not a real circular dependency.
+/// What the graph build reads of the loaded extensions. Only the registry
+/// build derives it (`specforge_registry::RegistryBuild::graph_inputs`),
+/// from the declarations and the field registry; no caller assembles one.
+/// The default is a project with no extension loaded.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct GraphInputs {
+    /// Inverse field pairs, each written (lesser, greater), sorted: a
+    /// two-hop cycle through both labels of one pair is a known
+    /// bidirectional relationship, not a reference cycle.
     pub bidirectional_pairs: Vec<(String, String)>,
     /// Entity kinds that declare a body parser: they carry extension-owned
     /// syntax the core grammar deliberately does not parse, so E001 parse
@@ -20,11 +20,11 @@ pub struct GraphConfig {
     /// parse errors are collected, so an incremental rebuild uses the
     /// file's current entities.
     pub body_parser_kinds: HashSet<String>,
-    /// (kind, field) pairs registered as single Reference fields. When
-    /// non-empty, references are re-resolved with single-reference awareness
-    /// (replacing the initial E003 diagnostics), creating edges for fields
-    /// like `journey.persona -> persona`.
-    pub single_reference_fields: std::collections::HashSet<(String, String)>,
+    /// (kind, field) pairs registered as single reference fields (none while
+    /// no kind is registered): references are re-resolved with
+    /// single-reference awareness, creating edges for fields like
+    /// `journey.persona -> persona`.
+    pub single_reference_fields: HashSet<(String, String)>,
     /// (kind, field) reference fields whose target kind no loaded extension
     /// declares, mapped to that kind: an unresolved reference there is an
     /// I004 hint (the kind's extension isn't enabled), not an E003.
@@ -34,8 +34,20 @@ pub struct GraphConfig {
     /// a reference_list field links like `field [id]`.
     pub field_coercions: HashMap<(String, String), crate::FieldCoercion>,
     /// Registered fields whose edges come from the type names an entity
-    /// writes in its field types or method signatures (`derived_from`).
+    /// writes in its field types or method signatures (`derived_from`),
+    /// sorted by kind and field.
     pub derived_references: Vec<crate::DerivedReference>,
+}
+
+/// What one graph build is configured with: the provider schemes the
+/// environment registered, and the inputs the registry build derived.
+#[derive(Debug, Clone, Default)]
+pub struct GraphConfig {
+    /// Provider schemes that are installed (e.g., "gh", "jira").
+    /// Refs with schemes not in this set emit I005.
+    pub known_provider_schemes: HashSet<String>,
+    /// What the graph build reads of the loaded extensions.
+    pub inputs: GraphInputs,
 }
 
 /// One file's change, as a [`GraphBuild`] applies it.
@@ -96,7 +108,7 @@ impl GraphBuild {
     /// An empty build: no file, no node, no diagnostic.
     pub fn new(config: GraphConfig) -> Self {
         GraphBuild {
-            graph: Graph::with_bidirectional_pairs(config.bidirectional_pairs.clone()),
+            graph: Graph::with_bidirectional_pairs(config.inputs.bidirectional_pairs.clone()),
             config,
             files: BTreeMap::new(),
             diagnostics: Vec::new(),
@@ -295,7 +307,8 @@ fn declarations<'a>(
     for spec_file in files.clone() {
         for error in &spec_file.errors {
             let diagnostic = Diagnostic::from(error);
-            if !inside_body_parser_entity(&diagnostic, spec_file, &config.body_parser_kinds) {
+            if !inside_body_parser_entity(&diagnostic, spec_file, &config.inputs.body_parser_kinds)
+            {
                 diagnostics.push(diagnostic);
             }
         }
@@ -452,11 +465,11 @@ fn link_and_diagnose(graph: &mut Graph, config: &GraphConfig) -> Vec<Diagnostic>
     let mut diagnostics = Vec::new();
 
     // Values take their declared types before anything reads them.
-    graph.coerce_field_values(&config.field_coercions);
+    graph.coerce_field_values(&config.inputs.field_coercions);
 
     // Link references -> edges.
     let mut ref_diags =
-        graph.resolve_references_with(&HashSet::new(), &config.absent_reference_targets);
+        graph.resolve_references_with(&HashSet::new(), &config.inputs.absent_reference_targets);
 
     // Detect reference cycles and emit W061
     let cycles = graph.detect_cycles();
@@ -475,16 +488,19 @@ fn link_and_diagnose(graph: &mut Graph, config: &GraphConfig) -> Vec<Diagnostic>
     // Re-resolve references with single-reference field awareness. Replaces
     // the initial reference diagnostics with ones that also account for
     // single Reference fields (e.g., journey.persona -> persona).
-    if !config.single_reference_fields.is_empty() {
+    if !config.inputs.single_reference_fields.is_empty() {
         ref_diags = graph.resolve_references_with(
-            &config.single_reference_fields,
-            &config.absent_reference_targets,
+            &config.inputs.single_reference_fields,
+            &config.inputs.absent_reference_targets,
         );
     }
 
     // Derived reference fields, after cycle detection: a recursive type is
     // not a reference cycle.
-    graph.link_derived_references(&config.derived_references, &config.single_reference_fields);
+    graph.link_derived_references(
+        &config.inputs.derived_references,
+        &config.inputs.single_reference_fields,
+    );
 
     // The linker's postcondition (E060, retired): every reference to an
     // existing entity has its edge.

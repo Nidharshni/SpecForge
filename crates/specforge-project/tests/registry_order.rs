@@ -166,11 +166,7 @@ fn the_environment_reports_before_the_sources() {
                 "E039"
             ]
         );
-        let probe = diagnostics
-            .iter()
-            .filter(|d| d.code == "W112")
-            .last()
-            .unwrap();
+        let probe = diagnostics.iter().rfind(|d| d.code == "W112").unwrap();
         assert!(probe.message.contains("could not be resolved"), "{probe:?}");
     }
 }

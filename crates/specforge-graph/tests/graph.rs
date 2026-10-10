@@ -1,5 +1,7 @@
 use specforge_common::{SourceSpan, Sym};
-use specforge_graph::{Edge, FileChange, Graph, GraphBuild, GraphConfig, Node, SpecFile};
+use specforge_graph::{
+    Edge, FileChange, Graph, GraphBuild, GraphConfig, GraphInputs, Node, SpecFile,
+};
 use specforge_parser::{EntityId, EntityKind, FieldMap, parse};
 use specforge_test_macros::test as specforge_test;
 
@@ -1389,7 +1391,10 @@ behavior b "B" { contract "second" guarded_by [a] }
 
     // With custom bidirectional pairs configured, the 2-hop cycle should be suppressed
     let config_with_pairs = GraphConfig {
-        bidirectional_pairs: vec![("guards".to_string(), "guarded_by".to_string())],
+        inputs: GraphInputs {
+            bidirectional_pairs: vec![("guards".to_string(), "guarded_by".to_string())],
+            ..Default::default()
+        },
         ..Default::default()
     };
     let (_, diags_with_pairs) = build_graph_with_config(&[spec_file], &config_with_pairs);
