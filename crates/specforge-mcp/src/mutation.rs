@@ -523,4 +523,16 @@ mod tests {
         assert!(!failed.outcome.succeeded());
         assert!(failed.written.is_some_and(|w| w.files.is_empty()));
     }
+
+    #[test]
+    fn an_operation_failure_converted_by_hand_loses_its_writes() {
+        let mut error = OpError::new(
+            specforge_ops::OpErrorKind::Internal,
+            "write_failed",
+            "failed",
+        );
+        error.writes = Writes::from_iter(["/p/a"]);
+        let converted = McpError::from(error).to_json().to_string();
+        assert!(!converted.contains("/p/a"), "{converted}");
+    }
 }

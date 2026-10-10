@@ -898,3 +898,138 @@ fn a_preview_reply_has_no_files_written() {
         );
     }
 }
+
+/// The greet module installed from a registry (a `source: registry` lock
+/// entry) and enabled: what `specforge add @sdk/greet@0.0.0-test` leaves.
+fn registry_installed_greet() -> Served {
+    let project = TestProject::new().enabling(&[GREET]);
+    specforge_installed::testing::install_module(
+        project.root(),
+        GREET,
+        &std::fs::read(greet_blob()).unwrap(),
+    );
+    project.serve_components()
+}
+
+// P1
+#[test]
+fn pin_a_dry_run_of_an_installed_registry_package_is_reported_as_a_mutation() {
+    let mut server = registry_installed_greet();
+    let since = server.state().events.len();
+    let reply = call_tool(
+        &mut server,
+        "specforge.add_extension",
+        json!({"specifier": "@sdk/greet@0.0.0-test", "dry_run": true}),
+    );
+    let payload = tool_json(&reply);
+    assert_eq!(payload["already_present"], true, "{reply}");
+    // Today: reported as a duplicate add.
+    assert_eq!(payload["files_written"], json!([]), "{reply}");
+    assert_eq!(
+        event_names_since(
+            &server,
+            since,
+            &["extension_added", "mcp_mutation_completed"]
+        ),
+        ["extension_added", "mcp_mutation_completed"]
+    );
+}
+
+// P2
+#[specforge_test(
+    behavior = "mcp_mutation_completed",
+    verify = "a mutation's reply lists in files_written the files files_changed counts"
+)]
+fn a_refused_preview_lists_nothing_and_a_refused_mutation_lists_no_file() {
+    let mut server = rename_server();
+    for (tool, preview, real) in [
+        (
+            "rename",
+            json!({"entity_id": "ghost", "new_name": "ghost2", "dry_run": true}),
+            json!({"entity_id": "ghost", "new_name": "ghost2"}),
+        ),
+        (
+            "migrate",
+            json!({"target_version": "x.y", "dry_run": true}),
+            json!({"target_version": "x.y"}),
+        ),
+        (
+            "format",
+            json!({"paths": ["missing.spec"], "check": true}),
+            json!({"paths": ["missing.spec"]}),
+        ),
+    ] {
+        let tool = format!("specforge.{tool}");
+        let since = server.state().events.len();
+        let reply = call_tool(&mut server, &tool, preview.clone());
+        assert_eq!(
+            reply["result"]["isError"], true,
+            "{tool} {preview}: {reply}"
+        );
+        assert!(
+            tool_json(&reply)["data"].get("files_written").is_none(),
+            "{tool} {preview}: {reply}"
+        );
+        assert_eq!(
+            event_names_since(&server, since, &["mcp_mutation_completed"]),
+            Vec::<String>::new(),
+            "{tool} {preview}"
+        );
+
+        let reply = call_tool(&mut server, &tool, real.clone());
+        assert_eq!(reply["result"]["isError"], true, "{tool} {real}: {reply}");
+        assert_eq!(files_written(&reply), Vec::<String>::new(), "{tool} {real}");
+        assert_eq!(
+            last_completed(&server),
+            Some(completed(&tool, 0, 0, false)),
+            "{tool} {real}"
+        );
+    }
+}
+
+// P3
+#[test]
+fn rename_returns_diagnostics_after_a_successful_write_only() {
+    let mut server = rename_server();
+    let tool = "specforge.rename";
+
+    let reply = call_tool(
+        &mut server,
+        tool,
+        json!({"entity_id": "alpha", "new_name": "omega", "dry_run": true}),
+    );
+    assert_ok(&reply);
+    assert!(tool_json(&reply).get("diagnostics").is_none(), "{reply}");
+
+    let reply = call_tool(
+        &mut server,
+        tool,
+        json!({"entity_id": "ghost", "new_name": "ghost2"}),
+    );
+    assert_eq!(reply["result"]["isError"], true, "{reply}");
+    let text = tool_json(&reply);
+    assert!(text.get("diagnostics").is_none(), "{reply}");
+    assert!(text["data"].get("diagnostics").is_none(), "{reply}");
+
+    let reply = call_tool(
+        &mut server,
+        tool,
+        json!({"entity_id": "alpha", "new_name": "omega"}),
+    );
+    assert_ok(&reply);
+    let payload = tool_json(&reply);
+    let codes: Vec<&str> = payload["diagnostics"]
+        .as_array()
+        .unwrap_or_else(|| panic!("no diagnostics in {reply}"))
+        .iter()
+        .map(|d| d["code"].as_str().expect("a code"))
+        .collect();
+    let served: Vec<String> = server
+        .state()
+        .diagnostics()
+        .iter()
+        .map(|d| d.code.to_string())
+        .collect();
+    assert_eq!(codes, served, "{reply}");
+    assert!(payload["files_written"].is_array(), "{reply}");
+}
