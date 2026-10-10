@@ -504,3 +504,28 @@ fn minimum_refuses_a_smaller_number() {
         ["$.n: 3 is below the minimum 5"]
     );
 }
+
+#[derive(Serialize, Shape)]
+struct Left {
+    left: String,
+}
+
+#[derive(Serialize, Shape)]
+struct Right {
+    right: usize,
+}
+
+#[derive(Serialize, Shape)]
+#[serde(untagged)]
+enum Wrapped {
+    A(Left),
+    B(Right),
+}
+
+#[test]
+fn an_untagged_union_of_object_newtypes_states_no_type_today() {
+    is_object::<Wrapped>();
+    assert_eq!(schema::<Wrapped>().get("type"), None);
+    accepts(&Wrapped::A(Left { left: "l".into() }));
+    accepts(&Wrapped::B(Right { right: 1 }));
+}

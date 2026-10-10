@@ -1,0 +1,35 @@
+---
+source: crates/specforge-mcp/tests/output_schemas.rs
+expression: "lines.join(\"\\n\")"
+---
+specforge.query 8901
+specforge.analyze 3607
+specforge.trace 1912
+specforge.search 481
+specforge.explain 770
+specforge.schema 1765
+specforge.coverage 696
+specforge.stats 757
+specforge.list 290
+specforge.inspect 3432
+specforge.find_definition 1018
+specforge.find_references 962
+specforge.outline 1907
+specforge.suggest_fixes 890
+specforge.format 3417
+specforge.rename 3000
+specforge.init 434
+specforge.add_extension 1537
+specforge.remove_extension 444
+specforge.migrate 10228
+specforge.extensions 884
+specforge.providers 2826
+specforge.doctor 4112
+specforge.collect 3091
+specforge.render 251
+specforge.infer_progress 864
+specforge.infer_gaps 1101
+specforge.infer_session 295
+specforge.find_implementation 502
+specforge.find_spec_for_source 642
+total 61016

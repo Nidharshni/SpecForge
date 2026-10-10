@@ -416,6 +416,12 @@ mod tests {
     use serde_json::json;
 
     #[test]
+    fn a_ref_is_not_followed_today() {
+        let schema = json!({"$defs": {"A": {"type": "string"}}, "$ref": "#/$defs/A"});
+        assert!(violations(&schema, &json!(1)).is_empty());
+    }
+
+    #[test]
     fn one_of_needs_exactly_one_branch_and_any_of_at_least_one() {
         let branch = |key: &str| json!({"type": "object", "required": [key]});
         let one_of = json!({"type": "object", "oneOf": [branch("a"), branch("b")]});
