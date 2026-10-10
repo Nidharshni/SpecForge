@@ -12,12 +12,11 @@
 //! pairing whose closing quote runs into text), or a multi-line `"""…"""`
 //! whose closing quotes run into text. The scan runs only on files the
 //! grammar already rejected; a properly closed multi-line string whose
-//! content looks like a block start is never split. A test holds the resume
-//! lines to the top-level forms the grammar reads in the repository's spec.
+//! content looks like a block start is never split. The resume lines are
+//! `lex::starts_top_level_form`'s, which the LSP's document shares (ADR 0038
+//! D6).
 
-use crate::lex::{self, LexemeKind, lex};
-
-const TRIPLE: &str = "\"\"\"";
+use crate::lex::{self, LexemeKind, TRIPLE, lex};
 
 /// A string the recovery ends early.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -27,7 +26,8 @@ pub(crate) struct UnclosedString {
     /// The delimiter: `"` or `"""`.
     pub delim: &'static str,
     /// Byte offset where the string is ended: the start of the next
-    /// block-start line, or the end of the source when none follows.
+    /// line that starts a top-level form, or the end of the source when none
+    /// follows.
     pub end: usize,
 }
 
@@ -37,7 +37,7 @@ pub(crate) fn unclosed_strings(source: &str) -> Vec<UnclosedString> {
     let mut found = Vec::new();
     let mut pos = 0;
     while let Some((open, delim, top_indent)) = culprit(source, pos) {
-        let end = next_block_start(source, open + delim.len(), top_indent).unwrap_or(source.len());
+        let end = next_form_start(source, open + delim.len(), top_indent).unwrap_or(source.len());
         found.push(UnclosedString { open, delim, end });
         if end == source.len() {
             break;
@@ -58,8 +58,10 @@ fn culprit(source: &str, from: usize) -> Option<(usize, &'static str, usize)> {
     for lexeme in lex(text) {
         let first_on_line = previous_end.is_none_or(|end| text[end..lexeme.start].contains('\n'));
         if first_on_line && depth == 0 && lexeme.kind != LexemeKind::Comment {
-            let line_start = text[..lexeme.start].rfind('\n').map_or(0, |nl| nl + 1);
-            top_indent = lexeme.start - line_start;
+            // First on its line: only whitespace precedes it there.
+            if let Some(indent) = lex::line_indent(text, lexeme.start) {
+                top_indent = indent;
+            }
         }
         match lexeme.kind {
             LexemeKind::Punct('{') => depth += 1,
@@ -90,8 +92,9 @@ fn culprit(source: &str, from: usize) -> Option<(usize, &'static str, usize)> {
 }
 
 /// The first line after `from` that starts a top-level form at indentation
-/// no deeper than `max_indent`.
-fn next_block_start(source: &str, from: usize, max_indent: usize) -> Option<usize> {
+/// no deeper than `max_indent` (`lex::starts_top_level_form`, each line
+/// lexed alone: the text after an unclosed string cannot be lexed whole).
+fn next_form_start(source: &str, from: usize, max_indent: usize) -> Option<usize> {
     let mut at = from;
     while let Some(nl) = source[at..].find('\n') {
         let line = at + nl + 1;
@@ -101,49 +104,13 @@ fn next_block_start(source: &str, from: usize, max_indent: usize) -> Option<usiz
         let line_end = source[line..]
             .find('\n')
             .map_or(source.len(), |nl| line + nl);
-        if is_block_start(&source[line..line_end], max_indent) {
+        let text = &source[line..line_end];
+        if lex::starts_top_level_form(text, &lex(text), max_indent) {
             return Some(line);
         }
         at = line;
     }
     None
-}
-
-/// Whether `line` opens a top-level form of the grammar (a child of
-/// `source_file`) at indentation no deeper than `max_indent`: `use …`,
-/// `pub use …`, `spec "Title" {`, `ref scheme.kind:id "Title"`,
-/// `kind name ["Title"] {` (a define block too) or `kind name =` (a union).
-fn is_block_start(line: &str, max_indent: usize) -> bool {
-    let indent = line.len() - line.trim_start_matches([' ', '\t']).len();
-    if indent > max_indent {
-        return false;
-    }
-    let lexemes = lex(line);
-    let kind = |i: usize| lexemes.get(i).map(|l| l.kind);
-    let word = |i: usize| {
-        lexemes
-            .get(i)
-            .filter(|l| l.kind == LexemeKind::Ident)
-            .map(|l| l.text(line))
-    };
-    // A header's title: a `"…"` closed on this line.
-    let title = |i: usize| {
-        lexemes.get(i).is_some_and(|l| {
-            l.kind == LexemeKind::Str { closed: true } && !l.text(line).starts_with(TRIPLE)
-        })
-    };
-    let punct = |i: usize, c: char| kind(i) == Some(LexemeKind::Punct(c));
-    // An import's target: a path, bindings or `* as`.
-    let import =
-        |i: usize| kind(i).is_some_and(LexemeKind::is_str) || punct(i, '{') || punct(i, '*');
-    match word(0) {
-        Some("use") => import(1),
-        Some("pub") => word(1) == Some("use") && import(2),
-        Some("spec") => title(1) && punct(2, '{'),
-        Some("ref") => kind(1) == Some(LexemeKind::RefId) && title(2),
-        Some(_) if word(1).is_some() => punct(if title(2) { 3 } else { 2 }, '{') || punct(2, '='),
-        _ => false,
-    }
 }
 
 #[cfg(test)]
@@ -283,64 +250,8 @@ mod tests {
     }
 
     #[test]
-    fn block_start_lines() {
-        assert!(is_block_start("behavior b \"B\" {", 0));
-        assert!(is_block_start("type t {", 0));
-        assert!(is_block_start("spec \"S\" {", 0));
-        assert!(is_block_start("ref github.issue:org/repo#1 \"T\"", 0));
-        assert!(is_block_start("use \"./a.spec\"", 0));
-        assert!(is_block_start("pub use { A } from \"./a.spec\"", 0));
-        assert!(!is_block_start("  behavior b \"B\" {", 0));
-        assert!(is_block_start("  behavior b \"B\" {", 2));
-        assert!(!is_block_start("the quick brown fox", 0));
-        assert!(!is_block_start("status done", 0));
-        assert!(!is_block_start("behavior b \"B", 0));
-        assert!(is_block_start("type status = \"a\" | \"b\"", 0));
-        assert!(is_block_start("type t =", 0));
-        assert!(is_block_start("use\"./a.spec\"", 0));
-    }
-
-    #[test]
     fn slashes_in_a_scheme_ref_are_not_a_comment() {
         let src = "ref web.page:https://x.io \"T\"\nbehavior a \"A\" {\n}\n";
         assert!(unclosed_strings(src).is_empty());
-    }
-
-    #[specforge_test_macros::test(
-        behavior = "recover_from_syntax_errors",
-        verify = "recovery resumes at every top-level form the grammar reads, a union block included"
-    )]
-    fn every_top_level_form_of_the_corpora_is_a_resume_point() {
-        let mut files = Vec::new();
-        for corpus in CORPORA {
-            collect_specs(&root().join(corpus), &mut files);
-        }
-        files.push(
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/lexemes.spec"),
-        );
-        let mut missed = std::collections::BTreeSet::new();
-        for file in files {
-            let src = std::fs::read_to_string(&file).unwrap();
-            let (_, tree) = crate::parse_incremental(&src, &file.to_string_lossy(), None);
-            let tree = tree.unwrap();
-            let root = tree.root_node();
-            let mut cursor = root.walk();
-            for node in root.named_children(&mut cursor) {
-                if node.kind() == tree_sitter_specforge::kind::COMMENT {
-                    continue;
-                }
-                let line = src.lines().nth(node.start_position().row).unwrap();
-                let column = node.start_position().column;
-                assert!(
-                    line[..column].trim().is_empty(),
-                    "{}: two forms on one line",
-                    file.display()
-                );
-                if !is_block_start(line, column) {
-                    missed.insert(format!("{}: {}", node.kind(), line));
-                }
-            }
-        }
-        assert!(missed.is_empty(), "not resume points: {missed:#?}");
     }
 }
