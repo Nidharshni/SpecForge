@@ -7,7 +7,7 @@ use specforge_common::shape::Shape;
 use specforge_common::{DiagnosticList, project_root_of};
 
 use crate::args::Arguments;
-use crate::mutation::{Mutated, Mutation, MutationArgs, Written};
+use crate::mutation::{Failed, Mutated, Mutation, MutationArgs, Written};
 use crate::target::ProjectRef;
 use crate::tool::{ErrorCode, McpError};
 use specforge_ops::OpErrorKind;
@@ -139,10 +139,8 @@ impl Reply {
 }
 
 pub(crate) fn call(project: &ProjectRef<'_>, args: Args) -> Mutation<Reply> {
-    // The one reading of check, diff and write: a run that does not write
-    // is a preview.
+    // The one reading of check, diff and write.
     let mode = args.mode();
-    let preview = !mode.writes();
 
     // The project the call formats: the served one, or the one `path`
     // names (a directory that is no project is its own root, formatted with
@@ -161,11 +159,7 @@ pub(crate) fn call(project: &ProjectRef<'_>, args: Args) -> Mutation<Reply> {
 
     let mut reply = Reply::of(&outcome, mode, args.diff);
     if outcome.succeeded() {
-        return Ok(if preview {
-            Mutated::preview(reply)
-        } else {
-            Mutated::wrote(reply, Written::files(outcome.writes()))
-        });
+        return Ok(Mutated::new(reply, Written::files(outcome.writes())));
     }
 
     // Every other file was still formatted, and what was written is
@@ -177,9 +171,5 @@ pub(crate) fn call(project: &ProjectRef<'_>, args: Args) -> Mutation<Reply> {
     let code = ErrorCode::from(outcome.failure_kind().unwrap_or(OpErrorKind::Internal));
     let error = McpError::new(code, reply.message.clone().unwrap_or_default())
         .with_data(serde_json::to_value(&reply).expect("a reply serializes"));
-    Ok(if preview {
-        Mutated::failed_preview(error)
-    } else {
-        Mutated::failed(error, Written::files(outcome.writes()))
-    })
+    Err(Failed::after(error, outcome.writes()))
 }

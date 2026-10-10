@@ -6,7 +6,7 @@ use specforge_ops::infer::{
 };
 
 use crate::args::Arguments;
-use crate::mutation::{Mutated, Mutation, MutationArgs, Written};
+use crate::mutation::{Failed, Mutated, Mutation, MutationArgs, Written};
 use crate::target::ProjectRef;
 use crate::tool::{ErrorCode, McpError};
 
@@ -56,25 +56,19 @@ pub struct Reply {
 /// (`specforge_ops::infer::session`), which writes `specforge-infer.json`.
 pub fn call(project: &ProjectRef<'_>, args: Args) -> Mutation<Reply> {
     let step = step(&args)?;
-    Ok(match infer::session(&project.view(), step) {
-        Ok(SessionOutcome { recorded, writes }) => {
-            let written = match &recorded {
-                Recorded::Marked { entities, .. } => {
-                    Written::files(writes).with_entities(entities.clone())
-                }
-                _ => Written::files(writes),
-            };
-            Mutated::wrote(reply(&recorded), written)
-        }
-        Err(error) => {
+    let SessionOutcome { recorded, writes } =
+        infer::session(&project.view(), step).map_err(|error| {
             let argument = argument_of(&error);
-            let refused = McpError::from(error);
-            Mutated::refused(match argument {
+            Failed::from(error).map_error(|refused| match argument {
                 Some(argument) => refused.with_argument(argument),
                 None => refused,
             })
-        }
-    })
+        })?;
+    let written = match &recorded {
+        Recorded::Marked { entities, .. } => Written::files(writes).with_entities(entities.clone()),
+        _ => Written::files(writes),
+    };
+    Ok(Mutated::new(reply(&recorded), written))
 }
 
 /// The step `args` asks for, or the refusal of the arguments.

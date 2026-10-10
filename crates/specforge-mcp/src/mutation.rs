@@ -25,7 +25,7 @@ use specforge_common::Diagnostic;
 use specforge_common::shape::{Object, Shape};
 use specforge_ops::{OpError, Writes};
 
-use crate::reply::{Answer, Answered};
+use crate::reply::Answer;
 use crate::surface_call::Event;
 use crate::target::Call;
 use crate::tool::{McpError, ToolOutcome};
@@ -170,90 +170,85 @@ impl Replied {
     }
 }
 
-/// A mutation handler's typed result: its answer (a reply, or a failure) and
-/// what it wrote; `written` is `None` for a preview.
+/// A mutation that ran: its answer (the reply, the diagnostics that ride in
+/// `_meta.diagnostics`, its other `_meta`) and what it wrote. A preview's
+/// [`Written`] holds no file and is dropped.
 #[derive(Debug)]
 pub struct Mutated<R> {
-    answer: Answered<R>,
-    written: Option<Written>,
+    answer: Answer<R>,
+    written: Written,
 }
 
 impl<R> Mutated<R> {
-    /// A run that meant to write: its reply and what it wrote.
-    pub fn wrote(answer: impl Into<Answer<R>>, written: Written) -> Self {
+    /// The one constructor of a run.
+    pub fn new(answer: impl Into<Answer<R>>, written: Written) -> Self {
         Mutated {
-            answer: Ok(answer.into()),
-            written: Some(written),
+            answer: answer.into(),
+            written,
+        }
+    }
+}
+
+/// A mutation that failed: its McpError and the files it left written (a
+/// format that failed on one file, a migration rolled back), which a failure
+/// that is no preview lists as `data.files_written`. A failure changes no
+/// entity and produces no domain event.
+#[derive(Debug)]
+pub struct Failed {
+    error: Box<McpError>,
+    files: Writes,
+}
+
+impl Failed {
+    /// `error`, having left `files` written.
+    pub fn after(error: impl Into<Box<McpError>>, files: Writes) -> Self {
+        Failed {
+            error: error.into(),
+            files,
         }
     }
 
-    /// A run that meant to write and failed, having written `written`.
-    pub fn failed(error: impl Into<Box<McpError>>, written: Written) -> Self {
-        Mutated {
-            answer: Err(error.into()),
-            written: Some(written),
-        }
+    /// The same failure, its McpError mapped (naming the argument it is
+    /// about).
+    pub fn map_error(mut self, map: impl FnOnce(McpError) -> McpError) -> Self {
+        self.error = Box::new(map(*self.error));
+        self
     }
 
-    /// A preview's reply.
-    pub fn preview(answer: impl Into<Answer<R>>) -> Self {
-        Mutated {
-            answer: Ok(answer.into()),
-            written: None,
-        }
-    }
-
-    /// A preview that failed.
-    pub fn failed_preview(error: impl Into<Box<McpError>>) -> Self {
-        Mutated {
-            answer: Err(error.into()),
-            written: None,
-        }
-    }
-
-    /// Refused before it wrote anything: a failed mutation.
-    pub fn refused(error: impl Into<Box<McpError>>) -> Self {
-        Self::failed(error, Written::nothing())
-    }
-
-    /// [`Self::refused`], or for a preview [`Self::failed_preview`].
-    pub fn refused_unless_preview(preview: bool, error: impl Into<Box<McpError>>) -> Self {
-        if preview {
-            Self::failed_preview(error)
-        } else {
-            Self::refused(error)
-        }
-    }
-
-    /// An operation's refusal: a failed mutation carrying what the
-    /// operation left written before it failed ([`OpError::writes`]), or,
-    /// for a preview, a failed preview.
-    pub fn refused_after(preview: bool, mut error: OpError) -> Self {
-        let files = std::mem::take(&mut error.writes);
-        let error = McpError::from(error);
-        if preview {
-            Self::failed_preview(error)
-        } else {
-            Self::failed(error, Written::files(files))
-        }
-    }
-
-    /// The same, `extra` added to its reply's `_meta.diagnostics`.
+    /// The same failure, `extra` added to the diagnostics its reply carries
+    /// in `_meta.diagnostics`.
     pub fn with_diagnostics(mut self, extra: Vec<Diagnostic>) -> Self {
-        self.answer = match self.answer {
-            Ok(answer) => Ok(answer.with_diagnostics(extra)),
-            Err(mut error) => {
-                error.reported.extend(extra);
-                Err(error)
-            }
-        };
+        self.error.reported.extend(extra);
         self
     }
 }
 
-/// What a mutation handler returns: a refusal before writing comes back with
-/// `?`; a failure after a write is an `Ok(Mutated::failed(..))`.
-pub type Mutation<R> = Result<Mutated<R>, Box<McpError>>;
+/// Failed before it wrote anything.
+impl From<McpError> for Failed {
+    fn from(error: McpError) -> Self {
+        Failed::after(error, Writes::none())
+    }
+}
+
+/// Failed before it wrote anything.
+impl From<Box<McpError>> for Failed {
+    fn from(error: Box<McpError>) -> Self {
+        Failed::after(error, Writes::none())
+    }
+}
+
+/// An operation's failure: what it left written is its [`OpError::writes`]
+/// (ADR 0022 D4).
+impl From<OpError> for Failed {
+    fn from(mut error: OpError) -> Self {
+        let files = std::mem::take(&mut error.writes);
+        Failed::after(McpError::from(error), files)
+    }
+}
+
+/// What a mutation handler returns. `?` on an `OpError`, an `McpError` or a
+/// `Box<McpError>` is a failure, carrying what an operation left written.
+pub type Mutation<R> = Result<Mutated<R>, Failed>;
 
 /// A mutation tool's arguments (its module's `Args`).
 pub trait MutationArgs: crate::args::Arguments {
@@ -268,21 +263,18 @@ pub trait MutationArgs: crate::args::Arguments {
 /// that `preview`s is no mutation whatever its handler built: its `Written`
 /// is dropped.
 pub fn replied<R: Object + Serialize>(preview: bool, mutation: Mutation<R>) -> Replied {
-    let mut replied = match mutation {
-        Ok(Mutated { answer, written }) => Replied {
-            outcome: crate::reply::structured(answer),
-            written,
-        },
-        Err(refused) => Replied::refused(ToolOutcome::Refused(refused)),
+    let (outcome, written) = match mutation {
+        Ok(Mutated { answer, written }) => (crate::reply::structured(Ok(answer)), written),
+        Err(Failed { error, files }) => (ToolOutcome::Refused(error), Written::files(files)),
     };
-    if preview {
-        debug_assert!(
-            replied.written.as_ref().is_none_or(|w| w.files.is_empty()),
-            "a preview wrote files"
-        );
-        replied.written = None;
+    debug_assert!(
+        !preview || written.files.is_empty(),
+        "a preview wrote files"
+    );
+    Replied {
+        outcome,
+        written: (!preview).then_some(written),
     }
-    replied
 }
 
 /// A mutation's reply as sent: the tool's reply and, unless it only
@@ -526,27 +518,31 @@ mod tests {
     }
 
     #[test]
-    fn a_typed_mutation_is_replied_with_what_it_wrote() {
+    fn a_run_and_a_failure_are_replied_with_what_they_wrote() {
         let written = Written::files(Writes::from_iter(["/p/a.spec"]));
-        let wrote = replied(
-            false,
-            Ok(Mutated::wrote(Probe { name: "x".into() }, written)),
-        );
+        let wrote = replied(false, Ok(Mutated::new(Probe { name: "x".into() }, written)));
         assert_eq!(payload(&wrote.outcome), json!({"name": "x"}));
         assert_eq!(wrote.written.expect("it wrote").files.len(), 1);
 
-        let preview = replied(true, Ok(Mutated::preview(Probe { name: "y".into() })));
+        let preview = replied(
+            true,
+            Ok(Mutated::new(Probe { name: "y".into() }, Written::nothing())),
+        );
         assert!(preview.written.is_none());
 
-        let failed = replied(
+        let failed = replied::<Probe>(
             false,
-            Ok(Mutated::<Probe>::refused(McpError::new(
-                ErrorCode::Conflict,
-                "no",
-            ))),
+            Err(Failed::after(
+                McpError::new(ErrorCode::Conflict, "no"),
+                Writes::from_iter(["/p/b.spec"]),
+            )),
         );
         assert!(!failed.outcome.succeeded());
-        assert!(failed.written.is_some_and(|w| w.files.is_empty()));
+        assert_eq!(failed.written.expect("it failed").files.len(), 1);
+
+        let refused = replied::<Probe>(true, Err(McpError::new(ErrorCode::Conflict, "no").into()));
+        assert!(!refused.outcome.succeeded());
+        assert!(refused.written.is_none());
     }
 
     #[test]
@@ -558,7 +554,7 @@ mod tests {
         };
         let replied = replied(
             true,
-            Ok(Mutated::wrote(
+            Ok(Mutated::new(
                 Probe { name: "x".into() },
                 Written::files(Writes::none()).with_event(event),
             )),
@@ -567,14 +563,18 @@ mod tests {
     }
 
     #[test]
-    fn an_operation_failure_converted_by_hand_loses_its_writes() {
+    fn an_operation_failure_keeps_what_it_left_written() {
         let mut error = OpError::new(
             specforge_ops::OpErrorKind::Internal,
             "write_failed",
             "failed",
         );
         error.writes = Writes::from_iter(["/p/a"]);
-        let converted = McpError::from(error).to_json().to_string();
-        assert!(!converted.contains("/p/a"), "{converted}");
+        let failed = Failed::from(error);
+        assert_eq!(failed.files.len(), 1);
+        let written = replied::<Probe>(false, Err(failed))
+            .written
+            .expect("failed");
+        assert_eq!(written.files.len(), 1);
     }
 }

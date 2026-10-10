@@ -4,7 +4,7 @@ use serde::Serialize;
 use specforge_common::shape::Shape;
 
 use crate::args::Arguments;
-use crate::mutation::{Mutated, Mutation, MutationArgs, MutationEvent, Written};
+use crate::mutation::{Failed, Mutated, Mutation, MutationArgs, MutationEvent, Written};
 use crate::reply::Answer;
 use crate::target::ProjectRef;
 
@@ -100,7 +100,6 @@ pub(crate) fn call(project: &ProjectRef<'_>, args: Args) -> Mutation<Reply> {
     use specforge_ops::extension::{self, AddOutcome, AddRequest, Origin, Trust};
 
     let allow_unsigned = args.allow_unsigned;
-    let dry_run = args.dry_run;
 
     // The project the call installs into: the served one, or the one
     // `path` names.
@@ -113,10 +112,7 @@ pub(crate) fn call(project: &ProjectRef<'_>, args: Args) -> Mutation<Reply> {
     } else {
         "installed in the project the path names; the server keeps serving its own"
     };
-    let source = match extension::parse(&args.specifier) {
-        Ok(source) => source,
-        Err(error) => return Ok(Mutated::refused_after(dry_run, error)),
-    };
+    let source = extension::parse(&args.specifier)?;
 
     let registry = specforge_ops_registry::ConfiguredRegistry::for_project(&root, "add_extension");
     // The shared operation `specforge add` runs. An agent can't be asked,
@@ -126,18 +122,16 @@ pub(crate) fn call(project: &ProjectRef<'_>, args: Args) -> Mutation<Reply> {
         source,
         allow_unsigned,
         trust: Trust::Refuse,
-        dry_run,
+        dry_run: args.dry_run,
     };
     let added = extension::add(&request, &registry, project.runtime.as_ref());
     // What reading the registry configuration reported (E067, W140, I003), once the add asked a
     // registry, as `specforge add` shows it.
     let reported = registry.reported();
+    // An install that failed after placing its module reports it.
     let added = match added {
         Ok(added) => added,
-        // An install that failed after placing its module reports it.
-        Err(error) => {
-            return Ok(Mutated::refused_after(dry_run, error).with_diagnostics(reported));
-        }
+        Err(error) => return Err(Failed::from(error).with_diagnostics(reported)),
     };
     let source_of = Origin::source;
     let (reply, was_duplicate) = match added.outcome {
@@ -203,8 +197,9 @@ pub(crate) fn call(project: &ProjectRef<'_>, args: Args) -> Mutation<Reply> {
                 version,
                 source: source_of(&origin),
             });
-            return Ok(Mutated::preview(
+            return Ok(Mutated::new(
                 Answer::new(plan).with_diagnostics(reported),
+                Written::nothing(),
             ));
         }
     };
@@ -213,7 +208,7 @@ pub(crate) fn call(project: &ProjectRef<'_>, args: Args) -> Mutation<Reply> {
         total_extensions: added.extensions_enabled,
         was_duplicate,
     };
-    Ok(Mutated::wrote(
+    Ok(Mutated::new(
         Answer::new(reply).with_diagnostics(reported),
         Written::files(added.writes).with_event(event),
     ))

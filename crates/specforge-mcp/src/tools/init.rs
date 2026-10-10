@@ -56,10 +56,7 @@ pub(crate) fn call(
         extensions,
     };
     let outcome =
-        match init::plan(&request, runtime.as_ref()).and_then(|plan| init::apply(path, plan)) {
-            Ok(outcome) => outcome,
-            Err(error) => return Ok(Mutated::refused_after(false, error)),
-        };
+        init::plan(&request, runtime.as_ref()).and_then(|plan| init::apply(path, plan))?;
     let reply = Reply {
         project_path: path.display().to_string(),
         config_file: "specforge.json".to_string(),
@@ -75,7 +72,7 @@ pub(crate) fn call(
         extension_count: outcome.extensions.len(),
         spec_file_path: init::STARTER_FILE.to_string(),
     };
-    Ok(Mutated::wrote(
+    Ok(Mutated::new(
         reply,
         Written::files(outcome.writes).with_event(event),
     ))

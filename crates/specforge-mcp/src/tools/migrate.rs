@@ -6,7 +6,7 @@ use specforge_common::shape::Shape;
 use specforge_ops::migrate::{MigrationDiff, MigrationResult, RollbackSummary};
 
 use crate::args::Arguments;
-use crate::mutation::{Mutated, Mutation, MutationArgs, Written};
+use crate::mutation::{Failed, Mutated, Mutation, MutationArgs, Written};
 use crate::target::ProjectRef;
 use crate::tool::McpError;
 
@@ -84,10 +84,7 @@ pub(crate) fn call(project: &ProjectRef<'_>, args: Args) -> Mutation<Reply> {
     let no_backup = args.no_backup;
     // The format version to migrate to, checked as `specforge migrate
     // --target-version` checks it.
-    let target = match specforge_ops::migrate::parse_target(args.target_version.as_deref()) {
-        Ok(target) => target,
-        Err(error) => return Ok(Mutated::refused_after(dry_run, error)),
-    };
+    let target = specforge_ops::migrate::parse_target(args.target_version.as_deref())?;
 
     let runtime = project.runtime;
     // The migration `specforge migrate` runs, hooks and rollback included.
@@ -101,15 +98,7 @@ pub(crate) fn call(project: &ProjectRef<'_>, args: Args) -> Mutation<Reply> {
     let (from, to) = (outcome.from.to_string(), outcome.to.to_string());
     // The format version lives in each spec file's header: with no file
     // behind the target, the project is current and nothing ran: a
-    // migration that wrote nothing (a dry run is a preview).
-    let migration = |reply: Reply, failure: Option<McpError>, writes: specforge_ops::Writes| match (
-        failure, dry_run,
-    ) {
-        (None, true) => Mutated::preview(reply),
-        (None, false) => Mutated::wrote(reply, Written::files(writes)),
-        (Some(error), true) => Mutated::failed_preview(error),
-        (Some(error), false) => Mutated::failed(error, Written::files(writes)),
-    };
+    // migration that wrote nothing.
     if !outcome.pending {
         let current = Reply::Current(Current {
             ok: outcome.ok(),
@@ -119,7 +108,7 @@ pub(crate) fn call(project: &ProjectRef<'_>, args: Args) -> Mutation<Reply> {
             dry_run,
             message: "project is already at the latest format version".to_string(),
         });
-        return Ok(migration(current, None, outcome.writes));
+        return Ok(Mutated::new(current, Written::files(outcome.writes)));
     }
 
     let summary = &outcome.summary;
@@ -146,8 +135,12 @@ pub(crate) fn call(project: &ProjectRef<'_>, args: Args) -> Mutation<Reply> {
     // A failed run's report rides in `data`, and what it left written (its
     // backups after a rollback, the files migrated before a failure) is
     // reported.
-    let failure = outcome.failure().map(|failure| {
-        McpError::from(failure).with_data(serde_json::to_value(&reply).expect("a reply serializes"))
-    });
-    Ok(migration(reply, failure, outcome.writes))
+    match outcome.failure() {
+        None => Ok(Mutated::new(reply, Written::files(outcome.writes))),
+        Some(failure) => Err(Failed::after(
+            McpError::from(failure)
+                .with_data(serde_json::to_value(&reply).expect("a reply serializes")),
+            outcome.writes,
+        )),
+    }
 }

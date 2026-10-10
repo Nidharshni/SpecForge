@@ -45,43 +45,32 @@ pub struct Stranded {
 }
 
 pub(crate) fn call(project: &ProjectRef<'_>, args: Args) -> Mutation<Reply> {
-    let name = args.name.clone();
-    let force = args.force;
-    let dry_run = args.dry_run;
-
     // The shared operation, over the view of the call's project: its
     // dependents and its stranded entities, the served project's or those
-    // of the project `path` names.
+    // of the project `path` names. A removal that failed after editing
+    // specforge.json reports it.
     let request = specforge_ops::extension::RemoveRequest {
-        name: &name,
-        force,
-        dry_run,
+        name: &args.name,
+        force: args.force,
+        dry_run: args.dry_run,
     };
-    match specforge_ops::extension::remove(&project.view(), &request) {
-        Ok(outcome) => {
-            let reply = Reply {
-                removed_extension: outcome.name.to_string(),
-                version: outcome.version.as_ref().map(ToString::to_string),
-                stranded: outcome
-                    .stranded
-                    .iter()
-                    .map(|entity| Stranded {
-                        entity_id: entity.entity_id.to_string(),
-                        kind: entity.kind.to_string(),
-                    })
-                    .collect(),
-                dry_run: outcome.dry_run.then_some(true),
-            };
-            if outcome.dry_run {
-                return Ok(Mutated::preview(reply));
-            }
-            Ok(Mutated::wrote(
-                reply,
-                Written::files(outcome.writes)
-                    .with_entities(outcome.stranded.into_iter().map(|entity| entity.entity_id)),
-            ))
-        }
-        // A removal that failed after editing specforge.json reports it.
-        Err(error) => Ok(Mutated::refused_after(dry_run, error)),
-    }
+    let outcome = specforge_ops::extension::remove(&project.view(), &request)?;
+    let reply = Reply {
+        removed_extension: outcome.name.to_string(),
+        version: outcome.version.as_ref().map(ToString::to_string),
+        stranded: outcome
+            .stranded
+            .iter()
+            .map(|entity| Stranded {
+                entity_id: entity.entity_id.to_string(),
+                kind: entity.kind.to_string(),
+            })
+            .collect(),
+        dry_run: outcome.dry_run.then_some(true),
+    };
+    Ok(Mutated::new(
+        reply,
+        Written::files(outcome.writes)
+            .with_entities(outcome.stranded.into_iter().map(|entity| entity.entity_id)),
+    ))
 }
