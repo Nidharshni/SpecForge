@@ -1,4 +1,4 @@
-//! What every core tool's outputSchema is today (plan 05, ADR 0051).
+//! What every core tool's outputSchema is (plan 05, ADR 0051).
 //!
 //! The pins are unlinked: they hold the schemas as they are. The ticket that
 //! changes what a pin holds flips it in the same commit.
@@ -6,6 +6,7 @@
 use std::collections::BTreeMap;
 
 use serde_json::Value;
+use specforge_test::prelude::*;
 
 /// Every core tool with an outputSchema, by name.
 fn documents() -> Vec<(&'static str, Value)> {
@@ -31,17 +32,18 @@ fn objects<'v>(schema: &'v Value, out: &mut Vec<&'v Value>) {
     }
 }
 
-#[test]
-fn output_schema_roots_without_type_object_today() {
-    let rootless: std::collections::BTreeSet<&str> = documents()
-        .iter()
-        .filter(|(_, schema)| schema.get("type") != Some(&Value::from("object")))
-        .map(|(name, _)| *name)
-        .collect();
-    assert_eq!(
-        rootless,
-        std::collections::BTreeSet::from(["specforge.explain", "specforge.trace"])
-    );
+#[specforge_test(
+    behavior = "follow_negotiated_mcp_revision",
+    verify = "every core tool's outputSchema is an object schema at its root"
+)]
+fn every_output_schema_root_is_an_object() {
+    for (name, schema) in documents() {
+        assert_eq!(
+            schema.get("type"),
+            Some(&Value::from("object")),
+            "{name}'s outputSchema root states no type object"
+        );
+    }
 }
 
 #[test]

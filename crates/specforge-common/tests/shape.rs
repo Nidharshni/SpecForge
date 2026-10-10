@@ -523,9 +523,18 @@ enum Wrapped {
 }
 
 #[test]
-fn an_untagged_union_of_object_newtypes_states_no_type_today() {
+fn an_untagged_union_of_object_newtypes_is_an_object() {
     is_object::<Wrapped>();
-    assert_eq!(schema::<Wrapped>().get("type"), None);
+    assert_eq!(schema::<Wrapped>()["type"], "object");
     accepts(&Wrapped::A(Left { left: "l".into() }));
     accepts(&Wrapped::B(Right { right: 1 }));
+}
+
+/// The derive only unions `Object`s, so a scalar branch is reached through
+/// `one_of` directly: a union is typed `object` only when every branch is.
+#[test]
+fn an_untagged_union_of_a_scalar_newtype_states_no_type() {
+    let mixed = specforge_common::shape::one_of(vec![schema::<String>(), schema::<Left>()]);
+    assert_eq!(mixed.get("type"), None);
+    assert_eq!(mixed["oneOf"].as_array().map(Vec::len), Some(2));
 }

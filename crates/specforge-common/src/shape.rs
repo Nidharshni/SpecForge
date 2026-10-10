@@ -111,7 +111,7 @@ pub fn flatten(into: &mut Value, inner: Value) {
                 object
             })
             .collect();
-        *into = one_of(merged, true);
+        *into = one_of(merged);
         return;
     }
     let (Some(target), Some(source)) = (into.as_object_mut(), inner.as_object()) else {
@@ -145,9 +145,13 @@ pub fn flatten(into: &mut Value, inner: Value) {
     }
 }
 
-/// `{"oneOf": branches}`, typed `object` when every branch is one.
+/// `{"oneOf": branches}`, typed `object` when every branch is one (decided
+/// from the branches, not from the syntax of the type they came from).
 #[doc(hidden)]
-pub fn one_of(branches: Vec<Value>, objects: bool) -> Value {
+pub fn one_of(branches: Vec<Value>) -> Value {
+    let objects = branches
+        .iter()
+        .all(|branch| branch.get("type") == Some(&json!("object")));
     if objects {
         json!({ "type": "object", "oneOf": branches })
     } else {

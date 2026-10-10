@@ -18,7 +18,8 @@
 //! - A **unit-only enum** is the set of its serialized names.
 //! - A **`#[serde(tag = "k")]` enum** of unit, struct and newtype variants is
 //!   a union of objects, each stating `k`; an **`#[serde(untagged)]` enum** of
-//!   struct and newtype variants is a union of the variants' schemas.
+//!   struct and newtype variants is a union of the variants' schemas (typed
+//!   `object` when every branch is an object schema, decided at run time).
 //! - `#[shape(as = Type)]` states a field's schema from `Type` (required for
 //!   a field serialized with `serialize_with` or `with`);
 //!   `#[shape(names = EXPR)]` makes a string field (or an `Option`/`Vec` of
@@ -574,12 +575,8 @@ fn enum_body(input: &DeriveInput, container: &Serde, data: &syn::DataEnum) -> sy
              use `#[serde(tag = \"..\")]` or `#[serde(untagged)]`",
         ));
     }
-    // Every branch is an object when the enum is tagged or its variants
-    // are structs; a newtype's inner schema may be anything.
-    let objects = container.tag.is_some()
-        || live().all(|(variant, _)| matches!(variant.fields, Fields::Named(_)));
     Ok(Body {
-        schema: quote!(#shape::one_of(::std::vec![#(#branches),*], #objects)),
+        schema: quote!(#shape::one_of(::std::vec![#(#branches),*])),
         object: Some(bounds),
     })
 }
