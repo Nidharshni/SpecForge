@@ -6,7 +6,7 @@ use specforge_common::shape::Shape;
 use specforge_ops::migrate::{MigrationDiff, MigrationResult, RollbackSummary};
 
 use crate::args::Arguments;
-use crate::mutation::{Mutated, Mutation, Written};
+use crate::mutation::{Mutated, Mutation, MutationArgs, Written};
 use crate::target::ProjectRef;
 use crate::tool::McpError;
 
@@ -19,6 +19,12 @@ pub struct Args {
     target_version: Option<String>,
     /// Skip the .bak backup of each migrated file
     no_backup: bool,
+}
+
+impl MutationArgs for Args {
+    fn previews(&self) -> bool {
+        self.dry_run
+    }
 }
 
 /// `specforge.migrate`'s reply (`McpMigrateResult`): a project already at

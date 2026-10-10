@@ -6,7 +6,7 @@ use serde::Serialize;
 use specforge_common::shape::Shape;
 
 use crate::args::Arguments;
-use crate::mutation::{Mutated, Mutation, MutationEvent, Written};
+use crate::mutation::{Mutated, Mutation, MutationArgs, MutationEvent, Written};
 
 /// `specforge.init`'s arguments.
 #[derive(Debug, Arguments)]
@@ -18,6 +18,12 @@ pub struct Args {
     version: String,
     /// Builtin extensions to enable (e.g. @specforge/software) and local .wasm files to install
     extensions: Vec<String>,
+}
+
+impl MutationArgs for Args {
+    fn previews(&self) -> bool {
+        false
+    }
 }
 
 /// `specforge.init`'s reply (`McpInitResult`).

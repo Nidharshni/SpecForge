@@ -4,7 +4,7 @@ use serde::Serialize;
 use specforge_common::shape::Shape;
 
 use crate::args::Arguments;
-use crate::mutation::{Mutated, Mutation, MutationEvent, Written};
+use crate::mutation::{Mutated, Mutation, MutationArgs, MutationEvent, Written};
 use crate::reply::Answer;
 use crate::target::ProjectRef;
 
@@ -17,6 +17,12 @@ pub struct Args {
     dry_run: bool,
     /// Accept a registry package with no publisher signature (publisher verification skipped)
     allow_unsigned: bool,
+}
+
+impl MutationArgs for Args {
+    fn previews(&self) -> bool {
+        self.dry_run
+    }
 }
 
 /// `specforge.add_extension`'s reply (`McpAddExtensionResult`): a builtin

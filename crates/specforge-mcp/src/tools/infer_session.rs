@@ -6,7 +6,7 @@ use specforge_ops::infer::{
 };
 
 use crate::args::Arguments;
-use crate::mutation::{Mutated, Mutation, Written};
+use crate::mutation::{Mutated, Mutation, MutationArgs, Written};
 use crate::target::ProjectRef;
 use crate::tool::{ErrorCode, McpError};
 
@@ -29,6 +29,12 @@ pub struct Args {
     /// Final status (for end)
     #[arg(choice = infer::END_STATUS)]
     status: EndStatus,
+}
+
+impl MutationArgs for Args {
+    fn previews(&self) -> bool {
+        false
+    }
 }
 
 /// `specforge.infer_session`'s reply (`McpInferSessionResult`): one step's

@@ -4,7 +4,7 @@ use serde::Serialize;
 use specforge_common::shape::Shape;
 
 use crate::args::Arguments;
-use crate::mutation::{Mutated, Mutation, Written};
+use crate::mutation::{Mutated, Mutation, MutationArgs, Written};
 use crate::target::ProjectRef;
 
 /// `specforge.remove_extension`'s arguments.
@@ -16,6 +16,12 @@ pub struct Args {
     force: bool,
     /// Preview the removal, stranded entities included, without changing any file
     dry_run: bool,
+}
+
+impl MutationArgs for Args {
+    fn previews(&self) -> bool {
+        self.dry_run
+    }
 }
 
 /// `specforge.remove_extension`'s reply (`McpRemoveExtensionResult`).

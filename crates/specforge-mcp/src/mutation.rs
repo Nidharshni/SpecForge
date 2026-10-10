@@ -255,15 +255,34 @@ impl<R> Mutated<R> {
 /// `?`; a failure after a write is an `Ok(Mutated::failed(..))`.
 pub type Mutation<R> = Result<Mutated<R>, Box<McpError>>;
 
-/// `mutation` serialized: what the pipeline refreshes and reports.
-pub fn replied<R: Object + Serialize>(mutation: Mutation<R>) -> Replied {
-    match mutation {
+/// A mutation tool's arguments (its module's `Args`).
+pub trait MutationArgs: crate::args::Arguments {
+    /// The call only previews (`dry_run`; format's `check` or `diff` without
+    /// `write`): it writes nothing and is no mutation. No refresh, no domain
+    /// event, no `mcp_mutation_completed`, no `files_written`, whatever its
+    /// operation answered (ADR 0022 D2).
+    fn previews(&self) -> bool;
+}
+
+/// `mutation` serialized: what the pipeline refreshes and reports. A call
+/// that `preview`s is no mutation whatever its handler built: its `Written`
+/// is dropped.
+pub fn replied<R: Object + Serialize>(preview: bool, mutation: Mutation<R>) -> Replied {
+    let mut replied = match mutation {
         Ok(Mutated { answer, written }) => Replied {
             outcome: crate::reply::structured(answer),
             written,
         },
         Err(refused) => Replied::refused(ToolOutcome::Refused(refused)),
+    };
+    if preview {
+        debug_assert!(
+            replied.written.as_ref().is_none_or(|w| w.files.is_empty()),
+            "a preview wrote files"
+        );
+        replied.written = None;
     }
+    replied
 }
 
 /// A mutation's reply as sent: the tool's reply and, unless it only
@@ -509,19 +528,42 @@ mod tests {
     #[test]
     fn a_typed_mutation_is_replied_with_what_it_wrote() {
         let written = Written::files(Writes::from_iter(["/p/a.spec"]));
-        let wrote = replied(Ok(Mutated::wrote(Probe { name: "x".into() }, written)));
+        let wrote = replied(
+            false,
+            Ok(Mutated::wrote(Probe { name: "x".into() }, written)),
+        );
         assert_eq!(payload(&wrote.outcome), json!({"name": "x"}));
         assert_eq!(wrote.written.expect("it wrote").files.len(), 1);
 
-        let preview = replied(Ok(Mutated::preview(Probe { name: "y".into() })));
+        let preview = replied(true, Ok(Mutated::preview(Probe { name: "y".into() })));
         assert!(preview.written.is_none());
 
-        let failed = replied(Ok(Mutated::<Probe>::refused(McpError::new(
-            ErrorCode::Conflict,
-            "no",
-        ))));
+        let failed = replied(
+            false,
+            Ok(Mutated::<Probe>::refused(McpError::new(
+                ErrorCode::Conflict,
+                "no",
+            ))),
+        );
         assert!(!failed.outcome.succeeded());
         assert!(failed.written.is_some_and(|w| w.files.is_empty()));
+    }
+
+    #[test]
+    fn a_preview_records_nothing_whatever_its_handler_answered() {
+        let event = MutationEvent::ExtensionAdded {
+            specifier: "@x/y".into(),
+            total_extensions: 1,
+            was_duplicate: true,
+        };
+        let replied = replied(
+            true,
+            Ok(Mutated::wrote(
+                Probe { name: "x".into() },
+                Written::files(Writes::none()).with_event(event),
+            )),
+        );
+        assert!(replied.written.is_none());
     }
 
     #[test]

@@ -110,10 +110,15 @@ macro_rules! mutation {
             arguments: <$args as crate::args::Arguments>::declared,
             reply: crate::mutation::output_schema::<$reply>,
             run: |call, arguments| match crate::args::read::<$args>(&arguments) {
-                Ok(args) => match call.project() {
-                    Ok(project) => crate::mutation::replied::<$reply>($handler(&project, args)),
-                    Err(refused) => crate::mutation::Replied::refused(refused),
-                },
+                Ok(args) => {
+                    let preview = crate::mutation::MutationArgs::previews(&args);
+                    match call.project() {
+                        Ok(project) => {
+                            crate::mutation::replied::<$reply>(preview, $handler(&project, args))
+                        }
+                        Err(refused) => crate::mutation::Replied::refused(refused),
+                    }
+                }
                 Err(refused) => {
                     crate::mutation::Replied::refused(crate::tool::ToolOutcome::Refused(refused))
                 }
@@ -131,15 +136,19 @@ macro_rules! create {
             arguments: <$args as crate::args::Arguments>::declared,
             reply: crate::mutation::output_schema::<$reply>,
             run: |call, arguments| match crate::args::read::<$args>(&arguments) {
-                Ok(args) => match call.new_project_dir() {
-                    Some(dir) => {
-                        crate::mutation::replied::<$reply>($handler(dir, &call.runtime(), args))
+                Ok(args) => {
+                    let preview = crate::mutation::MutationArgs::previews(&args);
+                    match call.new_project_dir() {
+                        Some(dir) => crate::mutation::replied::<$reply>(
+                            preview,
+                            $handler(dir, &call.runtime(), args),
+                        ),
+                        // The call target refused a call without a path.
+                        None => crate::mutation::Replied::refused(crate::tool::McpError::from(
+                            crate::target::TargetError::PathRequired,
+                        )),
                     }
-                    // The call target refused a call without a path.
-                    None => crate::mutation::Replied::refused(crate::tool::McpError::from(
-                        crate::target::TargetError::PathRequired,
-                    )),
-                },
+                }
                 Err(refused) => {
                     crate::mutation::Replied::refused(crate::tool::ToolOutcome::Refused(refused))
                 }

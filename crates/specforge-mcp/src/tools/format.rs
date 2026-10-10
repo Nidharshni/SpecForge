@@ -7,7 +7,7 @@ use specforge_common::shape::Shape;
 use specforge_common::{DiagnosticList, project_root_of};
 
 use crate::args::Arguments;
-use crate::mutation::{Mutated, Mutation, Written};
+use crate::mutation::{Mutated, Mutation, MutationArgs, Written};
 use crate::target::ProjectRef;
 use crate::tool::{ErrorCode, McpError};
 use specforge_ops::OpErrorKind;
@@ -24,6 +24,12 @@ pub struct Args {
     diff: bool,
     /// Write formatted output (defaults to false in check or diff mode)
     write: Option<bool>,
+}
+
+impl MutationArgs for Args {
+    fn previews(&self) -> bool {
+        !self.mode().writes()
+    }
 }
 
 impl Args {

@@ -5,7 +5,7 @@ use specforge_common::DiagnosticList;
 use specforge_common::shape::Shape;
 
 use crate::args::Arguments;
-use crate::mutation::{Mutated, Mutation, Written};
+use crate::mutation::{Mutated, Mutation, MutationArgs, Written};
 use crate::target::ProjectRef;
 use crate::tool::McpError;
 use specforge_ops::OpErrorKind;
@@ -19,6 +19,12 @@ pub struct Args {
     new_name: String,
     /// Return the rename plan without changing any file
     dry_run: bool,
+}
+
+impl MutationArgs for Args {
+    fn previews(&self) -> bool {
+        self.dry_run
+    }
 }
 
 /// `specforge.rename`'s reply (`McpRenameResult`).

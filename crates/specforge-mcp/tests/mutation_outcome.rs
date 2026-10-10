@@ -503,6 +503,18 @@ fn previews_are_no_mutation() {
     }
     assert_eq!(files_under(&root), before, "a preview writes nothing");
     assert_eq!(server.state().session_generation(), generation);
+
+    // An extension already installed from a registry answers "already
+    // present", and its dry run is still a preview.
+    let mut installed = registry_installed_greet();
+    let reply = call_tool(
+        &mut installed,
+        "specforge.add_extension",
+        json!({"specifier": "@sdk/greet@0.0.0-test", "dry_run": true}),
+    );
+    assert_eq!(tool_json(&reply)["already_present"], true, "{reply}");
+    assert_eq!(last_completed(&installed), None, "{reply}");
+    assert!(events(&installed, "extension_added").is_empty());
 }
 
 // 12
@@ -897,6 +909,20 @@ fn a_preview_reply_has_no_files_written() {
             "{tool} {arguments}: {reply}"
         );
     }
+
+    let mut installed = registry_installed_greet();
+    let reply = call_tool(
+        &mut installed,
+        "specforge.add_extension",
+        json!({"specifier": "@sdk/greet@0.0.0-test", "dry_run": true}),
+    );
+    assert!(tool_json(&reply).get("files_written").is_none(), "{reply}");
+    assert!(
+        reply["result"]["structuredContent"]
+            .get("files_written")
+            .is_none(),
+        "{reply}"
+    );
 }
 
 /// The greet module installed from a registry (a `source: registry` lock
@@ -912,8 +938,11 @@ fn registry_installed_greet() -> Served {
 }
 
 // P1
-#[test]
-fn pin_a_dry_run_of_an_installed_registry_package_is_reported_as_a_mutation() {
+#[specforge_test(
+    behavior = "mcp_mutation_completed",
+    verify = "a call whose arguments ask for a preview records nothing and lists no files_written, whatever its operation answered"
+)]
+fn a_dry_run_is_a_preview_whatever_the_operation_answers() {
     let mut server = registry_installed_greet();
     let since = server.state().events.len();
     let reply = call_tool(
@@ -923,15 +952,14 @@ fn pin_a_dry_run_of_an_installed_registry_package_is_reported_as_a_mutation() {
     );
     let payload = tool_json(&reply);
     assert_eq!(payload["already_present"], true, "{reply}");
-    // Today: reported as a duplicate add.
-    assert_eq!(payload["files_written"], json!([]), "{reply}");
+    assert!(payload.get("files_written").is_none(), "{reply}");
     assert_eq!(
         event_names_since(
             &server,
             since,
             &["extension_added", "mcp_mutation_completed"]
         ),
-        ["extension_added", "mcp_mutation_completed"]
+        Vec::<String>::new()
     );
 }
 
