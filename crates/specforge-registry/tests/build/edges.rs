@@ -6,7 +6,7 @@ use specforge_extension_sdk::prelude::*;
 use specforge_protocol_types::{EdgeTypeDescriptor, ExtensionDeclaration};
 use specforge_test_macros::test as spec;
 
-use crate::support::{build, coded, declare, diagnostics, product, software};
+use crate::support::{build, coded, codes, declare, diagnostics, product, software};
 
 /// `@specforge/product` declaring the edge type `enforces` again: from
 /// `feature` to `behavior`, dotted.
@@ -131,7 +131,7 @@ fn an_edge_label_declared_twice_is_w018_and_the_first_keeps_it() {
         w018[0].message,
         "edge type 'enforces' from '@specforge/product' duplicates 'enforces' from '@specforge/software' (first wins)"
     );
-    assert!(build.registry_diagnostics.contains(w018[0]));
+    assert_eq!(codes(&build), ["W018"]);
     // The first declaration keeps the label and its constraints.
     let enforces = build.edges.get("enforces").unwrap();
     assert_eq!(enforces.source_extension, "@specforge/software");

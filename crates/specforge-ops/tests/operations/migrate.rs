@@ -450,12 +450,9 @@ fn the_builtin_extensions_hooks_run_without_a_dependency_failure() {
 
     assert!(failures.is_empty(), "{failures:?}");
     assert!(
-        !build
-            .declaration_diagnostics
-            .iter()
-            .any(|d| d.code == "E027"),
+        build.diagnostics().all(|d| d.code != "E027"),
         "{:?}",
-        build.declaration_diagnostics
+        build.diagnostics().collect::<Vec<_>>()
     );
 }
 

@@ -26,9 +26,9 @@ fn load_via_protocol(ext_name: &str) -> ExtensionDeclaration {
 /// Its peers are not loaded, so their absence (E027) is not its fault.
 fn declaration_diagnostics(declaration: &ExtensionDeclaration) -> Vec<Diagnostic> {
     specforge_registry::build_registries(vec![declaration.clone()])
-        .declaration_diagnostics
-        .into_iter()
-        .filter(|d| d.code != "E027")
+        .diagnostics()
+        .filter(|d| matches!(d.code.as_str(), "E030" | "W021"))
+        .cloned()
         .collect()
 }
 
@@ -539,24 +539,14 @@ fn product_alone_is_clean_and_names_governance_for_w078() {
     // checks still run, so a typo'd kind in product would still be W021.
     let alone = specforge_registry::build_registries(vec![product.clone()]);
     assert!(
-        alone
-            .declaration_diagnostics
-            .iter()
-            .all(|d| d.code != "W021"),
+        alone.diagnostics().all(|d| d.code != "W021"),
         "{:?}",
-        alone.declaration_diagnostics
+        alone.diagnostics().collect::<Vec<_>>()
     );
     let mut typo = product.clone();
     typo.entities[0].fields[0].target_kind = Some("featur".to_string());
     let broken = specforge_registry::build_registries(vec![typo]);
-    assert_eq!(
-        broken
-            .declaration_diagnostics
-            .iter()
-            .filter(|d| d.code == "W021")
-            .count(),
-        1
-    );
+    assert_eq!(broken.diagnostics().filter(|d| d.code == "W021").count(), 1);
 
     // With governance: it declares `constraint`, so nothing is wrong either.
     let both = specforge_registry::build_registries(vec![
@@ -564,11 +554,9 @@ fn product_alone_is_clean_and_names_governance_for_w078() {
         product,
     ]);
     assert!(
-        both.declaration_diagnostics
-            .iter()
-            .all(|d| d.code != "W021"),
+        both.diagnostics().all(|d| d.code != "W021"),
         "{:?}",
-        both.declaration_diagnostics
+        both.diagnostics().collect::<Vec<_>>()
     );
 }
 

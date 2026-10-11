@@ -224,7 +224,7 @@ fn digest(build: &RegistryBuild) -> Value {
     edges.sort();
     json!({
         // Every diagnostic the build reports, in its order (T3: `build.diagnostics()`).
-        "diagnostics": rendered(crate::support::diagnostics(build)),
+        "diagnostics": rendered(build.diagnostics()),
         "rules": build
             .rules
             .iter()

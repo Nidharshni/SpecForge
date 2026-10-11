@@ -44,8 +44,7 @@ impl Built {
 pub fn rules_of(declarations: Vec<ExtensionDeclaration>) -> Built {
     let build = build(declarations);
     let diagnostics = build
-        .registry_diagnostics
-        .iter()
+        .diagnostics()
         .filter(|d| ["W112", "W147", "W023"].contains(&d.code.as_str()))
         .cloned()
         .collect();

@@ -102,10 +102,7 @@ fn a_target_kind_no_loaded_extension_declares_is_w021() {
     ] {
         assert!(w021[0].message.contains(part), "{}", w021[0].message);
     }
-    assert!(
-        build.declaration_diagnostics.contains(w021[0]),
-        "a declaration diagnostic"
-    );
+    assert_eq!(codes(&build), ["W021"]);
     assert!(build.kinds.contains("task"));
     assert!(build.fields.contains("task", "owner"));
 }
@@ -166,7 +163,7 @@ fn an_edge_label_with_no_declared_edge_type_is_w021() {
     for part in ["'invariants'", "edge label 'missing_edge'"] {
         assert!(w021[0].message.contains(part), "{}", w021[0].message);
     }
-    assert!(build.declaration_diagnostics.contains(w021[0]));
+    assert_eq!(codes(&build), ["W021"]);
     // The label is still registered, as an edge of the field's kind.
     assert!(build.edges.contains("missing_edge"));
 }
@@ -303,16 +300,8 @@ fn declaration_consistency_holds() {
     assert!(w021[2].contains("edge type 'haunts' references source_kind 'ghost'"));
     assert!(!w021.iter().any(|m| m.contains("'owner'")), "{w021:?}");
 
-    // Among the declaration diagnostics, after E030 and before E027.
-    assert_eq!(
-        build
-            .declaration_diagnostics
-            .iter()
-            .map(|d| d.code.as_str())
-            .collect::<Vec<_>>(),
-        ["E030", "W021", "W021", "W021", "E027"]
-    );
-    assert!(build.registry_diagnostics.iter().all(|d| d.code != "W021"));
+    // After E030 and before E027, and nothing else.
+    assert_eq!(codes(&build), ["E030", "W021", "W021", "W021", "E027"]);
 
     // compile_not_failed: W021 is a warning, and the kinds still register.
     assert!(
@@ -374,13 +363,7 @@ fn a_rules_edge_type_nobody_it_knows_declares_is_w021() {
             "extension '@test/stranger': rule 'X100' references edge type 'enforces' not declared among its edges or its peers' edges"
         ]
     );
-    // Only a warning, among the declaration diagnostics.
-    assert!(
-        build
-            .declaration_diagnostics
-            .iter()
-            .any(|d| d.code == "W021")
-    );
+    // Only a warning.
     assert_eq!(coded(&build, "W021")[0].severity, Severity::Warning);
 }
 

@@ -246,8 +246,8 @@ fn digest(env: &Environment) -> Value {
             .map(|p| json!({ "extension": p.extension, "name": p.pass.name }))
             .collect::<Vec<_>>(),
         "ext_short": ext_short,
-        // Everything the environment reports, in its order (T3: `env.diagnostics()` alone).
-        "diagnostics": diagnostics(env.diagnostics().chain(env.surface_diagnostics())),
+        // Everything the environment reports, in its order.
+        "diagnostics": diagnostics(env.diagnostics()),
     })
 }
 

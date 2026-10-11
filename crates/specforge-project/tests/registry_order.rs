@@ -4,9 +4,8 @@
 //! `CompiledProject::compile` loads the extensions, populates the registries,
 //! parses the rules and registers the surfaces in a fixed order, and its
 //! diagnostics come out in that order: populate (E026, W018), then rule
-//! parsing (W112), then the graph's own (here E002), and the surface
-//! conflicts (E039) last. Moving that sequence behind one `build_registries`
-//! (step R1) must keep this order byte for byte.
+//! parsing (W112), the surface conflicts (E039) with them, before the
+//! graph's own (here E002).
 
 use specforge_common::Diagnostic;
 use specforge_extension_sdk::{ContributionsBuilder, ExtensionMeta, PeerDependency};
@@ -132,8 +131,8 @@ fn registry_diagnostics_keep_their_order() {
         // Both extensions declare rule W900 (05·R4 wired W023, after the
         // rule-parse diagnostics).
         "<W023>: warning[W023]: validation rule code 'W900' from '@test/beta' duplicates code from '@test/alpha'",
-        "main.spec:3:1: error[E002]: duplicate entity ID 'widget' (first declared at main.spec:1:1)\n  help: rename one of the entities to avoid the collision",
         "<E039>: error[E039]: duplicate surface command ID 'hello': extension '@test/beta' conflicts with '@test/alpha'",
+        "main.spec:3:1: error[E002]: duplicate entity ID 'widget' (first declared at main.spec:1:1)\n  help: rename one of the entities to avoid the collision",
     ];
 
     // Compiled again and again, with fresh hash maps each time: the order
@@ -145,9 +144,12 @@ fn registry_diagnostics_keep_their_order() {
     }
 }
 
-// A characterization, not linked (T3 links it): this project has no import
-// cycle, so `diagnostic_determinism` is not at risk from W113.
-#[test]
+// This project has no import cycle, so `diagnostic_determinism` is not at
+// risk from W113.
+#[specforge_test_macros::test(
+    behavior = "load_extension_manifests",
+    verify = "the environment reports its own diagnostics, then the registry build's, before any source"
+)]
 fn the_environment_reports_before_the_sources() {
     let dir = project_with(true);
     let runtime = Arc::new(colliding_extensions_with(true, true));
@@ -156,14 +158,14 @@ fn the_environment_reports_before_the_sources() {
         let ctx = specforge_project::CompiledProject::compile(dir.path(), Some(runtime.clone()));
         let diagnostics = ctx.diagnostics();
         let codes: Vec<&str> = diagnostics.iter().map(|d| d.code.as_str()).collect();
-        // Today: the declarations' E027, then provider registration, then the
-        // registries' (populate, rule parse, W023, the probe), the graph's
-        // E002, a check's W148, and the surface conflict last.
+        // The environment's own first (provider registration), then the
+        // build's (the declarations' E027, the registries', the probe's, the
+        // surface conflict), then the graph's and the checks'.
         assert_eq!(
             codes,
             [
-                "E027", "W118", "E026", "W018", "W112", "W112", "W023", "W112", "E002", "W148",
-                "E039"
+                "W118", "E027", "E026", "W018", "W112", "W112", "W023", "W112", "E039", "E002",
+                "W148"
             ]
         );
         let probe = diagnostics.iter().rfind(|d| d.code == "W112").unwrap();

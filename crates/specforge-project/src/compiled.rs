@@ -97,9 +97,8 @@ impl CompiledProject {
     }
 
     /// Exactly what `specforge check` reports, in its order: the
-    /// environment's (E069, E028/E033, W138, the declarations', providers',
-    /// I002, the registry build's), the imports', the graph build's, the
-    /// checks', then surface conflicts (E039). The one place this order is
+    /// environment's (its own, then the registry build's), the imports',
+    /// the graph build's, then the checks'. The one place this order is
     /// written.
     pub fn diagnostics(&self) -> Vec<Diagnostic> {
         self.env
@@ -107,7 +106,6 @@ impl CompiledProject {
             .chain(&self.import_diagnostics)
             .chain(self.graph.diagnostics())
             .chain(&self.check_diagnostics)
-            .chain(self.env.surface_diagnostics())
             .cloned()
             .collect()
     }

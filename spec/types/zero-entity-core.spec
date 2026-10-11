@@ -91,10 +91,12 @@ type RegistryBuild {
   passes                  CompilerPassDeclaration[]
   // What every graph of the project is built with (registry_build_graph_inputs)
   graph_inputs            GraphInputs @readonly
-  // E030, W021, E027, then W145, extension by extension within each
-  declaration_diagnostics Diagnostic[]
-  registry_diagnostics    Diagnostic[]
-  surface_diagnostics     Diagnostic[]
+  // Every diagnostic it reports, in one order: the declarations' own (E030,
+  // W021, E073 and E027, W145), the registries' (E026, W018, W019, W021,
+  // I004, W017, the rule set's W150, W147 or W112, then W023), the custom
+  // rules' probes (W112), then the surfaces' (E055, E039); each group
+  // extension by extension in load order
+  diagnostics             Diagnostic[] @readonly
   verify unit "RegistryBuild schema is valid"
 }
 

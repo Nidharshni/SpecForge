@@ -23,7 +23,7 @@ fn unexecutable_rule() -> Diagnostic {
             .check(CheckKind::MissingRequiredField);
     });
     let build = build_registries(vec![c.declaration()]);
-    only(build.registry_diagnostics, "W112")
+    only(build.diagnostics().cloned().collect(), "W112")
 }
 
 /// E003: the graph build reports a reference to no entity.

@@ -9,6 +9,8 @@ use specforge_graph::{FieldCoercion, GraphInputs};
 use specforge_protocol_types::ExtensionDeclaration;
 use specforge_registry::build_registries;
 
+use crate::support::{coded, codes, diagnostics};
+
 /// A builder for the extension `name` in `version`.
 fn extension(name: &str, version: &str) -> ContributionsBuilder {
     ContributionsBuilder::new(ExtensionMeta::new(name, version))
@@ -99,11 +101,10 @@ fn two_extensions_populate_without_collision() {
         build.kinds.get("feature").unwrap().source_extension,
         "@test/product"
     );
-    assert!(
-        build.registry_diagnostics.is_empty(),
-        "no collision, no diagnostic: {:?}",
-        build.registry_diagnostics
-    );
+    // No kind, field or edge collides (no E026, W018): the declarations'
+    // own W021s (targets nobody declares), and the extensions' commands
+    // collide (E039).
+    assert_eq!(codes(&build), ["W021", "W021", "E039"]);
 }
 
 #[test]
@@ -173,19 +174,16 @@ fn derived_graph_inputs_match_the_manifests() {
 }
 
 #[test]
-fn surface_conflicts_land_in_their_own_bucket() {
+fn surface_conflicts_come_last_in_the_builds_diagnostics() {
     let build = build_registries(vec![software(), product()]);
 
-    let surface: Vec<&str> = build
-        .surface_diagnostics
-        .iter()
-        .map(|d| d.code.as_str())
-        .collect();
-    assert_eq!(surface, ["E039"]);
-    assert!(
-        build.registry_diagnostics.iter().all(|d| d.code != "E039"),
-        "E039 is reported last, apart from the registry diagnostics"
+    let reported = codes(&build);
+    assert_eq!(
+        reported.last(),
+        Some(&"E039"),
+        "E039 comes last, after the registries' diagnostics: {reported:?}"
     );
+    assert_eq!(reported.iter().filter(|c| **c == "E039").count(), 1);
     assert_eq!(build.surfaces.len(), 1, "first registration wins");
     assert_eq!(
         build
@@ -217,13 +215,8 @@ fn a_rule_code_declared_by_two_extensions_warns() {
 
     let build = build_registries(vec![rule("@ext/a"), rule("@ext/b")]);
 
-    let codes: Vec<&str> = build
-        .registry_diagnostics
-        .iter()
-        .map(|d| d.code.as_str())
-        .collect();
-    assert_eq!(codes, ["W023"]);
-    let message = &build.registry_diagnostics[0].message;
+    assert_eq!(codes(&build), ["W023"]);
+    let message = &diagnostics(&build)[0].message;
     for part in ["'W900'", "'@ext/a'", "'@ext/b'"] {
         assert!(message.contains(part), "{message}");
     }
@@ -254,9 +247,7 @@ fn no_declarations_build_empty_registries() {
     assert!(build.passes.is_empty());
     assert_eq!(build.graph_inputs(), GraphInputs::default());
     assert!(build.declarations().is_empty());
-    assert!(build.declaration_diagnostics.is_empty());
-    assert!(build.registry_diagnostics.is_empty());
-    assert!(build.surface_diagnostics.is_empty());
+    assert!(build.diagnostics().next().is_none());
 }
 
 /// An extension `name` whose one rule `code` reports at `severity`; the
@@ -309,8 +300,9 @@ fn a_rule_with_a_code_it_may_not_use_is_reported() {
         registered(&build, "E001"),
         [(specforge_common::Severity::Info, "@acme/squat".to_string())]
     );
-    let [w150] = build.registry_diagnostics.as_slice() else {
-        panic!("one W150 expected: {:?}", build.registry_diagnostics);
+    let all = diagnostics(&build);
+    let [w150] = all.as_slice() else {
+        panic!("one W150 expected: {all:?}");
     };
     assert_eq!(w150.code, "W150");
     assert_eq!(w150.severity, specforge_common::Severity::Warning);
@@ -345,11 +337,7 @@ fn a_misused_code_declared_for_several_kinds_is_reported_once_per_severity() {
     }
     let build = build_registries(vec![c.declaration()]);
 
-    let w150: Vec<_> = build
-        .registry_diagnostics
-        .iter()
-        .filter(|d| d.code == "W150")
-        .collect();
+    let w150 = coded(&build, "W150");
     // W001 at Warning (declared twice) and at Error.
     assert_eq!(w150.len(), 2, "{w150:?}");
     assert_eq!(registered(&build, "W001").len(), 3);
@@ -368,9 +356,9 @@ fn a_first_party_rule_is_checked_against_the_catalog() {
         ValidationSeverity::Warning,
     )]);
     assert!(
-        own.registry_diagnostics.is_empty(),
+        own.diagnostics().next().is_none(),
         "{:?}",
-        own.registry_diagnostics
+        diagnostics(&own)
     );
 
     let wrong_level = build_registries(vec![one_rule(
@@ -378,8 +366,9 @@ fn a_first_party_rule_is_checked_against_the_catalog() {
         "W077",
         ValidationSeverity::Error,
     )]);
-    let [w150] = wrong_level.registry_diagnostics.as_slice() else {
-        panic!("one W150 expected: {:?}", wrong_level.registry_diagnostics);
+    let all = diagnostics(&wrong_level);
+    let [w150] = all.as_slice() else {
+        panic!("one W150 expected: {all:?}");
     };
     assert_eq!(w150.code, "W150");
     assert!(w150.message.contains("another level"), "{}", w150.message);
@@ -389,7 +378,7 @@ fn a_first_party_rule_is_checked_against_the_catalog() {
         "W500",
         ValidationSeverity::Warning,
     )]);
-    assert_eq!(uncatalogued.registry_diagnostics[0].code, "W150");
+    assert_eq!(codes(&uncatalogued), ["W150"]);
 }
 
 #[test]
@@ -405,8 +394,8 @@ fn third_party_rule_codes_in_their_range_register_silently() {
         [(specforge_common::Severity::Warning, "@acme/x".to_string())]
     );
     assert!(
-        build.registry_diagnostics.is_empty(),
+        build.diagnostics().next().is_none(),
         "{:?}",
-        build.registry_diagnostics
+        diagnostics(&build)
     );
 }

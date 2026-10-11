@@ -51,7 +51,7 @@ fn a_missing_required_peer_is_e027() {
         e027[0].suggestion.as_deref(),
         Some("install it with: specforge add @specforge/software")
     );
-    assert!(build.declaration_diagnostics.contains(e027[0]));
+    assert_eq!(codes(&build), ["E027"]);
 }
 
 #[spec(
@@ -251,19 +251,12 @@ fn peer_dependency_checking_holds() {
 
     // peers_checked + unsatisfied_failed + unreadable_failed, in peer order,
     // after E030 and before W145.
-    let declared: Vec<&str> = build
-        .declaration_diagnostics
-        .iter()
-        .map(|d| d.code.as_str())
-        .collect();
-    assert_eq!(declared, ["E030", "E027", "E027", "E073", "W145"]);
+    assert_eq!(codes(&build), ["E030", "E027", "E027", "E073", "W145"]);
     let e027 = coded(&build, "E027");
     assert!(e027[0].message.contains("^2.0.0") && e027[0].message.contains("1.0.0"));
     assert!(e027[1].message.contains("'@test/missing'"));
     assert!(e027.iter().all(|d| d.severity == Severity::Error));
     assert!(coded(&build, "E073")[0].message.contains("'one-ish'"));
-    assert!(build.registry_diagnostics.is_empty());
-    assert!(build.surface_diagnostics.is_empty());
 }
 
 /// Governance works without software (only ConstrainsBehavior targets a

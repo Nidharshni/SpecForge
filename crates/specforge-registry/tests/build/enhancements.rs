@@ -8,7 +8,7 @@ use specforge_registry::FieldType;
 use specforge_registry::entity::EntityRecord;
 use specforge_test_macros::test as spec;
 
-use crate::support::{build, check, coded, coded_in, declare, diagnostics, software, span};
+use crate::support::{build, check, coded, coded_in, codes, declare, diagnostics, software, span};
 
 /// An extension `name` enhancing `target` (owned by `owner`) with string
 /// fields `fields`.
@@ -93,7 +93,7 @@ fn an_enhancement_of_an_unknown_kind_is_i004() {
         i004[0].message,
         "extension '@test/ext': entity enhancement targets unknown kind 'nonexistent_kind' (extension may not be installed)"
     );
-    assert!(build.registry_diagnostics.contains(i004[0]));
+    assert_eq!(codes(&build), ["I004"]);
     assert!(!build.fields.contains("nonexistent_kind", "extra"));
 }
 
@@ -226,11 +226,6 @@ fn enhancement_registration_holds() {
     let build = build([software(), a, b]);
 
     // manifests_validated: every declaration passes its own checks.
-    assert!(
-        build.declaration_diagnostics.is_empty(),
-        "{:?}",
-        build.declaration_diagnostics
-    );
     assert!(diagnostics(&build).is_empty(), "{:?}", diagnostics(&build));
 
     // enhancement_registered_emitted: each registered field records the

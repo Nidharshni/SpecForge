@@ -211,9 +211,8 @@ pub fn declare(
     Ok((declaration, diagnostics))
 }
 
-/// `warnings`, then what the registry build of `declaration` alone reports
-/// (its declaration, registry and surface diagnostics), without missing
-/// peers (E027).
+/// `warnings`, then what the registry build of `declaration` alone reports,
+/// in its order, without missing peers (E027).
 fn diagnostics_of(
     declaration: &ExtensionDeclaration,
     warnings: Vec<Diagnostic>,
@@ -221,10 +220,7 @@ fn diagnostics_of(
     let build = specforge_registry::build_registries(vec![declaration.clone()]);
     warnings
         .into_iter()
-        .chain(build.declaration_diagnostics)
-        .chain(build.registry_diagnostics)
-        .chain(build.surface_diagnostics)
-        .filter(|d| !d.is(codes::E027))
+        .chain(build.diagnostics().filter(|d| !d.is(codes::E027)).cloned())
         .collect()
 }
 

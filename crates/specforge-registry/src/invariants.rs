@@ -33,12 +33,8 @@ mod tests {
         declarations: &[ExtensionDeclaration],
     ) -> (KindRegistry, FieldRegistry, EdgeRegistry, Vec<Diagnostic>) {
         let build = build_registries(declarations.to_vec());
-        (
-            build.kinds,
-            build.fields,
-            build.edges,
-            build.registry_diagnostics,
-        )
+        let diagnostics = build.diagnostics().cloned().collect();
+        (build.kinds, build.fields, build.edges, diagnostics)
     }
 
     // -- I:zero_domain_knowledge_core --

@@ -17,7 +17,7 @@ use super::graph_inputs;
 use super::peers;
 use super::populate::populate;
 use super::validate::validate_extension_testability;
-use crate::rules::{Registries, Rules};
+use crate::rules::{CustomVerdicts, Registries, Rules};
 use crate::{
     EdgeRegistry, FieldRegistry, KindRegistry, SurfaceRegistryEntry, refuse_malformed_tool_schemas,
     register_surface_contributions,
@@ -49,7 +49,9 @@ impl DeclaredPass {
 }
 
 /// Everything the compiler derives from the loaded declarations, before
-/// any `.spec` file is read.
+/// any `.spec` file is read. Callers read it through its methods: the
+/// registries, the rule set and passes, the graph inputs, and its
+/// diagnostics in one order.
 #[derive(Debug, Default)]
 pub struct RegistryBuild {
     /// The declarations the build was made from, in load order; MCP tools
@@ -67,19 +69,17 @@ pub struct RegistryBuild {
     /// Every declared pass with its extension: extension by extension in
     /// load order, each extension's in its after/before order.
     pub passes: Vec<DeclaredPass>,
-    /// The declarations' own diagnostics: E030 identity and shape, W021
-    /// self-consistency, the peers' E073 and E027 (a cycle's after the declarations'), W145 pass cycles — in that order,
-    /// extension by extension within each. Reported before
-    /// `registry_diagnostics`.
-    pub declaration_diagnostics: Vec<Diagnostic>,
-    /// Populate (E026, W018, W019, W021, I004), W017, rule-parse (W112),
-    /// then duplicate rule codes (W023) diagnostics, in that order.
-    /// `specforge_project::Environment::load` appends the custom rules'
-    /// probes (W112) when the extensions ran in a runtime.
-    pub registry_diagnostics: Vec<Diagnostic>,
+    /// E030 identity and shape, W021 self-consistency, the peers' E073 and
+    /// E027 (a cycle's after the declarations'), W145 pass cycles — in that
+    /// order, extension by extension within each.
+    declaration_diagnostics: Vec<Diagnostic>,
+    /// Populate (E026, W018, W019, W021, I004), W017, the rule set's (W150,
+    /// W147 or W112 per declared rule), then W023 — in that order.
+    registry_diagnostics: Vec<Diagnostic>,
+    /// The custom rules' probes (W112), set by [`Self::probe`]; empty until then.
+    probe_diagnostics: Vec<Diagnostic>,
     /// Refused MCP tools (E055) and surface registration conflicts (E039).
-    /// `specforge check` reports them after the graph's own diagnostics.
-    pub surface_diagnostics: Vec<Diagnostic>,
+    surface_diagnostics: Vec<Diagnostic>,
 }
 
 impl RegistryBuild {
@@ -90,6 +90,31 @@ impl RegistryBuild {
     /// schemes.
     pub fn graph_inputs(&self) -> GraphInputs {
         graph_inputs::derive(&self.declarations, &self.kinds, &self.fields)
+    }
+
+    /// Ask `verdicts` once for each `custom` rule's function, on an entity
+    /// of its target kind that declares nothing (ADR 0020): a function that
+    /// cannot answer is W112, reported after the registries' diagnostics; the
+    /// rule stays registered. Probing again replaces the earlier result.
+    /// The environment probes when its extensions loaded in a runtime;
+    /// `NoVerdicts` answers nothing, so probing with it reports nothing.
+    pub fn probe(&mut self, verdicts: &dyn CustomVerdicts) {
+        self.probe_diagnostics = self.rules.probe(verdicts);
+    }
+
+    /// Every diagnostic the build reports, in its one order: the
+    /// declarations' own (E030, W021, E073 and E027, W145), the registries'
+    /// (E026, W018, W019, W021, I004; W017; W150, W147 or W112 per rule;
+    /// W023), the custom rules' probes (W112), then the surfaces' (E055,
+    /// E039); each group extension by extension in load order.
+    /// `specforge check` reports them right after the environment's own,
+    /// before any source (ADR 0012 D11, amended).
+    pub fn diagnostics(&self) -> impl Iterator<Item = &Diagnostic> {
+        self.declaration_diagnostics
+            .iter()
+            .chain(&self.registry_diagnostics)
+            .chain(&self.probe_diagnostics)
+            .chain(&self.surface_diagnostics)
     }
 
     /// The declarations the build was made from, in load order.
@@ -191,6 +216,7 @@ pub fn build_registries(declarations: Vec<ExtensionDeclaration>) -> RegistryBuil
         passes,
         declaration_diagnostics,
         registry_diagnostics,
+        probe_diagnostics: Vec::new(),
         surface_diagnostics,
     }
 }

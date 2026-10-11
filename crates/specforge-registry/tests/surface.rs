@@ -316,8 +316,8 @@ fn build_with_tools(tools: Vec<McpToolDescriptor>) -> (Vec<String>, Vec<String>,
         .flat_map(|d| d.surfaces.mcp_tools.iter().map(|t| t.name.clone()))
         .collect();
     let codes = build
-        .surface_diagnostics
-        .iter()
+        .diagnostics()
+        .filter(|d| ["E055", "E039"].contains(&d.code.as_str()))
         .map(|d| d.code.clone())
         .collect();
     (registered, listed, codes)
