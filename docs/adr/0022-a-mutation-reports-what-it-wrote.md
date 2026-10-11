@@ -21,7 +21,7 @@ places (`Call::wrote` in two handlers, a dispatcher fallback, `init`'s own `serv
   (`specforge_ops::Writes`), recorded at the write call. A write that changed nothing is not one; a
   file restored by a rollback is forgotten.
 - **D2. A mutation handler returns what it wrote.** `Handler::Mutation` returns `Mutated`: its reply
-  and a `Written { files, entities, event }` built from the operation's outcome, or nothing for a
+  and a `Written { files, entities, events }` built from the operation's outcome, or nothing for a
   preview (`dry_run`, `check`, `diff`), decided from its typed arguments. No JSON is read back.
 - **D3. One module acts on it.** `specforge_mcp::mutation::refresh` brings the call target up to date
   when files were written, whether or not the call then succeeded, by the call-target rules of
