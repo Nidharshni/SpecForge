@@ -374,6 +374,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Project sources**: the `.spec` files under the spec root (`spec_root`, else the project root) that
   discovery keeps — no skipped directory, no `exclude` entry. What a compile reads, and what format
   and migrate rewrite (`specforge_common::ProjectConfig::spec_files`).
+  The walk is `specforge_common::walk_spec_files`: the spec root is read whatever its own name, no
+  skipped directory below it is entered, no symlink is followed, and only files are sources. Format's
+  directory walk is the same walk, stopping at nested projects.
   A discovered source that can't be read (not UTF-8, no permission) is E025 naming it and stays out of the
   graph, in a compile and after every update alike.
 - **Format configuration**: how one `.spec` document is laid out: inside a project, the nearest

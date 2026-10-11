@@ -156,7 +156,8 @@ impl ProjectConfig {
 
     /// The project's sources: every `.spec` file under the spec root that
     /// discovery keeps (no skipped directory, no `exclude` entry), sorted —
-    /// the files a compile reads, and what format and migrate rewrite.
+    /// the files a compile reads, and what format and migrate rewrite (see
+    /// [`crate::walk_spec_files`]).
     pub fn spec_files(&self, root: &Path) -> Vec<PathBuf> {
         crate::discover_spec_files(&self.spec_root_in(root), &self.exclude)
     }

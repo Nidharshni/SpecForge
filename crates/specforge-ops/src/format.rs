@@ -1564,21 +1564,19 @@ mod tests {
         );
     }
 
-    /// Pins a defect of the time; plan 12 T3 flips it to
-    /// `a_directory_named_like_a_spec_file_is_no_target`.
-    #[test]
-    fn the_sources_take_a_directory_named_like_a_spec_file_today() {
+    #[specforge_test(
+        behavior = "discover_format_targets",
+        verify = "a directory named like a .spec file is no target, walked or discovered"
+    )]
+    fn a_directory_named_like_a_spec_file_is_no_target() {
         let dir = project_with("{}", &[("sub/a.spec", MESSY)]);
         std::fs::create_dir_all(dir.path().join("sub/archive.spec")).unwrap();
 
         let outcome = run(&request(dir.path(), Mode::Check));
-        assert_eq!(outcome.failures.len(), 1);
-        assert!(matches!(
-            &outcome.failures[0],
-            Failure::Read { path, .. } if path == &dir.path().join("sub/archive.spec")
-        ));
+        assert!(outcome.failures.is_empty(), "{:?}", outcome.failures);
+        assert_eq!(outcome.checked, 1);
 
-        // The directory walk already leaves it out.
+        // The directory walk leaves it out too.
         let walked = check_paths(dir.path(), &["sub"]);
         assert!(walked.failures.is_empty());
         assert_eq!(walked.checked, 1);

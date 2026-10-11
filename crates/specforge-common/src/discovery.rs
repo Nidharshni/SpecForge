@@ -5,41 +5,77 @@
 
 use std::path::{Path, PathBuf};
 
-/// Directories never traversed during `.spec` discovery: build artifacts,
-/// dependency trees, and VCS internals.
+/// Directories never entered below a walked root: build artifacts,
+/// dependency trees, and VCS internals. A walked root is entered whatever
+/// its own name.
 pub const SKIP_DIRS: &[&str] = &["target", "node_modules", ".git", ".hg", "dist", "build"];
 
-/// Discover `.spec` files under `root` with the shared policy: skip
-/// [`SKIP_DIRS`], never follow symlinks, and drop paths matching any
-/// `exclude` pattern. Patterns are matched as substrings against the
-/// workspace-relative path (project `specforge.json` `exclude` entries,
-/// C4-04). Returned paths are sorted for deterministic downstream behavior.
-pub fn discover_spec_files(root: &Path, exclude: &[String]) -> Vec<PathBuf> {
-    let mut files = Vec::new();
-    for entry in walkdir::WalkDir::new(root)
+/// What one walk of a directory found.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct Walked {
+    /// The `.spec` files reached, sorted. Only files: a directory named like
+    /// one is not a source.
+    pub files: Vec<PathBuf>,
+    /// The directories below the root that the walk reached and did not
+    /// enter because `stop` held for them, sorted.
+    pub stopped: Vec<PathBuf>,
+}
+
+/// The one `.spec` walk, under the shared policy:
+/// - `root` is entered whatever its name;
+/// - no [`SKIP_DIRS`] directory below it is entered;
+/// - symlinks are not followed;
+/// - a directory below `root` for which `stop` holds is not entered but is
+///   listed in [`Walked::stopped`].
+///
+/// No `exclude` entry applies here; a project's sources are
+/// [`discover_spec_files`].
+pub fn walk_spec_files(root: &Path, mut stop: impl FnMut(&Path) -> bool) -> Walked {
+    let mut stopped: Vec<PathBuf> = Vec::new();
+    let mut files: Vec<PathBuf> = walkdir::WalkDir::new(root)
         .follow_links(false) // symlink cycles and out-of-tree traversal are never wanted here
         .into_iter()
-        .filter_entry(|e| {
-            if e.file_type().is_dir()
-                && let Some(name) = e.file_name().to_str()
+        .filter_entry(|entry| {
+            if entry.depth() == 0 || !entry.file_type().is_dir() {
+                return true;
+            }
+            if entry
+                .file_name()
+                .to_str()
+                .is_some_and(|name| SKIP_DIRS.contains(&name))
             {
-                return !SKIP_DIRS.contains(&name);
+                return false;
+            }
+            if stop(entry.path()) {
+                stopped.push(entry.path().to_path_buf());
+                return false;
             }
             true
         })
-        .filter_map(|e| e.ok())
-    {
-        let path = entry.path();
-        if path.extension().is_some_and(|ext| ext == "spec") {
-            let relative = path.strip_prefix(root).unwrap_or(path);
-            if is_excluded(&relative.to_string_lossy(), exclude) {
-                continue;
-            }
-            files.push(path.to_path_buf());
-        }
-    }
+        .filter_map(Result::ok)
+        .filter(|entry| {
+            entry.file_type().is_file() && entry.path().extension().is_some_and(|ext| ext == "spec")
+        })
+        .map(walkdir::DirEntry::into_path)
+        .collect();
     files.sort();
-    files
+    stopped.sort();
+    Walked { files, stopped }
+}
+
+/// A project's sources under `root` (its spec root): the `.spec` files
+/// [`walk_spec_files`] reaches that no `exclude` pattern matches, as
+/// substrings of the path relative to `root` (project `specforge.json`
+/// `exclude` entries, C4-04). Sorted for deterministic downstream behavior.
+pub fn discover_spec_files(root: &Path, exclude: &[String]) -> Vec<PathBuf> {
+    walk_spec_files(root, |_| false)
+        .files
+        .into_iter()
+        .filter(|path| {
+            let relative = path.strip_prefix(root).unwrap_or(path);
+            !is_excluded(&relative.to_string_lossy(), exclude)
+        })
+        .collect()
 }
 
 /// Whether [`discover_spec_files`] finds `relative` (a path relative to
@@ -71,6 +107,7 @@ pub fn is_excluded(relative: &str, exclude: &[String]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use specforge_test_macros::test as specforge_test;
     use std::fs;
 
     #[test]
@@ -121,31 +158,59 @@ mod tests {
         assert!(is_discovered("build.spec", &exclude));
     }
 
-    /// Pins today's defect; plan 12 T3 flips it to
-    /// `a_walked_root_is_walked_whatever_its_name`.
-    #[test]
-    fn a_walked_root_named_like_a_skipped_directory_is_skipped_today() {
+    #[specforge_test(
+        behavior = "resolve_use_imports",
+        verify = "a spec root named like a skipped directory is compiled"
+    )]
+    fn a_walked_root_is_walked_whatever_its_name() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         fs::create_dir_all(root.join("build")).unwrap();
         fs::write(root.join("build/a.spec"), "").unwrap();
 
-        assert!(discover_spec_files(&root.join("build"), &[]).is_empty());
-        // The `build` directory as a child is skipped, which stays right.
+        assert_eq!(
+            discover_spec_files(&root.join("build"), &[]),
+            vec![root.join("build/a.spec")]
+        );
+        // The `build` directory as a child is still skipped.
         assert!(discover_spec_files(root, &[]).is_empty());
     }
 
-    /// Pins today's defect; plan 12 T3 flips it to `only_files_are_sources`.
-    #[test]
-    fn a_directory_named_like_a_spec_file_is_a_source_today() {
+    #[specforge_test(
+        behavior = "resolve_use_imports",
+        verify = "a directory named like a .spec file is no source"
+    )]
+    fn only_files_are_sources() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         fs::write(root.join("a.spec"), "").unwrap();
         fs::create_dir_all(root.join("archive.spec")).unwrap();
 
+        assert_eq!(discover_spec_files(root, &[]), vec![root.join("a.spec")]);
+    }
+
+    #[test]
+    fn a_walk_stops_where_told_and_lists_where() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        for (path, text) in [
+            ("a.spec", ""),
+            ("p/specforge.json", "{}"),
+            ("p/b.spec", ""),
+            ("q/c.spec", ""),
+        ] {
+            fs::create_dir_all(root.join(path).parent().unwrap()).unwrap();
+            fs::write(root.join(path), text).unwrap();
+        }
+
+        let walked = walk_spec_files(root, crate::is_project_root);
         assert_eq!(
-            discover_spec_files(root, &[]),
-            vec![root.join("a.spec"), root.join("archive.spec")]
+            walked.files,
+            vec![root.join("a.spec"), root.join("q/c.spec")]
         );
+        assert_eq!(walked.stopped, vec![root.join("p")]);
+        // A root `stop` would hold for is still walked.
+        let inside = walk_spec_files(&root.join("p"), crate::is_project_root);
+        assert_eq!(inside.files, vec![root.join("p/b.spec")]);
     }
 }

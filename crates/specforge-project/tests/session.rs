@@ -2460,14 +2460,17 @@ fn an_environment_holds_the_runtime_it_loaded_its_extensions_in() {
     assert!(bare.environment().registries.declarations().is_empty());
 }
 
-/// Pins today's defect; plan 12 T3 flips it to
-/// `a_spec_root_named_like_a_skipped_directory_is_compiled`.
-#[test]
-fn a_spec_root_named_like_a_skipped_directory_compiles_nothing_today() {
+#[specforge_test(
+    behavior = "resolve_use_imports",
+    verify = "a spec root named like a skipped directory is compiled"
+)]
+fn a_spec_root_named_like_a_skipped_directory_is_compiled() {
     let dir = project(
         r#"{"name":"s","version":"0.1.0","extensions":[],"spec_root":"build"}"#,
         &[("build/main.spec", "behavior a \"A\" {\n}\n")],
     );
     let compiled = CompiledProject::compile(dir.path(), None);
-    assert!(compiled.source_texts().is_empty());
+    let mut files: Vec<String> = compiled.source_texts().into_keys().collect();
+    files.sort();
+    assert_eq!(files, ["main.spec"]);
 }
