@@ -36,8 +36,8 @@ pub struct Args {
 pub struct Reply(Value);
 
 impl Shape for Reply {
-    fn schema() -> Value {
-        specforge_ops::query::document_schema()
+    fn body(defs: &mut specforge_common::shape::Definitions) -> Value {
+        specforge_ops::query::document_schema(defs)
     }
 }
 

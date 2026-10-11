@@ -4,7 +4,7 @@
 //! of structs, deriving `Serialize` and `Shape`), or [`Text`] for a tool
 //! whose result is a document in text. The tool table names the type once
 //! (`view!(stats::call, NoArgs => stats::Reply, ProjectTarget::SERVED)`):
-//! the listed outputSchema is `<Reply as Shape>::schema()`, the result is
+//! the listed outputSchema is ``shape::build::<Reply>()``, the result is
 //! the value serialized, and [`conforming`] checks every structured result
 //! against that schema before it is sent: a reply its schema refuses is a
 //! `schema_mismatch` failure, never structured content (the rule extension
@@ -72,7 +72,7 @@ impl From<String> for Text {
 
 /// The outputSchema of a tool whose reply is `R`.
 pub fn output_schema<R: Object>() -> Value {
-    R::schema()
+    specforge_common::shape::build::<R>()
 }
 
 /// `answered` as the outcome the pipeline sends: the reply serialized as a

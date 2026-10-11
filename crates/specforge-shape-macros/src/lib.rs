@@ -25,10 +25,16 @@
 //!   `#[shape(names = EXPR)]` makes a string field (or an `Option`/`Vec` of
 //!   them) one of the names of the option table `EXPR`.
 //!
+//! - `#[shape(define)]` (or `define = "Name"`) on the type makes it a *named
+//!   shape* (ADR 0051): a document defines it once under `$defs` and every
+//!   place that holds it refers to it. A named shape may be recursive.
+//!
 //! The derive refuses, at compile time: externally tagged data enums, tuple
 //! variants, unions, unknown serde attributes and `shape` keys, a field
-//! serialized by function without `shape(as)`, and a field whose type names
-//! the type itself (a recursive type has no finite inline schema).
+//! serialized by function without `shape(as)`, a field whose type names
+//! the type itself unless the type is a named shape (a recursive type has no
+//! finite inline schema), and `define` on a type with type parameters or on a
+//! field.
 
 use proc_macro::TokenStream;
 use proc_macro2::{TokenStream as TokenStream2, TokenTree};
@@ -237,6 +243,41 @@ struct ShapeAttr {
     names: Option<Expr>,
 }
 
+/// The name a type's `#[shape(define)]` / `#[shape(define = "Name")]` gives
+/// its definition: `Some` for a named shape.
+fn container_define(input: &DeriveInput) -> syn::Result<Option<String>> {
+    let mut define = None;
+    for attr in input.attrs.iter().filter(|a| a.path().is_ident("shape")) {
+        attr.parse_nested_meta(|meta| {
+            if meta.path.is_ident("define") {
+                define = Some(if meta.input.peek(Token![=]) {
+                    meta.value()?.parse::<LitStr>()?.value()
+                } else {
+                    input.ident.unraw().to_string()
+                });
+            } else if meta.path.is_ident("as") || meta.path.is_ident("names") {
+                return Err(meta.error("Shape: `as` and `names` state a field, not a type"));
+            } else {
+                return Err(meta.error("Shape: unknown `shape` key (expected `define`)"));
+            }
+            Ok(())
+        })?;
+    }
+    if define.is_some()
+        && input
+            .generics
+            .params
+            .iter()
+            .any(|param| matches!(param, GenericParam::Type(_)))
+    {
+        return Err(syn::Error::new_spanned(
+            &input.generics,
+            "Shape: a defined shape names one schema; a type with type parameters has one per instantiation",
+        ));
+    }
+    Ok(define)
+}
+
 fn shape_attrs(attrs: &[Attribute]) -> syn::Result<ShapeAttr> {
     let mut out = ShapeAttr::default();
     for attr in attrs.iter().filter(|a| a.path().is_ident("shape")) {
@@ -245,6 +286,8 @@ fn shape_attrs(attrs: &[Attribute]) -> syn::Result<ShapeAttr> {
                 out.as_type = Some(meta.value()?.parse()?);
             } else if meta.path.is_ident("names") {
                 out.names = Some(meta.value()?.parse()?);
+            } else if meta.path.is_ident("define") {
+                return Err(meta.error("Shape: `define` names a type, not a field"));
             } else {
                 return Err(meta.error("Shape: unknown `shape` key (expected `as` or `names`)"));
             }
@@ -297,7 +340,7 @@ fn shape_path() -> TokenStream2 {
 fn schema_of(ty: &Type, names: Option<&Expr>) -> TokenStream2 {
     let shape = shape_path();
     let Some(names) = names else {
-        return quote!(<#ty as #shape::Shape>::schema());
+        return quote!(<#ty as #shape::Shape>::schema(defs));
     };
     if let Some(inner) = option_inner(ty) {
         let inner = schema_of(inner, Some(names));
@@ -321,6 +364,7 @@ struct Body {
 
 fn expand(input: &DeriveInput) -> syn::Result<TokenStream2> {
     let container = serde_attrs(&input.attrs)?;
+    let define = container_define(input)?;
     let body = match &input.data {
         Data::Struct(data) => struct_body(input, &container, &data.fields)?,
         Data::Enum(data) => enum_body(input, &container, data)?,
@@ -351,9 +395,16 @@ fn expand(input: &DeriveInput) -> syn::Result<TokenStream2> {
     }
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
     let schema = body.schema;
+    let named = match define {
+        Some(name) => quote!(::core::option::Option::Some(#name)),
+        None => quote!(::core::option::Option::None),
+    };
     let mut out = quote! {
         impl #impl_generics #shape::Shape for #name #ty_generics #where_clause {
-            fn schema() -> #shape::Value {
+            const NAME: ::core::option::Option<&'static str> = #named;
+
+            #[allow(unused_variables)]
+            fn body(defs: &mut #shape::Definitions) -> #shape::Value {
                 #schema
             }
         }
@@ -421,10 +472,15 @@ fn field_schema_of(
 
 fn refuse_recursion(input: &DeriveInput, field: &Field) -> syn::Result<()> {
     use quote::ToTokens;
+    // A named shape refers to itself by name.
+    if container_define(input)?.is_some() {
+        return Ok(());
+    }
     if mentions(field.ty.to_token_stream(), &input.ident) {
         return Err(syn::Error::new_spanned(
             &field.ty,
-            "Shape: a field whose type names the type itself has no finite inline schema",
+            "Shape: a field whose type names the type itself has no finite inline schema \
+             (name it with `#[shape(define)]`)",
         ));
     }
     Ok(())
@@ -461,7 +517,8 @@ fn object_expr(
         refuse_recursion(input, field)?;
         let ty = attrs.as_type.as_ref().unwrap_or(&field.ty);
         if serde.flatten {
-            flattened.push(schema_of(ty, attrs.names.as_ref()));
+            // A flattened type is merged as its body, never as a reference.
+            flattened.push(quote!(<#ty as #shape::Shape>::body(defs)));
             continue;
         }
         let ident = field.ident.as_ref().expect("a named field");
@@ -493,7 +550,7 @@ fn object_expr(
             ::std::vec![#(#properties),*],
             ::std::vec![#(#required),*],
         );
-        #(#shape::flatten(&mut schema, #flattened);)*
+        #(#shape::flatten(&mut schema, #flattened, defs);)*
         schema
     }})
 }
@@ -546,7 +603,7 @@ fn enum_body(input: &DeriveInput, container: &Serde, data: &syn::DataEnum) -> sy
                         ::std::vec![(#key, #shape::names([#value]))],
                         ::std::vec![#key],
                     );
-                    #shape::flatten(&mut schema, <#ty as #shape::Shape>::schema());
+                    #shape::flatten(&mut schema, <#ty as #shape::Shape>::body(defs), defs);
                     schema
                 })
             }
@@ -576,7 +633,7 @@ fn enum_body(input: &DeriveInput, container: &Serde, data: &syn::DataEnum) -> sy
         ));
     }
     Ok(Body {
-        schema: quote!(#shape::one_of(::std::vec![#(#branches),*])),
+        schema: quote!(#shape::one_of(::std::vec![#(#branches),*], defs)),
         object: Some(bounds),
     })
 }
