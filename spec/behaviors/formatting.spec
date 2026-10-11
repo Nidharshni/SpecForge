@@ -42,6 +42,10 @@ behavior format_spec_files "Format Spec Files" {
     A file that cannot be read or written, or that has a region left
     unformatted (format_with_parse_errors), MUST make the command exit with
     code 1; every other file is still formatted and written.
+    Under --format json the command MUST print instead the format document
+    specforge.format answers (McpFormatResult) with the files it wrote, its
+    diagnostics and failures in the document, and nothing on stderr; the
+    exit code is the same.
   """
   verify unit "files matching the canonical format are not rewritten"
   verify unit "changed files are printed to stdout"
@@ -49,6 +53,7 @@ behavior format_spec_files "Format Spec Files" {
   verify integration "formatting all files in spec/ directory succeeds"
   verify unit "a region left unformatted makes the run exit 1, the rest of the file still written"
   verify unit "the format document names each changed file, each failed file with its kind, and the run's verdict"
+  verify unit "under --format json the run prints the format document on stdout and nothing on stderr"
   verify contract "Format Spec Files: spec file formatting holds — spec_files_available, format_config_loaded, formatted_output_written, unchanged_files_preserved, format_complete_emitted, summary_printed"
 }
 
@@ -125,6 +130,7 @@ behavior check_formatting "Check Formatting Without Modifying Files" {
   verify unit "check mode writes no files to disk"
   verify unit "a file that cannot be read makes the check fail"
   verify unit "a region left unformatted makes the check fail"
+  verify unit "under --format json a check that finds a change prints the document and exits 1"
   verify contract "Check Formatting Without Modifying Files: formatting check holds — spec_files_available, format_config_loaded, no_files_written, exit_code_correct, unformatted_paths_printed"
 }
 
@@ -154,9 +160,12 @@ behavior show_formatting_diff "Show Formatting Diff" {
     When specforge format --diff is invoked, the system MUST produce
     a unified diff of formatting changes for each file that would be
     modified. The diff MUST use standard unified format with --- and +++
-    headers. The system MUST NOT write any files in diff mode.
+    headers. The system MUST NOT write any files in diff mode. Under
+    --format json the diffs are the format document's: each changed file's
+    before and after text with its insertion and deletion counts.
   """
   verify unit "diff output uses unified format"
+  verify unit "under --format json --diff the document carries each changed file's before and after"
   verify unit "diff mode writes no files to disk"
   verify unit "unchanged files produce no diff output"
   verify unit "an unchanged line is shown as context, never as removed and added"
@@ -194,9 +203,11 @@ behavior format_from_stdin "Format from Standard Input" {
     MUST set filesChecked=1 and filesChanged to 0 (input already canonical)
     or 1 (formatting applied). When the input has a region left
     unformatted, the formatted text MUST still be printed and the command
-    MUST exit with code 1.
+    MUST exit with code 1. Its output is the formatted text, so --stdin
+    MUST refuse --format json (invalid_input, the error document on stdout).
   """
   verify unit "stdin content is formatted and written to stdout"
+  verify unit "--stdin refuses --format json with the error document"
   verify unit "stdin with a region left unformatted prints the formatted text and exits 1"
   verify unit "stdin mode does not read or write files"
   verify property "stdin formatting is idempotent"

@@ -1,4 +1,4 @@
-use crate::outcome::{Exit, OutputFormat, Refusal};
+use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal, Written};
 use crate::terminal::{Terminal, errln, out, outln};
 use specforge_common::Diagnostic;
 use specforge_formatter::unified_diff;
@@ -28,21 +28,40 @@ pub(crate) struct Args {
     /// Read from stdin, write to stdout
     #[arg(long)]
     stdin: bool,
+
+    #[command(flatten)]
+    output: OutputArg,
 }
 
 impl Args {
     /// Run the `specforge format` command.
     ///
     /// Returns the exit, one rule in every mode (write, `--check`,
-    /// `--diff`, `--stdin`):
+    /// `--diff`, `--stdin`) and output format:
     /// - 1 when a file could not be read or written, or has a region left
     ///   unformatted (W142); the other files, and the formatted parts, are
     ///   still written or printed;
     /// - 1 under `--check` when a file would change;
     /// - 0 otherwise.
+    ///
+    /// Under `--format json` it prints the format document `specforge.format`
+    /// answers (ADR 0052) with the files it wrote, and nothing on stderr;
+    /// `--stdin`, whose output is the formatted text, refuses it.
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
+        let format = self.output.format;
         let project_root = specforge_common::project_root_of(&self.path);
         if self.stdin {
+            if format == OutputFormat::Json {
+                return Refusal::of(format).report(
+                    terminal,
+                    &OpError::new(
+                        OpErrorKind::InvalidInput,
+                        OpErrorKind::InvalidInput.as_str(),
+                        "--stdin prints the formatted text; it has no JSON form",
+                    )
+                    .with_suggestion("drop --format json, or name the files to format"),
+                );
+            }
             return run_stdin(&project_root, &self.path, terminal);
         }
         let mode = Mode::of_flags(self.check, self.diff, None);
@@ -51,6 +70,18 @@ impl Args {
             paths: &self.paths,
             mode,
         });
+        if format == OutputFormat::Json {
+            // The files written, named from the project root as MCP names
+            // them; a run that only reports lists none.
+            let files_written = mode
+                .writes()
+                .then(|| outcome.writes().names_under(&project_root));
+            terminal.json(&Written {
+                document: outcome.document(self.diff),
+                files_written,
+            });
+            return Exit::of_verdict(outcome.ok());
+        }
         if outcome.found_nothing() {
             errln!(terminal, "No .spec files found");
             return Exit::Passed;

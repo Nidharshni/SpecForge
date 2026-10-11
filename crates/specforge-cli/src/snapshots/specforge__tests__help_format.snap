@@ -25,5 +25,11 @@ Options:
       --stdin
           Read from stdin, write to stdout
 
+      --format <FORMAT>
+          Output format: human or json
+          
+          [default: human]
+          [possible values: human, json]
+
   -h, --help
           Print help
