@@ -40,8 +40,7 @@ type, matched neither surface.
 - **D5. The rule covers every printed outcome**, update's included, though only the CLI prints it.
 - **D6. The spec type of a document is its tool's `Mcp*` reply type** (ADR 0048 D8 holds it);
   `ProjectStatistics`, `EntityKindCount` and `InitOutput` are deleted.
-- **D7. The CLI parity harness compares documents** (`Document` aspect): only `specforge format`,
-  which prints no JSON, differs.
+- **D7. The CLI parity harness compares documents** (`Document` aspect): none differs (D8).
 
 ## Consequences
 
@@ -74,7 +73,18 @@ type, matched neither surface.
   says what they are.
 - **Renaming the shared spec types off `Mcp`**: a rename of some forty types, left for a round in
   which nothing else edits `mcp.spec`.
-- **A CLI JSON for `specforge format`**: a new feature, not a convergence.
+- **A CLI JSON for `specforge format`** in this round: a new feature, not a convergence. It
+  followed in the round 6 follow-ups (D8).
+
+## Amendment (round 6 follow-ups)
+
+- **D8. `specforge format` takes `--format human|json`** (ADR 0029 D5b). Its document is
+  `specforge_ops::format::FormatDocument` (`Outcome::document`, spec type `McpFormatResult`), which
+  `specforge.format` answers and a failed call carries in its `data`; the CLI adds only
+  `files_written` (D2), absent when the run only reports (`--check`, `--diff`). Under JSON the W141
+  and W142 diagnostics and the failed files are the document's and nothing goes to stderr; the exit
+  stays the run's verdict (`--check` with a change exits 1). `--stdin`, whose output is the
+  formatted text, refuses `--format json` (`invalid_input`, the error document).
 
 ## What would reopen it
 

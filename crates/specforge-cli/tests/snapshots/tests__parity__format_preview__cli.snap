@@ -27,5 +27,23 @@ expression: cli_snap
     "spec/messy.spec": "behavior messy \"Messy\" {\ncategory \"core\"\ncontract \"The system MUST work\"\n}\n"
   },
   "ok": true,
-  "payload": "--- [ROOT]/spec/messy.spec\n+++ [ROOT]/spec/messy.spec\n@@ -1,4 +1,4 @@\n behavior messy \"Messy\" {\n-category \"core\"\n-contract \"The system MUST work\"\n+  category \"core\"\n+  contract \"The system MUST work\"\n }\n"
+  "payload": {
+    "all_clean": false,
+    "changed_files": [
+      "[ROOT]/spec/messy.spec"
+    ],
+    "check_only": true,
+    "diagnostics": [],
+    "diffs": [
+      {
+        "after": "behavior messy \"Messy\" {\n  category \"core\"\n  contract \"The system MUST work\"\n}\n",
+        "before": "behavior messy \"Messy\" {\ncategory \"core\"\ncontract \"The system MUST work\"\n}\n",
+        "deletions": 2,
+        "file_path": "[ROOT]/spec/messy.spec",
+        "insertions": 2
+      }
+    ],
+    "ok": true,
+    "total_checked": 2
+  }
 }

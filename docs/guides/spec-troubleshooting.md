@@ -102,6 +102,7 @@ specforge trace <id>             # see an entity's full traceability chain
 specforge query <id> --depth 2   # inspect an entity's neighborhood
 specforge model                  # render the logical data model (what kinds/fields exist)
 specforge format --check         # verify formatting (exit 1 if unformatted)
+specforge format --check --format json  # the same verdict, as the document specforge.format answers
 ```
 
 **Colour.** `check` and `analyze` colour-code diagnostics by severity (errors red,

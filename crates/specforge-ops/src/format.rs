@@ -7,9 +7,11 @@
 //! present what happened: the CLI prints it, MCP returns it, the LSP turns
 //! it into edits.
 
+use serde::Serialize;
+use specforge_common::shape::Shape;
 use specforge_common::{
-    Diagnostic, ProjectConfig, Sym, codes, find_project_root, is_project_root, load_project_config,
-    walk_spec_files,
+    Diagnostic, DiagnosticList, ProjectConfig, Sym, codes, find_project_root, is_project_root,
+    load_project_config, walk_spec_files,
 };
 use specforge_formatter::config::{find_config_path, read_config_file};
 use specforge_formatter::{FormatConfig, TextEdit, compute_edits, format_range, format_source};
@@ -476,6 +478,111 @@ impl Outcome {
     /// No target at all (nothing found, nothing failed).
     pub fn found_nothing(&self) -> bool {
         self.checked == 0 && self.failures.is_empty()
+    }
+
+    /// The document both surfaces print (ADR 0052): `specforge format
+    /// --format json` and `specforge.format`'s reply, a failed call's `data`.
+    /// `diffs` adds each changed file's before and after (`--diff`, MCP
+    /// `diff`).
+    pub fn document(&self, diffs: bool) -> FormatDocument {
+        let failed = !self.failures.is_empty();
+        FormatDocument {
+            changed_files: self.changes.iter().map(|c| shown(&c.path)).collect(),
+            total_checked: self.checked,
+            ok: self.ok(),
+            all_clean: self.clean(),
+            check_only: !self.mode.writes(),
+            diagnostics: DiagnosticList(self.diagnostics.clone()),
+            diffs: diffs.then(|| self.changes.iter().map(FileDiff::of).collect()),
+            message: failed.then(|| {
+                let reasons: Vec<String> = self.failures.iter().map(ToString::to_string).collect();
+                reasons.join("; ")
+            }),
+            failed_files: failed.then(|| self.failures.iter().map(|f| shown(f.path())).collect()),
+            failures: failed.then(|| self.failures.iter().map(FileFailure::of).collect()),
+        }
+    }
+}
+
+/// A path as the format document shows it.
+fn shown(path: &Path) -> String {
+    path.display().to_string()
+}
+
+/// What `specforge format --format json` and `specforge.format` print
+/// (`McpFormatResult`): the run's files, its verdict and what formatting
+/// reported. What the run did not do is absent, never `null`.
+#[derive(Debug, Clone, Serialize, Shape)]
+pub struct FormatDocument {
+    /// Files whose formatting differs, in discovery order.
+    pub changed_files: Vec<String>,
+    /// Files read and formatted.
+    pub total_checked: usize,
+    /// The run's verdict ([`Outcome::ok`]).
+    pub ok: bool,
+    /// Every file was read and is in canonical form ([`Outcome::clean`]).
+    pub all_clean: bool,
+    /// The run did not write (check or diff).
+    pub check_only: bool,
+    /// W141 per configuration file used, W142 per region kept verbatim.
+    pub diagnostics: DiagnosticList,
+    /// Each file that would change, before and after (asked for: `--diff`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub diffs: Option<Vec<FileDiff>>,
+    /// Why the run failed: each failed file's reason, `; `-joined.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+    /// The files the run could not read or write.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub failed_files: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub failures: Option<Vec<FileFailure>>,
+}
+
+/// One changed file's before and after text (`FormatDiff`).
+#[derive(Debug, Clone, Serialize, Shape)]
+pub struct FileDiff {
+    pub file_path: String,
+    pub before: String,
+    pub after: String,
+    pub insertions: usize,
+    pub deletions: usize,
+}
+
+impl FileDiff {
+    fn of(change: &FileChange) -> Self {
+        let file_path = shown(&change.path);
+        let stats = specforge_formatter::unified_diff(&file_path, &change.before, &change.after);
+        FileDiff {
+            file_path,
+            before: change.before.clone(),
+            after: change.after.clone(),
+            insertions: stats.insertions,
+            deletions: stats.deletions,
+        }
+    }
+}
+
+/// One file the run could not read or write (`McpFormatFailure`).
+#[derive(Debug, Clone, Serialize, Shape)]
+pub struct FileFailure {
+    pub file: String,
+    /// `read` or `write`.
+    pub operation: String,
+    /// The kind of the file's failure ([`OpErrorKind::as_str`], MCP's
+    /// `McpErrorCode`).
+    pub code: String,
+    pub message: String,
+}
+
+impl FileFailure {
+    fn of(failure: &Failure) -> Self {
+        FileFailure {
+            file: shown(failure.path()),
+            operation: failure.verb().to_string(),
+            code: failure.kind().as_str().to_string(),
+            message: failure.to_string(),
+        }
     }
 }
 
@@ -1599,5 +1706,45 @@ mod tests {
             changed_in(dir.path(), &outcome),
             ["sub/N/inner/drafts/d.spec", "sub/N/n.spec"]
         );
+    }
+
+    #[specforge_test(
+        behavior = "format_spec_files",
+        verify = "the format document names each changed file, each failed file with its kind, and the run's verdict"
+    )]
+    fn the_document_is_the_run_both_surfaces_print() {
+        let dir = project();
+        let mut outcome = run(&request(dir.path(), Mode::Check));
+
+        let plain = serde_json::to_value(outcome.document(false)).unwrap();
+        assert_eq!(plain["total_checked"], 2);
+        assert_eq!(plain["changed_files"].as_array().unwrap().len(), 2);
+        assert_eq!(plain["ok"], false, "a check that finds a change fails");
+        assert_eq!(plain["all_clean"], false);
+        assert_eq!(plain["check_only"], true);
+        assert_eq!(plain["diagnostics"], serde_json::json!([]));
+        // No null: what the run did not do is absent.
+        for absent in ["diffs", "message", "failed_files", "failures"] {
+            assert!(plain.get(absent).is_none(), "{absent}");
+        }
+
+        let diffs = serde_json::to_value(outcome.document(true)).unwrap();
+        let first = &diffs["diffs"][0];
+        assert_eq!(first["before"], MESSY);
+        assert_eq!(first["file_path"], plain["changed_files"][0]);
+        assert!(first["insertions"].as_u64().unwrap() > 0);
+
+        let locked = dir.path().join("spec/locked.spec");
+        outcome.failures.push(Failure::read(
+            locked.clone(),
+            &std::io::Error::from(std::io::ErrorKind::PermissionDenied),
+        ));
+        let failed = serde_json::to_value(outcome.document(false)).unwrap();
+        let shown = locked.display().to_string();
+        assert_eq!(failed["failed_files"], serde_json::json!([shown]));
+        assert_eq!(failed["failures"][0]["file"], shown);
+        assert_eq!(failed["failures"][0]["operation"], "read");
+        assert_eq!(failed["failures"][0]["code"], "permission_denied");
+        assert_eq!(failed["message"], failed["failures"][0]["message"]);
     }
 }

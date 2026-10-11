@@ -707,3 +707,199 @@ fn stdin_exits_one_on_a_region_left_unformatted() {
         format!("{CANONICAL_FOO}\n}}}}}}\n")
     );
 }
+
+// --- --format json: the format document (ADR 0052) ---
+
+/// `specforge format --format json --path <root>` with `flags`: exit code,
+/// stdout parsed as one JSON document, and stderr.
+fn format_json(root: &std::path::Path, flags: &[&str]) -> (Option<i32>, serde_json::Value, String) {
+    let output = Command::cargo_bin("specforge")
+        .unwrap()
+        .args([
+            "format",
+            "--format",
+            "json",
+            "--path",
+            root.to_str().unwrap(),
+        ])
+        .args(flags)
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let document = serde_json::from_str(&stdout)
+        .unwrap_or_else(|e| panic!("stdout is one JSON document ({e}): {stdout}"));
+    (
+        output.status.code(),
+        document,
+        String::from_utf8_lossy(&output.stderr).into_owned(),
+    )
+}
+
+/// A project with one canonical file and one that formatting changes.
+fn project_with_one_change(root: &std::path::Path) {
+    setup_project(root);
+    write_spec(root, "good.spec", CANONICAL_FOO);
+    write_spec(
+        root,
+        "bad.spec",
+        "behavior bar \"Bar\" {\n      contract \"stuff\"\n}\n",
+    );
+}
+
+#[specforge_test(
+    behavior = "format_spec_files",
+    verify = "under --format json the run prints the format document on stdout and nothing on stderr"
+)]
+fn json_prints_the_format_document_and_the_files_written() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    project_with_one_change(root);
+
+    let (code, document, stderr) = format_json(root, &[]);
+
+    assert_eq!(code, Some(0), "{document}");
+    assert_eq!(stderr, "", "JSON output writes nothing on stderr");
+    // Shown under the project root `--path` resolves to.
+    let changed = root
+        .canonicalize()
+        .unwrap()
+        .join("spec/bad.spec")
+        .display()
+        .to_string();
+    assert_eq!(document["changed_files"], serde_json::json!([changed]));
+    assert_eq!(document["total_checked"], 2);
+    assert_eq!(document["ok"], true);
+    assert_eq!(document["all_clean"], false);
+    assert_eq!(document["check_only"], false);
+    assert_eq!(document["diagnostics"], serde_json::json!([]));
+    assert_eq!(
+        document["files_written"],
+        serde_json::json!(["spec/bad.spec"])
+    );
+    assert!(document.get("diffs").is_none(), "{document}");
+}
+
+#[specforge_test(
+    behavior = "format_spec_files",
+    verify = "under --format json the run prints the format document on stdout and nothing on stderr"
+)]
+fn json_carries_what_formatting_reported_instead_of_stderr() {
+    let tmp = TempDir::new().unwrap();
+    project_with_a_kept_region(tmp.path());
+
+    let (code, document, stderr) = format_json(tmp.path(), &[]);
+
+    assert_eq!(code, Some(1), "a region left unformatted fails the run");
+    assert_eq!(stderr, "");
+    assert_eq!(document["ok"], false);
+    assert_eq!(document["diagnostics"][0]["code"], "W142", "{document}");
+}
+
+#[specforge_test(
+    behavior = "format_spec_files",
+    verify = "under --format json the run prints the format document on stdout and nothing on stderr"
+)]
+fn json_with_nothing_to_format_is_an_empty_run() {
+    let tmp = TempDir::new().unwrap();
+    setup_project(tmp.path());
+
+    let (code, document, stderr) = format_json(tmp.path(), &[]);
+
+    assert_eq!(code, Some(0));
+    assert_eq!(stderr, "");
+    assert_eq!(document["total_checked"], 0);
+    assert_eq!(document["all_clean"], true);
+}
+
+#[specforge_test(
+    behavior = "check_formatting",
+    verify = "under --format json a check that finds a change prints the document and exits 1"
+)]
+fn json_check_that_finds_a_change_exits_one() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    project_with_one_change(root);
+
+    let (code, document, stderr) = format_json(root, &["--check"]);
+
+    assert_eq!(code, Some(1), "{document}");
+    assert_eq!(stderr, "");
+    assert_eq!(document["ok"], false);
+    assert_eq!(document["check_only"], true);
+    assert_eq!(document["changed_files"].as_array().unwrap().len(), 1);
+    assert!(
+        document.get("files_written").is_none(),
+        "a check writes nothing: {document}"
+    );
+}
+
+#[cfg(unix)]
+#[specforge_test(
+    behavior = "check_formatting",
+    verify = "under --format json a check that finds a change prints the document and exits 1"
+)]
+fn json_names_a_file_that_cannot_be_read_in_the_document() {
+    use std::os::unix::fs::PermissionsExt;
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    setup_project(root);
+    write_spec(root, "locked.spec", CANONICAL_FOO);
+    let locked = root.join("spec/locked.spec");
+    fs::set_permissions(&locked, fs::Permissions::from_mode(0o000)).unwrap();
+
+    let (code, document, stderr) = format_json(root, &["--check"]);
+    fs::set_permissions(&locked, fs::Permissions::from_mode(0o644)).unwrap();
+
+    assert_eq!(code, Some(1), "{document}");
+    assert_eq!(stderr, "");
+    let shown = locked.canonicalize().unwrap().display().to_string();
+    assert_eq!(document["failed_files"], serde_json::json!([shown]));
+    assert_eq!(document["failures"][0]["operation"], "read");
+    assert_eq!(document["failures"][0]["code"], "permission_denied");
+}
+
+#[specforge_test(
+    behavior = "show_formatting_diff",
+    verify = "under --format json --diff the document carries each changed file's before and after"
+)]
+fn json_diff_carries_each_change_before_and_after() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    project_with_one_change(root);
+    let before = fs::read_to_string(root.join("spec/bad.spec")).unwrap();
+
+    let (code, document, stderr) = format_json(root, &["--diff"]);
+
+    assert_eq!(code, Some(0), "{document}");
+    assert_eq!(stderr, "");
+    let diff = &document["diffs"][0];
+    assert_eq!(diff["file_path"], document["changed_files"][0]);
+    assert_eq!(diff["before"], before);
+    assert_eq!(
+        diff["after"],
+        "behavior bar \"Bar\" {\n  contract \"stuff\"\n}\n"
+    );
+    assert_eq!(
+        fs::read_to_string(root.join("spec/bad.spec")).unwrap(),
+        before,
+        "a diff writes nothing"
+    );
+}
+
+#[specforge_test(
+    behavior = "format_from_stdin",
+    verify = "--stdin refuses --format json with the error document"
+)]
+fn stdin_refuses_json_with_the_error_document() {
+    let output = Command::cargo_bin("specforge")
+        .unwrap()
+        .args(["format", "--stdin", "--format", "json"])
+        .write_stdin(CANONICAL_FOO)
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(1));
+    assert_eq!(String::from_utf8_lossy(&output.stderr), "");
+    let document: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(document["code"], "invalid_input", "{document}");
+}
