@@ -299,6 +299,46 @@ fn publish_signs_package_when_key_provided() {
     assert_eq!(sig.public_key, key.public_key_hex());
 }
 
+// bug: plan 12 §3 R2, flipped by T4
+#[test]
+fn the_memory_client_stores_a_signature_that_does_not_verify_today() {
+    use sha2::{Digest, Sha256};
+    let sha256 = |bytes: &[u8]| hex::encode(Sha256::digest(bytes));
+    let registry = default_registry();
+    let declaration = minimal_manifest();
+    let manifest = serde_json::to_string(&declaration).unwrap();
+    let key = SigningKey::from_bytes(&[7; 32]);
+    let signature = key.sign_package(
+        "@test/ext",
+        "1.0.0",
+        &sha256(b"\0asm other"),
+        &sha256(manifest.as_bytes()),
+        "2026-10-11T00:00:00+00:00",
+    );
+    let signature = serde_json::to_string(&signature).unwrap();
+    let client = client();
+
+    client
+        .publish(
+            b"\0asm wasm",
+            &declaration,
+            &manifest,
+            Some(&signature),
+            &registry,
+            Some(&accepted()),
+        )
+        .expect("the memory client stores what does not verify");
+    let served = client
+        .metadata(
+            &PackageName::parse("@test/ext").unwrap(),
+            &Version::new(1, 0, 0),
+            &registry,
+            None,
+        )
+        .unwrap();
+    assert_eq!(served.signature, signature);
+}
+
 // B:publish_to_registry — verify unit "unsigned publish sends no signature"
 #[test]
 fn publish_without_key_sends_no_signature() {

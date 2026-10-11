@@ -448,6 +448,32 @@ mod tests {
         }
     }
 
+    // bug: plan 12 §3 R4, flipped by T3
+    #[test]
+    fn a_registry_refusal_reads_as_a_network_error_today() {
+        let body = serde_json::to_string(&ErrorBody::new(
+            specforge_registry_wire::code::UNSIGNED_PACKAGE,
+            "packages must be signed",
+        ))
+        .unwrap();
+        let error = failure(
+            StatusCode::BAD_REQUEST,
+            None,
+            &body,
+            "@acme/tool@1.0.0",
+            NOW,
+        );
+        assert_eq!(
+            error,
+            RegistryError::NetworkError {
+                message: "packages must be signed".into()
+            }
+        );
+        let diagnostic = error.to_diagnostic();
+        assert_eq!(diagnostic.code, "R005");
+        assert!(diagnostic.suggestion.unwrap().contains("network"));
+    }
+
     #[test]
     fn retry_after_delta_seconds() {
         let now = SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000_000);

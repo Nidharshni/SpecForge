@@ -773,6 +773,111 @@ async fn the_server_answers_in_these_json_shapes() {
     round_trips::<Yanked>(&yanked);
 }
 
+/// The answer to a publish of `@test/signed-ext` at `version` with its manifest, `wasm` and `signature`.
+async fn publish_signed_ext(
+    router: &axum::Router,
+    token: &str,
+    version: &str,
+    manifest: &str,
+    wasm: &[u8],
+    signature: &str,
+) -> (StatusCode, serde_json::Value) {
+    let response = router
+        .clone()
+        .oneshot(put_request(
+            token,
+            "@test%2Fsigned-ext",
+            version,
+            multipart_body(manifest, wasm, Some(signature)),
+        ))
+        .await
+        .unwrap();
+    let status = response.status();
+    (status, json_of(response).await)
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    hex::encode(Sha256::digest(bytes))
+}
+
+// bug: plan 12 §3 R1, flipped by T4
+#[tokio::test]
+async fn signatures_that_are_not_signatures_are_stored_today() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = app_state(dir.path(), 100);
+    let token = auth::create_token(&state.database, None, "pub", Some(90), false);
+    let router = app_clone(&state);
+    for (version, signature, key_id) in [
+        (
+            "1.0.0",
+            r#"{"sig":"x","keyId":"y","pubkey":"z","signedAt":"now"}"#,
+            "y",
+        ),
+        ("1.0.1", "hello", ""),
+        ("1.0.2", r#"{"sig":"aa"}"#, ""),
+    ] {
+        let manifest = VALID_MANIFEST.replace("1.0.0", version);
+        let (status, receipt) =
+            publish_signed_ext(&router, &token, version, &manifest, WASM, signature).await;
+        assert_eq!(status, StatusCode::CREATED, "{version}: {receipt}");
+        assert_eq!(receipt["key_id"], key_id, "{version}");
+    }
+}
+
+// bug: plan 12 §3 R2, flipped by T4
+#[tokio::test]
+async fn a_signature_over_other_bytes_is_stored_today() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = app_state(dir.path(), 100);
+    let token = auth::create_token(&state.database, None, "pub", Some(90), false);
+    let key = specforge_registry_client::SigningKey::from_bytes(&[7; 32]);
+    let signature = key.sign_package(
+        "@test/signed-ext",
+        "1.0.0",
+        &sha256_hex(b"\0asm-other"),
+        &sha256_hex(VALID_MANIFEST.as_bytes()),
+        "2026-10-11T00:00:00+00:00",
+    );
+    let (status, receipt) = publish_signed_ext(
+        &app_clone(&state),
+        &token,
+        "1.0.0",
+        VALID_MANIFEST,
+        WASM,
+        &serde_json::to_string(&signature).unwrap(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{receipt}");
+}
+
+// bug: plan 12 §3 R2, flipped by T4
+#[tokio::test]
+async fn a_signature_of_another_version_is_stored_today() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = app_state(dir.path(), 100);
+    let token = auth::create_token(&state.database, None, "pub", Some(90), false);
+    let key = specforge_registry_client::SigningKey::from_bytes(&[7; 32]);
+    // Made for 1.0.0, replayed with the 1.0.1 manifest at 1.0.1.
+    let signature = key.sign_package(
+        "@test/signed-ext",
+        "1.0.0",
+        &sha256_hex(WASM),
+        &sha256_hex(VALID_MANIFEST.as_bytes()),
+        "2026-10-11T00:00:00+00:00",
+    );
+    let (status, receipt) = publish_signed_ext(
+        &app_clone(&state),
+        &token,
+        "1.0.1",
+        &VALID_MANIFEST.replace("1.0.0", "1.0.1"),
+        WASM,
+        &serde_json::to_string(&signature).unwrap(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{receipt}");
+}
+
 #[tokio::test]
 async fn a_private_registry_refuses_anonymous_reads() {
     let dir = tempfile::tempdir().unwrap();
