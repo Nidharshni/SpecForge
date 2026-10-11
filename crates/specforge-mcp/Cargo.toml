@@ -10,6 +10,11 @@ autotests = false
 name = "tests"
 path = "tests/main.rs"
 
+# Its own binary: its global allocator counts what the server holds.
+[[test]]
+name = "heap"
+path = "tests/heap.rs"
+
 [dependencies]
 specforge-diagnostics = { path = "../specforge-diagnostics" }
 specforge-common = { workspace = true }

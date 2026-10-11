@@ -117,3 +117,20 @@ invariant mcp_served_project_consistency "MCP Served Project Consistency" {
   verify unit "with no project served, every core tool, prompt and resource answers or refuses as its target declares"
   verify unit "with no project served, an entry that acts on the project is refused before its arguments are read"
 }
+
+invariant mcp_event_record "MCP Event Record" {
+  guarantee """
+    What an MCP server records it did (the events of spec/events/mcp.spec and
+    spec/events/surface-contributions.spec, and the extension_added and
+    project_initialized a mutation produces) is one typed value per event,
+    its payload the spec's field for field, recorded through the server's
+    one event sink. Events never leave the process: a server keeps none of
+    them, so what it holds does not grow with the requests it answered; a
+    test gives the server a sink that keeps them, to observe it. A sink that
+    keeps an event stamps it with the time it was recorded (timestamp).
+  """
+  risk      medium
+  verify unit "a server keeps no event: what it holds does not grow with the requests it answers"
+  verify unit "every event the server records is one an events spec declares, its payload exactly the declared fields"
+  verify unit "every event a recording sink keeps carries the time it was recorded"
+}

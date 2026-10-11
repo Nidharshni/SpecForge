@@ -431,13 +431,11 @@ fn declared_payloads() -> std::collections::BTreeMap<String, Vec<(String, bool)>
     events
 }
 
-/// A session touching every MCP event: each payload carries every field
-/// the spec requires and none it does not declare.
-#[test]
-fn every_event_in_a_session_carries_exactly_its_declared_payload() {
-    let declared = declared_payloads();
-    assert_eq!(declared.len(), 13, "{declared:?}");
-
+/// A session touching every MCP event: initialize (twice), subscribe,
+/// the listings, a read, a tool, a prompt, a rename (a mutation and a
+/// graph delta), a protocol error, a cancel and shutdown. The project's
+/// directory lives as long as the returned value.
+fn core_session() -> (McpServer, tempfile::TempDir) {
     let dir = tempfile::TempDir::new().unwrap();
     let config = json!({"name":"t","version":"0.1.0","extensions":[]});
     std::fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
@@ -486,7 +484,17 @@ fn every_event_in_a_session_carries_exactly_its_declared_payload() {
     call(&mut server, "no/such/method", json!({}));
     call(&mut server, "$/cancelRequest", json!({"id": 7}));
     call(&mut server, "shutdown", json!({}));
+    (server, dir)
+}
 
+/// A session touching every MCP event: each payload carries every field
+/// the spec requires and none it does not declare.
+#[test]
+fn every_event_in_a_session_carries_exactly_its_declared_payload() {
+    let declared = declared_payloads();
+    assert_eq!(declared.len(), 13, "{declared:?}");
+
+    let (server, _dir) = core_session();
     let events = &server.state().events;
     let emitted: std::collections::BTreeSet<&str> =
         events.iter().map(|e| e.name.as_str()).collect();
@@ -513,4 +521,68 @@ fn every_event_in_a_session_carries_exactly_its_declared_payload() {
             );
         }
     }
+}
+
+/// Each recorded `(name, payload)` as `{"event": name, "payload": payload}`,
+/// in order, its `timestamp` removed and every `durationMs` read as
+/// `"[ms]"`: what the snapshot pins.
+fn sequence(recorded: impl IntoIterator<Item = (String, Value)>) -> Vec<Value> {
+    recorded
+        .into_iter()
+        .map(|(name, mut payload)| {
+            if let Some(object) = payload.as_object_mut() {
+                object.remove("timestamp");
+                if object.contains_key("durationMs") {
+                    object.insert("durationMs".into(), json!("[ms]"));
+                }
+            }
+            json!({"event": name, "payload": payload})
+        })
+        .collect()
+}
+
+/// The events two sessions record, in order: the core session above, and
+/// `@test/cmds`'s three surfaces dispatched (an explicit tool, a promoted
+/// command, a resource). A characterization pin: the payloads and their
+/// order stay as they are while the recorder changes.
+#[test]
+fn the_recorded_sequence_of_a_session() {
+    use crate::fake_extension::{self, FakeExtension};
+
+    let (core, _dir) = core_session();
+    let core = sequence(
+        core.state()
+            .events
+            .iter()
+            .map(|e| (e.name.clone(), e.params.clone())),
+    );
+
+    let (mut surfaces, _ext, _dir) = fake_extension::initialized(
+        FakeExtension::new()
+            .with_output("mcp__check", json!({"checked": true}))
+            .with_output(
+                "cmd__report",
+                json!({"exit_code": 0, "stdout": "3 of 4 covered", "stderr": ""}),
+            )
+            .with_output(
+                "mcp__summary",
+                json!({"content": "{}", "mime_type": "application/json"}),
+            ),
+    );
+    call_tool(&mut surfaces, "specforge.cmds.check", json!({}));
+    call_tool(
+        &mut surfaces,
+        "specforge.cmds.report",
+        json!({"style": "md"}),
+    );
+    read_resource(&mut surfaces, "specforge://ext/cmds/summary");
+    let surfaces = sequence(
+        surfaces
+            .state()
+            .events
+            .iter()
+            .map(|e| (e.name.clone(), e.params.clone())),
+    );
+
+    insta::assert_json_snapshot!(json!({"core": core, "surfaces": surfaces}));
 }
