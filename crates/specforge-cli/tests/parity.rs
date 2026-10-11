@@ -15,7 +15,7 @@
 //!   validate). Skipped where MCP returns none (ADR 0029).
 //! - `Document`: the outcome document each surface printed, without its own
 //!   extras (MCP's `note`, the CLI's credentials): the payload, or a failed
-//!   MCP call's `data`. Only `specforge format`, which prints no JSON, differs.
+//!   MCP call's `data`. None differs.
 //!
 //! Today's differences are listed in [`EXPECTED_DIVERGENCES`]. A scenario
 //! fails when an aspect differs without a row, and also when a row's aspect
@@ -88,21 +88,6 @@ const EXPECTED_DIVERGENCES: &[(&str, Aspect, &str)] = &[
         "check_cache",
         Aspect::Files,
         "only `check --cache` writes the build cache (write_build_cache opt_in)",
-    ),
-    (
-        "format",
-        Aspect::Document,
-        "specforge format prints no JSON document; specforge.format answers McpFormatResult",
-    ),
-    (
-        "format_check",
-        Aspect::Document,
-        "specforge format prints no JSON document; specforge.format answers McpFormatResult",
-    ),
-    (
-        "format_preview",
-        Aspect::Document,
-        "specforge format prints no JSON document; specforge.format answers McpFormatResult",
     ),
 ];
 
@@ -346,21 +331,21 @@ const SCENARIOS: &[Scenario] = &[
     Scenario {
         name: "format",
         setup: project_unformatted,
-        cli: |root| args(&["format", "--path", &s(root)]),
+        cli: |root| args(&["format", "--path", &s(root), "--format", "json"]),
         mcp: |root| ("specforge.format", json!({"path": s(root)})),
         mcp_rooted: true,
     },
     Scenario {
         name: "format_preview",
         setup: project_unformatted,
-        cli: |root| args(&["format", "--diff", "--path", &s(root)]),
+        cli: |root| args(&["format", "--diff", "--path", &s(root), "--format", "json"]),
         mcp: |root| ("specforge.format", json!({"path": s(root), "diff": true})),
         mcp_rooted: true,
     },
     Scenario {
         name: "format_check",
         setup: project_unformatted,
-        cli: |root| args(&["format", "--check", "--path", &s(root)]),
+        cli: |root| args(&["format", "--check", "--path", &s(root), "--format", "json"]),
         mcp: |root| ("specforge.format", json!({"path": s(root), "check": true})),
         mcp_rooted: true,
     },
@@ -886,20 +871,22 @@ fn verdicts_agree() {
 }
 
 /// The CLI's `--format json` and MCP's reply are one outcome document for
-/// every operation both surfaces run: only `specforge format`, which prints
-/// no JSON, differs (each `parity_*` runs the aspect itself).
+/// every operation both surfaces run: no `Document` divergence is expected
+/// (each `parity_*` runs the aspect itself).
 #[specforge_test_macros::test(
     behavior = "report_command_outcome",
-    verify = "the CLI's --format json and MCP's reply are one outcome document for every operation both surfaces run, format aside"
+    verify = "the CLI's --format json and MCP's reply are one outcome document for every operation both surfaces run"
 )]
 fn documents_agree() {
-    let mut rows: Vec<&str> = EXPECTED_DIVERGENCES
+    let rows: Vec<&str> = EXPECTED_DIVERGENCES
         .iter()
         .filter(|(_, aspect, _)| *aspect == Aspect::Document)
         .map(|(name, _, _)| *name)
         .collect();
-    rows.sort_unstable();
-    assert_eq!(rows, ["format", "format_check", "format_preview"]);
+    assert!(
+        rows.is_empty(),
+        "a document divergence is a bug, not a difference to list: {rows:?}"
+    );
 }
 
 #[test]
