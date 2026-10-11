@@ -230,8 +230,8 @@ fn extensions_json_format() {
     write_lock_file(
         dir.path(),
         &[
-            ("@specforge/software", "1.2.0", "registry"),
-            ("@specforge/governance", "1.0.0", "local"),
+            ("@acme/software", "1.2.0", "registry"),
+            ("@acme/governance", "1.0.0", "local"),
         ],
     );
 
@@ -252,11 +252,11 @@ fn extensions_json_format() {
     assert_eq!(extensions.len(), 2);
 
     // Sorted alphabetically, governance first
-    assert_eq!(extensions[0]["name"], "@specforge/governance");
+    assert_eq!(extensions[0]["name"], "@acme/governance");
     assert_eq!(extensions[0]["version"], "1.0.0");
     assert_eq!(extensions[0]["source"], "local");
 
-    assert_eq!(extensions[1]["name"], "@specforge/software");
+    assert_eq!(extensions[1]["name"], "@acme/software");
     assert_eq!(extensions[1]["version"], "1.2.0");
     assert_eq!(extensions[1]["source"], "registry");
 }

@@ -312,7 +312,8 @@ type McpLockEntry {
 
 type McpExtensionInfo {
   name             string @readonly
-  /// The loaded version, else the locked one; absent when neither.
+  /// The loaded version; else an installed extension's locked one; else the
+  /// version a legacy name@version entry writes; absent otherwise.
   version          string @optional
   /// "builtin", the lock entry's source ("registry", "local:<path>"), or
   /// "file:<path>" for a .wasm file entry of specforge.json.

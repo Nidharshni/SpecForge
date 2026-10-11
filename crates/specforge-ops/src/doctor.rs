@@ -642,7 +642,7 @@ mod tests {
 
         assert_eq!(report.extensions[0].source, "local:/blobs/probe.wasm");
         assert_eq!(
-            crate::extension::list(&view).extensions[0].origin.source(),
+            crate::extension::list(&view).extensions[0].source,
             "file:nope.wasm"
         );
     }
@@ -852,12 +852,7 @@ mod tests {
                 .into_iter()
                 .find(|e| e.name == extension.name)
                 .unwrap();
-            assert_eq!(
-                listed.origin.source(),
-                extension.source,
-                "{}",
-                extension.name
-            );
+            assert_eq!(listed.source, extension.source, "{}", extension.name);
         }
     }
 

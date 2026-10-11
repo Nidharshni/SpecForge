@@ -5,6 +5,7 @@ mod add;
 mod candidate;
 #[cfg(test)]
 mod fixtures;
+mod inventory;
 mod list;
 mod lock_plan;
 mod remove;
@@ -13,9 +14,10 @@ mod update;
 
 pub use add::{AddOutcome, AddRequest, Added, Source, Trust, add, parse};
 pub use candidate::{Candidate, Installable, LocalFile};
+pub use inventory::{Inventory, ProjectExtension, Selection, Status, inventory};
 pub use list::{
-    ExtensionEntry, ExtensionInfo, ExtensionListing, LockedExtension, ProviderEntry,
-    ProviderListing, ProviderRow, ProviderStatus, ProvidersDocument, Status, list, providers,
+    ExtensionInfo, ExtensionListing, LockedExtension, ProviderEntry, ProviderListing, ProviderRow,
+    ProviderStatus, ProvidersDocument, list, providers,
 };
 pub use remove::{RemoveOutcome, RemoveRequest, StrandedEntity, remove};
 pub use resolve::{resolve, resolve_requirement};
