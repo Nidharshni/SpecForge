@@ -33,27 +33,27 @@ fn every_kinds_fields_and_shared_fields_are_registered() {
     let build = build([software(), shared]);
     assert!(diagnostics(&build).is_empty(), "{:?}", diagnostics(&build));
 
-    assert!(build.fields.contains("behavior", "contract"));
-    assert!(build.fields.contains("behavior", "invariants"));
+    assert!(build.fields().contains("behavior", "contract"));
+    assert!(build.fields().contains("behavior", "invariants"));
     assert_eq!(
         build
-            .fields
+            .fields()
             .get("behavior", "contract")
             .unwrap()
             .source_extension(),
         "@specforge/software"
     );
     // `invariant` declares no field.
-    assert!(build.fields.fields_for_kind("invariant").is_empty());
+    assert!(build.fields().fields_for_kind("invariant").is_empty());
     // A shared field reaches every kind of its extension, and only those.
     for kind in ["task", "epic"] {
-        let owner = build.fields.get(kind, "owner").expect(kind);
+        let owner = build.fields().get(kind, "owner").expect(kind);
         assert_eq!(owner.kind_name(), kind);
         assert_eq!(owner.source_extension(), "@test/ext");
     }
-    assert!(!build.fields.contains("behavior", "owner"));
-    assert!(build.fields.contains("task", "estimate"));
-    assert!(!build.fields.contains("epic", "estimate"));
+    assert!(!build.fields().contains("behavior", "owner"));
+    assert!(build.fields().contains("task", "estimate"));
+    assert!(!build.fields().contains("epic", "estimate"));
 }
 
 #[spec(
@@ -95,7 +95,7 @@ fn each_field_type_and_its_alias_registers_as_that_type() {
     for field_type in FieldType::ALL {
         let name = field_type.as_str();
         for field in [name.to_string(), format!("{name}_alias")] {
-            let entry = build.fields.get("thing", &field).expect(&field);
+            let entry = build.fields().get("thing", &field).expect(&field);
             assert_eq!(entry.field_type(), *field_type, "{field}");
             assert_eq!(entry.declared().field_type, name, "{field}");
         }
@@ -103,7 +103,7 @@ fn each_field_type_and_its_alias_registers_as_that_type() {
     // An enum keeps its declared values, and its descriptor keeps them too.
     assert_eq!(
         build
-            .fields
+            .fields()
             .get("thing", "enum_alias")
             .unwrap()
             .declared()
@@ -147,10 +147,10 @@ fn a_field_of_an_undefined_type_is_w019_and_not_registered() {
             diagnostic.message
         );
     }
-    assert!(!build.fields.contains("thing", "notes"));
-    assert!(!build.fields.contains("thing", "data"));
-    assert!(build.fields.contains("thing", "summary"));
-    assert!(build.kinds.contains("thing"));
+    assert!(!build.fields().contains("thing", "notes"));
+    assert!(!build.fields().contains("thing", "data"));
+    assert!(build.fields().contains("thing", "summary"));
+    assert!(build.kinds().contains("thing"));
 }
 
 #[spec(
@@ -231,7 +231,7 @@ fn a_fields_normative_flag_reaches_its_entry() {
     })]);
     let normative = |field: &str| {
         build
-            .fields
+            .fields()
             .get("rule", field)
             .unwrap()
             .declared()
@@ -276,14 +276,14 @@ fn a_fields_proof_role_reaches_its_entry() {
     let build = build([roles_extension("bound", "claim"), other]);
     assert!(diagnostics(&build).is_empty(), "{:?}", diagnostics(&build));
 
-    let role = |field: &str| build.fields.get("rule", field).unwrap().proof_role();
+    let role = |field: &str| build.fields().get("rule", field).unwrap().proof_role();
     assert_eq!(role("limit"), Some(ProofRole::Bound));
     assert_eq!(role("goal"), Some(ProofRole::Claim));
     assert_eq!(role("description"), None);
     assert_eq!(role("expression"), Some(ProofRole::Claim));
     assert_eq!(
         build
-            .fields
+            .fields()
             .get("rule", "expression")
             .unwrap()
             .source_extension(),
@@ -313,11 +313,11 @@ fn a_proof_role_other_than_bound_or_claim_is_refused() {
         refused[0].message
     );
     // The field is registered; it has no role.
-    let limit = build.fields.get("rule", "limit").unwrap();
+    let limit = build.fields().get("rule", "limit").unwrap();
     assert_eq!(limit.proof_role(), None);
     assert_eq!(limit.declared().proof_role.as_deref(), Some("assumed"));
     assert_eq!(
-        build.fields.get("rule", "goal").unwrap().proof_role(),
+        build.fields().get("rule", "goal").unwrap().proof_role(),
         Some(ProofRole::Claim)
     );
 }
@@ -347,10 +347,10 @@ fn field_registration_holds() {
     let build = build([software(), late]);
 
     // fields_registered: every declared field, embedding its descriptor.
-    let contract = build.fields.get("behavior", "contract").unwrap();
+    let contract = build.fields().get("behavior", "contract").unwrap();
     assert_eq!(contract.field_type(), FieldType::Block);
     assert_eq!(contract.declared().name, "contract");
-    let invariants = build.fields.get("behavior", "invariants").unwrap();
+    let invariants = build.fields().get("behavior", "invariants").unwrap();
     assert_eq!(invariants.field_type(), FieldType::ReferenceList);
     assert_eq!(invariants.declared().edge.as_deref(), Some("enforces"));
     assert_eq!(
@@ -362,14 +362,17 @@ fn field_registration_holds() {
     let w019 = coded(&build, "W019");
     assert_eq!(w019.len(), 1);
     assert!(w019[0].message.contains("'prose'"));
-    assert!(!build.fields.contains("task", "title_text"));
+    assert!(!build.fields().contains("task", "title_text"));
 
     // roles_checked: the bad role is W021 and the field has none.
     assert_eq!(
-        build.fields.get("task", "bound").unwrap().proof_role(),
+        build.fields().get("task", "bound").unwrap().proof_role(),
         Some(ProofRole::Bound)
     );
-    assert_eq!(build.fields.get("task", "odd").unwrap().proof_role(), None);
+    assert_eq!(
+        build.fields().get("task", "odd").unwrap().proof_role(),
+        None
+    );
     let w021 = coded(&build, "W021");
     assert_eq!(w021.len(), 1);
     assert!(w021[0].message.contains("proof_role 'maybe'"));

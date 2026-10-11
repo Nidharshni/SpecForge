@@ -198,7 +198,7 @@ fn graph_inputs(inputs: &GraphInputs) -> Value {
 /// What the snapshot reads of the build.
 fn digest(build: &RegistryBuild) -> Value {
     let mut kinds: Vec<Value> = build
-        .kinds
+        .kinds()
         .iter()
         .map(|(keyword, entry)| {
             json!({
@@ -211,13 +211,13 @@ fn digest(build: &RegistryBuild) -> Value {
         .collect();
     kinds.sort_by_key(|k| k["keyword"].as_str().unwrap_or_default().to_string());
     let mut fields: Vec<String> = build
-        .fields
+        .fields()
         .iter()
         .map(|(kind, field, entry)| format!("{kind}.{field}: {:?}", entry.field_type()))
         .collect();
     fields.sort();
     let mut edges: Vec<String> = build
-        .edges
+        .edges()
         .iter()
         .map(|(label, entry)| format!("{label}: {}", entry.source_extension))
         .collect();
@@ -226,7 +226,7 @@ fn digest(build: &RegistryBuild) -> Value {
         // Every diagnostic the build reports, in its order (T3: `build.diagnostics()`).
         "diagnostics": rendered(build.diagnostics()),
         "rules": build
-            .rules
+            .rules()
             .iter()
             .map(|rule| {
                 json!([
@@ -241,7 +241,7 @@ fn digest(build: &RegistryBuild) -> Value {
         "fields": fields,
         "edges": edges,
         "graph_inputs": graph_inputs(&build.graph_inputs()),
-        "passes": build.passes.iter().map(|p| p.full_name()).collect::<Vec<_>>(),
+        "passes": build.passes().iter().map(|p| p.full_name()).collect::<Vec<_>>(),
     })
 }
 

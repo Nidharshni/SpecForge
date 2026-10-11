@@ -57,18 +57,18 @@ pub struct RegistryBuild {
     /// The declarations the build was made from, in load order; MCP tools
     /// refused for a malformed schema (E055) are left out of their surfaces.
     declarations: Vec<ExtensionDeclaration>,
-    pub kinds: KindRegistry,
-    pub fields: FieldRegistry,
-    pub edges: EdgeRegistry,
+    pub(crate) kinds: KindRegistry,
+    pub(crate) fields: FieldRegistry,
+    pub(crate) edges: EdgeRegistry,
     /// The rule set: the extensions' rules (checked and resolved against
     /// the registries) plus the host-generated E006 rules for required
     /// fields, each with its origin (ADR 0020).
-    pub rules: Rules,
+    pub(crate) rules: Rules,
     /// Registered surface contributions (first registration wins).
-    pub surfaces: Vec<SurfaceRegistryEntry>,
+    pub(crate) surfaces: Vec<SurfaceRegistryEntry>,
     /// Every declared pass with its extension: extension by extension in
     /// load order, each extension's in its after/before order.
-    pub passes: Vec<DeclaredPass>,
+    pub(crate) passes: Vec<DeclaredPass>,
     /// E030 identity and shape, W021 self-consistency, the peers' E073 and
     /// E027 (a cycle's after the declarations'), W145 pass cycles — in that
     /// order, extension by extension within each.
@@ -83,6 +83,40 @@ pub struct RegistryBuild {
 }
 
 impl RegistryBuild {
+    /// The kinds the declarations register, each under its keyword (first
+    /// in load order wins, E026).
+    pub fn kinds(&self) -> &KindRegistry {
+        &self.kinds
+    }
+
+    /// The fields registered on each kind: its own, its extension's shared
+    /// fields and enhancements.
+    pub fn fields(&self) -> &FieldRegistry {
+        &self.fields
+    }
+
+    /// The edge types: declared, and every label a field maps to without
+    /// declaring it.
+    pub fn edges(&self) -> &EdgeRegistry {
+        &self.edges
+    }
+
+    /// The rule set (ADR 0020).
+    pub fn rules(&self) -> &Rules {
+        &self.rules
+    }
+
+    /// Every declared pass with its extension, in order (both phases).
+    pub fn passes(&self) -> &[DeclaredPass] {
+        &self.passes
+    }
+
+    /// The surface contributions registered (first registration wins; a
+    /// later duplicate is E039).
+    pub fn surfaces(&self) -> &[SurfaceRegistryEntry] {
+        &self.surfaces
+    }
+
     /// What the graph build reads of these declarations: body-parser kinds,
     /// single and absent-target reference fields, inverse pairs, value
     /// coercions and derived references (ADR 0032, amended). The one place

@@ -526,17 +526,17 @@ fn hover_lists_the_diagnostics_not_already_shown() {
 
 #[test]
 fn hover_shows_field_description() {
-    let reg = registries("@specforge/software", |c| {
+    let build = registries("@specforge/software", |c| {
         c.kind("behavior", |k| {
             k.field("contract", |f| {
                 f.field_type(FieldType::String)
                     .description("The behavioral contract this entity fulfills");
             });
         });
-    })
-    .fields;
+    });
+    let reg = build.fields();
 
-    let text = specforge_lsp::hover_field_info("contract", "behavior", &reg).unwrap();
+    let text = specforge_lsp::hover_field_info("contract", "behavior", reg).unwrap();
     assert!(
         text.contains("The behavioral contract this entity fulfills"),
         "should show field description:\n{text}"
@@ -545,7 +545,7 @@ fn hover_shows_field_description() {
 
 // -- hover_field_info --------------------------------------------------------
 
-fn make_field_registry() -> specforge_registry::FieldRegistry {
+fn make_field_registry() -> specforge_registry::RegistryBuild {
     registries("@specforge/software", |c| {
         c.kind("behavior", |k| {
             k.field("contract", |f| {
@@ -559,13 +559,13 @@ fn make_field_registry() -> specforge_registry::FieldRegistry {
             });
         });
     })
-    .fields
 }
 
 #[test]
 fn field_hover_shows_type_and_extension() {
-    let reg = make_field_registry();
-    let text = specforge_lsp::hover_field_info("contract", "behavior", &reg).unwrap();
+    let build = make_field_registry();
+    let reg = build.fields();
+    let text = specforge_lsp::hover_field_info("contract", "behavior", reg).unwrap();
     assert!(
         text.contains("`contract`"),
         "should show field name:\n{text}"
@@ -579,8 +579,9 @@ fn field_hover_shows_type_and_extension() {
 
 #[test]
 fn field_hover_shows_target_kind_and_edge() {
-    let reg = make_field_registry();
-    let text = specforge_lsp::hover_field_info("features", "behavior", &reg).unwrap();
+    let build = make_field_registry();
+    let reg = build.fields();
+    let text = specforge_lsp::hover_field_info("features", "behavior", reg).unwrap();
     assert!(
         text.contains("→ **feature**"),
         "should show target kind:\n{text}"
@@ -594,14 +595,16 @@ fn field_hover_shows_target_kind_and_edge() {
 
 #[test]
 fn field_hover_unknown_field_returns_none() {
-    let reg = make_field_registry();
-    assert!(specforge_lsp::hover_field_info("nonexistent", "behavior", &reg).is_none());
+    let build = make_field_registry();
+    let reg = build.fields();
+    assert!(specforge_lsp::hover_field_info("nonexistent", "behavior", reg).is_none());
 }
 
 #[test]
 fn field_hover_unknown_kind_returns_none() {
-    let reg = make_field_registry();
-    assert!(specforge_lsp::hover_field_info("contract", "unknown_kind", &reg).is_none());
+    let build = make_field_registry();
+    let reg = build.fields();
+    assert!(specforge_lsp::hover_field_info("contract", "unknown_kind", reg).is_none());
 }
 
 #[spec(
@@ -609,7 +612,7 @@ fn field_hover_unknown_kind_returns_none() {
     verify = "field help names a field's type as E061 does, an enum's declared values included"
 )]
 fn field_hover_names_a_type_as_e061_does() {
-    let reg = registries("@t/x", |c| {
+    let build = registries("@t/x", |c| {
         c.kind("ticket", |k| {
             k.field("urgent", |f| {
                 f.field_type(FieldType::Bool);
@@ -618,12 +621,12 @@ fn field_hover_names_a_type_as_e061_does() {
                 f.field_type(FieldType::Enum).enum_values(&["low", "high"]);
             });
         });
-    })
-    .fields;
+    });
+    let reg = build.fields();
 
-    let urgent = specforge_lsp::hover_field_info("urgent", "ticket", &reg).unwrap();
+    let urgent = specforge_lsp::hover_field_info("urgent", "ticket", reg).unwrap();
     assert!(urgent.starts_with("**`urgent`** : bool"), "{urgent}");
-    let priority = specforge_lsp::hover_field_info("priority", "ticket", &reg).unwrap();
+    let priority = specforge_lsp::hover_field_info("priority", "ticket", reg).unwrap();
     assert!(
         priority.starts_with("**`priority`** : enum (low, high)  \n"),
         "{priority}"

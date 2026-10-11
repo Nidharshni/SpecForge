@@ -50,3 +50,22 @@ split across two crates again.
 **What would reopen it.** A `paths` key in `specforge.json` brings path aliases back, as configuration
 `resolve_imports` reads. A profile showing the cold read should keep tree-sitter trees for the first
 edit.
+
+## The registry build derives the graph's inputs (amendment, architecture round 6, plan 08)
+
+The graph build reads six things of the loaded extensions. Four were public fields of the registry
+build, computed for one caller (`Environment::graph_config`); two (`field_coercions`,
+`derived_references`) were derived in `specforge-project` from the build's field registry.
+
+- **One value.** `specforge_graph::GraphInputs` holds the six; `GraphConfig` is
+  `{ known_provider_schemes, inputs: GraphInputs }`, the schemes being the environment's.
+- **One producer.** `RegistryBuild::graph_inputs()` derives all six from the build's declarations and
+  field registry (`specforge-registry` now depends on `specforge-graph`; nothing below the graph
+  depends on the registry). `specforge-project`'s `field_types` module is gone, and so are the four
+  fields.
+- **Deterministic.** Inverse pairs are written (lesser, greater) and sorted; the graph reads a pair
+  symmetrically, so no graph changes.
+
+Rejected: the registry build taking the provider schemes (`graph_config(schemes)`), which ADR 0031 D7
+rejected for `build_registries`; the graph crate reading the registries, which would make every graph
+test build one.

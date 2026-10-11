@@ -206,15 +206,20 @@ fn test_pipeline_registries_populated() {
     let ctx = compile(&dir);
 
     // Kind registry should have all 9 product entity kinds
-    assert!(ctx.environment().registries.kinds.contains("feature"));
-    assert!(ctx.environment().registries.kinds.contains("journey"));
-    assert!(ctx.environment().registries.kinds.contains("deliverable"));
-    assert!(ctx.environment().registries.kinds.contains("milestone"));
-    assert!(ctx.environment().registries.kinds.contains("module"));
-    assert!(ctx.environment().registries.kinds.contains("term"));
-    assert!(ctx.environment().registries.kinds.contains("persona"));
-    assert!(ctx.environment().registries.kinds.contains("channel"));
-    assert!(ctx.environment().registries.kinds.contains("release"));
+    assert!(ctx.environment().registries().kinds().contains("feature"));
+    assert!(ctx.environment().registries().kinds().contains("journey"));
+    assert!(
+        ctx.environment()
+            .registries()
+            .kinds()
+            .contains("deliverable")
+    );
+    assert!(ctx.environment().registries().kinds().contains("milestone"));
+    assert!(ctx.environment().registries().kinds().contains("module"));
+    assert!(ctx.environment().registries().kinds().contains("term"));
+    assert!(ctx.environment().registries().kinds().contains("persona"));
+    assert!(ctx.environment().registries().kinds().contains("channel"));
+    assert!(ctx.environment().registries().kinds().contains("release"));
 }
 
 #[test]

@@ -88,13 +88,8 @@ pub(crate) fn project_with(extensions: &[&str]) -> tempfile::TempDir {
     dir
 }
 
-/// The kind and field registries `extensions` populate.
-pub(crate) fn registries_for(
-    extensions: &[&str],
-) -> (
-    specforge_registry::KindRegistry,
-    specforge_registry::FieldRegistry,
-) {
+/// The registry build `extensions` populate.
+pub(crate) fn registries_for(extensions: &[&str]) -> specforge_registry::RegistryBuild {
     let names: Vec<String> = extensions.iter().map(|s| s.to_string()).collect();
     let runtime = wasm_runtime_for(&names);
     let declarations: Vec<_> = names
@@ -105,8 +100,7 @@ pub(crate) fn registries_for(
             loaded.declaration
         })
         .collect();
-    let build = specforge_registry::build_registries(declarations);
-    (build.kinds, build.fields)
+    specforge_registry::build_registries(declarations)
 }
 
 // B:lsp_shutdown — verify contract "requires/ensures consistency for LSP shutdown"

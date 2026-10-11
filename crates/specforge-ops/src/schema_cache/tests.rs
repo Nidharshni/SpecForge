@@ -377,7 +377,7 @@ fn a_cache_an_older_host_wrote_reads_its_bool_field_unchanged() {
     }];
     let build = specforge_registry::build_registries(vec![declaration]);
     let mut current =
-        specforge_emitter::generate_schema(&build.kinds, &build.edges, &build.fields, &[]);
+        specforge_emitter::generate_schema(build.kinds(), build.edges(), build.fields(), &[]);
 
     let cache = SchemaCache::in_dir(dir.path());
     let (migration, diagnostics) = cache.detect_breaking(&current, true);

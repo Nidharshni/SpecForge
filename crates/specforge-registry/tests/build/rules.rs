@@ -26,7 +26,7 @@ fn rules(name: &str, declared: &[(&str, &str, CheckKind)]) -> ExtensionDeclarati
 /// The build's rules as `code: message template`, in order.
 fn templates(build: &specforge_registry::RegistryBuild) -> Vec<String> {
     build
-        .rules
+        .rules()
         .iter()
         .map(|rule| {
             format!(
@@ -40,7 +40,7 @@ fn templates(build: &specforge_registry::RegistryBuild) -> Vec<String> {
 
 /// The build's `i`th rule, in execution order.
 fn nth(build: &specforge_registry::RegistryBuild, i: usize) -> &Rule {
-    build.rules.iter().nth(i).unwrap()
+    build.rules().iter().nth(i).unwrap()
 }
 
 #[spec(
@@ -210,7 +210,7 @@ fn required_fields_get_e006_rules() {
     let build = build([declared]);
 
     assert_eq!(rule_codes(&build), [("E006", ""), ("E006", "")]);
-    for rule in &build.rules {
+    for rule in build.rules() {
         assert_eq!(
             rule.origin(),
             &Origin::Host,
@@ -220,7 +220,7 @@ fn required_fields_get_e006_rules() {
         assert_eq!(rule.check_kind(), CheckKind::MissingRequiredField);
     }
     let targets: Vec<String> = build
-        .rules
+        .rules()
         .iter()
         .map(|rule| {
             format!(
@@ -233,7 +233,7 @@ fn required_fields_get_e006_rules() {
     assert_eq!(targets, ["behavior.contract", "invariant.guarantee"]);
 
     // No required field, no rule.
-    assert!(crate::support::build([software()]).rules.is_empty());
+    assert!(crate::support::build([software()]).rules().is_empty());
 }
 
 #[spec(
@@ -300,7 +300,7 @@ fn rule_collection_holds() {
     assert_eq!(codes(&build), ["W023"]);
 
     // required_enforced: the required field has its E006 rule.
-    let e006 = build.rules.iter().last().unwrap();
+    let e006 = build.rules().iter().last().unwrap();
     assert_eq!(e006.target_kind(), Some("task"));
     assert_eq!(e006.describe()["field"], "owner");
 
@@ -316,5 +316,5 @@ fn rule_collection_holds() {
         ],
     )]);
     assert!(coded(&repeated, "W023").is_empty());
-    assert_eq!(repeated.rules.len(), 2);
+    assert_eq!(repeated.rules().len(), 2);
 }

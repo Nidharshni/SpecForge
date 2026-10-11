@@ -154,6 +154,6 @@ fn shutdown_serves_nothing_of_the_project() {
     assert!(state.diagnostics().is_empty());
     assert_eq!(state.config().name, None);
     assert!(state.spec_root().is_none());
-    assert!(state.registries().rules.is_empty());
+    assert!(state.registries().rules().is_empty());
     assert!(state.session().runtime().is_none());
 }

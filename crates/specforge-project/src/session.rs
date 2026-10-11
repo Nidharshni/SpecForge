@@ -270,7 +270,7 @@ impl ProjectSession {
         snapshot.stamp_environment(&inputs);
         let runtime = source.runtime_for(root, &read.config);
         let env = Environment::from_read(root, read, runtime);
-        let inputs = inputs.with_check_passes(env.registries.check_passes().next().is_some());
+        let inputs = inputs.with_check_passes(env.registries().check_passes().next().is_some());
         OpeningProject {
             env: Arc::new(env),
             source,
@@ -445,7 +445,7 @@ impl ProjectSession {
                 self.project.diagnostics(),
             );
         }
-        let root = self.project.environment().root.clone();
+        let root = self.project.environment().root().to_path_buf();
         let buffers = std::mem::take(&mut self.held).into_buffers();
         let mut next = Self::begin_open(&root, self.source.clone()).finish_holding(buffers);
         next.project.set_verify(self.project.verifies());
@@ -517,7 +517,7 @@ impl ProjectSession {
     /// The runtime the project's extensions were loaded in (its
     /// environment's; none: no extension loads).
     pub fn runtime(&self) -> Option<&SharedRuntime> {
-        self.project.environment().runtime.as_ref()
+        self.project.environment().runtime()
     }
 
     /// Whether a changed file is outside the project. A session with no

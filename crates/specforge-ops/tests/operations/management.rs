@@ -196,7 +196,7 @@ fn the_providers_listing_reports_what_the_environment_registered() {
     assert_eq!(w118(&listing.diagnostics).len(), 2, "{listing:?}");
     assert_eq!(
         w118(&listing.diagnostics),
-        w118(compiled.environment().providers.diagnostics())
+        w118(compiled.environment().providers().diagnostics())
     );
 }
 

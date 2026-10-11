@@ -1243,11 +1243,11 @@ mod tests {
         assert!(
             project
                 .environment()
-                .enabled
+                .enabled()
                 .iter()
                 .all(|e| e.failure.is_none())
         );
-        let commands = ExtensionCommands::build(&project.environment().registries);
+        let commands = ExtensionCommands::build(project.environment().registries());
         let features = commands
             .all()
             .iter()

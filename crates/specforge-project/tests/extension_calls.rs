@@ -152,11 +152,11 @@ fn c4_the_pass_input_of_an_analysis() {
     }))
     .unwrap();
     let proved: HashSet<String> = ["b".to_string(), "a".to_string()].into();
-    let registries = &compiled.environment().registries;
+    let registries = compiled.environment().registries();
     let input = pass_input(&AnalysisContext {
         graph: compiled.graph(),
-        kind_registry: &registries.kinds,
-        field_registry: &registries.fields,
+        kind_registry: registries.kinds(),
+        field_registry: registries.fields(),
         entities: compiled.entities(),
         project_root: Some(dir.path()),
         test_results: Some(&report),
@@ -310,13 +310,13 @@ fn c4_a_failing_analyze_pass_is_an_e028_finding_of_its_report() {
         }),
     ));
     let compiled = CompiledProject::compile(dir.path(), Some(runtime.clone()));
-    let registries = &compiled.environment().registries;
+    let registries = compiled.environment().registries();
     let reports = run_extension_passes(
-        &registries.passes,
+        registries.passes(),
         &AnalysisContext {
             graph: compiled.graph(),
-            kind_registry: &registries.kinds,
-            field_registry: &registries.fields,
+            kind_registry: registries.kinds(),
+            field_registry: registries.fields(),
             entities: compiled.entities(),
             project_root: Some(dir.path()),
             test_results: None,

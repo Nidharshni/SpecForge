@@ -191,7 +191,7 @@ impl<F: Fn(&str) -> Option<String>> Navigator<'_, F> {
         let kind = self
             .view
             .registries()
-            .fields
+            .fields()
             .get(holder.kind.raw.as_str(), field)?
             .declared()
             .target_kind
@@ -228,7 +228,7 @@ impl<F: Fn(&str) -> Option<String>> Navigator<'_, F> {
     fn verify_stub(&self, node: &Node) -> Option<Fix> {
         let registries = self.view.registries();
         let kind = registries
-            .kinds
+            .kinds()
             .get(node.kind.raw.as_str())
             .filter(|entry| entry.supports_verify)?;
         let standing = self.view.entities().standing(node.id.raw.as_str())?;

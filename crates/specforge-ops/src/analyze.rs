@@ -450,8 +450,8 @@ fn analyze_via(
     let registries = view.registries();
     let base = AnalysisContext {
         graph: view.graph(),
-        kind_registry: &registries.kinds,
-        field_registry: &registries.fields,
+        kind_registry: registries.kinds(),
+        field_registry: registries.fields(),
         entities: view.entities(),
         project_root: view.root(),
         test_results: report.as_deref(),
@@ -492,7 +492,7 @@ fn analyze_via(
         // across extensions they are advisory.
         passes_run.extend(
             passes::run_extension_passes(
-                &registries.passes,
+                registries.passes(),
                 &input,
                 runtime.as_ref(),
                 &selection.extension,
@@ -597,7 +597,7 @@ fn declared_pass_names(view: &ProjectView) -> Vec<String> {
         return Vec::new();
     }
     view.registries()
-        .passes
+        .passes()
         .iter()
         .filter(|p| !p.is_check_phase())
         .map(DeclaredPass::full_name)

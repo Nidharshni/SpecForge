@@ -28,7 +28,7 @@ impl<'a> ProjectView<'a> {
     pub fn kinds(&self) -> KnownKinds<'a> {
         let declared: BTreeSet<&'a str> = self
             .registries()
-            .kinds
+            .kinds()
             .keywords()
             .map(String::as_str)
             .collect();

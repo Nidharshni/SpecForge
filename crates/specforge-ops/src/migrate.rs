@@ -268,8 +268,8 @@ pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Outcome {
             .map(|r| r.file_path.clone())
             .collect(),
     };
-    let (invoked, failures) = match pre.environment().runtime.as_deref() {
-        Some(runtime) => invoke_hooks(&pre.environment().registries, runtime, &input),
+    let (invoked, failures) = match pre.environment().runtime().map(|r| r.as_ref()) {
+        Some(runtime) => invoke_hooks(pre.environment().registries(), runtime, &input),
         None => (Vec::new(), Vec::new()),
     };
     outcome.hooks_invoked = invoked;
@@ -377,11 +377,11 @@ pub fn rollback(root: &Path) -> RollbackOutcome {
 }
 
 fn schema_of(project: &CompiledProject) -> specforge_emitter::GraphProtocolSchema {
-    let registries = &project.environment().registries;
+    let registries = project.environment().registries();
     specforge_emitter::generate_schema(
-        &registries.kinds,
-        &registries.edges,
-        &registries.fields,
+        registries.kinds(),
+        registries.edges(),
+        registries.fields(),
         &registries
             .extension_info()
             .map(|(name, version)| (name.to_string(), version.to_string()))

@@ -238,7 +238,7 @@ pub fn guide<'a>(view: &ProjectView<'a>) -> InferenceGuide<'a> {
             .collect(),
         kinds,
         entities_by_kind: view.entities_by_kind(),
-        conventions: view.env().config.inference.global.as_deref(),
+        conventions: view.env().config().inference.global.as_deref(),
         spec_directory: spec_directory(view),
     }
 }
@@ -282,7 +282,7 @@ fn registered_for(
     descriptor: &EntityKindDescriptor,
 ) -> bool {
     view.registries()
-        .kinds
+        .kinds()
         .get(keyword(descriptor))
         .is_some_and(|entry| entry.source_extension == declaration.name())
 }
@@ -308,7 +308,7 @@ fn kind_of<'a>(
     let keyword = keyword(descriptor);
     // Every field the registry build registered on the kind: the registry's
     // map has no declaration order, so by name.
-    let mut fields = view.registries().fields.fields_for_kind(keyword);
+    let mut fields = view.registries().fields().fields_for_kind(keyword);
     fields.sort_by(|a, b| a.name().cmp(b.name()));
     KindGuide {
         keyword,
@@ -317,7 +317,7 @@ fn kind_of<'a>(
         fields,
         guide: merged_guide(
             descriptor.inference_guide.as_deref().unwrap_or(""),
-            view.env().config.inference.kinds.get(keyword),
+            view.env().config().inference.kinds.get(keyword),
         ),
         existing: existing.get(keyword).cloned().unwrap_or_default(),
     }
@@ -340,7 +340,7 @@ fn merged_guide(extension_guide: &str, project_guide: Option<&String>) -> String
 fn spec_directory(view: &ProjectView) -> String {
     let relative = view
         .root()
-        .and_then(|root| view.env().spec_root.strip_prefix(root).ok())
+        .and_then(|root| view.env().spec_root().strip_prefix(root).ok())
         .filter(|relative| *relative != Path::new(""));
     match relative {
         Some(relative) => {

@@ -262,7 +262,7 @@ impl<'a> ProjectRef<'a> {
 
     /// Where its `.spec` files are keyed from: spans are relative to it.
     pub fn spec_root(&self) -> &'a Path {
-        &self.view.env().spec_root
+        self.view.env().spec_root()
     }
 
     /// What every operation over this project reads, rooted at the project

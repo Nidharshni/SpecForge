@@ -51,7 +51,7 @@ pub fn rules_of(declarations: Vec<ExtensionDeclaration>) -> Built {
         .cloned()
         .collect();
     Built {
-        rules: build.rules.clone(),
+        rules: build.rules().clone(),
         build,
         diagnostics,
     }

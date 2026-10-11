@@ -326,7 +326,7 @@ pub fn diagnose_with(view: &ProjectView, z3_available: bool) -> DoctorReport {
         });
     }
     if let Some(root) = view.root()
-        && !view.env().config_found
+        && !view.env().config_found()
     {
         findings.push(Finding {
             about: About::Config,

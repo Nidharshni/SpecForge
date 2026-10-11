@@ -28,7 +28,7 @@ pub fn items(
     let mut items = match *site {
         CompletionSite::Keywords { prefix } => keywords(prefix, view),
         CompletionSite::Fields { kind, prefix } => {
-            let mut fields = registries.fields.fields_for_kind(kind);
+            let mut fields = registries.fields().fields_for_kind(kind);
             fields.sort_by(|a, b| a.declared().name.cmp(&b.declared().name));
             fields
                 .into_iter()
@@ -44,7 +44,7 @@ pub fn items(
                 .collect()
         }
         CompletionSite::VerifyKind { kind, prefix } => registries
-            .kinds
+            .kinds()
             .get(kind)
             .filter(|entry| entry.supports_verify)
             .map(|entry| {
@@ -66,7 +66,7 @@ pub fn items(
             field,
             prefix,
         } => {
-            let entry = registries.fields.get(kind, field);
+            let entry = registries.fields().get(kind, field);
             match entry.map(|e| e.field_type()) {
                 // A reference list, or a field the registry does not type.
                 None | Some(FieldType::ReferenceList) => {
@@ -84,7 +84,7 @@ pub fn items(
             kind,
             field,
             prefix,
-        } => value(&registries.fields, kind, field, prefix, view),
+        } => value(registries.fields(), kind, field, prefix, view),
         CompletionSite::Nothing => Vec::new(),
     };
     for item in &mut items {
@@ -119,7 +119,7 @@ fn starts_with(label: &str, prefix: &str) -> bool {
 /// `define` is a reserved word whose blocks register nothing (W143, ADR
 /// 0005): never suggested.
 fn keywords(prefix: &str, view: &ProjectView) -> Vec<CompletionItem> {
-    let kinds = &view.registries().kinds;
+    let kinds = view.registries().kinds();
     let guide = guide(view);
     let mut keywords: Vec<String> = kinds.keywords().cloned().collect();
     keywords.push(structural::USE.into());
@@ -132,7 +132,7 @@ fn keywords(prefix: &str, view: &ProjectView) -> Vec<CompletionItem> {
             let (detail, snippet) = match kinds.get(&keyword) {
                 Some(entry) => (
                     Some(entry.source_extension.clone()),
-                    Some(keyword_snippet(&keyword, &view.registries().fields)),
+                    Some(keyword_snippet(&keyword, view.registries().fields())),
                 ),
                 None => (None, None),
             };

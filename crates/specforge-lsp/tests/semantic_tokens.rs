@@ -683,7 +683,7 @@ fn tokens_agree_with_the_grammar() {
     let view = ProjectView::of(&project);
     let declared: Vec<&str> = view
         .registries()
-        .kinds
+        .kinds()
         .iter()
         .filter_map(|(_, entry)| entry.declared.semantic_token.as_deref())
         .collect();

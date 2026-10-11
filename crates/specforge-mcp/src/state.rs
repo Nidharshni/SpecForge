@@ -108,12 +108,12 @@ impl McpState {
     /// ([`crate::target::Call::view`]); this is the served session's, for
     /// the server itself (the surface table, the lifecycle answers).
     pub fn registries(&self) -> &RegistryBuild {
-        &self.session.project().environment().registries
+        self.session.project().environment().registries()
     }
 
     /// The served project's `specforge.json`.
     pub fn config(&self) -> &ProjectConfig {
-        &self.session.project().environment().config
+        self.session.project().environment().config()
     }
 
     /// Where the served project's `.spec` files live: spans are relative

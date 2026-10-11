@@ -301,7 +301,7 @@ impl From<TraceError> for OpError {
 /// flagged as missing.
 pub fn trace(view: &ProjectView, target: Target) -> Result<TraceOutcome, TraceError> {
     let expectations =
-        TraceExpectations::from_registries(&view.registries().fields, &view.registries().kinds);
+        TraceExpectations::from_registries(view.registries().fields(), view.registries().kinds());
     let graph = view.graph();
     match target {
         Target::Entity(entity_id) => {

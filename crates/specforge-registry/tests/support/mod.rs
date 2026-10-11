@@ -154,7 +154,7 @@ pub fn codes(build: &RegistryBuild) -> Vec<&str> {
 /// `""`).
 pub fn rule_codes(build: &RegistryBuild) -> Vec<(&str, &str)> {
     build
-        .rules
+        .rules()
         .iter()
         .map(|rule| (rule.code(), rule.origin().name()))
         .collect()

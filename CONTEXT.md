@@ -5,15 +5,19 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 
 - **Environment**: everything derived from `specforge.json` and the loaded extensions before any
   `.spec` file is read: config, spec root, registries, rules, surfaces, load diagnostics, and the
-  runtime the extensions were loaded in (`runtime`; none when it was loaded without one, so nothing
+  runtime the extensions were loaded in (`runtime()`; none when it was loaded without one, so nothing
   loaded). Every extension call an operation makes over the project, a check's included, runs in
   that runtime (`specforge_project::Environment`, ADR 0015 "The runtime travels with the
   environment"). A `specforge.json` that is there and can't be used is the
-  default config (for the unusable file or key), with each reason kept (`config_problems`) and
-  reported as the error E069. It also holds the project's **installed extensions** (`installed`:
+  default config (for the unusable file or key), with each reason kept (`config_problems()`) and
+  reported as the error E069. It also holds the project's **installed extensions** (`installed()`:
   what `specforge.lock` held when it was read, absent, read or unreadable, once, for every
   operation over the project) and what each `extensions` entry enabled, as the **extension load**
-  left it. A session
+  left it. An environment is assembled from those parts (`Environment::assemble`: the config read,
+  the installed extensions, whose root is the project root, and the extension load), and the assembly
+  derives the rest: the spec root, the registry build, the custom rules' probes, the providers'
+  registration and I002. `Environment::from_read` is its disk adapter: it reads the lock and runs
+  the extension load. Its fields are private; it is read through accessors (ADR 0047). A session
   reads `specforge.json` once per load and builds its extension runtime and, holding it, its
   environment from that read, after stamping every environment input (ADR 0030). It
   opens in two steps (`ProjectSession::begin_open`, then `OpeningProject::finish`), so an editor
@@ -113,7 +117,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   builtin from its embedded binary, an installed extension from its pinned module, a `.wasm` file
   entry from its file under the name it declares. Its declarations come in entry order; the registry
   build puts them in load order. What does not load is a typed `LoadFailure` on its
-  entry with one diagnostic; the runtime keeps none.
+  entry with one diagnostic; the runtime keeps none. Without a runtime nothing loads, and each entry
+  enables what it names (`Loaded::unloaded`); what an environment is assembled from says which
+  (`specforge_project::ExtensionLoad`: `NoRuntime`, or what was loaded `In` a runtime).
 - **Extension inventory**: every extension a project has, one row per name: enabled by a
   `specforge.json` entry, pinned in the `specforge.lock` the compile read, or loaded. Each row has its
   origin (`file:<path>` when only `.wasm` file entries enable it, `builtin`, the lock entry's source,
@@ -139,13 +145,22 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   is not locked is `check`'s. Lock order decides nothing. A registry install's binary loads only
   after that and must declare what was published; then the plan is written as one change.
 - **Registry build**: the pure result of putting extension declarations in load order and turning
-  them into kind, field and edge registries, the rule set, pass order and derived graph inputs, and the diagnostics of those
-  declarations (`specforge_registry::build_registries`). It also runs every check over a built
-  graph's entity records, in one order behind one gate: the structural checks, then the rule set
+  them into kind, field and edge registries, the rule set, pass order, the graph inputs
+  (`RegistryBuild::graph_inputs`) and the diagnostics of those declarations, in one order
+  (`RegistryBuild::diagnostics`: the declarations' own, the registries', the custom rules' probes,
+  the surfaces') (`specforge_registry::build_registries`). The custom rules' probe is the one call it
+  makes out, through the `CustomVerdicts` port, when the environment probes it in the runtime its
+  extensions loaded in (`RegistryBuild::probe`). It also runs every check over a built graph's entity
+  records, in one order behind one gate: the structural checks, then the rule set
   (`RegistryBuild::check`), and says which files those checks read (`RegistryBuild::files`). Its
   outcomes are the `registry_build_*` behaviors and `check_entities_in_one_order`. Tests and every
-  caller reach it only through `build_registries` and that build's methods; its steps and its
-  checks are private (ADR 0031).
+  caller reach it only through `build_registries` and that build's methods; its steps, its checks and
+  its fields are private (ADR 0031).
+- **Graph inputs**: what the graph build reads of the loaded extensions (`specforge_graph::GraphInputs`):
+  the kinds whose bodies an extension parses, the single and the absent-target reference fields, the
+  inverse field pairs, each field's value coercion and the derived reference fields. Only the registry
+  build derives them (`RegistryBuild::graph_inputs`); with the provider schemes the environment
+  registers they are every graph's `GraphConfig` (`Environment::graph_config`, ADR 0032).
 - **Rule set**: the extensions' declared validation rules plus the host's E006 rules for required
   fields, each turned once per registry build into a typed rule that carries only what its check
   reads, resolved against the registries (a compiled regex, an edge rule's peer kind, the fields an

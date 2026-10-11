@@ -122,14 +122,14 @@ impl<'a> ProjectView<'a> {
     /// every operation that calls an extension over the view calls it there.
     /// None: the environment loaded no extension.
     pub fn runtime(&self) -> Option<&'a SharedRuntime> {
-        self.env.runtime.as_ref()
+        self.env.runtime()
     }
 
     /// The registry build of the environment: kinds, fields, edges, rules,
     /// the extension declarations and their ordered passes. The one way to
-    /// reach it (`env().registries` is the same value).
+    /// reach it (`env().registries()` is the same value).
     pub fn registries(&self) -> &'a RegistryBuild {
-        &self.env.registries
+        self.env.registries()
     }
 
     /// The root the project was compiled from; `None` for a graph built in
@@ -152,7 +152,7 @@ impl<'a> ProjectView<'a> {
     pub fn installed(&self) -> &'a Installed {
         static NONE: Installed = Installed::none();
         match self.root {
-            Some(_) => &self.env.installed,
+            Some(_) => self.env.installed(),
             None => &NONE,
         }
     }
@@ -232,9 +232,9 @@ impl<'a> ProjectView<'a> {
     pub fn schema(&self) -> GraphProtocolSchema {
         let registries = self.registries();
         generate_schema(
-            &registries.kinds,
-            &registries.edges,
-            &registries.fields,
+            registries.kinds(),
+            registries.edges(),
+            registries.fields(),
             &registries
                 .extension_info()
                 .map(|(name, version)| (name.to_string(), version.to_string()))
@@ -527,7 +527,7 @@ mod tests {
         let view = ProjectView::new(&graph, &env, None, &recorded);
         assert!(view.entities().is_empty());
         assert!(std::ptr::eq(view.entities(), view.entities()));
-        assert_eq!(view.entities().spec_root(), env.spec_root);
+        assert_eq!(view.entities().spec_root(), env.spec_root());
         assert!(std::ptr::eq(
             view.coverage().unwrap().entities(),
             view.entities()
@@ -616,7 +616,7 @@ mod tests {
         // One registry build: the environment's, reached through one accessor.
         assert!(std::ptr::eq(
             of.registries(),
-            &compiled.environment().registries
+            compiled.environment().registries()
         ));
 
         // A view built in memory reports nothing until it is told what.
