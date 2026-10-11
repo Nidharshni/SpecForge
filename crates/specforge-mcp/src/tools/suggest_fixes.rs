@@ -1,3 +1,5 @@
+use crate::target::View;
+use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
 use serde::Serialize;
 use specforge_common::SourceSpan;
 use specforge_common::shape::Shape;
@@ -18,7 +20,7 @@ pub struct Args {
     diagnostic_code: Option<String>,
 }
 
-/// `specforge.suggest_fixes`'s reply (`McpFixSuggestions`).
+/// `specforge.suggest_fixes`'s reply.
 #[derive(Debug, Serialize, Shape)]
 pub struct Reply {
     fixes: Vec<Suggestion>,
@@ -71,22 +73,36 @@ impl Suggestion {
 /// the same diagnostics and entities, each with its edits (ADR 0016). A
 /// diagnostic whose data names no fix contributes none: its suggestion
 /// text stays on the diagnostic (validate, inspect).
-pub fn call(view: ProjectView<'_>, args: Args) -> Answered<Reply> {
-    if let Some(entity_id) = args.entity_id.as_deref()
-        && view.graph().node(entity_id).is_none()
-    {
-        return Err(crate::tool::entity_not_found(view.graph(), entity_id).into());
-    }
-    let diagnostics = view.reported();
-    let query = FixQuery {
-        entity: args.entity_id.as_deref(),
-        file: args.file_path.as_deref(),
-        code: args.diagnostic_code.as_deref(),
-        within: None,
+pub(crate) struct Tool;
+
+impl CoreTool for Tool {
+    const NAME: &'static str = "specforge.suggest_fixes";
+    const DESCRIPTION: &'static str = "The fixes the LSP offers as code actions for the project's diagnostics and entities, each with its edits";
+    const EFFECT: Effect = Effect::Reads {
+        group: ToolGroup::Navigation,
     };
-    let fixes = super::navigator(view).fixes(&diagnostics, &query);
-    Ok(Reply {
-        fixes: fixes.iter().map(Suggestion::of).collect(),
+    const SPEC: ReplySpec = ReplySpec::Type("McpFixSuggestions");
+    type Args = Args;
+    type Input = View;
+    type Returns = Answered<Reply>;
+
+    fn call(view: ProjectView<'_>, args: Args) -> Answered<Reply> {
+        if let Some(entity_id) = args.entity_id.as_deref()
+            && view.graph().node(entity_id).is_none()
+        {
+            return Err(crate::tool::entity_not_found(view.graph(), entity_id).into());
+        }
+        let diagnostics = view.reported();
+        let query = FixQuery {
+            entity: args.entity_id.as_deref(),
+            file: args.file_path.as_deref(),
+            code: args.diagnostic_code.as_deref(),
+            within: None,
+        };
+        let fixes = super::navigator(view).fixes(&diagnostics, &query);
+        Ok(Reply {
+            fixes: fixes.iter().map(Suggestion::of).collect(),
+        }
+        .into())
     }
-    .into())
 }

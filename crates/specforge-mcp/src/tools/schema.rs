@@ -1,3 +1,5 @@
+use crate::target::View;
+use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
 use specforge_ops::schema::SchemaRequest;
 
 use crate::args::Arguments;
@@ -5,7 +7,7 @@ use crate::reply::Answered;
 use crate::tool::McpError;
 
 /// `specforge.schema`'s reply: the document `specforge schema` prints.
-pub use specforge_ops::schema::SchemaDocument as Reply;
+type Reply = specforge_ops::schema::SchemaDocument;
 use specforge_ops::view::ProjectView;
 
 /// `specforge.schema`'s arguments.
@@ -27,14 +29,29 @@ pub struct Args {
 /// start or end at it (a kind no extension declares is `invalid_input` on
 /// `kind`, naming the closest); `include_edges: false` drops `edge_types`;
 /// `include_validation_rules` adds the rules the loaded extensions declare.
-pub fn call(view: ProjectView<'_>, args: Args) -> Answered<Reply> {
-    let request = SchemaRequest {
-        kind: args.kind.as_deref(),
-        edges: args.include_edges,
-        validation_rules: args.include_validation_rules,
+pub(crate) struct Tool;
+
+impl CoreTool for Tool {
+    const NAME: &'static str = "specforge.schema";
+    const DESCRIPTION: &'static str = "Get the GraphProtocolSchema: entity kinds with their typed fields, edge types and the loaded extensions";
+    const EFFECT: Effect = Effect::Reads {
+        group: ToolGroup::Core,
     };
-    match specforge_ops::schema::schema(&view, &request) {
-        Ok(outcome) => Ok(outcome.document().into()),
-        Err(error) => Err(Box::new(McpError::from(error).with_argument("kind"))),
+    const SPEC: ReplySpec = ReplySpec::Document("specforge schema's GraphProtocolSchema document");
+    const OPEN_VALUES: &'static [&'static str] = &["$.validation_rules[]"];
+    type Args = Args;
+    type Input = View;
+    type Returns = Answered<Reply>;
+
+    fn call(view: ProjectView<'_>, args: Args) -> Answered<Reply> {
+        let request = SchemaRequest {
+            kind: args.kind.as_deref(),
+            edges: args.include_edges,
+            validation_rules: args.include_validation_rules,
+        };
+        match specforge_ops::schema::schema(&view, &request) {
+            Ok(outcome) => Ok(outcome.document().into()),
+            Err(error) => Err(Box::new(McpError::from(error).with_argument("kind"))),
+        }
     }
 }

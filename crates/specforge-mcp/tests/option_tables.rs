@@ -123,14 +123,14 @@ fn every_input_enum_comes_from_a_table_or_a_name_list() {
             }
             let known = tables
                 .iter()
-                .any(|t| t.tool == spec.name && t.argument == argument)
+                .any(|t| t.tool == spec.name() && t.argument == argument)
                 || lists
                     .iter()
-                    .any(|(tool, a, _)| *tool == spec.name && a == argument);
+                    .any(|(tool, a, _)| *tool == spec.name() && a == argument);
             assert!(
                 known,
                 "{}.{argument} lists names no option table or name list holds",
-                spec.name
+                spec.name()
             );
         }
     }
@@ -140,7 +140,7 @@ fn every_input_enum_comes_from_a_table_or_a_name_list() {
 fn property(tool: &str, argument: &str) -> Value {
     let spec = specforge_mcp::tools::CORE_TOOLS
         .iter()
-        .find(|spec| spec.name == tool)
+        .find(|spec| spec.name() == tool)
         .unwrap_or_else(|| panic!("no core tool {tool}"));
     spec.input_schema()["properties"][argument].clone()
 }

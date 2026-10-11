@@ -1,3 +1,5 @@
+use crate::target::View;
+use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
 use serde::Serialize;
 use serde_json::Value;
 use specforge_common::shape::Shape;
@@ -18,7 +20,7 @@ pub struct Args {
     plan: Option<AgentPlan>,
 }
 
-/// `specforge.trace`'s reply (`McpTraceResult`): an entity's chain, the
+/// `specforge.trace`'s reply: an entity's chain, the
 /// document `specforge trace <entity> --format json` writes, or a plan's
 /// check.
 #[derive(Debug, Serialize, Shape)]
@@ -59,26 +61,40 @@ impl Gap {
 /// `specforge.trace`: the trace operation over the served project. An
 /// entity's result is the document `specforge trace <entity> --format
 /// json` writes; a plan's is an `McpTracePlanResult`.
-pub fn call(view: ProjectView<'_>, args: Args) -> Answered<Reply> {
-    if let Some(plan) = &args.plan {
-        return plan_gaps(&view, &plan.0);
-    }
-    let Some(entity_id) = args.entity_id.as_deref() else {
-        return Err(Box::new(McpError::invalid_input(
-            "entity_id",
-            "Missing required parameter: entity_id or plan",
-        )));
+pub(crate) struct Tool;
+
+impl CoreTool for Tool {
+    const NAME: &'static str = "specforge.trace";
+    const DESCRIPTION: &'static str = "Show traceability chain for an entity, or check an agent plan for gaps (entity_id or plan)";
+    const EFFECT: Effect = Effect::Reads {
+        group: ToolGroup::Core,
     };
-    let outcome =
-        specforge_ops::trace::trace(&view, Target::Entity(entity_id)).map_err(|error| {
-            McpError::from(specforge_ops::OpError::from(error)).with_entity(entity_id)
-        })?;
-    match outcome.into_chain() {
-        Some(chain) => Ok(Reply::Chain(chain).into()),
-        None => Err(Box::new(McpError::new(
-            ErrorCode::InternalError,
-            "trace of one entity answered no chain",
-        ))),
+    const SPEC: ReplySpec = ReplySpec::Type("McpTraceResult");
+    type Args = Args;
+    type Input = View;
+    type Returns = Answered<Reply>;
+
+    fn call(view: ProjectView<'_>, args: Args) -> Answered<Reply> {
+        if let Some(plan) = &args.plan {
+            return plan_gaps(&view, &plan.0);
+        }
+        let Some(entity_id) = args.entity_id.as_deref() else {
+            return Err(Box::new(McpError::invalid_input(
+                "entity_id",
+                "Missing required parameter: entity_id or plan",
+            )));
+        };
+        let outcome =
+            specforge_ops::trace::trace(&view, Target::Entity(entity_id)).map_err(|error| {
+                McpError::from(specforge_ops::OpError::from(error)).with_entity(entity_id)
+            })?;
+        match outcome.into_chain() {
+            Some(chain) => Ok(Reply::Chain(chain).into()),
+            None => Err(Box::new(McpError::new(
+                ErrorCode::InternalError,
+                "trace of one entity answered no chain",
+            ))),
+        }
     }
 }
 

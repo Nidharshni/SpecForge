@@ -201,7 +201,7 @@ fn no_core_tool_fails_with_a_plain_string_or_an_error_body() {
     let mut server = test_server();
     let probes = specforge_mcp::tools::CORE_TOOLS
         .iter()
-        .map(|tool| (tool.name, json!({})))
+        .map(|tool| (tool.name(), json!({})))
         .chain([
             ("specforge.inspect", json!({"entity_id": "nonexistent"})),
             (

@@ -1,3 +1,5 @@
+use crate::target::View;
+use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
 use serde::Serialize;
 use serde_json::{Map, Value};
 use specforge_common::shape::Shape;
@@ -22,7 +24,7 @@ pub struct Args {
     offset: Option<usize>,
 }
 
-/// `specforge.list`'s reply (`McpListResult`): the entities, sorted by id.
+/// `specforge.list`'s reply: the entities, sorted by id.
 #[derive(Debug, Serialize, Shape)]
 pub struct Reply {
     entities: Vec<Listed>,
@@ -57,16 +59,31 @@ pub(crate) fn rows(listing: &Listing) -> Vec<Listed> {
 /// free: any kind, any field (an extension's own list commands, such as
 /// `specforge.product.features`, render their kinds their way). A kind the
 /// project does not know lists nothing and is reported (I020).
-pub fn call(view: ProjectView<'_>, args: Args) -> Answered<Reply> {
-    let request = ListRequest {
-        kind: args.kind.as_deref(),
-        fields: args.r#where.as_ref(),
-        offset: args.offset.unwrap_or(0),
-        limit: args.limit,
+pub(crate) struct Tool;
+
+impl CoreTool for Tool {
+    const NAME: &'static str = "specforge.list";
+    const DESCRIPTION: &'static str =
+        "List entities sorted by id, optionally filtered by kind and field values, and paged";
+    const EFFECT: Effect = Effect::Reads {
+        group: ToolGroup::Core,
     };
-    let listing = list(&view, &request);
-    Ok(Answer::new(Reply {
-        entities: rows(&listing),
-    })
-    .with_diagnostics(listing.notices))
+    const SPEC: ReplySpec = ReplySpec::Type("McpListResult");
+    type Args = Args;
+    type Input = View;
+    type Returns = Answered<Reply>;
+
+    fn call(view: ProjectView<'_>, args: Args) -> Answered<Reply> {
+        let request = ListRequest {
+            kind: args.kind.as_deref(),
+            fields: args.r#where.as_ref(),
+            offset: args.offset.unwrap_or(0),
+            limit: args.limit,
+        };
+        let listing = list(&view, &request);
+        Ok(Answer::new(Reply {
+            entities: rows(&listing),
+        })
+        .with_diagnostics(listing.notices))
+    }
 }

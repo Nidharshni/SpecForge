@@ -149,7 +149,7 @@ pub fn assert_prompt_invoked(server: &McpServer, prompt: &str) {
 pub fn core_tools() -> Vec<specforge_mcp::types::McpToolDescriptor> {
     specforge_mcp::tools::CORE_TOOLS
         .iter()
-        .map(specforge_mcp::tool::ToolSpec::descriptor)
+        .map(|tool| tool.descriptor())
         .collect()
 }
 

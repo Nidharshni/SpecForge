@@ -279,9 +279,9 @@ fn structured_results_conform_to_each_tool_output_schema() {
     for spec in specforge_mcp::tools::CORE_TOOLS {
         if spec.output_schema().is_some() {
             assert!(
-                conforming.contains(spec.name),
+                conforming.contains(spec.name()),
                 "{} never checked",
-                spec.name
+                spec.name()
             );
         }
     }

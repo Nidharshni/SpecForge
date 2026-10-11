@@ -4,7 +4,8 @@ use std::path::PathBuf;
 
 use crate::protocol::{JsonRpcResponse, error_codes};
 use crate::state::{McpState, ServerPhase};
-use crate::tools::core_tool_name;
+use crate::tool::CoreTool;
+use crate::tools::{inspect, query, search, validate};
 use crate::types::{
     McpCapabilities, McpCapabilityFlags, McpPromptCapability, McpResourceCapability, McpServerInfo,
     McpToolCapability,
@@ -191,10 +192,10 @@ pub fn server_info() -> McpServerInfo {
 pub fn handle_discover(id: Option<Value>) -> JsonRpcResponse {
     let instructions = format!(
         "SpecForge compiles .spec files into a graph of entities. Query it with {}, {} and {}; check it with {}.",
-        core_tool_name("specforge.query"),
-        core_tool_name("specforge.search"),
-        core_tool_name("specforge.inspect"),
-        core_tool_name("specforge.validate"),
+        query::Tool::NAME,
+        search::Tool::NAME,
+        inspect::Tool::NAME,
+        validate::Tool::NAME,
     );
     JsonRpcResponse::success(
         id,

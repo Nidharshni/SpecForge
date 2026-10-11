@@ -1,8 +1,8 @@
 //! `spec/types/mcp.spec`'s reply types are the schemas the replies derive
 //! (ADR 0048 D8).
 //!
-//! Each core tool's reply is named once in [`REPLIES`]: an `Mcp*` type, a
-//! document specified elsewhere, or text. The spec types reached from a
+//! Each core tool names its reply's spec type (`CoreTool::SPEC`): an `Mcp*`
+//! type, a document specified elsewhere, or text. The spec types reached from a
 //! tool's type are compared with the schema its reply derives:
 //!
 //! 1. a name in [`SHARED`] is a domain type the reply embeds, compared by
@@ -24,71 +24,9 @@ use std::path::Path;
 use std::sync::OnceLock;
 
 use serde_json::Value;
+use specforge_mcp::tool::ReplySpec;
 use specforge_parser::FieldValue;
 use specforge_test::prelude::*;
-
-/// What a core tool's reply is, in the spec.
-enum Spec {
-    /// An `Mcp*` type of `spec/types/mcp.spec`.
-    Type(&'static str),
-    /// A document specified elsewhere.
-    Document(#[allow(dead_code)] &'static str),
-    /// A document in text: no outputSchema.
-    Text,
-}
-
-use Spec::{Document, Text, Type};
-
-/// Each core tool's reply as the spec names it: an `Mcp*` type, or why it
-/// has none.
-const REPLIES: &[(&str, Spec)] = &[
-    ("specforge.query", Document("the agent export, ADR 0007")),
-    ("specforge.validate", Text),
-    ("specforge.analyze", Type("McpAnalyzeResult")),
-    ("specforge.export", Text),
-    ("specforge.trace", Type("McpTraceResult")),
-    ("specforge.search", Type("McpSearchResults")),
-    ("specforge.explain", Type("McpExplainResult")),
-    (
-        "specforge.schema",
-        Document("specforge schema's GraphProtocolSchema document"),
-    ),
-    ("specforge.model", Text),
-    ("specforge.outline_extensions", Text),
-    ("specforge.coverage", Type("McpCoverageResults")),
-    ("specforge.stats", Type("McpStatsResult")),
-    ("specforge.list", Type("McpListResult")),
-    ("specforge.inspect", Type("McpInspectResult")),
-    ("specforge.find_definition", Type("McpDefinitionResult")),
-    ("specforge.find_references", Type("McpReferenceResult")),
-    ("specforge.outline", Type("McpOutlineResult")),
-    ("specforge.suggest_fixes", Type("McpFixSuggestions")),
-    ("specforge.format", Type("McpFormatResult")),
-    ("specforge.rename", Type("McpRenameResult")),
-    ("specforge.init", Type("McpInitResult")),
-    ("specforge.add_extension", Type("McpAddExtensionResult")),
-    (
-        "specforge.remove_extension",
-        Type("McpRemoveExtensionResult"),
-    ),
-    ("specforge.migrate", Type("McpMigrateResult")),
-    ("specforge.extensions", Type("McpExtensionsResult")),
-    ("specforge.providers", Type("McpProvidersResult")),
-    ("specforge.doctor", Type("McpDoctorReport")),
-    ("specforge.collect", Type("McpCollectResult")),
-    ("specforge.render", Type("McpRenderResult")),
-    ("specforge.infer_progress", Type("McpInferProgressResult")),
-    ("specforge.infer_gaps", Type("McpInferGapsResult")),
-    ("specforge.infer_session", Type("McpInferSessionResult")),
-    (
-        "specforge.find_implementation",
-        Type("McpImplementationResult"),
-    ),
-    (
-        "specforge.find_spec_for_source",
-        Type("McpSpecForSourceResult"),
-    ),
-];
 
 /// Domain types a reply embeds, specified in their own spec files: their
 /// drift from the wire is not this test's (the spec gives the domain, the
@@ -489,13 +427,15 @@ fn report() -> &'static Report {
     static REPORT: OnceLock<Report> = OnceLock::new();
     REPORT.get_or_init(|| {
         let mut report = Report::default();
-        for (tool, spec) in REPLIES {
-            let Type(name) = spec else { continue };
-            let core = specforge_mcp::tools::core_tool(tool).expect("a core tool");
-            let schema = core
+        for tool in specforge_mcp::tools::CORE_TOOLS {
+            let ReplySpec::Type(name) = tool.spec_reply() else {
+                continue;
+            };
+            // A typed spec is a typed reply: the table does not build otherwise.
+            let schema = tool
                 .output_schema()
-                .unwrap_or_else(|| panic!("{tool} names {name} but lists no outputSchema"));
-            let schema = if core.is_mutation() {
+                .expect("a typed reply lists its outputSchema");
+            let schema = if tool.is_mutation() {
                 without_files_written(schema)
             } else {
                 schema
@@ -519,28 +459,6 @@ fn assert_reply_type(name: &str) {
         "{name}:\n  {}",
         violations.join("\n  ")
     );
-}
-
-#[test]
-fn every_core_tool_names_its_reply_in_the_spec() {
-    let named: BTreeSet<&str> = REPLIES.iter().map(|(tool, _)| *tool).collect();
-    assert_eq!(named.len(), REPLIES.len(), "a tool is named twice");
-    let core: BTreeSet<&str> = specforge_mcp::tools::CORE_TOOLS
-        .iter()
-        .map(|t| t.name)
-        .collect();
-    assert_eq!(named, core, "REPLIES names exactly the core tools");
-    for (tool, spec) in REPLIES {
-        let listed = specforge_mcp::tools::core_tool(tool)
-            .expect("a core tool")
-            .output_schema()
-            .is_some();
-        assert_eq!(
-            listed,
-            !matches!(spec, Text),
-            "{tool}: Text exactly when it lists no outputSchema"
-        );
-    }
 }
 
 #[test]

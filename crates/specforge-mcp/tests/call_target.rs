@@ -443,7 +443,7 @@ fn a_path_while_nothing_is_served_serves_it_for_every_tool() {
     let mut with_path: Vec<&str> = specforge_mcp::tools::CORE_TOOLS
         .iter()
         .filter(|tool| tool.input_schema()["properties"].get("path").is_some())
-        .map(|tool| tool.name)
+        .map(|tool| tool.name())
         .collect();
     with_path.sort_unstable();
     assert_eq!(covered, with_path);
@@ -1178,7 +1178,7 @@ fn every_core_entry_with_nothing_served_answers_or_refuses_as_its_target_declare
     };
     let mut tools: Vec<&str> = specforge_mcp::tools::CORE_TOOLS
         .iter()
-        .map(|tool| tool.name)
+        .map(|tool| tool.name())
         .filter(|name| *name != "specforge.init")
         .collect();
     tools.sort();

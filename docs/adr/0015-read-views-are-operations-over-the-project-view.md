@@ -1,6 +1,6 @@
 # The read views are operations over the project view
 
-**Status:** accepted (2026-10-05)
+**Status:** accepted (2026-10-05); P7: tools are named by their typed constants (ADR 0049).
 
 `specforge-ops` handed the read views out as building blocks and each surface chained them on its
 own: the CLI's `stats` built a `CoverageRegistries` by hand and called `compute_project_stats`, MCP

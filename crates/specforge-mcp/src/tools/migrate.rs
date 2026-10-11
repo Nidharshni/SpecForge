@@ -5,7 +5,9 @@ use crate::mutation::{
     Failed, Mutated, Mutation, MutationArgs, MutationReply, NoDiagnostics, Written,
 };
 use crate::target::ProjectRef;
+use crate::target::{AnyProject, Project};
 use crate::tool::McpError;
+use crate::tool::{CoreTool, Effect, ReplySpec, WriteHints};
 
 /// `specforge.migrate`'s arguments.
 #[derive(Debug, Arguments)]
@@ -28,39 +30,57 @@ impl MutationReply for Reply {
     type After = NoDiagnostics;
 }
 
-/// `specforge.migrate`'s reply (`McpMigrateResult`): the migration document
+/// `specforge.migrate`'s reply: the migration document
 /// `specforge migrate --format json` prints, whether anything was pending
 /// or not (a failed run carries it in its error's `data`; ADR 0052).
-pub use specforge_ops::migrate::MigrateDocument as Reply;
+type Reply = specforge_ops::migrate::MigrateDocument;
 
-pub(crate) fn call(project: &ProjectRef<'_>, args: Args) -> Mutation<Reply> {
-    // The project the call migrates, and the runtime its hooks run in.
-    let path = project.root;
-    let dry_run = args.dry_run;
-    let no_backup = args.no_backup;
-    // The format version to migrate to, checked as `specforge migrate
-    // --target-version` checks it.
-    let target = specforge_ops::migrate::parse_target(args.target_version.as_deref())?;
+pub(crate) struct Tool;
 
-    let runtime = project.runtime;
-    // The migration `specforge migrate` runs, hooks and rollback included.
-    let request = specforge_ops::migrate::Request {
-        root: path,
-        target,
-        dry_run,
-        no_backup,
+impl CoreTool for Tool {
+    const NAME: &'static str = "specforge.migrate";
+    const DESCRIPTION: &'static str = "Run migration pipeline";
+    const EFFECT: Effect = Effect::Mutates {
+        hints: WriteHints {
+            destructive: true,
+            idempotent: true,
+            open_world: false,
+        },
     };
-    let outcome = specforge_ops::migrate::run(&request, Some(runtime.clone()));
-    // A failed run's report rides in `data`, and what it left written (its
-    // backups after a rollback, the files migrated before a failure) is
-    // reported.
-    let reply = outcome.document();
-    match outcome.failure() {
-        None => Ok(Mutated::new(reply, Written::files(outcome.writes))),
-        Some(failure) => Err(Failed::after(
-            McpError::from(failure)
-                .with_data(serde_json::to_value(&reply).expect("a reply serializes")),
-            outcome.writes,
-        )),
+    const SPEC: ReplySpec = ReplySpec::Type("McpMigrateResult");
+    type Args = Args;
+    type Input = Project<AnyProject>;
+    type Returns = Mutation<Reply>;
+
+    fn call(project: ProjectRef<'_>, args: Args) -> Mutation<Reply> {
+        // The project the call migrates, and the runtime its hooks run in.
+        let path = project.root;
+        let dry_run = args.dry_run;
+        let no_backup = args.no_backup;
+        // The format version to migrate to, checked as `specforge migrate
+        // --target-version` checks it.
+        let target = specforge_ops::migrate::parse_target(args.target_version.as_deref())?;
+
+        let runtime = project.runtime;
+        // The migration `specforge migrate` runs, hooks and rollback included.
+        let request = specforge_ops::migrate::Request {
+            root: path,
+            target,
+            dry_run,
+            no_backup,
+        };
+        let outcome = specforge_ops::migrate::run(&request, Some(runtime.clone()));
+        // A failed run's report rides in `data`, and what it left written (its
+        // backups after a rollback, the files migrated before a failure) is
+        // reported.
+        let reply = outcome.document();
+        match outcome.failure() {
+            None => Ok(Mutated::new(reply, Written::files(outcome.writes))),
+            Some(failure) => Err(Failed::after(
+                McpError::from(failure)
+                    .with_data(serde_json::to_value(&reply).expect("a reply serializes")),
+                outcome.writes,
+            )),
+        }
     }
 }

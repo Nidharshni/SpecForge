@@ -1,5 +1,5 @@
 mod add_extension;
-mod analyze;
+pub(crate) mod analyze;
 mod collect;
 pub(crate) mod coverage;
 mod doctor;
@@ -12,40 +12,77 @@ mod find_references;
 pub(crate) mod find_spec_for_source;
 mod format;
 mod infer_gaps;
-mod infer_progress;
-mod infer_session;
+pub(crate) mod infer_progress;
+pub(crate) mod infer_session;
 mod init;
-mod inspect;
+pub(crate) mod inspect;
 pub(crate) mod list;
 mod migrate;
 mod model;
 mod outline;
 mod outline_extensions;
 mod providers;
-mod query;
+pub(crate) mod query;
 mod remove_extension;
 mod rename;
 mod render;
-mod schema;
-mod search;
+pub(crate) mod schema;
+pub(crate) mod search;
 mod stats;
 mod suggest_fixes;
-mod table;
 pub(crate) mod trace;
-mod validate;
+pub(crate) mod validate;
 
 use serde_json::{Value, json};
 
 use crate::lifecycle::Revision;
-use crate::mutation;
 use crate::protocol::JsonRpcResponse;
 use crate::state::McpState;
 use crate::surface_call::{Event, Found, Invocation, Ran, Surface};
 use crate::surface_table::ToolEntry;
 use crate::target::{Call, TargetSpec};
-use crate::tool::{Category, Effect, McpError, ToolOutcome, ToolSpec, envelope};
+use crate::tool::{Category, McpError, ToolOutcome, ToolSpec, envelope, spec};
 use specforge_ops::view::ProjectView;
-pub use table::CORE_TOOLS;
+
+/// The core tools, in listing order (ADR 0017 D8): each its own module
+/// implementing [`CoreTool`](crate::tool::CoreTool), its declarations
+/// checked here when the table is built ([`spec`]).
+pub static CORE_TOOLS: &[&dyn ToolSpec] = &[
+    spec(&query::Tool),
+    spec(&validate::Tool),
+    spec(&analyze::Tool),
+    spec(&export::Tool),
+    spec(&trace::Tool),
+    spec(&search::Tool),
+    spec(&explain::Tool),
+    spec(&schema::Tool),
+    spec(&model::Tool),
+    spec(&outline_extensions::Tool),
+    spec(&coverage::Tool),
+    spec(&stats::Tool),
+    spec(&list::Tool),
+    spec(&inspect::Tool),
+    spec(&find_definition::Tool),
+    spec(&find_references::Tool),
+    spec(&outline::Tool),
+    spec(&suggest_fixes::Tool),
+    spec(&format::Tool),
+    spec(&rename::Tool),
+    spec(&init::Tool),
+    spec(&add_extension::Tool),
+    spec(&remove_extension::Tool),
+    spec(&migrate::Tool),
+    spec(&extensions::Tool),
+    spec(&providers::Tool),
+    spec(&doctor::Tool),
+    spec(&collect::Tool),
+    spec(&render::Tool),
+    spec(&infer_progress::Tool),
+    spec(&infer_gaps::Tool),
+    spec(&infer_session::Tool),
+    spec(&find_implementation::Tool),
+    spec(&find_spec_for_source::Tool),
+];
 
 /// Where the `.spec` files of the project `view` reads are keyed from: its
 /// spec root, when it has a root (the empty session has none, so no file is
@@ -67,18 +104,8 @@ pub(crate) fn navigator<'v>(
 }
 
 /// The core tool named `name`.
-pub fn core_tool(name: &str) -> Option<&'static ToolSpec> {
-    CORE_TOOLS.iter().find(|t| t.name == name)
-}
-
-/// The name of the core tool `name` as `tools/list` lists it: the one way
-/// a prompt or the server's instructions name a tool. A name no core tool
-/// has is a SpecForge bug; the prompts' tests render every text that names
-/// one, so it fails there first.
-pub(crate) fn core_tool_name(name: &'static str) -> &'static str {
-    core_tool(name)
-        .map(|tool| tool.name)
-        .unwrap_or_else(|| panic!("SpecForge bug: no core tool is named {name}"))
+pub fn core_tool(name: &str) -> Option<&'static dyn ToolSpec> {
+    CORE_TOOLS.iter().copied().find(|tool| tool.name() == name)
 }
 
 /// `tools/call`: the core tool table, then the extension surface table (ADR
@@ -94,11 +121,11 @@ impl Surface for Tools {
     // protocol error, as its "Unknown tool" example shows.
     const UNKNOWN: &'static str = "Unknown tool";
 
-    type Core = &'static ToolSpec;
+    type Core = &'static dyn ToolSpec;
     type Extension = ToolEntry;
     type Outcome = ToolOutcome;
 
-    fn core(name: &str) -> Option<&'static ToolSpec> {
+    fn core(name: &str) -> Option<&'static dyn ToolSpec> {
         core_tool(name)
     }
 
@@ -106,7 +133,7 @@ impl Surface for Tools {
         state.surfaces().tool(name).cloned()
     }
 
-    fn target(found: &Found<&'static ToolSpec, ToolEntry>) -> TargetSpec {
+    fn target(found: &Found<&'static dyn ToolSpec, ToolEntry>) -> TargetSpec {
         match found {
             Found::Core(spec) => spec.target(),
             Found::Extension(_) => TargetSpec::SERVED_PROJECT,
@@ -114,7 +141,7 @@ impl Surface for Tools {
     }
 
     fn invoked(
-        found: &Found<&'static ToolSpec, ToolEntry>,
+        found: &Found<&'static dyn ToolSpec, ToolEntry>,
         invocation: &Invocation,
     ) -> Option<Event> {
         // The category it is listed with: no second lookup.
@@ -139,50 +166,25 @@ impl Surface for Tools {
 
     fn run(
         call: &mut Call<'_>,
-        found: &Found<&'static ToolSpec, ToolEntry>,
+        found: &Found<&'static dyn ToolSpec, ToolEntry>,
         invocation: &Invocation,
     ) -> Ran<ToolOutcome> {
-        // A name the tool and its target do not declare is refused, before
-        // anything is read (a refused mutation is a failed one).
-        if let Found::Core(spec) = found
-            && let Some(error) = spec.undeclared(&invocation.arguments)
-        {
-            return Self::refused(found, error);
-        }
-        let arguments = invocation.arguments.clone();
         match found {
-            // A mutation's handler and `mutation::complete` do the rest: the
-            // refresh, the reply sent once and checked against its
-            // outputSchema, the events (ADR 0022).
-            Found::Core(ToolSpec {
-                effect: Effect::Mutates { handler, .. },
-                name,
-                ..
-            }) => {
-                let schema = handler.reply()();
-                let (outcome, events) = handler.run(call, name, &schema, arguments);
-                Ran { outcome, events }
-            }
-            Found::Core(
-                spec @ ToolSpec {
-                    effect: Effect::Reads { handler, .. } | Effect::WritesOutput { handler, .. },
-                    ..
-                },
-            ) => Ran::of(conforming(spec, handler.run(call, arguments))),
+            Found::Core(tool) => tool.run(call, &invocation.arguments),
             Found::Extension(entry) => {
                 crate::extension_dispatch::run_tool(call, entry, &invocation.arguments)
             }
         }
     }
 
-    fn refused(found: &Found<&'static ToolSpec, ToolEntry>, error: McpError) -> Ran<ToolOutcome> {
+    fn refused(
+        found: &Found<&'static dyn ToolSpec, ToolEntry>,
+        error: McpError,
+    ) -> Ran<ToolOutcome> {
         match found {
             // A refused mutation is a failed one: it wrote nothing, and says so.
-            Found::Core(spec) if spec.is_mutation() => {
-                let (outcome, events) = mutation::refused(spec.name, error);
-                Ran { outcome, events }
-            }
-            _ => Ran::of(error.into()),
+            Found::Core(tool) => tool.refused(error),
+            Found::Extension(_) => Ran::of(error.into()),
         }
     }
 
@@ -194,7 +196,7 @@ impl Surface for Tools {
     }
 
     fn completed(
-        _: &Found<&'static ToolSpec, ToolEntry>,
+        _: &Found<&'static dyn ToolSpec, ToolEntry>,
         _: &Invocation,
         _: &ToolOutcome,
     ) -> Option<Event> {
@@ -203,7 +205,7 @@ impl Surface for Tools {
 
     fn envelope(
         revision: Revision,
-        found: &Found<&'static ToolSpec, ToolEntry>,
+        found: &Found<&'static dyn ToolSpec, ToolEntry>,
         invocation: &Invocation,
         outcome: ToolOutcome,
         id: Option<Value>,
@@ -211,7 +213,7 @@ impl Surface for Tools {
         // A tool with an outputSchema: a core one, or an extension's that
         // declares one.
         let typed = match found {
-            Found::Core(spec) => spec.output_schema().is_some(),
+            Found::Core(spec) => spec.is_typed(),
             Found::Extension(entry) => entry.output_schema().is_some(),
         };
         envelope(
@@ -220,16 +222,5 @@ impl Surface for Tools {
             revision.sends_structured_content(),
             typed,
         )
-    }
-}
-
-/// `outcome` when it conforms to `spec`'s outputSchema (a tool with none is
-/// not checked), else the `schema_mismatch` failure ([`crate::reply::conforming`]).
-fn conforming(spec: &ToolSpec, outcome: ToolOutcome) -> ToolOutcome {
-    match spec.output_schema() {
-        Some(schema) => {
-            crate::reply::conforming(spec.name, crate::reply::Source::Core, &schema, outcome)
-        }
-        None => outcome,
     }
 }

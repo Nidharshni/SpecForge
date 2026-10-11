@@ -1,3 +1,5 @@
+use crate::target::View;
+use crate::tool::{CoreTool, Effect, ToolGroup};
 use specforge_ops::export::{self, Format, Schema};
 
 use crate::args::Arguments;
@@ -30,23 +32,36 @@ pub struct Args {
 /// `specforge.export`: the export `specforge export` writes, through the
 /// same function and schema policy (ADR 0004 D3-a). `with_schema` and
 /// `no_schema` are the CLI's `--with-schema` and `--no-schema`.
-pub fn call(view: ProjectView<'_>, args: Args) -> Answered<Text> {
-    // The tool serves the agent formats; dot is `specforge.render`'s.
-    let schema = match (args.no_schema, args.with_schema) {
-        (true, _) => Schema::Without,
-        (_, true) => Schema::With,
-        _ => Schema::Default,
-    };
-    let request = export::Request {
-        format: Some(args.format),
-        scope: args.scope.as_deref(),
-        depth: args.depth,
-        kinds: args.kinds.iter().map(String::as_str).collect(),
-        max_tokens: args.max_tokens,
-        schema,
-        schema_version: args.schema_version.as_deref(),
-    };
+pub(crate) struct Tool;
 
-    let document = export::export(&view, &request).map_err(McpError::from)?;
-    Ok(Text(document).into())
+impl CoreTool for Tool {
+    const NAME: &'static str = "specforge.export";
+    const DESCRIPTION: &'static str = "Export the graph in various formats";
+    const EFFECT: Effect = Effect::Reads {
+        group: ToolGroup::Core,
+    };
+    type Args = Args;
+    type Input = View;
+    type Returns = Answered<Text>;
+
+    fn call(view: ProjectView<'_>, args: Args) -> Answered<Text> {
+        // The tool serves the agent formats; dot is `specforge.render`'s.
+        let schema = match (args.no_schema, args.with_schema) {
+            (true, _) => Schema::Without,
+            (_, true) => Schema::With,
+            _ => Schema::Default,
+        };
+        let request = export::Request {
+            format: Some(args.format),
+            scope: args.scope.as_deref(),
+            depth: args.depth,
+            kinds: args.kinds.iter().map(String::as_str).collect(),
+            max_tokens: args.max_tokens,
+            schema,
+            schema_version: args.schema_version.as_deref(),
+        };
+
+        let document = export::export(&view, &request).map_err(McpError::from)?;
+        Ok(Text(document).into())
+    }
 }

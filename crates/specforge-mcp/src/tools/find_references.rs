@@ -1,3 +1,5 @@
+use crate::target::View;
+use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
 use serde::Serialize;
 use specforge_common::SourceSpan;
 use specforge_common::shape::Shape;
@@ -20,7 +22,7 @@ pub struct Args {
     include_declaration: bool,
 }
 
-/// `specforge.find_references`'s reply (`McpReferenceResult`).
+/// `specforge.find_references`'s reply.
 #[derive(Debug, Serialize, Shape)]
 pub struct Reply {
     entity_id: String,
@@ -59,18 +61,32 @@ impl Location {
 /// `specforge.find_references`: each occurrence of the entity's ID, as
 /// the LSP's references answer it (ADR 0016). Incoming by default, the
 /// declaration only when asked for.
-pub fn call(view: ProjectView<'_>, args: Args) -> Answered<Reply> {
-    let query = ReferenceQuery {
-        direction: args.direction,
-        include_declaration: args.include_declaration,
+pub(crate) struct Tool;
+
+impl CoreTool for Tool {
+    const NAME: &'static str = "specforge.find_references";
+    const DESCRIPTION: &'static str = "Find the references to an entity: each place another entity's field names it, as the identifier token (what an IDE's find-references shows)";
+    const EFFECT: Effect = Effect::Reads {
+        group: ToolGroup::Navigation,
     };
-    let occurrences = super::navigator(view)
-        .references(&args.entity_id, query)
-        .map_err(McpError::from)?;
-    Ok(Reply {
-        direction: DIRECTION.name_of(args.direction).to_string(),
-        entity_id: args.entity_id,
-        locations: occurrences.iter().map(Location::of).collect(),
+    const SPEC: ReplySpec = ReplySpec::Type("McpReferenceResult");
+    type Args = Args;
+    type Input = View;
+    type Returns = Answered<Reply>;
+
+    fn call(view: ProjectView<'_>, args: Args) -> Answered<Reply> {
+        let query = ReferenceQuery {
+            direction: args.direction,
+            include_declaration: args.include_declaration,
+        };
+        let occurrences = super::navigator(view)
+            .references(&args.entity_id, query)
+            .map_err(McpError::from)?;
+        Ok(Reply {
+            direction: DIRECTION.name_of(args.direction).to_string(),
+            entity_id: args.entity_id,
+            locations: occurrences.iter().map(Location::of).collect(),
+        }
+        .into())
     }
-    .into())
 }
