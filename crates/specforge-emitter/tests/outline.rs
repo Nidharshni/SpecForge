@@ -11,6 +11,7 @@ fn load_manifest(name: &str) -> ExtensionDeclaration {
         "software" => "@specforge/software",
         "governance" => "@specforge/governance",
         "formal" => "@specforge/formal",
+        "rust" => "@specforge/rust",
         _ => panic!("unknown extension: {}", name),
     };
     let runtime = wasm_runtime_for(&[ext_name]);
@@ -102,6 +103,24 @@ fn single_extension_maps_basic_metadata() {
     assert_eq!(ext["edge_types"].as_array().unwrap().len(), 20);
     assert_eq!(ext["contributes"]["entities"], true);
     assert_eq!(ext["contributes"]["validators"], true);
+}
+
+/// Pin (flipped by 04-T3): a card's `contributes` is the handshake's flags: an analyzer extension
+/// contributes nothing, and passes and surfaces are never named.
+#[test]
+fn pin_an_outline_card_shows_contribution_flags() {
+    let outline = outline_json(&[load_manifest("rust"), load_manifest("product")]);
+    let raised = |name: &str| -> Vec<String> {
+        card(&outline, name)["contributes"]
+            .as_object()
+            .unwrap()
+            .iter()
+            .filter(|(_, on)| **on == Value::Bool(true))
+            .map(|(flag, _)| flag.clone())
+            .collect()
+    };
+    assert!(raised("@specforge/rust").is_empty());
+    assert_eq!(raised("@specforge/product"), ["entities", "validators"]);
 }
 
 // --- Peer dependencies ---
