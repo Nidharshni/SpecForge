@@ -115,6 +115,12 @@ and the schema.
 - ~~**`specforge-cli/src/product`** implements product queries natively.~~ Closed by
   [ADR 0008](0008-extension-commands-run-over-the-graph.md): they are `@specforge/product`'s commands.
 - The model's DOT cluster ids strip the `@specforge/` scope (snapshot-locked output).
+- **Implicit edge types name their first writer only.** An edge a field writes without its extension
+  declaring it is registered once, with the first writing kind as its source and that field's target
+  (`compilation/populate.rs`, `register_implicit_edges`). A second kind writing the same undeclared
+  edge is in neither side, and the schema's inference does not run for a side that is set. No builtin
+  has such an edge (round 6 plan 12, R5). Fixing it means deciding what an edge rule's peer scope is
+  for an edge several kinds write.
 
 ## Amendment (architecture round 5, plan 16): an extension's counts are what the model draws
 
@@ -122,3 +128,12 @@ An extension's `entity_count` is the kinds it declares that the model keeps, and
 it declares that name at least one relationship the model draws: one rule before and after a selection. A
 standalone edge type (no source or target kinds) draws nothing and is not counted, and an extension that keeps no
 kind still counts its enhancement edge types between kept kinds. The markdown summary's "N edge types" is the sum.
+
+## Amendment (architecture round 6, plan 12): an open edge type takes the kinds of its writers
+
+An edge type whose registry entry leaves a side open is given, on that side, the kinds whose fields
+write it and the target kinds those fields declare, sorted (`schema::generate_schema`). A side it
+declares is kept. The inference stays in the emitter. `generate_schema` is its only reader (the model,
+`specforge schema --kind` and the exports read the schema it returns), so moving it beside the
+registries would relocate it without a second caller. Reopen this when another reader needs an edge
+type's endpoints.
