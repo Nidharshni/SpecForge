@@ -721,3 +721,75 @@ fn watch_sees_a_referenced_file_created_in_a_new_directory() {
     assert_eq!(last["errors"], 0, "{last}");
     assert!(!codes(&last).contains(&"E016".to_string()), "{last}");
 }
+
+/// A reader that leaves ends the watch (`specforge watch | head -1`): the
+/// next event it would write finds stdout closed, and the command ends with
+/// its own exit, 0.
+#[cfg(unix)]
+#[test]
+fn watch_ends_when_its_reader_leaves() {
+    struct Kill(std::process::Child);
+    impl Drop for Kill {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+
+    let project = TempDir::new().unwrap();
+    fs::write(project.path().join("specforge.json"), "{}").unwrap();
+    fs::write(
+        project.path().join("main.spec"),
+        "entity one { title \"One\" }\n",
+    )
+    .unwrap();
+
+    let mut child = Kill(
+        specforge_cmd()
+            .args([
+                "watch",
+                "--format",
+                "json",
+                "--path",
+                project.path().to_str().unwrap(),
+            ])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .stdin(Stdio::null())
+            .spawn()
+            .expect("failed to spawn specforge watch"),
+    );
+    let mut stdout = BufReader::new(child.0.stdout.take().unwrap());
+    let mut line = String::new();
+    loop {
+        line.clear();
+        let read = stdout.read_line(&mut line).expect("watch's stdout");
+        assert!(read > 0, "watch ended before it reported ready");
+        if line.contains("\"event\":\"ready\"") {
+            break;
+        }
+    }
+    // The reader leaves.
+    drop(stdout);
+
+    // Every change makes the watch write an event into the closed pipe.
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let mut edits = 1;
+    let status = loop {
+        if let Some(status) = child.0.try_wait().unwrap() {
+            break status;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "watch kept running after its reader left"
+        );
+        let mut spec = String::from("entity one { title \"One\" }\n");
+        for n in 0..edits {
+            spec.push_str(&format!("entity extra{n} {{ title \"Extra\" }}\n"));
+        }
+        fs::write(project.path().join("main.spec"), spec).unwrap();
+        edits += 1;
+        std::thread::sleep(Duration::from_millis(500));
+    };
+    assert_eq!(status.code(), Some(0), "the command's own exit");
+}

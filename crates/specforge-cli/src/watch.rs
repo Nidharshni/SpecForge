@@ -98,6 +98,11 @@ fn watch_project(path: &Path, json: bool, verify_incremental: bool, terminal: &T
                 }
                 WatchEvent::Unwatched(e) => errln!(terminal, "warning: {e}"),
             }
+            // The reader has gone (`| head`): nobody sees what a watch
+            // would write next.
+            if terminal.closed() {
+                return Exit::Passed;
+            }
         }
     }
     Exit::Passed

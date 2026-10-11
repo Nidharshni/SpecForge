@@ -37,6 +37,10 @@ impl Args {
                 outln!(terminal, "{}", notification);
             }
             terminal.flush();
+            // The client is gone: nobody reads what it would be sent.
+            if terminal.closed() {
+                break;
+            }
         }
 
         // End of input: the stdio client is gone.

@@ -1111,11 +1111,14 @@ fn infer_status_prints_the_session_history() {
     assert!(!stdout.contains("No specforge-infer.json yet"), "{stdout}");
 }
 
-/// Today a reader that closes stdout early panics the command (the bug;
-/// plan 11 T9 flips this).
+/// A reader that closes stdout early (`specforge stats | head`) ends the
+/// output quietly: no panic, nothing on stderr, and the command's own exit.
 #[cfg(unix)]
-#[test]
-fn a_closed_stdout_panics_the_command() {
+#[specforge_test(
+    behavior = "report_command_outcome",
+    verify = "a closed stdout ends the output quietly and keeps the command's exit"
+)]
+fn a_closed_stdout_ends_the_output_quietly_in_the_binary() {
     use std::io::Read;
     use std::process::Stdio;
 
@@ -1146,9 +1149,6 @@ fn a_closed_stdout_panics_the_command() {
         .read_to_string(&mut stderr)
         .unwrap();
     let status = child.wait().unwrap();
-    assert_eq!(status.code(), Some(101));
-    assert!(
-        stderr.contains("failed printing to stdout: Broken pipe"),
-        "stderr: {stderr}"
-    );
+    assert_eq!(status.code(), Some(0));
+    assert_eq!(stderr, "");
 }

@@ -552,6 +552,10 @@ behavior report_command_outcome "Report a Command's Outcome" {
     Every core command whose output has a human and a JSON form MUST take
     --format human|json (human by default; trace's is json); no core
     command takes --json.
+    A reader that closes stdout before the command has written
+    everything (specforge export | head) MUST end the output quietly:
+    no panic and nothing more on stderr, and the exit code stays the
+    command's.
     The verdict is the operation's: the CLI's exit code and the ok MCP
     returns for check, analyze, format, migrate and doctor MUST agree
     (doctor's credentials are the CLI's alone).
@@ -566,6 +570,7 @@ behavior report_command_outcome "Report a Command's Outcome" {
   verify unit "stats, trace, analyze, migrate and init refuse with the error document under --format json"
   verify unit "a command run outside any project refuses with no_project"
   verify unit "every core command with a JSON form takes --format human|json, and none takes --json"
+  verify unit "a closed stdout ends the output quietly and keeps the command's exit"
   verify integration "the CLI's exit code and MCP's ok agree for check, analyze, format and migrate"
   verify integration "the CLI's --format json and MCP's reply are one outcome document for every operation both surfaces run, format aside"
   verify contract "Report a Command's Outcome: command outcome holds — operation_ran, one_refusal_shape, one_exit_table, surfaces_agree"

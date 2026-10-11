@@ -88,10 +88,12 @@ struct Streams {
     facts: Facts,
 }
 
-/// One output stream: its writer and the name std's panic gives it.
+/// One output stream: its writer, the name std's panic gives it, and
+/// whether its reader has gone.
 struct Sink {
     writer: Box<dyn Write + Send>,
     label: &'static str,
+    closed: bool,
 }
 
 fn locked<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -103,7 +105,23 @@ impl Sink {
         Mutex::new(Self {
             writer: Box::new(writer),
             label,
+            closed: false,
         })
+    }
+
+    /// Run one write on the stream. Once its reader has gone, nothing is
+    /// written; a reader that goes now (`BrokenPipe`) closes the stream. Any
+    /// other failure panics as `print!` does: a full disk is not a reader
+    /// that left.
+    fn emit(&mut self, write: impl FnOnce(&mut (dyn Write + Send)) -> io::Result<()>) {
+        if self.closed {
+            return;
+        }
+        match write(&mut *self.writer) {
+            Ok(()) => {}
+            Err(error) if error.kind() == io::ErrorKind::BrokenPipe => self.closed = true,
+            Err(error) => self.failed(&error),
+        }
     }
 
     /// A failed write panics as `print!` does.
@@ -166,26 +184,26 @@ impl Terminal {
     }
 
     /// Write `text` to `stream` as it is (what `out!`/`err!` expand to). A
-    /// write that fails panics as `print!` does: `failed printing to
-    /// stdout: …`.
+    /// reader that has gone (`BrokenPipe`) closes the stream, and later
+    /// writes to it are dropped; any other failed write panics as `print!`
+    /// does: `failed printing to stdout: …`.
     pub(crate) fn write(&self, stream: Stream, text: fmt::Arguments<'_>) {
-        let mut sink = locked(self.sink(stream));
-        if let Err(error) = sink.writer.write_fmt(text) {
-            sink.failed(&error);
-        }
+        locked(self.sink(stream)).emit(|writer| writer.write_fmt(text));
     }
 
     /// Write `text` and a newline to `stream` under one lock, so a line is
     /// never split (what `outln!`/`errln!` expand to).
     pub(crate) fn write_line(&self, stream: Stream, text: fmt::Arguments<'_>) {
-        let mut sink = locked(self.sink(stream));
-        let written = sink
-            .writer
-            .write_fmt(text)
-            .and_then(|()| sink.writer.write_all(b"\n"));
-        if let Err(error) = written {
-            sink.failed(&error);
-        }
+        locked(self.sink(stream)).emit(|writer| {
+            writer.write_fmt(text)?;
+            writer.write_all(b"\n")
+        });
+    }
+
+    /// Whether stdout's reader has gone: a long-running command (`watch`,
+    /// `mcp`) stops when it has.
+    pub(crate) fn closed(&self) -> bool {
+        locked(&self.0.out).closed
     }
 
     /// `document` as pretty JSON and a newline on stdout: every JSON
@@ -264,10 +282,7 @@ impl Terminal {
     /// Flush both streams; `main` calls it before it exits.
     pub(crate) fn flush(&self) {
         for stream in [Stream::Out, Stream::Err] {
-            let mut sink = locked(self.sink(stream));
-            if let Err(error) = sink.writer.flush() {
-                sink.failed(&error);
-            }
+            locked(self.sink(stream)).emit(|writer| writer.flush());
         }
     }
 }
@@ -280,19 +295,13 @@ pub(crate) struct StreamWriter<'t> {
 
 impl Write for StreamWriter<'_> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let mut sink = locked(self.terminal.sink(self.stream));
-        match sink.writer.write(buf) {
-            Ok(written) => Ok(written),
-            Err(error) => sink.failed(&error),
-        }
+        locked(self.terminal.sink(self.stream)).emit(|writer| writer.write_all(buf));
+        Ok(buf.len())
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        let mut sink = locked(self.terminal.sink(self.stream));
-        match sink.writer.flush() {
-            Ok(()) => Ok(()),
-            Err(error) => sink.failed(&error),
-        }
+        locked(self.terminal.sink(self.stream)).emit(|writer| writer.flush());
+        Ok(())
     }
 }
 
@@ -435,6 +444,53 @@ mod tests {
             terminal.read_line().as_deref(),
             Some("y"),
             "input untouched"
+        );
+    }
+
+    /// A reader that has gone: every write is a broken pipe.
+    struct BrokenPipeWriter(Arc<std::sync::atomic::AtomicUsize>);
+
+    impl Write for BrokenPipeWriter {
+        fn write(&mut self, _: &[u8]) -> io::Result<usize> {
+            self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Err(io::ErrorKind::BrokenPipe.into())
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Err(io::ErrorKind::BrokenPipe.into())
+        }
+    }
+
+    #[specforge_test_macros::test(
+        behavior = "report_command_outcome",
+        verify = "a closed stdout ends the output quietly and keeps the command's exit"
+    )]
+    fn a_closed_stdout_ends_the_output_quietly() {
+        let attempts = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let err = SharedBuffer::default();
+        let terminal = Terminal::new(
+            BrokenPipeWriter(attempts.clone()),
+            err.clone(),
+            io::empty(),
+            Facts::PIPED,
+        );
+        assert!(!terminal.closed());
+
+        outln!(terminal, "one");
+        assert!(terminal.closed());
+        outln!(terminal, "two");
+        terminal.json(&serde_json::json!({"three": 3}));
+        terminal.flush();
+
+        assert_eq!(
+            attempts.load(std::sync::atomic::Ordering::SeqCst),
+            1,
+            "nothing is written to a stream whose reader has gone"
+        );
+        errln!(terminal, "still here");
+        assert_eq!(
+            String::from_utf8(locked(&err.0).clone()).unwrap(),
+            "still here\n"
         );
     }
 
