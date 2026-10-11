@@ -12,7 +12,7 @@
 //! was approved before) and presents the outcome.
 
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
-use crate::terminal::{Terminal, errln, outln};
+use crate::terminal::{Facts, Terminal, errln, outln};
 use specforge_ops::collect::{self, Collector, Consent, Mode, Request, RunnerOutput};
 use specforge_ops::view::ProjectView;
 use std::path::{Path, PathBuf};
@@ -67,14 +67,12 @@ fn collect_at(options: &Args, terminal: &Terminal) -> Exit {
     } else {
         Mode::Run(RunnerOutput::Inherit)
     };
-    let mut prompt = |collector: &Collector, argv: &[String]| ask(collector, argv, &root, terminal);
-    let consent = if options.yes {
-        Consent::Yes
-    } else if format == OutputFormat::Json || !terminal.facts().interactive {
-        // Nobody to ask: only what was approved before runs.
-        Consent::Approved
-    } else {
-        Consent::Prompt(&mut prompt)
+    let mut prompt =
+        |collector: &Collector, argv: &[String]| terminal.ask(&question(collector, argv, &root));
+    let consent = match asks(options.yes, format, terminal.facts()) {
+        Asks::Nobody => Consent::Yes,
+        Asks::ApprovedOnly => Consent::Approved,
+        Asks::Terminal => Consent::Prompt(&mut prompt),
     };
     let mut announce = |collector: &Collector, argv: &[String]| {
         if format != OutputFormat::Json {
@@ -142,16 +140,68 @@ fn collect_at(options: &Args, terminal: &Terminal) -> Exit {
     Exit::Passed
 }
 
-/// Ask on the terminal whether the collector's command may run here.
-fn ask(collector: &Collector, argv: &[String], root: &Path, terminal: &Terminal) -> bool {
-    let question = format!(
+/// Who is asked whether a collector's command may run.
+#[derive(Debug, PartialEq, Eq)]
+enum Asks {
+    /// `--yes`: nobody; everything runs.
+    Nobody,
+    /// Nobody can be asked: only what was approved before runs.
+    ApprovedOnly,
+    /// The terminal is asked.
+    Terminal,
+}
+
+/// `--yes` runs everything; JSON output, or nobody to ask, runs only what
+/// was approved before; a terminal that can answer is asked.
+fn asks(yes: bool, format: OutputFormat, facts: Facts) -> Asks {
+    if yes {
+        Asks::Nobody
+    } else if format == OutputFormat::Json || !facts.interactive {
+        Asks::ApprovedOnly
+    } else {
+        Asks::Terminal
+    }
+}
+
+/// The question the terminal is asked about the collector's command.
+fn question(collector: &Collector, argv: &[String], root: &Path) -> String {
+    format!(
         "{} wants to run this command in {}:\n  {}\nAllow it for this project? [y/N] ",
         collector.extension,
         root.display(),
         argv.join(" ")
-    );
-    match terminal.prompt(&question) {
-        Some(answer) => matches!(answer.trim(), "y" | "Y" | "yes"),
-        None => false,
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const INTERACTIVE: Facts = Facts {
+        color_out: false,
+        color_err: false,
+        interactive: true,
+    };
+
+    #[specforge_test_macros::test(
+        behavior = "approve_collector_command",
+        verify = "a terminal that can answer is asked; with nobody to ask, or under --format json, only an approved command runs"
+    )]
+    fn consent_asks_only_a_terminal_that_can_answer() {
+        for format in [OutputFormat::Human, OutputFormat::Json] {
+            assert_eq!(asks(true, format, Facts::PIPED), Asks::Nobody);
+        }
+        assert_eq!(
+            asks(false, OutputFormat::Json, INTERACTIVE),
+            Asks::ApprovedOnly
+        );
+        assert_eq!(
+            asks(false, OutputFormat::Human, Facts::PIPED),
+            Asks::ApprovedOnly
+        );
+        assert_eq!(
+            asks(false, OutputFormat::Human, INTERACTIVE),
+            Asks::Terminal
+        );
     }
 }

@@ -447,7 +447,8 @@ behavior approve_collector_command "Approve Collector Command" {
   contract   """
     `specforge collect` runs a collector's command only after the user
     approves it. It shows the extension, the project root and the exact
-    command, asks once, and remembers the answer per project, extension,
+    command, asks once (y or yes, in any case, approves; any other answer
+    refuses), and remembers the answer per project, extension,
     collector and argv in `~/.specforge/collector-consent.json`
     (`$SPECFORGE_CONSENT_FILE` overrides). The store lives outside the
     project, so a cloned repository can't approve its own commands. A
@@ -461,6 +462,7 @@ behavior approve_collector_command "Approve Collector Command" {
   verify unit "consent is keyed by project, extension and command"
   verify integration "unapproved command without a terminal fails with E059 and runs nothing"
   verify integration "--yes runs the declared command"
+  verify unit "a terminal that can answer is asked; with nobody to ask, or under --format json, only an approved command runs"
   verify contract "Approve Collector Command: consent holds — command_declared, consent_outside_project, changed_command_reprompts, non_interactive_refuses"
 }
 

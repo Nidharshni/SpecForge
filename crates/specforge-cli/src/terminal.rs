@@ -209,22 +209,24 @@ impl Terminal {
     }
 
     /// Ask `question` (written to stderr as it is, then flushed) and read one
-    /// line of the answer, with its line ending; `None` when nobody can
-    /// answer (`!facts().interactive`, and nothing is written or read) or at
-    /// the end of input.
-    pub(crate) fn prompt(&self, question: &str) -> Option<String> {
+    /// line: yes when the trimmed answer is `y` or `yes` in any case, no
+    /// otherwise, on end of input or a read error. With nobody to ask
+    /// (`!facts().interactive`) it is no, and nothing is written or read:
+    /// blocking on a pipe nobody answers would hang.
+    pub(crate) fn ask(&self, question: &str) -> bool {
         if !self.facts().interactive {
-            return None;
+            return false;
         }
         self.write(Stream::Err, format_args!("{question}"));
-        let mut err = locked(&self.0.err);
-        // A prompt must reach the person before they are asked to answer it.
-        let _ = err.writer.flush();
-        drop(err);
+        {
+            let mut err = locked(&self.0.err);
+            // A question must reach the person before they answer it.
+            let _ = err.writer.flush();
+        }
         let mut answer = String::new();
         match locked(&self.0.input).read_line(&mut answer) {
-            Ok(0) | Err(_) => None,
-            Ok(_) => Some(answer),
+            Ok(0) | Err(_) => false,
+            Ok(_) => matches!(answer.trim().to_ascii_lowercase().as_str(), "y" | "yes"),
         }
     }
 
@@ -398,6 +400,42 @@ mod tests {
                 "NO_COLOR={no_color:?} CLICOLOR_FORCE={force:?} terminal={is_terminal}"
             );
         }
+    }
+
+    const INTERACTIVE: Facts = Facts {
+        color_out: false,
+        color_err: false,
+        interactive: true,
+    };
+
+    #[test]
+    fn ask_takes_y_or_yes_in_any_case_and_nothing_else() {
+        for (input, answer) in [
+            ("y\n", true),
+            ("yes\n", true),
+            (" YES \n", true),
+            ("Yes", true),
+            ("n\n", false),
+            ("\n", false),
+            ("", false),
+            ("yess\n", false),
+        ] {
+            let (terminal, capture) = Terminal::captured(input, INTERACTIVE);
+            assert_eq!(terminal.ask("Go? "), answer, "{input:?}");
+            assert_eq!(capture.stderr(), "Go? ", "the question, once: {input:?}");
+        }
+    }
+
+    #[test]
+    fn nobody_to_ask_is_no_and_nothing_is_written() {
+        let (terminal, capture) = Terminal::captured("y\n", Facts::PIPED);
+        assert!(!terminal.ask("Go? "));
+        assert_eq!(capture.stderr(), "");
+        assert_eq!(
+            terminal.read_line().as_deref(),
+            Some("y"),
+            "input untouched"
+        );
     }
 
     #[test]
