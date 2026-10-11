@@ -97,7 +97,9 @@ pub struct AddRequest<'a> {
     /// Accept a registry package with no publisher signature.
     pub allow_unsigned: bool,
     pub trust: Trust,
-    /// Resolve and report; write and download nothing.
+    /// Resolve and report what the add would do; write and download nothing. An extension
+    /// already present answers as the real add would (`AlreadyPresent`, or
+    /// `Builtin { changed: false }`).
     pub dry_run: bool,
 }
 
@@ -205,23 +207,23 @@ fn add_builtin(
     name: &'static str,
     runtime: &dyn WasmRuntime,
 ) -> Result<Added, OpError> {
-    if req.dry_run {
-        return Ok(unchanged(
-            AddOutcome::Planned {
-                name: name.to_string(),
-                version: None,
-                origin: Origin::Builtin,
-            },
-            config,
-        ));
-    }
-    // An already-enabled extension is left exactly as it is.
+    // An already-enabled extension is left exactly as it is, a dry run included.
     if super::enabled_builtins(config).contains(&name) {
         return Ok(unchanged(
             AddOutcome::Builtin {
                 name,
                 changed: false,
                 peers_enabled: Vec::new(),
+            },
+            config,
+        ));
+    }
+    if req.dry_run {
+        return Ok(unchanged(
+            AddOutcome::Planned {
+                name: name.to_string(),
+                version: None,
+                origin: Origin::Builtin,
             },
             config,
         ));
@@ -258,6 +260,11 @@ fn add_local(
     local: LocalFile,
 ) -> Result<Added, OpError> {
     let install = Install::local(req.root, local)?;
+    if let Some(present) = already_present(installed, config, install.name(), |e| {
+        e.wasm_hash == install.sha256() && e.source.local_path().is_some()
+    }) {
+        return Ok(unchanged(present, config));
+    }
     if req.dry_run {
         return Ok(unchanged(
             AddOutcome::Planned {
@@ -269,11 +276,6 @@ fn add_local(
             },
             config,
         ));
-    }
-    if let Some(present) = already_present(installed, config, install.name(), |e| {
-        e.wasm_hash == install.sha256() && e.source.local_path().is_some()
-    }) {
-        return Ok(unchanged(present, config));
     }
     commit(req.root, plan, install)
 }
@@ -1284,10 +1286,11 @@ mod tests {
         );
     }
 
-    /// Pin (plan 01 T0): whether a dry run of an extension that is already present previews it
-    /// or answers "already present" depends on where it comes from. T6 flips it.
-    #[test]
-    fn pin_a_dry_run_of_a_present_extension_depends_on_its_source() {
+    #[specforge_test(
+        behavior = "add_extension_to_existing_project",
+        verify = "a dry run of an extension already present answers as the add would, whatever its source"
+    )]
+    fn a_dry_run_of_a_present_extension_answers_as_the_add_would() {
         let dry = |root, source| AddRequest {
             root,
             source,
@@ -1313,7 +1316,7 @@ mod tests {
             }
         );
 
-        // A local install, present: the preview first.
+        // A local install, present: already present too.
         let dir = project_with(EMPTY_PROJECT);
         let files = tempfile::tempdir().unwrap();
         let wasm = files.path().join("greet.wasm");
@@ -1327,15 +1330,29 @@ mod tests {
         )
         .unwrap()
         .outcome;
-        assert!(matches!(outcome, AddOutcome::Planned { .. }), "{outcome:?}");
+        assert_eq!(
+            outcome,
+            AddOutcome::AlreadyPresent {
+                name: "@sdk/greet".into(),
+                version: "0.1.0".into()
+            }
+        );
 
-        // A builtin, enabled: the preview first.
+        // A builtin, enabled: the no-op the real add returns.
         let dir =
             project_with(r#"{"name":"p","version":"0.1.0","extensions":["@specforge/product"]}"#);
         let source = Source::Builtin("@specforge/product");
-        let outcome = add(&dry(dir.path(), source), &unconfigured, &runtime())
-            .unwrap()
-            .outcome;
-        assert!(matches!(outcome, AddOutcome::Planned { .. }), "{outcome:?}");
+        let before = crate::config::testing::files_under(dir.path());
+        let added = add(&dry(dir.path(), source), &unconfigured, &runtime()).unwrap();
+        assert_eq!(
+            added.outcome,
+            AddOutcome::Builtin {
+                name: "@specforge/product",
+                changed: false,
+                peers_enabled: Vec::new()
+            }
+        );
+        assert!(added.writes.is_empty());
+        assert_eq!(crate::config::testing::files_under(dir.path()), before);
     }
 }

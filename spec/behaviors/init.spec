@@ -271,6 +271,9 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
     and diamond checks compare real versions and update never replaces a
     local build from a registry.
     The system MUST NOT duplicate an already-installed extension.
+    A dry run reports what the add would do and writes nothing; an
+    extension already present answers as the add would, whatever its
+    source.
     The system MUST NOT modify any other field in specforge.json.
     When adding an extension, the system MUST judge its peers by the one
     peer rule (ADR 0041) before anything is installed: a peer range that is
@@ -310,6 +313,7 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
   verify unit "a builtin whose declaration cannot be read is refused before anything is written"
   verify unit "a required builtin peer the embedded builtin does not satisfy is refused before anything is written"
   verify unit "add duplicate extension is a no-op with info message"
+  verify unit "a dry run of an extension already present answers as the add would, whatever its source"
   verify unit "add extension with no specforge.json rejects with error and exit code 1"
   verify unit "add unresolvable extension rejects with diagnostic"
   verify unit "add extension with @scope/name@version resolves version via parse_extension_specifier"
