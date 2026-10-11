@@ -120,4 +120,32 @@ mod tests {
         // A file merely named like a skipped directory is still found.
         assert!(is_discovered("build.spec", &exclude));
     }
+
+    /// Pins today's defect; plan 12 T3 flips it to
+    /// `a_walked_root_is_walked_whatever_its_name`.
+    #[test]
+    fn a_walked_root_named_like_a_skipped_directory_is_skipped_today() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        fs::create_dir_all(root.join("build")).unwrap();
+        fs::write(root.join("build/a.spec"), "").unwrap();
+
+        assert!(discover_spec_files(&root.join("build"), &[]).is_empty());
+        // The `build` directory as a child is skipped, which stays right.
+        assert!(discover_spec_files(root, &[]).is_empty());
+    }
+
+    /// Pins today's defect; plan 12 T3 flips it to `only_files_are_sources`.
+    #[test]
+    fn a_directory_named_like_a_spec_file_is_a_source_today() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        fs::write(root.join("a.spec"), "").unwrap();
+        fs::create_dir_all(root.join("archive.spec")).unwrap();
+
+        assert_eq!(
+            discover_spec_files(root, &[]),
+            vec![root.join("a.spec"), root.join("archive.spec")]
+        );
+    }
 }

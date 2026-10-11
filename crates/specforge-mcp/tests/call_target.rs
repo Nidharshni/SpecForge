@@ -1235,3 +1235,68 @@ fn a_call_that_needs_a_project_is_refused_before_its_arguments_are_read() {
     assert_eq!(error["argument"], "path", "{error}");
     assert_eq!(error["data"]["files_written"], json!([]), "{error}");
 }
+
+/// A directory with a spec file and no `specforge.json`.
+fn loose_directory() -> TempDir {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("a.spec"), "behavior l \"L\" {\n}\n").unwrap();
+    dir
+}
+
+/// Pins a defect of the time; plan 12 T8 flips it to
+/// `a_root_in_no_project_serves_nothing_and_init_serves_what_it_creates`.
+#[test]
+fn a_root_that_is_no_project_is_served_today() {
+    let loose = loose_directory();
+    let mut server = McpServer::with_project_root(loose.path().to_path_buf());
+    let resp = call(&mut server, "initialize", json!({}));
+    assert!(resp["error"].is_null(), "{resp}");
+    assert_eq!(served_root(&server), Some(canonical(loose.path())));
+
+    let nested = loose.path().join("sub");
+    let resp = call_tool(
+        &mut server,
+        "specforge.init",
+        json!({"path": nested.to_str().unwrap()}),
+    );
+    let error = crate::tool_errors::mcp_error(&resp);
+    assert_eq!(error["code"], "conflict", "{error}");
+    assert_eq!(error["argument"], "path", "{error}");
+    assert!(!nested.exists());
+}
+
+/// Pins a defect of the time; plan 12 T8 flips it to
+/// `a_root_inside_a_project_serves_that_project`.
+#[test]
+fn a_root_inside_a_project_is_served_as_its_own_today() {
+    let p = project(&[], "behavior ok \"Ok\" {\n}\n");
+    let docs = p.path().join("docs");
+    fs::create_dir(&docs).unwrap();
+    let mut server = McpServer::new();
+    initialize(&mut server, &docs);
+    assert_eq!(served_root(&server), Some(canonical(&docs)));
+
+    let resp = call_tool(
+        &mut server,
+        "specforge.stats",
+        json!({"path": p.path().to_str().unwrap()}),
+    );
+    let error = crate::tool_errors::mcp_error(&resp);
+    assert_eq!(error["code"], "invalid_input", "{error}");
+}
+
+/// Pins a defect of the time; plan 12 T8 flips it to
+/// `a_loose_path_is_opened_for_its_call_and_never_served`.
+#[test]
+fn a_loose_path_while_nothing_is_served_is_adopted_today() {
+    let loose = loose_directory();
+    let mut server = serving_nothing();
+
+    let resp = call_tool(
+        &mut server,
+        "specforge.validate",
+        json!({"path": loose.path().to_str().unwrap()}),
+    );
+    assert_eq!(resp["result"]["isError"], false, "{resp}");
+    assert_eq!(served_root(&server), Some(canonical(loose.path())));
+}

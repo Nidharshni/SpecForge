@@ -1563,4 +1563,40 @@ mod tests {
             doc.formatted
         );
     }
+
+    /// Pins a defect of the time; plan 12 T3 flips it to
+    /// `a_directory_named_like_a_spec_file_is_no_target`.
+    #[test]
+    fn the_sources_take_a_directory_named_like_a_spec_file_today() {
+        let dir = project_with("{}", &[("sub/a.spec", MESSY)]);
+        std::fs::create_dir_all(dir.path().join("sub/archive.spec")).unwrap();
+
+        let outcome = run(&request(dir.path(), Mode::Check));
+        assert_eq!(outcome.failures.len(), 1);
+        assert!(matches!(
+            &outcome.failures[0],
+            Failure::Read { path, .. } if path == &dir.path().join("sub/archive.spec")
+        ));
+
+        // The directory walk already leaves it out.
+        let walked = check_paths(dir.path(), &["sub"]);
+        assert!(walked.failures.is_empty());
+        assert_eq!(walked.checked, 1);
+    }
+
+    /// Pins a defect of the time; plan 12 T5 flips it to
+    /// `a_file_several_arguments_reach_is_formatted_once`.
+    #[test]
+    fn a_file_two_arguments_reach_is_two_targets_today() {
+        let dir = project_with("{}", &[("a.spec", MESSY)]);
+        std::fs::create_dir(dir.path().join("x")).unwrap();
+
+        let twice = check_paths(dir.path(), &["a.spec", "x/../a.spec"]);
+        assert_eq!(twice.checked, 2);
+        assert_eq!(twice.changes.len(), 2);
+
+        // `Path` equality already folds a redundant component.
+        let folded = check_paths(dir.path(), &["", "a.spec"]);
+        assert_eq!(folded.checked, 1);
+    }
 }

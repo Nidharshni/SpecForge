@@ -1126,4 +1126,55 @@ mod tests {
         }
         assert_eq!(combinations, 32);
     }
+
+    #[specforge_test(
+        behavior = "snapshot_entities_once",
+        verify = "the coverage rule reads each entity as the pass input carries it"
+    )]
+    fn coverage_entities_are_the_pass_entities_as_the_rule_reads_them() {
+        let mut kinds = KindRegistry::new();
+        kinds.register(kind("behavior", true, true));
+        kinds.register(kind("type", true, true));
+        kinds.register(kind("memo", false, false));
+        let registries = build(
+            kinds,
+            abstract_behaviors(),
+            vec![w004("behavior"), w004("type")],
+        );
+        let source = "behavior open \"Open\" {\n  features [base]\n  verify unit \"works\"\n}\n\n\
+                      behavior other \"Other\" {\n  features [base]\n}\n\n\
+                      behavior base \"Base\" {\n  abstract true\n}\n\n\
+                      type Status = active | inactive\n\ntype Plain \"Plain\" {\n  id string\n}\n\n\
+                      memo note \"Note\" {\n}\n";
+        let snapshot = snapshot(source, &registries);
+        let passed = snapshot.pass_entities();
+        let covered = snapshot.coverage_entities();
+        assert_eq!(passed.len(), 6);
+        assert_eq!(covered.len(), passed.len());
+        // The reading the rule makes of a pass entity, written out.
+        for (entity, pass) in covered.iter().zip(&passed) {
+            assert_eq!(entity.id, pass.id);
+            assert_eq!(entity.kind, pass.kind);
+            assert_eq!(entity.testable, pass.testable, "{}", pass.id);
+            assert_eq!(entity.exempt, pass.exempt, "{}", pass.id);
+            assert_eq!(entity.verify_kinds, pass.verify_kinds, "{}", pass.id);
+            assert_eq!(entity.verify_texts, pass.verify_texts, "{}", pass.id);
+            assert_eq!(entity.risk, None, "{}", pass.id);
+            assert_eq!(
+                entity.referenced,
+                pass.incoming_edge_count > 0,
+                "{}",
+                pass.id
+            );
+        }
+        // The cases are all there: a testable entity that owes, one that is
+        // exempt, one nothing refers to and one that something does.
+        let by_id = |id: &str| covered.iter().find(|e| e.id == id).unwrap();
+        assert!(by_id("open").testable && !by_id("open").exempt);
+        assert!(by_id("base").exempt);
+        assert!(by_id("Status").exempt);
+        assert!(!by_id("note").testable && by_id("note").exempt);
+        assert!(by_id("base").referenced);
+        assert!(!by_id("open").referenced);
+    }
 }
