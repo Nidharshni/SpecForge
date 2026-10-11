@@ -1,7 +1,8 @@
 //! The package registry's HTTP contract (ADR 0044): the paths a registry serves, the JSON it answers with,
-//! the multipart form a publish uploads and the codes its errors carry. `specforge-registry-server`
-//! serializes these and mounts these routes; `specforge-registry-client` requests these paths and
-//! deserializes these bodies. Nothing else writes a registry's JSON: a test reaches a registry through the
+//! the multipart form a publish uploads, the package signature it carries and the codes its errors carry.
+//! `specforge-registry-server` serializes these and mounts these routes; `specforge-registry-client` requests
+//! these paths and deserializes these bodies. Both ends parse, sign and verify the package signature with
+//! [`signature`] (ADR 0061). Nothing else writes a registry's JSON: a test reaches a registry through the
 //! real server in process (`specforge_registry_server::testing`) or an in-memory client
 //! (`specforge_registry_client::testing`).
 //!
@@ -11,6 +12,9 @@
 pub mod code;
 pub mod form;
 pub mod path;
+pub mod signature;
+
+pub use signature::{PackageSignature, SignatureError, SignedContent, sha256_hex};
 
 use serde::{Deserialize, Serialize};
 

@@ -91,6 +91,20 @@ type PackageMetadata "Package Metadata" {
   verify unit "PackageMetadata is the JSON a registry serves for one version"
 }
 
+// A publisher's Ed25519 signature over a package's name and version as
+// declared and the SHA-256 of the exact binary and manifest uploaded,
+// with the public key and time that verify it offline
+// (specforge_registry_wire::PackageSignature, ADR 0061). sig is 128 hex,
+// public_key 64 hex (not a small-order key), signed_at RFC 3339; no other
+// key. Its key id is the first 16 hex of SHA-256 of the public key. Only a
+// well-formed one reads.
+type PackageSignature "Package Signature" {
+  sig        string
+  public_key string
+  signed_at  string
+  verify unit "PackageSignature is the JSON of a publisher signature, and only a well-formed one reads"
+}
+
 type SearchHit "Search Hit" {
   name        string
   version     string
