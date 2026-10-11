@@ -6287,14 +6287,22 @@ expression: listing
               "source": {
                 "type": "string"
               },
+              "status": {
+                "enum": [
+                  "loaded",
+                  "not_loaded",
+                  "not_configured"
+                ],
+                "type": "string"
+              },
               "version": {
                 "type": "string"
               }
             },
             "required": [
               "name",
-              "version",
               "source",
+              "status",
               "enhancement_count"
             ],
             "type": "object"

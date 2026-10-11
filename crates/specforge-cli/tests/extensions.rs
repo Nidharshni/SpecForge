@@ -815,6 +815,7 @@ fn doctor_lists_enabled_builtins_and_lock_entries_with_enhancement_counts() {
     let installed = extension(&report, "test-ext");
     assert_eq!(installed["source"], "registry", "{report}");
     assert_eq!(installed["version"], "1.2.3", "{report}");
+    assert_eq!(installed["status"], "not_configured", "{report}");
     // test-ext's binary is missing, so doctor still fails on it.
     assert_eq!(code, 1, "{report}");
 

@@ -3,7 +3,7 @@
 //!
 //! The report is built from what a compile already produced (the loaded
 //! declarations and the diagnostics) plus the project's lock file on disk:
-//! enabled extensions with their enhancement counts, enhancements grouped
+//! the project's extensions, each with its status and enhancement count, enhancements grouped
 //! by the entity kind they target, and one list of findings (extension
 //! conflicts with a resolution suggestion, keywords that shadow an entity
 //! kind, unsatisfied peers, extensions that failed to load, installed-binary
@@ -22,7 +22,7 @@ use specforge_common::{Code, Diagnostic, DiagnosticData, Severity, codes};
 use specforge_installed::Health;
 use std::collections::BTreeMap;
 
-use crate::extension::Origin;
+use crate::extension::Status;
 use crate::view::ProjectView;
 
 /// Diagnostic codes that mean two contributions collide.
@@ -51,7 +51,7 @@ const LOCK_UNREADABLE: &str = "lock_unreadable";
 /// Everything `specforge doctor` reports about a project.
 #[derive(Debug, Clone)]
 pub struct DoctorReport {
-    /// Every enabled extension: builtins from `specforge.json` and lock entries.
+    /// Every extension of the project: its inventory, by name.
     pub extensions: Vec<ExtensionHealth>,
     /// Entity enhancements keyed by the entity kind they target (sorted).
     pub enhancements: BTreeMap<String, Vec<EnhancementEntry>>,
@@ -66,11 +66,15 @@ pub struct DoctorReport {
 #[derive(Debug, Clone, Serialize, Shape)]
 pub struct ExtensionHealth {
     pub name: String,
-    pub version: String,
+    /// The version the extensions listing gives it; none when it has none.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
     /// Where it comes from, as the extensions listing names it: `builtin`,
     /// the lock entry's source, `file:<path>` for a `.wasm` file entry, or
     /// `unknown`.
     pub source: String,
+    /// Whether it is part of the compiled project, as the listing says.
+    pub status: Status,
     pub enhancement_count: usize,
 }
 
@@ -265,32 +269,20 @@ pub fn diagnose(view: &ProjectView) -> DoctorReport {
 pub fn diagnose_with(view: &ProjectView, z3_available: bool) -> DoctorReport {
     let declarations = view.registries().declarations();
     let diagnostics = view.reported();
-    let lock = view.lock().file();
-    let lock_entries = view.lock().entries();
 
-    // Extensions: loaded declarations first (load order), then lock entries
-    // that did not load. Each is named by the listing's source rule: the
-    // .wasm file an entry names, the lock entry's source, a builtin, else
-    // unknown.
-    let mut extensions: Vec<ExtensionHealth> = declarations
+    // The project's extensions: the listing's rows, in its order.
+    let inventory = crate::extension::inventory(view);
+    let extensions: Vec<ExtensionHealth> = inventory
+        .rows()
         .iter()
-        .map(|d| ExtensionHealth {
-            name: d.name().to_string(),
-            version: d.version().to_string(),
-            source: Origin::of(d.name(), &view.env().enabled, lock).source(),
-            enhancement_count: d.enhancements.len(),
+        .map(|extension| ExtensionHealth {
+            name: extension.name.to_string(),
+            version: extension.version().map(str::to_string),
+            source: extension.origin.source(),
+            status: extension.status,
+            enhancement_count: extension.declaration.map_or(0, |d| d.enhancements.len()),
         })
         .collect();
-    for entry in lock_entries {
-        if !extensions.iter().any(|e| e.name == entry.name.as_str()) {
-            extensions.push(ExtensionHealth {
-                name: entry.name.to_string(),
-                version: entry.version.clone(),
-                source: entry.source.to_string(),
-                enhancement_count: 0,
-            });
-        }
-    }
 
     let mut enhancements: BTreeMap<String, Vec<EnhancementEntry>> = BTreeMap::new();
     for declaration in declarations {
@@ -397,11 +389,13 @@ pub fn diagnose_with(view: &ProjectView, z3_available: bool) -> DoctorReport {
     }
 
     // Extensions the compile could not load: `check` fails on them, so
-    // doctor does too.
-    for enabled in &view.env().enabled {
-        let Some(failure) = &enabled.failure else {
-            continue;
-        };
+    // doctor does too. A missing or changed binary is its binary finding
+    // above.
+    for failure in inventory
+        .rows()
+        .iter()
+        .flat_map(|extension| extension.failures())
+    {
         if failure.problem.is_module_health() {
             continue;
         }
@@ -483,7 +477,7 @@ pub fn diagnose_with(view: &ProjectView, z3_available: bool) -> DoctorReport {
     DoctorReport {
         extensions,
         enhancements,
-        installed_count: lock_entries.len(),
+        installed_count: view.lock().entries().len(),
         z3_available,
         findings,
     }
@@ -609,46 +603,98 @@ mod tests {
         )
     }
 
-    #[test]
-    fn pin_doctor_leaves_out_an_enabled_entry_neither_loaded_nor_locked() {
-        use specforge_installed::LoadProblem;
-        let fixture = Fixture::new().enabled(vec![failing_entry(
-            "@acme/missing",
-            LoadProblem::NotInstalled,
-        )]);
-        let view = fixture.view();
-
-        let report = diagnose_with(&view, true);
-
-        assert!(report.extensions.is_empty());
-        assert_eq!(crate::extension::list(&view).extensions.len(), 1);
-        assert_eq!(report.about(Part::Load).count(), 1);
-    }
-
-    #[test]
-    fn pin_doctor_names_a_lock_only_row_by_its_lock_source() {
+    #[specforge_test(
+        behavior = "run_doctor_check",
+        verify = "doctor lists the extensions the extensions listing lists, each with its version, source and status"
+    )]
+    fn doctor_lists_the_extensions_the_listing_lists() {
         use specforge_installed::LoadProblem;
         let fixture = Fixture::new()
-            .enabled(vec![failing_entry(
-                "@test/probe=nope.wasm",
-                LoadProblem::FileMissing {
-                    path: "nope.wasm".into(),
+            .enabled(vec![
+                specforge_project::EnabledExtension::unloaded("@specforge/product"),
+                specforge_project::EnabledExtension {
+                    entry: "greet.wasm".into(),
+                    name: "@sdk/greet".into(),
+                    file: Some("greet.wasm".into()),
+                    failure: None,
                 },
-            )])
-            .lock(&[("@test/probe", "0.1.0", "local:/blobs/probe.wasm")]);
+                failing_entry("@acme/missing", LoadProblem::NotInstalled),
+                failing_entry(
+                    "@test/probe=nope.wasm",
+                    LoadProblem::FileMissing {
+                        path: "nope.wasm".into(),
+                    },
+                ),
+            ])
+            .declarations(vec![
+                Fixture::declaration("@specforge/product", "1.0.0"),
+                Fixture::declaration("@sdk/greet", "0.1.0"),
+                Fixture::declaration("@acme/stray", "3.0.0"),
+            ])
+            .lock(&[
+                ("@test/probe", "0.1.0", "local:/blobs/probe.wasm"),
+                ("@m/m", "1.0.0", "registry"),
+            ]);
         let view = fixture.view();
 
         let report = diagnose_with(&view, true);
 
-        assert_eq!(report.extensions[0].source, "local:/blobs/probe.wasm");
+        let doctor: Vec<(&str, Option<&str>, &str, Status)> = report
+            .extensions
+            .iter()
+            .map(|e| {
+                (
+                    e.name.as_str(),
+                    e.version.as_deref(),
+                    e.source.as_str(),
+                    e.status,
+                )
+            })
+            .collect();
+        let listing = crate::extension::list(&view);
+        let listed: Vec<(&str, Option<&str>, &str, Status)> = listing
+            .extensions
+            .iter()
+            .map(|e| {
+                (
+                    e.name.as_str(),
+                    e.version.as_deref(),
+                    e.source.as_str(),
+                    e.status,
+                )
+            })
+            .collect();
+        assert_eq!(doctor, listed);
         assert_eq!(
-            crate::extension::list(&view).extensions[0].source,
-            "file:nope.wasm"
+            doctor,
+            [
+                ("@acme/missing", None, "unknown", Status::NotLoaded),
+                (
+                    "@acme/stray",
+                    Some("3.0.0"),
+                    "unknown",
+                    Status::NotConfigured
+                ),
+                ("@m/m", Some("1.0.0"), "registry", Status::NotConfigured),
+                (
+                    "@sdk/greet",
+                    Some("0.1.0"),
+                    "file:greet.wasm",
+                    Status::Loaded
+                ),
+                (
+                    "@specforge/product",
+                    Some("1.0.0"),
+                    "builtin",
+                    Status::Loaded
+                ),
+                ("@test/probe", None, "file:nope.wasm", Status::NotLoaded),
+            ]
         );
     }
 
     #[test]
-    fn pin_doctor_lists_loaded_extensions_in_load_order_then_the_lock() {
+    fn doctor_lists_extensions_by_name() {
         let fixture = Fixture::new()
             .config(&["@z/z", "@a/a"])
             .declarations(vec![
@@ -656,19 +702,15 @@ mod tests {
                 Fixture::declaration("@a/a", "1.0.0"),
             ])
             .lock(&[("@m/m", "1.0.0", "registry")]);
-        let view = fixture.view();
 
-        let report = diagnose_with(&view, true);
+        let report = diagnose_with(&fixture.view(), true);
 
         let names: Vec<&str> = report.extensions.iter().map(|e| e.name.as_str()).collect();
-        assert_eq!(names, ["@z/z", "@a/a", "@m/m"]);
-        let listed = crate::extension::list(&view);
-        let listed: Vec<&str> = listed.extensions.iter().map(|e| e.name.as_str()).collect();
-        assert_eq!(listed, ["@a/a", "@m/m", "@z/z"]);
+        assert_eq!(names, ["@a/a", "@m/m", "@z/z"]);
     }
 
     #[test]
-    fn pin_doctor_lists_load_failures_in_entry_order() {
+    fn doctor_lists_load_failures_by_extension_name() {
         use specforge_installed::LoadProblem;
         let fixture = Fixture::new().enabled(vec![
             failing_entry("@z/z", LoadProblem::NotInstalled),
@@ -678,7 +720,7 @@ mod tests {
         let report = diagnose_with(&fixture.view(), true);
 
         let checks: Vec<&str> = report.about(Part::Load).map(|f| f.check.as_str()).collect();
-        assert_eq!(checks, ["@z/z did not load", "@a/a did not load"]);
+        assert_eq!(checks, ["@a/a did not load", "@z/z did not load"]);
     }
 
     #[specforge_test(
@@ -801,59 +843,12 @@ mod tests {
         assert_eq!(report.cache_status(), CacheStatus::Ok);
         let names: Vec<&str> = report.extensions.iter().map(|e| e.name.as_str()).collect();
         assert_eq!(names, ["@acme/loaded"], "no lock is read without a root");
+        assert_eq!(report.extensions[0].status, Status::NotConfigured);
 
         // Rooted, the lock is read and its binary checked (missing here).
         let report = diagnose_with(&fixture.view(), true);
         assert_eq!(report.installed_count, 1);
         assert_eq!(report.cache_status(), CacheStatus::Stale);
-    }
-
-    #[specforge_test(
-        behavior = "run_doctor_check",
-        verify = "doctor gives each extension the source the extensions listing gives it"
-    )]
-    fn doctor_names_each_extension_by_the_listings_source() {
-        let fixture = Fixture::new()
-            .config(&["@specforge/product", "greet.wasm", "@acme/stray"])
-            .enabled(vec![
-                specforge_project::EnabledExtension::unloaded("@specforge/product"),
-                specforge_project::EnabledExtension {
-                    entry: "greet.wasm".into(),
-                    name: "@sdk/greet".into(),
-                    file: Some("greet.wasm".into()),
-                    failure: None,
-                },
-            ])
-            .declarations(vec![
-                Fixture::declaration("@specforge/product", "1.0.0"),
-                Fixture::declaration("@sdk/greet", "0.1.0"),
-                Fixture::declaration("@acme/stray", "3.0.0"),
-            ]);
-        let view = fixture.view();
-
-        let report = diagnose_with(&view, true);
-
-        let sources: Vec<(&str, &str)> = report
-            .extensions
-            .iter()
-            .map(|e| (e.name.as_str(), e.source.as_str()))
-            .collect();
-        assert_eq!(
-            sources,
-            [
-                ("@specforge/product", "builtin"),
-                ("@sdk/greet", "file:greet.wasm"),
-                ("@acme/stray", "unknown"),
-            ]
-        );
-        for extension in &report.extensions {
-            let listed = crate::extension::list(&view)
-                .extensions
-                .into_iter()
-                .find(|e| e.name == extension.name)
-                .unwrap();
-            assert_eq!(listed.source, extension.source, "{}", extension.name);
-        }
     }
 
     fn finding_codes(report: &DoctorReport) -> Vec<(&str, FindingStatus)> {
@@ -967,6 +962,12 @@ mod tests {
         // is not listed again.
         assert_eq!(report.about(Part::Binary).count(), 1);
         assert_eq!(report.about(Part::Load).count(), 0);
+        let greet = report
+            .extensions
+            .iter()
+            .find(|e| e.name == "@sdk/greet")
+            .unwrap();
+        assert_eq!(greet.status, Status::NotLoaded);
         assert!(report.findings.iter().all(|f| f.code != "E070"));
         assert!(matches!(
             report.findings[0].about,

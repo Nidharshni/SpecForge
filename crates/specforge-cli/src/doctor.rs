@@ -3,6 +3,7 @@ use crate::outcome::Exit;
 use serde_json::json;
 use specforge_common::codes;
 use specforge_ops::doctor::{About, BinaryIssue, DoctorReport, FindingStatus, Part, diagnose};
+use specforge_ops::extension::Status;
 use specforge_ops::view::ProjectView;
 use specforge_registry_client::credential_health::{
     CredentialHealth, CredentialLevel, user_credential_health,
@@ -73,13 +74,21 @@ fn render_human(report: &DoctorReport, credentials: &CredentialHealth) -> String
 
     line!("Extensions ({}):", report.extensions.len());
     if report.extensions.is_empty() {
-        line!("  none enabled");
+        line!("  none");
     }
     for ext in &report.extensions {
+        let version = ext
+            .version
+            .as_deref()
+            .map(|v| format!(" {v}"))
+            .unwrap_or_default();
+        let status = match ext.status {
+            Status::Loaded => String::new(),
+            other => format!(" [{}]", other.as_str()),
+        };
         line!(
-            "  {} {} ({}) — {} enhancement(s)",
+            "  {}{version} ({}){status} — {} enhancement(s)",
             ext.name,
-            ext.version,
             ext.source,
             ext.enhancement_count
         );

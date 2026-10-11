@@ -29,8 +29,7 @@ pub use update::{
 pub(crate) use candidate::required_builtins;
 pub(crate) use lock_plan::{check_local, install_local};
 
-use specforge_installed::{LockFile, LockSource};
-use specforge_project::EnabledExtension;
+use specforge_installed::LockSource;
 
 /// The code an operation reports for an extension the project doesn't
 /// have.
@@ -53,31 +52,6 @@ pub enum Origin {
 }
 
 impl Origin {
-    /// Where `name` comes from in a project: the `.wasm` file an
-    /// `extensions` entry names (over a lock entry), the lock entry's
-    /// source, a builtin, else `Unknown`. The one
-    /// rule `list` and `doctor` name sources by.
-    pub fn of(name: &str, enabled: &[EnabledExtension], lock: Option<&LockFile>) -> Origin {
-        if let Some(path) = enabled
-            .iter()
-            .find(|e| e.name == name)
-            .and_then(|e| e.file.clone())
-        {
-            return Origin::File { path };
-        }
-        if let Some(entry) =
-            lock.and_then(|lock| lock.entries.iter().find(|e| e.name.as_str() == name))
-        {
-            return Origin::Installed {
-                source: entry.source.clone(),
-            };
-        }
-        match builtin_name(name) {
-            Some(_) => Origin::Builtin,
-            None => Origin::Unknown,
-        }
-    }
-
     /// What the listings call it: `builtin`, the lock entry's source, or
     /// `file:<path>`.
     pub fn source(&self) -> String {
