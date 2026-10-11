@@ -337,9 +337,13 @@ behavior dispatch_surface_mcp_resource "Dispatch Surface MCP Resource" {
     is an answer that is not the resource's content and MIME type
     (McpResourceContent), an ExtensionError (E028) like a trap: it is
     never served as raw bytes. The URI is matched against the registered
-    templates after the core resources, whatever its scheme; a template a
-    core resource already serves is not served, and is reported with
-    I017. The resource
+    templates after the core resources, whatever its scheme, by the rule
+    core resources follow: a template names every URI that starts with its
+    text before its first placeholder (what stands for the placeholder,
+    empty included, is the export's to read), and a URI without a
+    placeholder names itself, alone or followed by a query the export
+    reads; a template a core resource already serves is not served, and
+    is reported with I017. The resource
     content and mime_type MUST be returned to the MCP client. The MCP
     server records each read whose export returned as a
     surface_mcp_resource_dispatched event.
@@ -352,6 +356,7 @@ behavior dispatch_surface_mcp_resource "Dispatch Surface MCP Resource" {
   verify unit "a resource whose answer is not its content and mime type is a structured MCP error"
   verify unit "an extension resource template outside specforge://ext/ is read through its export"
   verify unit "an extension resource template a core resource serves is not listed, with I017"
+  verify unit "a URI names a core or extension resource by one rule: a template's text before its first placeholder and anything after it, a plain URI alone or followed by a query"
   verify integration "a returned resource read is recorded as a surface_mcp_resource_dispatched event"
   verify contract "Dispatch Surface MCP Resource: surface MCP resource dispatch holds — resource_registered, uri_matched, fs_write_denied, traps_as_mcp_errors, content_returned, surface_mcp_resource_dispatched_emitted"
 }

@@ -30,7 +30,7 @@ impl Surface for Resources {
     type Outcome = ReadOutcome;
 
     fn core(uri: &str) -> Option<&'static ResourceSpec> {
-        CORE_RESOURCES.iter().find(|r| r.matches(uri))
+        CORE_RESOURCES.iter().find(|r| r.names(uri))
     }
 
     fn extension(state: &McpState, uri: &str) -> Option<ResourceEntry> {
@@ -201,20 +201,12 @@ impl ResourceSpec {
         }
     }
 
-    /// Whether `uri` names this resource: a template's prefix and what
-    /// stands for its placeholder (the reader refuses an empty one), or the
-    /// URI itself with an optional query string (which the reader reads, or
-    /// refuses: [`views::ViewQuery`]).
-    pub fn matches(&self, uri: &str) -> bool {
-        match self.uri.split_once('{') {
-            Some((prefix, _)) => uri.starts_with(prefix),
-            None => {
-                uri == self.uri
-                    || uri
-                        .strip_prefix(self.uri)
-                        .is_some_and(|rest| rest.starts_with('?'))
-            }
-        }
+    /// Whether `uri` names this resource, by the one rule extension
+    /// resources follow too ([`crate::uri_template::names`]): what stands
+    /// for a placeholder or follows as a query is the reader's to read or
+    /// refuse ([`views::ViewQuery`]).
+    pub fn names(&self, uri: &str) -> bool {
+        crate::uri_template::names(self.uri, uri)
     }
 }
 

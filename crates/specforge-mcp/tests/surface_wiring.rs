@@ -1524,10 +1524,11 @@ fn a_resource_outside_specforge_ext_is_read_through_its_export() {
     );
 }
 
-/// Unlinked pin: an extension template names no URI whose placeholder is
-/// empty (core templates do; plan 02 T3 unifies the rule).
-#[test]
-fn an_extension_resource_empty_placeholder_is_unknown_today() {
+#[specforge_test(
+    behavior = "dispatch_surface_mcp_resource",
+    verify = "a URI names a core or extension resource by one rule: a template's text before its first placeholder and anything after it, a plain URI alone or followed by a query"
+)]
+fn an_extension_resource_template_names_an_empty_placeholder() {
     let (mut server, ext, _dir) = fake_extension::initialized(
         FakeExtension::new()
             .with_resource(acme_resource())
@@ -1537,26 +1538,42 @@ fn an_extension_resource_empty_placeholder_is_unknown_today() {
             ),
     );
     let resp = read_resource(&mut server, "acme://doc/");
-    assert_eq!(resp["error"]["code"], -32002, "{resp}");
+    assert!(resp["error"].is_null(), "{resp}");
+    assert_eq!(resp["result"]["contents"][0]["text"], "doc", "{resp}");
     assert_eq!(
-        resp["error"]["message"],
-        "Unknown resource URI: acme://doc/"
+        ext.calls(),
+        [(
+            EXT.to_string(),
+            "mcp__doc".to_string(),
+            json!({"uri": "acme://doc/"})
+        )]
     );
-    assert!(ext.calls().is_empty(), "{:?}", ext.calls());
+    assert_eq!(
+        crate::support::events(&server, "surface_mcp_resource_dispatched").len(),
+        1
+    );
 }
 
-/// Unlinked pin: an extension URI without a placeholder names itself only,
-/// not with a query (core ones do; plan 02 T3 unifies the rule).
-#[test]
-fn an_extension_resource_query_is_unknown_today() {
+#[specforge_test(
+    behavior = "dispatch_surface_mcp_resource",
+    verify = "a URI names a core or extension resource by one rule: a template's text before its first placeholder and anything after it, a plain URI alone or followed by a query"
+)]
+fn an_extension_resource_names_its_uri_with_a_query() {
+    let uri = "specforge://ext/cmds/summary?x=1";
     let (mut server, ext, _dir) = fake_extension::initialized(with_summary());
-    let resp = read_resource(&mut server, "specforge://ext/cmds/summary?x=1");
-    assert_eq!(resp["error"]["code"], -32002, "{resp}");
+    let resp = read_resource(&mut server, uri);
+    assert!(resp["error"].is_null(), "{resp}");
     assert_eq!(
-        resp["error"]["message"],
-        "Unknown resource URI: specforge://ext/cmds/summary?x=1"
+        ext.calls(),
+        [(
+            EXT.to_string(),
+            "mcp__summary".to_string(),
+            json!({"uri": uri})
+        )]
     );
-    assert!(ext.calls().is_empty(), "{:?}", ext.calls());
+    // Subscribing to it is honoured too: the same lookup answers it.
+    let resp = call(&mut server, "resources/subscribe", json!({"uri": uri}));
+    assert!(resp["error"].is_null(), "{resp}");
 }
 
 #[specforge_test(
