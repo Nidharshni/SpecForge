@@ -464,7 +464,7 @@ fn server_with_product() -> (Served, std::path::PathBuf) {
     let resp = call_tool(
         &mut server,
         "specforge.add_extension",
-        json!({"specifier": blob.to_str().unwrap()}),
+        json!({"specifiers": [blob.to_str().unwrap()]}),
     );
     assert!(resp["result"].is_object(), "install failed: {resp}");
     (server, root)

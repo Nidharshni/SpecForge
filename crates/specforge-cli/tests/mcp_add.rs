@@ -25,11 +25,13 @@ fn mcp_add(root: &Path, arguments: Value) -> Value {
     serde_json::from_str(&mcp_on(root).handle_message(&req.to_string()).unwrap()).unwrap()
 }
 
+/// What the add did for its one specifier: the first entry of the reply's `added`.
 fn payload(reply: &Value) -> Value {
     let text = reply["result"]["content"][0]["text"]
         .as_str()
         .unwrap_or_else(|| panic!("no result: {reply}"));
-    serde_json::from_str(text).unwrap()
+    let document: Value = serde_json::from_str(text).unwrap();
+    document["added"][0].clone()
 }
 
 /// `(ok, error count)` of a fresh `specforge check` of `root`.
@@ -88,7 +90,7 @@ fn mcp_enables_a_builtin_offline() {
     // No registry configured: the old handler asked one and failed.
     let dir = project(&["@specforge/software"], json!([]));
 
-    let reply = mcp_add(dir.path(), json!({"specifier": "@specforge/cargo-test"}));
+    let reply = mcp_add(dir.path(), json!({"specifiers": ["@specforge/cargo-test"]}));
 
     let added = payload(&reply);
     assert_eq!(added["source"], "builtin", "{added}");
@@ -111,7 +113,7 @@ fn mcp_enables_a_builtin_offline() {
 fn mcp_add_then_check_is_clean() {
     let dir = project(&["@specforge/software"], json!([]));
 
-    let reply = mcp_add(dir.path(), json!({"specifier": "@specforge/product"}));
+    let reply = mcp_add(dir.path(), json!({"specifiers": ["@specforge/product"]}));
     assert!(reply["error"].is_null(), "{reply}");
 
     let (ok, errors) = check(dir.path());
@@ -133,7 +135,7 @@ fn mcp_local_add_then_check_loads_the_extension() {
     std::fs::write(&wasm, crate::registry::greet_wasm()).unwrap();
 
     // It used to write `greet@0.0.0`, which check failed with E028.
-    let reply = mcp_add(dir.path(), json!({"specifier": wasm.to_str().unwrap()}));
+    let reply = mcp_add(dir.path(), json!({"specifiers": [wasm.to_str().unwrap()]}));
     let added = payload(&reply);
     assert_eq!(added["extension"], "@sdk/greet", "{added}");
     assert_eq!(added["version"], "0.1.0", "{added}");
@@ -172,7 +174,7 @@ fn mcp_add_refuses_a_version_diamond() {
 
     let reply = mcp_add(
         dir.path(),
-        json!({"specifier": "@acme/app@1.0.0", "allow_unsigned": true}),
+        json!({"specifiers": ["@acme/app@1.0.0"], "allow_unsigned": true}),
     );
 
     let error = crate::e2e_fixtures::tool_error(&reply);
@@ -212,7 +214,7 @@ fn mcp_add_refuses_an_install_a_locked_extension_does_not_accept() {
 
     let reply = mcp_add(
         dir.path(),
-        json!({"specifier": "@sdk/greet@0.1.0", "allow_unsigned": true}),
+        json!({"specifiers": ["@sdk/greet@0.1.0"], "allow_unsigned": true}),
     );
 
     let error = crate::e2e_fixtures::tool_error(&reply);

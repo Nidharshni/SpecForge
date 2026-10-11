@@ -2130,9 +2130,9 @@ fn contract_doctor() {
     let installed = tool(
         &mut server,
         "specforge.add_extension",
-        json!({"specifier": product_wasm().to_str().unwrap()}),
+        json!({"specifiers": [product_wasm().to_str().unwrap()]}),
     );
-    assert_eq!(installed["action"], "installed", "{installed}");
+    assert_eq!(installed["added"][0]["action"], "installed", "{installed}");
 
     // health_checked: a fresh install is healthy.
     let healthy = tool(&mut server, "specforge.doctor", json!({}));
@@ -2702,11 +2702,11 @@ fn contract_add_extension() {
     let resp = call_tool(
         &mut server,
         "specforge.add_extension",
-        json!({"specifier": blob.to_str().unwrap()}),
+        json!({"specifiers": [blob.to_str().unwrap()]}),
     );
     let text = resp["result"]["content"][0]["text"].as_str().unwrap();
     let parsed: Value = serde_json::from_str(text).unwrap();
-    assert_eq!(parsed["action"], "installed");
+    assert_eq!(parsed["added"][0]["action"], "installed");
     // Truthful install is observable on disk.
     let lock = std::fs::read_to_string(dir.as_path().join("specforge.lock")).unwrap();
     assert!(lock.contains("@sdk/greet"));

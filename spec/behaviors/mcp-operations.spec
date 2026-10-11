@@ -233,8 +233,11 @@ behavior provide_mcp_add_extension_tool "Provide MCP Add Extension Tool" {
   }
   contract   """
     In MCP server mode, the system MUST register a specforge.add_extension
-    tool that accepts specifier (required, @scope/name[@version] or a .wasm
-    path), dry_run? (optional boolean, default false) and allow_unsigned?
+    tool that accepts specifiers (required, a non-empty list of
+    @scope/name[@version], builtin names or .wasm paths, added as one change
+    exactly as specforge add adds several: all or nothing, judged on the
+    whole set, a refusal naming the specifier refused, a repeated one
+    reported as a duplicate), dry_run? (optional boolean, default false) and allow_unsigned?
     (optional boolean, default false: accept a registry package with no
     publisher signature). When dry_run is true, the tool MUST
     return a preview of the changes without modifying specforge.json or
@@ -242,12 +245,14 @@ behavior provide_mcp_add_extension_tool "Provide MCP Add Extension Tool" {
     the extension to specforge.json, download the Wasm module if remote, and
     validate the extension manifest. If the manifest is invalid or the
     extension conflicts with an existing one, the tool MUST return an error.
-    If the extension is already installed, the tool MUST answer action
-    already_present without modifying specforge.json. That call still emits
-    extension_added, with wasDuplicate true; a dry run emits none. Its reply
-    is the add document specforge add --format json prints
-    (McpAddExtensionResult), plus a note saying whether the server serves
-    the extension from the next call on, absent for a preview. A registry specifier with no registry configured in
+    If an extension is already installed, the tool MUST answer action
+    already_present for it without modifying specforge.json. A call that
+    succeeds emits one extension_added per specifier, in order, with
+    wasDuplicate true for an extension already there or a specifier
+    repeating an earlier one; a dry run emits none. Its reply is the add
+    document specforge add --format json prints (McpAddExtensionResult: one
+    entry per specifier under added), plus a note saying whether the server
+    serves the extensions from the next call on, absent for a preview. A registry specifier with no registry configured in
     specforge.json MUST make no network call and MUST return an E063 error
     whose suggestion names the registries key. The tool MUST run the add
     specforge add runs: a builtin is enabled offline with its required
@@ -258,6 +263,7 @@ behavior provide_mcp_add_extension_tool "Provide MCP Add Extension Tool" {
   verify unit "with no registry configured, add_extension makes no network call and reports how to configure one"
   verify unit "add_extension of a registry package reports what reading the registry configuration found"
   verify unit "specforge.add_extension adds extension to config"
+  verify unit "specforge.add_extension adds every specifier as one change, one extension_added per specifier"
   verify unit "already-installed extension returns info without modifying config"
   verify unit "wasm module downloaded for remote extensions"
   verify unit "invalid manifest returns error"

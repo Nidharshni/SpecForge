@@ -57,7 +57,7 @@ fn server_with_greet_installed() -> (McpServer, tempfile::TempDir) {
     let resp = call_tool(
         &mut server,
         "specforge.add_extension",
-        json!({"specifier": greet_blob().to_str().unwrap()}),
+        json!({"specifiers": [greet_blob().to_str().unwrap()]}),
     );
     assert_eq!(resp["result"]["isError"], false, "install failed: {resp}");
     assert!(
@@ -215,11 +215,11 @@ fn add_and_remove_extension_refuse_an_unusable_config_alike() {
         for (tool, arguments) in [
             (
                 "specforge.add_extension",
-                json!({"specifier": "@specforge/product"}),
+                json!({"specifiers": ["@specforge/product"]}),
             ),
             (
                 "specforge.add_extension",
-                json!({"specifier": "@specforge/product", "dry_run": true}),
+                json!({"specifiers": ["@specforge/product"], "dry_run": true}),
             ),
             (
                 "specforge.remove_extension",

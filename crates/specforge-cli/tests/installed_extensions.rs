@@ -164,8 +164,8 @@ fn add_json_names_its_source_and_a_key_only_when_signed() {
         .unwrap();
     assert!(out.status.success(), "{out:?}");
     let local: Value = serde_json::from_slice(&out.stdout).unwrap();
-    assert_eq!(local["source"], "local:greet.wasm");
-    assert!(local.get("key_id").is_none(), "{local}");
+    assert_eq!(local["added"][0]["source"], "local:greet.wasm");
+    assert!(local["added"][0].get("key_id").is_none(), "{local}");
 
     let registry = serve(vec![Package::new("@sdk/greet", "0.1.0", greet_wasm())]);
     let dir = project_on(&registry);
@@ -185,9 +185,9 @@ fn add_json_names_its_source_and_a_key_only_when_signed() {
         .unwrap();
     assert!(out.status.success(), "{out:?}");
     let remote: Value = serde_json::from_slice(&out.stdout).unwrap();
-    assert!(remote.get("key_id").is_none(), "{remote}");
-    assert_eq!(remote["source"], "registry", "{remote}");
-    assert_eq!(remote["publisher"], "unsigned", "{remote}");
+    assert!(remote["added"][0].get("key_id").is_none(), "{remote}");
+    assert_eq!(remote["added"][0]["source"], "registry", "{remote}");
+    assert_eq!(remote["added"][0]["publisher"], "unsigned", "{remote}");
 }
 
 #[specforge_test(

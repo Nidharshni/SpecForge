@@ -98,7 +98,7 @@ fn enabling_a_builtin_writes_one_file() {
         &mut server,
         &root,
         "specforge.add_extension",
-        json!({"specifier": PRODUCT}),
+        json!({"specifiers": [PRODUCT]}),
     );
 
     assert_ok(&reply);
@@ -120,7 +120,7 @@ fn disabling_a_builtin_writes_one_file() {
     assert_ok(&call_tool(
         &mut server,
         "specforge.add_extension",
-        json!({"specifier": PRODUCT}),
+        json!({"specifiers": [PRODUCT]}),
     ));
 
     let (reply, changed) = wrote(
@@ -146,7 +146,7 @@ fn enabling_an_enabled_builtin_writes_nothing() {
     assert_ok(&call_tool(
         &mut server,
         "specforge.add_extension",
-        json!({"specifier": PRODUCT}),
+        json!({"specifiers": [PRODUCT]}),
     ));
     assert_eq!(events(&server, "extension_added").len(), 1);
 
@@ -154,7 +154,7 @@ fn enabling_an_enabled_builtin_writes_nothing() {
         &mut server,
         &root,
         "specforge.add_extension",
-        json!({"specifier": PRODUCT}),
+        json!({"specifiers": [PRODUCT]}),
     );
 
     assert_ok(&reply);
@@ -188,7 +188,7 @@ fn a_duplicate_add_emits_was_duplicate() {
             assert_ok(&call_tool(
                 &mut server,
                 "specforge.add_extension",
-                json!({"specifier": specifier}),
+                json!({"specifiers": [specifier]}),
             ));
         }
     }
@@ -216,7 +216,7 @@ fn a_duplicate_add_emits_was_duplicate() {
     assert_ok(&call_tool(
         &mut server,
         "specforge.add_extension",
-        json!({"specifier": PRODUCT, "dry_run": true}),
+        json!({"specifiers": [PRODUCT], "dry_run": true}),
     ));
     assert_eq!(events(&server, "extension_added").len(), since);
 }
@@ -236,7 +236,7 @@ fn installing_and_removing_a_local_extension_write_three_files() {
         &mut server,
         &root,
         "specforge.add_extension",
-        json!({"specifier": greet()}),
+        json!({"specifiers": [greet()]}),
     );
     assert_ok(&reply);
     assert_eq!(installed, three);
@@ -481,11 +481,11 @@ fn previews_are_no_mutation() {
         ),
         (
             "specforge.add_extension",
-            json!({"specifier": PRODUCT, "dry_run": true}),
+            json!({"specifiers": [PRODUCT], "dry_run": true}),
         ),
         (
             "specforge.add_extension",
-            json!({"specifier": greet(), "dry_run": true}),
+            json!({"specifiers": [greet()], "dry_run": true}),
         ),
         (
             "specforge.remove_extension",
@@ -510,9 +510,13 @@ fn previews_are_no_mutation() {
     let reply = call_tool(
         &mut installed,
         "specforge.add_extension",
-        json!({"specifier": "@sdk/greet@0.0.0-test", "dry_run": true}),
+        json!({"specifiers": ["@sdk/greet@0.0.0-test"], "dry_run": true}),
     );
-    assert_eq!(tool_json(&reply)["action"], "already_present", "{reply}");
+    assert_eq!(
+        tool_json(&reply)["added"][0]["action"],
+        "already_present",
+        "{reply}"
+    );
     assert_eq!(last_completed(&installed), None, "{reply}");
     assert!(events(&installed, "extension_added").is_empty());
 }
@@ -555,7 +559,7 @@ fn the_domain_event_precedes_the_mutation_event() {
     assert_ok(&call_tool(
         &mut server,
         "specforge.add_extension",
-        json!({"specifier": PRODUCT}),
+        json!({"specifiers": [PRODUCT]}),
     ));
     assert_eq!(
         event_names_since(
@@ -611,7 +615,7 @@ fn extension_added_names_the_specifier_and_the_total() {
     assert_ok(&call_tool(
         &mut server,
         "specforge.add_extension",
-        json!({"specifier": PRODUCT}),
+        json!({"specifiers": [PRODUCT]}),
     ));
     // The product builtin and the builtin peers it requires.
     let total = enabled(&root).len();
@@ -626,12 +630,87 @@ fn extension_added_names_the_specifier_and_the_total() {
     assert_ok(&call_tool(
         &mut server,
         "specforge.add_extension",
-        json!({"specifier": greet()}),
+        json!({"specifiers": [greet()]}),
     ));
     assert_eq!(
         events(&server, "extension_added")[1],
         json!({"extensionSpecifier": greet(), "totalExtensions": total + 1, "wasDuplicate": false})
     );
+}
+
+#[specforge_test(
+    behavior = "provide_mcp_add_extension_tool",
+    verify = "specforge.add_extension adds every specifier as one change, one extension_added per specifier"
+)]
+fn add_extension_adds_every_specifier_as_one_change() {
+    let mut server = empty_components();
+    let root = server.root().to_path_buf();
+
+    let (reply, changed) = wrote(
+        &mut server,
+        &root,
+        "specforge.add_extension",
+        json!({"specifiers": [PRODUCT, greet(), PRODUCT]}),
+    );
+
+    assert_ok(&reply);
+    let payload = tool_json(&reply);
+    let added = payload["added"].as_array().unwrap();
+    let actions: Vec<&str> = added
+        .iter()
+        .map(|a| a["action"].as_str().unwrap())
+        .collect();
+    assert_eq!(actions, ["enabled", "installed", "duplicate"], "{payload}");
+    let specifiers: Vec<Value> = added.iter().map(|a| a["specifier"].clone()).collect();
+    assert_eq!(specifiers, [json!(PRODUCT), json!(greet()), json!(PRODUCT)]);
+    assert_eq!(added[2]["duplicate_of"], PRODUCT, "{payload}");
+    let three = [
+        ".specforge/extensions/@sdk/greet/extension.wasm",
+        "specforge.json",
+        "specforge.lock",
+    ];
+    assert_eq!(payload["files_written"], json!(three), "{payload}");
+    assert_eq!(changed, names(&three));
+    let total = enabled(&root).len();
+    assert_eq!(
+        events(&server, "extension_added"),
+        [
+            json!({"extensionSpecifier": PRODUCT, "totalExtensions": total, "wasDuplicate": false}),
+            json!({"extensionSpecifier": greet(), "totalExtensions": total, "wasDuplicate": false}),
+            json!({"extensionSpecifier": PRODUCT, "totalExtensions": total, "wasDuplicate": true}),
+        ]
+    );
+    assert_eq!(events(&server, "mcp_mutation_completed").len(), 1);
+    assert_eq!(last_completed(&server).unwrap()["files_changed"], 3);
+
+    // One specifier refused: nothing written, no extension added, the refusal naming it.
+    let mut server = empty_components();
+    let root = server.root().to_path_buf();
+    let missing = root.join("missing.wasm");
+    let missing = missing.to_str().unwrap();
+    let (reply, changed) = wrote(
+        &mut server,
+        &root,
+        "specforge.add_extension",
+        json!({"specifiers": [PRODUCT, missing]}),
+    );
+    let error = crate::tool_errors::mcp_error(&reply);
+    assert!(
+        error["message"]
+            .as_str()
+            .unwrap()
+            .contains(&format!("adding '{missing}': file not found")),
+        "{reply}"
+    );
+    assert!(changed.is_empty(), "{changed:?}");
+    assert!(events(&server, "extension_added").is_empty());
+
+    // No specifier, or the one-specifier argument of old: refused before anything runs.
+    for arguments in [json!({"specifiers": []}), json!({"specifier": PRODUCT})] {
+        let reply = call_tool(&mut server, "specforge.add_extension", arguments.clone());
+        crate::tool_errors::mcp_error(&reply);
+        assert!(events(&server, "extension_added").is_empty(), "{arguments}");
+    }
 }
 
 /// Init `name` in a new directory of `scratch` with `extensions`; the
@@ -694,7 +773,7 @@ fn a_write_brings_the_served_project_up_to_date() {
             "specforge.rename",
             json!({"entity_id": "alpha", "new_name": "omega"}),
         ),
-        ("specforge.add_extension", json!({"specifier": PRODUCT})),
+        ("specforge.add_extension", json!({"specifiers": [PRODUCT]})),
         ("specforge.remove_extension", json!({"name": PRODUCT})),
         ("specforge.migrate", json!({})),
     ] {
@@ -776,15 +855,15 @@ fn every_mutation_reply_lists_what_it_wrote() {
     let mut server = empty_components();
     let root = server.root().to_path_buf();
     let add = "specforge.add_extension";
-    let enabled = lists_what_it_wrote(&mut server, &root, add, json!({"specifier": PRODUCT}));
+    let enabled = lists_what_it_wrote(&mut server, &root, add, json!({"specifiers": [PRODUCT]}));
     assert_eq!(files_written(&enabled), ["specforge.json"]);
-    let again = lists_what_it_wrote(&mut server, &root, add, json!({"specifier": PRODUCT}));
+    let again = lists_what_it_wrote(&mut server, &root, add, json!({"specifiers": [PRODUCT]}));
     assert_eq!(files_written(&again), Vec::<String>::new());
     let remove = "specforge.remove_extension";
     lists_what_it_wrote(&mut server, &root, remove, json!({"name": PRODUCT}));
 
     // Install a local extension, then remove it: module, lock, config.
-    let installed = lists_what_it_wrote(&mut server, &root, add, json!({"specifier": greet()}));
+    let installed = lists_what_it_wrote(&mut server, &root, add, json!({"specifiers": [greet()]}));
     assert_eq!(files_written(&installed).len(), 3);
     lists_what_it_wrote(&mut server, &root, remove, json!({"name": GREET}));
 
@@ -884,7 +963,7 @@ fn a_preview_reply_has_no_files_written() {
         ),
         (
             "specforge.add_extension",
-            json!({"specifier": PRODUCT, "dry_run": true}),
+            json!({"specifiers": [PRODUCT], "dry_run": true}),
         ),
         (
             "specforge.remove_extension",
@@ -914,7 +993,7 @@ fn a_preview_reply_has_no_files_written() {
     let reply = call_tool(
         &mut installed,
         "specforge.add_extension",
-        json!({"specifier": "@sdk/greet@0.0.0-test", "dry_run": true}),
+        json!({"specifiers": ["@sdk/greet@0.0.0-test"], "dry_run": true}),
     );
     assert!(tool_json(&reply).get("files_written").is_none(), "{reply}");
     assert!(
@@ -948,10 +1027,10 @@ fn a_dry_run_is_a_preview_whatever_the_operation_answers() {
     let reply = call_tool(
         &mut server,
         "specforge.add_extension",
-        json!({"specifier": "@sdk/greet@0.0.0-test", "dry_run": true}),
+        json!({"specifiers": ["@sdk/greet@0.0.0-test"], "dry_run": true}),
     );
     let payload = tool_json(&reply);
-    assert_eq!(payload["action"], "already_present", "{reply}");
+    assert_eq!(payload["added"][0]["action"], "already_present", "{reply}");
     assert!(payload.get("files_written").is_none(), "{reply}");
     assert_eq!(
         event_names_since(

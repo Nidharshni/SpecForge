@@ -91,3 +91,14 @@ type, matched neither surface.
 
 A consumer pinned to one surface's shape that extras cannot serve; or an outcome whose printed form
 must differ per surface for a reason the surface alone knows, beyond adding keys.
+
+## Amendment (2026-10-11): an add of several specifiers is one document
+
+`specforge add` takes one or more specifiers, and `specforge.add_extension` a `specifiers` list
+(its single `specifier` is gone), added as one change (ADR 0041's lock plan, judged on the whole
+set; all or nothing). D1's `AddDocument` is now `{added: [AddResult]}`: one entry per specifier,
+in the order given, each the union tagged by `action` that D1 described (enabled, installed,
+already_present, planned), plus `duplicate` (`duplicate_of`: the earlier specifier of the same add
+that names the extension the same way), and every entry names its `specifier` as given. MCP's
+`note` (D2) sits beside `added`, once per reply; the CLI's `files_written` lists the files of the
+whole set. The spec type is `McpAddExtensionResult { added: McpAddedExtension[], note? }`.

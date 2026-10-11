@@ -1,10 +1,10 @@
 //! `specforge add` and `specforge.add_extension`.
 
 use super::candidate::LocalFile;
-use super::lock_plan::{Fetch, Install, LockPlan, Refused, Verb};
+use super::lock_plan::{Fetch, Install, LockPlan, Verb};
 use super::{Origin, builtin_name};
 use crate::registry::{Acceptance, Publisher, Registry};
-use crate::{OpError, Writes};
+use crate::{OpError, OpErrorKind, Writes};
 use serde::Serialize;
 use specforge_common::codes;
 use specforge_common::shape::Shape;
@@ -80,6 +80,76 @@ impl From<SpecifierError> for OpError {
     }
 }
 
+/// One extension to add: its specifier as the caller gave it, and the source it reads as.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Specified {
+    pub specifier: String,
+    pub source: Source,
+}
+
+/// A source as its specifier would spell it.
+impl From<Source> for Specified {
+    fn from(source: Source) -> Self {
+        Specified {
+            specifier: source.to_string(),
+            source,
+        }
+    }
+}
+
+impl std::fmt::Display for Source {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Source::Builtin(name) => f.write_str(name),
+            Source::Local(path) => write!(f, "{}", path.display()),
+            Source::Registry(package) => write!(f, "{package}"),
+            Source::Git { url } => write!(f, "git+{url}"),
+        }
+    }
+}
+
+impl Source {
+    /// Whether adding it installs a module under `.specforge/extensions/` and locks it.
+    fn installs(&self) -> bool {
+        matches!(self, Source::Local(_) | Source::Registry(_))
+    }
+}
+
+/// Read each of `specifiers`, in order, as [`parse`] reads it. E054 when there is none; the
+/// first that can't be read refuses, named when there are several.
+pub fn specified<S: AsRef<str>>(specifiers: &[S]) -> Result<Vec<Specified>, OpError> {
+    if specifiers.is_empty() {
+        return Err(no_specifier());
+    }
+    let several = specifiers.len() > 1;
+    specifiers
+        .iter()
+        .map(|specifier| {
+            let specifier = specifier.as_ref();
+            parse(specifier)
+                .map(|source| Specified {
+                    specifier: specifier.to_string(),
+                    source,
+                })
+                .map_err(|error| named(several, specifier, error))
+        })
+        .collect()
+}
+
+/// E054: an add with nothing to add.
+fn no_specifier() -> OpError {
+    OpError::diagnostic(codes::E054, "no extension specifier").with_suggestion(SPECIFIER_FORMS)
+}
+
+/// `error`, naming the specifier it refuses when the add has several.
+fn named(several: bool, specifier: &str, error: OpError) -> OpError {
+    if several {
+        error.prefixed(format!("adding '{specifier}': "))
+    } else {
+        error
+    }
+}
+
 /// How a key change in a signed package is decided.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Trust {
@@ -95,7 +165,8 @@ pub enum Trust {
 #[derive(Debug, Clone)]
 pub struct AddRequest<'a> {
     pub root: &'a Path,
-    pub source: Source,
+    /// The extensions to add, in the order given: one change.
+    pub extensions: Vec<Specified>,
     /// Accept a registry package with no publisher signature.
     pub allow_unsigned: bool,
     pub trust: Trust,
@@ -105,7 +176,7 @@ pub struct AddRequest<'a> {
     pub dry_run: bool,
 }
 
-/// What an add did (or, on a dry run, would do).
+/// What an add did (or, on a dry run, would do) for one specifier.
 #[derive(Debug, Clone, PartialEq)]
 pub enum AddOutcome {
     /// A builtin enabled; `changed` is false when it already was.
@@ -133,17 +204,43 @@ pub enum AddOutcome {
         version: Option<String>,
         origin: Origin,
     },
+    /// An extension an earlier specifier of the same add names, as that one adds it: added
+    /// once, by `first` (that specifier).
+    Duplicate { name: String, first: String },
 }
 
 impl AddOutcome {
-    /// The document both surfaces print.
-    pub fn document(&self) -> AddDocument {
+    /// The add changed nothing for it: a builtin already enabled, a package
+    /// already present, or a specifier repeating an earlier one (`extension_added`'s
+    /// `wasDuplicate`, ADR 0022 D5).
+    pub fn is_duplicate(&self) -> bool {
         match self {
+            AddOutcome::Builtin { changed, .. } => !changed,
+            AddOutcome::AlreadyPresent { .. } | AddOutcome::Duplicate { .. } => true,
+            AddOutcome::Installed { .. } | AddOutcome::Planned { .. } => false,
+        }
+    }
+}
+
+/// What an add did for one specifier.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AddedExtension {
+    /// The specifier as the caller gave it.
+    pub specifier: String,
+    pub outcome: AddOutcome,
+}
+
+impl AddedExtension {
+    /// Its entry in the add document.
+    pub fn document(&self) -> AddResult {
+        let specifier = self.specifier.clone();
+        match &self.outcome {
             AddOutcome::Builtin {
                 name,
                 changed,
                 peers_enabled,
-            } => AddDocument::Enabled(EnabledBuiltin {
+            } => AddResult::Enabled(EnabledBuiltin {
+                specifier,
                 extension: (*name).to_string(),
                 source: BuiltinSource::Builtin,
                 changed: *changed,
@@ -158,7 +255,8 @@ impl AddOutcome {
                 sha256,
                 publisher,
                 origin,
-            } => AddDocument::Installed(InstalledPackage {
+            } => AddResult::Installed(InstalledPackage {
+                specifier,
                 extension: name.clone(),
                 version: version.clone(),
                 sha256: sha256.clone(),
@@ -170,7 +268,8 @@ impl AddOutcome {
                 publisher: publisher.as_ref().map(Publisher::acceptance),
             }),
             AddOutcome::AlreadyPresent { name, version } => {
-                AddDocument::AlreadyPresent(PresentExtension {
+                AddResult::AlreadyPresent(PresentExtension {
+                    specifier,
                     extension: name.clone(),
                     version: version.clone(),
                 })
@@ -179,30 +278,33 @@ impl AddOutcome {
                 name,
                 version,
                 origin,
-            } => AddDocument::Planned(PlannedAdd {
+            } => AddResult::Planned(PlannedAdd {
+                specifier,
                 extension: name.clone(),
                 version: version.clone(),
                 source: origin.source(),
             }),
-        }
-    }
-
-    /// The add changed nothing: a builtin already enabled, or a package
-    /// already present (`extension_added`'s `wasDuplicate`, ADR 0022 D5).
-    pub fn is_duplicate(&self) -> bool {
-        match self {
-            AddOutcome::Builtin { changed, .. } => !changed,
-            AddOutcome::AlreadyPresent { .. } => true,
-            AddOutcome::Installed { .. } | AddOutcome::Planned { .. } => false,
+            AddOutcome::Duplicate { name, first } => AddResult::Duplicate(DuplicateSpecifier {
+                specifier,
+                extension: name.clone(),
+                duplicate_of: first.clone(),
+            }),
         }
     }
 }
 
 /// What `specforge add --format json` and `specforge.add_extension` print
-/// (`McpAddExtensionResult`): what the add did, by `action`.
+/// (`McpAddExtensionResult`): what the add did for each specifier.
+#[derive(Debug, Clone, PartialEq, Serialize, Shape)]
+pub struct AddDocument {
+    /// One entry per specifier, in the order given.
+    pub added: Vec<AddResult>,
+}
+
+/// What the add did for one specifier, by `action` (`McpAddedExtension`).
 #[derive(Debug, Clone, PartialEq, Serialize, Shape)]
 #[serde(tag = "action", rename_all = "snake_case")]
-pub enum AddDocument {
+pub enum AddResult {
     /// A builtin enabled in `specforge.json` (`changed: false` when it
     /// already was), after the required builtin peers it lists.
     Enabled(EnabledBuiltin),
@@ -212,6 +314,8 @@ pub enum AddDocument {
     AlreadyPresent(PresentExtension),
     /// A dry run: what would be installed or enabled.
     Planned(PlannedAdd),
+    /// An extension an earlier specifier of the same add names: added once.
+    Duplicate(DuplicateSpecifier),
 }
 
 /// The one spelling of a builtin's `source`.
@@ -224,6 +328,7 @@ pub enum BuiltinSource {
 /// A builtin enabled.
 #[derive(Debug, Clone, PartialEq, Serialize, Shape)]
 pub struct EnabledBuiltin {
+    pub specifier: String,
     pub extension: String,
     pub source: BuiltinSource,
     pub changed: bool,
@@ -234,6 +339,7 @@ pub struct EnabledBuiltin {
 /// A package installed and locked.
 #[derive(Debug, Clone, PartialEq, Serialize, Shape)]
 pub struct InstalledPackage {
+    pub specifier: String,
     pub extension: String,
     pub version: String,
     pub sha256: String,
@@ -250,6 +356,7 @@ pub struct InstalledPackage {
 /// An extension already installed and enabled.
 #[derive(Debug, Clone, PartialEq, Serialize, Shape)]
 pub struct PresentExtension {
+    pub specifier: String,
     pub extension: String,
     pub version: String,
 }
@@ -257,6 +364,7 @@ pub struct PresentExtension {
 /// What a dry run would install or enable.
 #[derive(Debug, Clone, PartialEq, Serialize, Shape)]
 pub struct PlannedAdd {
+    pub specifier: String,
     pub extension: String,
     /// Absent for a builtin, which tracks the binary.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -265,13 +373,23 @@ pub struct PlannedAdd {
     pub source: String,
 }
 
+/// A specifier naming an extension an earlier one of the same add names.
+#[derive(Debug, Clone, PartialEq, Serialize, Shape)]
+pub struct DuplicateSpecifier {
+    pub specifier: String,
+    pub extension: String,
+    /// The earlier specifier that adds it.
+    pub duplicate_of: String,
+}
+
 /// What an add did, and what it changed on disk.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Added {
-    pub outcome: AddOutcome,
+    /// What it did for each specifier, in the order given.
+    pub added: Vec<AddedExtension>,
     /// The files the add changed: `specforge.json` when an entry was added,
-    /// and for an install the module and `specforge.lock` when their bytes
-    /// changed. Nothing for a dry run or an extension already present. A
+    /// and for the installs each module and `specforge.lock` when their bytes
+    /// changed. Nothing for a dry run or extensions already present. A
     /// trust pin the registry adapter keeps for the user is not one.
     pub writes: Writes,
     /// How many extensions `specforge.json` enables after the add (`0`
@@ -280,13 +398,15 @@ pub struct Added {
 }
 
 impl Added {
-    /// [`AddOutcome::document`].
+    /// The add document: [`AddedExtension::document`] for each specifier.
     pub fn document(&self) -> AddDocument {
-        self.outcome.document()
+        AddDocument {
+            added: self.added.iter().map(AddedExtension::document).collect(),
+        }
     }
 }
 
-/// Add an extension to the project at `req.root`.
+/// Add the extensions `req` names to the project at `req.root`, as one change.
 ///
 /// - A builtin is enabled in `specforge.json`, after the builtins it
 ///   requires as non-optional peers.
@@ -294,16 +414,21 @@ impl Added {
 ///   `.specforge/extensions/`, locked with the version it declares and
 ///   `source: "local:<path>"`, and enabled.
 /// - A registry package is resolved, downloaded, integrity- and
-///   signature-checked, validated by its handshake, checked against the
-///   ADR-0001 diamond gate, installed, locked and enabled.
+///   signature-checked, installed, locked and enabled.
 ///
-/// An installed extension is enabled by its bare name, which the runtime
-/// loads from the lock (ADR 0004 D3-b).
+/// Every install is staged in one lock plan, judged once by the peer rule over the whole set
+/// (ADR 0041: the order of the specifiers decides nothing), and each fetched binary is loaded
+/// only once the plan has passed. An installed extension is enabled by its bare name, which the
+/// runtime loads from the lock (ADR 0004 D3-b).
 ///
-/// An install is all or nothing: the module, its lock entry and the
-/// `specforge.json` entry are written as one change, and a failure at any
-/// step puts every file back (the error's [`OpError::writes`] names what the
-/// rollback could not, normally nothing).
+/// The add is all or nothing: the modules, the lock (written once) and the `specforge.json`
+/// entries are one change, and a refusal of any specifier writes nothing; with several
+/// specifiers, its message names the one refused. A failure while writing puts every file back
+/// (the error's [`OpError::writes`] names what the rollback could not, normally nothing).
+///
+/// A specifier naming an extension an earlier one names, as that one adds it, is a
+/// [`AddOutcome::Duplicate`]; two that add one extension differently (another version, other
+/// bytes, another source) are refused with `extension_conflict`.
 pub fn add(
     req: &AddRequest,
     registry: &dyn Registry,
@@ -313,140 +438,34 @@ pub fn add(
     // anything is installed into it: the refusal `update` and `remove`
     // give an unusable specforge.json too (`config_invalid`).
     let config = crate::config::required(req.root)?.config;
-    match &req.source {
-        Source::Builtin(name) => add_builtin(req, &config, name, runtime),
-        Source::Local(path) => {
-            // A specforge.lock that can't be read refuses before anything is read.
-            let installed = Installed::at(req.root);
-            let plan = LockPlan::new(&installed, Verb::Install)?;
-            let local = LocalFile::read(runtime, path)?;
-            add_local(req, &config, &installed, plan, local)
-        }
-        Source::Registry(package) => add_from_registry(req, &config, registry, runtime, package),
-        Source::Git { url } => Err(OpError::diagnostic(
-            codes::E064,
-            format!("git source '{url}' not yet supported"),
-        )),
+    if req.extensions.is_empty() {
+        return Err(no_specifier());
     }
-}
-
-/// `outcome`, with nothing written: the extensions `config` enables are
-/// still the ones it enabled.
-fn unchanged(outcome: AddOutcome, config: &specforge_common::ProjectConfig) -> Added {
-    Added {
-        outcome,
-        writes: Writes::none(),
-        extensions_enabled: config.extensions.len(),
-    }
-}
-
-fn add_builtin(
-    req: &AddRequest,
-    config: &specforge_common::ProjectConfig,
-    name: &'static str,
-    runtime: &dyn WasmRuntime,
-) -> Result<Added, OpError> {
-    // An already-enabled extension is left exactly as it is, a dry run included.
-    if super::enabled_builtins(config).contains(&name) {
-        return Ok(unchanged(
-            AddOutcome::Builtin {
-                name,
-                changed: false,
-                peers_enabled: Vec::new(),
-            },
-            config,
-        ));
-    }
-    if req.dry_run {
-        return Ok(unchanged(
-            AddOutcome::Planned {
-                name: name.to_string(),
-                version: None,
-                origin: Origin::Builtin,
-            },
-            config,
-        ));
-    }
-    // Required builtin peers come first, so they're enabled before the
-    // extension that builds on them, in the one edit that enables it.
-    let peers = super::required_builtins(runtime, name)?;
-    let wanted: Vec<&str> = peers.iter().copied().chain([name]).collect();
-    let enabled = crate::config::enable(req.root, &wanted)?;
-    let mut writes = Writes::none();
-    writes.record_if(
-        !enabled.appended.is_empty(),
-        req.root.join(crate::config::CONFIG_FILE),
-    );
-    Ok(Added {
-        outcome: AddOutcome::Builtin {
-            name,
-            changed: enabled.appended.iter().any(|appended| appended == name),
-            peers_enabled: peers
-                .into_iter()
-                .filter(|peer| enabled.appended.iter().any(|appended| appended == peer))
-                .collect(),
-        },
-        writes,
-        extensions_enabled: enabled.total,
-    })
-}
-
-fn add_local(
-    req: &AddRequest,
-    config: &specforge_common::ProjectConfig,
-    installed: &Installed,
-    plan: LockPlan<'_>,
-    local: LocalFile,
-) -> Result<Added, OpError> {
-    let install = Install::local(req.root, local)?;
-    if let Some(present) = already_present(installed, config, install.name(), |e| {
-        e.wasm_hash == install.sha256() && e.source.local_path().is_some()
-    }) {
-        return Ok(unchanged(present, config));
-    }
-    if req.dry_run {
-        return Ok(unchanged(
-            AddOutcome::Planned {
-                name: install.name().to_string(),
-                version: Some(install.version().to_string()),
-                origin: Origin::Installed {
-                    source: install.source().clone(),
-                },
-            },
-            config,
-        ));
-    }
-    commit(req.root, plan, install)
-}
-
-fn add_from_registry(
-    req: &AddRequest,
-    config: &specforge_common::ProjectConfig,
-    registry: &dyn Registry,
-    runtime: &dyn WasmRuntime,
-    package: &PackageRef,
-) -> Result<Added, OpError> {
-    // A specforge.lock that can't be read refuses before a registry is asked.
+    let several = req.extensions.len() > 1;
     let installed = Installed::at(req.root);
-    let plan = LockPlan::new(&installed, Verb::Install)?;
-    let name = package.name.as_str();
-    let version = super::resolve(registry, package)?;
-    if let Some(present) = already_present(&installed, config, &package.name, |e| {
-        e.version == version.to_string() && e.source.is_registry()
-    }) {
-        return Ok(unchanged(present, config));
-    }
-    if req.dry_run {
-        return Ok(unchanged(
-            AddOutcome::Planned {
-                name: name.to_string(),
-                version: Some(version.to_string()),
-                origin: Origin::Installed {
-                    source: LockSource::Registry,
-                },
-            },
-            config,
-        ));
+    // A specforge.lock that can't be read refuses before a file is read or a registry asked.
+    let plan = if req.extensions.iter().any(|e| e.source.installs()) {
+        Some(LockPlan::new(&installed, Verb::Install)?)
+    } else {
+        None
+    };
+    let mut resolver = Resolver {
+        req,
+        config: &config,
+        installed: &installed,
+        registry,
+        runtime,
+        claims: Vec::new(),
+    };
+    let mut steps = Vec::with_capacity(req.extensions.len());
+    for (at, wanted) in req.extensions.iter().enumerate() {
+        let step = resolver
+            .step(&req.extensions[..at], wanted)
+            .map_err(|error| match error {
+                Resolved::Refused(error) => named(several, &wanted.specifier, error),
+                Resolved::Conflict(error) => error,
+            })?;
+        steps.push(step);
     }
     let fetch = Fetch {
         registry,
@@ -454,7 +473,199 @@ fn add_from_registry(
         allow_unsigned: req.allow_unsigned,
         trust: req.trust,
     };
-    commit(req.root, plan, fetch.install(&package.name, &version)?)
+    apply(req, &config, plan, &fetch, steps)
+}
+
+/// What the add does for one specifier, once it is resolved.
+enum Step<'a> {
+    /// Nothing to write: already enabled or present, a dry run's plan, or a duplicate.
+    Unchanged(AddOutcome),
+    /// A builtin to enable, after its required builtin peers.
+    Enable {
+        name: &'static str,
+        peers: Vec<&'static str>,
+    },
+    /// A local file to install.
+    Local(Install<'a>),
+    /// A registry package to fetch and install.
+    Fetch(PackageName, specforge_package::Version),
+}
+
+/// An extension a specifier of the add names, and how it adds it.
+struct Claim {
+    name: String,
+    /// What makes two specifiers add it the same way: `builtin`, the registry version, or the
+    /// local file's SHA-256.
+    key: String,
+    /// How the refusal of a conflict says it: `builtin`, `<version> from <source>`.
+    shown: String,
+    specifier: String,
+}
+
+/// Why a specifier can't be resolved: refused on its own (named when the add has several), or in
+/// conflict with an earlier one (the refusal names both).
+enum Resolved {
+    Refused(OpError),
+    Conflict(OpError),
+}
+
+impl From<OpError> for Resolved {
+    fn from(error: OpError) -> Self {
+        Resolved::Refused(error)
+    }
+}
+
+/// Resolves each specifier in turn, remembering what the earlier ones claimed.
+struct Resolver<'r, 'a> {
+    req: &'r AddRequest<'r>,
+    config: &'r specforge_common::ProjectConfig,
+    installed: &'r Installed,
+    registry: &'a dyn Registry,
+    runtime: &'a dyn WasmRuntime,
+    claims: Vec<Claim>,
+}
+
+impl<'a> Resolver<'_, 'a> {
+    /// What the add does for `wanted`, given the specifiers before it.
+    fn step(&mut self, before: &[Specified], wanted: &Specified) -> Result<Step<'a>, Resolved> {
+        match &wanted.source {
+            Source::Builtin(name) => self.builtin(wanted, name),
+            Source::Local(path) => {
+                let local = LocalFile::read(self.runtime, path)?;
+                self.local(wanted, Install::local(self.req.root, local)?)
+            }
+            Source::Registry(package) => self.package(before, wanted, package),
+            Source::Git { url } => Err(Resolved::Refused(OpError::diagnostic(
+                codes::E064,
+                format!("git source '{url}' not yet supported"),
+            ))),
+        }
+    }
+
+    /// `name` claimed by `wanted` as `key`: `None` the first time, the duplicate when an earlier
+    /// specifier claimed it the same way, the conflict when differently.
+    fn claim(
+        &mut self,
+        wanted: &Specified,
+        name: &str,
+        key: String,
+        shown: String,
+    ) -> Result<Option<Step<'a>>, Resolved> {
+        match self.claims.iter().find(|claim| claim.name == name) {
+            Some(first) if first.key == key => Ok(Some(Step::Unchanged(AddOutcome::Duplicate {
+                name: name.to_string(),
+                first: first.specifier.clone(),
+            }))),
+            Some(first) => Err(Resolved::Conflict(
+                OpError::new(
+                    OpErrorKind::Conflict,
+                    "extension_conflict",
+                    format!(
+                        "'{}' and '{}' both add '{name}', as {} and as {shown}",
+                        first.specifier, wanted.specifier, first.shown
+                    ),
+                )
+                .with_suggestion(format!("add '{name}' once")),
+            )),
+            None => {
+                self.claims.push(Claim {
+                    name: name.to_string(),
+                    key,
+                    shown,
+                    specifier: wanted.specifier.clone(),
+                });
+                Ok(None)
+            }
+        }
+    }
+
+    fn builtin(&mut self, wanted: &Specified, name: &'static str) -> Result<Step<'a>, Resolved> {
+        if let Some(duplicate) = self.claim(wanted, name, "builtin".into(), "builtin".into())? {
+            return Ok(duplicate);
+        }
+        // An already-enabled extension is left exactly as it is, a dry run included.
+        if super::enabled_builtins(self.config).contains(&name) {
+            return Ok(Step::Unchanged(AddOutcome::Builtin {
+                name,
+                changed: false,
+                peers_enabled: Vec::new(),
+            }));
+        }
+        if self.req.dry_run {
+            return Ok(Step::Unchanged(AddOutcome::Planned {
+                name: name.to_string(),
+                version: None,
+                origin: Origin::Builtin,
+            }));
+        }
+        // Required builtin peers come first, so they're enabled before the
+        // extension that builds on them, in the one edit that enables it.
+        let peers = super::required_builtins(self.runtime, name)?;
+        Ok(Step::Enable { name, peers })
+    }
+
+    fn local(&mut self, wanted: &Specified, install: Install<'a>) -> Result<Step<'a>, Resolved> {
+        let shown = format!("{} from {}", install.version(), install.source());
+        let name = install.name().clone();
+        if let Some(duplicate) =
+            self.claim(wanted, name.as_str(), install.sha256().to_string(), shown)?
+        {
+            return Ok(duplicate);
+        }
+        if let Some(present) = already_present(self.installed, self.config, &name, |e| {
+            e.wasm_hash == install.sha256() && e.source.local_path().is_some()
+        }) {
+            return Ok(Step::Unchanged(present));
+        }
+        if self.req.dry_run {
+            return Ok(Step::Unchanged(AddOutcome::Planned {
+                name: name.to_string(),
+                version: Some(install.version().to_string()),
+                origin: Origin::Installed {
+                    source: install.source().clone(),
+                },
+            }));
+        }
+        Ok(Step::Local(install))
+    }
+
+    fn package(
+        &mut self,
+        before: &[Specified],
+        wanted: &Specified,
+        package: &PackageRef,
+    ) -> Result<Step<'a>, Resolved> {
+        let name = package.name.as_str();
+        // The same package reference again resolves the same way: nothing is asked.
+        if before.iter().any(|earlier| earlier.source == wanted.source)
+            && let Some(first) = self.claims.iter().find(|claim| claim.name == name)
+        {
+            return Ok(Step::Unchanged(AddOutcome::Duplicate {
+                name: name.to_string(),
+                first: first.specifier.clone(),
+            }));
+        }
+        let version = super::resolve(self.registry, package)?;
+        let shown = format!("{version} from registry");
+        if let Some(duplicate) = self.claim(wanted, name, format!("registry {version}"), shown)? {
+            return Ok(duplicate);
+        }
+        if let Some(present) = already_present(self.installed, self.config, &package.name, |e| {
+            e.version == version.to_string() && e.source.is_registry()
+        }) {
+            return Ok(Step::Unchanged(present));
+        }
+        if self.req.dry_run {
+            return Ok(Step::Unchanged(AddOutcome::Planned {
+                name: name.to_string(),
+                version: Some(version.to_string()),
+                origin: Origin::Installed {
+                    source: LockSource::Registry,
+                },
+            }));
+        }
+        Ok(Step::Fetch(package.name.clone(), version))
+    }
 }
 
 /// `AlreadyPresent` when the lock holds `name` as `same` accepts, its
@@ -478,36 +689,139 @@ fn already_present(
     })
 }
 
-/// Stage `install`, check the plan, and commit it with its `specforge.json` entry (its bare
-/// name): one change that puts everything back when a step fails. A locked extension the new
-/// version leaves with an unsatisfied peer refuses the install before anything is written
-/// (ADR 0041).
-fn commit<'a>(root: &Path, mut plan: LockPlan<'a>, install: Install<'a>) -> Result<Added, OpError> {
-    let name = install.name().to_string();
-    let outcome = AddOutcome::Installed {
-        name: name.clone(),
+/// What an install did, before it is staged.
+fn installed_outcome(install: &Install<'_>) -> AddOutcome {
+    AddOutcome::Installed {
+        name: install.name().to_string(),
         version: install.version().to_string(),
         sha256: install.sha256().to_string(),
         publisher: install.publisher().cloned(),
         origin: Origin::Installed {
             source: install.source().clone(),
         },
+    }
+}
+
+/// Fetch what `steps` install from a registry, stage every install in `plan`, check it once and
+/// commit it with the `specforge.json` entries (each builtin after its required peers, each
+/// install by its bare name): one change that puts everything back when a step fails. A plan the
+/// peer rule refuses writes nothing, its refusal naming the specifier when there are several
+/// (ADR 0041).
+fn apply<'a>(
+    req: &AddRequest,
+    config: &specforge_common::ProjectConfig,
+    plan: Option<LockPlan<'a>>,
+    fetch: &Fetch<'a>,
+    steps: Vec<Step<'a>>,
+) -> Result<Added, OpError> {
+    let several = req.extensions.len() > 1;
+    let specifier = |at: usize| req.extensions[at].specifier.as_str();
+    let mut outcomes: Vec<Option<AddOutcome>> = Vec::with_capacity(steps.len());
+    let mut builtins: Vec<(usize, &'static str, Vec<&'static str>)> = Vec::new();
+    let mut installs: Vec<(usize, Install<'a>)> = Vec::new();
+    let mut names: Vec<String> = Vec::new();
+    for (at, step) in steps.into_iter().enumerate() {
+        match step {
+            Step::Unchanged(outcome) => {
+                outcomes.push(Some(outcome));
+                continue;
+            }
+            Step::Enable { name, peers } => {
+                names.extend(peers.iter().chain([&name]).map(|n| n.to_string()));
+                builtins.push((at, name, peers));
+            }
+            Step::Local(install) => {
+                names.push(install.name().to_string());
+                installs.push((at, install));
+            }
+            Step::Fetch(name, version) => {
+                let install = fetch
+                    .install(&name, &version)
+                    .map_err(|error| named(several, specifier(at), error))?;
+                names.push(install.name().to_string());
+                installs.push((at, install));
+            }
+        }
+        outcomes.push(None);
+    }
+    if names.is_empty() {
+        return Ok(Added {
+            added: added(req, outcomes),
+            writes: Writes::none(),
+            extensions_enabled: config.extensions.len(),
+        });
+    }
+
+    let names: Vec<&str> = names.iter().map(String::as_str).collect();
+    let config_path = req.root.join(crate::config::CONFIG_FILE);
+    let mut enabled = None;
+    let writes = match plan {
+        Some(mut plan) if !installs.is_empty() => {
+            let mut staged: Vec<(PackageName, usize)> = Vec::with_capacity(installs.len());
+            for (at, install) in installs {
+                outcomes[at] = Some(installed_outcome(&install));
+                staged.push((install.name().clone(), at));
+                plan.stage(install);
+            }
+            let checked = plan.check().map_err(|refused| {
+                let (name, error) = refused.decisive();
+                let at = staged
+                    .iter()
+                    .find(|(staged, _)| *staged == name)
+                    .map_or(0, |(_, at)| *at);
+                named(several, specifier(at), error)
+            })?;
+            checked.commit_with(&config_path, || {
+                let edit = crate::config::enable(req.root, &names)?;
+                let changed = !edit.appended.is_empty();
+                enabled = Some(edit);
+                Ok(changed)
+            })?
+        }
+        _ => {
+            let edit = crate::config::enable(req.root, &names)?;
+            let mut writes = Writes::none();
+            writes.record_if(!edit.appended.is_empty(), &config_path);
+            enabled = Some(edit);
+            writes
+        }
     };
-    plan.stage(install);
-    let mut total = 0;
-    let writes = plan.check().map_err(Refused::first)?.commit_with(
-        &root.join(crate::config::CONFIG_FILE),
-        || {
-            let enabled = crate::config::enable(root, &[name.as_str()])?;
-            total = enabled.total;
-            Ok(!enabled.appended.is_empty())
-        },
-    )?;
+    let enabled = enabled.expect("the config edit ran");
+
+    // A builtin asked for is reported as its own; a required peer, once, by the first builtin
+    // that required it.
+    let asked: Vec<&str> = builtins.iter().map(|(_, name, _)| *name).collect();
+    let mut claimed: Vec<&str> = Vec::new();
+    for (at, name, peers) in builtins {
+        let appended = |n: &str| enabled.appended.iter().any(|a| a == n);
+        let peers_enabled = peers
+            .into_iter()
+            .filter(|peer| appended(peer) && !asked.contains(peer) && !claimed.contains(peer))
+            .collect::<Vec<_>>();
+        claimed.extend(peers_enabled.iter().copied());
+        outcomes[at] = Some(AddOutcome::Builtin {
+            name,
+            changed: appended(name),
+            peers_enabled,
+        });
+    }
     Ok(Added {
-        outcome,
+        added: added(req, outcomes),
         writes,
-        extensions_enabled: total,
+        extensions_enabled: enabled.total,
     })
+}
+
+/// Each specifier of `req` with its outcome.
+fn added(req: &AddRequest, outcomes: Vec<Option<AddOutcome>>) -> Vec<AddedExtension> {
+    req.extensions
+        .iter()
+        .zip(outcomes)
+        .map(|(wanted, outcome)| AddedExtension {
+            specifier: wanted.specifier.clone(),
+            outcome: outcome.expect("every specifier has an outcome"),
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -639,7 +953,7 @@ mod tests {
                 for dry_run in [false, true] {
                     let request = AddRequest {
                         root: dir.path(),
-                        source: source.clone(),
+                        extensions: vec![source.clone().into()],
                         allow_unsigned: false,
                         trust: Trust::Refuse,
                         dry_run,
@@ -670,7 +984,7 @@ mod tests {
         std::fs::write(&greet, GREET).unwrap();
         let request = AddRequest {
             root: dir.path(),
-            source: Source::Local(greet),
+            extensions: vec![Source::Local(greet).into()],
             allow_unsigned: false,
             trust: Trust::Refuse,
             dry_run: false,
@@ -688,16 +1002,19 @@ mod tests {
         let added = add(&request, &unconfigured, &runtime()).unwrap();
 
         assert!(
-            matches!(added.outcome, AddOutcome::Installed { .. }),
+            matches!(added.added[0].outcome, AddOutcome::Installed { .. }),
             "{:?}",
-            added.outcome
+            added.added[0].outcome
         );
         assert_eq!(std::fs::read(&module).unwrap(), pinned);
         assert_eq!(added.writes.len(), 1, "only the module differed");
 
         // Now that it is the pinned binary again, adding it is a no-op.
         let again = add(&request, &unconfigured, &runtime()).unwrap();
-        assert!(matches!(again.outcome, AddOutcome::AlreadyPresent { .. }));
+        assert!(matches!(
+            again.added[0].outcome,
+            AddOutcome::AlreadyPresent { .. }
+        ));
     }
 
     /// A project directory whose `specforge.json` holds `config` verbatim.
@@ -712,7 +1029,7 @@ mod tests {
     fn local_request<'a>(root: &'a Path, file: &Path) -> AddRequest<'a> {
         AddRequest {
             root,
-            source: Source::Local(file.to_path_buf()),
+            extensions: vec![Source::Local(file.to_path_buf()).into()],
             allow_unsigned: false,
             trust: Trust::Refuse,
             dry_run: false,
@@ -722,7 +1039,7 @@ mod tests {
     fn builtin_request<'a>(root: &'a Path, name: &'static str) -> AddRequest<'a> {
         AddRequest {
             root,
-            source: Source::Builtin(name),
+            extensions: vec![Source::Builtin(name).into()],
             allow_unsigned: false,
             trust: Trust::Refuse,
             dry_run: false,
@@ -891,7 +1208,7 @@ mod tests {
         .unwrap();
 
         assert_eq!(
-            added.outcome,
+            added.added[0].outcome,
             AddOutcome::Builtin {
                 name: "@specforge/cargo-test",
                 changed: true,
@@ -925,7 +1242,7 @@ mod tests {
 
         let again = add(&request, &registry, &runtime).unwrap();
         assert!(matches!(
-            again.outcome,
+            again.added[0].outcome,
             AddOutcome::Builtin { changed: false, .. }
         ));
         assert!(again.writes.is_empty());
@@ -1026,7 +1343,7 @@ mod tests {
         .unwrap();
 
         assert_eq!(
-            added.outcome,
+            added.added[0].outcome,
             AddOutcome::Builtin {
                 name: "@specforge/formal",
                 changed: true,
@@ -1072,7 +1389,7 @@ mod tests {
         )
         .unwrap();
         assert!(matches!(
-            added.outcome,
+            added.added[0].outcome,
             AddOutcome::Builtin { changed: true, .. }
         ));
     }
@@ -1148,7 +1465,10 @@ mod tests {
         )
         .unwrap();
 
-        assert!(matches!(added.outcome, AddOutcome::Installed { .. }));
+        assert!(matches!(
+            added.added[0].outcome,
+            AddOutcome::Installed { .. }
+        ));
         assert_eq!(added.extensions_enabled, 1);
         let config: serde_json::Value = serde_json::from_str(
             &std::fs::read_to_string(dir.path().join("specforge.json")).unwrap(),
@@ -1188,7 +1508,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let request = AddRequest {
             root: dir.path(),
-            source: Source::Builtin("@specforge/product"),
+            extensions: vec![Source::Builtin("@specforge/product").into()],
             allow_unsigned: false,
             trust: Trust::Refuse,
             dry_run: false,
@@ -1216,7 +1536,9 @@ mod tests {
         add(
             &AddRequest {
                 root,
-                source: Source::Registry(PackageRef::parse("@sdk/greet@0.1.0").unwrap()),
+                extensions: vec![
+                    Source::Registry(PackageRef::parse("@sdk/greet@0.1.0").unwrap()).into(),
+                ],
                 allow_unsigned: true,
                 trust: Trust::Refuse,
                 dry_run: false,
@@ -1224,7 +1546,7 @@ mod tests {
             registry,
             &runtime(),
         )
-        .map(|added| added.outcome)
+        .map(|added| added.added[0].outcome.clone())
     }
 
     fn with_peer(
@@ -1357,7 +1679,7 @@ mod tests {
         let error = add(
             &AddRequest {
                 root: dir.path(),
-                source: Source::Registry(PackageRef::parse("@x/a@2.0.0").unwrap()),
+                extensions: vec![Source::Registry(PackageRef::parse("@x/a@2.0.0").unwrap()).into()],
                 allow_unsigned: true,
                 trust: Trust::Refuse,
                 dry_run: false,
@@ -1430,9 +1752,9 @@ mod tests {
         verify = "a dry run of an extension already present answers as the add would, whatever its source"
     )]
     fn a_dry_run_of_a_present_extension_answers_as_the_add_would() {
-        let dry = |root, source| AddRequest {
+        let dry = |root, source: Source| AddRequest {
             root,
-            source,
+            extensions: vec![source.into()],
             allow_unsigned: true,
             trust: Trust::Refuse,
             dry_run: true,
@@ -1446,7 +1768,9 @@ mod tests {
         let source = Source::Registry(PackageRef::parse("@sdk/greet@0.1.0").unwrap());
         let outcome = add(&dry(dir.path(), source), &registry, &runtime())
             .unwrap()
-            .outcome;
+            .added[0]
+            .outcome
+            .clone();
         assert_eq!(
             outcome,
             AddOutcome::AlreadyPresent {
@@ -1468,7 +1792,9 @@ mod tests {
             &runtime(),
         )
         .unwrap()
-        .outcome;
+        .added[0]
+            .outcome
+            .clone();
         assert_eq!(
             outcome,
             AddOutcome::AlreadyPresent {
@@ -1484,7 +1810,7 @@ mod tests {
         let before = crate::config::testing::files_under(dir.path());
         let added = add(&dry(dir.path(), source), &unconfigured, &runtime()).unwrap();
         assert_eq!(
-            added.outcome,
+            added.added[0].outcome,
             AddOutcome::Builtin {
                 name: "@specforge/product",
                 changed: false,
@@ -1497,7 +1823,7 @@ mod tests {
 
     #[specforge_test(
         behavior = "add_extension_to_existing_project",
-        verify = "the add document says what the add did by action, with source always and key_id only for a signed package"
+        verify = "the add document lists what the add did for each specifier by action, with source always and key_id only for a signed package"
     )]
     fn add_document_names_what_the_add_did() {
         use specforge_installed::LockSource;
@@ -1520,22 +1846,22 @@ mod tests {
                     changed: true,
                     peers_enabled: vec!["@specforge/software"],
                 },
-                serde_json::json!({"action": "enabled", "extension": "@specforge/product",
+                serde_json::json!({"specifier": "s", "action": "enabled", "extension": "@specforge/product",
                     "source": "builtin", "changed": true, "peers_enabled": ["@specforge/software"]}),
             ),
             (
                 installed_from(Some(Publisher::Unsigned), LockSource::Registry),
-                serde_json::json!({"action": "installed", "extension": "@acme/x", "version": "1.0.0",
+                serde_json::json!({"specifier": "s", "action": "installed", "extension": "@acme/x", "version": "1.0.0",
                     "sha256": "ab", "source": "registry", "publisher": "unsigned"}),
             ),
             (
                 installed_from(Some(signed), LockSource::Registry),
-                serde_json::json!({"action": "installed", "extension": "@acme/x", "version": "1.0.0",
+                serde_json::json!({"specifier": "s", "action": "installed", "extension": "@acme/x", "version": "1.0.0",
                     "sha256": "ab", "source": "registry", "key_id": "k1", "publisher": "pinned_now"}),
             ),
             (
                 installed_from(None, LockSource::Local("x.wasm".into())),
-                serde_json::json!({"action": "installed", "extension": "@acme/x", "version": "1.0.0",
+                serde_json::json!({"specifier": "s", "action": "installed", "extension": "@acme/x", "version": "1.0.0",
                     "sha256": "ab", "source": "local:x.wasm"}),
             ),
             (
@@ -1543,7 +1869,7 @@ mod tests {
                     name: "@acme/x".into(),
                     version: "1.0.0".into(),
                 },
-                serde_json::json!({"action": "already_present", "extension": "@acme/x", "version": "1.0.0"}),
+                serde_json::json!({"specifier": "s", "action": "already_present", "extension": "@acme/x", "version": "1.0.0"}),
             ),
             (
                 AddOutcome::Planned {
@@ -1551,12 +1877,33 @@ mod tests {
                     version: None,
                     origin: Origin::Builtin,
                 },
-                serde_json::json!({"action": "planned", "extension": "@specforge/product", "source": "builtin"}),
+                serde_json::json!({"specifier": "s", "action": "planned", "extension": "@specforge/product", "source": "builtin"}),
             ),
         ];
-        for (outcome, document) in cases {
-            assert_eq!(serde_json::to_value(outcome.document()).unwrap(), document);
-        }
+        let cases = cases.into_iter().chain([(
+            AddOutcome::Duplicate {
+                name: "@acme/x".into(),
+                first: "@acme/x@1".into(),
+            },
+            serde_json::json!({"specifier": "s", "action": "duplicate", "extension": "@acme/x",
+                "duplicate_of": "@acme/x@1"}),
+        )]);
+        let (outcomes, documents): (Vec<_>, Vec<_>) = cases.unzip();
+        let added = Added {
+            added: outcomes
+                .into_iter()
+                .map(|outcome| AddedExtension {
+                    specifier: "s".into(),
+                    outcome,
+                })
+                .collect(),
+            writes: Writes::none(),
+            extensions_enabled: 1,
+        };
+        assert_eq!(
+            serde_json::to_value(added.document()).unwrap(),
+            serde_json::json!({ "added": documents })
+        );
         assert!(
             AddOutcome::AlreadyPresent {
                 name: "a".into(),
@@ -1565,5 +1912,449 @@ mod tests {
             .is_duplicate()
         );
         assert!(!installed_from(None, LockSource::Registry).is_duplicate());
+        assert!(
+            AddOutcome::Duplicate {
+                name: "a".into(),
+                first: "a".into()
+            }
+            .is_duplicate()
+        );
+    }
+
+    // --- several specifiers: one change ---
+
+    /// The outcomes of `added`, in specifier order.
+    fn outcomes(added: &Added) -> Vec<AddOutcome> {
+        added.added.iter().map(|a| a.outcome.clone()).collect()
+    }
+
+    /// An add of `extensions` into `root`.
+    fn several(root: &Path, extensions: Vec<Specified>, dry_run: bool) -> AddRequest<'_> {
+        AddRequest {
+            root,
+            extensions,
+            allow_unsigned: true,
+            trust: Trust::Refuse,
+            dry_run,
+        }
+    }
+
+    /// `runtime()`, also serving the builtin `@specforge/product`.
+    fn runtime_with_product() -> InProcessRuntime {
+        serving_builtin(
+            runtime(),
+            "@specforge/product",
+            declaring("@specforge/product", "1.0.0", &[]),
+        )
+    }
+
+    /// `greet.wasm` written in a directory of its own.
+    fn greet_file() -> (tempfile::TempDir, PathBuf) {
+        let files = tempfile::tempdir().unwrap();
+        let wasm = files.path().join("greet.wasm");
+        std::fs::write(&wasm, GREET).unwrap();
+        (files, wasm)
+    }
+
+    #[specforge_test(
+        behavior = "add_extension_to_existing_project",
+        verify = "add takes several specifiers and adds them as one change"
+    )]
+    fn several_specifiers_are_added_as_one_change() {
+        let dir = project_with(EMPTY_PROJECT);
+        let (_files, wasm) = greet_file();
+        let shown = wasm.display().to_string();
+        let extensions = specified(&["@specforge/product", shown.as_str()]).unwrap();
+
+        let added = add(
+            &several(dir.path(), extensions, false),
+            &crate::registry::Unconfigured("add"),
+            &runtime_with_product(),
+        )
+        .unwrap();
+
+        let specifiers: Vec<&str> = added.added.iter().map(|a| a.specifier.as_str()).collect();
+        assert_eq!(specifiers, ["@specforge/product", shown.as_str()]);
+        let outcomes = outcomes(&added);
+        assert_eq!(
+            outcomes[0],
+            AddOutcome::Builtin {
+                name: "@specforge/product",
+                changed: true,
+                peers_enabled: Vec::new(),
+            }
+        );
+        assert!(
+            matches!(&outcomes[1], AddOutcome::Installed { name, .. } if name == "@sdk/greet"),
+            "{outcomes:?}"
+        );
+        assert_eq!(
+            added.writes.names_under(dir.path()),
+            [
+                ".specforge/extensions/@sdk/greet/extension.wasm",
+                "specforge.json",
+                "specforge.lock"
+            ]
+        );
+        assert_eq!(
+            specforge_common::read_project_config(dir.path())
+                .config
+                .extensions,
+            ["@specforge/product", "@sdk/greet"]
+        );
+        assert_eq!(added.extensions_enabled, 2);
+    }
+
+    #[specforge_test(
+        behavior = "add_extension_to_existing_project",
+        verify = "an add of several specifiers that refuses one writes nothing, its refusal naming that specifier"
+    )]
+    fn a_refused_specifier_writes_nothing_and_is_named() {
+        use crate::config::testing::files_under;
+        let dir = project_with(EMPTY_PROJECT);
+        let (_files, wasm) = greet_file();
+        let missing = dir.path().join("missing.wasm");
+        let before = files_under(dir.path());
+
+        for extensions in [
+            vec![
+                Specified::from(Source::Builtin("@specforge/product")),
+                Specified::from(Source::Local(missing.clone())),
+            ],
+            vec![
+                Specified::from(Source::Local(missing.clone())),
+                Specified::from(Source::Local(wasm.clone())),
+            ],
+        ] {
+            let error = add(
+                &several(dir.path(), extensions, false),
+                &crate::registry::Unconfigured("add"),
+                &runtime_with_product(),
+            )
+            .unwrap_err();
+
+            assert_eq!(error.code, "E054", "{error:?}");
+            assert_eq!(
+                error.message,
+                format!(
+                    "adding '{}': file not found: {}",
+                    missing.display(),
+                    missing.display()
+                )
+            );
+            assert_eq!(files_under(dir.path()), before);
+        }
+
+        // One specifier: its refusal is the add's, as it was.
+        let error = add(
+            &several(
+                dir.path(),
+                vec![Source::Local(missing.clone()).into()],
+                false,
+            ),
+            &crate::registry::Unconfigured("add"),
+            &runtime(),
+        )
+        .unwrap_err();
+        assert_eq!(
+            error.message,
+            format!("file not found: {}", missing.display())
+        );
+    }
+
+    #[specforge_test(
+        behavior = "add_extension_to_existing_project",
+        verify = "the specifiers of an add are read in order, the first unreadable one refused and named among several"
+    )]
+    fn specifiers_are_read_in_order_and_named_among_several() {
+        let read = specified(&["@specforge/product", "@acme/tool@^1"]).unwrap();
+        assert_eq!(
+            read,
+            [
+                Specified {
+                    specifier: "@specforge/product".into(),
+                    source: Source::Builtin("@specforge/product"),
+                },
+                Specified {
+                    specifier: "@acme/tool@^1".into(),
+                    source: Source::Registry(PackageRef::parse("@acme/tool@^1").unwrap()),
+                },
+            ]
+        );
+
+        let error = specified(&["@specforge/product", "tool", "@acme/"]).unwrap_err();
+        assert_eq!(error.code, "E054");
+        assert!(
+            error
+                .message
+                .starts_with("adding 'tool': invalid extension specifier: "),
+            "{error:?}"
+        );
+        let alone = specified(&["tool"]).unwrap_err();
+        assert!(
+            alone.message.starts_with("invalid extension specifier: "),
+            "{alone:?}"
+        );
+
+        let none = specified::<&str>(&[]).unwrap_err();
+        assert_eq!(none.code, "E054");
+        assert_eq!(none.message, "no extension specifier");
+        let dir = project_with(EMPTY_PROJECT);
+        let error = add(
+            &several(dir.path(), Vec::new(), false),
+            &crate::registry::Unconfigured("add"),
+            &runtime(),
+        )
+        .unwrap_err();
+        assert_eq!(error, none);
+    }
+
+    const A2: &[u8] = b"\0asm in-process @x/a 2.0.0";
+    const B2: &[u8] = b"\0asm in-process @x/b 2.0.0";
+
+    /// `runtime()`, also serving `@x/a` 2.0.0 (wanting `@x/b` ^2) and `@x/b` 2.0.0.
+    fn coupled_runtime() -> InProcessRuntime {
+        runtime()
+            .binary(A2, declaring("@x/a", "2.0.0", &[("@x/b", "^2", false)]))
+            .binary(B2, declaring("@x/b", "2.0.0", &[]))
+    }
+
+    /// `@x/a` 2.0.0, `@x/b` 1.0.0 (no extension: it never loads) and `@x/b` 2.0.0 published.
+    fn coupled_registry(runtime: &InProcessRuntime) -> MemoryRegistry {
+        let served = |wasm: &[u8]| {
+            Published::new(
+                wasm.to_vec(),
+                crate::publish::declare(runtime, wasm).unwrap().0,
+            )
+        };
+        MemoryRegistry::new()
+            .serving(served(A2))
+            .serving(Published::new(
+                b"\0asm b1".to_vec(),
+                declaration("@x/b", "1.0.0", &[]),
+            ))
+            .serving(served(B2))
+    }
+
+    fn registry_specified(reference: &str) -> Specified {
+        Specified {
+            specifier: reference.to_string(),
+            source: Source::Registry(PackageRef::parse(reference).unwrap()),
+        }
+    }
+
+    #[specforge_test(
+        behavior = "add_extension_to_existing_project",
+        verify = "an add of several specifiers judges their peers on the whole set, whatever their order"
+    )]
+    fn peers_are_judged_on_the_whole_set_whatever_the_order() {
+        use crate::config::testing::files_under;
+        let runtime = coupled_runtime();
+
+        // `@x/a` 2.0.0 alone wants `@x/b` ^2, and 1.0.0 is locked.
+        let dir = add_project(vec![entry("@x/b", "1.0.0", "registry", &[])]);
+        let error = add(
+            &several(dir.path(), vec![registry_specified("@x/a@2.0.0")], false),
+            &coupled_registry(&runtime),
+            &runtime,
+        )
+        .unwrap_err();
+        assert_eq!(error.code, "R-RES-006", "{error:?}");
+
+        // With `@x/b` 2.0.0 in the same add, the set is accepted, in either order, leaving the
+        // same lock.
+        let mut locks = Vec::new();
+        for order in [["@x/a@2.0.0", "@x/b@2.0.0"], ["@x/b@2.0.0", "@x/a@2.0.0"]] {
+            let dir = add_project(vec![entry("@x/b", "1.0.0", "registry", &[])]);
+            let extensions = order.iter().map(|r| registry_specified(r)).collect();
+            let added = add(
+                &several(dir.path(), extensions, false),
+                &coupled_registry(&runtime),
+                &runtime,
+            )
+            .unwrap();
+            assert!(
+                outcomes(&added)
+                    .iter()
+                    .all(|o| matches!(o, AddOutcome::Installed { .. })),
+                "{order:?}: {added:?}"
+            );
+            let lock_path = dir.path().join("specforge.lock");
+            let lock = specforge_installed::read_lock_file(&lock_path).unwrap();
+            let locked: Vec<(&str, &str)> = lock
+                .entries
+                .iter()
+                .map(|e| (e.name.as_str(), e.version.as_str()))
+                .collect();
+            assert_eq!(locked, [("@x/b", "2.0.0"), ("@x/a", "2.0.0")], "{order:?}");
+            locks.push(std::fs::read(&lock_path).unwrap());
+        }
+        assert_eq!(locks[0], locks[1], "the order decides nothing");
+
+        // With `@x/b` 1.0.0 instead, the set is refused in either order, naming `@x/a`'s
+        // specifier, and nothing is written.
+        for order in [["@x/a@2.0.0", "@x/b@1.0.0"], ["@x/b@1.0.0", "@x/a@2.0.0"]] {
+            let dir = add_project(vec![entry("@x/b", "1.0.0", "registry", &[])]);
+            let before = files_under(dir.path());
+            let extensions = order.iter().map(|r| registry_specified(r)).collect();
+            let error = add(
+                &several(dir.path(), extensions, false),
+                &coupled_registry(&runtime),
+                &runtime,
+            )
+            .unwrap_err();
+            assert_eq!(error.code, "R-RES-006", "{order:?}: {error:?}");
+            assert_eq!(
+                error.message,
+                "adding '@x/a@2.0.0': version diamond: '@x/a' requires peer '@x/b' ^2 but this install locks 1.0.0; @x/b 2.0.0 would satisfy every requirer",
+                "{order:?}"
+            );
+            assert_eq!(files_under(dir.path()), before, "{order:?}");
+        }
+    }
+
+    #[specforge_test(
+        behavior = "add_extension_to_existing_project",
+        verify = "a specifier naming an extension an earlier one adds is a duplicate, and two adding it differently are refused"
+    )]
+    fn a_repeated_extension_is_a_duplicate_and_a_different_one_a_conflict() {
+        use crate::config::testing::files_under;
+
+        // The same builtin twice, by two spellings: enabled once.
+        let dir = project_with(EMPTY_PROJECT);
+        let extensions = specified(&["@specforge/product", "@specforge/product@latest"]).unwrap();
+        let added = add(
+            &several(dir.path(), extensions, false),
+            &crate::registry::Unconfigured("add"),
+            &runtime_with_product(),
+        )
+        .unwrap();
+        assert_eq!(
+            outcomes(&added)[1],
+            AddOutcome::Duplicate {
+                name: "@specforge/product".into(),
+                first: "@specforge/product".into(),
+            }
+        );
+        assert!(added.added[1].outcome.is_duplicate());
+        assert_eq!(
+            specforge_common::read_project_config(dir.path())
+                .config
+                .extensions,
+            ["@specforge/product"]
+        );
+
+        // A registry package resolving to the same version: fetched once.
+        let dir = add_project(Vec::new());
+        let registry =
+            MemoryRegistry::new().serving(Published::new(greet(), declaration_of(&greet())));
+        let extensions = vec![
+            registry_specified("@sdk/greet@0.1.0"),
+            registry_specified("@sdk/greet"),
+            registry_specified("@sdk/greet@0.1.0"),
+        ];
+        let added = add(
+            &several(dir.path(), extensions, false),
+            &registry,
+            &runtime(),
+        )
+        .unwrap();
+        let outcomes = outcomes(&added);
+        assert!(matches!(outcomes[0], AddOutcome::Installed { .. }));
+        for duplicate in &outcomes[1..] {
+            assert_eq!(
+                *duplicate,
+                AddOutcome::Duplicate {
+                    name: "@sdk/greet".into(),
+                    first: "@sdk/greet@0.1.0".into(),
+                }
+            );
+        }
+        let fetched = registry
+            .asked()
+            .into_iter()
+            .filter(|asked| matches!(asked, crate::registry::testing::Asked::Fetch(..)))
+            .count();
+        assert_eq!(fetched, 1);
+
+        // The same package at two versions: refused, naming both, nothing written.
+        let runtime = coupled_runtime();
+        let dir = add_project(Vec::new());
+        let before = files_under(dir.path());
+        let extensions = vec![
+            registry_specified("@x/b@1.0.0"),
+            registry_specified("@x/b@2.0.0"),
+        ];
+        let error = add(
+            &several(dir.path(), extensions, false),
+            &coupled_registry(&runtime),
+            &runtime,
+        )
+        .unwrap_err();
+        assert_eq!(error.code, "extension_conflict");
+        assert_eq!(error.kind, OpErrorKind::Conflict);
+        assert_eq!(
+            error.message,
+            "'@x/b@1.0.0' and '@x/b@2.0.0' both add '@x/b', as 1.0.0 from registry and as 2.0.0 from registry"
+        );
+        assert_eq!(error.suggestion.as_deref(), Some("add '@x/b' once"));
+        assert_eq!(files_under(dir.path()), before);
+    }
+
+    #[specforge_test(
+        behavior = "add_extension_to_existing_project",
+        verify = "a dry run of several specifiers previews each and writes nothing"
+    )]
+    fn a_dry_run_of_several_specifiers_previews_each() {
+        use crate::config::testing::files_under;
+        let dir = project_with(EMPTY_PROJECT);
+        let (_files, wasm) = greet_file();
+        let before = files_under(dir.path());
+        let extensions = vec![
+            Specified::from(Source::Builtin("@specforge/product")),
+            Specified::from(Source::Local(wasm.clone())),
+            Specified::from(Source::Builtin("@specforge/product")),
+        ];
+
+        let added = add(
+            &several(dir.path(), extensions, true),
+            &crate::registry::Unconfigured("add"),
+            &runtime_with_product(),
+        )
+        .unwrap();
+
+        let outcomes = outcomes(&added);
+        assert_eq!(
+            outcomes[0],
+            AddOutcome::Planned {
+                name: "@specforge/product".into(),
+                version: None,
+                origin: Origin::Builtin,
+            }
+        );
+        assert!(
+            matches!(&outcomes[1], AddOutcome::Planned { name, version: Some(v), .. }
+                if name == "@sdk/greet" && v == "0.1.0"),
+            "{outcomes:?}"
+        );
+        assert!(matches!(outcomes[2], AddOutcome::Duplicate { .. }));
+        assert!(added.writes.is_empty());
+        assert_eq!(files_under(dir.path()), before);
+
+        // A dry run refuses what the add would refuse, naming it.
+        let missing = dir.path().join("missing.wasm");
+        let extensions = vec![
+            Source::Builtin("@specforge/product").into(),
+            Source::Local(missing).into(),
+        ];
+        let error = add(
+            &several(dir.path(), extensions, true),
+            &crate::registry::Unconfigured("add"),
+            &runtime_with_product(),
+        )
+        .unwrap_err();
+        assert_eq!(error.code, "E054");
+        assert!(error.message.starts_with("adding '"), "{error:?}");
+        assert_eq!(files_under(dir.path()), before);
     }
 }

@@ -293,7 +293,10 @@ fn what_publish_uploads_is_what_add_installs() {
     let added = add(
         &AddRequest {
             root: project.path(),
-            source: parse("@acme/greet@1.0.0").unwrap(),
+            extensions: vec![specforge_ops::extension::Specified {
+                specifier: "@acme/greet@1.0.0".into(),
+                source: parse("@acme/greet@1.0.0").unwrap(),
+            }],
             allow_unsigned: false,
             trust: Trust::Refuse,
             dry_run: false,
@@ -303,8 +306,8 @@ fn what_publish_uploads_is_what_add_installs() {
     )
     .unwrap();
 
-    let AddOutcome::Installed { version, .. } = &added.outcome else {
-        panic!("not installed: {:?}", added.outcome);
+    let AddOutcome::Installed { version, .. } = &added.added[0].outcome else {
+        panic!("not installed: {:?}", added.added[0].outcome);
     };
     assert_eq!(version, "1.0.0");
     let name = PackageName::parse("@acme/greet").unwrap();

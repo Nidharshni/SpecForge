@@ -30,10 +30,15 @@ expression: mcp_snap
   },
   "ok": true,
   "payload": {
-    "action": "already_present",
-    "extension": "@sdk/greet",
+    "added": [
+      {
+        "action": "already_present",
+        "extension": "@sdk/greet",
+        "specifier": "[BLOB]",
+        "version": "0.1.0"
+      }
+    ],
     "files_written": [],
-    "note": "the server serves it from the next call on",
-    "version": "0.1.0"
+    "note": "the server serves the extensions added from the next call on"
   }
 }

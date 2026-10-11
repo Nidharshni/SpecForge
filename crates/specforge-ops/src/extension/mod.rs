@@ -13,8 +13,9 @@ mod resolve;
 mod update;
 
 pub use add::{
-    AddDocument, AddOutcome, AddRequest, Added, BuiltinSource, EnabledBuiltin, InstalledPackage,
-    PlannedAdd, PresentExtension, Source, Trust, add, parse,
+    AddDocument, AddOutcome, AddRequest, AddResult, Added, AddedExtension, BuiltinSource,
+    DuplicateSpecifier, EnabledBuiltin, InstalledPackage, PlannedAdd, PresentExtension, Source,
+    Specified, Trust, add, parse, specified,
 };
 pub use candidate::{Candidate, Installable, LocalFile};
 pub use inventory::{Inventory, ProjectExtension, Selection, Status, inventory};
