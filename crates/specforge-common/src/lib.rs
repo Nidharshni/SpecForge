@@ -25,8 +25,8 @@ pub use present::{
 };
 pub use project::{
     ConfigProblem, ConfigRead, ExtensionEntry, InferenceConfig, ProjectConfig,
-    extension_entry_name, find_project_root, is_project_root, load_project_config, project_root_of,
-    read_project_config, validate_project_name,
+    extension_entry_name, find_project_root, is_project_root, load_project_config,
+    parse_project_config, project_root_of, read_project_config, validate_project_name,
 };
 pub use slug::slug;
 pub use span::SourceSpan;
