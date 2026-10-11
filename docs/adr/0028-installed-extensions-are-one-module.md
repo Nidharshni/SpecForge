@@ -89,3 +89,11 @@ needing automatic recovery (today the next change sweeps the staging directory a
 the missing binary).
 A runtime that cannot read a candidate without disturbing what it has loaded (D7 relies on the
 candidate name being loaded and unloaded in place).
+
+## Amendment (2026-10-11): installs stage through the lock plan
+
+D4's change is unchanged, but `add`, `update` and `init` no longer open it themselves: they stage installs
+into the lock plan (`specforge_ops::extension::lock_plan`, ADR 0041 amendment 2026-10-11), which owns the
+change, judges the peers once, loads what it fetched, and commits only a checked plan. `init`'s local files
+are one change (they were one per file, each committed before the next was judged). `remove` still opens
+the change directly.
