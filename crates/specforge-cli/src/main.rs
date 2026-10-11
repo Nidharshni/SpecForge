@@ -245,17 +245,46 @@ mod tests {
         pin_help(&root, &[]);
     }
 
-    /// Today `analyze` and `watch` take `--json`, not `--format` (T6 flips
-    /// this).
-    #[test]
-    fn analyze_and_watch_take_json_today() {
-        use clap::error::ErrorKind;
-        for command in ["analyze", "watch"] {
-            assert!(Cli::try_parse_from(["specforge", command, "--json"]).is_ok());
-            let refused = Cli::try_parse_from(["specforge", command, "--format", "json"])
-                .err()
-                .expect("--format is refused");
-            assert_eq!(refused.kind(), ErrorKind::UnknownArgument);
+    /// Every argument of `command` and of each subcommand under it.
+    fn all_arguments(command: &clap::Command, found: &mut Vec<(String, clap::Arg)>) {
+        for argument in command.get_arguments() {
+            found.push((command.get_name().to_string(), argument.clone()));
+        }
+        for sub in command.get_subcommands() {
+            all_arguments(sub, found);
+        }
+    }
+
+    #[specforge_test_macros::test(
+        behavior = "report_command_outcome",
+        verify = "every core command with a JSON form takes --format human|json, and none takes --json"
+    )]
+    fn every_json_output_is_asked_for_with_format() {
+        let mut root = Cli::command();
+        root.build();
+        let mut arguments = Vec::new();
+        all_arguments(&root, &mut arguments);
+        for (command, argument) in &arguments {
+            assert_ne!(
+                argument.get_long(),
+                Some("json"),
+                "`specforge {command}` takes --json"
+            );
+        }
+        for name in ["analyze", "watch"] {
+            let command = root.find_subcommand(name).expect("a core command");
+            let format = command
+                .get_arguments()
+                .find(|argument| argument.get_id() == "format")
+                .unwrap_or_else(|| panic!("`specforge {name}` takes --format"));
+            let values: Vec<String> = format
+                .get_possible_values()
+                .iter()
+                .map(|value| value.get_name().to_string())
+                .collect();
+            assert_eq!(values, ["human", "json"], "`specforge {name} --format`");
+            let defaults: Vec<_> = format.get_default_values().iter().collect();
+            assert_eq!(defaults, ["human"], "`specforge {name} --format` default");
         }
     }
 

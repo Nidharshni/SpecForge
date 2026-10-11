@@ -279,7 +279,7 @@ impl AnalyzeOutcome {
     }
 }
 
-/// The document both surfaces answer with (`specforge analyze --json`,
+/// The document both surfaces answer with (`specforge analyze --format json`,
 /// `specforge.analyze`).
 #[derive(Debug, Clone, PartialEq, Serialize, Shape)]
 pub struct AnalyzeDocument {

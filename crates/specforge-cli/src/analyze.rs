@@ -4,7 +4,7 @@
 //! tool. This module is the CLI half: arguments in, rendering and exit
 //! codes out.
 
-use crate::outcome::{Exit, OutputFormat, Refusal};
+use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use crate::pipeline;
 use crate::terminal::{Terminal, err, errln, outln};
 use specforge_common::{codes, diagnostic_summary, render_diagnostics, truncate_diagnostics};
@@ -23,13 +23,12 @@ pub(crate) struct Args {
     /// an extension declares (`<extension>:<pass>`)
     pass: Option<String>,
 
-    /// Project directory (defaults to current directory)
-    #[arg(long)]
-    path: Option<String>,
+    /// Project directory
+    #[arg(long, default_value = ".")]
+    path: PathBuf,
 
-    /// Machine-readable output
-    #[arg(long, default_value_t = false)]
-    json: bool,
+    #[command(flatten)]
+    output: OutputArg,
 
     /// Fail (exit 1) on warnings as well as errors
     #[arg(long, default_value_t = false)]
@@ -38,7 +37,7 @@ pub(crate) struct Args {
     /// Test-results report for proof-level verdicts (default: the project's
     /// specforge-report.json, written by `specforge collect`)
     #[arg(long)]
-    test_results: Option<String>,
+    test_results: Option<PathBuf>,
 
     /// Verify declared bounds and claims with an SMT solver (z3)
     #[arg(long, default_value_t = false)]
@@ -63,7 +62,7 @@ impl Args {
                 .unwrap_or_else(|| specforge_ops::analyze::EVERY_PASS.to_string()),
             strict: self.strict,
             report: match &self.test_results {
-                Some(path) => ReportSource::File(PathBuf::from(path)),
+                Some(path) => ReportSource::File(path.clone()),
                 None => ReportSource::Recorded,
             },
             min: self.min,
@@ -72,19 +71,11 @@ impl Args {
     }
 
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
-        let project_path = self
-            .path
-            .as_deref()
-            .map_or_else(|| PathBuf::from("."), PathBuf::from);
-        let project = pipeline::compile_project(&project_path);
-        // A refusal is the error document under `--json`, the lines on
-        // stderr otherwise; analyze measures, so it cannot judge the
+        let project = pipeline::compile_project(&self.path);
+        // A refusal is the error document under `--format json`, the lines
+        // on stderr otherwise; analyze measures, so it cannot judge the
         // project either way.
-        let format = if self.json {
-            OutputFormat::Json
-        } else {
-            OutputFormat::Human
-        };
+        let format = self.output.format;
         let outcome = match analyze(&ProjectView::of(&project), &self.options()) {
             Ok(outcome) => outcome,
             Err(error) => {
@@ -103,7 +94,7 @@ impl Args {
         }
 
         // The gate comes after the reports print, so the operator still
-        // sees the full analysis. Under `--json` the document carries where
+        // sees the full analysis. Under `--format json` the document carries where
         // it landed and nothing goes to stderr.
         if let (OutputFormat::Human, Some(failure)) = (format, outcome.gate_failure()) {
             err!(terminal, "{}", crate::outcome::error_lines(&failure, None));

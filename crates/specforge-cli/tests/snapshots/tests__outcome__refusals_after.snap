@@ -19,7 +19,7 @@ exit 2
 }
 -- stderr:
 
-C3 | specforge analyze --json
+C3 | specforge analyze --format json
 exit 2
 -- stdout:
 {

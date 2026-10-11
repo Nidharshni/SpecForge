@@ -30,7 +30,8 @@ fn spawn_watch_with(project: &TempDir, extra: &[&str]) -> (mpsc::Receiver<String
             "watch",
             "--path",
             project.path().to_str().unwrap(),
-            "--json",
+            "--format",
+            "json",
         ])
         .args(extra);
     let mut child = ChildGuard::spawn(

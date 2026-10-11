@@ -22,12 +22,12 @@ behavior fa_analyze_conditions "Analyze Conditions Command" {
   }
   ensures {
     condition_report "report shows condition analysis for all behaviors with requires/ensures"
-    json_output      "with --json flag, output is machine-readable JSON"
+    json_output      "with --format json, output is machine-readable JSON"
     strict_exit_code "with --strict flag, any violation exits non-zero"
   }
   features [fa_analyze_commands]
   verify unit "analyze conditions reports all behaviors with requires/ensures"
-  verify unit "analyze conditions --json produces JSON output"
+  verify unit "analyze conditions --format json produces JSON output"
   verify unit "analyze conditions --strict exits non-zero on violation"
 }
 
@@ -40,11 +40,11 @@ behavior fa_analyze_layering "Analyze Layering Command" {
   """
   ensures {
     layering_report "report shows all layering chains with completeness status"
-    json_output     "with --json flag, output is machine-readable JSON"
+    json_output     "with --format json, output is machine-readable JSON"
   }
   features [fa_analyze_commands]
   verify unit "analyze layering reports all abstract/concrete chains"
-  verify unit "analyze layering --json produces JSON output"
+  verify unit "analyze layering --format json produces JSON output"
 }
 
 behavior fa_analyze_event_graph "Analyze Event Graph Command" {
@@ -56,11 +56,11 @@ behavior fa_analyze_event_graph "Analyze Event Graph Command" {
   """
   ensures {
     event_graph_report "report shows cycles, retry cycles, unmatched producers, channel mismatches"
-    json_output        "with --json flag, output is machine-readable JSON"
+    json_output        "with --format json, output is machine-readable JSON"
   }
   features [fa_analyze_commands]
   verify unit "analyze event-graph reports cycles and retry cycles"
-  verify unit "analyze event-graph --json produces JSON output"
+  verify unit "analyze event-graph --format json produces JSON output"
 }
 
 behavior fa_analyze_all "Analyze All Command" {
@@ -76,11 +76,11 @@ behavior fa_analyze_all "Analyze All Command" {
   }
   ensures {
     unified_report   "report combines condition, layering, and event graph analysis"
-    json_output      "with --json flag, output is machine-readable JSON"
+    json_output      "with --format json, output is machine-readable JSON"
     strict_exit_code "with --strict flag, any violation exits non-zero (for CI)"
   }
   features [fa_analyze_commands]
   verify unit "analyze all runs all three passes in pipeline order"
   verify unit "analyze all --strict exits non-zero on any violation"
-  verify unit "analyze all --json produces unified JSON report"
+  verify unit "analyze all --format json produces unified JSON report"
 }

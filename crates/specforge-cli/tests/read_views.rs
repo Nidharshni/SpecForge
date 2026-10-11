@@ -618,14 +618,14 @@ fn analyze_and_stats_read_the_report_at_the_compiled_root() {
     // report at the root it compiled: there is none.
     let stats = cli(&["stats", s(&sub), "--format", "json"]);
     assert_eq!(stats.code, Some(0), "{}", stats.stderr);
-    let analyze = cli(&["analyze", "--path", s(&sub), "--json"]);
+    let analyze = cli(&["analyze", "--path", s(&sub), "--format", "json"]);
     assert_eq!(analyze.code, Some(0), "{}", analyze.stderr);
 
     // At the root both refuse the report: exit 2, and under JSON output
     // the error document on stdout and nothing on stderr.
     for args in [
         vec!["stats", s(tmp.path()), "--format", "json"],
-        vec!["analyze", "--path", s(tmp.path()), "--json"],
+        vec!["analyze", "--path", s(tmp.path()), "--format", "json"],
     ] {
         let run = cli(&args);
         assert_eq!(run.code, Some(2), "{args:?}: {}", run.stdout);
@@ -801,7 +801,10 @@ fn contract_read_views() {
     }
     let sub = root.join("spec");
     assert_eq!(cli(&["stats", s(&sub)]).code, Some(0));
-    assert_eq!(cli(&["analyze", "--path", s(&sub), "--json"]).code, Some(0));
+    assert_eq!(
+        cli(&["analyze", "--path", s(&sub), "--format", "json"]).code,
+        Some(0)
+    );
     // ...and the schema cache likewise: the sub-path's export leaves the
     // root's cache as the root's export wrote it.
     assert_eq!(cli(&["export", s(root)]).code, Some(0));

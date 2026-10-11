@@ -12,7 +12,7 @@ use crate::terminal::{Terminal, errln, outln};
 
 use std::path::{Path, PathBuf};
 
-use crate::outcome::{Exit, OutputFormat, Refusal};
+use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use specforge_ops::check::Counts;
 use specforge_ops::{OpError, OpErrorKind};
 use specforge_project::{ProjectSession, UpdateKind};
@@ -21,13 +21,12 @@ use specforge_watch::{Applied, DEFAULT_DEBOUNCE_WINDOW, Notify, SessionWatch, Wa
 // `specforge watch`'s command line.
 #[derive(clap::Args)]
 pub(crate) struct Args {
-    /// Project directory (defaults to current directory)
-    #[arg(long)]
-    path: Option<String>,
+    /// Project directory
+    #[arg(long, default_value = ".")]
+    path: PathBuf,
 
-    /// Emit one JSON object per rebuild cycle
-    #[arg(long, default_value_t = false)]
-    json: bool,
+    #[command(flatten)]
+    output: OutputArg,
 
     /// Check every incremental rebuild against a cold rebuild (slower)
     #[arg(long, default_value_t = false)]
@@ -36,11 +35,8 @@ pub(crate) struct Args {
 
 impl Args {
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
-        let project = self
-            .path
-            .as_deref()
-            .map_or_else(|| PathBuf::from("."), PathBuf::from);
-        watch_project(&project, self.json, self.verify_incremental, terminal)
+        let json = self.output.format == OutputFormat::Json;
+        watch_project(&self.path, json, self.verify_incremental, terminal)
     }
 }
 

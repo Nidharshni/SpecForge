@@ -12,10 +12,15 @@ Arguments:
 
 Options:
       --path <PATH>
-          Project directory (defaults to current directory)
+          Project directory
+          
+          [default: .]
 
-      --json
-          Machine-readable output
+      --format <FORMAT>
+          Output format: human or json
+          
+          [default: human]
+          [possible values: human, json]
 
       --strict
           Fail (exit 1) on warnings as well as errors

@@ -656,7 +656,7 @@ behavior run_doctor_check "Run Doctor Check" {
   ensures {
     doctor_check_completed_emitted "doctor_check_completed event is emitted after all checks finish"
     report_produced                "human-readable report listing extensions, enhancements, and conflicts is produced"
-    json_output_supported          "--json flag produces machine-readable JSON output for CI integration"
+    json_output_supported          "--format json produces machine-readable JSON output for CI integration"
   }
   contract   """
     When specforge doctor is invoked, the system MUST load all extension
@@ -687,15 +687,15 @@ behavior run_doctor_check "Run Doctor Check" {
     remediation that names a command MUST name one the user can run as
     written. A finding whose diagnostic offers no
     suggestion of its own MUST quote the catalogue's explanation of its
-    code. The --json flag MUST produce machine-readable JSON
-    output for CI integration.
+    code. specforge doctor --format json MUST produce machine-readable
+    JSON output for CI integration.
   """
   produces   [doctor_check_completed]
   verify unit "doctor lists all installed extensions with enhancement counts"
   verify unit "doctor lists all enhancements grouped by entity kind"
   verify unit "doctor reports conflicts with resolution suggestions"
   verify unit "doctor detects shadowed grammar-level constructs"
-  verify unit "doctor --json produces valid JSON output"
+  verify unit "doctor --format json produces valid JSON output"
   verify unit "doctor reports an extension that fails to load (E028, E070) as an error"
   verify unit "doctor reports a missing or changed installed binary once, with the remedy its load gives"
   verify unit "doctor reports the peer requirements check reports, with the remedy each suggests"

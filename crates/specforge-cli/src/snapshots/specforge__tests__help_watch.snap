@@ -8,10 +8,15 @@ Usage: specforge watch [OPTIONS]
 
 Options:
       --path <PATH>
-          Project directory (defaults to current directory)
+          Project directory
+          
+          [default: .]
 
-      --json
-          Emit one JSON object per rebuild cycle
+      --format <FORMAT>
+          Output format: human or json
+          
+          [default: human]
+          [possible values: human, json]
 
       --verify-incremental
           Check every incremental rebuild against a cold rebuild (slower)

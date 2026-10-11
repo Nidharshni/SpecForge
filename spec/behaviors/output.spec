@@ -540,10 +540,13 @@ behavior report_command_outcome "Report a Command's Outcome" {
     exit 2. A refusal MUST be printed on stderr
     as error[CODE]: message, then "  hint: " and the suggestion when there
     is one, then "  wrote: " and each file the failed operation left
-    written; under --format json (analyze: --json) it MUST instead be the
+    written; under --format json it MUST instead be the
     error document {error, code, suggestion} (and files_written when files
     were left written) on stdout, with nothing on stderr. A command run
     outside any project where it needs one MUST refuse with no_project.
+    Every core command whose output has a human and a JSON form MUST take
+    --format human|json (human by default; trace's is json); no core
+    command takes --json.
     The verdict is the operation's: the CLI's exit code and the ok MCP
     returns for check, analyze, format, migrate and doctor MUST agree
     (doctor's credentials are the CLI's alone).
@@ -557,6 +560,7 @@ behavior report_command_outcome "Report a Command's Outcome" {
   verify unit "a passed run exits 0, a failed verdict or a refusal 1, a refusal of a measuring command 2"
   verify unit "stats, trace, analyze, migrate and init refuse with the error document under --format json"
   verify unit "a command run outside any project refuses with no_project"
+  verify unit "every core command with a JSON form takes --format human|json, and none takes --json"
   verify integration "the CLI's exit code and MCP's ok agree for check, analyze, format and migrate"
   verify integration "the CLI's --format json and MCP's reply are one outcome document for every operation both surfaces run, format aside"
   verify contract "Report a Command's Outcome: command outcome holds — operation_ran, one_refusal_shape, one_exit_table, surfaces_agree"
@@ -810,8 +814,8 @@ behavior present_diagnostics_as_json "Present Diagnostics as JSON" {
   }
   contract   """
     Wherever SpecForge prints diagnostics as JSON (specforge check
-    --format json, specforge collect and specforge watch --json, the MCP
-    specforge.validate tool, the specforge://diagnostics resource and the
+    --format json, specforge collect and specforge watch --format json,
+    the MCP specforge.validate tool, the specforge://diagnostics resource and the
     diagnostics in a tool result's _meta), it MUST present them in one
     shape: an array of
     entries with code, severity, message and suggestion (null when there
