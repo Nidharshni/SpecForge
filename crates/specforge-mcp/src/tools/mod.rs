@@ -227,7 +227,9 @@ impl Surface for Tools {
 /// not checked), else the `schema_mismatch` failure ([`crate::reply::conforming`]).
 fn conforming(spec: &ToolSpec, outcome: ToolOutcome) -> ToolOutcome {
     match spec.output_schema() {
-        Some(schema) => crate::reply::conforming(spec.name, &schema, outcome),
+        Some(schema) => {
+            crate::reply::conforming(spec.name, crate::reply::Source::Core, &schema, outcome)
+        }
         None => outcome,
     }
 }

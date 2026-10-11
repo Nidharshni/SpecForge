@@ -11,6 +11,7 @@ use specforge_ops::command::{CommandFormat, ExtensionCommand, RunError};
 use specforge_protocol_types::CommandOutput;
 use specforge_wasm::runtime::WasmRuntime;
 
+use crate::reply::Source;
 use crate::resources::{ReadOutcome, ResourceText};
 use crate::surface_call::Ran;
 use crate::surface_table::{ResourceEntry, ToolEntry, ToolKind};
@@ -97,23 +98,12 @@ fn mcp_tool_adapter(
         Ok(value) => match output_schema {
             // An output the tool's own schema refuses is never served as
             // its structured result.
-            Some(schema) => {
-                let violations = specforge_common::shape::violations(schema, &value);
-                if violations.is_empty() {
-                    ToolOutcome::ok(value)
-                } else {
-                    McpError::new(
-                        ErrorCode::SchemaMismatch,
-                        format!(
-                            "extension tool '{}' returned output that does not match its output schema: {}",
-                            entry.name,
-                            violations.join("; ")
-                        ),
-                    )
-                    .with_data(json!({ "violations": violations }))
-                    .into()
-                }
-            }
+            Some(schema) => crate::reply::conforming(
+                &entry.name,
+                Source::Extension(&entry.extension),
+                schema,
+                ToolOutcome::ok(value),
+            ),
             None => ToolOutcome::ok(value),
         },
         // A failed call is the tool's error, and no dispatch is recorded.

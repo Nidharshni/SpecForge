@@ -880,7 +880,7 @@ fn extension_tool_output_is_checked_against_its_schema() {
     assert_eq!(error["code"], "schema_mismatch", "{error}");
     assert_eq!(
         error["message"],
-        "extension tool 'specforge.cmds.check' returned output that does not match its output schema: $.checked: expected boolean, got string"
+        "tool 'specforge.cmds.check' of '@test/cmds' answered a reply its output schema refuses: $.checked: expected boolean, got string"
     );
     assert_eq!(
         error["data"]["violations"],
@@ -925,6 +925,10 @@ fn extension_tool_output_with_an_undeclared_key_is_refused() {
     assert_eq!(resp["result"]["isError"], true, "{resp}");
     let error = crate::tool_errors::mcp_error(&resp);
     assert_eq!(error["code"], "schema_mismatch", "{error}");
+    assert_eq!(
+        error["message"],
+        "tool 'test.closed' of '@test/cmds' answered a reply its output schema refuses: $.extra: undeclared key"
+    );
     assert_eq!(
         error["data"]["violations"],
         json!(["$.extra: undeclared key"]),
