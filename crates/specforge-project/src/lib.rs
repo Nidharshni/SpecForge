@@ -5,7 +5,8 @@
 //! graph, checks" on its own, and each copy drifted. This crate owns that
 //! assembly:
 //! - an [`Environment`] is everything derived from `specforge.json` and the
-//!   loaded extensions before any `.spec` file is read;
+//!   loaded extensions before any `.spec` file is read, assembled from those
+//!   parts ([`Environment::assemble`]; [`Environment::load`] reads them);
 //! - a [`CompiledProject`] is an environment plus the sources read in it,
 //!   their graph build and what the imports and the checks reported. Its
 //!   [`CompiledProject::diagnostics`] are, by definition, what `specforge
