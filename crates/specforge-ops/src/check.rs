@@ -440,7 +440,7 @@ mod tests {
     #[test]
     fn no_root_with_cache_or_lint_is_refused() {
         let graph = Graph::new();
-        let env = specforge_project::Environment::with_registries(RegistryBuild::default());
+        let env = specforge_project::Environment::with_registries(RegistryBuild::default(), None);
         let recorded = RecordedCoverage::over(&graph, &env);
         let view = ProjectView::new(&graph, &env, None, &recorded);
         let reported = vec![Diagnostic::untyped("W002", Severity::Warning, "unused")];

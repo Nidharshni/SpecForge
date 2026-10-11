@@ -46,7 +46,6 @@ use specforge_common::{
 use specforge_graph::{Graph, GraphBuild, GraphConfig};
 use specforge_installed::{Builtins, Installed};
 use specforge_parser::SpecFile;
-use specforge_protocol_types::ExtensionDeclaration;
 use specforge_registry::{
     RegistryBuild, build_registries,
     rules::{CustomVerdicts, NoVerdicts},
@@ -103,9 +102,8 @@ pub struct Environment {
     /// [`loads_nothing`](ConfigProblem::loads_nothing), the compile loaded
     /// no extension.
     pub config_problems: Vec<ConfigProblem>,
-    /// `specforge.json` exists at the root. `false` for [`Self::empty`],
-    /// [`Self::from_declarations`] and [`Self::with_registries`] (no file
-    /// was read).
+    /// `specforge.json` exists at the root. `false` for [`Self::empty`]
+    /// and [`Self::with_registries`] (no file was read).
     pub config_found: bool,
     /// The project's installed extensions: what `specforge.lock` held when
     /// the environment was read (absent, read, or unreadable with its
@@ -136,8 +134,8 @@ pub struct Environment {
     /// The runtime the extensions were loaded in: every extension call an
     /// operation makes over this project runs there, a custom rule's
     /// verdict and a check pass included. None: the environment was loaded
-    /// without one, so no extension loaded ([`Self::empty`],
-    /// [`Self::from_declarations`] and [`Self::with_registries`] have none).
+    /// without one, so no extension loaded ([`Self::empty`] has none;
+    /// [`Self::with_registries`] has the one it is given).
     pub runtime: Option<SharedRuntime>,
 }
 
@@ -160,22 +158,13 @@ impl Environment {
         }
     }
 
-    /// An environment of `declarations` (in entry order; the registry build
-    /// puts them in load order) and no project: the default config, no spec
-    /// root, the registry build of exactly these declarations.
-    pub fn from_declarations(declarations: Vec<ExtensionDeclaration>) -> Self {
-        Environment {
-            registries: build_registries(declarations),
-            ..Environment::empty()
-        }
-    }
-
-    /// An environment of exactly `registries` and no project: the default
-    /// config, nothing enabled, no spec root (tests, a graph built in
-    /// memory).
-    pub fn with_registries(registries: RegistryBuild) -> Self {
+    /// No project, a registry build made in memory, and the runtime its
+    /// extension calls go to, if any: a bare build for a graph built in a
+    /// test (ADR 0015 "The view, completed"). Nothing reported, no I002.
+    pub fn with_registries(registries: RegistryBuild, runtime: Option<SharedRuntime>) -> Self {
         Environment {
             registries,
+            runtime,
             ..Environment::empty()
         }
     }

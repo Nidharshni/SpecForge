@@ -687,7 +687,7 @@ mod tests {
                 declared(EXT, "scan", None),
                 declared(EXT, "hidden", Some("check")),
             ];
-            let mut env = specforge_project::Environment::with_registries(registries);
+            let mut env = specforge_project::Environment::with_registries(registries, None);
             // The environment the extension passes were loaded in.
             env.runtime = Some(std::sync::Arc::new(scanning_extension()));
             Self {

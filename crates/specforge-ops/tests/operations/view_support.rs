@@ -112,7 +112,7 @@ impl Project {
         Project {
             dir: TempDir::new().unwrap(),
             graph,
-            env: Environment::with_registries(registries),
+            env: Environment::with_registries(registries, None),
             recorded: std::sync::OnceLock::new(),
         }
     }

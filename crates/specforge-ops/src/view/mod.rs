@@ -281,12 +281,10 @@ pub(crate) mod testing {
         /// default config, nothing enabled, no extension, nothing reported.
         pub fn new() -> Self {
             let dir = TempDir::new().unwrap();
-            let env = Environment {
-                root: dir.path().to_path_buf(),
-                spec_root: dir.path().to_path_buf(),
-                config_found: true,
-                ..Environment::empty()
-            };
+            let mut env = Environment::empty();
+            env.root = dir.path().to_path_buf();
+            env.spec_root = dir.path().to_path_buf();
+            env.config_found = true;
             Fixture {
                 dir,
                 graph: Graph::new(),
@@ -473,7 +471,7 @@ mod tests {
         // A graph assembled without a compile: the view takes one, once,
         // with the environment's spec root.
         let graph = Graph::new();
-        let mut env = Environment::with_registries(RegistryBuild::default());
+        let mut env = Environment::with_registries(RegistryBuild::default(), None);
         env.spec_root = dir.path().join("spec");
         let recorded = RecordedCoverage::over(&graph, &env);
         let view = ProjectView::new(&graph, &env, None, &recorded);
@@ -529,7 +527,7 @@ mod tests {
         let sub = project.join("sub");
         std::fs::create_dir(&sub).unwrap();
         let graph = Graph::new();
-        let env = Environment::with_registries(RegistryBuild::default());
+        let env = Environment::with_registries(RegistryBuild::default(), None);
 
         let recorded = RecordedCoverage::over(&graph, &env);
         let at_sub = ProjectView::new(&graph, &env, Some(&sub), &recorded);
@@ -573,7 +571,7 @@ mod tests {
 
         // A view built in memory reports nothing until it is told what.
         let graph = Graph::new();
-        let env = Environment::with_registries(RegistryBuild::default());
+        let env = Environment::with_registries(RegistryBuild::default(), None);
         let recorded = RecordedCoverage::over(&graph, &env);
         let bare = ProjectView::new(&graph, &env, None, &recorded);
         assert!(bare.reported().is_empty());

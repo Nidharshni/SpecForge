@@ -300,6 +300,7 @@ fn the_view_versions_against_its_root_cache() {
     let graph = specforge_graph::Graph::new();
     let env = specforge_project::Environment::with_registries(
         specforge_registry::RegistryBuild::default(),
+        None,
     );
     let recorded = specforge_project::coverage::RecordedCoverage::over(&graph, &env);
     let view_at = |root| ProjectView::new(&graph, &env, Some(root), &recorded);

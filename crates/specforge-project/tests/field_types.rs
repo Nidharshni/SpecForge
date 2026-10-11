@@ -42,7 +42,10 @@ fn ticket_manifest() -> ExtensionDeclaration {
 
 /// Build and check `source` against the ticket extension's registries.
 fn build_and_check(source: &str) -> (Graph, Vec<Diagnostic>) {
-    let env = Environment::from_declarations(vec![ticket_manifest()]);
+    let env = Environment::with_registries(
+        specforge_registry::build_registries(vec![ticket_manifest()]),
+        None,
+    );
     let pop_diags: Vec<_> = env.registries.diagnostics().collect();
     assert!(pop_diags.is_empty(), "{pop_diags:?}");
     let parsed = specforge_parser::parse(source, "main.spec");
