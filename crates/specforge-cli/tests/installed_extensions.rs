@@ -401,23 +401,31 @@ fn redact_hashes(text: &str) -> String {
     out
 }
 
-/// Pins today's update document; plan 07 T4 flips it.
-#[test]
-fn update_json_today() {
+#[specforge_test(
+    behavior = "update_all_extensions",
+    verify = "update --format json prints every locked extension's status and the batch_update_completed payload"
+)]
+fn update_json_lists_every_locked_extension() {
     let local = json!({"name": "@acme/local", "version": "1.0.0", "source": "local:local.wasm", "wasm_hash": "00"});
     let (ok, document, dir) = update_json(local);
     assert!(ok, "{document}");
     assert_eq!(lock_entry(dir.path(), "@sdk/greet")["version"], "0.1.0");
+    assert_eq!(document["ok"], true, "{document}");
+    let rows = document["extensions"].as_array().unwrap();
+    assert_eq!(rows.len(), 2, "{document}");
+    assert_eq!(rows[0]["status"], "updated", "{document}");
+    assert_eq!(rows[0]["name"], "@sdk/greet");
+    assert_eq!(rows[0]["publisher"], "unsigned");
+    assert!(rows[0].get("key_id").is_none(), "{document}");
+    assert_eq!(rows[1]["status"], "not_from_registry", "{document}");
     insta::assert_snapshot!(
-        "update_json_today",
+        "update_json_lists_every_locked_extension",
         serde_json::to_string_pretty(&document).unwrap()
     );
 }
 
-/// Pins today's failed-update document (the first failure's error document
-/// merged with the batch); plan 07 T4 flips it.
 #[test]
-fn failed_update_json_today() {
+fn a_failed_update_prints_its_document() {
     let gone =
         json!({"name": "@acme/gone", "version": "1.0.0", "source": "registry", "wasm_hash": "00"});
     let (ok, document, dir) = update_json(gone);
@@ -428,22 +436,20 @@ fn failed_update_json_today() {
         .unwrap()
         .keys()
         .map(String::as_str)
-        .filter(|k| *k != "suggestion")
         .collect();
     keys.sort_unstable();
     assert_eq!(
         keys,
-        [
-            "batch_update_completed",
-            "code",
-            "error",
-            "failed",
-            "updated"
-        ],
+        ["batch_update_completed", "extensions", "ok"],
         "{document}"
     );
+    assert_eq!(document["ok"], false, "{document}");
+    let rows = document["extensions"].as_array().unwrap();
+    assert_eq!(rows[0]["status"], "held_back", "{document}");
+    assert_eq!(rows[1]["status"], "failed", "{document}");
+    assert_eq!(rows[1]["code"], "R-RES-001", "{document}");
     insta::assert_snapshot!(
-        "failed_update_json_today",
+        "a_failed_update_prints_its_document",
         serde_json::to_string_pretty(&document).unwrap()
     );
 }

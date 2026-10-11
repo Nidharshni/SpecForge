@@ -882,6 +882,13 @@ behavior update_all_extensions "Update All Extensions" {
     to be updated and no registry is configured in specforge.json, update
     MUST make no network call and MUST fail with E063, whose suggestion
     names the registries key.
+    Under --format json it prints the update document: ok (nothing
+    failed, so the update was written), each locked extension in lock
+    order with its status (updated, with its publisher's acceptance and
+    key id when signed; held_back when another extension failed;
+    up_to_date; not_from_registry; failed, with the failure's code,
+    message and suggestion), and the batch_update_completed payload. A
+    failed update prints the same document and exits 1.
   """
   produces   [batch_update_completed]
   verify unit "with no registry configured, update makes no network call and reports how to configure one"
@@ -894,5 +901,7 @@ behavior update_all_extensions "Update All Extensions" {
   verify unit "failed upgrade rolls back all changes"
   verify unit "a write that fails while applying fails the update, naming what it could not write, and nothing is applied"
   verify integration "update never replaces a locally installed extension from a registry"
+  verify unit "the update document lists every locked extension's status, held back when another failed"
+  verify integration "update --format json prints every locked extension's status and the batch_update_completed payload"
   verify contract "Update All Extensions: batch extension update holds — extensions_installed, registries_reachable, batch_update_completed_emitted, semver_constraints_respected, lock_hashes_refreshed, atomic_rollback_on_failure"
 }

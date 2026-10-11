@@ -9,12 +9,20 @@ expression: "serde_json::to_string_pretty(&document).unwrap()"
     "timestamp": "[TIME]",
     "updatedCount": 1
   },
-  "updated": [
+  "extensions": [
     {
       "from": "0.0.9",
       "name": "@sdk/greet",
       "publisher": "unsigned",
+      "sha256": "[SHA256]",
+      "status": "updated",
       "to": "0.1.0"
+    },
+    {
+      "name": "@acme/local",
+      "source": "local:local.wasm",
+      "status": "not_from_registry"
     }
-  ]
+  ],
+  "ok": true
 }
