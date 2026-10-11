@@ -132,7 +132,10 @@ type McpPromptArgument {
 
 // ── Core tool replies ─────────────────────────────────────────────────────
 // Each core tool's reply as its structuredContent and outputSchema carry it
-// (ADR 0048): an optional field is absent, never null; a mutation's reply
+// (ADRs 0048, 0051): a domain type a reply embeds from another spec file
+// (Diagnostic, MigrationResult, MigrationDiff, RollbackSummary) is one
+// $defs entry the reply's fields refer to; an optional field is absent,
+// never null; a mutation's reply
 // also carries files_written (string[], absent from a preview), which the
 // mutation pipeline adds to every mutation tool, and rename's diagnostics,
 // which it adds after a successful rename (ADR 0022). A test holds each

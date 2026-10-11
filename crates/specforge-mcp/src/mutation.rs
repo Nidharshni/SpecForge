@@ -677,8 +677,9 @@ mod tests {
         let fresh = output_schema::<FreshProbe>();
         assert_eq!(
             fresh["properties"]["diagnostics"],
-            specforge_common::shape::build::<DiagnosticList>()
+            json!({"type": "array", "items": {"$ref": "#/$defs/Diagnostic"}})
         );
+        assert!(fresh["$defs"]["Diagnostic"].is_object());
         assert!(fresh["properties"][FILES_WRITTEN].is_object());
         assert_eq!(fresh["required"], json!(["name"]));
         assert!(

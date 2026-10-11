@@ -659,7 +659,11 @@ behavior follow_negotiated_mcp_revision "Follow the Negotiated MCP Revision" {
     Each core tool's outputSchema is derived from its typed reply: its root
     is an object schema (type object, a union's included), every object it
     closes lists its keys and states additionalProperties false, every
-    array states its items. A core tool's reply that its outputSchema
+    array states its items. A type the reply holds in more than one place,
+    or a domain type another spec file declares (Diagnostic, SourceSpan,
+    MigrationResult, ...), is defined once under the outputSchema's $defs
+    and referred to by a same-document $ref; the root is never a
+    reference. A core tool's reply that its outputSchema
     refuses MUST be a schema_mismatch error naming each violation, never
     structured content.
     A failed call of a tool with an outputSchema carries no
@@ -669,6 +673,8 @@ behavior follow_negotiated_mcp_revision "Follow the Negotiated MCP Revision" {
   verify unit "a core tool's reply its output schema refuses is a schema_mismatch error, never structured content"
   verify unit "a core tool's output schema is derived from its typed reply: every object it closes lists its keys, every array its items"
   verify unit "every core tool's outputSchema is an object schema at its root"
+  verify unit "a type a reply holds more than once, or a domain type another spec file declares, is defined once under the outputSchema's $defs and referred to by $ref"
+  verify unit "every $ref in a core tool's outputSchema is a same-document pointer to a definition it holds"
   verify unit "a 2025-03-26 session answers a batch with the response to each request"
   verify unit "a batch of notifications gets no response"
   verify unit "an empty batch is an invalid request"

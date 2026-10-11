@@ -37,6 +37,7 @@ pub enum TraceLinkStatus {
 }
 
 #[derive(Debug, Serialize, Shape)]
+#[shape(define)]
 pub struct TraceLink {
     pub entity_id: String,
     pub entity_kind: String,

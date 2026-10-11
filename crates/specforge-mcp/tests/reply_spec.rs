@@ -5,8 +5,9 @@
 //! type, a document specified elsewhere, or text. The spec types reached from a
 //! tool's type are compared with the schema its reply derives:
 //!
-//! 1. a name in [`SHARED`] is a domain type the reply embeds, compared by
-//!    identity (it is not a field-by-field copy of the wire);
+//! 1. a name in [`SHARED`] is a domain type the reply embeds: its schema is a
+//!    reference to the document's one definition of that name (ADR 0051), not
+//!    a field-by-field copy of the wire;
 //! 2. a union of named types is a `oneOf`/`anyOf` of the same length,
 //!    compared in order;
 //! 3. an alias of string literals is a string `enum` of the same set;
@@ -232,22 +233,44 @@ fn merged(schema: &Value) -> Value {
     })
 }
 
-fn check_type(name: &str, schema: &Value, report: &mut Report) {
+/// The schema a `#…` reference of `root` names; `schema` itself otherwise.
+fn resolve<'v>(root: &'v Value, schema: &'v Value) -> &'v Value {
+    schema
+        .get("$ref")
+        .and_then(Value::as_str)
+        .and_then(|reference| reference.strip_prefix('#'))
+        .and_then(|pointer| root.pointer(pointer))
+        .unwrap_or(schema)
+}
+
+fn check_type(name: &str, root: &Value, schema: &Value, report: &mut Report) {
     report.reached.insert(name.to_string());
     if SHARED.contains(&name) {
+        // A domain type another spec file declares: the reply refers to its one definition.
+        let expected = serde_json::json!({ "$ref": format!("#/$defs/{name}") });
+        if schema != &expected {
+            report.violate(
+                name,
+                format!(
+                    "a shared domain type is referred to as {expected}, but the schema is {}",
+                    shape(schema)
+                ),
+            );
+        }
         return;
     }
+    let schema = resolve(root, schema);
     let Some(spec) = spec_types().get(name) else {
         report.violate(name, "no spec file declares this type".to_string());
         return;
     };
     match spec {
-        SpecType::Alias(members) => check_alias(name, members, schema, report),
-        SpecType::Record(fields) => check_record(name, fields, schema, report),
+        SpecType::Alias(members) => check_alias(name, members, root, schema, report),
+        SpecType::Record(fields) => check_record(name, fields, root, schema, report),
     }
 }
 
-fn check_alias(name: &str, members: &[String], schema: &Value, report: &mut Report) {
+fn check_alias(name: &str, members: &[String], root: &Value, schema: &Value, report: &mut Report) {
     let named = members
         .iter()
         .all(|m| spec_types().contains_key(m) || SHARED.contains(&m.as_str()));
@@ -268,7 +291,7 @@ fn check_alias(name: &str, members: &[String], schema: &Value, report: &mut Repo
             return;
         };
         for (member, branch) in members.iter().zip(branches) {
-            check_type(member, branch, report);
+            check_type(member, root, branch, report);
         }
         return;
     }
@@ -281,7 +304,13 @@ fn check_alias(name: &str, members: &[String], schema: &Value, report: &mut Repo
     }
 }
 
-fn check_record(name: &str, fields: &[SpecField], schema: &Value, report: &mut Report) {
+fn check_record(
+    name: &str,
+    fields: &[SpecField],
+    root: &Value,
+    schema: &Value,
+    report: &mut Report,
+) {
     let schema = if schema.get("oneOf").is_some() {
         merged(schema)
     } else {
@@ -341,12 +370,13 @@ fn check_record(name: &str, fields: &[SpecField], schema: &Value, report: &mut R
                     ),
                 );
             }
-            check_ty(name, &field.name, &field.ty, property, report);
+            check_ty(name, &field.name, &field.ty, root, property, report);
         }
     }
 }
 
-fn check_ty(owner: &str, field: &str, ty: &Ty, schema: &Value, report: &mut Report) {
+fn check_ty(owner: &str, field: &str, ty: &Ty, root: &Value, written: &Value, report: &mut Report) {
+    let schema = resolve(root, written);
     let mismatch = |report: &mut Report, wanted: &str| {
         report.violate(
             owner,
@@ -359,7 +389,7 @@ fn check_ty(owner: &str, field: &str, ty: &Ty, schema: &Value, report: &mut Repo
     match ty {
         Ty::List(inner) => {
             if schema["type"] == "array" && schema.get("items").is_some() {
-                check_ty(owner, field, inner, &schema["items"], report);
+                check_ty(owner, field, inner, root, &schema["items"], report);
             } else {
                 mismatch(report, "a list");
             }
@@ -403,7 +433,7 @@ fn check_ty(owner: &str, field: &str, ty: &Ty, schema: &Value, report: &mut Repo
                     mismatch(report, "an object");
                 }
             }
-            other => check_type(other, schema, report),
+            other => check_type(other, root, written, report),
         },
         Ty::Unsupported(text) => report.violate(
             owner,
@@ -440,7 +470,7 @@ fn report() -> &'static Report {
             } else {
                 schema.clone()
             };
-            check_type(name, &schema, &mut report);
+            check_type(name, &schema, &schema, &mut report);
         }
         report
     })
