@@ -1,5 +1,5 @@
 mod add_extension;
-mod analyze;
+pub(crate) mod analyze;
 mod collect;
 pub(crate) mod coverage;
 mod doctor;
@@ -12,26 +12,26 @@ mod find_references;
 pub(crate) mod find_spec_for_source;
 mod format;
 mod infer_gaps;
-mod infer_progress;
-mod infer_session;
+pub(crate) mod infer_progress;
+pub(crate) mod infer_session;
 mod init;
-mod inspect;
+pub(crate) mod inspect;
 pub(crate) mod list;
 mod migrate;
 mod model;
 mod outline;
 mod outline_extensions;
 mod providers;
-mod query;
+pub(crate) mod query;
 mod remove_extension;
 mod rename;
 mod render;
-mod schema;
-mod search;
+pub(crate) mod schema;
+pub(crate) mod search;
 mod stats;
 mod suggest_fixes;
 pub(crate) mod trace;
-mod validate;
+pub(crate) mod validate;
 
 use serde_json::{Value, json};
 
@@ -106,16 +106,6 @@ pub(crate) fn navigator<'v>(
 /// The core tool named `name`.
 pub fn core_tool(name: &str) -> Option<&'static dyn ToolSpec> {
     CORE_TOOLS.iter().copied().find(|tool| tool.name() == name)
-}
-
-/// The name of the core tool `name` as `tools/list` lists it: the one way
-/// a prompt or the server's instructions name a tool. A name no core tool
-/// has is a SpecForge bug; the prompts' tests render every text that names
-/// one, so it fails there first.
-pub(crate) fn core_tool_name(name: &'static str) -> &'static str {
-    core_tool(name)
-        .map(|tool| tool.name())
-        .unwrap_or_else(|| panic!("SpecForge bug: no core tool is named {name}"))
 }
 
 /// `tools/call`: the core tool table, then the extension surface table (ADR
