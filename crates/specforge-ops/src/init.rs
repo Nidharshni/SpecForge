@@ -574,7 +574,7 @@ mod tests {
     }
 
     #[specforge_test_macros::test(
-        behavior = "scaffold_starter_spec_file",
+        behavior = "non_interactive_init",
         verify = "init refuses local extensions the lock plan refuses before it writes anything"
     )]
     fn init_refuses_local_extensions_the_lock_plan_refuses_before_writing() {

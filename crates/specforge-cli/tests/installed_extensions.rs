@@ -907,7 +907,7 @@ fn removing_a_wasm_file_no_entry_names_is_not_found() {
 // extensions listing does (it called it "builtin" before 05-T4).
 #[specforge_test(
     behavior = "run_doctor_check",
-    verify = "doctor gives each extension the source the extensions listing gives it"
+    verify = "doctor lists the extensions the extensions listing lists, each with its version, source and status"
 )]
 fn doctor_lists_a_wasm_file_entry_with_its_file_source() {
     let dir = greet_file_project();

@@ -373,7 +373,7 @@ fn init_refuses_a_directory_whose_starter_file_exists() {
 }
 
 #[specforge_test_macros::test(
-    behavior = "scaffold_starter_spec_file",
+    behavior = "non_interactive_init",
     verify = "init refuses local extensions the lock plan refuses before it writes anything"
 )]
 fn init_refuses_local_extensions_over_an_unreadable_lock_before_writing() {

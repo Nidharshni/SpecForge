@@ -238,7 +238,7 @@ fn required_fields_get_e006_rules() {
 
 #[spec(
     behavior = "registry_build_rules",
-    verify = "Registry Build Collects Rules: rule collection holds — declarations_in_load_order, rules_collected, duplicates_warned, required_enforced, unloaded_targets_inert"
+    verify = "Registry Build Collects Rules: rule collection holds — declarations_in_load_order, rules_collected, duplicates_warned, required_enforced, unloaded_targets_inert, rule_codes_checked"
 )]
 fn rule_collection_holds() {
     // declarations_in_load_order: each extension's rules out of code order;

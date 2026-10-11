@@ -383,7 +383,7 @@ fn doctor_over_a_directory_that_is_no_project_is_refused_as_no_project() {
 
 #[specforge_test(
     behavior = "run_doctor_check",
-    verify = "doctor gives each extension the source the extensions listing gives it"
+    verify = "doctor lists the extensions the extensions listing lists, each with its version, source and status"
 )]
 fn doctor_names_a_wasm_file_entry_by_its_file() {
     let dir = tempfile::TempDir::new().unwrap();

@@ -230,6 +230,7 @@ behavior find_all_references "Find All References" {
   verify unit "find-refs excludes what the entity itself references"
   verify unit "find-refs omits the declaration when the request excludes it"
   verify unit "each reference is the identifier token as written"
+  verify unit "reference ranges are UTF-16 after multi-byte text"
   verify contract "Find All References: find all references holds — graph_available, all_references_returned, declaration_included"
 }
 

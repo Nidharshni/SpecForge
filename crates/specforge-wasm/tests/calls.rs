@@ -740,7 +740,7 @@ fn a_pass_answer_is_bare_or_with_a_summary_and_its_diagnostics_are_canonical() {
 
 #[specforge_test_macros::test(
     behavior = "call_extension_exports",
-    verify = "Call Extension Exports: extension calls hold — extension_loaded, one_protocol_type, strict_answers, one_failure, no_silent_failure, runtimes_agree"
+    verify = "Call Extension Exports: extension calls hold — extension_loaded, one_protocol_type, strict_answers, one_failure, no_silent_failure, runtimes_agree, pass_codes_checked"
 )]
 fn extension_calls_hold_their_contract() {
     let runtime = runtime();
