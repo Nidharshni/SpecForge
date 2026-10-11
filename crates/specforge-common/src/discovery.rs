@@ -54,7 +54,7 @@ pub fn walk_spec_files(root: &Path, mut stop: impl FnMut(&Path) -> bool) -> Walk
         })
         .filter_map(Result::ok)
         .filter(|entry| {
-            entry.file_type().is_file() && entry.path().extension().is_some_and(|ext| ext == "spec")
+            !entry.file_type().is_dir() && entry.path().extension().is_some_and(|ext| ext == "spec")
         })
         .map(walkdir::DirEntry::into_path)
         .collect();
