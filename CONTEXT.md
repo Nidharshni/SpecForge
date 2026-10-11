@@ -284,9 +284,12 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   ones always, optional ones unless that would close a cycle). The registry build produces it
   (`Peers::load_order`); a cycle among required peers is E027 and its extensions load together in
   entry order (ADR 0041).
-- **Extension specifier**: the `add` argument (also `specforge.add_extension`'s and
-  `init --extensions`'): a builtin's name, a local path, a `git+` URL, or a package reference
-  `@scope/name[@requirement]` (`PackageRef`), read once by `specforge_ops::extension::parse`.
+- **Extension specifier**: an `add` argument (also each of `specforge.add_extension`'s
+  `specifiers` and `init --extensions`'): a builtin's name, a local path, a `git+` URL, or a package
+  reference `@scope/name[@requirement]` (`PackageRef`), read once by
+  `specforge_ops::extension::parse`. An add takes one or more and adds them as one change, judged on
+  the whole set (one lock plan, ADR 0041); a specifier naming an extension an earlier one of the same
+  add names is a *duplicate* of it.
 - **Project view**: the compiled project as one surface sees it, borrowed: the graph, the
   environment it was compiled in (config, what each `extensions` entry enabled, the registry build:
   kinds, fields, edges, rules, the extension declarations and their ordered passes), the root it was
