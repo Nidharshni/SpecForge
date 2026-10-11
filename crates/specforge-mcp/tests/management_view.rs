@@ -133,7 +133,7 @@ fn extensions_lists_the_lock_entries_and_the_kinds_in_the_graph() {
 
 #[specforge_test(
     behavior = "read_views_over_the_project_view",
-    verify = "specforge stats and specforge.stats report the same numbers"
+    verify = "specforge stats --format json and specforge.stats answer the same document"
 )]
 fn stats_and_validate_count_the_served_projects_surface_conflicts() {
     let (mut server, _ext, _dir) = fake_extension::initialized(

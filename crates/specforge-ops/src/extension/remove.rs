@@ -3,6 +3,8 @@
 use super::{Inventory, NOT_FOUND, Origin, ProjectExtension, Selection};
 use crate::view::ProjectView;
 use crate::{OpError, OpErrorKind, Writes};
+use serde::Serialize;
+use specforge_common::shape::Shape;
 use specforge_common::{ExtensionEntry, codes};
 use specforge_graph::Graph;
 use specforge_installed::{Installed, LockState};
@@ -35,7 +37,7 @@ struct Removing<'a> {
 
 /// A stranded entity (CONTEXT.md): one whose kind only the removed
 /// extension declares; the next compile reports it E024.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Shape)]
 pub struct StrandedEntity {
     pub entity_id: String,
     pub kind: String,
@@ -66,6 +68,49 @@ pub struct RemoveOutcome {
     /// dropped, and for an uninstall `specforge.lock` and each file deleted
     /// under the extension's directory. Nothing for a dry run.
     pub writes: Writes,
+}
+
+impl RemoveOutcome {
+    /// The document both surfaces print.
+    pub fn document(&self) -> RemoveDocument {
+        RemoveDocument {
+            action: if self.dry_run {
+                RemoveAction::Planned
+            } else {
+                RemoveAction::Removed
+            },
+            extension: self.name.clone(),
+            source: self.origin.source(),
+            version: self.version.clone(),
+            stranded: self.stranded.clone(),
+        }
+    }
+}
+
+/// What `specforge remove --format json` and `specforge.remove_extension`
+/// print (`McpRemoveExtensionResult`).
+#[derive(Debug, Clone, PartialEq, Serialize, Shape)]
+pub struct RemoveDocument {
+    pub action: RemoveAction,
+    pub extension: String,
+    /// `builtin`, the lock entry's source, `file:<path>` or `unknown`
+    /// ([`Origin::source`]).
+    pub source: String,
+    /// The locked version; for a builtin, the loaded one. Absent when
+    /// neither is known.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
+    /// The entities the removal strands, in id order.
+    pub stranded: Vec<StrandedEntity>,
+}
+
+/// Whether the removal was made or only previewed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Shape)]
+#[serde(rename_all = "snake_case")]
+pub enum RemoveAction {
+    Removed,
+    /// A dry run: nothing changed.
+    Planned,
 }
 
 /// Remove `name` from the project the view was compiled from: a locked
@@ -729,6 +774,60 @@ mod tests {
         assert_eq!(
             text(specforge_installed::lock_path(fixture.dir.path())),
             "not valid json {{{"
+        );
+    }
+
+    #[specforge_test(
+        behavior = "remove_extension",
+        verify = "the remove document names the extension's source and version whatever its origin"
+    )]
+    fn remove_document_names_source_and_version() {
+        use specforge_installed::LockSource;
+
+        let outcome = |origin, version: Option<&str>, dry_run| RemoveOutcome {
+            name: "@acme/x".into(),
+            version: version.map(String::from),
+            origin,
+            stranded: vec![StrandedEntity {
+                entity_id: "a".into(),
+                kind: "greeting".into(),
+            }],
+            dry_run,
+            writes: Writes::default(),
+        };
+        let document = |outcome: RemoveOutcome| serde_json::to_value(outcome.document()).unwrap();
+        let stranded = serde_json::json!([{"entity_id": "a", "kind": "greeting"}]);
+
+        assert_eq!(
+            document(outcome(Origin::Builtin, Some("1.0.0"), false)),
+            serde_json::json!({"action": "removed", "extension": "@acme/x", "source": "builtin",
+                "version": "1.0.0", "stranded": stranded})
+        );
+        assert_eq!(
+            document(outcome(
+                Origin::Installed {
+                    source: LockSource::Registry
+                },
+                Some("0.1.0"),
+                false
+            )),
+            serde_json::json!({"action": "removed", "extension": "@acme/x", "source": "registry",
+                "version": "0.1.0", "stranded": stranded})
+        );
+        assert_eq!(
+            document(outcome(
+                Origin::File {
+                    path: "x.wasm".into()
+                },
+                None,
+                false
+            )),
+            serde_json::json!({"action": "removed", "extension": "@acme/x", "source": "file:x.wasm",
+                "stranded": stranded})
+        );
+        assert_eq!(
+            document(outcome(Origin::Unknown, None, true))["action"],
+            "planned"
         );
     }
 }

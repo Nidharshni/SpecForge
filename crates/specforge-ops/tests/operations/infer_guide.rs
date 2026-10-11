@@ -119,7 +119,10 @@ fn a_kind_guide_lists_every_registered_field() {
         .map(|f| (f.name(), f.field_type().as_str()))
         .collect();
     assert_eq!(fields, [("description", "string"), ("tags", "string_list")]);
-    assert_eq!(guide.to_json()["fields"][0]["description"], "A description");
+    assert_eq!(
+        serde_json::to_value(guide.document()).unwrap()["fields"][0]["description"],
+        "A description"
+    );
 }
 
 #[specforge_test(
@@ -254,7 +257,7 @@ fn the_guide_lists_extensions_kinds_and_entities() {
         [("behavior", 2), ("widget", 1)]
     );
     assert_eq!(guide.kinds[0].existing, ["alpha", "zeta"]);
-    let json = kind_guide(&view, "behavior").unwrap().to_json();
+    let json = serde_json::to_value(kind_guide(&view, "behavior").unwrap().document()).unwrap();
     assert_eq!(json["existing_entity_ids"], json!(["alpha", "zeta"]));
 }
 

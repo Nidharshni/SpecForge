@@ -512,7 +512,7 @@ fn previews_are_no_mutation() {
         "specforge.add_extension",
         json!({"specifier": "@sdk/greet@0.0.0-test", "dry_run": true}),
     );
-    assert_eq!(tool_json(&reply)["already_present"], true, "{reply}");
+    assert_eq!(tool_json(&reply)["action"], "already_present", "{reply}");
     assert_eq!(last_completed(&installed), None, "{reply}");
     assert!(events(&installed, "extension_added").is_empty());
 }
@@ -951,7 +951,7 @@ fn a_dry_run_is_a_preview_whatever_the_operation_answers() {
         json!({"specifier": "@sdk/greet@0.0.0-test", "dry_run": true}),
     );
     let payload = tool_json(&reply);
-    assert_eq!(payload["already_present"], true, "{reply}");
+    assert_eq!(payload["action"], "already_present", "{reply}");
     assert!(payload.get("files_written").is_none(), "{reply}");
     assert_eq!(
         event_names_since(

@@ -1272,8 +1272,8 @@ fn add_validates_local_specifier() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let json: serde_json::Value = serde_json::from_str(&stdout).unwrap();
 
-    assert_eq!(json["action"], "add");
-    assert_eq!(json["name"], "@sdk/greet", "{json}");
+    assert_eq!(json["action"], "installed");
+    assert_eq!(json["extension"], "@sdk/greet", "{json}");
     assert_eq!(json["source"], "local:my-extension.wasm", "{json}");
 }
 
@@ -2136,7 +2136,7 @@ fn add_json_lists_the_files_it_wrote() {
     // Already there: nothing written.
     let before = files_under(root);
     let again = json_of(&["add", &wasm], root);
-    assert_eq!(again["already_present"], true, "{again}");
+    assert_eq!(again["action"], "already_present", "{again}");
     assert_eq!(files_written(&again), Vec::<String>::new());
     assert_eq!(changed_since(root, &before), Vec::<String>::new());
     let enabled = json_of(&["add", "@specforge/product"], root);

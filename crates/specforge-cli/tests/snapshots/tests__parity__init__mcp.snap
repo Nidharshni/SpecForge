@@ -30,7 +30,7 @@ expression: mcp_snap
       "specforge.json"
     ],
     "name": "demo",
-    "project_path": "[ROOT]",
+    "project_root": "[ROOT]",
     "starter_file": "spec/hello.spec",
     "version": "0.1.0"
   }

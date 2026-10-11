@@ -13,8 +13,10 @@
 
 use super::Trust;
 use super::lock_plan::{Fetch, Install, LockPlan, Verb};
-use crate::registry::{NO_REGISTRY, Publisher, Registry};
+use crate::registry::{Acceptance, NO_REGISTRY, Publisher, Registry};
 use crate::{OpError, OpErrorKind};
+use serde::Serialize;
+use specforge_common::shape::Shape;
 use specforge_common::{Code, codes};
 use specforge_installed::{Installed, LockState};
 use specforge_protocol_types::PackageName;
@@ -98,6 +100,63 @@ impl UpdateOutcome {
         })
     }
 
+    /// The document `specforge update` prints, stamped `ended_at` (the
+    /// adapter passes `Utc::now()`, a test a fixed time).
+    pub fn document(&self, ended_at: chrono::DateTime<chrono::Utc>) -> UpdateDocument {
+        let applied = self.applied();
+        let counts = self.batch_update_completed();
+        UpdateDocument {
+            ok: applied,
+            extensions: self
+                .extensions
+                .iter()
+                .map(|e| {
+                    let name = e.name.clone();
+                    match &e.status {
+                        UpdateStatus::Updated {
+                            from,
+                            to,
+                            sha256,
+                            publisher,
+                        } if applied => UpdateRow::Updated {
+                            name,
+                            from: from.clone(),
+                            to: to.clone(),
+                            sha256: sha256.clone(),
+                            key_id: publisher.key_id().map(str::to_string),
+                            publisher: publisher.acceptance(),
+                        },
+                        UpdateStatus::Updated { from, to, .. } => UpdateRow::HeldBack {
+                            name,
+                            from: from.clone(),
+                            to: to.clone(),
+                        },
+                        UpdateStatus::UpToDate { version } => UpdateRow::UpToDate {
+                            name,
+                            version: version.clone(),
+                        },
+                        UpdateStatus::NotFromRegistry { source } => UpdateRow::NotFromRegistry {
+                            name,
+                            source: source.clone(),
+                        },
+                        UpdateStatus::Failed(error) => UpdateRow::Failed {
+                            name,
+                            code: error.code.to_string(),
+                            message: error.message.clone(),
+                            suggestion: error.suggestion.clone(),
+                        },
+                    }
+                })
+                .collect(),
+            batch_update_completed: BatchUpdateEvent {
+                updated_count: counts.updated_count,
+                failed_count: counts.failed_count,
+                skipped_count: counts.skipped_count,
+                timestamp: ended_at.to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+            },
+        }
+    }
+
     /// The `batch_update_completed` event's counts
     /// (`spec/events/wasm-extensions.spec`). An extension counts as
     /// updated only when the update was applied; one an aborted update
@@ -116,6 +175,67 @@ impl UpdateOutcome {
             skipped_count: self.extensions.len() - updated_count - failed_count,
         }
     }
+}
+
+/// What `specforge update --format json` prints: whether the update was
+/// written, what became of each locked extension, and the
+/// `batch_update_completed` event's payload.
+#[derive(Debug, Clone, PartialEq, Serialize, Shape)]
+pub struct UpdateDocument {
+    /// No extension failed, so the update was written (`specforge update`
+    /// exits 1 otherwise).
+    pub ok: bool,
+    /// Every locked extension the update looked at, in lock order.
+    pub extensions: Vec<UpdateRow>,
+    pub batch_update_completed: BatchUpdateEvent,
+}
+
+/// One locked extension and what became of it.
+#[derive(Debug, Clone, PartialEq, Serialize, Shape)]
+#[serde(tag = "status", rename_all = "snake_case")]
+pub enum UpdateRow {
+    /// Moved from `from` to `to`.
+    Updated {
+        name: String,
+        from: String,
+        to: String,
+        sha256: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        key_id: Option<String>,
+        publisher: Acceptance,
+    },
+    /// Would have moved, but another extension failed, so nothing was
+    /// applied.
+    HeldBack {
+        name: String,
+        from: String,
+        to: String,
+    },
+    /// Already at the newest version the request allows.
+    UpToDate { name: String, version: String },
+    /// Not a registry install; a registry never replaces it (ADR 0004 D3-b).
+    NotFromRegistry { name: String, source: String },
+    /// Its newer version could not be fetched, checked or installed.
+    Failed {
+        name: String,
+        code: String,
+        message: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        suggestion: Option<String>,
+    },
+}
+
+/// `batch_update_completed` as `specforge update --format json` carries it
+/// (`spec/events/wasm-extensions.spec`): the counts and when the update
+/// ended.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Shape)]
+#[serde(rename_all = "camelCase")]
+pub struct BatchUpdateEvent {
+    pub updated_count: usize,
+    pub failed_count: usize,
+    pub skipped_count: usize,
+    /// RFC 3339, UTC, milliseconds.
+    pub timestamp: String,
 }
 
 /// The payload of `batch_update_completed`, which an update that ran to
@@ -658,5 +778,69 @@ mod tests {
             ));
             assert_eq!(std::fs::read(lock_path(dir.path())).unwrap(), lock_before);
         }
+    }
+
+    #[specforge_test(
+        behavior = "update_all_extensions",
+        verify = "the update document lists every locked extension's status, held back when another failed"
+    )]
+    fn update_document_lists_each_status() {
+        let row = |name: &str, status| ExtensionUpdate {
+            name: name.into(),
+            status,
+        };
+        let outcome = UpdateOutcome {
+            extensions: vec![
+                row(
+                    "@a/moved",
+                    UpdateStatus::Updated {
+                        from: "1.0.0".into(),
+                        to: "1.1.0".into(),
+                        sha256: "ab".into(),
+                        publisher: Publisher::Unsigned,
+                    },
+                ),
+                row(
+                    "@a/same",
+                    UpdateStatus::UpToDate {
+                        version: "2.0.0".into(),
+                    },
+                ),
+                row(
+                    "@a/local",
+                    UpdateStatus::NotFromRegistry {
+                        source: "local:x.wasm".into(),
+                    },
+                ),
+                row(
+                    "@a/gone",
+                    UpdateStatus::Failed(
+                        OpError::diagnostic(codes::E063, "no registry").with_suggestion("add one"),
+                    ),
+                ),
+            ],
+        };
+        let ended_at = chrono::DateTime::parse_from_rfc3339("2026-10-11T12:00:00.123Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+
+        let document = serde_json::to_value(outcome.document(ended_at)).unwrap();
+
+        assert_eq!(document["ok"], false);
+        assert_eq!(
+            document["extensions"],
+            serde_json::json!([
+                {"status": "held_back", "name": "@a/moved", "from": "1.0.0", "to": "1.1.0"},
+                {"status": "up_to_date", "name": "@a/same", "version": "2.0.0"},
+                {"status": "not_from_registry", "name": "@a/local", "source": "local:x.wasm"},
+                {"status": "failed", "name": "@a/gone", "code": "E063", "message": "no registry",
+                 "suggestion": "add one"},
+            ])
+        );
+        assert_eq!(
+            document["batch_update_completed"],
+            serde_json::json!({"updatedCount": 0, "failedCount": 1, "skippedCount": 3,
+                "timestamp": "2026-10-11T12:00:00.123Z"})
+        );
     }
 }

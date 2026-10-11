@@ -31,9 +31,20 @@ expression: cli_snap
   "ok": false,
   "payload": {
     "backups": [],
-    "failed_count": 1,
+    "diffs": [],
+    "dry_run": false,
+    "files_failed": 1,
+    "files_migrated": 0,
+    "files_skipped": 1,
     "files_written": [],
-    "migrated_count": 0,
+    "from_version": "1.0",
+    "hook_failures": [],
+    "hooks_invoked": [],
+    "migrated": false,
+    "ok": false,
+    "pending": true,
+    "post_migration_errors": [],
+    "post_migration_validated": false,
     "results": [
       {
         "error": "E019: unsupported format version 99.0 (max supported: 1.0) — Use a format version between 1.0 and 1.0.",
@@ -57,10 +68,9 @@ expression: cli_snap
         }
       }
     ],
-    "skipped_count": 1,
-    "target_version": {
-      "major": 1,
-      "minor": 0
-    }
+    "rolled_back": false,
+    "schema_warnings": [],
+    "structural_differences": [],
+    "to_version": "1.0"
   }
 }

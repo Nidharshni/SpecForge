@@ -1,6 +1,6 @@
 use crate::OutputFormat;
-use crate::outcome::{Exit, Refusal};
-use specforge_ops::migrate::{self, MigrationStatus, MigrationSummary, Request, RollbackSummary};
+use crate::outcome::{Exit, Refusal, Written, print_json};
+use specforge_ops::migrate::{self, MigrateDocument, MigrationStatus, Request, RollbackSummary};
 use std::path::Path;
 
 pub fn run(
@@ -36,7 +36,7 @@ pub fn run(
     let outcome = migrate::run(&request, Some(runtime));
     // Each migrated file and each backup (none for a dry run).
     let written = (!dry_run).then(|| outcome.writes.names_under(path));
-    print_migration(&outcome.summary, written.as_deref(), format, dry_run);
+    print_migration(&outcome.document(), written, format);
 
     if outcome.summary.failed_count != 0 {
         return Exit::of_verdict(outcome.ok());
@@ -62,20 +62,11 @@ pub fn run(
     Exit::of_verdict(outcome.ok())
 }
 
-/// The JSON of `document` with `files_written`, when given.
-fn with_files_written(document: impl serde::Serialize, files_written: Option<&[String]>) -> String {
-    let mut json = serde_json::to_value(document).unwrap_or_default();
-    if let (Some(files), Some(object)) = (files_written, json.as_object_mut()) {
-        object.insert("files_written".to_string(), serde_json::json!(files));
-    }
-    serde_json::to_string_pretty(&json).unwrap_or_default()
-}
-
 /// The restore; its JSON lists each file restored in `files_written`.
 fn print_rollback(summary: &RollbackSummary, files_written: &[String], format: OutputFormat) {
     match format {
         OutputFormat::Json => {
-            println!("{}", with_files_written(summary, Some(files_written)));
+            print_json(&Written::of(summary, files_written.to_vec()));
         }
         OutputFormat::Human => {
             for w in &summary.warnings {
@@ -103,28 +94,28 @@ fn print_rollback(summary: &RollbackSummary, files_written: &[String], format: O
     }
 }
 
-/// The migration; its JSON lists each migrated file and each backup in
-/// `files_written` (absent from a dry run).
+/// The migration; its JSON is the migration document with `files_written`
+/// (absent from a dry run).
 fn print_migration(
-    summary: &MigrationSummary,
-    files_written: Option<&[String]>,
+    document: &MigrateDocument,
+    files_written: Option<Vec<String>>,
     format: OutputFormat,
-    dry_run: bool,
 ) {
     match format {
-        OutputFormat::Json => {
-            println!("{}", with_files_written(summary, files_written));
-        }
+        OutputFormat::Json => print_json(&Written {
+            document,
+            files_written,
+        }),
         OutputFormat::Human => {
-            if dry_run {
-                for d in &summary.diffs {
+            if document.dry_run {
+                for d in &document.diffs {
                     println!("{}", d.unified_text);
                 }
             }
 
             eprintln!(
                 "{} migrated, {} skipped, {} failed",
-                summary.migrated_count, summary.skipped_count, summary.failed_count
+                document.files_migrated, document.files_skipped, document.files_failed
             );
         }
     }

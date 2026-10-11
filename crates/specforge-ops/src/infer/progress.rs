@@ -17,6 +17,14 @@ use super::manifest::{
 use crate::OpError;
 use crate::view::ProjectView;
 
+/// The unanalyzed files of one directory (`specforge infer-status --gaps`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Shape)]
+pub struct UnanalyzedDirectory {
+    pub directory: String,
+    pub count: usize,
+    pub files: Vec<String>,
+}
+
 /// How far inference has come: every source file the analyzers would
 /// scan, against the manifest's index.
 #[derive(Debug, Clone)]
@@ -86,13 +94,20 @@ impl Progress {
         }
     }
 
-    /// The unanalyzed files grouped by directory, sorted.
-    pub fn unanalyzed_by_directory(&self) -> BTreeMap<&str, Vec<&str>> {
+    /// The unanalyzed files grouped by directory, in directory order.
+    pub fn unanalyzed_by_directory(&self) -> Vec<UnanalyzedDirectory> {
         let mut by_dir: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
         for file in &self.unanalyzed {
             by_dir.entry(directory_of(file)).or_default().push(file);
         }
         by_dir
+            .into_iter()
+            .map(|(directory, files)| UnanalyzedDirectory {
+                directory: directory.to_string(),
+                count: files.len(),
+                files: files.into_iter().map(str::to_string).collect(),
+            })
+            .collect()
     }
 
     /// The document both surfaces answer with:
@@ -222,7 +237,11 @@ mod tests {
         assert_eq!(progress.summary.entities_produced, 1);
         assert_eq!(
             progress.unanalyzed_by_directory(),
-            BTreeMap::from([("src/net", vec!["src/net/wire.rs"])])
+            [UnanalyzedDirectory {
+                directory: "src/net".to_string(),
+                count: 1,
+                files: vec!["src/net/wire.rs".to_string()],
+            }]
         );
     }
 

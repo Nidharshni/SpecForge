@@ -242,10 +242,12 @@ behavior provide_mcp_add_extension_tool "Provide MCP Add Extension Tool" {
     the extension to specforge.json, download the Wasm module if remote, and
     validate the extension manifest. If the manifest is invalid or the
     extension conflicts with an existing one, the tool MUST return an error.
-    If the extension is already installed, the tool MUST return an info
-    response indicating the extension is already present without modifying
-    specforge.json. That call still emits extension_added, with wasDuplicate
-    true; a dry run emits none. A registry specifier with no registry configured in
+    If the extension is already installed, the tool MUST answer action
+    already_present without modifying specforge.json. That call still emits
+    extension_added, with wasDuplicate true; a dry run emits none. Its reply
+    is the add document specforge add --format json prints
+    (McpAddExtensionResult), plus a note saying whether the server serves
+    the extension from the next call on, absent for a preview. A registry specifier with no registry configured in
     specforge.json MUST make no network call and MUST return an E063 error
     whose suggestion names the registries key. The tool MUST run the add
     specforge add runs: a builtin is enabled offline with its required
@@ -301,6 +303,9 @@ behavior provide_mcp_remove_extension_tool "Provide MCP Remove Extension Tool" {
     entities (entities of kinds only that extension defines, E024 on the
     next compile), the tool MUST list them in the response (stranded:
     entity_id, kind, in id order) but still proceed.
+    Its reply is the remove document specforge remove --format json prints
+    (McpRemoveExtensionResult): action removed, or planned for a dry run,
+    the extension, its source and version, and the stranded entities.
     If the specified extension is not installed (not listed in specforge.json),
     the tool MUST return an isError result whose McpError code is
     "extension_not_found" and whose message names the unknown extension.
@@ -344,6 +349,9 @@ behavior provide_mcp_migrate_tool "Provide MCP Migrate Tool" {
     detect and apply pending migrations to spec files. In dry_run mode, the
     tool MUST return the diff without modifying any files. After migration,
     the tool MUST validate the result and report any post-migration errors.
+    Its reply is the migration document specforge migrate --format json
+    prints (McpMigrateResult); a project with nothing pending answers it
+    with pending false and nothing migrated.
     The tool MUST run the same migration as specforge migrate: extension
     migration hooks run after the files are migrated, and a migration whose
     hooks fail or whose graph changes structure is rolled back. The result

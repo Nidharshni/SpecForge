@@ -78,8 +78,8 @@ feature gamma "G" { behaviors [alpha] }
     let parsed: serde_json::Value = serde_json::from_str(&stdout)
         .unwrap_or_else(|e| panic!("invalid JSON: {}\noutput: {}", e, stdout));
 
-    assert_eq!(parsed["total_entities"], 2);
-    assert_eq!(parsed["total_edges"], 1);
+    assert_eq!(parsed["entity_count"], 2);
+    assert_eq!(parsed["edge_count"], 1);
 }
 
 // Coverage is over the kinds the enabled extensions declare testable:

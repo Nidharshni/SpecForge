@@ -115,7 +115,7 @@ fn rendered(instruction: impl Into<String>, payload: Value) -> Rendered {
 
 fn get_overview(project: &ProjectView) -> Rendered {
     let guide = infer::guide(project);
-    let mut payload = guide.to_json();
+    let mut payload = serde_json::to_value(guide.document()).expect("a document serializes");
     payload["output_format"] = Value::from(format!(
         "Write .spec files in the {} directory. Use `keyword entity_id \"Title\" {{ fields }}` syntax. Entity IDs are snake_case identifiers (letters, digits, underscores, 2-60 chars).",
         guide.spec_directory
@@ -137,7 +137,7 @@ fn get_overview(project: &ProjectView) -> Rendered {
 fn get_kind_scoped(project: &ProjectView, kind_name: &str) -> PromptOutcome {
     let guide = infer::kind_guide(project, kind_name)
         .map_err(|error| Box::new(McpError::from(error).with_argument("scope")))?;
-    let mut payload = guide.to_json();
+    let mut payload = serde_json::to_value(guide.document()).expect("a document serializes");
     payload["validation"] = Value::from(validation());
 
     let instruction = format!(

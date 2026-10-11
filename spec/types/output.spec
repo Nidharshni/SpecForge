@@ -53,28 +53,6 @@ type PlanValidationEntry "Single Plan Entry Validation" {
   verify unit "Single Plan Entry Validation conforms to schema"
 }
 
-type EntityKindCount "Entity count for a single kind" {
-  kind  string  @readonly
-  count integer @readonly
-  verify unit "Entity count for a single kind conforms to schema"
-}
-
-type ProjectStatistics "Project-Level Statistics" {
-  entity_count_by_kind  EntityKindCount[]
-  /// Deprecated alias of declared_percentage.
-  coverage_percentage   float
-  /// Testable entities with at least one verify statement, in percent.
-  declared_percentage   float
-  /// Testable entities proven, in percent: the --min gate's figure. Absent without recorded test results.
-  proof_percentage      float @optional
-  /// Entities no edge links to another entity.
-  unconnected_count     integer
-  diagnostic_summary    DiagnosticSummary
-  testable_entity_count integer
-  verified_entity_count integer
-  verify unit "Project-Level Statistics conforms to schema"
-}
-
 type DiagnosticSummary "Diagnostic Count Summary" {
   error_count integer
   warn_count  integer

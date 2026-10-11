@@ -6,7 +6,7 @@ use specforge_ops::review::{Review, ReviewRequest, review};
 use specforge_ops::view::ProjectView;
 
 use crate::OutputFormat;
-use crate::outcome::{Exit, Refusal};
+use crate::outcome::{Exit, Refusal, print_json};
 use crate::pipeline;
 
 /// `specforge review [ENTITY]`: the review read view over the project
@@ -18,10 +18,7 @@ pub(crate) fn run(path: &Path, request: &ReviewRequest, format: OutputFormat) ->
     match review(&ProjectView::of(&project), request) {
         Ok(review) => {
             match format {
-                OutputFormat::Json => println!(
-                    "{}",
-                    serde_json::to_string_pretty(&review.to_json()).expect("serialize JSON output")
-                ),
+                OutputFormat::Json => print_json(&review.document()),
                 OutputFormat::Human => print_human(&review, request.depth),
             }
             Exit::Passed

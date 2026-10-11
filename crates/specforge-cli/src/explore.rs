@@ -4,7 +4,7 @@ use specforge_ops::explore::{Exploration, ExplorationRequest, explore};
 use specforge_ops::view::ProjectView;
 
 use crate::OutputFormat;
-use crate::outcome::{Exit, Refusal};
+use crate::outcome::{Exit, Refusal, print_json};
 use crate::pipeline;
 
 /// `specforge explore [ENTITY]`: the exploration read view over the project
@@ -21,11 +21,7 @@ pub(crate) fn run(path: &Path, request: &ExplorationRequest, format: OutputForma
                 eprintln!("{}", specforge_common::render_plain(notice));
             }
             match format {
-                OutputFormat::Json => println!(
-                    "{}",
-                    serde_json::to_string_pretty(&exploration.to_json())
-                        .expect("serialize JSON output")
-                ),
+                OutputFormat::Json => print_json(&exploration.document()),
                 OutputFormat::Human => print_human(&exploration, &view),
             }
             Exit::Passed

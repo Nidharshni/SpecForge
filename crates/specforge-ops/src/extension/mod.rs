@@ -12,18 +12,23 @@ mod remove;
 mod resolve;
 mod update;
 
-pub use add::{AddOutcome, AddRequest, Added, Source, Trust, add, parse};
+pub use add::{
+    AddDocument, AddOutcome, AddRequest, Added, BuiltinSource, EnabledBuiltin, InstalledPackage,
+    PlannedAdd, PresentExtension, Source, Trust, add, parse,
+};
 pub use candidate::{Candidate, Installable, LocalFile};
 pub use inventory::{Inventory, ProjectExtension, Selection, Status, inventory};
 pub use list::{
-    ExtensionInfo, ExtensionListing, LockedExtension, ProviderEntry, ProviderListing, ProviderRow,
-    ProviderStatus, ProvidersDocument, list, providers,
+    ExtensionInfo, ExtensionListing, ExtensionsDocument, LockedExtension, ProviderEntry,
+    ProviderListing, ProviderRow, ProviderStatus, ProvidersDocument, list, providers,
 };
-pub use remove::{RemoveOutcome, RemoveRequest, StrandedEntity, remove};
+pub use remove::{
+    RemoveAction, RemoveDocument, RemoveOutcome, RemoveRequest, StrandedEntity, remove,
+};
 pub use resolve::{resolve, resolve_requirement};
 pub use update::{
-    BatchUpdateCompleted, ExtensionUpdate, NO_LOCK, UpdateOutcome, UpdateRequest, UpdateStatus,
-    update,
+    BatchUpdateCompleted, BatchUpdateEvent, ExtensionUpdate, NO_LOCK, UpdateDocument,
+    UpdateOutcome, UpdateRequest, UpdateRow, UpdateStatus, update,
 };
 
 pub(crate) use candidate::required_builtins;

@@ -79,9 +79,12 @@ has one coverage-row presenter (`tools::coverage::row_json`) and one gap present
   first two (`McpTraceGap`). MCP's invented "no upstream/downstream links" is gone: isolation is an
   empty `upstream` or `downstream`, and `specforge.trace` returns exactly the CLI's document (its
   output schema is a `oneOf` of that document and `McpTracePlanResult`).
-- **D6. Stats keeps two JSON shapes**, `ProjectStatistics` and `McpStatsResult` (both published), as
+- ~~**D6. Stats keeps two JSON shapes**, `ProjectStatistics` and `McpStatsResult` (both published), as
   ADR 0004 D1-c accepted for diagnostics. The numbers live once, in the operation; a parity test
-  holds the two shapes to the same numbers.
+  holds the two shapes to the same numbers.~~ Superseded by
+  [ADR 0052](0052-an-operations-outcome-is-one-document-both-surfaces-print.md) D1: stats' outcome
+  (`specforge_ops::stats::Stats`, `McpStatsResult`) is the one document `specforge stats --format
+  json` and `specforge.stats` print; `ProjectStatistics` is deleted.
 - **D7. Stats' diagnostics are the surface's**: the CLI's view reports what `check` reports, MCP's
   its project's diagnostics plus its surface-registration notices (`ProjectView::reported`, see
   "Management operations"; `StatsRequest` is gone).
@@ -115,7 +118,7 @@ has one coverage-row presenter (`tools::coverage::row_json`) and one gap present
   no `gaps` on an entity trace; an error for an unknown schema kind or coverage status; W146 in
   model results (retired by ADR 0034).
 - Sub-path invocations change (D1); the R1/R2 reproductions of plan 02 are tests.
-- No ADR conflicts: D3 extends ADR 0004 D2-b, D4 is consistent with D2-a, D6 mirrors D1-c, and ADR
+- No ADR conflicts: D3 extends ADR 0004 D2-b, D4 is consistent with D2-a, D6 mirrors D1-c (both superseded by ADR 0052), and ADR
   0004 is silent on roots (27c48e54 had already chosen the view's own root for MCP).
 - Found on the way: `specforge outline` printed a different document on most runs (a HashMap
   transitive closure); it is deterministic now.

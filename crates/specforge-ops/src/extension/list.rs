@@ -27,10 +27,36 @@ pub struct ExtensionInfo {
 }
 
 /// One entry of the project's `specforge.lock`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Shape)]
 pub struct LockedExtension {
     pub name: String,
     pub version: String,
+}
+
+/// What `specforge extensions --format json` and `specforge.extensions`
+/// print (`McpExtensionsResult`).
+#[derive(Debug, Clone, PartialEq, Serialize, Shape)]
+pub struct ExtensionsDocument {
+    /// Sorted by name.
+    pub extensions: Vec<ExtensionInfo>,
+    /// How many extensions are listed.
+    pub count: usize,
+    /// The lock's entries, in lock order.
+    pub lock_file_entries: Vec<LockedExtension>,
+    /// The kinds of the graph's entities.
+    pub entity_kinds_in_graph: BTreeSet<String>,
+}
+
+impl ExtensionListing {
+    /// The document both surfaces print.
+    pub fn document(&self) -> ExtensionsDocument {
+        ExtensionsDocument {
+            extensions: self.extensions.clone(),
+            count: self.extensions.len(),
+            lock_file_entries: self.locked.clone(),
+            entity_kinds_in_graph: self.kinds_in_graph.clone(),
+        }
+    }
 }
 
 /// Every extension the project enables, has locked at its root, or

@@ -4,7 +4,7 @@ use specforge_ops::infer::{InferenceGuide, KindGuide, guide, kind_guide};
 use specforge_ops::view::ProjectView;
 
 use crate::OutputFormat;
-use crate::outcome::{Exit, Refusal};
+use crate::outcome::{Exit, Refusal, print_json};
 use crate::pipeline;
 
 /// `specforge infer-guide [KIND]`: the inference guide read view over the
@@ -20,7 +20,7 @@ pub(crate) fn run(path: &Path, kind: Option<&str>, format: OutputFormat) -> Exit
         None => {
             let guide = guide(&view);
             match format {
-                OutputFormat::Json => print_json(&guide.to_json()),
+                OutputFormat::Json => print_json(&guide.document()),
                 OutputFormat::Human => print_overview(&guide),
             }
             Exit::Passed
@@ -28,7 +28,7 @@ pub(crate) fn run(path: &Path, kind: Option<&str>, format: OutputFormat) -> Exit
         Some(kind) => match kind_guide(&view, kind) {
             Ok(guide) => {
                 match format {
-                    OutputFormat::Json => print_json(&guide.to_json()),
+                    OutputFormat::Json => print_json(&guide.document()),
                     OutputFormat::Human => print_kind(&guide),
                 }
                 Exit::Passed
@@ -36,13 +36,6 @@ pub(crate) fn run(path: &Path, kind: Option<&str>, format: OutputFormat) -> Exit
             Err(error) => Refusal::of(format).report(&error),
         },
     }
-}
-
-fn print_json(document: &serde_json::Value) {
-    println!(
-        "{}",
-        serde_json::to_string_pretty(document).expect("serialize JSON output")
-    );
 }
 
 /// `text`, each non-empty line indented by `indent`.

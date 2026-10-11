@@ -33,6 +33,6 @@ pub fn render(view: ProjectView<'_>, args: Args) -> PromptOutcome {
     let exploration = explore(&view, &request).map_err(McpError::from)?;
     Ok(Rendered {
         instruction: INSTRUCTION.to_string(),
-        payload: exploration.to_json(),
+        payload: serde_json::to_value(exploration.document()).expect("a document serializes"),
     })
 }

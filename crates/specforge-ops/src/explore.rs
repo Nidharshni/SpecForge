@@ -5,8 +5,9 @@
 use std::cmp::Reverse;
 use std::collections::BTreeSet;
 
-use serde_json::{Value, json};
-use specforge_common::Diagnostic;
+use serde::Serialize;
+use specforge_common::shape::Shape;
+use specforge_common::{Diagnostic, DiagnosticList};
 use specforge_graph::Graph;
 
 use crate::OpError;
@@ -66,34 +67,49 @@ pub struct Exploration {
 
 impl Exploration {
     /// The exploration as the explore prompt's payload and `specforge
-    /// explore --format json` write it (`McpExplorePromptResult`):
-    /// `matching_entities`, `relationship_paths` (`from_entity`,
-    /// `to_entity`, `edge_types`, `path_length`), `starting_points`,
-    /// `high_connectivity`, `unconnected`, `notices` (the diagnostics JSON,
-    /// `specforge_common::diagnostics_json`).
-    pub fn to_json(&self) -> Value {
-        let from = self.from.as_deref().unwrap_or_default();
-        let paths: Vec<Value> = self
-            .paths
-            .iter()
-            .map(|path| {
-                json!({
-                    "from_entity": from,
-                    "to_entity": path.to,
-                    "edge_types": path.labels,
-                    "path_length": path.labels.len(),
+    /// explore --format json` write it.
+    pub fn document(&self) -> ExplorationDocument {
+        let from = self.from.clone().unwrap_or_default();
+        ExplorationDocument {
+            matching_entities: self.selected.clone(),
+            relationship_paths: self
+                .paths
+                .iter()
+                .map(|path| PathDocument {
+                    from_entity: from.clone(),
+                    to_entity: path.to.clone(),
+                    edge_types: path.labels.clone(),
+                    path_length: path.labels.len(),
                 })
-            })
-            .collect();
-        json!({
-            "matching_entities": self.selected,
-            "relationship_paths": paths,
-            "starting_points": self.starting_points,
-            "high_connectivity": self.most_connected,
-            "unconnected": self.unconnected,
-            "notices": specforge_common::diagnostics_json(&self.notices),
-        })
+                .collect(),
+            starting_points: self.starting_points.clone(),
+            high_connectivity: self.most_connected.clone(),
+            unconnected: self.unconnected.clone(),
+            notices: DiagnosticList(self.notices.clone()),
+        }
     }
+}
+
+/// The exploration as `specforge explore --format json` and the explore
+/// prompt print it (`McpExplorePromptResult`).
+#[derive(Debug, Clone, PartialEq, Serialize, Shape)]
+pub struct ExplorationDocument {
+    pub matching_entities: Vec<String>,
+    pub relationship_paths: Vec<PathDocument>,
+    pub starting_points: Vec<String>,
+    pub high_connectivity: Vec<String>,
+    pub unconnected: Vec<String>,
+    /// I020 for a kind the project does not know.
+    pub notices: DiagnosticList,
+}
+
+/// One relationship path of an exploration.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Shape)]
+pub struct PathDocument {
+    pub from_entity: String,
+    pub to_entity: String,
+    pub edge_types: Vec<String>,
+    pub path_length: usize,
 }
 
 /// The exploration `request` asks for. An `entity_id` the graph lacks is

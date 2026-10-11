@@ -240,7 +240,8 @@ impl DoctorReport {
 }
 
 /// What `specforge doctor --format json` and `specforge.doctor` answer with
-/// (`McpDoctorReport`; the CLI adds the user's credential health).
+/// (`McpDoctorReport`); the CLI prints it with the user's credential health
+/// beside it (ADR 0029 D3a, ADR 0052 D8).
 #[derive(Debug, Clone, Serialize, Shape)]
 pub struct DoctorDocument {
     /// No error-level finding.

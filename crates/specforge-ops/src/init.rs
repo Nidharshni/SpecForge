@@ -10,7 +10,9 @@
 
 use crate::extension::{self, Candidate, LocalFile, Source};
 use crate::{OpError, OpErrorKind, Writes};
+use serde::Serialize;
 use serde_json::{Value, json};
+use specforge_common::shape::Shape;
 use specforge_common::validate_project_name;
 use specforge_wasm::WasmRuntime;
 use std::path::{Path, PathBuf};
@@ -73,14 +75,43 @@ pub struct Plan {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Outcome {
     pub root: PathBuf,
-    pub config_path: PathBuf,
-    pub starter_path: PathBuf,
     pub name: String,
     pub version: String,
     pub extensions: Vec<String>,
     /// The files init wrote: `specforge.json`, the starter, `.gitignore`
     /// when it lacked an entry, and each local install's module and lock.
     pub writes: Writes,
+}
+
+impl Outcome {
+    /// The document both surfaces print.
+    pub fn document(&self) -> InitDocument {
+        InitDocument {
+            project_root: self.root.display().to_string(),
+            name: self.name.clone(),
+            version: self.version.clone(),
+            config_file: crate::config::CONFIG_FILE.to_string(),
+            starter_file: STARTER_FILE.to_string(),
+            extensions_installed: self.extensions.clone(),
+        }
+    }
+}
+
+/// What `specforge init --format json` and `specforge.init` print
+/// (`McpInitResult`).
+#[derive(Debug, Clone, PartialEq, Serialize, Shape)]
+pub struct InitDocument {
+    /// The new project's root, absolute and canonical.
+    pub project_root: String,
+    pub name: String,
+    pub version: String,
+    /// `specforge.json`, relative to `project_root`.
+    pub config_file: String,
+    /// [`STARTER_FILE`], relative to `project_root`.
+    pub starter_file: String,
+    /// The extensions enabled: builtins by name, local installs by the name
+    /// they declare.
+    pub extensions_installed: Vec<String>,
 }
 
 /// Validate `req` and build what init writes, writing nothing.
@@ -274,8 +305,6 @@ pub fn apply(dir: &Path, plan: Plan) -> Result<Outcome, OpError> {
 
     Ok(Outcome {
         root: dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf()),
-        config_path: dir.join(crate::config::CONFIG_FILE),
-        starter_path: dir.join(STARTER_FILE),
         name: plan.name,
         version: plan.version,
         extensions: plan.extensions,

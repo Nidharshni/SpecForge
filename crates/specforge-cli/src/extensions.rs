@@ -1,6 +1,5 @@
 use crate::OutputFormat;
-use crate::outcome::Exit;
-use serde_json::json;
+use crate::outcome::{Exit, print_json};
 use specforge_ops::extension;
 use specforge_ops::view::ProjectView;
 use std::path::Path;
@@ -10,19 +9,11 @@ use std::path::Path;
 /// registered and how many of the project's entities use them.
 pub fn run(path: &Path, format: OutputFormat) -> Exit {
     let project = crate::pipeline::compile_project(path);
-    let entries = extension::list(&ProjectView::of(&project)).extensions;
+    let listing = extension::list(&ProjectView::of(&project));
+    let entries = &listing.extensions;
 
     match format {
-        OutputFormat::Json => {
-            let output = json!({
-                "extensions": entries,
-                "count": entries.len(),
-            });
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&output).expect("serialize JSON output")
-            );
-        }
+        OutputFormat::Json => print_json(&listing.document()),
         OutputFormat::Human => {
             if entries.is_empty() {
                 println!("No extensions installed.");
@@ -32,7 +23,7 @@ pub fn run(path: &Path, format: OutputFormat) -> Exit {
             }
             println!("Installed extensions:");
             println!();
-            for entry in &entries {
+            for entry in entries {
                 let version = entry
                     .version
                     .as_deref()

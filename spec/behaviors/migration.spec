@@ -119,8 +119,9 @@ behavior migrate_spec_files_in_place "Migrate Spec Files In Place" {
     The FileSystem port is required for reading source files, writing
     backups, writing temporary files, and performing atomic renames.
 
-    Its JSON output lists each migrated file and each backup as
-    files_written.
+    Its JSON output is the migration document specforge.migrate answers
+    (McpMigrateResult), listing each migrated file and each backup as
+    files_written (none for a dry run).
 
     A migration that is kept (no file failed, its hooks and checks
     passed) and made backups MUST record each migrated file, its backup
@@ -130,6 +131,7 @@ behavior migrate_spec_files_in_place "Migrate Spec Files In Place" {
     the record.
   """
   verify integration "migrate --format json lists each migrated file and its backup in files_written"
+  verify integration "migrate --format json prints the migration document specforge.migrate answers, with files_written"
   verify contract "Migrate Spec Files In Place: in-place migration holds — semantic_preservation"
   verify unit "files migrated from source to target version"
   verify unit "backup created before modification"

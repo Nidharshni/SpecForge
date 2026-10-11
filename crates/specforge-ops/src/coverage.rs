@@ -6,7 +6,6 @@
 //! testable, so its rows and stats' numbers cannot disagree.
 
 use serde::Serialize;
-use serde_json::Value;
 use specforge_common::shape::Shape;
 use specforge_project::coverage::{Status, Summary, Verdict};
 use specforge_project::snapshot::{EntityRecord, Standing};
@@ -72,11 +71,6 @@ impl CoverageRow {
             unproven: self.verdict.unproven.clone(),
             exempt: self.exempt,
         }
-    }
-
-    /// [`Self::document`] as JSON.
-    pub fn to_json(&self) -> Value {
-        serde_json::to_value(self.document()).expect("a coverage row serializes")
     }
 
     /// It declares at least one obligation.

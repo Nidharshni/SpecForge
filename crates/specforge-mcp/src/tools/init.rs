@@ -2,9 +2,6 @@
 
 use std::path::Path;
 
-use serde::Serialize;
-use specforge_common::shape::Shape;
-
 use crate::args::Arguments;
 use crate::mutation::{
     Mutated, Mutation, MutationArgs, MutationEvent, MutationReply, NoDiagnostics, Written,
@@ -32,16 +29,9 @@ impl MutationReply for Reply {
     type After = NoDiagnostics;
 }
 
-/// `specforge.init`'s reply (`McpInitResult`).
-#[derive(Debug, Serialize, Shape)]
-pub struct Reply {
-    project_path: String,
-    config_file: String,
-    starter_file: String,
-    extensions_installed: Vec<String>,
-    name: String,
-    version: String,
-}
+/// `specforge.init`'s reply (`McpInitResult`): the init document `specforge
+/// init --format json` prints (ADR 0052).
+pub use specforge_ops::init::InitDocument as Reply;
 
 pub(crate) fn call(
     path: &Path,
@@ -63,14 +53,7 @@ pub(crate) fn call(
     };
     let outcome =
         init::plan(&request, runtime.as_ref()).and_then(|plan| init::apply(path, plan))?;
-    let reply = Reply {
-        project_path: path.display().to_string(),
-        config_file: "specforge.json".to_string(),
-        starter_file: init::STARTER_FILE.to_string(),
-        extensions_installed: outcome.extensions.clone(),
-        name: outcome.name.clone(),
-        version: outcome.version.clone(),
-    };
+    let reply = outcome.document();
     // With no project served, the server serves the one it created (ADR
     // 0014 D5): `mutation::complete` does, once it wrote.
     let event = MutationEvent::ProjectInitialized {

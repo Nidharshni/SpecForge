@@ -175,7 +175,7 @@ behavior non_interactive_init "Non-Interactive Init" {
   features   [project_initialization]
   category   command
   invariants [spec_root_singleton, init_config_validity, zero_domain_knowledge_core]
-  types      [CompilerConfig, InitConfig, InitOutput, InitError, BundledExtensionCatalog]
+  types      [CompilerConfig, InitConfig, McpInitResult, InitError, BundledExtensionCatalog]
   ports      [FileSystem, RegistryClient]
   produces   [project_initialized]
   requires {
@@ -186,7 +186,7 @@ behavior non_interactive_init "Non-Interactive Init" {
   ensures {
     config_identical_to_interactive "Generated specforge.json is structurally identical to one created interactively with the same inputs"
     all_prompts_skipped             "All interactive prompts are skipped"
-    json_output_supported           "When --format=json is specified, output is a JSON object with project_root, config_path, spec_file_path, extensions_installed"
+    json_output_supported           "When --format=json is specified, output is the init document specforge.init answers: project_root, name, version, config_file, starter_file, extensions_installed and files_written"
     project_initialized_emitted     "project_initialized event is emitted after successful non-interactive init"
   }
   contract   """
@@ -196,8 +196,10 @@ behavior non_interactive_init "Non-Interactive Init" {
     automated tooling to scaffold projects without user interaction.
     The generated specforge.json MUST be identical in structure to
     one created interactively with the same inputs. When --format=json
-    is specified, output MUST be a JSON object:
-    { project_root, config_path, spec_file_path, extensions_installed[] }.
+    is specified, output MUST be the init document specforge.init answers
+    (McpInitResult): { project_root (absolute), name, version, config_file
+    and starter_file (relative to project_root), extensions_installed[] },
+    with files_written.
     When --version is specified, it MUST override the default version
     (0.1.0) in the generated specforge.json.
     --extensions takes builtins and local .wasm files, several to a flag
@@ -225,8 +227,8 @@ behavior non_interactive_init "Non-Interactive Init" {
   verify integration "--extensions splits a comma-separated list into its extensions"
   verify integration "a one-character project name is rejected before its starter can fail E014"
   verify integration "non-interactive output matches interactive output for same inputs"
-  verify unit "non-interactive init with --format=json outputs InitOutput JSON"
-  verify unit "non-interactive init --format=json includes all 4 required fields: project_root, config_path, spec_file_path, extensions_installed"
+  verify unit "non-interactive init with --format=json prints the init document specforge.init answers"
+  verify unit "non-interactive init --format=json includes project_root, name, version, config_file, starter_file and extensions_installed"
   verify unit "non-interactive init with --version overrides default version in specforge.json"
   verify integration "non_interactive_init completes full init-check-export cycle in under 60 seconds"
   verify contract "Non-Interactive Init: non-interactive init holds — name_flag_provided, filesystem_available, no_existing_project, config_identical_to_interactive, all_prompts_skipped, json_output_supported, project_initialized_emitted"
@@ -302,12 +304,16 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
     a diagnostic naming the unresolvable extension. A registry specifier
     with no registry configured in specforge.json MUST make no network call
     and MUST fail with E063, whose suggestion names the registries key.
-    Its JSON output lists the files it wrote as files_written (empty when
-    the extension was already enabled).
+    Its JSON output is the add document specforge.add_extension answers
+    (McpAddExtensionResult, its action enabled, installed, already_present
+    or planned; no note), with the files it wrote as files_written (empty
+    when the extension was already enabled). A registry package's source is
+    registry, and its key_id is present only when the package is signed.
   """
   verify unit "with no registry configured, add makes no network call and reports how to configure one"
   verify unit "add extension appends to extensions list"
   verify integration "add --format json lists the files it wrote in files_written"
+  verify unit "the add document says what the add did by action, with source always and key_id only for a signed package"
   verify unit "add enables a builtin's required peers but not its optional ones"
   verify unit "add enables the builtins a required builtin peer requires, dependencies first"
   verify unit "a builtin whose declaration cannot be read is refused before anything is written"

@@ -150,39 +150,17 @@ fn stats_today() {
     pin_stats("rv1", rv1().path());
 }
 
-/// `specforge stats` and `specforge.stats` on `root` carry the same numbers
-/// in their two shapes (`ProjectStatistics`, `McpStatsResult`).
+/// `specforge stats --format json` and `specforge.stats` on `root` answer one
+/// document (`McpStatsResult`, ADR 0052).
 fn assert_stats_agree(root: &Path) {
     let cli = cli_json(&["stats", "--format", "json", s(root)]);
     let mcp = &mcp_calls(root, &[json!({"name": "specforge.stats", "arguments": {}})])[0];
-    let counts: serde_json::Map<String, Value> = mcp["entity_counts"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|c| (c["kind"].as_str().unwrap().to_string(), c["count"].clone()))
-        .collect();
-    assert_eq!(cli["entities_by_kind"], Value::Object(counts), "{root:?}");
-    let total: u64 = mcp["entity_counts"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|c| c["count"].as_u64().unwrap())
-        .sum();
-    assert_eq!(cli["total_entities"], json!(total));
-    assert_eq!(cli["total_edges"], mcp["edge_count"]);
-    assert_eq!(cli["unconnected_count"], mcp["unconnected_count"]);
-    for key in ["declared_pct", "proof_pct"] {
-        assert_eq!(cli[key], mcp[key], "{key} on {root:?}");
-    }
-    let summary = &mcp["diagnostic_summary"];
-    assert_eq!(cli["error_count"], summary["errors"]);
-    assert_eq!(cli["warning_count"], summary["warnings"]);
-    assert_eq!(cli["info_count"], summary["infos"]);
+    assert_eq!(cli, *mcp, "{root:?}");
 }
 
 #[specforge_test_macros::test(
     behavior = "read_views_over_the_project_view",
-    verify = "specforge stats and specforge.stats report the same numbers"
+    verify = "specforge stats --format json and specforge.stats answer the same document"
 )]
 fn cli_and_mcp_stats_report_the_same_numbers() {
     assert_stats_agree(project("fx1").path());
@@ -761,7 +739,7 @@ fn contract_read_views() {
     // project_compiled: the CLI's compiled project and MCP's session each
     // supply a view, and answer.
     let stats = cli_json(&["stats", "--format", "json", s(root)]);
-    assert_eq!(stats["total_entities"], 6, "{stats}");
+    assert_eq!(stats["entity_count"], 6, "{stats}");
 
     // surfaces_agree: the same numbers, chains, schema version and rows.
     assert_stats_agree(root);

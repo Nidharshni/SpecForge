@@ -208,14 +208,18 @@ fn stats_contract_graph_with_diagnostics_produces_complete_stats() {
     graph.add_node(verified_feature);
 
     let stats = crate::view_support::stats_of(&graph, &["behavior"], &diagnostics);
-    assert_eq!(stats.total_entities, 5);
-    assert_eq!(stats.total_edges, 2);
+    assert_eq!(stats.entity_count, 5);
+    assert_eq!(stats.edge_count, 2);
     // entity_counts_produced: counts grouped by kind.
     assert_eq!(
-        stats.entities_by_kind,
-        [("behavior".to_string(), 3), ("feature".to_string(), 2)]
+        stats.entity_counts,
+        [("behavior", 3), ("feature", 2)]
             .into_iter()
-            .collect()
+            .map(|(kind, count)| specforge_ops::stats::KindCount {
+                kind: kind.to_string(),
+                count,
+            })
+            .collect::<Vec<_>>()
     );
     // coverage_computed: b and c of the three behaviors are verified.
     assert_eq!(stats.testable_count, 3);
@@ -224,8 +228,8 @@ fn stats_contract_graph_with_diagnostics_produces_complete_stats() {
         "2 of 3 testable verified: {}",
         stats.declared_pct
     );
-    assert_eq!(stats.error_count, 1);
-    assert_eq!(stats.warning_count, 1);
+    assert_eq!(stats.diagnostic_summary.errors, 1);
+    assert_eq!(stats.diagnostic_summary.warnings, 1);
 
     // zero_testable_safe: no testable kinds, or a testable kind with no
     // entities, reports 0%, not NaN.

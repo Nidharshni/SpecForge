@@ -9,7 +9,7 @@ specforge.search 481
 specforge.explain 786
 specforge.schema 1765
 specforge.coverage 696
-specforge.stats 757
+specforge.stats 1013
 specforge.list 290
 specforge.inspect 3432
 specforge.find_definition 1018
@@ -19,10 +19,10 @@ specforge.suggest_fixes 890
 specforge.format 3417
 specforge.rename 3000
 specforge.init 434
-specforge.add_extension 1537
-specforge.remove_extension 444
-specforge.migrate 10228
-specforge.extensions 884
+specforge.add_extension 1552
+specforge.remove_extension 500
+specforge.migrate 10082
+specforge.extensions 931
 specforge.providers 2826
 specforge.doctor 4186
 specforge.collect 3091
@@ -32,4 +32,4 @@ specforge.infer_gaps 1101
 specforge.infer_session 295
 specforge.find_implementation 502
 specforge.find_spec_for_source 642
-total 61122
+total 61350

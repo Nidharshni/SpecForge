@@ -92,7 +92,7 @@ fn mcp_enables_a_builtin_offline() {
 
     let added = payload(&reply);
     assert_eq!(added["source"], "builtin", "{added}");
-    assert_eq!(added["installed"], true, "{added}");
+    assert_eq!(added["action"], "enabled", "{added}");
     // Its required builtin peer comes first, as with `specforge add`.
     assert_eq!(
         extensions(dir.path()),

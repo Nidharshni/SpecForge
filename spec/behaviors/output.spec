@@ -175,7 +175,7 @@ behavior compute_traceability_chain "Compute Traceability Chain" {
 behavior compute_project_statistics "Compute Project Statistics" {
   invariants [diagnostic_determinism, testable_entity_classification, zero_domain_knowledge_core]
   category   query
-  types      [Graph, KindRegistryEntry, ProjectStatistics, DiagnosticSummary, EntityKindCount]
+  types      [Graph, KindRegistryEntry, McpStatsResult, McpEntityCount, McpDiagnosticSummary]
   consumes   [validation_complete]
   features   [extension_driven_coverage]
   requires {
@@ -206,6 +206,11 @@ behavior compute_project_statistics "Compute Project Statistics" {
     rule proves, the analyze coverage --min gate's figure. Without
     results it is absent; a report that exists but cannot be read is an
     error.
+    specforge stats --format json prints the statistics document
+    specforge.stats answers (McpStatsResult): the entity count and the
+    counts by kind, the edge count, the unconnected, testable, declared and
+    verified counts, the declared and proof percentages and the diagnostic
+    summary by severity; an absent proof percentage is no key, never null.
   """
   verify unit "stats reports correct entity counts"
   verify unit "stats reports coverage percentage"
@@ -213,6 +218,7 @@ behavior compute_project_statistics "Compute Project Statistics" {
   verify unit "stats reports diagnostic summary"
   verify unit "coverage is 0% when testable_entity_count is zero"
   verify unit "stats leaves the entities W004 exempts out of the testable count"
+  verify unit "the stats document has no proof_pct without recorded test results"
   verify integration "stats reports the declared and proof percentages"
   verify contract "Compute Project Statistics: project statistics computation holds — validation_complete_fired, entity_counts_produced, coverage_computed, zero_testable_safe"
 }
@@ -280,7 +286,7 @@ behavior read_views_over_the_project_view "Read Views over the Project View" {
   verify unit "inspect reports an entity's standing as the coverage view counts it"
   verify unit "a report that cannot be read is the coverage's error, and the standing still holds"
   verify unit "an unusable report is the same failure, of the kind the operation decides, on every view"
-  verify integration "specforge stats and specforge.stats report the same numbers"
+  verify integration "specforge stats --format json and specforge.stats answer the same document"
   verify integration "specforge trace and specforge.trace return the same chain for an entity"
   verify integration "specforge schema and specforge.schema carry the same version"
   verify integration "specforge schema --kind and specforge.schema with a kind return the same document"
@@ -541,6 +547,10 @@ behavior report_command_outcome "Report a Command's Outcome" {
     The verdict is the operation's: the CLI's exit code and the ok MCP
     returns for check, analyze, format, migrate and doctor MUST agree
     (doctor's credentials are the CLI's alone).
+    Under --format json a command prints its operation's outcome document,
+    the one the matching MCP tool answers, adding only what it alone knows
+    (the files it wrote, doctor's credentials, infer-status's --gaps and
+    --gaps-detail sections), never renaming or dropping a key.
   """
   verify unit "an operation's refusal is error[CODE]: message, its hint and the files it left written, on stderr"
   verify unit "under --format json a refusal is the error document on stdout and nothing on stderr"
@@ -548,6 +558,7 @@ behavior report_command_outcome "Report a Command's Outcome" {
   verify unit "stats, trace, analyze, migrate and init refuse with the error document under --format json"
   verify unit "a command run outside any project refuses with no_project"
   verify integration "the CLI's exit code and MCP's ok agree for check, analyze, format and migrate"
+  verify integration "the CLI's --format json and MCP's reply are one outcome document for every operation both surfaces run, format aside"
   verify contract "Report a Command's Outcome: command outcome holds — operation_ran, one_refusal_shape, one_exit_table, surfaces_agree"
 }
 
@@ -836,14 +847,7 @@ behavior export_agent_context_format "Export Agent Context Format" {
     zero_domain_knowledge_core,
   ]
   category   query
-  types      [
-    Graph,
-    GraphProtocolSchema,
-    OutputFile,
-    AgentExportConfig,
-    ProjectStatistics,
-    GraphAnnotation,
-  ]
+  types      [Graph, GraphProtocolSchema, OutputFile, AgentExportConfig, GraphAnnotation]
   ports      [CompilerApi]
   consumes   [validation_complete]
   produces   [export_complete]

@@ -39,7 +39,9 @@ pub use manifest::{
 pub use plan::{
     FilePage, InferencePlan, InferencePlanRequest, KindPriority, MAX_LISTED_FILES, inference_plan,
 };
-pub use progress::{Progress, ProgressDocument, ProgressSummary, SessionRow, progress};
+pub use progress::{
+    Progress, ProgressDocument, ProgressSummary, SessionRow, UnanalyzedDirectory, progress,
+};
 pub use session::{
     END_STATUS, EndStatus, Recorded, SESSION_ACTION, SESSION_ACTIVE, SESSION_NOT_ACTIVE,
     SOURCE_OUTSIDE_ROOT, SOURCE_UNREADABLE, SessionAction, SessionOutcome, SessionStep,
