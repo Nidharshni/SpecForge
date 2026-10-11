@@ -161,15 +161,6 @@ impl<D> Written<D> {
             files_written: Some(files_written),
         }
     }
-
-    /// `document` of a preview: no `files_written`.
-    #[allow(dead_code)]
-    pub(crate) fn preview(document: D) -> Self {
-        Self {
-            document,
-            files_written: None,
-        }
-    }
 }
 
 /// `{"error", "code", "suggestion"}`, and `files_written` when the
