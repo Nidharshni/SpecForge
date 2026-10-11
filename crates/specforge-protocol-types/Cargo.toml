@@ -4,13 +4,11 @@ edition.workspace = true
 version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Wire types for the SpecForge extension protocol: handshake, describe payloads, and shared descriptors"
+description = "The guest wire of the SpecForge extension protocol: the handshake, the describe payloads, the operation payloads and the command-arg rule, which the host and every guest compile (ADR 0012, 0013, 0050)"
 readme = "../../docs/extension-protocol.md"
 
 [dependencies]
 serde = { workspace = true }
-# A package name's requirement (ADR 0036): no dependencies, builds for guests.
-semver = { workspace = true }
 # `raw_value`: the command input splices the host's rendered graph (`RawGraph`).
 serde_json = { workspace = true, features = ["raw_value"] }
 

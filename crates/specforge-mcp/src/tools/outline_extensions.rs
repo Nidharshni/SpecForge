@@ -1,3 +1,5 @@
+use crate::target::View;
+use crate::tool::{CoreTool, Effect, ToolGroup};
 use specforge_ops::model::{self, DependencyDepth, OutlineDetail, OutlineFormat, OutlineOptions};
 
 use crate::args::Arguments;
@@ -20,8 +22,21 @@ pub struct Args {
 
 /// `specforge.outline_extensions`: the outline operation over the served
 /// project.
-pub fn call(view: ProjectView<'_>, args: Args) -> Answered<Text> {
-    Ok(Text(model::outline(&view, &options(&args))).into())
+pub(crate) struct Tool;
+
+impl CoreTool for Tool {
+    const NAME: &'static str = "specforge.outline_extensions";
+    const DESCRIPTION: &'static str = "Renders the extension architecture hierarchy — how extensions relate via dependencies, enhancements, and cross-extension edges. Shows entity kinds, edge types, validation rules, and surface contributions per extension. Use this to understand the project's extension topology before making structural changes.";
+    const EFFECT: Effect = Effect::Reads {
+        group: ToolGroup::Core,
+    };
+    type Args = Args;
+    type Input = View;
+    type Returns = Answered<Text>;
+
+    fn call(view: ProjectView<'_>, args: Args) -> Answered<Text> {
+        Ok(Text(model::outline(&view, &options(&args))).into())
+    }
 }
 
 /// The outline options the arguments name; an absent one is its table's

@@ -1,5 +1,5 @@
 use sha2::{Digest, Sha256};
-use specforge_protocol_types::PackageName;
+use specforge_package::PackageName;
 
 use crate::db::{Database, TokenRecord};
 

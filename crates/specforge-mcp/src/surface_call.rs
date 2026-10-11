@@ -80,7 +80,7 @@ impl<C: Copy> Found<C, std::convert::Infallible> {
 
 /// What a handler produced, with the events to record whatever it was (an
 /// extension's dispatch event is recorded for a failed dispatch too).
-pub(crate) struct Ran<O> {
+pub struct Ran<O> {
     pub outcome: O,
     pub events: Vec<Event>,
 }

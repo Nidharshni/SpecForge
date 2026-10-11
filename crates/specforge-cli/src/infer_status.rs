@@ -3,33 +3,91 @@
 //! `specforge.infer_progress` answer; `--gaps` adds the unanalyzed files
 //! by directory and `--gaps-detail` the `specforge.infer_gaps` report.
 
-use crate::OutputFormat;
-use crate::outcome::{Exit, Refusal};
-use serde_json::json;
-use specforge_ops::infer::{self, Gaps, MANIFEST_FILENAME, Progress};
-use specforge_ops::view::ProjectView;
-use std::path::Path;
+use crate::terminal::{Terminal, out, outln};
 
-pub fn run(
-    path: &Path,
+use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
+use serde::Serialize;
+use specforge_ops::infer::{
+    self, Gaps, GapsDocument, MANIFEST_FILENAME, Progress, ProgressDocument, UnanalyzedDirectory,
+};
+use specforge_ops::view::ProjectView;
+use specforge_project::CompiledProject;
+use std::path::PathBuf;
+
+/// What `specforge infer-status --format json` prints: the progress document
+/// `specforge.infer_progress` answers, and the sections only the CLI's flags
+/// ask for.
+#[derive(Serialize)]
+struct Printed {
+    #[serde(flatten)]
+    progress: ProgressDocument,
+    /// `--gaps`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    unanalyzed_by_directory: Option<Vec<UnanalyzedDirectory>>,
+    /// `--gaps-detail`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    gap_analysis: Option<GapsDocument>,
+}
+
+// `specforge infer-status`'s command line.
+#[derive(clap::Args)]
+pub(crate) struct Args {
+    /// Path to the project root
+    #[arg(long, default_value = ".")]
+    path: PathBuf,
+
+    #[command(flatten)]
+    output: OutputArg,
+
+    /// Show unanalyzed files grouped by directory
+    #[arg(long)]
+    gaps: bool,
+
+    /// Show stale and deleted files
+    #[arg(long)]
+    stale: bool,
+
+    /// Show detailed gap analysis (pub Rust items without spec entities)
+    #[arg(long)]
+    gaps_detail: bool,
+}
+
+impl Args {
+    pub(crate) fn run(self, terminal: &Terminal) -> Exit {
+        let (format, show_gaps, show_stale, show_gaps_detail) =
+            (self.output.format, self.gaps, self.stale, self.gaps_detail);
+        let project = crate::pipeline::compile_project(&self.path);
+        run_over(
+            &project,
+            format,
+            show_gaps,
+            show_stale,
+            show_gaps_detail,
+            terminal,
+        )
+    }
+}
+
+fn run_over(
+    project: &CompiledProject,
     format: OutputFormat,
     show_gaps: bool,
     show_stale: bool,
     show_gaps_detail: bool,
+    terminal: &Terminal,
 ) -> Exit {
-    let project = crate::pipeline::compile_project(path);
-    let view = ProjectView::of(&project);
+    let view = ProjectView::of(project);
     let progress = match infer::progress(&view) {
         Ok(progress) => progress,
         Err(error) => {
-            return Refusal::of(format).report(&error);
+            return Refusal::of(format).report(terminal, &error);
         }
     };
     let gaps = if show_gaps_detail {
         match infer::gaps(&view) {
             Ok(gaps) => Some(gaps),
             Err(error) => {
-                return Refusal::of(format).report(&error);
+                return Refusal::of(format).report(terminal, &error);
             }
         }
     } else {
@@ -38,33 +96,22 @@ pub fn run(
 
     match format {
         OutputFormat::Json => {
-            let mut doc = serde_json::to_value(progress.document()).expect("a document serializes");
-            if show_gaps {
-                doc["unanalyzed_by_directory"] = progress
-                    .unanalyzed_by_directory()
-                    .iter()
-                    .map(|(dir, files)| {
-                        json!({"directory": dir, "count": files.len(), "files": files})
-                    })
-                    .collect();
-            }
-            if let Some(gaps) = &gaps {
-                doc["gap_analysis"] =
-                    serde_json::to_value(gaps.document()).expect("a document serializes");
-            }
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&doc).expect("serialize JSON output")
-            );
+            terminal.json(&Printed {
+                progress: progress.document(),
+                unanalyzed_by_directory: show_gaps.then(|| progress.unanalyzed_by_directory()),
+                gap_analysis: gaps.as_ref().map(Gaps::document),
+            });
         }
         OutputFormat::Human => {
-            print!(
+            out!(
+                terminal,
                 "{}",
                 render_human(&progress, show_gaps, show_stale, gaps.as_ref())
             );
             if !progress.recorded {
-                println!();
-                println!(
+                outln!(terminal);
+                outln!(
+                    terminal,
                     "No {MANIFEST_FILENAME} yet: start an inference with the MCP infer prompt \
                      (specforge://prompts/infer), which records progress here."
                 );
@@ -117,9 +164,9 @@ fn render_human(progress: &Progress, gaps: bool, stale: bool, detail: Option<&Ga
     if gaps && !progress.unanalyzed.is_empty() {
         line!();
         line!("Unanalyzed files:");
-        for (dir, files) in progress.unanalyzed_by_directory() {
-            line!("  {} ({} files)", dir, files.len());
-            for f in files {
+        for row in progress.unanalyzed_by_directory() {
+            line!("  {} ({} files)", row.directory, row.count);
+            for f in &row.files {
                 line!("    {f}");
             }
         }

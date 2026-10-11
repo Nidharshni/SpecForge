@@ -3,7 +3,7 @@
 use specforge_installed::{
     Health, Installed, LockFile, LockFileEntry, LockState, read_lock_file, write_lock_file,
 };
-use specforge_protocol_types::PackageName;
+use specforge_package::PackageName;
 use std::path::Path;
 use tempfile::TempDir;
 
@@ -21,7 +21,7 @@ fn lock_file_roundtrip() {
         lockfile_version: 1,
         entries: vec![
             LockFileEntry {
-                name: specforge_protocol_types::PackageName::parse("@specforge/software").unwrap(),
+                name: specforge_package::PackageName::parse("@specforge/software").unwrap(),
                 version: "1.0.0".to_string(),
                 source: specforge_installed::LockSource::parse("registry"),
                 wasm_hash: "abc123".to_string(),
@@ -29,8 +29,7 @@ fn lock_file_roundtrip() {
                 peer_dependencies: Vec::new(),
             },
             LockFileEntry {
-                name: specforge_protocol_types::PackageName::parse("@specforge/governance")
-                    .unwrap(),
+                name: specforge_package::PackageName::parse("@specforge/governance").unwrap(),
                 version: "2.0.0".to_string(),
                 source: specforge_installed::LockSource::parse("local:./ext"),
                 wasm_hash: "def456".to_string(),
@@ -70,7 +69,7 @@ fn lock_file_missing_e033() {
 
 fn entry(name: &str, hash: &str) -> LockFileEntry {
     LockFileEntry {
-        name: specforge_protocol_types::PackageName::parse(name).unwrap(),
+        name: specforge_package::PackageName::parse(name).unwrap(),
         version: "1.0.0".to_string(),
         source: specforge_installed::LockSource::parse("registry"),
         wasm_hash: hash.to_string(),

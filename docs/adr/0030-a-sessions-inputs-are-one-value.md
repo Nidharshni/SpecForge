@@ -35,6 +35,9 @@ and five places.
   read (`RuntimeSource`: built per load from the config read, or fixed). A file written during the
   load is seen by the next `stale()`. The lock is still read by the runtime and by the environment,
   both after its stamp. `owns_runtime` is gone.
+  *(Round 6, plan 06: `Environment::from_read` reads the lock and runs the extension load, then
+  `Environment::assemble` builds the environment from those parts; ADR 0047 "An environment
+  assembles from its loaded parts".)*
 - **D4. Spelling.** Classification compares canonical paths. Watch roots are canonical (what the file
   watcher reports). The LSP's watchers name each input as the checks read it (OS resolution of
   `..`), re-spelled under the project root as the editor gave it, absolute outside it.

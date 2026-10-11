@@ -108,7 +108,7 @@ behavior render_extension_outline "Render the Extension Outline" {
     declarations_loaded "the project's extension declarations are loaded"
   }
   ensures {
-    one_card_per_extension  "each loaded extension is one card naming its version and what it contributes"
+    one_card_per_extension  "each loaded extension is one card naming its version, the describe categories it declares, and providers when its handshake says so"
     declared_text_contained "text an extension declares stays inside the label, string or table cell it is written in, in every format"
     deps_selected           "the dependencies every format shows, json included, are the ones --deps selects"
   }
@@ -128,6 +128,7 @@ behavior render_extension_outline "Render the Extension Outline" {
   verify unit "declared text with a quote, markup or a line break stays inside its Mermaid label"
   verify unit "declared text with a pipe or a line break stays in its Markdown table cell"
   verify unit "the builtins' outline is unchanged in every format"
+  verify unit "each extension's card names the describe categories it declares, and providers when its handshake says so"
   verify unit "the dependencies every format shows, json included, are the ones --deps selects"
   verify contract "Render the Extension Outline: outline rendering holds — declarations_loaded, one_card_per_extension, declared_text_contained, deps_selected"
 }
@@ -175,7 +176,7 @@ behavior compute_traceability_chain "Compute Traceability Chain" {
 behavior compute_project_statistics "Compute Project Statistics" {
   invariants [diagnostic_determinism, testable_entity_classification, zero_domain_knowledge_core]
   category   query
-  types      [Graph, KindRegistryEntry, ProjectStatistics, DiagnosticSummary, EntityKindCount]
+  types      [Graph, KindRegistryEntry, McpStatsResult, McpEntityCount, McpDiagnosticSummary]
   consumes   [validation_complete]
   features   [extension_driven_coverage]
   requires {
@@ -206,6 +207,11 @@ behavior compute_project_statistics "Compute Project Statistics" {
     rule proves, the analyze coverage --min gate's figure. Without
     results it is absent; a report that exists but cannot be read is an
     error.
+    specforge stats --format json prints the statistics document
+    specforge.stats answers (McpStatsResult): the entity count and the
+    counts by kind, the edge count, the unconnected, testable, declared and
+    verified counts, the declared and proof percentages and the diagnostic
+    summary by severity; an absent proof percentage is no key, never null.
   """
   verify unit "stats reports correct entity counts"
   verify unit "stats reports coverage percentage"
@@ -213,6 +219,7 @@ behavior compute_project_statistics "Compute Project Statistics" {
   verify unit "stats reports diagnostic summary"
   verify unit "coverage is 0% when testable_entity_count is zero"
   verify unit "stats leaves the entities W004 exempts out of the testable count"
+  verify unit "the stats document has no proof_pct without recorded test results"
   verify integration "stats reports the declared and proof percentages"
   verify contract "Compute Project Statistics: project statistics computation holds — validation_complete_fired, entity_counts_produced, coverage_computed, zero_testable_safe"
 }
@@ -280,7 +287,7 @@ behavior read_views_over_the_project_view "Read Views over the Project View" {
   verify unit "inspect reports an entity's standing as the coverage view counts it"
   verify unit "a report that cannot be read is the coverage's error, and the standing still holds"
   verify unit "an unusable report is the same failure, of the kind the operation decides, on every view"
-  verify integration "specforge stats and specforge.stats report the same numbers"
+  verify integration "specforge stats --format json and specforge.stats answer the same document"
   verify integration "specforge trace and specforge.trace return the same chain for an entity"
   verify integration "specforge schema and specforge.schema carry the same version"
   verify integration "specforge schema --kind and specforge.schema with a kind return the same document"
@@ -465,6 +472,10 @@ behavior print_diagnostics_structured "Print Diagnostics Structured" {
     number, column, source context snippet, suggestion, and color-coded
     severity. Errors MUST be red, warnings yellow, info blue. The format
     MUST be consistent across all output modes.
+    Colour follows one rule wherever the CLI writes: NO_COLOR set turns
+    it off, CLICOLOR_FORCE set (and not 0) turns it on, otherwise only a
+    terminal is coloured; specforge explain bolds the code it explains by
+    the same rule.
   """
   verify unit "error diagnostic is formatted with file:line:col"
   verify unit "diagnostic includes context snippet"
@@ -474,6 +485,7 @@ behavior print_diagnostics_structured "Print Diagnostics Structured" {
   verify unit "spanless error diagnostic also uses code"
   verify unit "diagnostics are plain when output is not a terminal"
   verify unit "NO_COLOR disables diagnostic colour"
+  verify unit "specforge explain bolds the code only where its output is coloured"
 }
 
 behavior exit_code_reflects_diagnostic_severity "Exit Code Reflects Diagnostic Severity" {
@@ -534,20 +546,34 @@ behavior report_command_outcome "Report a Command's Outcome" {
     exit 2. A refusal MUST be printed on stderr
     as error[CODE]: message, then "  hint: " and the suggestion when there
     is one, then "  wrote: " and each file the failed operation left
-    written; under --format json (analyze: --json) it MUST instead be the
+    written; under --format json it MUST instead be the
     error document {error, code, suggestion} (and files_written when files
     were left written) on stdout, with nothing on stderr. A command run
     outside any project where it needs one MUST refuse with no_project.
+    Every core command whose output has a human and a JSON form MUST take
+    --format human|json (human by default; trace's is json); no core
+    command takes --json.
+    A reader that closes stdout before the command has written
+    everything (specforge export | head) MUST end the output quietly:
+    no panic and nothing more on stderr, and the exit code stays the
+    command's.
     The verdict is the operation's: the CLI's exit code and the ok MCP
     returns for check, analyze, format, migrate and doctor MUST agree
     (doctor's credentials are the CLI's alone).
+    Under --format json a command prints its operation's outcome document,
+    the one the matching MCP tool answers, adding only what it alone knows
+    (the files it wrote, doctor's credentials, infer-status's --gaps and
+    --gaps-detail sections), never renaming or dropping a key.
   """
   verify unit "an operation's refusal is error[CODE]: message, its hint and the files it left written, on stderr"
   verify unit "under --format json a refusal is the error document on stdout and nothing on stderr"
   verify unit "a passed run exits 0, a failed verdict or a refusal 1, a refusal of a measuring command 2"
   verify unit "stats, trace, analyze, migrate and init refuse with the error document under --format json"
   verify unit "a command run outside any project refuses with no_project"
+  verify unit "every core command with a JSON form takes --format human|json, and none takes --json"
+  verify unit "a closed stdout ends the output quietly and keeps the command's exit"
   verify integration "the CLI's exit code and MCP's ok agree for check, analyze, format and migrate"
+  verify integration "the CLI's --format json and MCP's reply are one outcome document for every operation both surfaces run, format aside"
   verify contract "Report a Command's Outcome: command outcome holds — operation_ran, one_refusal_shape, one_exit_table, surfaces_agree"
 }
 
@@ -799,8 +825,8 @@ behavior present_diagnostics_as_json "Present Diagnostics as JSON" {
   }
   contract   """
     Wherever SpecForge prints diagnostics as JSON (specforge check
-    --format json, specforge collect and specforge watch --json, the MCP
-    specforge.validate tool, the specforge://diagnostics resource and the
+    --format json, specforge collect and specforge watch --format json,
+    the MCP specforge.validate tool, the specforge://diagnostics resource and the
     diagnostics in a tool result's _meta), it MUST present them in one
     shape: an array of
     entries with code, severity, message and suggestion (null when there
@@ -836,14 +862,7 @@ behavior export_agent_context_format "Export Agent Context Format" {
     zero_domain_knowledge_core,
   ]
   category   query
-  types      [
-    Graph,
-    GraphProtocolSchema,
-    OutputFile,
-    AgentExportConfig,
-    ProjectStatistics,
-    GraphAnnotation,
-  ]
+  types      [Graph, GraphProtocolSchema, OutputFile, AgentExportConfig, GraphAnnotation]
   ports      [CompilerApi]
   consumes   [validation_complete]
   produces   [export_complete]

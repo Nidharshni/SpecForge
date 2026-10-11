@@ -30,6 +30,7 @@ expression: mcp_snap
   },
   "ok": true,
   "payload": {
+    "count": 2,
     "entity_kinds_in_graph": [
       "behavior"
     ],

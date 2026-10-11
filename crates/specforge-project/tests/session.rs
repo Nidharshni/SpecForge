@@ -566,7 +566,7 @@ fn a_wasm_file_entry_loads_in_a_session_and_reloads_with_its_file() {
     fs::write(root.join("ext/greet.wasm"), &greet).unwrap();
     let mut session = ProjectSession::open(root);
 
-    let enabled = &session.project().environment().enabled;
+    let enabled = session.project().environment().enabled();
     assert_eq!(enabled[1].name, "@sdk/greet");
     assert_eq!(enabled[1].file.as_deref(), Some("ext/greet.wasm"));
     let codes: Vec<String> = session
@@ -2060,7 +2060,7 @@ fn an_update_that_skips_the_checks_still_scores_its_own_graph() {
     assert!(!std::ptr::eq(entities, &*before), "a fresh memo per update");
     assert_eq!(
         entities.spec_root(),
-        session.project().environment().spec_root
+        session.project().environment().spec_root()
     );
     assert!(
         std::ptr::eq(entities, session.project().entities()),
@@ -2168,7 +2168,7 @@ fn a_config_written_while_the_runtime_loads_is_seen_next_time() {
     assert_eq!(update.kind, UpdateKind::Environment);
     assert_eq!(seen.lock().unwrap()[1], ["@test/a", "@test/b"]);
     assert!(!e028(&session), "{:?}", session.project().diagnostics());
-    let kinds = &session.project().environment().registries.kinds;
+    let kinds = session.project().environment().registries().kinds();
     assert!(kinds.contains("alpha") && kinds.contains("beta"));
     assert!(!session.stale().environment);
 }
@@ -2438,24 +2438,36 @@ fn an_environment_holds_the_runtime_it_loaded_its_extensions_in() {
     let rt: SharedRuntime = Arc::new(InProcessRuntime::new().with(obliging_items));
 
     let loaded = Environment::load(root, Some(rt.clone()));
-    assert!(Arc::ptr_eq(loaded.runtime.as_ref().unwrap(), &rt));
+    assert!(Arc::ptr_eq(loaded.runtime().unwrap(), &rt));
 
     let compiled = CompiledProject::compile(root, Some(rt.clone()));
-    assert!(Arc::ptr_eq(
-        compiled.environment().runtime.as_ref().unwrap(),
-        &rt
-    ));
+    assert!(Arc::ptr_eq(compiled.environment().runtime().unwrap(), &rt));
 
     let mut session = ProjectSession::open_with_runtime(root, Some(rt.clone()));
     assert!(Arc::ptr_eq(session.runtime().unwrap(), &rt));
     session.reload_environment();
     assert!(Arc::ptr_eq(session.runtime().unwrap(), &rt));
     assert!(Arc::ptr_eq(
-        session.project().environment().runtime.as_ref().unwrap(),
+        session.project().environment().runtime().unwrap(),
         &rt
     ));
 
     let bare = CompiledProject::compile(root, None);
-    assert!(bare.environment().runtime.is_none());
-    assert!(bare.environment().registries.declarations().is_empty());
+    assert!(bare.environment().runtime().is_none());
+    assert!(bare.environment().registries().declarations().is_empty());
+}
+
+#[specforge_test(
+    behavior = "resolve_use_imports",
+    verify = "a spec root named like a skipped directory is compiled"
+)]
+fn a_spec_root_named_like_a_skipped_directory_is_compiled() {
+    let dir = project(
+        r#"{"name":"s","version":"0.1.0","extensions":[],"spec_root":"build"}"#,
+        &[("build/main.spec", "behavior a \"A\" {\n}\n")],
+    );
+    let compiled = CompiledProject::compile(dir.path(), None);
+    let mut files: Vec<String> = compiled.source_texts().into_keys().collect();
+    files.sort();
+    assert_eq!(files, ["main.spec"]);
 }

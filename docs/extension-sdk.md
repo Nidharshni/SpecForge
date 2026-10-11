@@ -216,7 +216,7 @@ specforge_extension_sdk::component_guest!(build = contributions::build);
 | `short` | no | The name the extension's commands are routed by: `specforge <short> <command>` on the CLI, `specforge.<short>.<id>` over MCP. Lowercase kebab case (`[a-z][a-z0-9-]*`), checked at compile time; absent, the name's last segment (`@specforge/software` is `software`). On the wire, the handshake's `ext_short`. |
 | `description` | no | One line a package registry shows for the extension (the handshake's `description`) |
 
-Everything else the handshake carries is set on the builder: `c.starter_template(..)`, `c.theme_color(..)`, `c.migration_hook_handler(export, |input| ..)` and `c.command_prefix(..)`, and `ExtensionMeta`'s `c.meta.keywords`, `c.meta.peer_dependencies` and `c.meta.sandbox_policy`. The declaration the builder builds (`ContributionsBuilder::declaration`) is exactly what the host loads and what `specforge publish` uploads (ADR 0012).
+Everything else the handshake carries is set on the builder: `c.starter_template(..)`, `c.theme_color(..)`, `c.migration_hook_handler(export, |input| ..)`, `c.command_prefix(..)` and `c.providers()` (it implements configured providers), and `ExtensionMeta`'s `c.meta.keywords`, `c.meta.peer_dependencies` and `c.meta.sandbox_policy`. The declaration the builder builds (`ContributionsBuilder::declaration`) is exactly what the host loads and what `specforge publish` uploads (ADR 0012).
 
 `ExtensionMeta::sandbox_policy` declares the extension's limits, `SandboxPolicy { max_execution_ms, max_memory_mb }`: at most 30000 ms and 512 MB, the ceiling when unset. A component is granted no capability whatever it declares (see Sandbox in the [protocol doc](extension-protocol.md)).
 
@@ -248,6 +248,7 @@ Every contribution is a builder call. The SDK adds the matching Wasm exports and
 | `c.analyzer(language, \|a\| ..)` | a source analyzer and its scanner | `analyzers` |
 | `c.feature_flag(name, default, description)` | a flag users set in `specforge.json` | `feature_flags` |
 | `c.meta.peer_dependencies` | a peer requirement | handshake |
+| `c.providers()` | it implements configured providers | handshake |
 
 ## Builder reference
 
@@ -404,7 +405,7 @@ extension is built.
 c.pass("coverage", |p| {
     p.after("resolve").phase("check").run(|input: &PassInput| {
         input.entities.iter()
-            .filter(|e| e.testable && !e.exempt && e.verify_texts.is_empty())
+            .filter(|e| e.testable && !e.owes_none && e.verify_texts.is_empty())
             .map(|e| PassDiagnostic::warning("A001", format!("{} declares nothing", e.id))
                 .with_entity(&e.id))
             .collect::<Vec<_>>()
@@ -421,7 +422,7 @@ after/before order; a trap or malformed answer is E028. Any other phase, or
 none, runs the pass only under `specforge analyze`, which skips check passes.
 
 A pass receives `PassInput`: `entities` (each with its field texts by name
-([Field text](#field-text)), edge counts, span, `testable`, and `exempt`: it
+([Field text](#field-text)), edge counts, span, `testable`, and `owes_none`: it
 owes no obligations of its own, decided by the host's one obligation rule), `edges`, `test_results` and `proved_claims` (always absent for a
 check pass), and `previous`: when
 `specforge-cache.json` exists, the statuses of the build that wrote it

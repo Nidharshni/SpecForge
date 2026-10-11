@@ -225,7 +225,7 @@ fn the_fixture_serves_its_declaration_through_the_registry_build() {
     assert_eq!(declared, [EXT]);
     for kind in ["behavior", "invariant", "feature"] {
         let entry = registries
-            .kinds
+            .kinds()
             .get(kind)
             .unwrap_or_else(|| panic!("{kind} is not registered"));
         assert_eq!(entry.source_extension, EXT, "{kind}");
@@ -406,7 +406,7 @@ fn serve_components_loads_the_builtins() {
     let behavior = served
         .state()
         .registries()
-        .kinds
+        .kinds()
         .get("behavior")
         .expect("behavior is registered");
     assert_eq!(behavior.source_extension, "@specforge/software");

@@ -3,8 +3,7 @@
 // P7 Justification: Core prompts are domain-agnostic graph operations (implement,
 // review, trace, explore). They contain zero domain knowledge — they traverse
 // generic graph nodes and edges. No extension contributes a prompt today: an
-// extension's surfaces are commands, MCP tools and MCP resources
-// (ContributionFlags.prompts stays reserved).
+// extension's surfaces are commands, MCP tools and MCP resources.
 //
 // 5 behaviors: serve, context, review, trace, explore (infer's scopes are in
 // behaviors/infer.spec; the exploration and the review they render are in

@@ -20,6 +20,10 @@
 //!
 //! And one rule both sides run: [`command_args`], what a command's declared
 //! args admit and what its export receives (ADR 0017).
+//!
+//! What sits here is what both sides compile: every builtin blob is built from this crate, so an
+//! item only the host reads lives host-side (the package names and the peer rule are
+//! `specforge-package`, ADR 0050).
 
 use std::fmt;
 
@@ -28,14 +32,11 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 pub mod calls;
 pub mod command_args;
 mod declaration;
-pub mod package;
-pub mod peers;
 mod vocabulary;
 pub use calls::*;
 pub use declaration::{
     DECLARED_CATEGORIES, DeclaredCategory, ExtensionDeclaration, UnknownKey, is_valid_short,
 };
-pub use package::{PackageName, PackageRef, VersionRequirement};
 pub use vocabulary::{CheckKind, ConstraintKind, FieldType, ProofRole};
 
 /// Protocol version for the extension wire format (semver). The host loads
@@ -43,25 +44,10 @@ pub use vocabulary::{CheckKind, ConstraintKind, FieldType, ProofRole};
 /// values change meaning or an optional field is added; the major moves
 /// only when an older guest could no longer be decoded or answered.
 /// `docs/extension-protocol.md` ("Protocol versions") lists what each
-/// version guarantees; 1.1.0 is the field-text rule of ADR 0019.
-pub const PROTOCOL_VERSION: &str = "1.1.0";
-
-/// All supported describe categories that the host can request.
-pub const SUPPORTED_CATEGORIES: &[&str] = &[
-    "entities",
-    "edges",
-    "fields",
-    "shared_fields",
-    "enhancements",
-    "validation_rules",
-    "surfaces",
-    "grammars",
-    "body_parsers",
-    "collectors",
-    "passes",
-    "feature_flags",
-    "analyzers",
-];
+/// version guarantees; 1.2.0 is ADR 0050's: the declared categories are the
+/// only describe categories, and the handshake says `providers` instead of
+/// carrying contribution flags.
+pub const PROTOCOL_VERSION: &str = "1.2.0";
 
 /// Errors that can occur during the extension protocol lifecycle.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -77,8 +63,6 @@ pub enum ProtocolError {
     DescribeFailed { category: String, reason: String },
     /// JSON deserialization of a protocol message failed.
     DeserializationError(String),
-    /// The host requested an unsupported describe category.
-    UnsupportedCategory(String),
 }
 
 impl fmt::Display for ProtocolError {
@@ -97,7 +81,6 @@ impl fmt::Display for ProtocolError {
                 write!(f, "describe '{}' failed: {}", category, reason)
             }
             Self::DeserializationError(msg) => write!(f, "deserialization error: {}", msg),
-            Self::UnsupportedCategory(cat) => write!(f, "unsupported category: {}", cat),
         }
     }
 }
@@ -116,15 +99,13 @@ impl From<serde_json::Error> for ProtocolError {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct HandshakeRequest {
     pub host_version: String,
-    pub supported_categories: Vec<String>,
 }
 
 /// Returned by the extension's `__handshake` export.
 ///
-/// `contribution_flags` and `peer_dependencies` are **required** on the wire:
-/// a truncated handshake fails deserialization instead of silently yielding
-/// empty flags (host skips every describe category) or an empty dependency
-/// list (peer checks pass vacuously) — audit C7-07.
+/// `peer_dependencies` is **required** on the wire: a truncated handshake
+/// fails deserialization instead of yielding an empty dependency list (peer
+/// checks pass vacuously) — audit C7-07.
 ///
 /// `sandbox_policy` is a documented exception: serde treats `Option<T>`
 /// fields as implicitly optional, so absence and explicit `null` both
@@ -150,12 +131,15 @@ pub struct HandshakeRequest {
 /// the name's last segment when absent), and what a package registry shows
 /// for it. Absent fields serialize nothing, so a handshake without them is
 /// byte-identical to one from before they existed.
+///
+/// What the extension contributes is not on the handshake: it is what its
+/// declaration declares (`ExtensionDeclaration::declares`). Only `providers`,
+/// which no describe category carries, is.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct HandshakeResponse {
     pub protocol_version: String,
     pub name: String,
     pub version: String,
-    pub contribution_flags: ContributionFlags,
     pub peer_dependencies: Vec<PeerDependency>,
     pub sandbox_policy: Option<SandboxPolicy>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -178,34 +162,11 @@ pub struct HandshakeResponse {
     /// Search keywords for package registries.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub keywords: Vec<String>,
-}
-
-/// Declares which contribution categories an extension provides. Derived
-/// from the declaration's content (`ExtensionDeclaration::contribution_flags`)
-/// and informational: a host reads every declared category whatever these
-/// say, and only `providers` (no describe category) is read from them.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
-pub struct ContributionFlags {
-    #[serde(default)]
-    pub entities: bool,
-    #[serde(default)]
-    pub validators: bool,
-    #[serde(default)]
-    pub renderers: bool,
-    #[serde(default)]
+    /// The extension implements configured providers: a `specforge.json`
+    /// `providers` entry may name it as its extension (W118 otherwise).
+    /// Omitted from the wire when false.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub providers: bool,
-    #[serde(default)]
-    pub collectors: bool,
-    #[serde(default)]
-    pub prompts: bool,
-    #[serde(default)]
-    pub parsers: bool,
-    #[serde(default)]
-    pub grammars: bool,
-    #[serde(default)]
-    pub body_parsers: bool,
-    #[serde(default)]
-    pub analyzers: bool,
 }
 
 /// Declares a dependency on another extension.
@@ -538,26 +499,6 @@ pub struct McpResourceDescriptor {
     pub description: Option<String>,
     pub export: String,
     pub mime_type: String,
-}
-
-// ── Grammar Descriptor ──
-
-/// Describes a grammar contribution for an entity kind's body content.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct GrammarDescriptor {
-    pub entity_kind: String,
-    pub grammar_wasm_path: String,
-    #[serde(default)]
-    pub export_name: Option<String>,
-}
-
-// ── Body Parser Descriptor ──
-
-/// Describes a body parser contribution for an entity kind.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct BodyParserDescriptor {
-    pub entity_kind: String,
-    pub export_name: String,
 }
 
 // ── Collector Descriptor ──

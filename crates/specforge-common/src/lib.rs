@@ -16,7 +16,7 @@ pub mod structural;
 pub mod suggest;
 
 pub use diagnostic::{CustomRuleFailure, Diagnostic, DiagnosticData, DiagnosticsExt, Severity};
-pub use discovery::{SKIP_DIRS, discover_spec_files, is_discovered, is_excluded};
+pub use discovery::{Walked, discover_spec_files, is_discovered, is_excluded, walk_spec_files};
 pub use interner::Sym;
 pub use present::{
     Counts, DiagnosticJson, DiagnosticList, MAX_DIAGNOSTICS, compute_exit_code, diagnostic_summary,
@@ -25,8 +25,8 @@ pub use present::{
 };
 pub use project::{
     ConfigProblem, ConfigRead, ExtensionEntry, InferenceConfig, ProjectConfig,
-    extension_entry_name, find_project_root, is_project_root, load_project_config, project_root_of,
-    read_project_config, validate_project_name,
+    extension_entry_name, find_project_root, is_project_root, load_project_config,
+    parse_project_config, project_root_of, read_project_config, validate_project_name,
 };
 pub use slug::slug;
 pub use span::SourceSpan;

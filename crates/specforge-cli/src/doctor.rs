@@ -1,39 +1,63 @@
-use crate::OutputFormat;
-use crate::outcome::Exit;
-use serde_json::json;
+use crate::outcome::{Exit, OutputArg, OutputFormat};
+use crate::terminal::{Terminal, out};
+use serde::Serialize;
 use specforge_common::codes;
-use specforge_ops::doctor::{About, BinaryIssue, DoctorReport, FindingStatus, Part, diagnose};
+use specforge_ops::doctor::{
+    About, BinaryIssue, DoctorDocument, DoctorReport, FindingStatus, Part, diagnose,
+};
+use specforge_ops::extension::Status;
 use specforge_ops::view::ProjectView;
 use specforge_registry_client::credential_health::{
-    CredentialHealth, CredentialLevel, user_credential_health,
+    CredentialHealth, CredentialLevel, CredentialLine, user_credential_health,
 };
-use std::path::Path;
+use std::path::PathBuf;
 
-/// `specforge doctor`: the shared project health report (extensions and
-/// their enhancements, conflicts, shadowed keywords, installed binaries)
-/// plus registry credential health. Exit 1 on any error-level finding or
-/// credential failure.
-pub fn run(path: &Path, format: OutputFormat) -> Exit {
-    let project = crate::pipeline::compile_project(path);
-    let report = diagnose(&ProjectView::of(&project));
-    let credentials = user_credential_health();
+// `specforge doctor`'s command line.
+#[derive(clap::Args)]
+pub(crate) struct Args {
+    /// Path to the project root
+    #[arg(long, default_value = ".")]
+    path: PathBuf,
 
-    match format {
-        OutputFormat::Json => {
-            let mut output =
-                serde_json::to_value(report.document()).expect("a document serializes");
-            output["credentials"] = json!(credentials.lines);
-            output["credentials_failures"] = json!(credentials.failures);
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&output).expect("serialize JSON output")
-            );
+    #[command(flatten)]
+    output: OutputArg,
+}
+
+/// What `specforge doctor --format json` prints: the project's report and
+/// the user's registry credentials, which only the CLI shows (ADR 0029 D3a).
+#[derive(Serialize)]
+struct Printed<'a> {
+    #[serde(flatten)]
+    report: DoctorDocument,
+    credentials: &'a [CredentialLine],
+    credentials_failures: usize,
+}
+
+impl Args {
+    /// `specforge doctor`: the shared project health report (extensions and
+    /// their enhancements, conflicts, shadowed keywords, installed
+    /// binaries) plus registry credential health. Exit 1 on any
+    /// error-level finding or credential failure.
+    pub(crate) fn run(self, terminal: &Terminal) -> Exit {
+        let project = crate::pipeline::compile_project(&self.path);
+        let report = diagnose(&ProjectView::of(&project));
+        let credentials = user_credential_health();
+
+        match self.output.format {
+            OutputFormat::Json => {
+                terminal.json(&Printed {
+                    report: report.document(),
+                    credentials: &credentials.lines,
+                    credentials_failures: credentials.failures,
+                });
+            }
+            OutputFormat::Human => out!(terminal, "{}", render_human(&report, &credentials)),
         }
-        OutputFormat::Human => print!("{}", render_human(&report, &credentials)),
-    }
 
-    // Doctor checks the project and the user's credentials: both must pass.
-    Exit::of_verdict(report.ok() && credentials.failures == 0)
+        // Doctor checks the project and the user's credentials: both must
+        // pass.
+        Exit::of_verdict(report.ok() && credentials.failures == 0)
+    }
 }
 
 /// The human report: one section per report part, then credentials.
@@ -73,13 +97,21 @@ fn render_human(report: &DoctorReport, credentials: &CredentialHealth) -> String
 
     line!("Extensions ({}):", report.extensions.len());
     if report.extensions.is_empty() {
-        line!("  none enabled");
+        line!("  none");
     }
     for ext in &report.extensions {
+        let version = ext
+            .version
+            .as_deref()
+            .map(|v| format!(" {v}"))
+            .unwrap_or_default();
+        let status = match ext.status {
+            Status::Loaded => String::new(),
+            other => format!(" [{}]", other.as_str()),
+        };
         line!(
-            "  {} {} ({}) — {} enhancement(s)",
+            "  {}{version} ({}){status} — {} enhancement(s)",
             ext.name,
-            ext.version,
             ext.source,
             ext.enhancement_count
         );
@@ -266,7 +298,7 @@ mod tests {
         ];
 
         let graph = specforge_graph::Graph::new();
-        let env = specforge_project::Environment::with_registries(Default::default());
+        let env = specforge_project::Environment::with_registries(Default::default(), None);
         let recorded = specforge_project::coverage::RecordedCoverage::over(&graph, &env);
         let view =
             ProjectView::new(&graph, &env, Some(dir.path()), &recorded).reporting(&diagnostics);

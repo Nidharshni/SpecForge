@@ -1,6 +1,6 @@
 //! The diagnostic for text that must be a package name or version and is not (E072, ADR 0036).
 //!
-//! `specforge_protocol_types::package` reads names and versions and is pure; the host crates that
+//! `specforge_package` reads names and versions and is pure; the host crates that
 //! meet a refusal (ops, project, the CLI) build the diagnostic through this one function, so the
 //! code and the suggestion are written once.
 
@@ -21,7 +21,7 @@ pub fn invalid(why: &dyn Display) -> Diagnostic {
 mod tests {
     use super::*;
     use crate::Severity;
-    use specforge_protocol_types::PackageName;
+    use specforge_package::PackageName;
 
     #[test]
     fn a_refused_name_is_one_e072_naming_the_text() {

@@ -162,8 +162,8 @@ pub fn export(view: &ProjectView, request: &Request) -> Result<String, OpError> 
         kind_filter: request.kinds.clone(),
         schema: schema.as_ref(),
         token_budget: request.max_tokens,
-        kind_registry: Some(&view.registries().kinds),
-        field_registry: Some(&view.registries().fields),
+        kind_registry: Some(view.registries().kinds()),
+        field_registry: Some(view.registries().fields()),
     };
     emit(view.graph(), &options).map_err(|error| failure(view, error))
 }

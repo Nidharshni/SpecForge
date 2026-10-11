@@ -69,3 +69,33 @@ project was brought up to date with `ensure_fresh`. `OtherProject` also re-imple
 **What would reopen it.** A surface that needs a compiled project's state without its graph build (a
 snapshot published to readers, which ADR 0023 rejected), or a one-shot compile whose kept parses show in a
 profile.
+
+## An environment assembles from its loaded parts (amendment, architecture round 6, plan 06)
+
+The environment is the first part of a compiled project, and it had no constructor that took its parts.
+`Environment::from_read` read the lock, ran the extension load, then derived E069, the registry build, the custom
+rules' probes (pushed into the build's own field from outside it), the providers' registration, I002 and the spec root.
+Its twelve fields were public, so tests built an environment with `with_registries` or `empty()` and wrote fields: 51
+writes in 11 files. Those fixtures built states no load makes (providers registered before the declarations existed,
+passes declared by an extension the runtime did not serve, a runtime swapped under an environment), and every new
+field swept them (the runtime field: 64 files).
+
+- **E1. `Environment::assemble(read, installed, load)` derives everything.** From the config read, the installed
+  extensions and the extension load it builds E069, the registry build, the probes (in the load's runtime, through the
+  build's `probe`), the providers' registration, I002 and the spec root. It reads nothing from disk; its one
+  effect is the probe's calls in the runtime it is given. The root is `installed.root()`.
+- **E2. "No runtime" is a type.** `ExtensionLoad` is `NoRuntime` (each entry enables what it names, nothing loads) or
+  `In { runtime, loaded }`; the environment holds that runtime (ADR 0015 R1, R3).
+- **E3. `from_read` is the disk adapter.** It reads the lock (`Installed::at`), loads the configured entries into the
+  runtime it is given (`Installed::load`), and assembles. `Environment::load` reads `specforge.json` first.
+- **E4. The fields are private.** Readers use accessors (`root`, `config`, `config_problems`, `config_found`,
+  `installed`, `enabled`, `spec_root`, `registries`, `providers`, `runtime`); what the environment reports is read
+  only through `diagnostics()`. No mutator exists: a test that needs another environment assembles another one.
+- **E5. Test environments.** A fixture assembles (`Environment::assemble`) or, when it serves an extension in
+  process, takes the production load (ADR 0028 D3). `empty()` is the detached project's; `with_registries(registries,
+  runtime)` is the bare build of a graph made in a test. `from_declarations` is gone. A specforge.json text parses with
+  `parse_project_config`, the parse `read_project_config` runs after reading the file.
+
+**Rejected.** Running the extension load inside `assemble` (it reads modules from disk); a `root` parameter beside
+`installed` (two values that must agree); `Loaded` plus `Option<SharedRuntime>` (an environment without a runtime that
+holds declarations); a `testing` feature for `with_registries` (no invariant to protect).

@@ -296,22 +296,26 @@ fn stats_entities_by_kind_counts_all_kinds() {
     let parsed = parse_json_stdout(&output);
 
     // 15 entities total in MULTI_EXTENSION_SPEC (2 behaviors + 13 other kinds)
-    let total = parsed["total_entities"].as_u64().unwrap();
+    let total = parsed["entity_count"].as_u64().unwrap();
     assert_eq!(total, 15, "expected 15 entities, got {}", total);
 
-    let by_kind = parsed["entities_by_kind"].as_object().unwrap();
-    assert!(
-        by_kind.contains_key("behavior"),
-        "missing behavior in entities_by_kind"
-    );
-    assert!(
-        by_kind.contains_key("feature"),
-        "missing feature in entities_by_kind"
-    );
-    assert!(
-        by_kind.contains_key("decision"),
-        "missing decision in entities_by_kind"
-    );
+    let by_kind: std::collections::BTreeMap<&str, u64> = parsed["entity_counts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|row| {
+            (
+                row["kind"].as_str().unwrap(),
+                row["count"].as_u64().unwrap(),
+            )
+        })
+        .collect();
+    for kind in ["behavior", "feature", "decision"] {
+        assert!(
+            by_kind.contains_key(kind),
+            "missing {kind} in entity_counts"
+        );
+    }
     assert_eq!(by_kind["behavior"], 2, "expected 2 behaviors");
 }
 

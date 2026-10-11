@@ -2,8 +2,8 @@
 //! the upload URL through the package module (ADR 0036).
 
 use crate::handlers::ApiError;
-use specforge_protocol_types::PackageName;
-use specforge_protocol_types::package::Version;
+use specforge_package::PackageName;
+use specforge_package::Version;
 use specforge_registry_wire::code;
 
 /// The package a publish names, read from its URL path: a scoped

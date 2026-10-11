@@ -11,6 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 semver = { workspace = true }
+specforge-package = { path = "../specforge-package" }
 specforge-protocol-types = { path = "../specforge-protocol-types" }
 specforge-registry-wire = { path = "../specforge-registry-wire" }
 axum = { version = "0.8.4", features = ["multipart"] }

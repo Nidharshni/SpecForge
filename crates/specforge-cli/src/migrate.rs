@@ -1,92 +1,122 @@
-use crate::OutputFormat;
-use crate::outcome::{Exit, Refusal};
-use specforge_ops::migrate::{self, MigrationStatus, MigrationSummary, Request, RollbackSummary};
-use std::path::Path;
+use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal, Written};
+use crate::terminal::{Terminal, errln, outln};
+use specforge_ops::migrate::{self, MigrateDocument, MigrationStatus, Request, RollbackSummary};
+use std::path::PathBuf;
 
-pub fn run(
-    path: &Path,
+// `specforge migrate`'s command line.
+#[derive(clap::Args)]
+pub(crate) struct Args {
+    /// Path to the spec root directory
+    #[arg(long, default_value = ".")]
+    path: PathBuf,
+
+    /// Show unified diff without modifying files
+    #[arg(long)]
     dry_run: bool,
+
+    /// Skip creating .spec.bak backup files
+    #[arg(long)]
     no_backup: bool,
+
+    /// Restore files from .spec.bak backups
+    #[arg(long)]
     rollback: bool,
-    target_version: Option<&str>,
-    format: OutputFormat,
-) -> Exit {
-    // Handle rollback mode
-    if rollback {
-        let outcome = migrate::rollback(path);
-        print_rollback(&outcome.summary, &outcome.writes.names_under(path), format);
-        return Exit::of_verdict(outcome.ok());
-    }
 
-    let target = match migrate::parse_target(target_version) {
-        Ok(target) => target,
-        Err(error) => return Refusal::of(format).report(&error),
-    };
+    /// Target format version (defaults to current)
+    #[arg(long)]
+    target_version: Option<String>,
 
-    // The shared migration: migrate, run the extensions' hooks, then check
-    // the graph kept its structure, rolling back when it didn't.
-    let runtime: specforge_project::SharedRuntime =
-        std::sync::Arc::new(specforge_component::ComponentRuntime::with_user_cache());
-    let request = Request {
-        root: path,
-        target,
-        dry_run,
-        no_backup,
-    };
-    let outcome = migrate::run(&request, Some(runtime));
-    // Each migrated file and each backup (none for a dry run).
-    let written = (!dry_run).then(|| outcome.writes.names_under(path));
-    print_migration(&outcome.summary, written.as_deref(), format, dry_run);
-
-    if outcome.summary.failed_count != 0 {
-        return Exit::of_verdict(outcome.ok());
-    }
-    for failure in &outcome.hook_failures {
-        eprintln!("migration hook failure: {failure}");
-    }
-    // Graph Protocol compatibility: breaking schema changes warn W053.
-    for warning in &outcome.schema_warnings {
-        eprintln!("warning[{}]: {}", warning.code, warning.message);
-    }
-    for d in &outcome.structural_differences {
-        eprintln!("{}: {}", d.code, d.message);
-    }
-    if outcome.rollback.is_some() {
-        if outcome.hook_failures.is_empty() {
-            eprintln!("migration changed the graph structure; files restored from backups");
-        } else {
-            eprintln!("files restored from backups");
-        }
-    }
-
-    Exit::of_verdict(outcome.ok())
+    #[command(flatten)]
+    output: OutputArg,
 }
 
-/// The JSON of `document` with `files_written`, when given.
-fn with_files_written(document: impl serde::Serialize, files_written: Option<&[String]>) -> String {
-    let mut json = serde_json::to_value(document).unwrap_or_default();
-    if let (Some(files), Some(object)) = (files_written, json.as_object_mut()) {
-        object.insert("files_written".to_string(), serde_json::json!(files));
+impl Args {
+    pub(crate) fn run(self, terminal: &Terminal) -> Exit {
+        let format = self.output.format;
+        let path = self.path.as_path();
+        let (dry_run, no_backup) = (self.dry_run, self.no_backup);
+        // Handle rollback mode
+        if self.rollback {
+            let outcome = migrate::rollback(path);
+            print_rollback(
+                &outcome.summary,
+                &outcome.writes.names_under(path),
+                format,
+                terminal,
+            );
+            return Exit::of_verdict(outcome.ok());
+        }
+
+        let target = match migrate::parse_target(self.target_version.as_deref()) {
+            Ok(target) => target,
+            Err(error) => return Refusal::of(format).report(terminal, &error),
+        };
+
+        // The shared migration: migrate, run the extensions' hooks, then check
+        // the graph kept its structure, rolling back when it didn't.
+        let runtime: specforge_project::SharedRuntime =
+            std::sync::Arc::new(specforge_component::ComponentRuntime::with_user_cache());
+        let request = Request {
+            root: path,
+            target,
+            dry_run,
+            no_backup,
+        };
+        let outcome = migrate::run(&request, Some(runtime));
+        // Each migrated file and each backup (none for a dry run).
+        let written = (!dry_run).then(|| outcome.writes.names_under(path));
+        print_migration(&outcome.document(), written, format, terminal);
+
+        if outcome.summary.failed_count != 0 {
+            return Exit::of_verdict(outcome.ok());
+        }
+        for failure in &outcome.hook_failures {
+            errln!(terminal, "migration hook failure: {failure}");
+        }
+        // Graph Protocol compatibility: breaking schema changes warn W053.
+        for warning in &outcome.schema_warnings {
+            errln!(terminal, "warning[{}]: {}", warning.code, warning.message);
+        }
+        for d in &outcome.structural_differences {
+            errln!(terminal, "{}: {}", d.code, d.message);
+        }
+        if outcome.rollback.is_some() {
+            if outcome.hook_failures.is_empty() {
+                errln!(
+                    terminal,
+                    "migration changed the graph structure; files restored from backups"
+                );
+            } else {
+                errln!(terminal, "files restored from backups");
+            }
+        }
+
+        Exit::of_verdict(outcome.ok())
     }
-    serde_json::to_string_pretty(&json).unwrap_or_default()
 }
 
 /// The restore; its JSON lists each file restored in `files_written`.
-fn print_rollback(summary: &RollbackSummary, files_written: &[String], format: OutputFormat) {
+fn print_rollback(
+    summary: &RollbackSummary,
+    files_written: &[String],
+    format: OutputFormat,
+    terminal: &Terminal,
+) {
     match format {
         OutputFormat::Json => {
-            println!("{}", with_files_written(summary, Some(files_written)));
+            terminal.json(&Written::of(summary, files_written.to_vec()));
         }
         OutputFormat::Human => {
             for w in &summary.warnings {
-                eprintln!("warning: {w}");
+                errln!(terminal, "warning: {w}");
             }
             for r in &summary.results {
                 match r.status {
-                    MigrationStatus::Restored => eprintln!("  restored: {}", r.file_path),
+                    MigrationStatus::Restored => errln!(terminal, "  restored: {}", r.file_path),
                     MigrationStatus::Skipped => {}
                     MigrationStatus::Failed => {
-                        eprintln!(
+                        errln!(
+                            terminal,
                             "  failed: {} ({})",
                             r.file_path,
                             r.error.as_deref().unwrap_or("unknown")
@@ -95,36 +125,43 @@ fn print_rollback(summary: &RollbackSummary, files_written: &[String], format: O
                     _ => {}
                 }
             }
-            eprintln!(
+            errln!(
+                terminal,
                 "{} restored, {} skipped, {} failed",
-                summary.restored_count, summary.skipped_count, summary.failed_count
+                summary.restored_count,
+                summary.skipped_count,
+                summary.failed_count
             );
         }
     }
 }
 
-/// The migration; its JSON lists each migrated file and each backup in
-/// `files_written` (absent from a dry run).
+/// The migration; its JSON is the migration document with `files_written`
+/// (absent from a dry run).
 fn print_migration(
-    summary: &MigrationSummary,
-    files_written: Option<&[String]>,
+    document: &MigrateDocument,
+    files_written: Option<Vec<String>>,
     format: OutputFormat,
-    dry_run: bool,
+    terminal: &Terminal,
 ) {
     match format {
-        OutputFormat::Json => {
-            println!("{}", with_files_written(summary, files_written));
-        }
+        OutputFormat::Json => terminal.json(&Written {
+            document,
+            files_written,
+        }),
         OutputFormat::Human => {
-            if dry_run {
-                for d in &summary.diffs {
-                    println!("{}", d.unified_text);
+            if document.dry_run {
+                for d in &document.diffs {
+                    outln!(terminal, "{}", d.unified_text);
                 }
             }
 
-            eprintln!(
+            errln!(
+                terminal,
                 "{} migrated, {} skipped, {} failed",
-                summary.migrated_count, summary.skipped_count, summary.failed_count
+                document.files_migrated,
+                document.files_skipped,
+                document.files_failed
             );
         }
     }

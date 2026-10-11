@@ -1,3 +1,5 @@
+use crate::target::View;
+use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
 use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_ops::query::{FieldHolds, Hit, SearchRequest, search};
@@ -25,7 +27,7 @@ pub struct Args {
     references: Option<String>,
 }
 
-/// `specforge.search`'s reply (`McpSearchResults`): the hits, best first.
+/// `specforge.search`'s reply: the hits, best first.
 #[derive(Debug, Serialize, Shape)]
 pub struct Reply {
     results: Vec<Found>,
@@ -68,33 +70,47 @@ impl Found {
 /// completion rank them, over names and string fields. Every filter is
 /// ANDed: kinds, a field's text (`field` with `value`: one without the other
 /// is refused), and `references` (the entities that reference that one).
-pub fn call(view: ProjectView<'_>, args: Args) -> Answered<Reply> {
-    let field = match (args.field.as_deref(), args.value.as_deref()) {
-        (Some(field), Some(value)) => Some(FieldHolds { field, value }),
-        (None, None) => None,
-        (Some(_), None) => {
-            return Err(Box::new(McpError::invalid_input(
-                "value",
-                "'field' needs 'value': the text the field must contain",
-            )));
-        }
-        (None, Some(_)) => {
-            return Err(Box::new(McpError::invalid_input(
-                "field",
-                "'value' needs 'field': the field whose text it must be in",
-            )));
-        }
+pub(crate) struct Tool;
+
+impl CoreTool for Tool {
+    const NAME: &'static str = "specforge.search";
+    const DESCRIPTION: &'static str = "Find entities by id, title or string field text, ranked as the LSP ranks them (exact, prefix, substring, field text, then fuzzy)";
+    const EFFECT: Effect = Effect::Reads {
+        group: ToolGroup::Core,
     };
-    let request = SearchRequest {
-        text: &args.query,
-        kinds: args.kinds.iter().map(String::as_str).collect(),
-        field,
-        referencing: args.references.as_deref(),
-        limit: Some(args.limit),
-    };
-    let outcome = search(&view, &request);
-    Ok(Answer::new(Reply {
-        results: outcome.hits.iter().map(Found::of).collect(),
-    })
-    .with_diagnostics(outcome.notices))
+    const SPEC: ReplySpec = ReplySpec::Type("McpSearchResults");
+    type Args = Args;
+    type Input = View;
+    type Returns = Answered<Reply>;
+
+    fn call(view: ProjectView<'_>, args: Args) -> Answered<Reply> {
+        let field = match (args.field.as_deref(), args.value.as_deref()) {
+            (Some(field), Some(value)) => Some(FieldHolds { field, value }),
+            (None, None) => None,
+            (Some(_), None) => {
+                return Err(Box::new(McpError::invalid_input(
+                    "value",
+                    "'field' needs 'value': the text the field must contain",
+                )));
+            }
+            (None, Some(_)) => {
+                return Err(Box::new(McpError::invalid_input(
+                    "field",
+                    "'value' needs 'field': the field whose text it must be in",
+                )));
+            }
+        };
+        let request = SearchRequest {
+            text: &args.query,
+            kinds: args.kinds.iter().map(String::as_str).collect(),
+            field,
+            referencing: args.references.as_deref(),
+            limit: Some(args.limit),
+        };
+        let outcome = search(&view, &request);
+        Ok(Answer::new(Reply {
+            results: outcome.hits.iter().map(Found::of).collect(),
+        })
+        .with_diagnostics(outcome.notices))
+    }
 }

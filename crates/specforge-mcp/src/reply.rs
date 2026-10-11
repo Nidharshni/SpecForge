@@ -2,10 +2,10 @@
 //!
 //! A handler answers its module's `Reply` (a struct, or an untagged union
 //! of structs, deriving `Serialize` and `Shape`), or [`Text`] for a tool
-//! whose result is a document in text. The tool table names the type once
-//! (`view!(stats::call, NoArgs => stats::Reply, ProjectTarget::SERVED)`):
-//! the listed outputSchema is `<Reply as Shape>::schema()`, the result is
-//! the value serialized, and [`conforming`] checks every structured result
+//! whose result is a document in text. A tool's module names the type once
+//! (`type Returns = Answered<Reply>`, ADR 0049): the listed
+//! outputSchema is ``shape::build::<Reply>()``, the result is the value
+//! serialized, and [`conforming`] checks every structured result
 //! against that schema before it is sent: a reply its schema refuses is a
 //! `schema_mismatch` failure, never structured content (the rule extension
 //! tools follow).
@@ -70,9 +70,10 @@ impl From<String> for Text {
     }
 }
 
-/// The outputSchema of a tool whose reply is `R`.
-pub fn output_schema<R: Object>() -> Value {
-    R::schema()
+/// The outputSchema of a tool whose reply is `R`: `R`'s document, built once
+/// per process (ADR 0051).
+pub fn output_schema<R: Object + 'static>() -> &'static Value {
+    specforge_common::shape::document::<R>()
 }
 
 /// `answered` as the outcome the pipeline sends: the reply serialized as a
@@ -110,11 +111,27 @@ pub fn text(answered: Answered<Text>) -> ToolOutcome {
     }
 }
 
+/// Where a tool whose structured result is checked comes from: the `source`
+/// `tools/list` gives it.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum Source<'a> {
+    Core,
+    /// The contributing extension's name.
+    Extension(&'a str),
+}
+
 /// `outcome` when its structured payload conforms to `schema`; otherwise the
-/// failure `schema_mismatch`, "core tool '<tool>' answered a reply its
-/// output schema refuses: <violations>", with `data.violations`. A failure
-/// or a text payload is returned as it is.
-pub fn conforming(tool: &str, schema: &Value, outcome: ToolOutcome) -> ToolOutcome {
+/// failure `schema_mismatch` with `data.violations`: "core tool '<tool>'
+/// answered a reply its output schema refuses: <violations>", or for an
+/// extension's tool "tool '<tool>' of '<extension>' answered a reply its
+/// output schema refuses: <violations>". A failure or a text payload is
+/// returned as it is; a refused core reply keeps its diagnostics.
+pub(crate) fn conforming(
+    tool: &str,
+    source: Source<'_>,
+    schema: &Value,
+    outcome: ToolOutcome,
+) -> ToolOutcome {
     let ToolOutcome::Done {
         payload: Payload::Json(value),
         is_error: false,
@@ -127,10 +144,14 @@ pub fn conforming(tool: &str, schema: &Value, outcome: ToolOutcome) -> ToolOutco
     if violations.is_empty() {
         return outcome;
     }
+    let whose = match source {
+        Source::Core => format!("core tool '{tool}'"),
+        Source::Extension(extension) => format!("tool '{tool}' of '{extension}'"),
+    };
     let mut refused = McpError::new(
         ErrorCode::SchemaMismatch,
         format!(
-            "core tool '{tool}' answered a reply its output schema refuses: {}",
+            "{whose} answered a reply its output schema refuses: {}",
             violations.join("; ")
         ),
     )
@@ -158,6 +179,7 @@ mod tests {
         });
         let conforming_outcome = conforming(
             "specforge.probe",
+            Source::Core,
             &schema,
             ToolOutcome::ok(json!({"a": "x"})),
         );
@@ -165,6 +187,7 @@ mod tests {
 
         let outcome = conforming(
             "specforge.probe",
+            Source::Core,
             &schema,
             ToolOutcome::ok(json!({"a": "x", "b": 1})),
         );
@@ -173,15 +196,25 @@ mod tests {
         };
         assert_eq!(error.code, ErrorCode::SchemaMismatch);
         assert_eq!(
+            error.message,
+            "core tool 'specforge.probe' answered a reply its output schema refuses: $.b: undeclared key"
+        );
+        assert_eq!(
             error.data,
             Some(json!({"violations": ["$.b: undeclared key"]}))
         );
 
         // A text outcome and a refusal pass through unchanged.
-        let text = conforming("specforge.probe", &schema, ToolOutcome::text("anything"));
+        let text = conforming(
+            "specforge.probe",
+            Source::Core,
+            &schema,
+            ToolOutcome::text("anything"),
+        );
         assert!(text.succeeded());
         let refusal = conforming(
             "specforge.probe",
+            Source::Core,
             &schema,
             ToolOutcome::error(ErrorCode::InvalidInput, "no"),
         );

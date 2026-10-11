@@ -129,15 +129,9 @@ pub fn coded_in<'a>(diagnostics: &'a [Diagnostic], code: &str) -> Vec<&'a Diagno
     diagnostics.iter().filter(|d| d.code == code).collect()
 }
 
-/// Every diagnostic the build reports, in the order `check` reports them:
-/// declaration, registry, then surface diagnostics.
+/// Every diagnostic the build reports, in its order.
 pub fn diagnostics(build: &RegistryBuild) -> Vec<&Diagnostic> {
-    build
-        .declaration_diagnostics
-        .iter()
-        .chain(&build.registry_diagnostics)
-        .chain(&build.surface_diagnostics)
-        .collect()
+    build.diagnostics().collect()
 }
 
 /// The build's diagnostics with `code`, in that order.
@@ -160,7 +154,7 @@ pub fn codes(build: &RegistryBuild) -> Vec<&str> {
 /// `""`).
 pub fn rule_codes(build: &RegistryBuild) -> Vec<(&str, &str)> {
     build
-        .rules
+        .rules()
         .iter()
         .map(|rule| (rule.code(), rule.origin().name()))
         .collect()

@@ -1,3 +1,5 @@
+use crate::target::View;
+use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
 use serde::Serialize;
 use specforge_common::SourceSpan;
 use specforge_common::shape::Shape;
@@ -15,7 +17,7 @@ pub struct Args {
     file: String,
 }
 
-/// `specforge.outline`'s reply (`McpOutlineResult`): the file's entities in
+/// `specforge.outline`'s reply: the file's entities in
 /// line order.
 #[derive(Debug, Serialize, Shape)]
 pub struct Reply {
@@ -82,19 +84,34 @@ impl Entry {
 /// with its method members, each selecting its name: the tree the LSP's
 /// document symbols are (`specforge_ops::navigate::outline`). `file` is a
 /// spec file of the project, relative to its spec root, as spans name it.
-pub fn call(view: ProjectView<'_>, args: Args) -> Answered<Reply> {
-    let file = args.file.as_str();
-    let entries = outline(&super::navigator(view), file);
-    // A file the graph has no entity from is either empty or not there:
-    // under the project's spec root. With nothing served no file is the
-    // project's (the dispatcher makes the refusal the no-project one,
-    // ADR 0025).
-    let on_disk = super::spec_root(&view).is_some_and(|spec_root| spec_root.join(file).exists());
-    if entries.is_empty() && !on_disk {
-        return Err(file_not_found(file).into());
+pub(crate) struct Tool;
+
+impl CoreTool for Tool {
+    const NAME: &'static str = "specforge.outline";
+    const DESCRIPTION: &'static str = "Get entity outline for a file";
+    const EFFECT: Effect = Effect::Reads {
+        group: ToolGroup::Navigation,
+    };
+    const SPEC: ReplySpec = ReplySpec::Type("McpOutlineResult");
+    type Args = Args;
+    type Input = View;
+    type Returns = Answered<Reply>;
+
+    fn call(view: ProjectView<'_>, args: Args) -> Answered<Reply> {
+        let file = args.file.as_str();
+        let entries = outline(&super::navigator(view), file);
+        // A file the graph has no entity from is either empty or not there:
+        // under the project's spec root. With nothing served no file is the
+        // project's (the dispatcher makes the refusal the no-project one,
+        // ADR 0025).
+        let on_disk =
+            super::spec_root(&view).is_some_and(|spec_root| spec_root.join(file).exists());
+        if entries.is_empty() && !on_disk {
+            return Err(file_not_found(file).into());
+        }
+        Ok(Reply {
+            entries: entries.iter().map(Entry::of).collect(),
+        }
+        .into())
     }
-    Ok(Reply {
-        entries: entries.iter().map(Entry::of).collect(),
-    }
-    .into())
 }

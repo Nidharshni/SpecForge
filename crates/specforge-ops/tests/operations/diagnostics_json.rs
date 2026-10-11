@@ -10,7 +10,7 @@ use serde_json::{Value, json};
 use specforge_common::Diagnostic;
 use specforge_extension_sdk::prelude::*;
 use specforge_ops::analyze::{AnalyzeOptions, analyze};
-use specforge_registry::{RegistryBuild, build_registries};
+use specforge_registry::build_registries;
 use specforge_registry_client::registry_client::RegistryError;
 
 use crate::view_support::Project;
@@ -23,7 +23,7 @@ fn unexecutable_rule() -> Diagnostic {
             .check(CheckKind::MissingRequiredField);
     });
     let build = build_registries(vec![c.declaration()]);
-    only(build.registry_diagnostics, "W112")
+    only(build.diagnostics().cloned().collect(), "W112")
 }
 
 /// E003: the graph build reports a reference to no entity.
@@ -82,8 +82,16 @@ fn registry_unauthorized() -> Diagnostic {
 /// I202: inference reports a source file that produced too many entities,
 /// through the lint the `inferred` profile runs.
 fn dense_inference() -> Diagnostic {
-    let mut project = Project::new("behavior a \"A\" {\n}\n", RegistryBuild::default());
-    project.env.config.inference.density_threshold = Some(0.5);
+    let project = Project::assembled("behavior a \"A\" {\n}\n", |root| {
+        specforge_project::Environment::assemble(
+            crate::view_support::config_read(
+                root,
+                json!({"inference": {"density_threshold": 0.5}}),
+            ),
+            specforge_installed::Installed::unread(root),
+            specforge_project::ExtensionLoad::NoRuntime,
+        )
+    });
     let root = project.dir.path();
     std::fs::write(root.join("lib.rs"), "fn a() {}\n").unwrap();
     std::fs::write(

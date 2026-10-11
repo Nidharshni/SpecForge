@@ -15,8 +15,9 @@ use specforge_ops::registry::{
     no_registry,
 };
 use specforge_ops::{OpError, OpErrorKind};
-use specforge_protocol_types::package::Version;
-use specforge_protocol_types::{DeclaredCategory, ExtensionDeclaration, PackageName};
+use specforge_package::PackageName;
+use specforge_package::Version;
+use specforge_protocol_types::{DeclaredCategory, ExtensionDeclaration};
 use specforge_registry_client::credentials::{read_credentials, user_dir};
 use specforge_registry_client::signing::load_or_create_signing_key_at;
 use specforge_registry_client::{

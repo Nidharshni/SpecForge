@@ -23,6 +23,9 @@ Changed answers are marked *(amended)*.
   the spec root. The spec type and the JSON schema (which rejects the key today) gain it.
 - **D1-c** One diagnostic type with **two presenters** for now: the CLI's JSON nests `span`, MCP's
   is flat. When they converge, it is one additive shape carrying both, so no reader breaks.
+  *(Converged, recorded by ADR 0052: `specforge_common::DiagnosticJson` is that additive shape,
+  nesting `span` and repeating its start flat as `file`, `line` and `column`; every surface's JSON
+  and every outcome document carry diagnostics in it, `DiagnosticList`, ADR 0048 D6.)*
 - **D1-d** `CompiledProject` and `ProjectSession` live in a **new crate, `specforge-project`**; the
   emitter stays free of the Wasm runtime.
 
@@ -103,7 +106,9 @@ Changed answers are marked *(amended)*.
   governance manifest's peer is corrected); I005 follows D3-c. *(amended)* The **I004** keyword hint is
   removed: E024 already names the extension to install, and both would report every entity twice.
   **Define blocks** and **grammar and body-parser contributions** are removed from the spec and the
-  registry (define blocks warn when used); the protocol flags stay reserved.
+  registry (define blocks warn when used); the protocol flags stay reserved. *(Amended by ADR 0050: the
+  reserved protocol flags and the `grammars` and `body_parsers` describe categories are removed; a kind
+  keeps `has_body_parser`.)*
 
 ## Diagnostic catalog (plan 06)
 

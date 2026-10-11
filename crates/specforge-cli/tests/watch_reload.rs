@@ -29,7 +29,13 @@ fn watch_reloads_extension_environment_on_config_change() {
     .unwrap();
 
     let mut watch = Command::new(env!("CARGO_BIN_EXE_specforge"));
-    watch.args(["watch", "--path", dir.path().to_str().unwrap(), "--json"]);
+    watch.args([
+        "watch",
+        "--path",
+        dir.path().to_str().unwrap(),
+        "--format",
+        "json",
+    ]);
     let mut child = ChildGuard::spawn(
         guarded_command(&watch)
             .stdout(Stdio::piped())

@@ -87,7 +87,7 @@ impl Providers {
                     ));
                     ProviderStatus::ExtensionNotLoaded
                 }
-                Some(d) if !d.contribution_flags().providers => {
+                Some(d) if !d.handshake.providers => {
                     diagnostics.push(warning(
                         format!(
                             "provider '{}' names extension '{}', which contributes no providers",

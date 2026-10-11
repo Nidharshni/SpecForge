@@ -32,6 +32,7 @@ expression: mcp_snap
   "payload": {
     "code": "internal_error",
     "data": {
+      "backups": [],
       "diffs": [],
       "dry_run": false,
       "files_failed": 1,
@@ -43,6 +44,7 @@ expression: mcp_snap
       "hooks_invoked": [],
       "migrated": false,
       "ok": false,
+      "pending": true,
       "post_migration_errors": [],
       "post_migration_validated": false,
       "results": [

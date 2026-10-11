@@ -63,14 +63,14 @@ fn remove_delegates_to_uninstall() {
     let dir = TempDir::new().unwrap();
 
     // Create a lock file with one extension
-    write_lock_file(dir.path(), &[("@specforge/software", "1.0.0", "registry")]);
+    write_lock_file(dir.path(), &[("@acme/software", "1.0.0", "registry")]);
 
     // Create the extension directory so uninstall can remove it
     let ext_dir = dir
         .path()
         .join(".specforge")
         .join("extensions")
-        .join("@specforge/software");
+        .join("@acme/software");
     fs::create_dir_all(&ext_dir).unwrap();
     fs::write(ext_dir.join("extension.wasm"), b"fake wasm").unwrap();
     // Another extension's files must survive.
@@ -83,12 +83,12 @@ fn remove_delegates_to_uninstall() {
     fs::write(other_dir.join("extension.wasm"), b"other wasm").unwrap();
 
     specforge_cmd()
-        .args(["remove", "@specforge/software", "--path"])
+        .args(["remove", "@acme/software", "--path"])
         .arg(dir.path())
         .assert()
         .success()
         .stdout(predicates::str::contains(
-            "Removed extension '@specforge/software' (v1.0.0)",
+            "Removed extension '@acme/software' (v1.0.0)",
         ));
 
     // Lock file should now have empty entries
@@ -230,8 +230,8 @@ fn extensions_json_format() {
     write_lock_file(
         dir.path(),
         &[
-            ("@specforge/software", "1.2.0", "registry"),
-            ("@specforge/governance", "1.0.0", "local"),
+            ("@acme/software", "1.2.0", "registry"),
+            ("@acme/governance", "1.0.0", "local"),
         ],
     );
 
@@ -252,11 +252,11 @@ fn extensions_json_format() {
     assert_eq!(extensions.len(), 2);
 
     // Sorted alphabetically, governance first
-    assert_eq!(extensions[0]["name"], "@specforge/governance");
+    assert_eq!(extensions[0]["name"], "@acme/governance");
     assert_eq!(extensions[0]["version"], "1.0.0");
     assert_eq!(extensions[0]["source"], "local");
 
-    assert_eq!(extensions[1]["name"], "@specforge/software");
+    assert_eq!(extensions[1]["name"], "@acme/software");
     assert_eq!(extensions[1]["version"], "1.2.0");
     assert_eq!(extensions[1]["source"], "registry");
 }
@@ -815,6 +815,7 @@ fn doctor_lists_enabled_builtins_and_lock_entries_with_enhancement_counts() {
     let installed = extension(&report, "test-ext");
     assert_eq!(installed["source"], "registry", "{report}");
     assert_eq!(installed["version"], "1.2.3", "{report}");
+    assert_eq!(installed["status"], "not_configured", "{report}");
     // test-ext's binary is missing, so doctor still fails on it.
     assert_eq!(code, 1, "{report}");
 
@@ -930,7 +931,7 @@ fn doctor_reports_a_keyword_shadowing_an_extension_entity_kind() {
 
 #[specforge_test(
     behavior = "run_doctor_check",
-    verify = "doctor --json produces valid JSON output"
+    verify = "doctor --format json produces valid JSON output"
 )]
 fn doctor_json_carries_every_report_section() {
     let dir = builtin_project(Some(SHADOWING_ID));
@@ -1271,8 +1272,8 @@ fn add_validates_local_specifier() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let json: serde_json::Value = serde_json::from_str(&stdout).unwrap();
 
-    assert_eq!(json["action"], "add");
-    assert_eq!(json["name"], "@sdk/greet", "{json}");
+    assert_eq!(json["action"], "installed");
+    assert_eq!(json["extension"], "@sdk/greet", "{json}");
     assert_eq!(json["source"], "local:my-extension.wasm", "{json}");
 }
 
@@ -2135,7 +2136,7 @@ fn add_json_lists_the_files_it_wrote() {
     // Already there: nothing written.
     let before = files_under(root);
     let again = json_of(&["add", &wasm], root);
-    assert_eq!(again["already_present"], true, "{again}");
+    assert_eq!(again["action"], "already_present", "{again}");
     assert_eq!(files_written(&again), Vec::<String>::new());
     assert_eq!(changed_since(root, &before), Vec::<String>::new());
     let enabled = json_of(&["add", "@specforge/product"], root);

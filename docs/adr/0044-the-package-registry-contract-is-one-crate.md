@@ -89,3 +89,8 @@ or a dry run of an exact version, asks nothing and shows nothing.
   (`specforge_registry_wire::declares`). The reference server can require a token to read
   (`ReadAccess::Token`, `serve --private`).
 - The contract suite gains the private-registry clauses (K-P1..K-P4) and the port contract a search clause (R-S).
+
+**Amended by ADR 0050 (2026-10-11):** D1's reason for keeping host code out of the protocol types ("a blob input
+of every builtin") now holds for the protocol types themselves: the package names and the peer rule moved to
+`specforge-package`, which the wire crate depends on. `specforge_registry_wire::declares` is gone: a search
+filter reads `ExtensionDeclaration::declares`.

@@ -2,7 +2,7 @@
 //! (__handshake / __describe) through a WasmRuntime implementation.
 
 use specforge_extension_sdk::{ContributionsBuilder, ExtensionMeta, no_other_exports};
-use specforge_protocol_types::{ContributionFlags, HandshakeResponse};
+use specforge_protocol_types::HandshakeResponse;
 use specforge_test::prelude::*;
 use specforge_wasm::testing::InProcessRuntime;
 use specforge_wasm::{WasmCallResult, WasmTrapInfo};
@@ -67,20 +67,20 @@ fn protocol_extension_loaded_with_runtime() {
     let e028: Vec<_> = diagnostics.iter().filter(|d| d.code == "E028").collect();
     assert!(e028.is_empty(), "should not have E028: {:?}", e028);
 
-    // Its declaration should appear in ctx.env.registries.declarations()
+    // Its declaration should appear in ctx.env.registries().declarations()
     assert_eq!(
-        ctx.environment().registries.declarations().len(),
+        ctx.environment().registries().declarations().len(),
         1,
         "expected 1 declaration from protocol extension"
     );
     assert_eq!(
-        ctx.environment().registries.declarations()[0].name(),
+        ctx.environment().registries().declarations()[0].name(),
         "@test/proto"
     );
 
     // KindRegistry should have "gadget"
     assert!(
-        ctx.environment().registries.kinds.contains("gadget"),
+        ctx.environment().registries().kinds().contains("gadget"),
         "expected gadget kind in registry"
     );
 }
@@ -135,7 +135,7 @@ fn protocol_handshake_trap_produces_e028() {
 
     // No declaration from the broken extension
     assert!(
-        ctx.environment().registries.declarations().is_empty(),
+        ctx.environment().registries().declarations().is_empty(),
         "broken extension should not produce a declaration"
     );
 }
@@ -156,7 +156,6 @@ fn protocol_version_mismatch_produces_e028() {
         protocol_version: "99.0".to_string(),
         name: "@test/badver".to_string(),
         version: "1.0.0".to_string(),
-        contribution_flags: ContributionFlags::default(),
         peer_dependencies: vec![],
         sandbox_policy: None,
         starter_template: None,

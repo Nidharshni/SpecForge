@@ -7,14 +7,14 @@ use sha2::{Digest, Sha256};
 use specforge_ops::extension::{Trust, resolve};
 use specforge_ops::registry::Registry;
 use specforge_ops_registry::{ConfiguredRegistry, User};
-use specforge_protocol_types::package::{PackageName, PackageRef, Version};
+use specforge_package::{PackageName, PackageRef, Version};
 use specforge_registry_server::testing::LocalRegistry;
 use specforge_registry_wire::PackageMetadata;
 use specforge_test_macros::test as specforge_test;
 use tempfile::TempDir;
 
 /// The declaration of `@acme/tool@1.0.0`, as `specforge publish` uploads it.
-const MANIFEST: &str = r#"{"handshake":{"protocol_version":"1.0.0","name":"@acme/tool","version":"1.0.0","contribution_flags":{},"peer_dependencies":[],"sandbox_policy":null}}"#;
+const MANIFEST: &str = r#"{"handshake":{"protocol_version":"1.0.0","name":"@acme/tool","version":"1.0.0","peer_dependencies":[],"sandbox_policy":null}}"#;
 
 /// A registry in process publishing `@acme/tool` at `versions`, unsigned.
 fn serving(versions: &[&str]) -> LocalRegistry {

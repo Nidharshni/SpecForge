@@ -3,14 +3,16 @@
 
 use serde_json::json;
 use specforge_extension_sdk::prelude::*;
+use specforge_installed::Installed;
 use specforge_ops::infer::{InferencePlanRequest, guide, inference_plan, kind_guide};
 use specforge_ops::view::ProjectView;
+use specforge_project::Environment;
 use specforge_project::coverage::RecordedCoverage;
 use specforge_protocol_types::ExtensionDeclaration;
 use specforge_registry::build_registries;
 use specforge_test::prelude::*;
 
-use crate::view_support::Project;
+use crate::view_support::{Project, config_read, loaded};
 
 /// A declaration of `name` that declares each of `kinds` (a keyword and an
 /// inference guide).
@@ -37,18 +39,22 @@ fn project_of(source: &str, declarations: Vec<ExtensionDeclaration>) -> Project 
     verify = "a kind's guide is its extension's guide, then the project's guide for the kind under Project-specific"
 )]
 fn a_guide_is_the_extension_s_then_the_project_s() {
-    let mut project = project_of(
-        "",
-        vec![extension(
-            "@t/soft",
-            &[("behavior", Some("Look for public functions"))],
-        )],
-    );
-    project.env.config.inference.global = Some("This is a Rust project".to_string());
-    project.env.config.inference.kinds.insert(
-        "behavior".to_string(),
-        "In our codebase, behaviors are in use_cases/".to_string(),
-    );
+    let project = Project::assembled("", |root| {
+        Environment::assemble(
+            config_read(
+                root,
+                json!({"inference": {
+                    "global": "This is a Rust project",
+                    "behavior": "In our codebase, behaviors are in use_cases/",
+                }}),
+            ),
+            Installed::unread(root),
+            loaded(vec![extension(
+                "@t/soft",
+                &[("behavior", Some("Look for public functions"))],
+            )]),
+        )
+    });
     let view = project.view();
 
     let guide = guide(&view);
@@ -68,16 +74,19 @@ fn a_guide_is_the_extension_s_then_the_project_s() {
     verify = "a kind only the project guides has the project's guide alone, and one nobody guides an empty guide"
 )]
 fn a_kind_without_an_extension_guide_has_the_project_s_alone() {
-    let mut project = project_of(
-        "",
-        vec![extension("@t/soft", &[("behavior", None), ("event", None)])],
-    );
-    project
-        .env
-        .config
-        .inference
-        .kinds
-        .insert("behavior".to_string(), "Look in use_cases/".to_string());
+    let project = Project::assembled("", |root| {
+        Environment::assemble(
+            config_read(
+                root,
+                json!({"inference": {"behavior": "Look in use_cases/"}}),
+            ),
+            Installed::unread(root),
+            loaded(vec![extension(
+                "@t/soft",
+                &[("behavior", None), ("event", None)],
+            )]),
+        )
+    });
     let view = project.view();
 
     let guide = guide(&view);
@@ -110,7 +119,10 @@ fn a_kind_guide_lists_every_registered_field() {
         .map(|f| (f.name(), f.field_type().as_str()))
         .collect();
     assert_eq!(fields, [("description", "string"), ("tags", "string_list")]);
-    assert_eq!(guide.to_json()["fields"][0]["description"], "A description");
+    assert_eq!(
+        serde_json::to_value(guide.document()).unwrap()["fields"][0]["description"],
+        "A description"
+    );
 }
 
 #[specforge_test(
@@ -198,18 +210,24 @@ fn a_kind_declared_twice_is_guided_by_the_first() {
     verify = "the guide's spec directory is the project's spec root, relative to its root"
 )]
 fn the_spec_directory_is_the_spec_root_relative_to_the_root() {
-    let mut project = project_of("", Vec::new());
-    project.env.root = project.dir.path().to_path_buf();
-
-    project.env.spec_root = project.dir.path().join("model");
+    let rooted = |config: serde_json::Value| {
+        Project::assembled("", |root| {
+            Environment::assemble(
+                config_read(root, config),
+                Installed::unread(root),
+                loaded(Vec::new()),
+            )
+        })
+    };
+    let project = rooted(json!({"spec_root": "model"}));
     assert_eq!(guide(&project.view()).spec_directory, "model/");
-    project.env.spec_root = project.dir.path().join("docs").join("spec");
+    let project = rooted(json!({"spec_root": "docs/spec"}));
     assert_eq!(guide(&project.view()).spec_directory, "docs/spec/");
-    project.env.spec_root = project.dir.path().to_path_buf();
+    let project = rooted(json!({}));
     assert_eq!(guide(&project.view()).spec_directory, "./");
 
     // A view without a root has no relative directory.
-    project.env.spec_root = project.dir.path().join("model");
+    let project = rooted(json!({"spec_root": "model"}));
     let recorded = RecordedCoverage::over(&project.graph, &project.env);
     let rootless = ProjectView::new(&project.graph, &project.env, None, &recorded);
     assert_eq!(guide(&rootless).spec_directory, "./");
@@ -239,7 +257,7 @@ fn the_guide_lists_extensions_kinds_and_entities() {
         [("behavior", 2), ("widget", 1)]
     );
     assert_eq!(guide.kinds[0].existing, ["alpha", "zeta"]);
-    let json = kind_guide(&view, "behavior").unwrap().to_json();
+    let json = serde_json::to_value(kind_guide(&view, "behavior").unwrap().document()).unwrap();
     assert_eq!(json["existing_entity_ids"], json!(["alpha", "zeta"]));
 }
 
@@ -370,9 +388,13 @@ fn the_plan_excludes_analyzed_files() {
     verify = "plan's target directory defaults to the project's spec root"
 )]
 fn the_plan_targets_the_spec_root_unless_told() {
-    let mut project = project_of("", Vec::new());
-    project.env.root = project.dir.path().to_path_buf();
-    project.env.spec_root = project.dir.path().join("model");
+    let project = Project::assembled("", |root| {
+        Environment::assemble(
+            config_read(root, json!({"spec_root": "model"})),
+            Installed::unread(root),
+            loaded(Vec::new()),
+        )
+    });
 
     let default = inference_plan(&project.view(), &InferencePlanRequest::default()).unwrap();
     assert_eq!(default.target_spec_directory, "model/");

@@ -1,100 +1,89 @@
-use crate::OutputFormat;
-use crate::outcome::{Exit, Refusal};
-use serde_json::json;
-use specforge_ops::extension::{self, Trust, UpdateRequest};
+use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
+use crate::terminal::{Terminal, errln, outln};
+use specforge_ops::extension::{self, UpdateRequest};
 use specforge_ops_registry::ConfiguredRegistry;
-use std::path::Path;
+use std::path::PathBuf;
 
-/// `specforge update`: the shared update operation, presented. Exit 1
-/// when it fails outright or when any extension fails (nothing is then
-/// applied).
-pub fn run(
-    name: Option<&str>,
-    path: &Path,
-    format: OutputFormat,
+// `specforge update`'s command line.
+#[derive(clap::Args)]
+pub(crate) struct Args {
+    /// Extension name (updates all if omitted)
+    name: Option<String>,
+
+    /// Path to the project root
+    #[arg(long, default_value = ".")]
+    path: PathBuf,
+
+    #[command(flatten)]
+    output: OutputArg,
+
+    /// Allow new major versions (otherwise each extension stays within
+    /// its locked version's caret range)
+    #[arg(long, default_value_t = false)]
     major: bool,
+
+    /// Accept unsigned packages (publisher verification skipped)
+    #[arg(long, default_value_t = false)]
     allow_unsigned: bool,
-    trust: Trust,
-) -> Exit {
-    let registry =
-        ConfiguredRegistry::for_project(path, "update").asking(crate::trust::ask_key_change);
-    let runtime = specforge_component::ComponentRuntime::with_user_cache();
-    let request = UpdateRequest {
-        root: path,
-        name,
-        major,
-        allow_unsigned,
-        trust,
-    };
-    let updated = extension::update(&request, &registry, &runtime);
-    format.eprint_diagnostics(&registry.reported());
-    let outcome = match updated {
-        Ok(outcome) => outcome,
-        Err(error) => {
-            return Refusal::of(format).report(&error);
-        }
-    };
-    // The update ran to the end (applied or rolled back): it emits
-    // `batch_update_completed`, which JSON output carries.
-    let completed = batch_update_completed(&outcome);
 
-    if let Some((_, first)) = outcome.failures().next() {
-        let failed: Vec<_> = outcome
-            .failures()
-            .map(|(name, e)| json!({"name": name, "code": e.code, "error": e.message}))
-            .collect();
-        match format {
-            OutputFormat::Json => {
-                let mut output = crate::outcome::error_document(first, None);
-                output["failed"] = json!(failed);
-                output["updated"] = json!([]);
-                output["batch_update_completed"] = completed;
-                println!("{}", serde_json::to_string_pretty(&output).unwrap());
-            }
-            OutputFormat::Human => {
-                for (name, e) in outcome.failures() {
-                    eprintln!("error[{}]: {name}: {}", e.code, e.message);
-                    if let Some(hint) = &e.suggestion {
-                        eprintln!("  hint: {hint}");
-                    }
-                }
-                eprintln!("no extension was updated");
-            }
-        }
-        return Exit::Failed;
-    }
+    /// Accept key changes non-interactively (for CI)
+    #[arg(long, default_value_t = false)]
+    yes: bool,
+}
 
-    let updated: Vec<_> = outcome
-        .extensions
-        .iter()
-        .filter_map(|e| match &e.status {
-            extension::UpdateStatus::Updated {
-                from,
-                to,
-                publisher,
-                ..
-            } => {
-                let mut entry = json!({"name": e.name, "from": from, "to": to});
-                if let Some(key_id) = publisher.key_id() {
-                    entry["key_id"] = json!(key_id);
-                }
-                entry["publisher"] = json!(publisher.as_str());
-                Some(entry)
+impl Args {
+    /// `specforge update`: the shared update operation, presented. Exit 1
+    /// when it fails outright or when any extension fails (nothing is then
+    /// applied).
+    pub(crate) fn run(self, terminal: &Terminal) -> Exit {
+        let format = self.output.format;
+        let path = self.path.as_path();
+        let registry =
+            ConfiguredRegistry::for_project(path, "update").asking(crate::trust::asker(terminal));
+        let runtime = specforge_component::ComponentRuntime::with_user_cache();
+        let request = UpdateRequest {
+            root: path,
+            name: self.name.as_deref(),
+            major: self.major,
+            allow_unsigned: self.allow_unsigned,
+            trust: format.trust(self.yes),
+        };
+        let updated = extension::update(&request, &registry, &runtime);
+        terminal.diagnostics(&registry.reported());
+        let outcome = match updated {
+            Ok(outcome) => outcome,
+            Err(error) => {
+                return Refusal::of(format).report(terminal, &error);
             }
-            _ => None,
-        })
-        .collect();
-    match format {
-        OutputFormat::Json => {
-            let output = json!({"updated": updated, "batch_update_completed": completed});
-            println!("{}", serde_json::to_string_pretty(&output).unwrap());
+        };
+        // The update ran to the end (applied or rolled back): it emits
+        // `batch_update_completed`, which JSON output carries in its document.
+        if let OutputFormat::Json = format {
+            terminal.json(&outcome.document(chrono::Utc::now()));
+            return Exit::of_verdict(outcome.applied());
         }
-        OutputFormat::Human if outcome.extensions.is_empty() => {
-            println!("no extensions to update");
+
+        if outcome.failures().next().is_some() {
+            for (name, e) in outcome.failures() {
+                errln!(terminal, "error[{}]: {name}: {}", e.code, e.message);
+                if let Some(hint) = &e.suggestion {
+                    errln!(terminal, "  hint: {hint}");
+                }
+            }
+            errln!(terminal, "no extension was updated");
+            return Exit::Failed;
         }
-        OutputFormat::Human if updated.is_empty() => println!("all extensions are up to date"),
-        OutputFormat::Human => {
-            println!("updated {} extension(s):", updated.len());
+
+        if outcome.extensions.is_empty() {
+            outln!(terminal, "no extensions to update");
+        } else if outcome.updated().next().is_none() {
+            outln!(terminal, "all extensions are up to date");
+        } else {
+            outln!(
+                terminal,
+                "updated {} extension(s):",
+                outcome.updated().count()
+            );
             for e in &outcome.extensions {
                 if let extension::UpdateStatus::Updated {
                     from,
@@ -103,23 +92,11 @@ pub fn run(
                     ..
                 } = &e.status
                 {
-                    println!("  {} {from} -> {to}", e.name);
-                    println!("    {}", crate::add::publisher_line(publisher));
+                    outln!(terminal, "  {} {from} -> {to}", e.name);
+                    outln!(terminal, "    {}", crate::add::publisher_line(publisher));
                 }
             }
         }
+        Exit::Passed
     }
-    Exit::Passed
-}
-
-/// The `batch_update_completed` event's payload
-/// (`spec/events/wasm-extensions.spec`), stamped now.
-fn batch_update_completed(outcome: &extension::UpdateOutcome) -> serde_json::Value {
-    let counts = outcome.batch_update_completed();
-    json!({
-        "updatedCount": counts.updated_count,
-        "failedCount": counts.failed_count,
-        "skippedCount": counts.skipped_count,
-        "timestamp": chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
-    })
 }

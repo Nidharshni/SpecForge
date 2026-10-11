@@ -419,8 +419,10 @@ fn a_preview_asked_for_with_a_string_writes_nothing() {
         );
         // It answered as the preview it was asked for.
         let result = tool_json(&reply);
-        let previewed =
-            result["check_only"] == true || result["dry_run"] == true || result["diffs"].is_array();
+        let previewed = result["check_only"] == true
+            || result["dry_run"] == true
+            || result["action"] == "planned"
+            || result["diffs"].is_array();
         assert!(previewed, "{tool} {arguments}: {result}");
     }
 }
@@ -544,7 +546,7 @@ fn every_core_tool_lists_its_typed_arguments() {
         let schema = tool.input_schema();
         let properties = schema["properties"].as_object().expect("properties");
         for argument in tool.arguments() {
-            let name = format!("{}.{}", tool.name, argument.name);
+            let name = format!("{}.{}", tool.name(), argument.name);
             let property = &properties[argument.name];
             assert_eq!(property, &argument.schema, "{name}");
             // Its description is the field's doc comment (an enumerated
@@ -575,7 +577,7 @@ fn every_core_tool_lists_its_typed_arguments() {
                 declared.contains(&listed.as_str())
                     || tool.target().fields().contains(&listed.as_str()),
                 "{}: lists {listed}",
-                tool.name
+                tool.name()
             );
         }
     }

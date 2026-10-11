@@ -328,25 +328,25 @@ impl LspState {
     }
 
     pub fn kind_registry(&self) -> &KindRegistry {
-        &self.registries().kinds
+        self.registries().kinds()
     }
 
     pub fn field_registry(&self) -> &FieldRegistry {
-        &self.registries().fields
+        self.registries().fields()
     }
 
     pub fn edge_registry(&self) -> &EdgeRegistry {
-        &self.registries().edges
+        self.registries().edges()
     }
 
     /// Everything built from the loaded extensions.
     pub fn registries(&self) -> &RegistryBuild {
-        &self.environment().registries
+        self.environment().registries()
     }
 
     /// Where the project's `.spec` files live (empty with no project).
     pub fn spec_root(&self) -> &Path {
-        &self.environment().spec_root
+        self.environment().spec_root()
     }
 
     /// The session's key for a file's absolute path

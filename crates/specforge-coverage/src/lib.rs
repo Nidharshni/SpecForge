@@ -9,11 +9,17 @@
 //! re-implements the rule, and both are held to the golden vectors in
 //! `tests/fixtures/coverage-cases.json`.
 //!
-//! It depends on serde only, so it builds for `wasm32-wasip2`. Keep these
-//! types out of the extension SDK and protocol-types: every builtin blob is
-//! built from those, and a change there makes all of them stale.
+//! It reads a pass's entities through `Entity::from(&PassEntity)`, the one
+//! reading the host and the extensions share, and it states the counting rule
+//! once ([`Counting`]).
+//!
+//! It depends on serde and the guest wire's `PassEntity` only, so it builds
+//! for `wasm32-wasip2`. Keep these types out of the extension SDK and
+//! protocol-types: every builtin blob is built from those, and a change there
+//! makes all of them stale. It reads them; they never read it.
 
 use serde::{Deserialize, Serialize};
+use specforge_protocol_types::PassEntity;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// How a recorded test's status names a passing test.
@@ -38,6 +44,36 @@ pub struct RiskGrading {
     pub error_at: String,
 }
 
+/// Whether an entity counts toward coverage, from the three facts the rule
+/// reads (ADR 0004 D2-b, ADR 0019): the one statement of the counting rule.
+/// The host's `Standing` and a pass's [`Entity`] both answer through it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Counting {
+    /// Its kind is testable (its registry entry says so).
+    pub testable: bool,
+    /// It owes obligations of its own: a `no_verify_statements` rule
+    /// applies to its kind and nothing exempts it.
+    pub owes_obligations: bool,
+    /// How many obligations (`verify` statements) it declares.
+    pub declared: usize,
+}
+
+impl Counting {
+    /// It counts toward coverage (the testable totals and the `--min`
+    /// gate's denominator): testable, and it owes obligations or declares
+    /// some.
+    pub fn counts(self) -> bool {
+        self.testable && (self.owes_obligations || self.declared > 0)
+    }
+
+    /// Testable, yet it owes none and declares none, so it does not count:
+    /// the summary's `testable_exempt`, the coverage view's and inspect's
+    /// `exempt`. Not [`Entity::owes_none`], which says only that it owes none.
+    pub fn exempt(self) -> bool {
+        self.testable && !self.counts()
+    }
+}
+
 /// An entity as the rule sees it.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Entity {
@@ -51,9 +87,11 @@ pub struct Entity {
     /// kind no rule requires obligations of (governance). Decided by the
     /// host from the registry. An exempt entity that declares none is
     /// left out of the testable count and is not A001; one that declares
-    /// some counts like any other.
+    /// some counts like any other. This is "owes none", not
+    /// [`Counting::exempt`]: an entity that owes none and declares some
+    /// still counts.
     #[serde(default)]
-    pub exempt: bool,
+    pub owes_none: bool,
     /// One entry per `verify` statement, in order: its kind, or `""` for a
     /// bare `verify "..."`.
     #[serde(default)]
@@ -77,11 +115,39 @@ impl Entity {
         self.verify_texts.len()
     }
 
-    /// Whether the entity counts toward coverage (the testable totals and
-    /// the gate's denominator): its kind is testable, and it is not an
-    /// exempt entity that declares nothing.
+    /// The facts the counting rule reads.
+    pub fn counting(&self) -> Counting {
+        Counting {
+            testable: self.testable,
+            owes_obligations: !self.owes_none,
+            declared: self.obligations(),
+        }
+    }
+
+    /// Whether the entity counts toward coverage ([`Counting::counts`]).
     pub fn counts_toward_coverage(&self) -> bool {
-        self.testable && !(self.exempt && self.obligations() == 0)
+        self.counting().counts()
+    }
+}
+
+impl From<&PassEntity> for Entity {
+    /// A pass's entity as the rule reads it. The host's per-entity views and
+    /// every extension's pass share this one reading:
+    /// - its testable flag, `owes_none` and obligations, as the
+    ///   host decided them;
+    /// - referenced when any edge comes in;
+    /// - `risk` unset: a caller that grades a kind fills it ([`RiskGrading`]).
+    fn from(entity: &PassEntity) -> Self {
+        Entity {
+            id: entity.id.clone(),
+            kind: entity.kind.clone(),
+            testable: entity.testable,
+            owes_none: entity.owes_none,
+            verify_kinds: entity.verify_kinds.clone(),
+            verify_texts: entity.verify_texts.clone(),
+            risk: None,
+            referenced: entity.incoming_edge_count > 0,
+        }
     }
 }
 
@@ -191,7 +257,7 @@ impl Verdict {
 
     /// The per-entity view, from the same facts as [`Verdict::is_proven`].
     pub fn status(&self) -> Status {
-        if self.obligations > 0 && self.unproven.is_empty() && self.failing == 0 {
+        if self.is_proven() {
             Status::Covered
         } else if self.proven > 0 || self.failing > 0 {
             Status::Partial
@@ -427,9 +493,10 @@ pub fn assess(
             funnel.formally_discharged += 1;
         }
 
-        if entity.testable && !entity.counts_toward_coverage() {
+        let counting = entity.counting();
+        if counting.exempt() {
             testable_exempt += 1;
-        } else if entity.testable {
+        } else if counting.counts() {
             testable_total += 1;
             if obligations == 0 {
                 finding(

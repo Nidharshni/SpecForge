@@ -92,7 +92,7 @@ fn refusals_after() {
     let broken = rv1(Some("{"));
     add("C1", broken.path(), &["stats"]);
     add("C2", broken.path(), &["stats", "--format", "json"]);
-    add("C3", broken.path(), &["analyze", "--json"]);
+    add("C3", broken.path(), &["analyze", "--format", "json"]);
     let project = rv1(None);
     add("C4", project.path(), &["analyze", "nope"]);
     add("C5", project.path(), &["trace", "nope", "--format", "json"]);
@@ -227,7 +227,7 @@ fn json_refusals_are_the_error_document() {
             &["trace", "nope", "--format", "json"],
             "E003",
         ),
-        (broken.path(), &["analyze", "--json"], "E045"),
+        (broken.path(), &["analyze", "--format", "json"], "E045"),
         (
             project.path(),
             &["migrate", "--target-version", "9.9", "--format", "json"],

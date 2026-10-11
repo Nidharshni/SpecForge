@@ -749,4 +749,39 @@ mod tests {
         );
         assert_ne!(inherited_tables(a), inherited_tables(&c));
     }
+
+    /// The crates a builtin blob compiles besides its own sources: the guest wire, the SDK and its
+    /// macros, and the coverage rule (ADR 0039, 0050). A host-only module in one of them, or a new
+    /// path dependency of a guest, shows here as an input outside this list.
+    const GUEST_CRATES: &[&str] = &[
+        "crates/specforge-protocol-types/",
+        "crates/specforge-extension-sdk/",
+        "crates/specforge-extension-sdk-macros/",
+        "crates/specforge-coverage/",
+    ];
+
+    #[test]
+    fn a_builtin_compiles_only_its_own_sources_and_the_guest_crates() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        for &(name, _) in EXTENSIONS {
+            let path = root.join(format!("extensions/{name}/wasm/{INPUTS_FILE}"));
+            let record: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+            let own = format!("extensions/{name}/");
+            let inputs = record["inputs"].as_object().unwrap();
+            for key in inputs.keys() {
+                assert!(
+                    key == WORKSPACE_INHERITED
+                        || key.starts_with(&own)
+                        || GUEST_CRATES.iter().any(|guest| key.starts_with(guest)),
+                    "{name} compiles {key}, outside its own sources and the guest crates"
+                );
+            }
+            assert!(
+                !inputs
+                    .keys()
+                    .any(|k| k.ends_with("/peers.rs") || k.ends_with("/package.rs")),
+                "{name}: the package and peer rules are host-side"
+            );
+        }
+    }
 }

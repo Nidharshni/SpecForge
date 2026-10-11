@@ -1,5 +1,7 @@
 //! `specforge.format`: format the spec files (`specforge_ops::format`).
 
+use crate::target::{AnyProject, Project};
+use crate::tool::{CoreTool, Effect, ReplySpec, WriteHints};
 use std::path::PathBuf;
 
 use serde::Serialize;
@@ -7,7 +9,9 @@ use specforge_common::shape::Shape;
 use specforge_common::{DiagnosticList, project_root_of};
 
 use crate::args::Arguments;
-use crate::mutation::{Mutated, Mutation, Written};
+use crate::mutation::{
+    Failed, Mutated, Mutation, MutationArgs, MutationReply, NoDiagnostics, Written,
+};
 use crate::target::ProjectRef;
 use crate::tool::{ErrorCode, McpError};
 use specforge_ops::OpErrorKind;
@@ -26,6 +30,16 @@ pub struct Args {
     write: Option<bool>,
 }
 
+impl MutationArgs for Args {
+    fn previews(&self) -> bool {
+        !self.mode().writes()
+    }
+}
+
+impl MutationReply for Reply {
+    type After = NoDiagnostics;
+}
+
 impl Args {
     /// Whether the call writes or only reports: `specforge format`'s one
     /// reading of check, diff and write.
@@ -34,7 +48,7 @@ impl Args {
     }
 }
 
-/// `specforge.format`'s reply (`McpFormatResult`).
+/// `specforge.format`'s reply.
 #[derive(Debug, Serialize, Shape)]
 pub struct Reply {
     changed_files: Vec<String>,
@@ -132,48 +146,56 @@ impl Reply {
     }
 }
 
-pub(crate) fn call(project: &ProjectRef<'_>, args: Args) -> Mutation<Reply> {
-    // The one reading of check, diff and write: a run that does not write
-    // is a preview.
-    let mode = args.mode();
-    let preview = !mode.writes();
+pub(crate) struct Tool;
 
-    // The project the call formats: the served one, or the one `path`
-    // names (a directory that is no project is its own root, formatted with
-    // the defaults, as `specforge format` formats it); its config decides
-    // what is formatted.
-    let project_root = project_root_of(project.root);
+impl CoreTool for Tool {
+    const NAME: &'static str = "specforge.format";
+    const DESCRIPTION: &'static str = "Format spec files";
+    const EFFECT: Effect = Effect::Mutates {
+        hints: WriteHints {
+            destructive: true,
+            idempotent: true,
+            open_world: false,
+        },
+    };
+    const SPEC: ReplySpec = ReplySpec::Type("McpFormatResult");
+    type Args = Args;
+    type Input = Project<AnyProject>;
+    type Returns = Mutation<Reply>;
 
-    // The run `specforge format` makes. Relative paths name files under
-    // the project root.
-    let explicit: Vec<PathBuf> = args.paths.iter().map(|p| project_root.join(p)).collect();
-    let outcome = format::run(&Request {
-        root: &project_root,
-        paths: &explicit,
-        mode,
-    });
+    fn call(project: ProjectRef<'_>, args: Args) -> Mutation<Reply> {
+        // The one reading of check, diff and write.
+        let mode = args.mode();
 
-    let mut reply = Reply::of(&outcome, mode, args.diff);
-    if outcome.succeeded() {
-        return Ok(if preview {
-            Mutated::preview(reply)
-        } else {
-            Mutated::wrote(reply, Written::files(outcome.writes()))
+        // The project the call formats: the served one, or the one `path`
+        // names (a directory that is no project is its own root, formatted with
+        // the defaults, as `specforge format` formats it); its config decides
+        // what is formatted.
+        let project_root = project_root_of(project.root);
+
+        // The run `specforge format` makes. Relative paths name files under
+        // the project root.
+        let explicit: Vec<PathBuf> = args.paths.iter().map(|p| project_root.join(p)).collect();
+        let outcome = format::run(&Request {
+            root: &project_root,
+            paths: &explicit,
+            mode,
         });
-    }
 
-    // Every other file was still formatted, and what was written is
-    // reported; the call failed for these (read or write), with the kind
-    // the files share (permission denied for locked files, not found for
-    // missing ones), else an internal failure. The failed call's `data`
-    // is the reply.
-    reply.fail_with(&outcome);
-    let code = ErrorCode::from(outcome.failure_kind().unwrap_or(OpErrorKind::Internal));
-    let error = McpError::new(code, reply.message.clone().unwrap_or_default())
-        .with_data(serde_json::to_value(&reply).expect("a reply serializes"));
-    Ok(if preview {
-        Mutated::failed_preview(error)
-    } else {
-        Mutated::failed(error, Written::files(outcome.writes()))
-    })
+        let mut reply = Reply::of(&outcome, mode, args.diff);
+        if outcome.succeeded() {
+            return Ok(Mutated::new(reply, Written::files(outcome.writes())));
+        }
+
+        // Every other file was still formatted, and what was written is
+        // reported; the call failed for these (read or write), with the kind
+        // the files share (permission denied for locked files, not found for
+        // missing ones), else an internal failure. The failed call's `data`
+        // is the reply.
+        reply.fail_with(&outcome);
+        let code = ErrorCode::from(outcome.failure_kind().unwrap_or(OpErrorKind::Internal));
+        let error = McpError::new(code, reply.message.clone().unwrap_or_default())
+            .with_data(serde_json::to_value(&reply).expect("a reply serializes"));
+        Err(Failed::after(error, outcome.writes()))
+    }
 }

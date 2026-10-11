@@ -165,24 +165,26 @@ behavior upgrade_wasm_extension "Upgrade Wasm Extension" {
   ensures {
     extension_upgrade_completed_emitted "extension_upgrade_completed event is emitted on successful upgrade"
     binary_replaced                     "the installed .wasm binary is replaced and the lock entry records the new hash"
-    peer_compatibility_enforced         "breaking peer dependency changes are rejected without --force"
+    peer_compatibility_enforced         "an upgrade that would leave an installed extension outside its declared peer range is refused, and nothing is written"
   }
   contract   """
-    When specforge extension upgrade is invoked, the system MUST check the
-    source for a newer version, validate peer dependency compatibility
-    with all installed extensions, and replace the .wasm binary. The lock
-    entry MUST record the new hash, which becomes the tamper pin for
-    subsequent loads. The engine's compile cache keys on binary content,
-    so the new binary never resolves to the previous artifact. Breaking
-    peer dependency changes MUST require the --force flag. Without
-    --force, the upgrade MUST be rejected with a diagnostic listing the
-    incompatible peers.
+    When specforge update is invoked with an extension's name, the system
+    MUST pick the version its requirement asks for from the registry that
+    serves it (within the locked version's caret range unless --major),
+    check the new version's peers against the other installed extensions
+    and every installed extension's peers against the new version, and
+    replace the .wasm binary. The lock entry MUST record the new hash,
+    which becomes the tamper pin for subsequent loads. The engine's
+    compile cache keys on binary content, so the new binary never resolves
+    to the previous artifact. An upgrade that would leave an installed
+    extension outside its declared peer range MUST be refused before
+    anything is written, with an error naming the dependent; no flag
+    overrides it (remove alone takes --force). Updating every extension
+    at once, rollback and locally installed extensions are
+    update_all_extensions, whose verifies prove this refusal and the
+    lock hashes.
   """
   produces   [extension_upgrade_completed]
-  verify unit "checks source for newer version"
-  verify unit "validates peer dependency compatibility"
-  verify unit "replaces binary and records new lock hash"
-  verify unit "rejects breaking peer change without --force"
   verify unit "one rule picks the version a requirement asks for"
   verify contract "Upgrade Wasm Extension: Wasm extension upgrade holds — extension_installed, source_available, extension_upgrade_completed_emitted, binary_replaced, peer_compatibility_enforced"
 }

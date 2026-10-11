@@ -271,18 +271,18 @@ impl<F: Fn(&str) -> Option<String>> Navigator<'_, F> {
         let registries = self.view.registries();
         let kind = holder.kind.raw.as_str();
         let derived = registries
-            .fields
+            .fields()
             .get(kind, edge.label.as_str())
             .and_then(|entry| entry.declared().derived_from.as_deref())
             .and_then(DerivedFrom::parse);
         let target = edge.target.as_str();
+        let single = registries.graph_inputs().single_reference_fields;
         let mut spans = Vec::new();
         match derived {
             Some(DerivedFrom::TypeExpressions) => {
                 for entry in holder.fields.entries() {
-                    let single = registries
-                        .single_reference_fields
-                        .contains(&(kind.to_string(), entry.key.as_str().to_string()));
+                    let single =
+                        single.contains(&(kind.to_string(), entry.key.as_str().to_string()));
                     let typed = matches!(
                         entry.value,
                         FieldValue::Identifier(_)

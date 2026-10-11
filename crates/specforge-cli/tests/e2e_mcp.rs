@@ -2337,7 +2337,10 @@ fn mcp_tool_init_returns_project() {
     let resp = find_response(&responses, 1).expect("should get response for id 1");
     assert!(resp["error"].is_null(), "should not be error: {}", resp);
     let content = parse_tool_content(resp);
-    assert_eq!(content["project_path"], dir.path().to_str().unwrap());
+    assert_eq!(
+        content["project_root"],
+        dir.path().canonicalize().unwrap().to_str().unwrap()
+    );
     assert!(dir.path().join("specforge.json").is_file());
     assert_eq!(content["config_file"], "specforge.json");
     assert_eq!(content["starter_file"], "spec/hello.spec");
@@ -2393,7 +2396,7 @@ fn mcp_tool_add_extension_returns_installed() {
     assert!(resp["error"].is_null(), "should not be error: {}", resp);
     let content = parse_tool_content(resp);
     assert_eq!(content["extension"], "@sdk/greet");
-    assert_eq!(content["installed"], true);
+    assert_eq!(content["action"], "installed");
 
     // The project's config now lists the extension (it listed none before)...
     let config: serde_json::Value =
@@ -2472,7 +2475,7 @@ fn mcp_tool_migrate_returns_result() {
     // from_version is the format version detected on disk.
     assert_eq!(content["from_version"], "1.0");
     assert_eq!(content["migrated"], false, "fixture is already current");
-    assert!(content["message"].is_string());
+    assert_eq!(content["pending"], false);
 }
 
 #[test]

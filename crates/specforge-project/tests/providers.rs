@@ -9,11 +9,11 @@ use specforge_protocol_types::ExtensionDeclaration;
 use specforge_test_macros::test as specforge_test;
 
 /// The declaration of the extension `name`, contributing providers when
-/// `providers` (a raw `providers` category raises the handshake's flag).
+/// `providers` (its handshake says `providers`).
 fn make_declaration(name: &str, providers: bool) -> ExtensionDeclaration {
     let mut c = ContributionsBuilder::new(ExtensionMeta::new(name, "1.0.0"));
     if providers {
-        c.raw_category("providers", json!([]));
+        c.providers();
     }
     c.declaration()
 }

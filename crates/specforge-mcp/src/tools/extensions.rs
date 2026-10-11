@@ -1,45 +1,33 @@
 //! `specforge.extensions`: the installed extensions (`specforge_ops::extension::list`).
 
-use std::collections::BTreeSet;
-
-use serde::Serialize;
-use specforge_common::shape::Shape;
-use specforge_ops::extension::ExtensionInfo;
-
 use crate::args::NoArgs;
 use crate::reply::Answered;
+use crate::target::Project;
 use crate::target::ProjectRef;
+use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
 
-/// `specforge.extensions`'s reply (`McpExtensionsResult`).
-#[derive(Debug, Serialize, Shape)]
-pub struct Reply {
-    extensions: Vec<ExtensionInfo>,
-    lock_file_entries: Vec<LockEntry>,
-    entity_kinds_in_graph: BTreeSet<String>,
-}
+/// `specforge.extensions`'s reply: the extensions
+/// document `specforge extensions --format json` prints (ADR 0052).
+type Reply = specforge_ops::extension::ExtensionsDocument;
 
-/// One entry of the project's `specforge.lock`.
-#[derive(Debug, Serialize, Shape)]
-pub struct LockEntry {
-    name: String,
-    version: String,
-}
+pub(crate) struct Tool;
 
-pub(crate) fn call(project: &ProjectRef<'_>, _args: NoArgs) -> Answered<Reply> {
-    // The shared listing, over the project view: what the project
-    // compiled, its lock and the kinds its graph uses.
-    let listing = specforge_ops::extension::list(&project.view());
-    Ok(Reply {
-        extensions: listing.extensions.iter().map(|e| e.info()).collect(),
-        lock_file_entries: listing
-            .locked
-            .iter()
-            .map(|e| LockEntry {
-                name: e.name.clone(),
-                version: e.version.clone(),
-            })
-            .collect(),
-        entity_kinds_in_graph: listing.kinds_in_graph,
+impl CoreTool for Tool {
+    const NAME: &'static str = "specforge.extensions";
+    const DESCRIPTION: &'static str = "List installed extensions";
+    const EFFECT: Effect = Effect::Reads {
+        group: ToolGroup::Management,
+    };
+    const SPEC: ReplySpec = ReplySpec::Type("McpExtensionsResult");
+    type Args = NoArgs;
+    type Input = Project;
+    type Returns = Answered<Reply>;
+
+    fn call(project: ProjectRef<'_>, _args: NoArgs) -> Answered<Reply> {
+        // The shared listing, over the project view: what the project
+        // compiled, its lock and the kinds its graph uses.
+        Ok(specforge_ops::extension::list(&project.view())
+            .document()
+            .into())
     }
-    .into())
 }

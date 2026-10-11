@@ -1,18 +1,3 @@
 {
-  "host_version": "1.1.0",
-  "supported_categories": [
-    "entities",
-    "edges",
-    "fields",
-    "shared_fields",
-    "enhancements",
-    "validation_rules",
-    "surfaces",
-    "grammars",
-    "body_parsers",
-    "collectors",
-    "passes",
-    "feature_flags",
-    "analyzers"
-  ]
+  "host_version": "1.2.0"
 }

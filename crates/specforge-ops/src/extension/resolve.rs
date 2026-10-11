@@ -7,8 +7,8 @@
 use crate::OpError;
 use crate::registry::Registry;
 use specforge_common::codes;
-use specforge_protocol_types::PackageRef;
-use specforge_protocol_types::package::{PackageName, Version, VersionRequirement};
+use specforge_package::PackageRef;
+use specforge_package::{PackageName, Version, VersionRequirement};
 
 /// The version `package` asks for. An exact version asks nothing of the
 /// registry; anything else lists the package's versions and picks.

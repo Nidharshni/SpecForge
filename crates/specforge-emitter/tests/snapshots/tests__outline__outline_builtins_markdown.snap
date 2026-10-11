@@ -56,7 +56,7 @@ expression: "render(&outline, &opts)"
 
 **Entity kinds**: feature, journey, deliverable, milestone, module, term, persona, channel, release
 
-**Contributes**: entities, validators
+**Contributes**: entities, edges, shared_fields, validation_rules, surfaces, passes
 
 **Validation rules**: W077, W078, W078, W078, W078, W079, W080, W083, W084, W085, W095, W041, W042, W044, I010, I046, I047, E007, E015, E052, W045, W092, W093, I048, I062, I053, I061, I050, I068, I068, I068, I068, I068, I068, I068, I068, I068, I086, I087, W049, I059, W057, I060, I066, I069, I070, I057, I089, W043, W046, I067, I055, I082, I083, I048, I054, I080, I080, I080, I080, I081 (61 total)
   Severity breakdown: 3 errors, 21 warnings, 37 info
@@ -198,7 +198,7 @@ expression: "render(&outline, &opts)"
 
 **Entity kinds**: behavior, invariant, event, type, port
 
-**Contributes**: entities, validators
+**Contributes**: entities, edges, enhancements, validation_rules
 
 **Validation rules**: W001, W002, W003, W005, W006, W007, W008, W010, E004, E051, E010 (11 total)
   Severity breakdown: 3 errors, 8 warnings
@@ -278,7 +278,7 @@ expression: "render(&outline, &opts)"
 
 **Entity kinds**: decision, constraint, failure_mode
 
-**Contributes**: entities, validators
+**Contributes**: entities, edges, validation_rules
 
 **Validation rules**: W050, W051, W051, W052, W052, W121, W121 (7 total)
   Severity breakdown: 7 warnings
@@ -346,7 +346,7 @@ expression: "render(&outline, &opts)"
 
 **Entity kinds**: property, axiom, protocol, refinement, process
 
-**Contributes**: entities, validators
+**Contributes**: entities, edges, enhancements, validation_rules, passes
 
 **Validation rules**: W125, W123, W126, W128, W131, W134, W124, W127, W129, W132, W135, W136, W133 (13 total)
   Severity breakdown: 13 warnings

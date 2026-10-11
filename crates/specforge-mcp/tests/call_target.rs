@@ -443,7 +443,7 @@ fn a_path_while_nothing_is_served_serves_it_for_every_tool() {
     let mut with_path: Vec<&str> = specforge_mcp::tools::CORE_TOOLS
         .iter()
         .filter(|tool| tool.input_schema()["properties"].get("path").is_some())
-        .map(|tool| tool.name)
+        .map(|tool| tool.name())
         .collect();
     with_path.sort_unstable();
     assert_eq!(covered, with_path);
@@ -1178,7 +1178,7 @@ fn every_core_entry_with_nothing_served_answers_or_refuses_as_its_target_declare
     };
     let mut tools: Vec<&str> = specforge_mcp::tools::CORE_TOOLS
         .iter()
-        .map(|tool| tool.name)
+        .map(|tool| tool.name())
         .filter(|name| *name != "specforge.init")
         .collect();
     tools.sort();
@@ -1194,7 +1194,7 @@ fn every_core_entry_with_nothing_served_answers_or_refuses_as_its_target_declare
         assert!(
             probed(Entry::Resource)
                 .iter()
-                .any(|uri| resource.matches(uri)),
+                .any(|uri| resource.names(uri)),
             "{} is not probed",
             resource.uri
         );
@@ -1234,4 +1234,90 @@ fn a_call_that_needs_a_project_is_refused_before_its_arguments_are_read() {
     assert_eq!(error["code"], "precondition_failed", "{error}");
     assert_eq!(error["argument"], "path", "{error}");
     assert_eq!(error["data"]["files_written"], json!([]), "{error}");
+}
+
+/// A directory with a spec file and no `specforge.json`.
+fn loose_directory() -> TempDir {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("a.spec"), "behavior l \"L\" {\n}\n").unwrap();
+    dir
+}
+
+#[specforge_test(
+    invariant = "mcp_served_project_consistency",
+    verify = "a server whose root lies in no project serves nothing, and init then serves the project it creates"
+)]
+fn a_root_in_no_project_serves_nothing_and_init_serves_what_it_creates() {
+    let loose = loose_directory();
+    let mut server = McpServer::with_project_root(loose.path().to_path_buf());
+    let resp = call(&mut server, "initialize", json!({}));
+    assert!(resp["error"].is_null(), "{resp}");
+    assert_eq!(served_root(&server), None);
+
+    let nested = loose.path().join("sub");
+    let resp = call_tool(
+        &mut server,
+        "specforge.init",
+        json!({"path": nested.to_str().unwrap()}),
+    );
+    assert_eq!(resp["result"]["isError"], false, "{resp}");
+    assert!(nested.join("specforge.json").exists());
+    assert_eq!(served_root(&server), Some(canonical(&nested)));
+}
+
+#[specforge_test(
+    invariant = "mcp_served_project_consistency",
+    verify = "a server started inside a project serves that project"
+)]
+fn a_root_inside_a_project_serves_that_project() {
+    let p = project(&[], "behavior ok \"Ok\" {\n}\n");
+    let docs = p.path().join("docs");
+    fs::create_dir(&docs).unwrap();
+    let mut server = McpServer::new();
+    initialize(&mut server, &docs);
+    assert_eq!(served_root(&server), Some(canonical(p.path())));
+
+    let resp = call_tool(
+        &mut server,
+        "specforge.stats",
+        json!({"path": p.path().to_str().unwrap()}),
+    );
+    assert_eq!(resp["result"]["isError"], false, "{resp}");
+}
+
+#[specforge_test(
+    invariant = "mcp_served_project_consistency",
+    verify = "a path to a directory that is no project is read for that call and never served"
+)]
+fn a_loose_path_is_opened_for_its_call_and_never_served() {
+    let loose = loose_directory();
+    let mut server = serving_nothing();
+
+    let resp = call_tool(
+        &mut server,
+        "specforge.validate",
+        json!({"path": loose.path().to_str().unwrap()}),
+    );
+    assert_eq!(resp["result"]["isError"], false, "{resp}");
+    // The loose directory has no extensions installed, so its sources are
+    // read with default configuration (I002).
+    let diagnostics: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
+    assert!(
+        diagnostics
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|d| d["code"] == "I002"),
+        "{diagnostics}"
+    );
+    assert_eq!(served_root(&server), None);
+
+    let nested = loose.path().join("sub");
+    let resp = call_tool(
+        &mut server,
+        "specforge.init",
+        json!({"path": nested.to_str().unwrap()}),
+    );
+    assert_eq!(resp["result"]["isError"], false, "{resp}");
+    assert_eq!(served_root(&server), Some(canonical(&nested)));
 }

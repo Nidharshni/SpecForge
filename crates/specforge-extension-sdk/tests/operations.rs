@@ -16,7 +16,7 @@ fn extension() -> ContributionsBuilder {
             input
                 .entities
                 .iter()
-                .filter(|e| !e.exempt)
+                .filter(|e| !e.owes_none)
                 .map(|e| {
                     PassDiagnostic::warning("W1", format!("{} audited", e.id)).with_entity(&e.id)
                 })
@@ -124,7 +124,7 @@ fn every_operation_answers_through_its_declared_handler() {
     );
 
     let entities = json!({"entities": [
-        {"id": "a", "kind": "k"}, {"id": "b", "kind": "k", "exempt": true}
+        {"id": "a", "kind": "k"}, {"id": "b", "kind": "k", "owes_none": true}
     ]});
     assert_eq!(
         call("__pass_audit", entities.clone()).unwrap(),

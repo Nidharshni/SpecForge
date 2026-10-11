@@ -3,53 +3,38 @@
 
 mod add;
 mod candidate;
-mod diamond;
 #[cfg(test)]
 mod fixtures;
+mod inventory;
 mod list;
+mod lock_plan;
 mod remove;
 mod resolve;
 mod update;
 
-pub use add::{AddOutcome, AddRequest, Added, Source, Trust, add, parse};
-pub use candidate::{Candidate, Installable, LocalFile};
-pub use diamond::check_diamonds;
-pub use list::{
-    ExtensionEntry, ExtensionInfo, ExtensionListing, LockedExtension, ProviderEntry,
-    ProviderListing, ProviderRow, ProviderStatus, ProvidersDocument, Status, list, providers,
+pub use add::{
+    AddDocument, AddOutcome, AddRequest, Added, BuiltinSource, EnabledBuiltin, InstalledPackage,
+    PlannedAdd, PresentExtension, Source, Trust, add, parse,
 };
-pub use remove::{RemoveOutcome, RemoveRequest, StrandedEntity, remove};
+pub use candidate::{Candidate, Installable, LocalFile};
+pub use inventory::{Inventory, ProjectExtension, Selection, Status, inventory};
+pub use list::{
+    ExtensionInfo, ExtensionListing, ExtensionsDocument, LockedExtension, ProviderEntry,
+    ProviderListing, ProviderRow, ProviderStatus, ProvidersDocument, list, providers,
+};
+pub use remove::{
+    RemoveAction, RemoveDocument, RemoveOutcome, RemoveRequest, StrandedEntity, remove,
+};
 pub use resolve::{resolve, resolve_requirement};
 pub use update::{
-    BatchUpdateCompleted, ExtensionUpdate, NO_LOCK, UpdateOutcome, UpdateRequest, UpdateStatus,
-    update,
+    BatchUpdateCompleted, BatchUpdateEvent, ExtensionUpdate, NO_LOCK, UpdateDocument,
+    UpdateOutcome, UpdateRequest, UpdateRow, UpdateStatus, update,
 };
 
-pub(crate) use add::install_local;
 pub(crate) use candidate::required_builtins;
+pub(crate) use lock_plan::{check_local, install_local};
 
-use crate::OpError;
-use crate::registry::Registry;
-use specforge_installed::{LockFile, LockSource};
-use specforge_project::EnabledExtension;
-use specforge_protocol_types::PackageName;
-use specforge_protocol_types::package::Version;
-
-/// The versions a registry publishes of a peer, as the diamond gate asks
-/// for them: a peer that is not a package name is E072.
-pub(crate) fn published_versions(
-    registry: &dyn Registry,
-) -> impl Fn(&str) -> Result<Vec<String>, OpError> + '_ {
-    move |peer| {
-        let name = PackageName::parse(peer)
-            .map_err(|why| OpError::from(specforge_common::package::invalid(&why)))?;
-        Ok(registry
-            .versions(&name)?
-            .iter()
-            .map(Version::to_string)
-            .collect())
-    }
-}
+use specforge_installed::LockSource;
 
 /// The code an operation reports for an extension the project doesn't
 /// have.
@@ -72,31 +57,6 @@ pub enum Origin {
 }
 
 impl Origin {
-    /// Where `name` comes from in a project: the `.wasm` file an
-    /// `extensions` entry names (over a lock entry), the lock entry's
-    /// source, a builtin, else `Unknown`. The one
-    /// rule `list` and `doctor` name sources by.
-    pub fn of(name: &str, enabled: &[EnabledExtension], lock: Option<&LockFile>) -> Origin {
-        if let Some(path) = enabled
-            .iter()
-            .find(|e| e.name == name)
-            .and_then(|e| e.file.clone())
-        {
-            return Origin::File { path };
-        }
-        if let Some(entry) =
-            lock.and_then(|lock| lock.entries.iter().find(|e| e.name.as_str() == name))
-        {
-            return Origin::Installed {
-                source: entry.source.clone(),
-            };
-        }
-        match builtin_name(name) {
-            Some(_) => Origin::Builtin,
-            None => Origin::Unknown,
-        }
-    }
-
     /// What the listings call it: `builtin`, the lock entry's source, or
     /// `file:<path>`.
     pub fn source(&self) -> String {

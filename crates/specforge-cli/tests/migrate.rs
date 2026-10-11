@@ -54,8 +54,9 @@ fn migrate_exits_zero_on_current_version_project() {
         .unwrap();
     assert!(output.status.success());
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(json["skipped_count"], 1, "{json}");
-    assert_eq!(json["migrated_count"], 0, "{json}");
+    assert_eq!(json["pending"], false, "{json}");
+    assert_eq!(json["files_skipped"], 1, "{json}");
+    assert_eq!(json["files_migrated"], 0, "{json}");
     assert_eq!(json["results"][0]["status"], "skipped", "{json}");
     assert_eq!(
         fs::read_to_string(root.join("spec/test.spec")).unwrap(),
@@ -101,9 +102,9 @@ fn migrate_json_output_contains_summary_fields() {
     let json: serde_json::Value = serde_json::from_str(&stdout)
         .unwrap_or_else(|e| panic!("failed to parse JSON: {e}\nstdout: {stdout}"));
 
-    assert_eq!(json["migrated_count"], 1, "{json}");
-    assert_eq!(json["skipped_count"], 1, "{json}");
-    assert_eq!(json["failed_count"], 1, "{json}");
+    assert_eq!(json["files_migrated"], 1, "{json}");
+    assert_eq!(json["files_skipped"], 1, "{json}");
+    assert_eq!(json["files_failed"], 1, "{json}");
     assert_eq!(status_of(&json, "old.spec"), "migrated");
     assert_eq!(status_of(&json, "current.spec"), "skipped");
     assert_eq!(status_of(&json, "future.spec"), "failed");
@@ -260,7 +261,7 @@ fn missing_version_header_defaults_to_current() {
             let stdout = String::from_utf8(o.stdout).unwrap();
             let json: serde_json::Value = serde_json::from_str(&stdout).unwrap();
             assert_eq!(
-                json["skipped_count"], 1,
+                json["files_skipped"], 1,
                 "file without header should be skipped"
             );
         })
@@ -286,8 +287,8 @@ fn unsupported_version_in_header() {
         .unwrap();
 
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(json["failed_count"], 1, "{json}");
-    assert_eq!(json["skipped_count"], 0, "{json}");
+    assert_eq!(json["files_failed"], 1, "{json}");
+    assert_eq!(json["files_skipped"], 0, "{json}");
     let error = json["results"][0]["error"].as_str().unwrap_or_default();
     assert!(error.contains("E019"), "{json}");
     assert!(error.contains("Use a format version between"), "{json}");
@@ -325,8 +326,8 @@ fn files_at_target_version_are_skipped() {
 
     let stdout = String::from_utf8(output.stdout).unwrap();
     let json: serde_json::Value = serde_json::from_str(&stdout).unwrap();
-    assert_eq!(json["skipped_count"], 1);
-    assert_eq!(json["migrated_count"], 0);
+    assert_eq!(json["files_skipped"], 1);
+    assert_eq!(json["files_migrated"], 0);
 
     // No .bak file should exist
     assert!(
@@ -836,9 +837,9 @@ fn double_migrate_is_idempotent() {
         .unwrap();
     assert!(output.status.success());
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(json["skipped_count"], 1, "{json}");
-    assert_eq!(json["migrated_count"], 0, "{json}");
-    assert_eq!(json["failed_count"], 0, "{json}");
+    assert_eq!(json["files_skipped"], 1, "{json}");
+    assert_eq!(json["files_migrated"], 0, "{json}");
+    assert_eq!(json["files_failed"], 0, "{json}");
     assert_eq!(status_of(&json, "test.spec"), "skipped");
 
     let after_second = fs::read_to_string(root.join("spec/test.spec")).unwrap();
@@ -870,8 +871,8 @@ fn failure_in_one_file_does_not_block_others() {
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
 
     assert_eq!(output.status.code(), Some(1), "{json}");
-    assert_eq!(json["migrated_count"], 1, "{json}");
-    assert_eq!(json["failed_count"], 1, "{json}");
+    assert_eq!(json["files_migrated"], 1, "{json}");
+    assert_eq!(json["files_failed"], 1, "{json}");
     let failed = json["results"]
         .as_array()
         .unwrap()
@@ -920,11 +921,49 @@ fn json_summary_contains_results_and_backups() {
 
     assert!(json["results"].is_array(), "results should be an array");
     assert!(json["backups"].is_array(), "backups should be an array");
-    assert_eq!(json["migrated_count"], 1);
+    assert_eq!(json["files_migrated"], 1);
     assert!(
         !json["backups"].as_array().unwrap().is_empty(),
         "backups should be populated"
     );
+}
+
+#[specforge_test(
+    behavior = "migrate_spec_files_in_place",
+    verify = "migrate --format json prints the migration document specforge.migrate answers, with files_written"
+)]
+fn migrate_json_is_the_migration_document() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    setup_project(root);
+    write_spec(
+        root,
+        "old.spec",
+        "// specforge-format: 0.1\nbehavior old_one \"Old\" {\n  contract \"stuff\"\n}\n",
+    );
+
+    let output = Command::cargo_bin("specforge")
+        .unwrap()
+        .args(["migrate", "--format=json", "--path", root.to_str().unwrap()])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success(), "{output:?}");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["ok"], true, "{json}");
+    assert_eq!(json["pending"], true, "{json}");
+    assert_eq!(json["dry_run"], false, "{json}");
+    assert_eq!(json["files_migrated"], 1, "{json}");
+    let backups = json["backups"].as_array().unwrap();
+    assert_eq!(backups.len(), 1, "{json}");
+    let written: Vec<&str> = json["files_written"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|file| file.as_str().unwrap())
+        .collect();
+    assert!(written.contains(&"spec/old.spec.bak"), "{json}");
+    assert!(written.contains(&".specforge/migration.json"), "{json}");
 }
 
 // ===================================================================
@@ -1127,13 +1166,13 @@ fn migrate_in_place_contract() {
     let json: serde_json::Value = serde_json::from_str(&stdout).unwrap();
 
     // files_at_target
-    assert_eq!(json["migrated_count"], 1);
-    assert_eq!(json["failed_count"], 0);
+    assert_eq!(json["files_migrated"], 1);
+    assert_eq!(json["files_failed"], 0);
 
     // summary_emitted
-    assert!(json.get("migrated_count").is_some());
-    assert!(json.get("skipped_count").is_some());
-    assert!(json.get("failed_count").is_some());
+    assert!(json.get("files_migrated").is_some());
+    assert!(json.get("files_skipped").is_some());
+    assert!(json.get("files_failed").is_some());
 
     // Verify file is now at target version
     let content = fs::read_to_string(root.join("spec/test.spec")).unwrap();
@@ -1170,9 +1209,9 @@ fn summary_reports_all_three_counts() {
     let stdout = String::from_utf8(output.stdout).unwrap();
     let json: serde_json::Value = serde_json::from_str(&stdout).unwrap();
 
-    assert_eq!(json["migrated_count"], 1, "one file migrated");
-    assert_eq!(json["skipped_count"], 1, "one file skipped");
-    assert_eq!(json["failed_count"], 0, "no failures");
+    assert_eq!(json["files_migrated"], 1, "one file migrated");
+    assert_eq!(json["files_skipped"], 1, "one file skipped");
+    assert_eq!(json["files_failed"], 0, "no failures");
 }
 
 // ===================================================================
@@ -1283,7 +1322,7 @@ fn dry_run_failure_isolation() {
             .ends_with("good.spec"),
         "{json}"
     );
-    assert_eq!(json["failed_count"], 1, "{json}");
+    assert_eq!(json["files_failed"], 1, "{json}");
     assert_eq!(
         crate::written::changed_since(root, &before),
         Vec::<String>::new(),

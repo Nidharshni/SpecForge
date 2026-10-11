@@ -5,17 +5,24 @@ expression: "normalized(&json, root)"
 {
   "declared_count": 1,
   "declared_pct": 20.0,
-  "entities_by_kind": {
-    "behavior": 3,
-    "type": 3
+  "diagnostic_summary": {
+    "errors": 0,
+    "infos": 0,
+    "warnings": 8
   },
-  "error_count": 0,
-  "info_count": 0,
-  "proof_pct": null,
+  "edge_count": 2,
+  "entity_count": 6,
+  "entity_counts": [
+    {
+      "count": 3,
+      "kind": "behavior"
+    },
+    {
+      "count": 3,
+      "kind": "type"
+    }
+  ],
   "testable_count": 5,
-  "total_edges": 2,
-  "total_entities": 6,
   "unconnected_count": 3,
-  "verified_count": 1,
-  "warning_count": 8
+  "verified_count": 1
 }

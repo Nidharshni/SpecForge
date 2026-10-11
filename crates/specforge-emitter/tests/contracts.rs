@@ -422,7 +422,7 @@ fn deterministic_contract_same_input_identical_output() {
 // B:present_diagnostics_as_json — verify contract
 #[specforge_test(
     behavior = "present_diagnostics_as_json",
-    verify = "Present Diagnostics as JSON: JSON diagnostic presentation holds — diagnostics_collected, one_shape_everywhere, location_both_ways"
+    verify = "Present Diagnostics as JSON: JSON diagnostic presentation holds — diagnostics_collected, one_shape_everywhere, location_both_ways, data_only_when_typed"
 )]
 fn diagnostic_json_contract_complete_fields() {
     let diags = vec![

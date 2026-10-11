@@ -162,7 +162,7 @@
       "entities": [
         {"id": "login", "kind": "behavior", "testable": true,
           "verify_kinds": ["unit"], "verify_texts": ["login succeeds with valid credentials"]},
-        {"id": "Status", "kind": "type", "testable": true, "exempt": true},
+        {"id": "Status", "kind": "type", "testable": true, "owes_none": true},
         {"id": "Payload", "kind": "type", "testable": true,
           "verify_kinds": ["unit"], "verify_texts": ["Payload schema is valid"]},
         {"id": "signin", "kind": "feature", "testable": false},

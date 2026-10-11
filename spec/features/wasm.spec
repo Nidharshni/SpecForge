@@ -177,41 +177,33 @@ feature contribution_based_extensions "Contribution-Based Extensions" {
   status   done
   problem  """
     Extensions need a structured way to declare what they contribute
-    (entities, validators, renderers, providers, parsers, collectors,
-    grammars, body_parsers, verify_kinds) with per-entity metadata such
+    (the ten describe categories: entities, edges, shared_fields,
+    enhancements, validation_rules, surfaces, collectors, analyzers,
+    passes, feature_flags) with per-entity metadata such
     as testable flags, field type definitions, and structured validation
     rule patterns.
   """
   solution """
     Structured manifest format with typed objects (entity_kinds
     EntityKindDescriptor[], validation_rules ValidationRulePattern[],
-    edge_types EdgeTypeDescriptor[]). Each extension declares a contributes
-    key listing what it provides. The nine contribution types are:
-    entities (domain vocabulary), validators (graph validation rules),
-    renderers (non-code diagnostic artifacts as enforced by the emit_file
-    allowlist), providers (ref validation), parsers (domain-specific file
-    parsing — see ADR extension_file_parsers), and collectors (test result
-    ingestion — see test_result_collection feature for collector
-    behaviors). The host calls an extension's exports through one typed
+    edge_types EdgeTypeDescriptor[]). What an extension contributes is what its declaration declares in
+    those categories (ExtensionDeclaration::declares, ADR 0050); its
+    handshake says providers when it implements configured providers.
+    The host calls an extension's exports through one typed
     module (call_extension_exports, ADR 0013): handshake and describe, a
     command, an MCP tool or resource, a compiler pass, a collector, a
     custom validator, a scanner and the migration hook, each with the
     protocol's input and answer types and every failure E028. Per-call-site
     permissions for host functions belong to the planned
     wasm_host_function_api feature: no export can call the host yet. This
-    feature owns the compile-time contributions (entities, validators,
-    renderers, providers, parsers, grammars, body_parsers). Test result collection (collectors) is owned by the
+    feature owns the compile-time categories (entities, edges,
+    shared_fields, enhancements, validation_rules, passes, feature_flags). Test result collection (collectors) is owned by the
     test_result_collection feature. Surface contributions (CLI commands,
     MCP tools, MCP resources) are owned by the surface_contributions feature.
     Collector behaviors (register_collector_contributions,
     auto_detect_collector, approve_collector_command, run_collector_command,
     dispatch_collector, ingest_collector_report) are owned by the
     test_result_collection feature.
-    The eight dispatch contribution types and their feature owners:
-    1-5. entities, validators, renderers, providers, parsers — this feature.
-    6. collectors — test_result_collection feature.
-    7-8. grammars, body_parsers — reserved flags; nothing reads them.
-    Additionally, verify_kinds is a declarative manifest field (no Wasm dispatch).
   """
 }
 
@@ -240,8 +232,8 @@ feature test_result_collection "Test Result Collection" {
 feature surface_contributions "Surface Contributions" {
   status   done
   problem  """
-    Extensions can extend the compilation pipeline (entities, validators,
-    renderers, providers, collectors, grammars, body_parsers) but cannot
+    Extensions can extend the compilation pipeline (entities, validation rules,
+    collectors, passes) but cannot
     extend the tooling surfaces — CLI and MCP server. This creates a
     capability asymmetry: domain extensions need CLI commands (e.g., analyze, audit) but has no registration mechanism; extensions cannot register
     MCP tools so agents only see core tools.

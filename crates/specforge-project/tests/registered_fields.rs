@@ -36,9 +36,12 @@ fn kind_extensions(specs: Vec<serde_json::Value>) -> InProcessRuntime {
                     })
                     .collect();
                 let mut c = ContributionsBuilder::new(meta);
-                for category in ["entities", "edges"] {
-                    if !spec[category].is_null() {
-                        c.raw_category(category, spec[category].clone());
+                for category in [
+                    specforge_extension_sdk::DeclaredCategory::Entities,
+                    specforge_extension_sdk::DeclaredCategory::Edges,
+                ] {
+                    if !spec[category.name()].is_null() {
+                        c.raw_category(category, spec[category.name()].clone());
                     }
                 }
                 c
@@ -95,8 +98,8 @@ fn tasks_and_people() -> InProcessRuntime {
 fn a_target_kind_another_extension_registers_resolves() {
     let env = load(tasks_and_people(), &["@test/people", "@test/tasks"]);
 
-    assert!(env.registries.kinds.contains("person"));
-    let owner = env.registries.fields.get("task", "owner").unwrap();
+    assert!(env.registries().kinds().contains("person"));
+    let owner = env.registries().fields().get("task", "owner").unwrap();
     assert_eq!(owner.declared().target_kind.as_deref(), Some("person"));
     assert!(w021(&env).is_empty(), "{:?}", w021(&env));
 }
@@ -110,7 +113,7 @@ fn a_target_kind_another_extension_registers_resolves() {
 fn an_edge_label_the_extension_declares_resolves() {
     let env = load(tasks_and_people(), &["@test/people", "@test/tasks"]);
 
-    let owned_by = env.registries.edges.get("owned_by").unwrap();
+    let owned_by = env.registries().edges().get("owned_by").unwrap();
     assert_eq!(owned_by.declared.target_kind.as_deref(), Some("person"));
     assert!(w021(&env).is_empty(), "{:?}", w021(&env));
 }
@@ -142,7 +145,7 @@ fn an_unresolved_target_kind_is_w021() {
             warnings[0].message
         );
     }
-    assert!(env.registries.kinds.contains("task"));
+    assert!(env.registries().kinds().contains("task"));
 }
 
 /// An edge label no edge type of the extension declares is a W021 warning
@@ -204,7 +207,7 @@ fn a_domain_the_host_does_not_know_cross_validates_cleanly() {
 
     let env = load(runtime, &["@custom/cooking"]);
 
-    assert!(env.registries.kinds.contains("recipe"));
+    assert!(env.registries().kinds().contains("recipe"));
     let diagnostics: Vec<&Diagnostic> = env.diagnostics().collect();
     assert!(diagnostics.is_empty(), "{diagnostics:?}");
 }
@@ -266,7 +269,9 @@ fn field_cross_validation_holds_on_load() {
         "{:?}",
         env.diagnostics().collect::<Vec<_>>()
     );
-    assert!(env.registries.kinds.contains("task") && env.registries.kinds.contains("person"));
+    assert!(
+        env.registries().kinds().contains("task") && env.registries().kinds().contains("person")
+    );
 }
 
 /// The extension whose `task.owner` targets `person` loads before the peer
@@ -313,7 +318,7 @@ fn population_completes_before_any_validation() {
 
     let loaded: Vec<&str> = project
         .environment()
-        .registries
+        .registries()
         .declarations()
         .iter()
         .map(|d| d.name())

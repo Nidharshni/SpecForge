@@ -1,0 +1,22 @@
+---
+source: crates/specforge-cli/src/main.rs
+expression: command.clone().render_long_help().to_string()
+---
+List installed extensions
+
+Usage: specforge extensions [OPTIONS]
+
+Options:
+      --path <PATH>
+          Path to the project root
+          
+          [default: .]
+
+      --format <FORMAT>
+          Output format: human or json
+          
+          [default: human]
+          [possible values: human, json]
+
+  -h, --help
+          Print help

@@ -33,66 +33,79 @@ type ExtensionDeclaration {
 // The extension's answer to __handshake: who it is, what it needs, and how
 // the host shows it.
 type HandshakeResponse {
-  protocol_version   string           @readonly
-  name               string           @readonly
-  version            string           @readonly
-  contribution_flags ContributionFlags
-  peer_dependencies  PeerDependency[] @optional
+  protocol_version  string           @readonly
+  name              string           @readonly
+  version           string           @readonly
+  peer_dependencies PeerDependency[] @optional
   // Absent: the host's ceiling holds the extension (30000 ms, 512 MB)
-  sandbox_policy     SandboxPolicy    @optional
+  sandbox_policy    SandboxPolicy    @optional
   // Text of the starter .spec file scaffold_starter_spec_file writes; {project} stands for the project id and {version} for its version
-  starter_template   string           @optional
+  starter_template  string           @optional
   // Wasm function name to invoke during `specforge migrate` for this extension
-  migration_hook     string           @optional
+  migration_hook    string           @optional
   // The colour diagrams (model, outline) draw the extension in; grey when absent
-  theme_color        string           @optional
+  theme_color       string           @optional
   // The name its commands are routed by (specforge <ext_short> <command>,
   // specforge.<ext_short>.<id>); lowercase kebab case; absent, the name's last segment
-  ext_short          string           @optional
+  ext_short         string           @optional
   // What a package registry shows for the extension
-  description        string           @optional
-  keywords           string[]         @optional
+  description       string           @optional
+  keywords          string[]         @optional
+  // It implements configured providers: a specforge.json providers entry may name it (ADR 0050)
+  providers         boolean          @optional
   verify unit "HandshakeResponse schema is valid"
 }
 
-// What an extension contributes, on its handshake. Derived from what it
-// declares and informational: the host reads every declared category
-// whatever they say; only providers, which has no describe category, is
-// read from them.
-type ContributionFlags {
-  entities     boolean @optional
-  validators   boolean @optional
-  renderers    boolean @optional
-  providers    boolean @optional
-  collectors   boolean @optional
-  // Phase 2: extensions MAY contribute domain-specific prompts via Wasm exports (P7).
-  prompts      boolean @optional
-  parsers      boolean @optional
-  grammars     boolean @optional
-  body_parsers boolean @optional
-  analyzers    boolean @optional
-  verify unit "ContributionFlags schema is valid"
-}
-
 // What the registry build derives from the loaded declarations, before any
-// .spec file is read (specforge_registry::build_registries). It is pure.
+// .spec file is read (specforge_registry::build_registries). It is made only
+// by that build and read only through its methods. It is pure.
 type RegistryBuild {
   // The declarations it was built from, in load order
-  declarations            ExtensionDeclaration[] @readonly
-  kinds                   KindRegistryEntry[]
-  fields                  FieldRegistryEntry[]
-  edges                   EdgeRegistryEntry[]
+  declarations ExtensionDeclaration[] @readonly
+  kinds        KindRegistryEntry[]
+  fields       FieldRegistryEntry[]
+  edges        EdgeRegistryEntry[]
   // The extensions' rules plus the host-generated E006 rules
-  rules                   ValidationRulePattern[]
-  surfaces                SurfaceRegistryEntry[]
+  rules        ValidationRulePattern[]
+  surfaces     SurfaceRegistryEntry[]
   // Every declared pass, extension by extension in load order, each
   // extension's in its after/before order
-  passes                  CompilerPassDeclaration[]
-  // E030, W021, E027, then W145, extension by extension within each
-  declaration_diagnostics Diagnostic[]
-  registry_diagnostics    Diagnostic[]
-  surface_diagnostics     Diagnostic[]
+  passes       CompilerPassDeclaration[]
+  // What every graph of the project is built with (registry_build_graph_inputs)
+  graph_inputs GraphInputs            @readonly
+  // Every diagnostic it reports, in one order: the declarations' own (E030,
+  // W021, E073 and E027, W145), the registries' (E026, W018, W019, W021,
+  // I004, W017, the rule set's W150, W147 or W112, then W023), the custom
+  // rules' probes (W112), then the surfaces' (E055, E039); each group
+  // extension by extension in load order
+  diagnostics  Diagnostic[]           @readonly
   verify unit "RegistryBuild schema is valid"
+}
+
+// What the graph build reads of the loaded extensions (specforge_graph::GraphInputs).
+// Only the registry build derives it; with the provider schemes the
+// environment registers it is every graph's configuration (ADR 0032).
+type GraphInputs {
+  // Inverse field pairs, each written lesser label first, sorted: a two-hop
+  // cycle through both labels of one pair is not a reference cycle
+  bidirectional_pairs      string[] @readonly
+  // Kinds whose bodies an extension parses: the core grammar's parse
+  // errors inside their entities are not reported
+  body_parser_kinds        string[] @readonly
+  // kind.field of every registered reference field (none while no kind is
+  // registered): its one value links as an edge
+  single_reference_fields  string[] @readonly
+  // kind.field of every reference field whose target kind no loaded
+  // extension declares, with that kind: an unresolved value there is I004
+  absent_reference_targets string[] @readonly
+  // kind.field of every registered field whose value is coerced to its
+  // declared type: a list type to a list; integer, bool, string or enum to
+  // that type; a single reference or a block is read as written
+  field_coercions          string[] @readonly
+  // kind.field of every reference field whose edges the host derives
+  // (derived_from), with its target kind and source, sorted by kind and field
+  derived_references       string[] @readonly
+  verify unit "GraphInputs schema is valid"
 }
 
 type EntityKindDescriptor {

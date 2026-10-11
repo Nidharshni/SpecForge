@@ -295,7 +295,7 @@ c.pass("condition_check", |p| {
 Then run it:
 
 ```console
-$ specforge analyze --json
+$ specforge analyze --format json
 ```
 
 Design notes, so your passes age well:
@@ -474,7 +474,7 @@ for (id, out) in specforge_extension_sdk::testing::call_every_command(&c, &graph
 }
 ```
 
-The shipped extensions test exactly this way — see the `raw_category_flag_tests`
+The shipped extensions test exactly this way — see the `raw_category_tests`
 module in the SDK, the pass tests in `extensions/formal/src/lib.rs` and the
 command tests in `extensions/product/src/tests.rs`.
 

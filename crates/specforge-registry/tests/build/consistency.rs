@@ -54,7 +54,7 @@ fn a_target_kind_the_extension_or_a_loaded_peer_declares_passes() {
         "{:?}",
         diagnostics(&with_peer)
     );
-    assert!(with_peer.kinds.contains("feature_like"));
+    assert!(with_peer.kinds().contains("feature_like"));
 
     // A named peer that is not loaded: its kinds are unknown, so the target
     // is let through (the missing peer is E027, not W021).
@@ -70,9 +70,9 @@ fn a_target_kind_the_extension_or_a_loaded_peer_declares_passes() {
 fn an_edge_label_the_extension_declares_passes() {
     let build = build([software(), product()]);
     assert!(diagnostics(&build).is_empty(), "{:?}", diagnostics(&build));
-    let invariants = build.fields.get("behavior", "invariants").unwrap();
+    let invariants = build.fields().get("behavior", "invariants").unwrap();
     assert_eq!(invariants.declared().edge.as_deref(), Some("enforces"));
-    let behaviors = build.fields.get("feature", "behaviors").unwrap();
+    let behaviors = build.fields().get("feature", "behaviors").unwrap();
     assert_eq!(behaviors.declared().edge.as_deref(), Some("composes"));
 }
 
@@ -102,12 +102,9 @@ fn a_target_kind_no_loaded_extension_declares_is_w021() {
     ] {
         assert!(w021[0].message.contains(part), "{}", w021[0].message);
     }
-    assert!(
-        build.declaration_diagnostics.contains(w021[0]),
-        "a declaration diagnostic"
-    );
-    assert!(build.kinds.contains("task"));
-    assert!(build.fields.contains("task", "owner"));
+    assert_eq!(codes(&build), ["W021"]);
+    assert!(build.kinds().contains("task"));
+    assert!(build.fields().contains("task", "owner"));
 }
 
 #[spec(
@@ -166,9 +163,9 @@ fn an_edge_label_with_no_declared_edge_type_is_w021() {
     for part in ["'invariants'", "edge label 'missing_edge'"] {
         assert!(w021[0].message.contains(part), "{}", w021[0].message);
     }
-    assert!(build.declaration_diagnostics.contains(w021[0]));
+    assert_eq!(codes(&build), ["W021"]);
     // The label is still registered, as an edge of the field's kind.
-    assert!(build.edges.contains("missing_edge"));
+    assert!(build.edges().contains("missing_edge"));
 }
 
 #[spec(
@@ -244,7 +241,7 @@ fn consistency_is_checked_by_structure_alone() {
         });
     })]);
     assert!(diagnostics(&build).is_empty(), "{:?}", diagnostics(&build));
-    assert!(build.kinds.contains("recipe") && build.kinds.contains("ingredient"));
+    assert!(build.kinds().contains("recipe") && build.kinds().contains("ingredient"));
 }
 
 #[spec(
@@ -303,16 +300,8 @@ fn declaration_consistency_holds() {
     assert!(w021[2].contains("edge type 'haunts' references source_kind 'ghost'"));
     assert!(!w021.iter().any(|m| m.contains("'owner'")), "{w021:?}");
 
-    // Among the declaration diagnostics, after E030 and before E027.
-    assert_eq!(
-        build
-            .declaration_diagnostics
-            .iter()
-            .map(|d| d.code.as_str())
-            .collect::<Vec<_>>(),
-        ["E030", "W021", "W021", "W021", "E027"]
-    );
-    assert!(build.registry_diagnostics.iter().all(|d| d.code != "W021"));
+    // After E030 and before E027, and nothing else.
+    assert_eq!(codes(&build), ["E030", "W021", "W021", "W021", "E027"]);
 
     // compile_not_failed: W021 is a warning, and the kinds still register.
     assert!(
@@ -320,8 +309,8 @@ fn declaration_consistency_holds() {
             .iter()
             .all(|d| d.severity == Severity::Warning)
     );
-    assert!(build.kinds.contains("task") && build.kinds.contains("person"));
-    assert!(build.fields.contains("task", "robot"));
+    assert!(build.kinds().contains("task") && build.kinds().contains("person"));
+    assert!(build.fields().contains("task", "robot"));
 }
 
 /// An extension `name` with `peers`, declaring one untargeted
@@ -374,13 +363,7 @@ fn a_rules_edge_type_nobody_it_knows_declares_is_w021() {
             "extension '@test/stranger': rule 'X100' references edge type 'enforces' not declared among its edges or its peers' edges"
         ]
     );
-    // Only a warning, among the declaration diagnostics.
-    assert!(
-        build
-            .declaration_diagnostics
-            .iter()
-            .any(|d| d.code == "W021")
-    );
+    // Only a warning.
     assert_eq!(coded(&build, "W021")[0].severity, Severity::Warning);
 }
 
@@ -431,7 +414,7 @@ fn a_rules_target_kind_nobody_it_knows_declares_is_w021() {
     // A rule for a kind nobody loaded declares (`ghost`, an absent peer's
     // `absent_kind`) is not registered: it is inert (ADR 0020 D5). The W021
     // above still tells its author.
-    assert_eq!(build.rules.len(), 2);
+    assert_eq!(build.rules().len(), 2);
 }
 
 /// An extension `name` (no peers) with one rule `X300` on `target_kind` /
@@ -490,7 +473,7 @@ fn a_rules_target_extension_resolves_its_kind_and_edge_type() {
     ]);
     assert_eq!(w021(&build_loaded), [field_w021]);
     assert_eq!(
-        build_loaded.rules.iter().next().unwrap().describe()["target_extension"],
+        build_loaded.rules().iter().next().unwrap().describe()["target_extension"],
         "@specforge/software"
     );
 
@@ -503,7 +486,7 @@ fn a_rules_target_extension_resolves_its_kind_and_edge_type() {
         Some("enforces"),
     )]);
     assert_eq!(w021(&build_absent), [field_w021]);
-    assert!(build_absent.rules.is_empty(), "the edge type is unknown");
+    assert!(build_absent.rules().is_empty(), "the edge type is unknown");
 
     // Loaded without the kind or the edge type: W021 for each.
     let build_without = build([

@@ -140,6 +140,27 @@ fn format_paths_restrict_the_run() {
 }
 
 #[specforge_test(
+    behavior = "discover_format_targets",
+    verify = "a file several arguments reach is formatted once"
+)]
+fn format_counts_a_file_two_paths_name_once() {
+    let (mut server, root) = server_with_unformatted();
+    std::fs::create_dir(root.join("x")).unwrap();
+
+    let parsed = format_result(
+        &mut server,
+        json!({"paths": ["a.spec", "x/../a.spec"], "check": true}),
+    );
+
+    assert_eq!(parsed["total_checked"], 1, "{parsed}");
+    assert_eq!(
+        parsed["changed_files"].as_array().unwrap().len(),
+        1,
+        "{parsed}"
+    );
+}
+
+#[specforge_test(
     behavior = "provide_mcp_format_tool",
     verify = "diff mode returns FormatDiff entries"
 )]
@@ -729,7 +750,10 @@ fn init_creates_the_project() {
         json!({"path": project.to_str().unwrap(), "name": "myproject"}),
     );
 
-    assert_eq!(parsed["project_path"], project.display().to_string());
+    assert_eq!(
+        parsed["project_root"],
+        project.canonicalize().unwrap().display().to_string()
+    );
     let config = read_config(&project);
     assert_eq!(config["name"], "myproject");
     assert_eq!(config["version"], "0.1.0");
@@ -1059,7 +1083,7 @@ fn add_extension_returns_result() {
     );
     let text = tool_text(&resp);
     let parsed: Value = serde_json::from_str(&text).unwrap();
-    assert_eq!(parsed["installed"], true);
+    assert_eq!(parsed["action"], "installed");
     // Local installs derive the name from the file stem (same as the CLI).
     let lock = std::fs::read_to_string(dir.as_path().join("specforge.lock")).unwrap();
     assert!(lock.contains("@sdk/greet"));
@@ -1201,7 +1225,7 @@ fn add_extension_reads_the_candidate_in_the_host_runtime() {
     );
 
     let parsed: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
-    assert_eq!(parsed["installed"], true, "{parsed}");
+    assert_eq!(parsed["action"], "installed", "{parsed}");
     let lock = std::fs::read_to_string(root.join("specforge.lock")).unwrap();
     assert!(lock.contains("@sdk/greet"), "{lock}");
     let handshakes = runtime
@@ -1280,9 +1304,8 @@ fn add_extension_dry_run_writes_nothing() {
     );
 
     let parsed: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
-    assert_eq!(parsed["dry_run"], true, "{parsed}");
+    assert_eq!(parsed["action"], "planned", "{parsed}");
     assert_eq!(parsed["extension"], GREET, "{parsed}");
-    assert_eq!(parsed["installed"], false, "{parsed}");
     assert_eq!(files_under(&root), before, "a dry run writes nothing");
 }
 
@@ -1306,7 +1329,7 @@ fn remove_extension_removes_it_from_config_lock_and_disk() {
 
     let parsed: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
     assert!(parsed.get("success").is_none(), "{parsed}");
-    assert_eq!(parsed["removed_extension"], GREET);
+    assert_eq!(parsed["extension"], GREET);
     assert!(
         !config_extensions(&root)
             .iter()
@@ -1350,8 +1373,8 @@ fn remove_extension_removes_a_wasm_file_entry_by_its_declared_name() {
     );
 
     let parsed: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
-    assert!(parsed["removed_extension"].is_string(), "{parsed}");
-    assert_eq!(parsed["removed_extension"], GREET, "{parsed}");
+    assert!(parsed["extension"].is_string(), "{parsed}");
+    assert_eq!(parsed["extension"], GREET, "{parsed}");
     assert_eq!(parsed["version"], "0.1.0", "{parsed}");
     assert_eq!(
         parsed["stranded"],
@@ -1378,8 +1401,8 @@ fn remove_extension_dry_run_writes_nothing() {
     );
 
     let parsed: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
-    assert_eq!(parsed["dry_run"], true, "{parsed}");
-    assert_eq!(parsed["removed_extension"], GREET, "{parsed}");
+    assert_eq!(parsed["action"], "planned", "{parsed}");
+    assert_eq!(parsed["extension"], GREET, "{parsed}");
     assert!(parsed["stranded"].is_array(), "{parsed}");
     assert_eq!(files_under(&root), before, "a dry run writes nothing");
 }
@@ -1409,10 +1432,7 @@ fn remove_extension_lists_stranded_entities() {
         json!([{"entity_id": "hello", "kind": "greeting"}]),
         "{parsed}"
     );
-    assert!(
-        parsed["removed_extension"].is_string(),
-        "removal still proceeds"
-    );
+    assert!(parsed["extension"].is_string(), "removal still proceeds");
     assert!(!root.join(".specforge/extensions").join(GREET).exists());
 }
 
@@ -1457,8 +1477,8 @@ fn remove_extension_disables_an_enabled_builtin() {
     );
 
     let parsed: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
-    assert!(parsed["removed_extension"].is_string(), "{parsed}");
-    assert_eq!(parsed["removed_extension"], "@specforge/product");
+    assert!(parsed["extension"].is_string(), "{parsed}");
+    assert_eq!(parsed["extension"], "@specforge/product");
     assert_eq!(config_extensions(dir.path()), ["@specforge/software"]);
 }
 
@@ -1473,7 +1493,7 @@ fn migrate_returns_result() {
     let text = tool_text(&resp);
     let parsed: Value = serde_json::from_str(&text).unwrap();
     assert_eq!(parsed["migrated"], false);
-    assert!(parsed.get("message").is_some());
+    assert_eq!(parsed["pending"], false);
 }
 
 #[test]
@@ -1673,8 +1693,7 @@ fn add_extension_dry_run() {
     );
     let text = tool_text(&resp);
     let parsed: Value = serde_json::from_str(&text).unwrap();
-    // Spec requires dry_run preview; accept current impl behavior.
-    assert!(parsed["dry_run"] == true || parsed["installed"].is_boolean());
+    assert_eq!(parsed["action"], "planned", "{parsed}");
 }
 
 #[test]
@@ -1702,8 +1721,7 @@ fn remove_extension_dry_run() {
     );
     let text = tool_text(&resp);
     let parsed: Value = serde_json::from_str(&text).unwrap();
-    // Spec requires dry_run preview; accept current impl behavior.
-    assert!(parsed["dry_run"] == true || parsed["success"].is_boolean());
+    assert_eq!(parsed["action"], "planned", "{parsed}");
 }
 
 // --- Contract tests ---
@@ -1772,7 +1790,7 @@ fn add_extension_contract() {
         json!({"specifier": specifier, "dry_run": true}),
     );
     let preview: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
-    assert_eq!(preview["installed"], false, "{preview}");
+    assert_eq!(preview["action"], "planned", "{preview}");
     assert_eq!(files_under(&root), before);
     assert!(events(&server, "extension_added").is_empty());
 
@@ -1783,7 +1801,7 @@ fn add_extension_contract() {
         json!({"specifier": specifier}),
     );
     let installed: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
-    assert_eq!(installed["installed"], true, "{installed}");
+    assert_eq!(installed["action"], "installed", "{installed}");
     // Enabled by its bare name; the lock pins version and hash (D3-b).
     assert_eq!(config_extensions(&root), vec![GREET]);
     let lock = std::fs::read_to_string(root.join("specforge.lock")).unwrap();
@@ -2136,7 +2154,7 @@ fn remove_on_another_project_checks_that_projects_dependents() {
     );
     assert_eq!(resp["result"]["isError"], false, "{resp}");
     let payload: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
-    assert!(payload["removed_extension"].is_string(), "{payload}");
+    assert!(payload["extension"].is_string(), "{payload}");
 
     // In the served project formal still requires it.
     let resp = call_tool(

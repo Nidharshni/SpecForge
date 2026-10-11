@@ -1,7 +1,9 @@
 //! The one lexer of the `.spec` language (`specforge_parser::lex`),
 //! checked against tree-sitter's grammar over the repository's spec.
 
-use specforge_parser::lex::{Lexeme, LexemeKind, is_ref_id_prefix, lex, runs_into_text};
+use specforge_parser::lex::{
+    Lexeme, LexemeKind, is_ref_id_prefix, lex, line_indent, runs_into_text, starts_top_level_form,
+};
 use specforge_parser::parse_incremental;
 use specforge_test_macros::test as specforge_test;
 use std::path::{Path, PathBuf};
@@ -299,4 +301,138 @@ fn what_runs_into_a_closing_quote_is_text() {
         assert_eq!(runs_into_text(text, at), runs, "{needle:?}");
     }
     assert!(!runs_into_text(text, text.len()), "the end of the text");
+}
+
+/// Whether `line`, lexed alone, starts a top-level form at indentation at
+/// most `max_indent`: how the parser's recovery asks.
+fn starts_alone(line: &str, max_indent: usize) -> bool {
+    starts_top_level_form(line, &lex(line), max_indent)
+}
+
+/// Whether the lexeme at `needle` in `text` starts a top-level form, read
+/// from the document's lexemes: how the LSP's document asks.
+fn starts_in(text: &str, needle: &str, max_indent: usize) -> bool {
+    let at = text.find(needle).unwrap_or_else(|| panic!("no {needle:?}"));
+    let lexemes = lex(text);
+    let first = lexemes.partition_point(|l| l.start < at);
+    starts_top_level_form(text, &lexemes[first..], max_indent)
+}
+
+#[test]
+fn form_start_lines() {
+    // Every shape of the grammar's top-level forms.
+    assert!(starts_alone("behavior b \"B\" {", 0));
+    assert!(starts_alone("type t {", 0));
+    assert!(starts_alone("spec \"S\" {", 0));
+    assert!(starts_alone("ref github.issue:org/repo#1 \"T\"", 0));
+    assert!(starts_alone("use \"./a.spec\"", 0));
+    assert!(starts_alone("pub use { A } from \"./a.spec\"", 0));
+    assert!(!starts_alone("  behavior b \"B\" {", 0));
+    assert!(starts_alone("  behavior b \"B\" {", 2));
+    assert!(!starts_alone("the quick brown fox", 0));
+    assert!(!starts_alone("status done", 0));
+    assert!(!starts_alone("behavior b \"B", 0));
+    assert!(starts_alone("type status = \"a\" | \"b\"", 0));
+    assert!(starts_alone("type t =", 0));
+    assert!(starts_alone("use\"./a.spec\"", 0));
+    // What the LSP's copy took and the grammar does not.
+    assert!(!starts_alone("use", 0));
+    assert!(!starts_alone("pub", 0));
+    assert!(!starts_alone("behavior b x y {", 0));
+    assert!(!starts_alone("behavior gh.issue:1 {", 0));
+    assert!(!starts_alone("behavior b \"\"\"B\"\"\" {", 0));
+    // Read from a document's lexemes.
+    let text = concat!(
+        "behavior a \"A\" {\n",
+        "  x behavior b \"B\" {\n",
+        "}\n",
+        "type t\n",
+        "  = A\n",
+        "behavior c \"C\n",
+        "D\" {\n",
+        "}\n",
+    );
+    assert!(starts_in(text, "behavior a", 0));
+    assert!(
+        !starts_in(text, "behavior b", 4),
+        "not the first lexeme of its line"
+    );
+    assert!(!starts_in(text, "type t", 0), "its `=` is on the next line");
+    assert!(!starts_in(text, "behavior c", 0), "a title spanning lines");
+    assert!(!starts_top_level_form(text, &[], 0));
+    assert_eq!(line_indent(text, text.find("x behavior").unwrap()), Some(2));
+    assert_eq!(line_indent(text, text.find("behavior b").unwrap()), None);
+}
+
+#[specforge_test(
+    behavior = "lex_spec_text",
+    verify = "a line starts a top-level form exactly where the grammar reads one, on every spec file of the repository"
+)]
+fn form_starts_are_the_grammars_top_level_nodes() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut files = Vec::new();
+    for corpus in ["spec", "integrations/rust/spec", "examples"] {
+        spec_files(&root.join(corpus), &mut files);
+    }
+    files.push(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/lexemes.spec"));
+    assert!(files.len() > 150, "found only {} spec files", files.len());
+    let mut missed = std::collections::BTreeSet::new();
+    let mut spurious = std::collections::BTreeSet::new();
+    for file in files {
+        let src = std::fs::read_to_string(&file).unwrap();
+        let lexemes = lex(&src);
+        let (_, tree) = parse_incremental(&src, &file.to_string_lossy(), None);
+        let tree = tree.unwrap();
+        let root_node = tree.root_node();
+        assert!(!root_node.has_error(), "{}: does not parse", file.display());
+        let mut cursor = root_node.walk();
+        for node in root_node.named_children(&mut cursor) {
+            if node.kind() == kind::COMMENT {
+                continue;
+            }
+            let row = node.start_position().row;
+            let column = node.start_position().column;
+            let line = src.lines().nth(row).unwrap();
+            assert!(
+                line[..column].trim().is_empty(),
+                "{}: two forms on one line",
+                file.display()
+            );
+            let first = lexemes.partition_point(|l| l.start < node.start_byte());
+            // As recovery reads it: the line alone.
+            if !starts_top_level_form(line, &lex(line), column) {
+                missed.insert(format!(
+                    "{}: {} (alone): {line}",
+                    file.display(),
+                    node.kind()
+                ));
+            }
+            // As the LSP's document reads it: the document's lexemes.
+            if !starts_top_level_form(&src, &lexemes[first..], column) {
+                missed.insert(format!(
+                    "{}: {} (document): {line}",
+                    file.display(),
+                    node.kind()
+                ));
+            }
+            // No other line of the form starts one at its indentation.
+            let end = lexemes.partition_point(|l| l.start < node.end_byte());
+            for j in first + 1..end {
+                if starts_top_level_form(&src, &lexemes[j..], column) {
+                    let at = src[..lexemes[j].start].matches('\n').count();
+                    spurious.insert(format!(
+                        "{}:{}: {}",
+                        file.display(),
+                        at + 1,
+                        src.lines().nth(at).unwrap()
+                    ));
+                }
+            }
+        }
+    }
+    assert!(missed.is_empty(), "not form starts: {missed:#?}");
+    assert!(
+        spurious.is_empty(),
+        "form starts inside a form: {spurious:#?}"
+    );
 }

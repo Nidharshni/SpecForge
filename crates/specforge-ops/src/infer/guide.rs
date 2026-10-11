@@ -6,7 +6,8 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use serde_json::{Value, json};
+use serde::Serialize;
+use specforge_common::shape::Shape;
 use specforge_protocol_types::{EntityKindDescriptor, ExtensionDeclaration};
 use specforge_registry::{FieldRegistryEntry, FieldType};
 
@@ -57,32 +58,53 @@ impl KindGuide<'_> {
         lines.join("\n")
     }
 
-    /// The kind scope's data: `kind`, `extension`, `description`,
-    /// `existing_entity_ids`, `fields` (`name`, `type`, `required`,
-    /// `description`), `inference_guide`, `example`.
-    pub fn to_json(&self) -> Value {
-        let fields: Vec<Value> = self
-            .fields
-            .iter()
-            .map(|field| {
-                json!({
-                    "name": field.name(),
-                    "type": field.field_type().as_str(),
-                    "required": field.declared().required,
-                    "description": field.declared().description,
+    /// The kind scope's data, as `specforge infer-guide <kind> --format json`
+    /// and the infer prompt's kind scope write it.
+    pub fn document(&self) -> KindGuideDocument {
+        KindGuideDocument {
+            kind: self.keyword.to_string(),
+            extension: self.extension.to_string(),
+            description: self.description.map(str::to_string),
+            existing_entity_ids: self.existing.iter().map(|id| id.to_string()).collect(),
+            fields: self
+                .fields
+                .iter()
+                .map(|field| GuideField {
+                    name: field.name().to_string(),
+                    field_type: field.field_type().as_str().to_string(),
+                    required: field.declared().required,
+                    description: field.declared().description.clone(),
                 })
-            })
-            .collect();
-        json!({
-            "kind": self.keyword,
-            "extension": self.extension,
-            "description": self.description,
-            "existing_entity_ids": self.existing,
-            "fields": fields,
-            "inference_guide": self.guide,
-            "example": self.example(),
-        })
+                .collect(),
+            inference_guide: self.guide.clone(),
+            example: self.example(),
+        }
     }
+}
+
+/// A kind's guide as `specforge infer-guide <kind> --format json` and the
+/// infer prompt's kind scope print it.
+#[derive(Debug, Clone, PartialEq, Serialize, Shape)]
+pub struct KindGuideDocument {
+    pub kind: String,
+    pub extension: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    pub existing_entity_ids: Vec<String>,
+    pub fields: Vec<GuideField>,
+    pub inference_guide: String,
+    pub example: String,
+}
+
+/// One field of a kind's guide.
+#[derive(Debug, Clone, PartialEq, Serialize, Shape)]
+pub struct GuideField {
+    pub name: String,
+    #[serde(rename = "type")]
+    pub field_type: String,
+    pub required: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
 }
 
 /// How the example writes a value of `field`'s type.
@@ -128,43 +150,68 @@ impl<'a> InferenceGuide<'a> {
         self.kinds.iter().find(|kind| kind.keyword == keyword)
     }
 
-    /// The overview's data: `installed_extensions`, `existing_entities`,
-    /// `kinds` (`kind`, `extension`, `description`, `fields` as names with
-    /// `*` after a required one, `inference_guide`), `project_conventions`,
-    /// `spec_directory`.
-    pub fn to_json(&self) -> Value {
-        let kinds: Vec<Value> = self
-            .kinds
-            .iter()
-            .map(|kind| {
-                let fields: Vec<String> = kind
-                    .fields
-                    .iter()
-                    .map(|field| {
-                        if field.declared().required {
-                            format!("{}*", field.name())
-                        } else {
-                            field.name().to_string()
-                        }
-                    })
-                    .collect();
-                json!({
-                    "kind": kind.keyword,
-                    "extension": kind.extension,
-                    "description": kind.description,
-                    "fields": fields,
-                    "inference_guide": kind.guide,
+    /// The overview's data, as `specforge infer-guide --format json` and the
+    /// infer prompt's overview write it.
+    pub fn document(&self) -> GuideDocument {
+        GuideDocument {
+            installed_extensions: self
+                .extensions
+                .iter()
+                .map(|name| name.to_string())
+                .collect(),
+            existing_entities: self
+                .entities_by_kind
+                .iter()
+                .map(|(kind, count)| (kind.to_string(), *count))
+                .collect(),
+            kinds: self
+                .kinds
+                .iter()
+                .map(|kind| GuideKind {
+                    kind: kind.keyword.to_string(),
+                    extension: kind.extension.to_string(),
+                    description: kind.description.map(str::to_string),
+                    fields: kind
+                        .fields
+                        .iter()
+                        .map(|field| {
+                            if field.declared().required {
+                                format!("{}*", field.name())
+                            } else {
+                                field.name().to_string()
+                            }
+                        })
+                        .collect(),
+                    inference_guide: kind.guide.clone(),
                 })
-            })
-            .collect();
-        json!({
-            "installed_extensions": self.extensions,
-            "existing_entities": self.entities_by_kind,
-            "kinds": kinds,
-            "project_conventions": self.conventions.unwrap_or(""),
-            "spec_directory": self.spec_directory,
-        })
+                .collect(),
+            project_conventions: self.conventions.unwrap_or("").to_string(),
+            spec_directory: self.spec_directory.clone(),
+        }
     }
+}
+
+/// The project's guide as `specforge infer-guide --format json` and the
+/// infer prompt's overview print it.
+#[derive(Debug, Clone, PartialEq, Serialize, Shape)]
+pub struct GuideDocument {
+    pub installed_extensions: Vec<String>,
+    pub existing_entities: BTreeMap<String, usize>,
+    pub kinds: Vec<GuideKind>,
+    pub project_conventions: String,
+    pub spec_directory: String,
+}
+
+/// One kind in the overview.
+#[derive(Debug, Clone, PartialEq, Serialize, Shape)]
+pub struct GuideKind {
+    pub kind: String,
+    pub extension: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// Field names, a required one followed by `*`.
+    pub fields: Vec<String>,
+    pub inference_guide: String,
 }
 
 /// The project's inference guide.
@@ -191,7 +238,7 @@ pub fn guide<'a>(view: &ProjectView<'a>) -> InferenceGuide<'a> {
             .collect(),
         kinds,
         entities_by_kind: view.entities_by_kind(),
-        conventions: view.env().config.inference.global.as_deref(),
+        conventions: view.env().config().inference.global.as_deref(),
         spec_directory: spec_directory(view),
     }
 }
@@ -235,7 +282,7 @@ fn registered_for(
     descriptor: &EntityKindDescriptor,
 ) -> bool {
     view.registries()
-        .kinds
+        .kinds()
         .get(keyword(descriptor))
         .is_some_and(|entry| entry.source_extension == declaration.name())
 }
@@ -261,7 +308,7 @@ fn kind_of<'a>(
     let keyword = keyword(descriptor);
     // Every field the registry build registered on the kind: the registry's
     // map has no declaration order, so by name.
-    let mut fields = view.registries().fields.fields_for_kind(keyword);
+    let mut fields = view.registries().fields().fields_for_kind(keyword);
     fields.sort_by(|a, b| a.name().cmp(b.name()));
     KindGuide {
         keyword,
@@ -270,7 +317,7 @@ fn kind_of<'a>(
         fields,
         guide: merged_guide(
             descriptor.inference_guide.as_deref().unwrap_or(""),
-            view.env().config.inference.kinds.get(keyword),
+            view.env().config().inference.kinds.get(keyword),
         ),
         existing: existing.get(keyword).cloned().unwrap_or_default(),
     }
@@ -293,7 +340,7 @@ fn merged_guide(extension_guide: &str, project_guide: Option<&String>) -> String
 fn spec_directory(view: &ProjectView) -> String {
     let relative = view
         .root()
-        .and_then(|root| view.env().spec_root.strip_prefix(root).ok())
+        .and_then(|root| view.env().spec_root().strip_prefix(root).ok())
         .filter(|relative| *relative != Path::new(""));
     match relative {
         Some(relative) => {

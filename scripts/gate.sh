@@ -144,7 +144,7 @@ dogfood() {
     if grep -q '"W115"' "$LOGS/collect.json"; then
         echo "W115 in collect:"; grep -A2 '"W115"' "$LOGS/collect.json"; return 1
     fi
-    "$SPECFORGE" analyze coverage --json >"$LOGS/analyze.json"
+    "$SPECFORGE" analyze coverage --format json >"$LOGS/analyze.json"
     python3 - "$LOGS/analyze.json" <<'PY'
 import json, sys
 doc = json.load(open(sys.argv[1]))

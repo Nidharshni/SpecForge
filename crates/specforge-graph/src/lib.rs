@@ -13,7 +13,7 @@ pub use obligations::obligations;
 pub use specforge_common::cycles::{CycleOptions, find_cycles};
 
 pub use build::{
-    Applied, FileChange, GraphBuild, GraphConfig, build_graph, build_graph_with_config,
+    Applied, FileChange, GraphBuild, GraphConfig, GraphInputs, build_graph, build_graph_with_config,
 };
 pub use graph::{Edge, Graph, Node, Reached};
 pub use specforge_common::{Diagnostic, Severity, SourceSpan};

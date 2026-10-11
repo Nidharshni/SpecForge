@@ -63,7 +63,7 @@ impl EntitySnapshot {
             .iter()
             .filter(|record| {
                 registries
-                    .kinds
+                    .kinds()
                     .get(&record.kind)
                     .is_some_and(|kind| kind.declared.declares_types)
             })
@@ -149,33 +149,10 @@ impl EntitySnapshot {
 
     // ── Adapters to fixed external shapes (ADR 0019, "Wire") ──
 
-    /// `PassInput::entities`: each entity's field texts by key (a key
-    /// written twice keeps its last text), edge totals, span, `testable`,
-    /// and `exempt` = it owes no obligations of its own.
+    /// `PassInput::entities`: one [`pass_entity`] per entity, in id order.
     pub fn pass_entities(&self) -> Vec<PassEntity> {
         self.iter()
-            .map(|(record, standing)| PassEntity {
-                id: record.id.clone(),
-                kind: record.kind.clone(),
-                fields: record
-                    .fields
-                    .iter()
-                    .map(|f| (f.key.clone(), f.text.clone()))
-                    .collect(),
-                incoming_edge_count: record.incoming.total,
-                outgoing_edge_count: record.outgoing.total,
-                span: Some(PassSpan {
-                    file: record.span.file.as_str().to_string(),
-                    start_line: record.span.start_line,
-                    start_col: record.span.start_col,
-                    end_line: record.span.end_line,
-                    end_col: record.span.end_col,
-                }),
-                testable: standing.testable,
-                exempt: !standing.owes_obligations(),
-                verify_kinds: record.obligations.iter().map(|o| o.kind.clone()).collect(),
-                verify_texts: record.obligations.iter().map(|o| o.text.clone()).collect(),
-            })
+            .map(|(record, standing)| pass_entity(record, standing))
             .collect()
     }
 
@@ -261,29 +238,44 @@ impl EntitySnapshot {
         }
     }
 
-    /// The coverage rule's entities (`specforge_coverage::Entity`), in id
-    /// order: the same facts the `@specforge/testing:coverage` pass
-    /// receives, so a per-entity view and the pass cannot disagree.
+    /// The coverage rule's entities, in id order. They are the pass
+    /// entities, read as the `@specforge/testing:coverage` pass reads them
+    /// (`specforge_coverage::Entity::from`), so a per-entity view and the
+    /// pass cannot disagree.
     pub fn coverage_entities(&self) -> Vec<specforge_coverage::Entity> {
-        self.iter()
-            .map(|(record, standing)| coverage_entity(record, standing))
+        self.pass_entities()
+            .iter()
+            .map(specforge_coverage::Entity::from)
             .collect()
     }
 }
 
-/// An entity as the coverage rule sees it.
-fn coverage_entity(record: &EntityRecord, standing: &Standing) -> specforge_coverage::Entity {
-    specforge_coverage::Entity {
+/// One entity as a pass receives it:
+/// - its field texts by key (a key written twice keeps its last text);
+/// - its edge totals and span;
+/// - `testable`, and `owes_none` = it owes no obligations of its own.
+fn pass_entity(record: &EntityRecord, standing: &Standing) -> PassEntity {
+    PassEntity {
         id: record.id.clone(),
         kind: record.kind.clone(),
+        fields: record
+            .fields
+            .iter()
+            .map(|f| (f.key.clone(), f.text.clone()))
+            .collect(),
+        incoming_edge_count: record.incoming.total,
+        outgoing_edge_count: record.outgoing.total,
+        span: Some(PassSpan {
+            file: record.span.file.as_str().to_string(),
+            start_line: record.span.start_line,
+            start_col: record.span.start_col,
+            end_line: record.span.end_line,
+            end_col: record.span.end_col,
+        }),
         testable: standing.testable,
-        exempt: !standing.owes_obligations(),
+        owes_none: !standing.owes_obligations(),
         verify_kinds: record.obligations.iter().map(|o| o.kind.clone()).collect(),
         verify_texts: record.obligations.iter().map(|o| o.text.clone()).collect(),
-        // The host grades no kind by risk (ADR 0009, B): the testing pass
-        // reads risk for the kind it grades.
-        risk: None,
-        referenced: record.edges(Direction::Incoming, None) > 0,
     }
 }
 
@@ -310,11 +302,11 @@ impl Standing {
     pub fn of(record: &EntityRecord, registries: &RegistryBuild) -> Standing {
         Standing {
             testable: registries
-                .kinds
+                .kinds()
                 .get(&record.kind)
                 .is_some_and(|kind| kind.testable),
             rule: registries
-                .rules
+                .rules()
                 .verify_rule_for(&record.kind)
                 .map(|rule| rule.code().to_string()),
             exemption: record.exemption.clone(),
@@ -328,26 +320,32 @@ impl Standing {
     }
 
     /// It owes obligations of its own: obligated, and nothing exempts it.
-    /// `PassEntity::exempt` and `specforge_coverage::Entity::exempt` are its
+    /// `PassEntity::owes_none` and `specforge_coverage::Entity::owes_none` are its
     /// negation.
     pub fn owes_obligations(&self) -> bool {
         self.rule.is_some() && self.exemption.is_none()
     }
 
-    /// It counts toward coverage: testable, and it owes obligations or
-    /// declares some. The one place the host states the rule;
-    /// `specforge_coverage::Entity::counts_toward_coverage` is its twin for
-    /// the pass's entity (the `coverage` extension's input), pinned equal by
-    /// `standing_counts_as_the_coverage_rule_does`. Every other reader
-    /// (inspect, the coverage view, stats) asks the snapshot's standing.
+    /// The facts the coverage rule counts it by.
+    pub fn counting(&self) -> specforge_coverage::Counting {
+        specforge_coverage::Counting {
+            testable: self.testable,
+            owes_obligations: self.owes_obligations(),
+            declared: self.declared,
+        }
+    }
+
+    /// It counts toward coverage: the coverage rule's
+    /// [`Counting::counts`](specforge_coverage::Counting::counts) over its
+    /// facts. Every reader (inspect, the coverage view, stats) asks this.
     pub fn counts(&self) -> bool {
-        self.testable && (self.owes_obligations() || self.declared > 0)
+        self.counting().counts()
     }
 
     /// Testable, but it owes none and declares none, so it does not count
     /// (the coverage view's and inspect's `exempt`).
     pub fn exempt(&self) -> bool {
-        self.testable && !self.counts()
+        self.counting().exempt()
     }
 
     /// The rule that reports it now: it owes obligations and declares none.
@@ -486,7 +484,7 @@ fn record(
             .collect(),
         incoming,
         outgoing,
-        exemption: exemption(node, &registries.kinds, &registries.fields),
+        exemption: exemption(node, registries.kinds(), registries.fields()),
         methods: node
             .methods
             .iter()
@@ -842,47 +840,16 @@ mod tests {
     // ── The obligation rule (moved from coverage.rs; links kept) ──
 
     use specforge_protocol_types::{
-        ExtensionDeclaration, ValidationRuleDescriptor, ValidationSeverity,
+        EntityKindDescriptor, ExtensionDeclaration, FieldDescriptor, ValidationRuleDescriptor,
+        ValidationSeverity,
     };
-    use specforge_registry::rules::{NoVerdicts, Registries, Rules};
-    use specforge_registry::{FieldRegistry, KindRegistry, KindRegistryEntry, RegistryBuild};
-
-    fn kind(name: &str, testable: bool, supports_verify: bool) -> KindRegistryEntry {
-        KindRegistryEntry {
-            kind_name: name.into(),
-            source_extension: "@test/ext".into(),
-            testable,
-            supports_verify,
-            allowed_verify_kinds: Vec::new(),
-            lifecycle_field: None,
-            ..Default::default()
-        }
-    }
+    use specforge_registry::rules::NoVerdicts;
+    use specforge_registry::{RegistryBuild, build_registries};
 
     fn graph_of(source: &str) -> Graph {
         let (graph, _) =
             specforge_graph::build_graph(&[specforge_parser::parse(source, "test.spec")]);
         graph
-    }
-
-    /// The field registry of a project whose `behavior` kind declares the
-    /// `abstract` flag (as @specforge/formal does).
-    fn abstract_behaviors() -> FieldRegistry {
-        let mut fields = FieldRegistry::new();
-        fields.register(
-            specforge_registry::FieldRegistryEntry::new(
-                "behavior",
-                "@test/formal",
-                specforge_protocol_types::FieldDescriptor {
-                    name: "abstract".into(),
-                    field_type: "bool".into(),
-                    exempts_obligations: true,
-                    ..Default::default()
-                },
-            )
-            .unwrap(),
-        );
-        fields
     }
 
     fn w004(kind: &str) -> ValidationRuleDescriptor {
@@ -897,27 +864,50 @@ mod tests {
         }
     }
 
-    /// The registry build of `kinds`, `fields` and the rule set of an
-    /// extension declaring `rules`.
-    fn build(
-        kinds: KindRegistry,
-        fields: FieldRegistry,
+    /// The registry build of one extension declaring `kinds` as
+    /// `(name, testable, supports_verify)`, the `abstract` flag on
+    /// `behavior` (as @specforge/formal does) when `abstract_behaviors`, and
+    /// `rules`.
+    fn declared(
+        kinds: &[(&str, bool, bool)],
+        abstract_behaviors: bool,
         rules: Vec<ValidationRuleDescriptor>,
     ) -> RegistryBuild {
-        let mut build = RegistryBuild::default();
-        build.kinds = kinds;
-        build.fields = fields;
-        let declaration = ExtensionDeclaration {
+        let mut declaration = ExtensionDeclaration {
             validation_rules: rules,
+            entities: kinds
+                .iter()
+                .map(|(name, testable, supports_verify)| EntityKindDescriptor {
+                    name: name.to_string(),
+                    keyword: Some(name.to_string()),
+                    testable: *testable,
+                    supports_verify: *supports_verify,
+                    ..Default::default()
+                })
+                .collect(),
             ..Default::default()
         };
-        (build.rules, _) = Rules::build(
-            &[declaration],
-            Registries {
-                kinds: &build.kinds,
-                fields: &build.fields,
-                edges: &build.edges,
-            },
+        declaration.handshake.name = "@specforge/testing".into();
+        declaration.handshake.version = "1.0.0".into();
+        if abstract_behaviors {
+            declaration
+                .entities
+                .iter_mut()
+                .find(|kind| kind.name == "behavior")
+                .expect("a behavior kind")
+                .fields
+                .push(FieldDescriptor {
+                    name: "abstract".into(),
+                    field_type: "bool".into(),
+                    exempts_obligations: true,
+                    ..Default::default()
+                });
+        }
+        let build = build_registries(vec![declaration]);
+        assert!(
+            build.diagnostics().next().is_none(),
+            "{:?}",
+            build.diagnostics().collect::<Vec<_>>()
         );
         build
     }
@@ -927,16 +917,17 @@ mod tests {
     }
 
     /// The ids W004 reports on `source` (rules on `behavior` and `type`).
-    fn w004_ids(source: &str, fields: FieldRegistry) -> Vec<String> {
+    fn w004_ids(source: &str, abstract_behaviors: bool) -> Vec<String> {
         // A rule for a kind nobody declares is inert (ADR 0020 D5): declare
         // the two the rules target.
-        let mut kinds = KindRegistry::new();
-        kinds.register(kind("behavior", true, true));
-        kinds.register(kind("type", true, true));
-        let registries = build(kinds, fields, vec![w004("behavior"), w004("type")]);
+        let registries = declared(
+            &[("behavior", true, true), ("type", true, true)],
+            abstract_behaviors,
+            vec![w004("behavior"), w004("type")],
+        );
         let snapshot = snapshot(source, &registries);
         let mut ids: Vec<String> = registries
-            .rules
+            .rules()
             .check(&snapshot.rule_input(), &NoVerdicts)
             .into_iter()
             .map(|d| d.message.split('\'').nth(1).unwrap().to_string())
@@ -952,7 +943,7 @@ mod tests {
     fn a_union_type_owes_no_obligations() {
         let ids = w004_ids(
             "type Status = active | inactive\n\ntype Plain \"Plain\" {\n  id string\n}\n",
-            FieldRegistry::new(),
+            false,
         );
         assert_eq!(ids, ["Plain"]);
     }
@@ -961,7 +952,7 @@ mod tests {
     fn an_enum_values_list_is_not_a_union() {
         let ids = w004_ids(
             "type Priority \"Priority\" {\n  values [high, low]\n}\n",
-            FieldRegistry::new(),
+            false,
         );
         assert_eq!(ids, ["Priority"]);
     }
@@ -973,14 +964,15 @@ mod tests {
     fn an_abstract_entity_owes_no_obligations_when_its_kind_declares_the_flag() {
         let source = "behavior base \"Base\" {\n  contract \"The system MUST work\"\n  abstract true\n}\n\n\
                       behavior concrete \"Concrete\" {\n  contract \"The system MUST work\"\n  abstract false\n}\n";
-        assert_eq!(w004_ids(source, abstract_behaviors()), ["concrete"]);
+        assert_eq!(w004_ids(source, true), ["concrete"]);
         // Without a registry entry declaring it, `abstract` is just a name.
-        assert_eq!(w004_ids(source, FieldRegistry::new()), ["base", "concrete"]);
+        assert_eq!(w004_ids(source, false), ["base", "concrete"]);
     }
 
-    /// The ids of `source`'s entities whose kind is testable, under `kinds`.
-    fn testable_ids(source: &str, kinds: KindRegistry) -> Vec<String> {
-        let snapshot = snapshot(source, &build(kinds, FieldRegistry::new(), Vec::new()));
+    /// The ids of `source`'s entities whose kind is testable, under `kinds`
+    /// as `(name, testable, supports_verify)`.
+    fn testable_ids(source: &str, kinds: &[(&str, bool, bool)]) -> Vec<String> {
+        let snapshot = snapshot(source, &declared(kinds, false, Vec::new()));
         snapshot
             .iter()
             .filter(|(_, standing)| standing.testable)
@@ -994,11 +986,8 @@ mod tests {
     )]
     fn no_kind_is_testable_unless_an_extension_says_so() {
         let source = "behavior login \"Login\" {\n}\n";
-        assert!(testable_ids(source, KindRegistry::new()).is_empty());
-
-        let mut reg = KindRegistry::new();
-        reg.register(kind("behavior", false, false));
-        assert!(testable_ids(source, reg).is_empty());
+        assert!(testable_ids(source, &[]).is_empty());
+        assert!(testable_ids(source, &[("behavior", false, false)]).is_empty());
     }
 
     #[specforge_test(
@@ -1006,15 +995,16 @@ mod tests {
         verify = "testable=false entity excluded from coverage"
     )]
     fn only_kinds_declared_testable_count() {
-        let mut reg = KindRegistry::new();
-        reg.register(kind("behavior", true, true));
-        reg.register(kind("type", true, true));
-        // Accepts verify statements but does not count toward coverage.
-        reg.register(kind("property", false, true));
-        reg.register(kind("feature", false, false));
+        let kinds = [
+            ("behavior", true, true),
+            ("type", true, true),
+            // Accepts verify statements but does not count toward coverage.
+            ("property", false, true),
+            ("feature", false, false),
+        ];
         let source = "behavior b \"B\" {\n}\n\ntype t \"T\" {\n}\n\n\
                       property p \"P\" {\n  verify unit \"holds\"\n}\n\nfeature f \"F\" {\n}\n";
-        assert_eq!(testable_ids(source, reg), ["b", "t"]);
+        assert_eq!(testable_ids(source, &kinds), ["b", "t"]);
     }
 
     #[specforge_test(
@@ -1022,18 +1012,16 @@ mod tests {
         verify = "an entity owes obligations when a no_verify_statements rule applies to its kind and neither a union body nor an exempting flag exempts it"
     )]
     fn an_entity_owes_obligations_when_a_rule_applies_and_nothing_exempts_it() {
-        let kinds = || {
-            let mut kinds = KindRegistry::new();
-            kinds.register(kind("behavior", true, true));
-            kinds.register(kind("type", true, true));
-            kinds.register(kind("memo", false, false));
-            kinds
-        };
+        let kinds = [
+            ("behavior", true, true),
+            ("type", true, true),
+            ("memo", false, false),
+        ];
         let source = "behavior open \"Open\" {\n}\n\nbehavior base \"Base\" {\n  abstract true\n}\n\n\
                       type Status = active | inactive\n\ntype Plain \"Plain\" {\n  id string\n}\n\n\
                       memo note \"Note\" {\n}\n";
         let owes = |rules: Vec<ValidationRuleDescriptor>| -> Vec<String> {
-            let registries = build(kinds(), abstract_behaviors(), rules);
+            let registries = declared(&kinds, true, rules);
             snapshot(source, &registries)
                 .iter()
                 .filter(|(_, standing)| standing.owes_obligations())
@@ -1050,7 +1038,7 @@ mod tests {
         untargeted.target_kind = None;
         assert_eq!(owes(vec![untargeted]), ["Plain", "open"]);
         // What exempts each, decided once.
-        let registries = build(kinds(), abstract_behaviors(), Vec::new());
+        let registries = declared(&kinds, true, Vec::new());
         let exemptions: Vec<(String, Option<Exemption>)> = snapshot(source, &registries)
             .iter()
             .map(|(record, standing)| {
@@ -1076,8 +1064,8 @@ mod tests {
     }
 
     #[specforge_test(
-        behavior = "read_views_over_the_project_view",
-        verify = "an entity is unverified when it counts toward coverage and is not proven"
+        behavior = "snapshot_entities_once",
+        verify = "the standing counts an entity toward coverage exactly as the coverage rule counts the pass entity it sends"
     )]
     fn standing_counts_as_the_coverage_rule_does() {
         let span = specforge_common::SourceSpan {
@@ -1111,13 +1099,10 @@ mod tests {
                             exemption: exemption.clone(),
                             declared,
                         };
-                        let entity = coverage_entity(&record, &standing);
-                        assert_eq!(
-                            standing.counts(),
-                            entity.counts_toward_coverage(),
-                            "{standing:?}"
-                        );
-                        assert_eq!(entity.exempt, !standing.owes_obligations());
+                        let entity =
+                            specforge_coverage::Entity::from(&pass_entity(&record, &standing));
+                        assert_eq!(standing.counting(), entity.counting(), "{standing:?}");
+                        assert_eq!(entity.owes_none, !standing.owes_obligations());
                         assert_eq!(standing.exempt(), testable && !standing.counts());
                         combinations += 1;
                     }
@@ -1125,5 +1110,56 @@ mod tests {
             }
         }
         assert_eq!(combinations, 32);
+    }
+
+    #[specforge_test(
+        behavior = "snapshot_entities_once",
+        verify = "the coverage rule reads each entity as the pass input carries it"
+    )]
+    fn coverage_entities_are_the_pass_entities_as_the_rule_reads_them() {
+        let registries = declared(
+            &[
+                ("behavior", true, true),
+                ("type", true, true),
+                ("memo", false, false),
+            ],
+            true,
+            vec![w004("behavior"), w004("type")],
+        );
+        let source = "behavior open \"Open\" {\n  features [base]\n  verify unit \"works\"\n}\n\n\
+                      behavior other \"Other\" {\n  features [base]\n}\n\n\
+                      behavior base \"Base\" {\n  abstract true\n}\n\n\
+                      type Status = active | inactive\n\ntype Plain \"Plain\" {\n  id string\n}\n\n\
+                      memo note \"Note\" {\n}\n";
+        let snapshot = snapshot(source, &registries);
+        let passed = snapshot.pass_entities();
+        let covered = snapshot.coverage_entities();
+        assert_eq!(passed.len(), 6);
+        assert_eq!(covered.len(), passed.len());
+        // The reading the rule makes of a pass entity, written out.
+        for (entity, pass) in covered.iter().zip(&passed) {
+            assert_eq!(entity.id, pass.id);
+            assert_eq!(entity.kind, pass.kind);
+            assert_eq!(entity.testable, pass.testable, "{}", pass.id);
+            assert_eq!(entity.owes_none, pass.owes_none, "{}", pass.id);
+            assert_eq!(entity.verify_kinds, pass.verify_kinds, "{}", pass.id);
+            assert_eq!(entity.verify_texts, pass.verify_texts, "{}", pass.id);
+            assert_eq!(entity.risk, None, "{}", pass.id);
+            assert_eq!(
+                entity.referenced,
+                pass.incoming_edge_count > 0,
+                "{}",
+                pass.id
+            );
+        }
+        // The cases are all there: a testable entity that owes, one that is
+        // exempt, one nothing refers to and one that something does.
+        let by_id = |id: &str| covered.iter().find(|e| e.id == id).unwrap();
+        assert!(by_id("open").testable && !by_id("open").owes_none);
+        assert!(by_id("base").owes_none);
+        assert!(by_id("Status").owes_none);
+        assert!(!by_id("note").testable && by_id("note").owes_none);
+        assert!(by_id("base").referenced);
+        assert!(!by_id("open").referenced);
     }
 }

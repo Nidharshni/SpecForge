@@ -11,7 +11,6 @@ use crate::protocol::JsonRpcResponse;
 use crate::resources::{CORE_RESOURCES, ResourceSpec};
 use crate::state::McpState;
 use crate::surface_table::{ResourceEntry, ToolEntry};
-use crate::tool::ToolSpec;
 use crate::tools::CORE_TOOLS;
 use crate::types::{McpResourceDescriptor, McpToolDescriptor};
 
@@ -20,7 +19,7 @@ use crate::types::{McpResourceDescriptor, McpToolDescriptor};
 pub fn listed_tools(state: &McpState) -> impl Iterator<Item = McpToolDescriptor> + '_ {
     CORE_TOOLS
         .iter()
-        .map(ToolSpec::descriptor)
+        .map(|tool| tool.descriptor())
         .chain(state.surfaces().tools().iter().map(ToolEntry::descriptor))
 }
 

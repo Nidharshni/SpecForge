@@ -1,7 +1,7 @@
 use specforge_extension_sdk::{ContributionsBuilder, ExtensionMeta};
 use specforge_protocol_types::{
-    CommandArgDescriptor, CommandDescriptor, ExtensionDeclaration, McpResourceDescriptor,
-    McpToolDescriptor, SurfaceDescriptor,
+    CommandArgDescriptor, CommandDescriptor, DeclaredCategory, ExtensionDeclaration,
+    McpResourceDescriptor, McpToolDescriptor, SurfaceDescriptor,
 };
 use specforge_registry::{
     CommandArgType, SurfaceRegistryEntry, SurfaceType, register_surface_contributions,
@@ -57,7 +57,7 @@ fn make_resource(name: &str, export: &str) -> McpResourceDescriptor {
 fn declared_with(surfaces: Option<serde_json::Value>) -> ExtensionDeclaration {
     let mut c = ContributionsBuilder::new(ExtensionMeta::new("@ext/test", "1.0.0"));
     if let Some(surfaces) = surfaces {
-        c.raw_category("surfaces", serde_json::json!([surfaces]));
+        c.raw_category(DeclaredCategory::Surfaces, serde_json::json!([surfaces]));
     }
     c.declaration()
 }
@@ -305,7 +305,7 @@ fn build_with_tools(tools: Vec<McpToolDescriptor>) -> (Vec<String>, Vec<String>,
     declaration.surfaces = make_surfaces(vec![], tools, vec![]);
     let build = specforge_registry::build_registries(vec![declaration]);
     let registered = build
-        .surfaces
+        .surfaces()
         .iter()
         .filter(|e| e.surface_type == SurfaceType::McpTool)
         .map(|e| e.contribution_name.clone())
@@ -316,8 +316,8 @@ fn build_with_tools(tools: Vec<McpToolDescriptor>) -> (Vec<String>, Vec<String>,
         .flat_map(|d| d.surfaces.mcp_tools.iter().map(|t| t.name.clone()))
         .collect();
     let codes = build
-        .surface_diagnostics
-        .iter()
+        .diagnostics()
+        .filter(|d| ["E055", "E039"].contains(&d.code.as_str()))
         .map(|d| d.code.clone())
         .collect();
     (registered, listed, codes)

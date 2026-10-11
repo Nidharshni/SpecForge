@@ -29,7 +29,7 @@ fn each_core_tool_schema_advertises_exactly_what_its_handler_reads() {
         if sorted != expected {
             drift.push(format!(
                 "{}: advertises {sorted:?}, reads {expected:?}",
-                tool.name
+                tool.name()
             ));
         }
         // What is required is what the handler cannot do without, in
@@ -50,11 +50,11 @@ fn each_core_tool_schema_advertises_exactly_what_its_handler_reads() {
         if listed != required {
             drift.push(format!(
                 "{}: requires {listed:?}, needs {required:?}",
-                tool.name
+                tool.name()
             ));
         }
         if schema["additionalProperties"] != false {
-            drift.push(format!("{}: allows other properties", tool.name));
+            drift.push(format!("{}: allows other properties", tool.name()));
         }
     }
     assert!(drift.is_empty(), "schema drift: {drift:#?}");

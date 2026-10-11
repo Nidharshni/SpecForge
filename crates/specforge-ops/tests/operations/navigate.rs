@@ -2,6 +2,7 @@
 //! position comes from the parser, as the LSP and MCP see it.
 
 use specforge_common::SourceSpan;
+use specforge_extension_sdk::prelude::*;
 use specforge_ops::navigate::{Direction, Navigator, Occurrence, Precision, ReferenceQuery, Role};
 use specforge_ops::view::ProjectView;
 use specforge_project::{CompiledProject, Environment};
@@ -44,7 +45,7 @@ pub fn compile(extensions: &[&str], files: &[(&str, &str)]) -> Compiled {
 impl Compiled {
     /// A navigator reading the project's files from disk.
     pub fn navigator(&self) -> Navigator<'_, impl Fn(&str) -> Option<String> + '_> {
-        let spec_root = &self.project.environment().spec_root;
+        let spec_root = self.project.environment().spec_root().to_path_buf();
         Navigator::new(ProjectView::of(&self.project), move |file| {
             std::fs::read_to_string(spec_root.join(file)).ok()
         })
@@ -521,8 +522,8 @@ fn completion_keeps_the_fields_target_kind() {
     let target = p
         .project
         .environment()
-        .registries
-        .fields
+        .registries()
+        .fields()
         .get("behavior", "invariants")
         .and_then(|f| f.declared().target_kind.clone())
         .expect("@specforge/software's invariants field targets a kind");
@@ -717,9 +718,7 @@ fn the_message_is_never_read() {
 
 use specforge_ops::navigate::{Fix, FixKind, FixQuery, FixSource, TextEdit};
 use specforge_project::coverage::RecordedCoverage;
-use specforge_registry::{
-    FieldRegistry, FieldRegistryEntry, KindRegistry, KindRegistryEntry, RegistryBuild,
-};
+use specforge_registry::{RegistryBuild, build_registries};
 
 /// `text` with `edits` (spans of it) applied.
 fn apply(text: &str, edits: &[TextEdit]) -> String {
@@ -967,28 +966,27 @@ fn with_registries<'a>(
     env: &'a Environment,
     recorded: &'a RecordedCoverage,
 ) -> Navigator<'a, impl Fn(&str) -> Option<String> + 'a> {
-    let spec_root = &p.project.environment().spec_root;
+    let spec_root = p.project.environment().spec_root().to_path_buf();
     Navigator::new(
         ProjectView::new(p.project.graph(), env, None, recorded),
         move |file| std::fs::read_to_string(spec_root.join(file)).ok(),
     )
 }
 
-/// Kinds that take verify statements of `verify_kinds`.
-fn verifiable(kinds: &[&str], verify_kinds: &[&str]) -> KindRegistry {
-    let mut registry = KindRegistry::new();
+/// The registries of kinds that take verify statements of `verify_kinds`.
+fn verifiable(kinds: &[&str], verify_kinds: &[&str]) -> RegistryBuild {
+    let mut c = ContributionsBuilder::new(ExtensionMeta::new("@test/ext", "1.0.0"));
     for kind in kinds {
-        registry.register(KindRegistryEntry {
-            kind_name: kind.to_string(),
-            source_extension: "@test/ext".into(),
-            testable: true,
-            supports_verify: true,
-            allowed_verify_kinds: verify_kinds.iter().map(|k| k.to_string()).collect(),
-            lifecycle_field: None,
-            ..Default::default()
+        c.kind(kind, |k| {
+            k.keyword(kind)
+                .testable(true)
+                .supports_verify(true)
+                .verify_kinds(verify_kinds);
         });
     }
-    registry
+    let build = build_registries(vec![c.declaration()]);
+    assert!(build.diagnostics().next().is_none());
+    build
 }
 
 #[specforge_test(
@@ -1003,12 +1001,7 @@ fn the_verify_stub_uses_the_kinds_first_allowed_verify_kind() {
             "invariant unique_ids \"U\" {\n  guarantee \"g\"\n}\nfeature untestable \"F\" {\n}\n",
         )],
     );
-    let registries = {
-        let mut build = RegistryBuild::default();
-        build.kinds = verifiable(&["invariant"], &["property", "unit"]);
-        build
-    };
-    let env = Environment::with_registries(registries);
+    let env = Environment::with_registries(verifiable(&["invariant"], &["property", "unit"]), None);
     let recorded = RecordedCoverage::over(p.project.graph(), &env);
     let fixes = with_registries(&p, &env, &recorded).fixes(&[], &FixQuery::default());
     assert_eq!(
@@ -1142,23 +1135,27 @@ fn the_stub_kind_is_the_fields_target_kind() {
     );
 }
 
-/// `behavior.invariants` as a reference list targeting `target_kind`.
-fn invariants_field(target_kind: Option<&str>) -> FieldRegistry {
-    let mut fields = FieldRegistry::new();
-    fields.register(
-        FieldRegistryEntry::new(
-            "behavior",
-            "@test/ext",
-            specforge_registry::FieldDescriptor {
-                name: "invariants".into(),
-                field_type: "reference_list".to_string(),
-                target_kind: target_kind.map(str::to_string),
-                ..Default::default()
-            },
-        )
-        .unwrap(),
-    );
-    fields
+/// The registries of `behavior.invariants` as a reference list targeting
+/// `target_kind` (a kind declared beside `behavior`).
+fn invariants_field(target_kind: Option<&str>) -> RegistryBuild {
+    let mut c = ContributionsBuilder::new(ExtensionMeta::new("@test/ext", "1.0.0"));
+    c.kind("behavior", |k| {
+        k.keyword("behavior");
+        k.field("invariants", |f| {
+            f.field_type(FieldType::ReferenceList);
+            if let Some(target_kind) = target_kind {
+                f.target_kind(target_kind);
+            }
+        });
+    });
+    if let Some(target_kind) = target_kind {
+        c.kind(target_kind, |k| {
+            k.keyword(target_kind);
+        });
+    }
+    let build = build_registries(vec![c.declaration()]);
+    assert!(build.diagnostics().next().is_none());
+    build
 }
 
 #[specforge_test(
@@ -1168,12 +1165,7 @@ fn invariants_field(target_kind: Option<&str>) -> FieldRegistry {
 fn no_stub_without_a_target_kind() {
     let p = compile(TESTING, &[("auth.spec", DANGLING)]);
     let diagnostics = p.project.diagnostics();
-    let untargeted = {
-        let mut build = RegistryBuild::default();
-        build.fields = invariants_field(None);
-        build
-    };
-    let env = Environment::with_registries(untargeted);
+    let env = Environment::with_registries(invariants_field(None), None);
     let recorded = RecordedCoverage::over(p.project.graph(), &env);
     let fixes = with_registries(&p, &env, &recorded).fixes(&diagnostics, &FixQuery::default());
     assert!(
@@ -1181,13 +1173,8 @@ fn no_stub_without_a_target_kind() {
         "{:?}",
         titles(&fixes)
     );
-    let targeted = {
-        let mut build = RegistryBuild::default();
-        build.fields = invariants_field(Some("invariant"));
-        build
-    };
-    let fixes = with_registries(&p, &Environment::with_registries(targeted), &recorded)
-        .fixes(&diagnostics, &FixQuery::default());
+    let targeted = Environment::with_registries(invariants_field(Some("invariant")), None);
+    let fixes = with_registries(&p, &targeted, &recorded).fixes(&diagnostics, &FixQuery::default());
     assert!(fixes.iter().any(|f| f.source == FixSource::CreateStub));
 }
 

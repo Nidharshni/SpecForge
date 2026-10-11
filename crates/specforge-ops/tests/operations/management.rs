@@ -6,59 +6,63 @@ use specforge_common::Diagnostic;
 use specforge_ops::collect::{Consent, Mode, Request};
 use specforge_ops::extension::{self, RemoveRequest, Status};
 use specforge_ops::view::ProjectView;
-use specforge_project::EnabledExtension;
 use specforge_project::coverage::RecordedCoverage;
-use specforge_registry::RegistryBuild;
+use specforge_project::{EnabledExtension, Environment, ExtensionLoad, Loaded};
 use specforge_test::prelude::*;
+use specforge_wasm::testing::InProcessRuntime;
 
-use crate::view_support::Project;
+use crate::view_support::{Project, config_read};
 
 /// A project whose compile read `specforge.json` as enabling
 /// `@acme/missing@1.2.0` and configuring one provider, with one lock entry
 /// at its root, while the `specforge.json` on disk now says something
 /// else entirely.
 fn project() -> Project {
-    let mut project = Project::new("behavior a \"A\" {\n}\n", RegistryBuild::default());
     let config = serde_json::json!({
         "extensions": ["@acme/missing@1.2.0"],
         "providers": [{"scheme": "gh", "alias": "work", "extension": "@acme/issues"}],
     });
-    project.env.config.extensions = vec!["@acme/missing@1.2.0".into()];
-    // The environment registered the providers when the project compiled.
-    project.env.providers = specforge_project::providers::Providers::register(
-        Some(&config),
-        project.env.registries.declarations(),
-    );
-    project.env.config.raw = Some(config);
-    // It did not load: not installed, as the load recorded it.
-    project.env.enabled = vec![EnabledExtension {
-        failure: Some(specforge_installed::LoadFailure {
-            problem: specforge_installed::LoadProblem::NotInstalled,
-            diagnostic: Diagnostic::new(
-                specforge_common::codes::E028,
-                "extension '@acme/missing' is not installed",
-            ),
-        }),
-        ..EnabledExtension::unloaded("@acme/missing@1.2.0")
-    }];
-    project.env.config_found = true;
-    let root = project.dir.path();
-    std::fs::write(
-        root.join("specforge.json"),
-        r#"{"extensions": ["@other/x@9.9.9"], "providers": []}"#,
-    )
-    .unwrap();
-    std::fs::write(
-        root.join("specforge.lock"),
-        serde_json::json!({"lockfile_version": 1, "entries": [
-            {"name": "@acme/locked", "version": "1.0.0", "source": "registry", "wasm_hash": "h"}
-        ]})
-        .to_string(),
-    )
-    .unwrap();
-    // The compile read the lock as it is at this root.
-    project.env.installed = specforge_installed::Installed::at(root);
-    project
+    Project::assembled("behavior a \"A\" {\n}\n", |root| {
+        let read = config_read(root, config);
+        // The specforge.json on disk now says something else entirely, and
+        // the lock holds one entry.
+        std::fs::write(
+            root.join("specforge.json"),
+            r#"{"extensions": ["@other/x@9.9.9"], "providers": []}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("specforge.lock"),
+            serde_json::json!({"lockfile_version": 1, "entries": [
+                {"name": "@acme/locked", "version": "1.0.0", "source": "registry", "wasm_hash": "h"}
+            ]})
+            .to_string(),
+        )
+        .unwrap();
+        Environment::assemble(
+            read,
+            // The compile read the lock as it is at this root.
+            specforge_installed::Installed::at(root),
+            ExtensionLoad::In {
+                runtime: std::sync::Arc::new(InProcessRuntime::new()),
+                loaded: Loaded {
+                    // It did not load: not installed, as the load recorded it.
+                    enabled: vec![EnabledExtension {
+                        failure: Some(specforge_installed::LoadFailure {
+                            problem: specforge_installed::LoadProblem::NotInstalled,
+                            diagnostic: Diagnostic::new(
+                                specforge_common::codes::E028,
+                                "extension '@acme/missing' is not installed",
+                            ),
+                        }),
+                        ..EnabledExtension::unloaded("@acme/missing@1.2.0")
+                    }],
+                    declarations: Vec::new(),
+                    diagnostics: Vec::new(),
+                },
+            },
+        )
+    })
 }
 
 #[specforge_test(
@@ -192,7 +196,7 @@ fn the_providers_listing_reports_what_the_environment_registered() {
     assert_eq!(w118(&listing.diagnostics).len(), 2, "{listing:?}");
     assert_eq!(
         w118(&listing.diagnostics),
-        w118(compiled.environment().providers.diagnostics())
+        w118(compiled.environment().providers().diagnostics())
     );
 }
 

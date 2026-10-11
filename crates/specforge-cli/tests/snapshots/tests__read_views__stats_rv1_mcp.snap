@@ -3,6 +3,7 @@ source: crates/specforge-cli/tests/read_views.rs
 expression: "normalized(mcp, root)"
 ---
 {
+  "declared_count": 1,
   "declared_pct": 20.0,
   "diagnostic_summary": {
     "errors": 0,
@@ -10,6 +11,7 @@ expression: "normalized(mcp, root)"
     "warnings": 8
   },
   "edge_count": 2,
+  "entity_count": 6,
   "entity_counts": [
     {
       "count": 3,
@@ -20,5 +22,7 @@ expression: "normalized(mcp, root)"
       "kind": "type"
     }
   ],
-  "unconnected_count": 3
+  "testable_count": 5,
+  "unconnected_count": 3,
+  "verified_count": 1
 }

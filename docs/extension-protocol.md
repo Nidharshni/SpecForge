@@ -15,7 +15,7 @@ Host                                Extension (.wasm)
  |                                        |
  |-- __handshake(host_version) --------->|
  |<-- name, version, protocol_version, --|
- |    contribution_flags, sandbox_policy  |
+ |    peer_dependencies, sandbox_policy   |
  |                                        |
  |-- __describe("entities") ------------>|
  |<-- entity kind descriptors ------------|
@@ -47,31 +47,16 @@ The handshake is the first call the host makes after loading a Wasm binary. It e
 **Input:**
 
 ```json
-{
-  "host_version": "1.1.0",
-  "supported_categories": ["entities", "edges", "fields", "shared_fields", "enhancements", "validation_rules", "surfaces", "grammars", "body_parsers", "collectors", "passes", "feature_flags", "analyzers"]
-}
+{ "host_version": "1.2.0" }
 ```
 
 **Output** (`specforge_protocol_types::HandshakeResponse`):
 
 ```json
 {
-  "protocol_version": "1.1.0",
+  "protocol_version": "1.2.0",
   "name": "@specforge/software",
   "version": "1.0.0",
-  "contribution_flags": {
-    "entities": true,
-    "validators": true,
-    "renderers": false,
-    "providers": false,
-    "collectors": false,
-    "prompts": false,
-    "parsers": false,
-    "grammars": false,
-    "body_parsers": false,
-    "analyzers": false
-  },
   "peer_dependencies": [
     { "name": "@specforge/product", "version": "^1.0", "optional": true }
   ],
@@ -86,15 +71,16 @@ The handshake is the first call the host makes after loading a Wasm binary. It e
 
 Peer dependencies are SemVer ranges read as Cargo reads them; one rule judges them against the loaded versions (E027; a range that is not SemVer is E073, ADR 0041). Extensions load in `specforge.json` order, except that each loads after its peers. A cycle among **required** peers is one E027 naming its extensions. **Optional** peers are only a preference: extensions may name each other as optional peers, and the host adds the optional edges after the required ones in name order, skipping any that would close a cycle. A rule on another extension's kind that this one works without uses the rule's `target_extension` (see "Category: validation_rules"), not a peer.
 
-`protocol_version`, `name`, `version`, `contribution_flags`, `peer_dependencies` and `sandbox_policy` are required on the wire (`sandbox_policy` may be `null`: the extension then runs under the host's ceiling; see Sandbox). The others are optional and omitted when absent:
+`protocol_version`, `name`, `version`, `peer_dependencies` and `sandbox_policy` are required on the wire (`sandbox_policy` may be `null`: the extension then runs under the host's ceiling; see Sandbox). The others are optional and omitted when absent:
 
 - `starter_template`: the text of the starter `.spec` file `specforge init` writes for a project that enables the extension, `{project}` standing for the project's entity id and `{version}` for its version. When several enabled extensions declare one, `init` uses the first listed in `specforge.json`. SDK: `ContributionsBuilder::starter_template`.
 - `migration_hook`: the export `specforge migrate` calls after migrating the project's files. SDK: `ContributionsBuilder::migration_hook`.
 - `theme_color`: the hex colour (`#rgb`, `#rrggbb` or `#rrggbbaa`) the `model` and `outline` diagrams draw the extension in; grey otherwise. SDK: `ContributionsBuilder::theme_color`.
 - `ext_short`: the short name that routes the extension's commands, `specforge <ext_short> <command>` on the CLI and `specforge.<ext_short>.<id>` over MCP. Lowercase kebab case (`[a-z][a-z0-9-]*`); a malformed one is E030. Absent, it is the name's last segment (`@specforge/product` is `product`). SDK: `#[extension(short = "...")]`, checked at compile time.
 - `description` and `keywords`: what a package registry shows for the extension. `specforge publish` uploads them with the rest of the declaration. SDK: `#[extension(description = "...")]`, `ExtensionMeta::keywords`.
+- `providers`: `true` when the extension implements configured providers (a `specforge.json` `providers` entry may name it; W118 otherwise). SDK: `ContributionsBuilder::providers`.
 
-`contribution_flags` are informational: the SDK derives them from what the extension declares, and the host reads every declared category whatever they say. Only `providers`, which has no describe category, is read from them.
+What an extension contributes is what it declares in the describe categories; nothing on the handshake says it (ADR 0050).
 
 The host checks `protocol_version`: a major version other than its own fails the extension's load (E028), and its handshake's `sandbox_policy` limits every later call into it (see Sandbox).
 
@@ -132,7 +118,6 @@ A category whose answer fails or doesn't parse as its descriptors fails the exte
 | `entities` | Entity kind descriptors (keyword, fields, LSP and DOT metadata) | Always |
 | `edges` | Edge type descriptors (label, source/target kind, visual style) | Always |
 | `shared_fields` | Field descriptors every kind of the extension gets (a kind's own field of the same name wins) | Always |
-| `fields` | Every kind's fields, concatenated (derived; the SDK answers it) | Never |
 | `enhancements` | Fields, edge types and verify kinds added to other extensions' entity kinds | Always |
 | `validation_rules` | Declarative and custom validation rule descriptors | Always |
 | `surfaces` | One descriptor of the CLI commands, MCP tools and MCP resources, or none | Always |
@@ -140,7 +125,6 @@ A category whose answer fails or doesn't parse as its descriptors fails the exte
 | `analyzers` | Language analyzer descriptors (`specforge infer`) | Always |
 | `passes` | Compiler pass descriptors with ordering constraints | Always |
 | `feature_flags` | Feature flag descriptors | Always |
-| `grammars`, `body_parsers` | Reserved | Never |
 
 ### Category: entities
 
@@ -240,8 +224,6 @@ Returns the field descriptors every entity kind of the extension gets; a kind's 
   ]
 }
 ```
-
-The `fields` category is derived: every kind's fields (from its `entities` descriptor), concatenated. The SDK answers it; the host never asks for it.
 
 ### Category: enhancements
 
@@ -419,13 +401,11 @@ named as a core tool, a resource whose URIs a core resource serves, a command wh
 is reported with I017. A resource template may use any scheme; its read failing (a trap, an answer that
 is not `{content, mime_type}`) is a JSON-RPC internal error whose `data` is an McpError carrying E028.
 
-### Reserved: grammars and body_parsers
+### Body syntax
 
-The `grammars` and `body_parsers` contribution flags are reserved. The host ignores them and
-never calls `__describe` for these categories: extensions cannot contribute grammars or body
-parsers (ADR 0004, D5-a). A kind whose body syntax the core grammar does not parse sets
-`has_body_parser` on its entity descriptor instead; the compiler then leaves parse errors
-inside entities of that kind unreported.
+Extensions cannot contribute grammars or body parsers (ADR 0004, D5-a, ADR 0050). A kind whose
+body syntax the core grammar does not parse sets `has_body_parser` on its entity descriptor
+instead; the compiler then leaves parse errors inside entities of that kind unreported.
 
 ### Category: collectors
 
@@ -478,8 +458,8 @@ watch, the LSP, MCP). Passes with any other phase, or none, run only under
 `specforge analyze`. The `__pass_<name>` export receives a `PassInput`
 (`{"entities", "edges", "test_results"?, "proved_claims"?, "previous"?}`;
 each entity is `{"id", "kind", "fields", "incoming_edge_count",
-"outgoing_edge_count", "span"?, "testable", "exempt", "verify_kinds",
-"verify_texts"}`, `exempt` meaning it owes no obligations of its own, decided
+"outgoing_edge_count", "span"?, "testable", "owes_none", "verify_kinds",
+"verify_texts"}`, `owes_none` meaning it owes no obligations of its own, decided
 by the host from the registries) and answers host diagnostics, bare or as
 `{"diagnostics", "summary"}` (a `PassAnswer`). A diagnostic may carry
 `"entity": "<id>"`; with no `span`, the host attaches that entity's.
@@ -535,7 +515,7 @@ table below and the goldens in `crates/specforge-wasm/tests/wire/`.
 
 | Operation | Export | Input | Answer |
 |---|---|---|---|
-| Handshake | `__handshake` | `HandshakeRequest` `{"host_version", "supported_categories"}` | `HandshakeResponse` |
+| Handshake | `__handshake` | `HandshakeRequest` `{"host_version"}` | `HandshakeResponse` |
 | Describe | `__describe` | `DescribeRequest` `{"category"}` | `DescribeResponse` `{"category", "items"}` |
 | Command | the command's `export` (`cmd__<id>`) | `CommandInput` `{"args", "cwd", "format", "today", "graph"}`; `cwd` is the project root, absolute and canonical | `CommandOutput` `{"exit_code", "stdout"?, "stderr"?}` |
 | MCP tool | the tool's `export` (`mcp__<name>`) | the JSON its `input_schema` describes | the JSON its `output_schema` describes |
@@ -621,6 +601,7 @@ The host-function surface is versioned alongside the wire protocol (`protocol_ve
 |-----------------|-------------------|
 | `1.0.0` | `host_query_graph`, `host_emit_diagnostic`, `host_read_file`, `host_emit_file`, `host_http_get`, `host_add_graph_node`, `host_add_graph_edge` |
 | `1.1.0` | the same as `1.0.0` |
+| `1.2.0` | the same as `1.0.0` |
 
 ### Protocol Versions
 
@@ -629,14 +610,15 @@ guest of its major version, whatever minor it was built with, and sends its own 
 `host_version` in every handshake request. A guest built with the SDK declares the SDK's version in
 its handshake and its registry manifest.
 
-The minor moves when a payload's values change meaning or an optional field is added: every older
-peer still decodes every payload. The major moves only when an older guest could no longer be decoded
+The minor moves when a payload changes in a way every older guest survives: a field added, removed or
+given a new meaning. The major moves only when an older guest could no longer be decoded
 or answered.
 
 | Version | What it guarantees |
 |---------|--------------------|
 | `1.0.0` | The baseline: the handshake, describe and operate payloads of this document. |
 | `1.1.0` | A validation rule's optional `target_extension` (ADR 0020). Field text (ADR 0019): every field an entity writes has one text, the same in a pass's `PassEntity.fields`, a validator's `ValidatorField.value` and what declarative rules match (see "Field text" in `extension-sdk.md`). A written field is present even when empty (`""`). A validator's field `value` is always a string (a variant list, mixed list, expression or type union was `null`). `PassEntity.exempt` follows the host's one obligation rule: a `no_verify_statements` rule without a target kind obliges every kind that accepts `verify` statements (an entity of a kind that accepts none is exempt). |
+| `1.2.0` | The declared categories are the only describe categories (`fields`, `grammars`, `body_parsers` are gone); the handshake request carries only `host_version`; the handshake response carries `providers` and no `contribution_flags`; a pass's `PassEntity` says `owes_none` where it said `exempt` (ADR 0050). A 1.2 host loads every 1.x guest and ignores an older guest's flags; a 1.1 host cannot read a 1.2 guest's handshake. |
 
 A host of `1.0.x` still loads a `1.1.0` guest and hands it the `1.0.0` values; a guest that needs the
 `1.1.0` values can read `host_version` in its handshake request.

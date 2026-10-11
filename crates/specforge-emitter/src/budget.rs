@@ -9,6 +9,7 @@ use crate::error::EmitterError;
 /// The `token_budget` block of an export that did not fit its budget whole:
 /// what was dropped to make it fit.
 #[derive(Serialize, Shape)]
+#[shape(define)]
 pub(crate) struct TokenBudget {
     strategy: &'static str,
     budget_tokens: usize,

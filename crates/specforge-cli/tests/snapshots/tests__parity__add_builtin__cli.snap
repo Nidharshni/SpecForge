@@ -30,12 +30,12 @@ expression: cli_snap
   },
   "ok": true,
   "payload": {
-    "action": "add",
+    "action": "enabled",
     "changed": true,
+    "extension": "@specforge/product",
     "files_written": [
       "specforge.json"
     ],
-    "name": "@specforge/product",
     "peers_enabled": [],
     "source": "builtin"
   }

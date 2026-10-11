@@ -1,75 +1,111 @@
+use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
+use crate::pipeline;
+use crate::terminal::{Terminal, outln};
 use specforge_ops::stats::Stats;
 use specforge_ops::view::ProjectView;
-use std::path::Path;
+use std::path::PathBuf;
 
-use crate::OutputFormat;
-use crate::outcome::{Exit, Refusal};
-use crate::pipeline;
+// `specforge stats`'s command line.
+#[derive(clap::Args)]
+pub(crate) struct Args {
+    /// Path to the spec root directory
+    #[arg(default_value = ".")]
+    path: PathBuf,
 
-/// `specforge stats`: the stats operation over the project compiled at
-/// `path`, its proof percentage read from what `specforge collect` last
-/// recorded there; a report that is there but unusable is an error (exit
-/// 2), as in `analyze`.
-pub fn run(path: &Path, format: OutputFormat) -> Exit {
-    let project = pipeline::compile_project(path);
-    let stats = match specforge_ops::stats::stats(&ProjectView::of(&project)) {
-        Ok(stats) => stats,
-        Err(error) => return Refusal::measuring(format).report(&error),
-    };
-
-    match format {
-        OutputFormat::Json => print_json(&stats),
-        OutputFormat::Human => print_human(&stats),
-    }
-
-    Exit::Passed
+    #[command(flatten)]
+    output: OutputArg,
 }
 
-fn print_human(stats: &Stats) {
-    println!("Entities: {}", stats.total_entities);
-    for (kind, count) in &stats.entities_by_kind {
-        println!("  {}: {}", kind, count);
+impl Args {
+    /// `specforge stats`: the stats operation over the project compiled at
+    /// `path`, its proof percentage read from what `specforge collect` last
+    /// recorded there; a report that is there but unusable is an error
+    /// (exit 2), as in `analyze`.
+    pub(crate) fn run(self, terminal: &Terminal) -> Exit {
+        let format = self.output.format;
+        let project = pipeline::compile_project(&self.path);
+        let stats = match specforge_ops::stats::stats(&ProjectView::of(&project)) {
+            Ok(stats) => stats,
+            Err(error) => return Refusal::measuring(format).report(terminal, &error),
+        };
+
+        match format {
+            OutputFormat::Json => terminal.json(&stats),
+            OutputFormat::Human => print_human(&stats, terminal),
+        }
+
+        Exit::Passed
     }
-    println!("Edges:    {}", stats.total_edges);
-    println!("Unconnected: {}", stats.unconnected_count);
-    println!("Verified: {}", stats.verified_count);
-    println!(
+}
+
+fn print_human(stats: &Stats, terminal: &Terminal) {
+    outln!(terminal, "Entities: {}", stats.entity_count);
+    for row in &stats.entity_counts {
+        outln!(terminal, "  {}: {}", row.kind, row.count);
+    }
+    outln!(terminal, "Edges:    {}", stats.edge_count);
+    outln!(terminal, "Unconnected: {}", stats.unconnected_count);
+    outln!(terminal, "Verified: {}", stats.verified_count);
+    outln!(
+        terminal,
         "Declared: {}% of {} testable",
         stats.declared_pct.round(),
         stats.testable_count
     );
     if let Some(proof_pct) = stats.proof_pct {
-        println!(
+        outln!(
+            terminal,
             "Proven:   {}% of {} testable",
             proof_pct.round(),
             stats.testable_count
         );
     }
-    if stats.error_count > 0 || stats.warning_count > 0 || stats.info_count > 0 {
-        println!(
+    let found = stats.diagnostic_summary;
+    if found.errors > 0 || found.warnings > 0 || found.infos > 0 {
+        outln!(
+            terminal,
             "Diagnostics: {} errors, {} warnings, {} info",
-            stats.error_count, stats.warning_count, stats.info_count
+            found.errors,
+            found.warnings,
+            found.infos
         );
     }
 }
 
-fn print_json(stats: &Stats) {
-    let json = serde_json::json!({
-        "total_entities": stats.total_entities,
-        "total_edges": stats.total_edges,
-        "unconnected_count": stats.unconnected_count,
-        "verified_count": stats.verified_count,
-        "testable_count": stats.testable_count,
-        "declared_count": stats.declared_count,
-        "declared_pct": stats.declared_pct,
-        "proof_pct": stats.proof_pct,
-        "error_count": stats.error_count,
-        "warning_count": stats.warning_count,
-        "info_count": stats.info_count,
-        "entities_by_kind": stats.entities_by_kind,
-    });
-    println!(
-        "{}",
-        serde_json::to_string_pretty(&json).expect("serialize JSON output")
-    );
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::terminal::Facts;
+
+    #[test]
+    fn stats_writes_its_human_report_to_stdout() {
+        let dir = tempfile::TempDir::new().unwrap();
+        std::fs::write(
+            dir.path().join("specforge.json"),
+            r#"{"name":"t","version":"0.1.0","extensions":[]}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path().join("main.spec"),
+            "behavior parse_input \"Parse\" {\n  contract \"x\"\n}\n",
+        )
+        .unwrap();
+        let (terminal, capture) = Terminal::captured("", Facts::PIPED);
+
+        let exit = Args {
+            path: dir.path().to_path_buf(),
+            output: OutputArg {
+                format: OutputFormat::Human,
+            },
+        }
+        .run(&terminal);
+
+        assert_eq!(exit, Exit::Passed);
+        assert!(
+            capture.stdout().starts_with("Entities: 1\n  behavior: 1\n"),
+            "{}",
+            capture.stdout()
+        );
+        assert_eq!(capture.stderr(), "");
+    }
 }

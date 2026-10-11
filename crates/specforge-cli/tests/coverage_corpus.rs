@@ -66,7 +66,8 @@ pub(crate) fn analyze_coverage(root: &Path) -> Value {
             "--path",
             root.to_str().unwrap(),
             "coverage",
-            "--json",
+            "--format",
+            "json",
         ])
         .output()
         .unwrap();

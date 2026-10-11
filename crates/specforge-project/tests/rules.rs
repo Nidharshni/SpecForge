@@ -48,7 +48,10 @@ fn extension(rules: Value, required_owner: bool) -> impl Fn() -> ContributionsBu
         c.edge("NodeDependsOn", |e| {
             e.source_kind("node").target_kind("node");
         });
-        c.raw_category("validation_rules", rules.clone());
+        c.raw_category(
+            specforge_extension_sdk::DeclaredCategory::ValidationRules,
+            rules.clone(),
+        );
         c
     }
 }
@@ -384,7 +387,7 @@ fn an_untargeted_obligation_rule_obliges_every_kind_after_the_move() {
         .into_iter()
         .find(|e| e.id == "alpha")
         .unwrap();
-    assert!(!alpha.exempt);
+    assert!(!alpha.owes_none);
 }
 
 #[spec(

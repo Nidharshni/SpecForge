@@ -14,7 +14,7 @@ use crate::extension::Trust;
 use crate::options::{Choice, OptionTable};
 use crate::{OpError, OpErrorKind};
 use specforge_common::{Code, Diagnostic, codes};
-use specforge_protocol_types::package::{PackageName, Version};
+use specforge_package::{PackageName, Version};
 use specforge_protocol_types::{DeclaredCategory, ExtensionDeclaration};
 
 /// The diagnostic a registry operation reports when no registry is
@@ -96,19 +96,34 @@ impl Publisher {
         }
     }
 
-    /// `unsigned`, `pinned`, `pinned_now` or `repinned`: the JSON `publisher` value.
-    pub fn as_str(&self) -> &'static str {
+    /// How this publisher was accepted.
+    pub fn acceptance(&self) -> Acceptance {
         match self {
-            Publisher::Unsigned => "unsigned",
+            Publisher::Unsigned => Acceptance::Unsigned,
             Publisher::Signed {
                 first_use: false, ..
-            } => "pinned",
+            } => Acceptance::Pinned,
             Publisher::Signed {
                 first_use: true, ..
-            } => "pinned_now",
-            Publisher::Repinned { .. } => "repinned",
+            } => Acceptance::PinnedNow,
+            Publisher::Repinned { .. } => Acceptance::Repinned,
         }
     }
+}
+
+/// How a fetch accepted a package's publisher, as every document names it:
+/// `unsigned`, `pinned`, `pinned_now` or `repinned`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, specforge_common::shape::Shape)]
+#[serde(rename_all = "snake_case")]
+pub enum Acceptance {
+    /// Not signed; the caller allowed it (W155).
+    Unsigned,
+    /// Signed by the pinned key.
+    Pinned,
+    /// Signed, and its key pinned by this fetch.
+    PinnedNow,
+    /// Signed by a key that replaced the pin with consent (W156).
+    Repinned,
 }
 
 /// A package `publish` hands the registry: a scoped package name and a full

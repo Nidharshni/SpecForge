@@ -68,7 +68,7 @@ fn add_local_file_json_output() {
 
     assert!(output.status.success());
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(json["action"], "add");
+    assert_eq!(json["action"], "installed");
     assert_eq!(json["source"], "local:my-ext.wasm");
 }
 
@@ -718,7 +718,7 @@ fn add_without_a_version_installs_the_latest() {
         String::from_utf8_lossy(&output.stdout)
     );
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(json["name"], "@sdk/greet", "{json}");
+    assert_eq!(json["extension"], "@sdk/greet", "{json}");
     assert_eq!(json["version"], "0.1.0", "{json}");
     let lock = std::fs::read_to_string(dir.path().join("specforge.lock")).unwrap();
     assert!(lock.contains("\"0.1.0\""), "{lock}");
@@ -1214,6 +1214,11 @@ fn an_unsigned_add_reports_w155_in_both_formats() {
     let human = add("human");
     assert!(
         stderr_of(&human).contains("warning[W155]"),
+        "{}",
+        stderr_of(&human)
+    );
+    assert!(
+        stderr_of(&human).contains("was accepted because --allow-unsigned was given"),
         "{}",
         stderr_of(&human)
     );

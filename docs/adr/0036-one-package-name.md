@@ -56,3 +56,8 @@ another ecosystem). The rule would then grow a registry-side alias, not a looser
 **Amended by ADR 0045 (2026-10-08):** D3's "the one registry the adapter chose" is
 `Configured::registry_for`: the scope's entry, else the default entry, else R-OPS-001 before any
 request; there is no fallback to the first entry, and `publish` asks the same registry.
+
+**Amended by ADR 0050 (2026-10-11):** D1's module is the host-side crate `specforge-package`
+(`specforge_package::{PackageName, VersionRequirement, PackageRef}`, `Version` re-exported): the protocol types
+are a blob input of every builtin and keep only the guest wire. A declaration's name is read as a package name by
+`PackageName::declared_by`; `specforge-common` gains the edge to `specforge-package`, not to the protocol types.

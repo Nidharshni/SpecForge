@@ -459,7 +459,9 @@ fn watch_writes_no_schema_cache() {
 
     let dir = software_project();
     let mut watch = std::process::Command::new(assert_cmd::cargo_bin!("specforge"));
-    watch.args(["watch", "--json", "--path"]).arg(dir.path());
+    watch
+        .args(["watch", "--format", "json", "--path"])
+        .arg(dir.path());
     let mut child = crate::child_guard::ChildGuard::spawn(
         crate::child_guard::guarded_command(&watch)
             .stdout(Stdio::piped())

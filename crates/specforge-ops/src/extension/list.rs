@@ -3,66 +3,13 @@
 //! operations"). Both read the config the compile read, from the view's
 //! environment, never `specforge.json` again.
 
-use super::Origin;
 use crate::view::ProjectView;
 use serde::Serialize;
 use specforge_common::shape::Shape;
-use specforge_common::{Diagnostic, DiagnosticList, ExtensionEntry as Entry};
+use specforge_common::{Diagnostic, DiagnosticList};
 use std::collections::BTreeSet;
 
-/// Whether an extension listed is part of the compiled project.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Shape)]
-#[serde(rename_all = "snake_case")]
-pub enum Status {
-    /// Enabled in `specforge.json` and loaded.
-    Loaded,
-    /// Enabled but not loaded (not installed, or it failed to load).
-    NotLoaded,
-    /// Installed (locked) or loaded, but no longer enabled.
-    NotConfigured,
-}
-
-impl Status {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Status::Loaded => "loaded",
-            Status::NotLoaded => "not_loaded",
-            Status::NotConfigured => "not_configured",
-        }
-    }
-}
-
-/// One extension of the project: what it is and what it contributes.
-#[derive(Debug, Clone, PartialEq)]
-pub struct ExtensionEntry {
-    pub name: String,
-    /// The loaded version, else the locked one, else the version a legacy
-    /// `name@version` entry writes.
-    pub version: Option<String>,
-    pub origin: Origin,
-    pub status: Status,
-    /// The entity kinds it contributes, sorted.
-    pub entity_kinds: Vec<String>,
-    /// How many of the project's entities are of those kinds.
-    pub entity_count: usize,
-    pub validation_rules: usize,
-}
-
-impl ExtensionEntry {
-    /// `{name, version, source, status, entity_kinds, entity_count,
-    /// validation_rules}`: the entry both surfaces print.
-    pub fn info(&self) -> ExtensionInfo {
-        ExtensionInfo {
-            name: self.name.clone(),
-            version: self.version.clone(),
-            source: self.origin.source(),
-            status: self.status,
-            entity_kinds: self.entity_kinds.clone(),
-            entity_count: self.entity_count,
-            validation_rules: self.validation_rules,
-        }
-    }
-}
+pub use super::Status;
 
 /// One extension as both surfaces print it (`McpExtensionInfo`).
 #[derive(Debug, Clone, PartialEq, Serialize, Shape)]
@@ -70,7 +17,7 @@ pub struct ExtensionInfo {
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
-    /// `builtin`, the lock entry's source, or `file:<path>`.
+    /// `builtin`, the lock entry's source, `file:<path>` or `unknown`.
     pub source: String,
     pub status: Status,
     /// The entity kinds it contributes, sorted.
@@ -80,10 +27,36 @@ pub struct ExtensionInfo {
 }
 
 /// One entry of the project's `specforge.lock`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Shape)]
 pub struct LockedExtension {
     pub name: String,
     pub version: String,
+}
+
+/// What `specforge extensions --format json` and `specforge.extensions`
+/// print (`McpExtensionsResult`).
+#[derive(Debug, Clone, PartialEq, Serialize, Shape)]
+pub struct ExtensionsDocument {
+    /// Sorted by name.
+    pub extensions: Vec<ExtensionInfo>,
+    /// How many extensions are listed.
+    pub count: usize,
+    /// The lock's entries, in lock order.
+    pub lock_file_entries: Vec<LockedExtension>,
+    /// The kinds of the graph's entities.
+    pub entity_kinds_in_graph: BTreeSet<String>,
+}
+
+impl ExtensionListing {
+    /// The document both surfaces print.
+    pub fn document(&self) -> ExtensionsDocument {
+        ExtensionsDocument {
+            extensions: self.extensions.clone(),
+            count: self.extensions.len(),
+            lock_file_entries: self.locked.clone(),
+            entity_kinds_in_graph: self.kinds_in_graph.clone(),
+        }
+    }
 }
 
 /// Every extension the project enables, has locked at its root, or
@@ -91,58 +64,27 @@ pub struct LockedExtension {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExtensionListing {
     /// Sorted by name.
-    pub extensions: Vec<ExtensionEntry>,
+    pub extensions: Vec<ExtensionInfo>,
     /// In lock order; empty without a lock or a root.
     pub locked: Vec<LockedExtension>,
     /// The kinds of the graph's entities.
     pub kinds_in_graph: BTreeSet<String>,
 }
 
-/// Every extension the project enables (its view's `env.enabled`), has
-/// locked at its root, or loaded, sorted by name, with the entity kinds
-/// each registered (from the kind registry), how many of the graph's
-/// entities use them, and its rule count; the lock's entries; the kinds
-/// its graph uses. The lock is the view's ([`ProjectView::lock`]): none
-/// without a root.
+/// Every extension of the project ([`super::inventory`]), sorted by name,
+/// with the entity kinds each registered (from the kind registry), how many
+/// of the graph's entities use them, and its rule count; the lock's
+/// entries; the kinds its graph uses. The lock is the view's
+/// ([`ProjectView::lock`]): none without a root.
 pub fn list(view: &ProjectView) -> ExtensionListing {
-    let enabled = &view.env().enabled;
-    let entries = &view.env().config.extensions;
-    let loaded = view.registries().declarations();
-    let kinds = &view.registries().kinds;
-    // The version a legacy `name@version` entry names.
-    let configured_version = |name: &str| {
-        entries.iter().find_map(|e| {
-            let e = e.trim();
-            (Entry::parse(e) == Entry::Named(name) && e.len() > name.len())
-                .then(|| e[name.len() + 1..].to_string())
-        })
-    };
-    let lock = view.lock().file();
-    let lock_entries = view.lock().entries();
-    let enabled_names: Vec<&str> = enabled.iter().map(|e| e.name.as_str()).collect();
-
-    let mut names: Vec<String> = enabled_names
+    let kinds = view.registries().kinds();
+    let extensions = super::inventory(view)
+        .rows()
         .iter()
-        .map(|name| name.to_string())
-        .chain(lock_entries.iter().map(|e| e.name.to_string()))
-        .chain(loaded.iter().map(|d| d.name().to_string()))
-        .collect();
-    names.sort();
-    names.dedup();
-
-    let extensions = names
-        .into_iter()
-        .map(|name| {
-            let declaration = loaded.iter().find(|d| d.name() == name);
-            let locked = lock_entries.iter().find(|e| e.name.as_str() == name);
-            let status = match (enabled_names.contains(&name.as_str()), declaration) {
-                (true, Some(_)) => Status::Loaded,
-                (true, None) => Status::NotLoaded,
-                (false, _) => Status::NotConfigured,
-            };
+        .map(|extension| {
             let mut entity_kinds: Vec<String> = kinds
                 .iter()
-                .filter(|(_, entry)| entry.source_extension == name)
+                .filter(|(_, entry)| entry.source_extension == extension.name)
                 .map(|(kind, _)| kind.clone())
                 .collect();
             entity_kinds.sort();
@@ -152,24 +94,25 @@ pub fn list(view: &ProjectView) -> ExtensionListing {
                 .iter()
                 .filter(|n| entity_kinds.iter().any(|k| k == n.kind.raw.as_str()))
                 .count();
-            ExtensionEntry {
-                version: declaration
-                    .map(|d| d.version().to_string())
-                    .or_else(|| locked.map(|e| e.version.clone()))
-                    .or_else(|| configured_version(&name)),
-                validation_rules: declaration.map_or(0, |d| d.validation_rules.len()),
-                origin: Origin::of(&name, enabled, lock),
-                name,
-                status,
+            ExtensionInfo {
+                name: extension.name.to_string(),
+                version: extension.version().map(str::to_string),
+                source: extension.origin.source(),
+                status: extension.status,
                 entity_kinds,
                 entity_count,
+                validation_rules: extension
+                    .declaration
+                    .map_or(0, |d| d.validation_rules.len()),
             }
         })
         .collect();
 
     ExtensionListing {
         extensions,
-        locked: lock_entries
+        locked: view
+            .lock()
+            .entries()
             .iter()
             .map(|e| LockedExtension {
                 name: e.name.to_string(),
@@ -242,7 +185,7 @@ pub struct ProviderRow {
 /// each with its status, and the diagnostics reading and registering them
 /// produced (W118, E057). Never `specforge.json` again.
 pub fn providers(view: &ProjectView) -> ProviderListing {
-    let registered = &view.env().providers;
+    let registered = view.env().providers();
     ProviderListing {
         providers: registered.iter().cloned().collect(),
         diagnostics: registered.diagnostics().to_vec(),
@@ -254,7 +197,6 @@ mod tests {
     use super::*;
     use crate::view::testing::Fixture;
     use serde_json::json;
-    use specforge_installed::LockSource;
     use specforge_project::EnabledExtension;
     use specforge_test_macros::test as specforge_test;
 
@@ -277,8 +219,7 @@ mod tests {
         let missing = &listing.extensions[0];
         assert_eq!(missing.version.as_deref(), Some("1.2.0"));
         assert_eq!(missing.status, Status::NotLoaded);
-        assert_eq!(missing.origin, Origin::Unknown);
-        assert_eq!(missing.origin.source(), "unknown");
+        assert_eq!(missing.source, "unknown");
     }
 
     #[specforge_test(
@@ -320,13 +261,7 @@ mod tests {
         assert_eq!(listing.extensions.len(), 1, "{listing:?}");
         let greet = &listing.extensions[0];
         assert_eq!(greet.name, "@sdk/greet");
-        assert_eq!(
-            greet.origin,
-            Origin::File {
-                path: "greet.wasm".into()
-            }
-        );
-        assert_eq!(greet.origin.source(), "file:greet.wasm");
+        assert_eq!(greet.source, "file:greet.wasm");
         assert_eq!(greet.status, Status::Loaded);
         assert_eq!(greet.version.as_deref(), Some("0.1.0"));
     }
@@ -368,12 +303,7 @@ mod tests {
             .iter()
             .find(|e| e.name == "@acme/locked")
             .unwrap();
-        assert_eq!(
-            locked.origin,
-            Origin::Installed {
-                source: LockSource::Registry
-            }
-        );
+        assert_eq!(locked.source, "registry");
     }
 
     #[specforge_test(

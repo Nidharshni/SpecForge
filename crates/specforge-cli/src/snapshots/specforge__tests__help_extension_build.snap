@@ -1,0 +1,22 @@
+---
+source: crates/specforge-cli/src/main.rs
+expression: command.clone().render_long_help().to_string()
+---
+Build the extension's component (cargo build --release --target wasm32-wasip2)
+
+Usage: specforge extension build [OPTIONS]
+
+Options:
+      --path <PATH>
+          Path to the extension project
+          
+          [default: .]
+
+      --format <FORMAT>
+          Output format: human or json
+          
+          [default: human]
+          [possible values: human, json]
+
+  -h, --help
+          Print help

@@ -48,7 +48,11 @@ behavior generate_schema_from_registries "Generate Schema From Registries" {
     the KindRegistry and FieldRegistry into a GraphProtocolSchema object.
     Each registered entity kind MUST produce a SchemaEntityKind entry with
     its fields, testable flag, and singleton flag. Each registered edge type
-    MUST produce a SchemaEdgeType entry. The schema MUST be generated once
+    MUST produce a SchemaEdgeType entry.
+    An edge type that declares no source kind or no target kind MUST
+    name, on that side, the kinds whose fields write it and the target
+    kinds those fields declare, sorted; a side it declares is kept.
+    The schema MUST be generated once
     per compilation and cached for reuse by embed_schema_in_export and
     serve_schema_resource. In watch mode or LSP mode, the schema MUST be
     regenerated on each compilation cycle — "once per compilation" means
@@ -72,6 +76,7 @@ behavior generate_schema_from_registries "Generate Schema From Registries" {
   verify unit "SchemaVersion FromStr"
   verify unit "SchemaVersion Ord"
   verify unit "populated schema serde round-trip"
+  verify unit "an edge type that declares no source or target kind names those of the fields that write it"
 }
 
 behavior embed_schema_in_export "Embed Schema in Export" {

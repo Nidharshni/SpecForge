@@ -42,7 +42,10 @@ behavior mcp_initialize "MCP Initialize" {
     mcp_initialized_emitted      "mcp_initialized event emitted on success, mcp_initialization_failed on failure"
   }
   contract   """
-    The MCP server MUST compile the current project graph, load all
+    The MCP server MUST serve the project at or above its root (the
+    client's projectRoot, else the path it was started with: the nearest
+    directory holding specforge.json or specforge.spec), or nothing when
+    there is none. It MUST compile that project's graph, load all
     extension manifests, register all tools/resources/prompts from
     installed extensions (including surface-contributed MCP tools and
     resources from extension manifests), and return McpCapabilities.
@@ -161,12 +164,21 @@ behavior list_mcp_tools "List MCP Tools" {
     is listed in its group (core, navigation or management); a tool that
     writes output artifacts is listed in its group, and a tool that writes
     its target's project files is a mutation whose outputSchema declares
-    files_written; both say whether they are destructive (they may
+    files_written (and, for rename, the diagnostics it returns after the
+    write): fields the mutation pipeline fills, which no tool reply
+    declares itself; both say whether they are destructive (they may
     overwrite or remove), idempotent (a repeat changes nothing) and open
     world. An extension tool is annotated readOnlyHint and not
     openWorldHint, since the host grants an extension no capability, and is
     listed in the group it declares, core when it declares none or another
     name: never as a mutation.
+    Each core tool is one module: its name, description, the declaration
+    of what it does, the spec type its reply is, its typed arguments, what
+    its handler is given (its call target) and its typed reply are stated
+    there once, and everything listed and dispatched for it is derived
+    from them; a declaration that contradicts its handler (a mutation whose
+    handler answers no mutation, a spec type for a text reply) does not
+    build.
   """
   verify unit "returns all registered tool descriptors after extension load"
   verify unit "returns core-provided descriptors when no extensions installed"
@@ -178,11 +190,13 @@ behavior list_mcp_tools "List MCP Tools" {
   verify unit "every listed tool has a spec category and a source"
   verify unit "core tools are annotated: read-only tools readOnlyHint, writing tools how they write"
   verify unit "a mutation's outputSchema declares files_written, derived from its effect"
+  verify unit "what the pipeline adds to a mutation's reply is declared once, beside its reply: files_written, and rename's diagnostics"
   verify unit "a writing tool's hints say what it does: one that overwrites is destructive, one whose repeat changes nothing is idempotent"
   verify unit "an extension tool is annotated read-only and is never listed as a mutation"
   verify unit "an extension tool is listed once across recompiles"
   verify unit "an extension tool's declared output_schema is listed as its outputSchema"
   verify unit "a tool's path and use_cached are declared once, by its target"
+  verify unit "a core tool's spec is derived from its one module: its name, description, effect, arguments, target and reply"
   verify unit "every listed extension tool is the one dispatched under its name, listed once"
 }
 
@@ -642,9 +656,14 @@ behavior follow_negotiated_mcp_revision "Follow the Negotiated MCP Revision" {
     MUST also carry that object as structuredContent, alongside the text
     block holding its JSON, and tools/list MUST give each tool whose result
     is an object an outputSchema that every structured result conforms to.
-    Each core tool's outputSchema is derived from its typed reply: every
-    object it closes lists its keys and states additionalProperties false,
-    every array states its items. A core tool's reply that its outputSchema
+    Each core tool's outputSchema is derived from its typed reply: its root
+    is an object schema (type object, a union's included), every object it
+    closes lists its keys and states additionalProperties false, every
+    array states its items. A type the reply holds in more than one place,
+    or a domain type another spec file declares (Diagnostic, SourceSpan,
+    MigrationResult, ...), is defined once under the outputSchema's $defs
+    and referred to by a same-document $ref; the root is never a
+    reference. A core tool's reply that its outputSchema
     refuses MUST be a schema_mismatch error naming each violation, never
     structured content.
     A failed call of a tool with an outputSchema carries no
@@ -653,6 +672,9 @@ behavior follow_negotiated_mcp_revision "Follow the Negotiated MCP Revision" {
   """
   verify unit "a core tool's reply its output schema refuses is a schema_mismatch error, never structured content"
   verify unit "a core tool's output schema is derived from its typed reply: every object it closes lists its keys, every array its items"
+  verify unit "every core tool's outputSchema is an object schema at its root"
+  verify unit "a type a reply holds more than once, or a domain type another spec file declares, is defined once under the outputSchema's $defs and referred to by $ref"
+  verify unit "every $ref in a core tool's outputSchema is a same-document pointer to a definition it holds"
   verify unit "a 2025-03-26 session answers a batch with the response to each request"
   verify unit "a batch of notifications gets no response"
   verify unit "an empty batch is an invalid request"

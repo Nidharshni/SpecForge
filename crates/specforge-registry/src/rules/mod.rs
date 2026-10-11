@@ -31,7 +31,7 @@ pub use verdicts::{CustomCall, CustomVerdicts, NoVerdicts, Subject, Verdict, Ver
 /// edge and cycle rules name, and the fields that write those edges or are
 /// `required` (E006).
 #[derive(Clone, Copy)]
-pub struct Registries<'a> {
+pub(crate) struct Registries<'a> {
     pub kinds: &'a KindRegistry,
     pub fields: &'a FieldRegistry,
     pub edges: &'a EdgeRegistry,
@@ -186,7 +186,7 @@ impl Rules {
     /// Diagnostics, in order: per extension and per rule in declaration
     /// order, W112 (the rule cannot work as declared, not registered); then
     /// W023 for a code a later extension declares again. Pure.
-    pub fn build(
+    pub(crate) fn build(
         declarations: &[ExtensionDeclaration],
         registries: Registries<'_>,
     ) -> (Rules, Vec<Diagnostic>) {
@@ -209,7 +209,7 @@ impl Rules {
     /// Call each `custom` rule's function once on an entity of its target
     /// kind that declares nothing: a function that cannot answer is W112,
     /// once, at load (the rule stays registered).
-    pub fn probe(&self, verdicts: &dyn CustomVerdicts) -> Vec<Diagnostic> {
+    pub(crate) fn probe(&self, verdicts: &dyn CustomVerdicts) -> Vec<Diagnostic> {
         self.rules
             .iter()
             .filter_map(|rule| check::probe(rule, verdicts))

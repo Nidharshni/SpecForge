@@ -180,6 +180,7 @@ pub struct SchemaExtensionInfo {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Shape)]
+#[shape(define)]
 pub struct GraphProtocolSchema {
     pub schema_version: SchemaVersion,
     pub extensions: Vec<SchemaExtensionInfo>,
@@ -349,6 +350,7 @@ pub struct SchemaCacheEntry {
 /// the publisher emits plus the content hash from the schema cache, letting
 /// scoped exports name their schema without embedding the whole document.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Shape)]
+#[shape(define)]
 pub struct SchemaRefBlock {
     pub url: String,
     pub content_hash: String,

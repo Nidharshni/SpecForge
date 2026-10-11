@@ -2,14 +2,17 @@
 //!
 //! [`plan`] validates everything and builds the files in memory; only
 //! [`apply`] writes. `init` enables builtins, and installs local `.wasm`
-//! extensions through the shared add operation (ADR 0004 D3-e): it never
-//! writes an entry `specforge check` can't load. A registry extension needs
-//! a configured registry, which a project that doesn't exist yet can't
-//! have, so it is added afterwards with `specforge add`.
+//! extensions through the lock plan `add` uses, as one change (ADR 0004
+//! D3-e, ADR 0041): it never writes an entry `specforge check` can't load.
+//! A registry extension needs a configured registry, which a project that
+//! doesn't exist yet can't have, so it is added afterwards with `specforge
+//! add`.
 
 use crate::extension::{self, Candidate, LocalFile, Source};
 use crate::{OpError, OpErrorKind, Writes};
+use serde::Serialize;
 use serde_json::{Value, json};
+use specforge_common::shape::Shape;
 use specforge_common::validate_project_name;
 use specforge_wasm::WasmRuntime;
 use std::path::{Path, PathBuf};
@@ -63,8 +66,8 @@ pub struct Plan {
     pub extensions: Vec<String>,
     pub config: Value,
     pub starter: String,
-    /// Local `.wasm` files installed through `add`, each read once by the
-    /// plan.
+    /// Local `.wasm` files installed through the lock plan, as one change,
+    /// each read once by the plan.
     pub installs: Vec<LocalFile>,
 }
 
@@ -72,14 +75,43 @@ pub struct Plan {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Outcome {
     pub root: PathBuf,
-    pub config_path: PathBuf,
-    pub starter_path: PathBuf,
     pub name: String,
     pub version: String,
     pub extensions: Vec<String>,
     /// The files init wrote: `specforge.json`, the starter, `.gitignore`
     /// when it lacked an entry, and each local install's module and lock.
     pub writes: Writes,
+}
+
+impl Outcome {
+    /// The document both surfaces print.
+    pub fn document(&self) -> InitDocument {
+        InitDocument {
+            project_root: self.root.display().to_string(),
+            name: self.name.clone(),
+            version: self.version.clone(),
+            config_file: crate::config::CONFIG_FILE.to_string(),
+            starter_file: STARTER_FILE.to_string(),
+            extensions_installed: self.extensions.clone(),
+        }
+    }
+}
+
+/// What `specforge init --format json` and `specforge.init` print
+/// (`McpInitResult`).
+#[derive(Debug, Clone, PartialEq, Serialize, Shape)]
+pub struct InitDocument {
+    /// The new project's root, absolute and canonical.
+    pub project_root: String,
+    pub name: String,
+    pub version: String,
+    /// `specforge.json`, relative to `project_root`.
+    pub config_file: String,
+    /// [`STARTER_FILE`], relative to `project_root`.
+    pub starter_file: String,
+    /// The extensions enabled: builtins by name, local installs by the name
+    /// they declare.
+    pub extensions_installed: Vec<String>,
 }
 
 /// Validate `req` and build what init writes, writing nothing.
@@ -121,6 +153,8 @@ pub fn plan(req: &Request, runtime: &dyn WasmRuntime) -> Result<Plan, OpError> {
     let version = req.version.to_string();
 
     let (extensions, installs) = extensions_of(req.extensions, runtime)?;
+    // The lock plan the installs will be: refused here, before anything is written.
+    extension::check_local(req.dir, &installs)?;
     // A builtin is enabled after the builtins it requires, as `add` does.
     let mut extensions = with_required_builtins(extensions, runtime)?;
     // Test obligations (`verify`) on software kinds come from
@@ -166,8 +200,8 @@ pub fn plan(req: &Request, runtime: &dyn WasmRuntime) -> Result<Plan, OpError> {
 }
 
 /// Write `plan` into `dir`: `specforge.json`, the starter file, the
-/// `.gitignore` entries, and each local install, without reading the files
-/// again. Init only adds: the starter is created, never overwritten, and a
+/// `.gitignore` entries, and the local installs as one change, without
+/// reading the files again. Init only adds: the starter is created, never overwritten, and a
 /// failed init puts back what was there before it ran (the lock's bytes, a
 /// pre-existing `.specforge/`) and removes only what it wrote. Its error
 /// reports nothing written.
@@ -205,10 +239,7 @@ pub fn apply(dir: &Path, plan: Plan) -> Result<Outcome, OpError> {
             _ => write_error(STARTER_FILE, e),
         })?;
         writes.record(dir.join(STARTER_FILE));
-        for local in plan.installs {
-            let added = extension::install_local(dir, local)?;
-            writes.merge(added.writes);
-        }
+        writes.merge(extension::install_local(dir, plan.installs)?);
         Ok(())
     })();
 
@@ -232,9 +263,9 @@ pub fn apply(dir: &Path, plan: Plan) -> Result<Outcome, OpError> {
         if specforge_dir_existed {
             // What the failed install placed in the directory that was
             // already there, and its now-empty parents.
-            let placed: Vec<PathBuf> = writes
+            let placed: Vec<PathBuf> = error
+                .writes
                 .paths()
-                .chain(error.writes.paths())
                 .filter(|path| path.starts_with(&specforge_dir))
                 .map(Path::to_path_buf)
                 .collect();
@@ -274,8 +305,6 @@ pub fn apply(dir: &Path, plan: Plan) -> Result<Outcome, OpError> {
 
     Ok(Outcome {
         root: dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf()),
-        config_path: dir.join(crate::config::CONFIG_FILE),
-        starter_path: dir.join(STARTER_FILE),
         name: plan.name,
         version: plan.version,
         extensions: plan.extensions,
@@ -505,4 +534,59 @@ fn uses_vitest(path: &Path) -> bool {
                     .iter()
                     .any(|deps| pkg[deps].get("vitest").is_some())
             })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testing::declaring;
+    use specforge_wasm::testing::InProcessRuntime;
+
+    const A: &[u8] = b"\0asm in-process @x/a 1.0.0";
+    const B: &[u8] = b"\0asm in-process @x/b 1.0.0";
+
+    /// `@x/a` 1.0.0 wanting `@x/b` ^2, and `@x/b` 1.0.0.
+    fn runtime() -> InProcessRuntime {
+        InProcessRuntime::new()
+            .binary(A, declaring("@x/a", "1.0.0", &[("@x/b", "^2", false)]))
+            .binary(B, declaring("@x/b", "1.0.0", &[]))
+    }
+
+    /// `a.wasm` and `b.wasm` written in a scratch directory, and the directory to init.
+    fn files() -> (tempfile::TempDir, Vec<String>, PathBuf) {
+        let scratch = tempfile::tempdir().unwrap();
+        std::fs::write(scratch.path().join("a.wasm"), A).unwrap();
+        std::fs::write(scratch.path().join("b.wasm"), B).unwrap();
+        let extensions = ["a.wasm", "b.wasm"]
+            .map(|f| scratch.path().join(f).display().to_string())
+            .to_vec();
+        let dir = scratch.path().join("demo");
+        (scratch, extensions, dir)
+    }
+
+    fn request<'a>(dir: &'a Path, extensions: &'a [String]) -> Request<'a> {
+        Request {
+            dir,
+            name: Some("demo"),
+            version: DEFAULT_VERSION,
+            extensions,
+        }
+    }
+
+    #[specforge_test_macros::test(
+        behavior = "non_interactive_init",
+        verify = "init refuses local extensions the lock plan refuses before it writes anything"
+    )]
+    fn init_refuses_local_extensions_the_lock_plan_refuses_before_writing() {
+        let (_scratch, extensions, dir) = files();
+
+        let error = plan(&request(&dir, &extensions), &runtime()).unwrap_err();
+
+        assert_eq!(error.code, "E027", "{error:?}");
+        assert_eq!(
+            error.message,
+            "extension '@x/a' requires peer dependency '@x/b' ^2 but version 1.0.0 is installed"
+        );
+        assert!(!dir.exists(), "nothing was written");
+    }
 }

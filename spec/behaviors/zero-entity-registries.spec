@@ -483,6 +483,41 @@ behavior registry_build_edges "Registry Build Registers Edge Types" {
   verify contract "Registry Build Registers Edge Types: edge type registration holds — declarations_in_load_order, edge_types_registered, first_wins"
 }
 
+behavior registry_build_graph_inputs "Registry Build Derives the Graph Inputs" {
+  features   [dynamic_entity_registration]
+  invariants [zero_domain_knowledge_core, registry_population_before_validation]
+  category   command
+  types      [ExtensionDeclaration, FieldRegistryEntry, RegistryBuild, GraphInputs]
+  requires {
+    registries_populated "The build's kind and field registries hold every loaded declaration (registry_build_kinds, registry_build_fields)"
+  }
+  ensures {
+    every_input_derived "Every input the graph build reads of the extensions comes from the build: body-parser kinds, single and absent-target reference fields, inverse pairs, value coercions and derived references"
+    registries_agree    "Each input says what the build's declarations and field registry say, and nothing else"
+    deterministic       "The same declarations give the same inputs, whatever order the registries hold them in"
+  }
+  contract   """
+    The registry build MUST derive every input the graph build reads of the
+    loaded extensions, and no caller derives one: the kinds whose bodies an
+    extension parses (has_body_parser); every registered field of the
+    reference type as a single reference field, none while no kind is
+    registered; every reference field whose target kind no loaded extension
+    declares, with that kind; every inverse field pair, written lesser label
+    first, the list sorted; how each registered field's value is coerced to
+    its declared type (string_list and reference_list to a list, integer,
+    bool, string and enum to that type, a single reference and a block read
+    as written); and every reference field whose edges the host derives
+    (derived_from naming a known source, with a target kind), sorted by kind
+    and field. With the provider schemes the environment registers, they are
+    the configuration every graph of the project is built with (ADR 0032).
+  """
+  verify unit "the registry build derives every graph input from the declarations"
+  verify unit "a field's value coercion follows its registered type"
+  verify unit "a derived reference field is a graph input only with a target kind and a known source"
+  verify unit "inverse pairs are written lesser first and sorted, whatever the registration order"
+  verify contract "Registry Build Derives the Graph Inputs: graph inputs hold — registries_populated, every_input_derived, registries_agree, deterministic"
+}
+
 behavior registry_build_rules "Registry Build Collects Rules" {
   features   [declarative_validation_rules]
   invariants [
@@ -623,7 +658,7 @@ behavior registry_build_peer_dependencies "Registry Build Checks Peer Dependenci
   }
   contract   """
     The registry build MUST judge every declaration's peer dependencies by
-    the one peer rule (specforge_protocol_types::peers, ADR 0041) against
+    the one peer rule (specforge_package::peers, ADR 0041) against
     the loaded declarations. The range is read first, as Cargo reads a
     SemVer requirement (caret, tilde, comparisons, wildcards, and a bare
     version as a caret): a range that is not one is E073, whether the peer

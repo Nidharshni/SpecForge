@@ -447,7 +447,8 @@ behavior approve_collector_command "Approve Collector Command" {
   contract   """
     `specforge collect` runs a collector's command only after the user
     approves it. It shows the extension, the project root and the exact
-    command, asks once, and remembers the answer per project, extension,
+    command, asks once (y or yes, in any case, approves; any other answer
+    refuses), and remembers the answer per project, extension,
     collector and argv in `~/.specforge/collector-consent.json`
     (`$SPECFORGE_CONSENT_FILE` overrides). The store lives outside the
     project, so a cloned repository can't approve its own commands. A
@@ -461,6 +462,7 @@ behavior approve_collector_command "Approve Collector Command" {
   verify unit "consent is keyed by project, extension and command"
   verify integration "unapproved command without a terminal fails with E059 and runs nothing"
   verify integration "--yes runs the declared command"
+  verify unit "a terminal that can answer is asked; with nobody to ask, or under --format json, only an approved command runs"
   verify contract "Approve Collector Command: consent holds — command_declared, consent_outside_project, changed_command_reprompts, non_interactive_refuses"
 }
 
@@ -656,7 +658,7 @@ behavior run_doctor_check "Run Doctor Check" {
   ensures {
     doctor_check_completed_emitted "doctor_check_completed event is emitted after all checks finish"
     report_produced                "human-readable report listing extensions, enhancements, and conflicts is produced"
-    json_output_supported          "--json flag produces machine-readable JSON output for CI integration"
+    json_output_supported          "--format json produces machine-readable JSON output for CI integration"
   }
   contract   """
     When specforge doctor is invoked, the system MUST load all extension
@@ -677,9 +679,9 @@ behavior run_doctor_check "Run Doctor Check" {
     (E027, E073) MUST be an error finding with the remedy its diagnostic
     suggests: doctor and check judge peers by one rule over the loaded
     extensions (ADR 0041), so a peer a builtin or a .wasm file entry
-    satisfies is not reported. Each listed extension MUST carry the source the
-    extensions listing gives it: builtin, the lock entry's source, or
-    file:<path> for a .wasm file entry of specforge.json. Run in a
+    satisfies is not reported. Doctor MUST list the extensions the
+    extensions listing lists, in its order, each with the version, source
+    and status the listing gives it. Run in a
     directory without specforge.json, doctor MUST report a warning finding
     config_missing naming the directory; the run stays healthy. A
     specforge.lock that exists but cannot be read (E033) MUST be reported
@@ -687,21 +689,21 @@ behavior run_doctor_check "Run Doctor Check" {
     remediation that names a command MUST name one the user can run as
     written. A finding whose diagnostic offers no
     suggestion of its own MUST quote the catalogue's explanation of its
-    code. The --json flag MUST produce machine-readable JSON
-    output for CI integration.
+    code. specforge doctor --format json MUST produce machine-readable
+    JSON output for CI integration.
   """
   produces   [doctor_check_completed]
   verify unit "doctor lists all installed extensions with enhancement counts"
   verify unit "doctor lists all enhancements grouped by entity kind"
   verify unit "doctor reports conflicts with resolution suggestions"
   verify unit "doctor detects shadowed grammar-level constructs"
-  verify unit "doctor --json produces valid JSON output"
+  verify unit "doctor --format json produces valid JSON output"
   verify unit "doctor reports an extension that fails to load (E028, E070) as an error"
   verify unit "doctor reports a missing or changed installed binary once, with the remedy its load gives"
   verify unit "doctor reports the peer requirements check reports, with the remedy each suggests"
   verify unit "a peer a builtin satisfies is not reported"
   verify unit "a finding without its own suggestion quotes the catalogued explanation"
-  verify unit "doctor gives each extension the source the extensions listing gives it"
+  verify unit "doctor lists the extensions the extensions listing lists, each with its version, source and status"
   verify unit "doctor in a directory without specforge.json reports config_missing as a warning"
   verify unit "a lock file that cannot be read is an error finding naming E033"
   verify unit "doctor states each finding once, saying what it is about, and its verdict; the CLI and MCP return one report"
@@ -867,7 +869,12 @@ behavior update_all_extensions "Update All Extensions" {
     --major is specified. After upgrading, the system MUST refresh the lock
     file with the new binary hashes. Peer dependency
     conflicts introduced by upgrades MUST be detected and reported before
-    applying changes. If any upgrade fails, the system MUST roll back all
+    applying changes. Every upgrade is judged against the lock as the
+    whole update leaves it, whatever order the lock lists the extensions
+    in: an upgraded extension's peer ranges against the versions its peers
+    are left at, those this update moves included, and every locked
+    extension's ranges against the versions this update locks. If any
+    upgrade fails, the system MUST roll back all
     changes and report the failure. A write that fails while the checked
     upgrades are applied is the update's own failure, naming the file it
     could not write (E032) or the lock (E033); every file is put back, and no
@@ -877,6 +884,13 @@ behavior update_all_extensions "Update All Extensions" {
     to be updated and no registry is configured in specforge.json, update
     MUST make no network call and MUST fail with E063, whose suggestion
     names the registries key.
+    Under --format json it prints the update document: ok (nothing
+    failed, so the update was written), each locked extension in lock
+    order with its status (updated, with its publisher's acceptance and
+    key id when signed; held_back when another extension failed;
+    up_to_date; not_from_registry; failed, with the failure's code,
+    message and suggestion), and the batch_update_completed payload. A
+    failed update prints the same document and exits 1.
   """
   produces   [batch_update_completed]
   verify unit "with no registry configured, update makes no network call and reports how to configure one"
@@ -885,8 +899,11 @@ behavior update_all_extensions "Update All Extensions" {
   verify unit "major version skipped without --major flag"
   verify unit "lock file records new binary hashes after update"
   verify unit "peer dependency conflicts detected before applying"
+  verify unit "every upgrade is judged against the lock as the whole update leaves it, whatever order the lock lists them in"
   verify unit "failed upgrade rolls back all changes"
   verify unit "a write that fails while applying fails the update, naming what it could not write, and nothing is applied"
   verify integration "update never replaces a locally installed extension from a registry"
+  verify unit "the update document lists every locked extension's status, held back when another failed"
+  verify integration "update --format json prints every locked extension's status and the batch_update_completed payload"
   verify contract "Update All Extensions: batch extension update holds — extensions_installed, registries_reachable, batch_update_completed_emitted, semver_constraints_respected, lock_hashes_refreshed, atomic_rollback_on_failure"
 }

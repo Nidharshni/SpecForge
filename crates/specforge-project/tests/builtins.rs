@@ -1,5 +1,5 @@
 use specforge_common::Diagnostic;
-use specforge_protocol_types::{EntityKindDescriptor, ExtensionDeclaration};
+use specforge_protocol_types::{DeclaredCategory, EntityKindDescriptor, ExtensionDeclaration};
 use specforge_wasm::WasmRuntime;
 use specforge_wasm::protocol::load_declaration;
 use std::sync::Arc;
@@ -26,9 +26,9 @@ fn load_via_protocol(ext_name: &str) -> ExtensionDeclaration {
 /// Its peers are not loaded, so their absence (E027) is not its fault.
 fn declaration_diagnostics(declaration: &ExtensionDeclaration) -> Vec<Diagnostic> {
     specforge_registry::build_registries(vec![declaration.clone()])
-        .declaration_diagnostics
-        .into_iter()
-        .filter(|d| d.code != "E027")
+        .diagnostics()
+        .filter(|d| matches!(d.code.as_str(), "E030" | "W021"))
+        .cloned()
         .collect()
 }
 
@@ -46,8 +46,8 @@ fn product_extension_loads_via_protocol() {
     assert_eq!(manifest.edges.len(), 20);
     assert_eq!(manifest.validation_rules.len(), 61);
     assert_eq!(manifest.shared_fields.len(), 1, "shared fields (tags)");
-    assert!(manifest.contribution_flags().entities);
-    assert!(manifest.contribution_flags().validators);
+    assert!(manifest.declares(DeclaredCategory::Entities));
+    assert!(manifest.declares(DeclaredCategory::ValidationRules));
 
     let diags = declaration_diagnostics(&manifest);
     assert!(diags.is_empty(), "declaration errors: {:?}", diags);
@@ -96,8 +96,8 @@ fn governance_extension_loads_via_protocol() {
         dep_names.contains(&"@specforge/product"),
         "must depend on product (declares edges to feature)"
     );
-    assert!(manifest.contribution_flags().entities);
-    assert!(manifest.contribution_flags().validators);
+    assert!(manifest.declares(DeclaredCategory::Entities));
+    assert!(manifest.declares(DeclaredCategory::ValidationRules));
 
     let diags = declaration_diagnostics(&manifest);
     assert!(diags.is_empty(), "declaration errors: {:?}", diags);
@@ -160,8 +160,8 @@ fn software_extension_loads_via_protocol() {
         "product is an optional peer: software works without it"
     );
     assert!(manifest.handshake.sandbox_policy.is_some());
-    assert!(manifest.contribution_flags().entities);
-    assert!(manifest.contribution_flags().validators);
+    assert!(manifest.declares(DeclaredCategory::Entities));
+    assert!(manifest.declares(DeclaredCategory::ValidationRules));
 
     let diags = declaration_diagnostics(&manifest);
     assert!(diags.is_empty(), "declaration errors: {:?}", diags);
@@ -182,8 +182,8 @@ fn formal_extension_loads_via_protocol() {
     // behavior, event, and invariant (its `expression` claim, ADR 0009).
     assert_eq!(manifest.enhancements.len(), 3);
     assert_eq!(manifest.peers().len(), 1);
-    assert!(manifest.contribution_flags().entities);
-    assert!(manifest.contribution_flags().validators);
+    assert!(manifest.declares(DeclaredCategory::Entities));
+    assert!(manifest.declares(DeclaredCategory::ValidationRules));
 
     let property = manifest
         .entities
@@ -239,8 +239,8 @@ fn rust_extension_loads_via_protocol() {
     let manifest = load_via_protocol("@specforge/rust");
     assert_eq!(manifest.name(), "@specforge/rust");
     assert_eq!(manifest.version(), "1.0.0");
-    assert!(manifest.contribution_flags().analyzers);
-    assert!(!manifest.contribution_flags().entities);
+    assert!(manifest.declares(DeclaredCategory::Analyzers));
+    assert!(!manifest.declares(DeclaredCategory::Entities));
     assert_eq!(manifest.analyzers.len(), 1);
     let ac = &manifest.analyzers[0];
     assert_eq!(ac.language, "rust");
@@ -301,8 +301,8 @@ fn typescript_extension_loads_via_protocol() {
     let manifest = load_via_protocol("@specforge/typescript");
     assert_eq!(manifest.name(), "@specforge/typescript");
     assert_eq!(manifest.version(), "1.0.0");
-    assert!(manifest.contribution_flags().analyzers);
-    assert!(!manifest.contribution_flags().entities);
+    assert!(manifest.declares(DeclaredCategory::Analyzers));
+    assert!(!manifest.declares(DeclaredCategory::Entities));
     assert_eq!(manifest.analyzers.len(), 1);
     let ac = &manifest.analyzers[0];
     assert_eq!(ac.language, "typescript");
@@ -503,11 +503,11 @@ fn the_builtin_extensions_rules_register_cleanly() {
 
     let env = specforge_project::Environment::load(dir.path(), Some(Arc::new(runtime)));
 
-    assert_eq!(env.registries.declarations().len(), 9);
+    assert_eq!(env.registries().declarations().len(), 9);
     assert!(
-        env.registries.rules.len() > 80,
+        env.registries().rules().len() > 80,
         "{}",
-        env.registries.rules.len()
+        env.registries().rules().len()
     );
     let unworkable: Vec<&Diagnostic> = env
         .diagnostics()
@@ -539,24 +539,14 @@ fn product_alone_is_clean_and_names_governance_for_w078() {
     // checks still run, so a typo'd kind in product would still be W021.
     let alone = specforge_registry::build_registries(vec![product.clone()]);
     assert!(
-        alone
-            .declaration_diagnostics
-            .iter()
-            .all(|d| d.code != "W021"),
+        alone.diagnostics().all(|d| d.code != "W021"),
         "{:?}",
-        alone.declaration_diagnostics
+        alone.diagnostics().collect::<Vec<_>>()
     );
     let mut typo = product.clone();
     typo.entities[0].fields[0].target_kind = Some("featur".to_string());
     let broken = specforge_registry::build_registries(vec![typo]);
-    assert_eq!(
-        broken
-            .declaration_diagnostics
-            .iter()
-            .filter(|d| d.code == "W021")
-            .count(),
-        1
-    );
+    assert_eq!(broken.diagnostics().filter(|d| d.code == "W021").count(), 1);
 
     // With governance: it declares `constraint`, so nothing is wrong either.
     let both = specforge_registry::build_registries(vec![
@@ -564,11 +554,9 @@ fn product_alone_is_clean_and_names_governance_for_w078() {
         product,
     ]);
     assert!(
-        both.declaration_diagnostics
-            .iter()
-            .all(|d| d.code != "W021"),
+        both.diagnostics().all(|d| d.code != "W021"),
         "{:?}",
-        both.declaration_diagnostics
+        both.diagnostics().collect::<Vec<_>>()
     );
 }
 

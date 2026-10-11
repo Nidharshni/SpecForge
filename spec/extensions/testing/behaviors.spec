@@ -128,6 +128,8 @@ behavior te_coverage_pass "Coverage Analysis Pass" {
   verify unit "an entity with no obligations is never proven, even by passing tests"
   verify unit "an entity whose obligations are all formally discharged is proven without tests"
   verify unit "entities W004 exempts are not A001 and leave the testable count"
+  verify unit "an entity counts toward coverage when its kind is testable and it owes or declares obligations, and is exempt when testable and neither"
+  verify unit "the rule reads a pass entity as the host decided it, with no risk unless the grading caller sets one"
   verify unit "without a risk grading no kind is risk-tallied and nothing is A002"
 }
 
@@ -156,7 +158,7 @@ behavior te_coverage_gate "Proof Coverage Gate" {
 
     Exit codes: below the threshold (E048) exits 1; E068 and missing test
     results exit 2. E048 and E068 take precedence over any other finding.
-    Under --json the document says it and nothing is written to stderr.
+    Under --format json the document says it and nothing is written to stderr.
     The coverage pass must have run, so `pass` is `coverage` or `all`;
     naming another pass alone does not satisfy the gate. specforge.analyze
     takes min and returns the same ok and gate.
@@ -186,8 +188,8 @@ behavior te_stray_test_records "Stray Test Records" {
     is never reassigned to the near match. The operation returns these
     stray test records as data outside the pass reports, so `--strict`
     never promotes them and neither `ok` nor the exit code changes. The
-    CLI prints the W097 lines to stderr before the reports. The CLI
-    `--json` output and the MCP analyze result gain a top-level
+    CLI prints the W097 lines to stderr before the reports. The CLI's
+    `--format json` output and the MCP analyze result gain a top-level
     `stray_records` list of `{entity_id, near}` only when it is
     non-empty; with none the output is unchanged.
   """

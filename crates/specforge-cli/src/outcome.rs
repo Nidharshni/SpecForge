@@ -8,7 +8,7 @@
 //! printed by [`Refusal::report`] and nowhere else: `error[CODE]: message`
 //! on stderr, or under JSON output the error document on stdout.
 
-use crate::OutputFormat;
+use crate::terminal::{Terminal, err};
 use specforge_common::Code;
 use specforge_ops::{OpError, Writes};
 use std::path::Path;
@@ -56,6 +56,37 @@ impl Exit {
     }
 }
 
+/// Human-readable vs machine-readable output: what `--format human|json`
+/// asks for.
+#[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum OutputFormat {
+    Human,
+    Json,
+}
+
+impl OutputFormat {
+    /// How a publisher key change is decided for this output: `--yes`
+    /// accepts it; JSON output can't ask anyone, so it refuses; a terminal
+    /// is asked.
+    pub(crate) fn trust(self, assume_yes: bool) -> specforge_ops::extension::Trust {
+        use specforge_ops::extension::Trust;
+        match (assume_yes, self) {
+            (true, _) => Trust::AssumeYes,
+            (false, OutputFormat::Json) => Trust::Refuse,
+            (false, OutputFormat::Human) => Trust::Prompt,
+        }
+    }
+}
+
+/// The `--format human|json` flag every core command with a JSON form takes
+/// (`#[command(flatten)]`; `trace` declares its own, json by default).
+#[derive(clap::Args, Clone, Copy, Debug)]
+pub(crate) struct OutputArg {
+    /// Output format: human or json
+    #[arg(long, default_value = "human")]
+    pub(crate) format: OutputFormat,
+}
+
 /// How one command reports its operation's refusal: the output format, the
 /// root the files a failed operation left written are named from, and the
 /// exit the refusal costs.
@@ -93,27 +124,42 @@ impl<'a> Refusal<'a> {
         }
     }
 
-    /// Report `error`: under JSON output the error document on stdout and
-    /// nothing on stderr (ADR 0011), under human output [`error_lines`] on
-    /// stderr. Returns the exit.
-    pub(crate) fn report(self, error: &OpError) -> Exit {
+    /// Report `error` at `terminal`: under JSON output the error document
+    /// on stdout and nothing on stderr (ADR 0011), under human output
+    /// [`error_lines`] on stderr. Returns the exit.
+    pub(crate) fn report(self, terminal: &Terminal, error: &OpError) -> Exit {
         match self.format {
-            OutputFormat::Json => {
-                let document = error_document(error, self.root);
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&document).expect("serialize JSON output")
-                );
-            }
-            OutputFormat::Human => eprint!("{}", error_lines(error, self.root)),
+            OutputFormat::Json => terminal.json(&error_document(error, self.root)),
+            OutputFormat::Human => err!(terminal, "{}", error_lines(error, self.root)),
         }
         self.exit
     }
 
     /// Report a failure under the catalogued error `code`, as
     /// [`Self::report`].
-    pub(crate) fn coded(self, code: Code, message: impl Into<String>) -> Exit {
-        self.report(&OpError::diagnostic(code, message))
+    pub(crate) fn coded(self, terminal: &Terminal, code: Code, message: impl Into<String>) -> Exit {
+        self.report(terminal, &OpError::diagnostic(code, message))
+    }
+}
+
+/// A document and the files the command wrote (ADR 0022 D6): what `add`,
+/// `remove`, `init` and `migrate` print under `--format json`. A dry run
+/// lists none (`files_written` absent), as MCP's preview.
+#[derive(Debug, serde::Serialize)]
+pub(crate) struct Written<D> {
+    #[serde(flatten)]
+    pub(crate) document: D,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) files_written: Option<Vec<String>>,
+}
+
+impl<D> Written<D> {
+    /// `document` with the files a command wrote.
+    pub(crate) fn of(document: D, files_written: Vec<String>) -> Self {
+        Self {
+            document,
+            files_written: Some(files_written),
+        }
     }
 }
 
@@ -160,8 +206,42 @@ pub(crate) fn files_written(writes: &Writes, root: Option<&Path>) -> Vec<String>
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::terminal::Facts;
     use specforge_common::codes;
     use specforge_ops::RunVerdict;
+
+    #[test]
+    fn trust_is_yes_then_what_the_output_can_ask() {
+        use specforge_ops::extension::Trust;
+        assert_eq!(OutputFormat::Human.trust(true), Trust::AssumeYes);
+        assert_eq!(OutputFormat::Json.trust(true), Trust::AssumeYes);
+        assert_eq!(OutputFormat::Json.trust(false), Trust::Refuse);
+        assert_eq!(OutputFormat::Human.trust(false), Trust::Prompt);
+    }
+
+    #[specforge_test_macros::test(
+        behavior = "report_command_outcome",
+        verify = "under --format json a refusal is the error document on stdout and nothing on stderr"
+    )]
+    fn a_refusal_writes_to_the_stream_its_format_names() {
+        let error = OpError::diagnostic(codes::E003, "gone");
+
+        let (terminal, capture) = Terminal::captured("", Facts::PIPED);
+        assert_eq!(
+            Refusal::of(OutputFormat::Json).report(&terminal, &error),
+            Exit::Failed
+        );
+        assert!(capture.stdout().contains("\"code\": \"E003\""));
+        assert_eq!(capture.stderr(), "");
+
+        let (terminal, capture) = Terminal::captured("", Facts::PIPED);
+        assert_eq!(
+            Refusal::of(OutputFormat::Human).report(&terminal, &error),
+            Exit::Failed
+        );
+        assert_eq!(capture.stdout(), "");
+        assert_eq!(capture.stderr(), "error[E003]: gone\n");
+    }
 
     fn failed_after_writing() -> OpError {
         OpError::diagnostic(codes::E032, "failed to write specforge.lock")
@@ -216,10 +296,14 @@ mod tests {
         assert_eq!(Exit::of_verdict(false).code(), 1);
         assert_eq!(Exit::Unjudged.code(), 2);
         let error = OpError::diagnostic(codes::E003, "gone");
+        let (terminal, _) = Terminal::captured("", Facts::PIPED);
         // Both formats end the same way; only the stream differs.
         for format in [OutputFormat::Human, OutputFormat::Json] {
-            assert_eq!(Refusal::of(format).report(&error).code(), 1);
-            assert_eq!(Refusal::measuring(format).report(&error).code(), 2);
+            assert_eq!(Refusal::of(format).report(&terminal, &error).code(), 1);
+            assert_eq!(
+                Refusal::measuring(format).report(&terminal, &error).code(),
+                2
+            );
         }
         for (verdict, code) in [
             (RunVerdict::Passed, 0),

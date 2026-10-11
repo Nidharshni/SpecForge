@@ -24,11 +24,11 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 use specforge_common::{Diagnostic, DiagnosticData, Severity, SourceSpan, Sym, codes};
 use specforge_protocol_types::{
-    CollectInput, CollectOutput, CommandInput, CommandOutput, DescribeRequest, DescribeResponse,
-    HandshakeRequest, HandshakeResponse, McpResourceContent, McpResourceRequest, MigrationInput,
-    PROTOCOL_VERSION, PassAnswer, PassDiagnostic, PassInput, PassOutput, PassSeverity, PassSpan,
-    RawGraph, SUPPORTED_CATEGORIES, ScanRequest, ScanResponse, ValidatorContext, ValidatorVerdict,
-    pass_export,
+    CollectInput, CollectOutput, CommandInput, CommandOutput, DeclaredCategory, DescribeRequest,
+    DescribeResponse, HandshakeRequest, HandshakeResponse, McpResourceContent, McpResourceRequest,
+    MigrationInput, PROTOCOL_VERSION, PassAnswer, PassDiagnostic, PassInput, PassOutput,
+    PassSeverity, PassSpan, RawGraph, ScanRequest, ScanResponse, ValidatorContext,
+    ValidatorVerdict, pass_export,
 };
 
 use crate::runtime::{WasmCallResult, WasmRuntime};
@@ -219,7 +219,6 @@ impl<'r> ExtensionCalls<'r> {
     pub fn handshake(&self, extension: &str) -> Result<Handshake, CallError> {
         let request = HandshakeRequest {
             host_version: PROTOCOL_VERSION.to_string(),
-            supported_categories: SUPPORTED_CATEGORIES.iter().map(|s| s.to_string()).collect(),
         };
         let export = "__handshake";
         let operation = Operation::Handshake;
@@ -239,9 +238,13 @@ impl<'r> ExtensionCalls<'r> {
     }
 
     /// `__describe` of `category`.
-    pub fn describe(&self, extension: &str, category: &str) -> Result<DescribeResponse, CallError> {
+    pub fn describe(
+        &self,
+        extension: &str,
+        category: DeclaredCategory,
+    ) -> Result<DescribeResponse, CallError> {
         let request = DescribeRequest {
-            category: category.to_string(),
+            category: category.name().to_string(),
         };
         self.call_typed(
             Operation::Describe,

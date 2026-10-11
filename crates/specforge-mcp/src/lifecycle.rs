@@ -1,9 +1,11 @@
 use serde_json::Value;
+use specforge_common::find_project_root;
 use std::path::PathBuf;
 
 use crate::protocol::{JsonRpcResponse, error_codes};
 use crate::state::{McpState, ServerPhase};
-use crate::tools::core_tool_name;
+use crate::tool::CoreTool;
+use crate::tools::{inspect, query, search, validate};
 use crate::types::{
     McpCapabilities, McpCapabilityFlags, McpPromptCapability, McpResourceCapability, McpServerInfo,
     McpToolCapability,
@@ -143,14 +145,17 @@ pub fn handle_initialize(
     JsonRpcResponse::success(id, value)
 }
 
-/// Compile and serve the project at `project_root` when there is one: its
+/// Serve the project at or above `start` (the server's PATH, or the
+/// client's `projectRoot`): the nearest directory holding `specforge.json`
+/// or `specforge.spec`, `start` included (`find_project_root`). Its
 /// registries, and the core tools, resources and prompts plus what its
-/// extensions contribute; the core surface alone otherwise. Subscribed
-/// clients learn what it changed (C9-01). A root that does not exist has
-/// no config to read: nothing is served (a call's `path` may serve a
-/// project later).
-pub fn serve_project(state: &mut McpState, project_root: Option<PathBuf>) {
-    if let Some(root) = project_root.filter(|root| root.exists()) {
+/// extensions contribute are served; the core surface alone when there is
+/// none. With none, nothing is served: what reads only the project view
+/// answers over the empty session, and a call's `path` or `init` may serve
+/// a project later (ADR 0014 D5). Subscribed clients learn what it
+/// changed (C9-01).
+pub fn serve_project(state: &mut McpState, start: Option<PathBuf>) {
+    if let Some(root) = start.as_deref().and_then(find_project_root) {
         state.serve(&root);
     }
     state.served = true;
@@ -187,10 +192,10 @@ pub fn server_info() -> McpServerInfo {
 pub fn handle_discover(id: Option<Value>) -> JsonRpcResponse {
     let instructions = format!(
         "SpecForge compiles .spec files into a graph of entities. Query it with {}, {} and {}; check it with {}.",
-        core_tool_name("specforge.query"),
-        core_tool_name("specforge.search"),
-        core_tool_name("specforge.inspect"),
-        core_tool_name("specforge.validate"),
+        query::Tool::NAME,
+        search::Tool::NAME,
+        inspect::Tool::NAME,
+        validate::Tool::NAME,
     );
     JsonRpcResponse::success(
         id,

@@ -5,7 +5,7 @@ use std::sync::Mutex;
 
 use specforge_common::codes;
 use specforge_installed::hex_sha256;
-use specforge_protocol_types::package::{PackageName, Version};
+use specforge_package::{PackageName, Version};
 use specforge_protocol_types::{DeclaredCategory, ExtensionDeclaration};
 
 use super::{Found, Package, Published as Receipt, Publisher, Registry, Searched, Upload};
@@ -60,7 +60,7 @@ impl Published {
     }
 
     fn try_name(&self) -> Result<PackageName, String> {
-        self.declaration.package_name().map_err(|e| e.to_string())
+        PackageName::declared_by(&self.declaration).map_err(|e| e.to_string())
     }
 
     fn try_version(&self) -> Result<Version, String> {
@@ -80,7 +80,6 @@ pub fn declaration(name: &str, version: &str, peers: &[(&str, &str)]) -> Extensi
             "protocol_version": "1.0.0",
             "name": name,
             "version": version,
-            "contribution_flags": {},
             "peer_dependencies": peers,
             "sandbox_policy": null,
         }
@@ -288,7 +287,7 @@ impl Registry for MemoryRegistry {
                     .keywords
                     .iter()
                     .any(|k| k.to_ascii_lowercase().contains(&needle));
-            if !matches || contributes.is_some_and(|c| !Self::declares(published, c)) {
+            if !matches || contributes.is_some_and(|c| !published.declaration.declares(c)) {
                 continue;
             }
             match latest.iter().position(|p| p.name() == published.name()) {
@@ -316,17 +315,6 @@ impl Registry for MemoryRegistry {
             failures: Vec::new(),
             asked: 1,
         })
-    }
-}
-
-impl MemoryRegistry {
-    /// Whether `published` declares `category`.
-    fn declares(published: &Published, category: DeclaredCategory) -> bool {
-        published
-            .declaration
-            .describe_items(category.name())
-            .and_then(|items| items.as_array().map(|a| !a.is_empty()))
-            .unwrap_or(false)
     }
 }
 

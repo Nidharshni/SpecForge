@@ -1,3 +1,5 @@
+use crate::target::Project;
+use crate::tool::{CoreTool, Effect, ReplySpec, WriteHints};
 use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_ops::OpError;
@@ -6,7 +8,9 @@ use specforge_ops::infer::{
 };
 
 use crate::args::Arguments;
-use crate::mutation::{Mutated, Mutation, Written};
+use crate::mutation::{
+    Failed, Mutated, Mutation, MutationArgs, MutationReply, NoDiagnostics, Written,
+};
 use crate::target::ProjectRef;
 use crate::tool::{ErrorCode, McpError};
 
@@ -31,7 +35,17 @@ pub struct Args {
     status: EndStatus,
 }
 
-/// `specforge.infer_session`'s reply (`McpInferSessionResult`): one step's
+impl MutationArgs for Args {
+    fn previews(&self) -> bool {
+        false
+    }
+}
+
+impl MutationReply for Reply {
+    type After = NoDiagnostics;
+}
+
+/// `specforge.infer_session`'s reply: one step's
 /// outcome. The three steps share their keys, so it is one struct.
 #[derive(Debug, Serialize, Shape)]
 pub struct Reply {
@@ -48,27 +62,42 @@ pub struct Reply {
 
 /// `specforge.infer_session`: one step of an inference session
 /// (`specforge_ops::infer::session`), which writes `specforge-infer.json`.
-pub fn call(project: &ProjectRef<'_>, args: Args) -> Mutation<Reply> {
-    let step = step(&args)?;
-    Ok(match infer::session(&project.view(), step) {
-        Ok(SessionOutcome { recorded, writes }) => {
-            let written = match &recorded {
-                Recorded::Marked { entities, .. } => {
-                    Written::files(writes).with_entities(entities.clone())
-                }
-                _ => Written::files(writes),
-            };
-            Mutated::wrote(reply(&recorded), written)
-        }
-        Err(error) => {
-            let argument = argument_of(&error);
-            let refused = McpError::from(error);
-            Mutated::refused(match argument {
-                Some(argument) => refused.with_argument(argument),
-                None => refused,
-            })
-        }
-    })
+pub(crate) struct Tool;
+
+impl CoreTool for Tool {
+    const NAME: &'static str = "specforge.infer_session";
+    const DESCRIPTION: &'static str =
+        "Manage inference sessions: start a new session, mark files as analyzed, or end a session";
+    const EFFECT: Effect = Effect::Mutates {
+        hints: WriteHints {
+            destructive: true,
+            idempotent: false,
+            open_world: false,
+        },
+    };
+    const SPEC: ReplySpec = ReplySpec::Type("McpInferSessionResult");
+    type Args = Args;
+    type Input = Project;
+    type Returns = Mutation<Reply>;
+
+    fn call(project: ProjectRef<'_>, args: Args) -> Mutation<Reply> {
+        let step = step(&args)?;
+        let SessionOutcome { recorded, writes } =
+            infer::session(&project.view(), step).map_err(|error| {
+                let argument = argument_of(&error);
+                Failed::from(error).map_error(|refused| match argument {
+                    Some(argument) => refused.with_argument(argument),
+                    None => refused,
+                })
+            })?;
+        let written = match &recorded {
+            Recorded::Marked { entities, .. } => {
+                Written::files(writes).with_entities(entities.clone())
+            }
+            _ => Written::files(writes),
+        };
+        Ok(Mutated::new(reply(&recorded), written))
+    }
 }
 
 /// The step `args` asks for, or the refusal of the arguments.

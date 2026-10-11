@@ -82,6 +82,7 @@ pub(crate) fn graph_node(n: &Node) -> JsonNode {
 }
 
 #[derive(Serialize, Shape)]
+#[shape(define = "Edge")]
 pub(crate) struct JsonEdge {
     pub source: String,
     pub target: String,

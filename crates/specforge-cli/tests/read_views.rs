@@ -150,39 +150,17 @@ fn stats_today() {
     pin_stats("rv1", rv1().path());
 }
 
-/// `specforge stats` and `specforge.stats` on `root` carry the same numbers
-/// in their two shapes (`ProjectStatistics`, `McpStatsResult`).
+/// `specforge stats --format json` and `specforge.stats` on `root` answer one
+/// document (`McpStatsResult`, ADR 0052).
 fn assert_stats_agree(root: &Path) {
     let cli = cli_json(&["stats", "--format", "json", s(root)]);
     let mcp = &mcp_calls(root, &[json!({"name": "specforge.stats", "arguments": {}})])[0];
-    let counts: serde_json::Map<String, Value> = mcp["entity_counts"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|c| (c["kind"].as_str().unwrap().to_string(), c["count"].clone()))
-        .collect();
-    assert_eq!(cli["entities_by_kind"], Value::Object(counts), "{root:?}");
-    let total: u64 = mcp["entity_counts"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|c| c["count"].as_u64().unwrap())
-        .sum();
-    assert_eq!(cli["total_entities"], json!(total));
-    assert_eq!(cli["total_edges"], mcp["edge_count"]);
-    assert_eq!(cli["unconnected_count"], mcp["unconnected_count"]);
-    for key in ["declared_pct", "proof_pct"] {
-        assert_eq!(cli[key], mcp[key], "{key} on {root:?}");
-    }
-    let summary = &mcp["diagnostic_summary"];
-    assert_eq!(cli["error_count"], summary["errors"]);
-    assert_eq!(cli["warning_count"], summary["warnings"]);
-    assert_eq!(cli["info_count"], summary["infos"]);
+    assert_eq!(cli, *mcp, "{root:?}");
 }
 
 #[specforge_test_macros::test(
     behavior = "read_views_over_the_project_view",
-    verify = "specforge stats and specforge.stats report the same numbers"
+    verify = "specforge stats --format json and specforge.stats answer the same document"
 )]
 fn cli_and_mcp_stats_report_the_same_numbers() {
     assert_stats_agree(project("fx1").path());
@@ -640,14 +618,14 @@ fn analyze_and_stats_read_the_report_at_the_compiled_root() {
     // report at the root it compiled: there is none.
     let stats = cli(&["stats", s(&sub), "--format", "json"]);
     assert_eq!(stats.code, Some(0), "{}", stats.stderr);
-    let analyze = cli(&["analyze", "--path", s(&sub), "--json"]);
+    let analyze = cli(&["analyze", "--path", s(&sub), "--format", "json"]);
     assert_eq!(analyze.code, Some(0), "{}", analyze.stderr);
 
     // At the root both refuse the report: exit 2, and under JSON output
     // the error document on stdout and nothing on stderr.
     for args in [
         vec!["stats", s(tmp.path()), "--format", "json"],
-        vec!["analyze", "--path", s(tmp.path()), "--json"],
+        vec!["analyze", "--path", s(tmp.path()), "--format", "json"],
     ] {
         let run = cli(&args);
         assert_eq!(run.code, Some(2), "{args:?}: {}", run.stdout);
@@ -761,7 +739,7 @@ fn contract_read_views() {
     // project_compiled: the CLI's compiled project and MCP's session each
     // supply a view, and answer.
     let stats = cli_json(&["stats", "--format", "json", s(root)]);
-    assert_eq!(stats["total_entities"], 6, "{stats}");
+    assert_eq!(stats["entity_count"], 6, "{stats}");
 
     // surfaces_agree: the same numbers, chains, schema version and rows.
     assert_stats_agree(root);
@@ -823,7 +801,10 @@ fn contract_read_views() {
     }
     let sub = root.join("spec");
     assert_eq!(cli(&["stats", s(&sub)]).code, Some(0));
-    assert_eq!(cli(&["analyze", "--path", s(&sub), "--json"]).code, Some(0));
+    assert_eq!(
+        cli(&["analyze", "--path", s(&sub), "--format", "json"]).code,
+        Some(0)
+    );
     // ...and the schema cache likewise: the sub-path's export leaves the
     // root's cache as the root's export wrote it.
     assert_eq!(cli(&["export", s(root)]).code, Some(0));

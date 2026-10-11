@@ -23,6 +23,8 @@ use specforge_installed::{Installed, LockState};
 use specforge_project::coverage::{ProjectCoverage, Recorded, RecordedCoverage, TestReport};
 use specforge_project::snapshot::EntitySnapshot;
 use specforge_project::{CompiledProject, Environment, SharedRuntime};
+#[cfg(test)]
+use specforge_project::{ExtensionLoad, Loaded};
 use specforge_registry::RegistryBuild;
 
 pub use connectivity::{Connectivity, Degree};
@@ -120,14 +122,14 @@ impl<'a> ProjectView<'a> {
     /// every operation that calls an extension over the view calls it there.
     /// None: the environment loaded no extension.
     pub fn runtime(&self) -> Option<&'a SharedRuntime> {
-        self.env.runtime.as_ref()
+        self.env.runtime()
     }
 
     /// The registry build of the environment: kinds, fields, edges, rules,
     /// the extension declarations and their ordered passes. The one way to
-    /// reach it (`env().registries` is the same value).
+    /// reach it (`env().registries()` is the same value).
     pub fn registries(&self) -> &'a RegistryBuild {
-        &self.env.registries
+        self.env.registries()
     }
 
     /// The root the project was compiled from; `None` for a graph built in
@@ -150,7 +152,7 @@ impl<'a> ProjectView<'a> {
     pub fn installed(&self) -> &'a Installed {
         static NONE: Installed = Installed::none();
         match self.root {
-            Some(_) => &self.env.installed,
+            Some(_) => self.env.installed(),
             None => &NONE,
         }
     }
@@ -230,9 +232,9 @@ impl<'a> ProjectView<'a> {
     pub fn schema(&self) -> GraphProtocolSchema {
         let registries = self.registries();
         generate_schema(
-            &registries.kinds,
-            &registries.edges,
-            &registries.fields,
+            registries.kinds(),
+            registries.edges(),
+            registries.fields(),
             &registries
                 .extension_info()
                 .map(|(name, version)| (name.to_string(), version.to_string()))
@@ -265,10 +267,23 @@ pub(crate) mod testing {
 
     /// A project assembled in a test: a temp root, a graph, an environment
     /// and what its surface reports. Only what a test sets is on disk.
+    ///
+    /// The fixture holds what the compile read and loaded (the config read,
+    /// the installed extensions, what each entry enabled, the declarations,
+    /// the runtime) and assembles its environment from them at every
+    /// builder call ([`Environment::assemble`]), so the order of the calls
+    /// does not matter and the environment is one `check` could make.
     pub(crate) struct Fixture {
         pub dir: TempDir,
         pub graph: Graph,
-        pub env: Environment,
+        read: specforge_common::ConfigRead,
+        installed: Installed,
+        /// What the compile read each entry as enabling, in place of what
+        /// the config's entries name.
+        enabled: Option<Vec<specforge_project::EnabledExtension>>,
+        declarations: Vec<specforge_protocol_types::ExtensionDeclaration>,
+        runtime: Option<SharedRuntime>,
+        env: Environment,
         /// Made over the graph and environment as they are at the first
         /// view ([`Self::recorded`]).
         recorded: std::sync::OnceLock<RecordedCoverage>,
@@ -281,30 +296,61 @@ pub(crate) mod testing {
         /// default config, nothing enabled, no extension, nothing reported.
         pub fn new() -> Self {
             let dir = TempDir::new().unwrap();
-            let env = Environment {
-                root: dir.path().to_path_buf(),
-                spec_root: dir.path().to_path_buf(),
-                config_found: true,
-                ..Environment::empty()
-            };
+            let installed = Installed::unread(dir.path());
             Fixture {
-                dir,
+                read: specforge_common::ConfigRead {
+                    found: true,
+                    ..Default::default()
+                },
+                installed,
+                enabled: None,
+                declarations: Vec::new(),
+                runtime: None,
+                env: Environment::empty(),
                 graph: Graph::new(),
-                env,
                 recorded: std::sync::OnceLock::new(),
                 reported: Vec::new(),
+                dir,
             }
+            .assembled()
+        }
+
+        /// The environment the fixture assembled from what it holds.
+        pub fn env(&self) -> &Environment {
+            &self.env
+        }
+
+        /// Assemble the environment from what the fixture says the compile
+        /// read and loaded: the one place its environment is made.
+        fn assembled(mut self) -> Self {
+            let load =
+                if self.runtime.is_none() && self.enabled.is_none() && self.declarations.is_empty()
+                {
+                    ExtensionLoad::NoRuntime
+                } else {
+                    ExtensionLoad::In {
+                        runtime: self.runtime.clone().unwrap_or_else(|| {
+                            std::sync::Arc::new(specforge_wasm::testing::InProcessRuntime::new())
+                        }),
+                        loaded: Loaded {
+                            enabled: self.enabled.clone().unwrap_or_else(|| {
+                                Loaded::unloaded(&self.read.config.extensions).enabled
+                            }),
+                            declarations: self.declarations.clone(),
+                            diagnostics: Vec::new(),
+                        },
+                    }
+                };
+            self.env = Environment::assemble(self.read.clone(), self.installed.clone(), load);
+            self.recorded = std::sync::OnceLock::new();
+            self
         }
 
         /// The compile loaded its extensions in `runtime`, which the
         /// environment holds.
-        #[allow(
-            dead_code,
-            reason = "a fixture builder tests reach for as they need it"
-        )]
         pub fn runtime(mut self, runtime: SharedRuntime) -> Self {
-            self.env.runtime = Some(runtime);
-            self
+            self.runtime = Some(runtime);
+            self.assembled()
         }
 
         /// The coverage memo of the graph and environment the test built.
@@ -318,28 +364,11 @@ pub(crate) mod testing {
         /// names ([`EnabledExtension::unloaded`]), and its `providers`,
         /// registered against the loaded declarations.
         pub fn config_json(mut self, config: serde_json::Value) -> Self {
-            let entries: Vec<String> = config["extensions"]
-                .as_array()
-                .map(|entries| {
-                    entries
-                        .iter()
-                        .filter_map(|e| e.as_str().map(str::to_string))
-                        .collect()
-                })
-                .unwrap_or_default();
-            self.env.enabled = entries
-                .iter()
-                .map(|e| specforge_project::EnabledExtension::unloaded(e))
-                .collect();
-            self.env.config.extensions = entries;
-            // ... and registered its `providers` against the loaded
-            // declarations.
-            self.env.providers = specforge_project::providers::Providers::register(
-                Some(&config),
-                self.env.registries.declarations(),
+            self.read = specforge_common::parse_project_config(
+                &self.dir.path().join("specforge.json"),
+                &config.to_string(),
             );
-            self.env.config.raw = Some(config);
-            self
+            self.assembled()
         }
 
         /// [`Self::config_json`] of a config enabling `entries`.
@@ -350,8 +379,8 @@ pub(crate) mod testing {
         /// What the compile read each entry as enabling, in place of what
         /// the config's entries name.
         pub fn enabled(mut self, enabled: Vec<specforge_project::EnabledExtension>) -> Self {
-            self.env.enabled = enabled;
-            self
+            self.enabled = Some(enabled);
+            self.assembled()
         }
 
         /// The compile loaded `declarations`, in this order.
@@ -359,8 +388,8 @@ pub(crate) mod testing {
             mut self,
             declarations: Vec<specforge_protocol_types::ExtensionDeclaration>,
         ) -> Self {
-            self.env.registries = specforge_registry::build_registries(declarations);
-            self
+            self.declarations = declarations;
+            self.assembled()
         }
 
         /// An extension `name` at `version` that contributes nothing.
@@ -387,7 +416,7 @@ pub(crate) mod testing {
                     .iter()
                     .map(
                         |(name, version, source)| specforge_installed::LockFileEntry {
-                            name: specforge_protocol_types::PackageName::parse(name).unwrap(),
+                            name: specforge_package::PackageName::parse(name).unwrap(),
                             version: version.to_string(),
                             source: specforge_installed::LockSource::parse(source),
                             wasm_hash: format!("hash-{name}"),
@@ -402,22 +431,35 @@ pub(crate) mod testing {
                 &specforge_installed::lock_path(self.dir.path()),
             )
             .unwrap();
-            self.env.installed = Installed::with_lock(self.dir.path(), LockState::Read(lock));
-            self
+            self.installed = Installed::with_lock(self.dir.path(), LockState::Read(lock));
+            self.assembled()
+        }
+
+        /// The compile read exactly `lock` (not written to disk), for a lock
+        /// a test edits after `lock(..)` built it.
+        pub fn with_lock_file(mut self, lock: specforge_installed::LockFile) -> Self {
+            self.installed = Installed::with_lock(self.dir.path(), LockState::Read(lock));
+            self.assembled()
+        }
+
+        /// The compile read the lock at the root as it is on disk now.
+        pub fn read_lock(mut self) -> Self {
+            self.installed = Installed::at(self.dir.path());
+            self.assembled()
         }
 
         /// The compile found no `specforge.json` at the root.
         pub fn without_config_file(mut self) -> Self {
-            self.env.config_found = false;
-            self
+            self.read.found = false;
+            self.assembled()
         }
 
         /// The compile could not use `specforge.json` as written, for
         /// `problems` (what the surface reports for them is the test's to
         /// set).
         pub fn config_problems(mut self, problems: Vec<specforge_common::ConfigProblem>) -> Self {
-            self.env.config_problems = problems;
-            self
+            self.read.problems = problems;
+            self.assembled()
         }
 
         /// The project's surface reports `diagnostics`.
@@ -473,13 +515,19 @@ mod tests {
         // A graph assembled without a compile: the view takes one, once,
         // with the environment's spec root.
         let graph = Graph::new();
-        let mut env = Environment::with_registries(RegistryBuild::default());
-        env.spec_root = dir.path().join("spec");
+        let env = Environment::assemble(
+            specforge_common::parse_project_config(
+                &dir.path().join("specforge.json"),
+                r#"{"spec_root": "spec"}"#,
+            ),
+            Installed::unread(dir.path()),
+            ExtensionLoad::NoRuntime,
+        );
         let recorded = RecordedCoverage::over(&graph, &env);
         let view = ProjectView::new(&graph, &env, None, &recorded);
         assert!(view.entities().is_empty());
         assert!(std::ptr::eq(view.entities(), view.entities()));
-        assert_eq!(view.entities().spec_root(), env.spec_root);
+        assert_eq!(view.entities().spec_root(), env.spec_root());
         assert!(std::ptr::eq(
             view.coverage().unwrap().entities(),
             view.entities()
@@ -529,7 +577,7 @@ mod tests {
         let sub = project.join("sub");
         std::fs::create_dir(&sub).unwrap();
         let graph = Graph::new();
-        let env = Environment::with_registries(RegistryBuild::default());
+        let env = Environment::with_registries(RegistryBuild::default(), None);
 
         let recorded = RecordedCoverage::over(&graph, &env);
         let at_sub = ProjectView::new(&graph, &env, Some(&sub), &recorded);
@@ -568,12 +616,12 @@ mod tests {
         // One registry build: the environment's, reached through one accessor.
         assert!(std::ptr::eq(
             of.registries(),
-            &compiled.environment().registries
+            compiled.environment().registries()
         ));
 
         // A view built in memory reports nothing until it is told what.
         let graph = Graph::new();
-        let env = Environment::with_registries(RegistryBuild::default());
+        let env = Environment::with_registries(RegistryBuild::default(), None);
         let recorded = RecordedCoverage::over(&graph, &env);
         let bare = ProjectView::new(&graph, &env, None, &recorded);
         assert!(bare.reported().is_empty());

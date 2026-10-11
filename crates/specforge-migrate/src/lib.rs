@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Serialize, Shape)]
+#[shape(define)]
 pub struct MigrationResult {
     pub file_path: String,
     pub status: MigrationStatus,
@@ -39,6 +40,7 @@ pub struct MigrationBackup {
 }
 
 #[derive(Debug, Clone, Serialize, Shape)]
+#[shape(define)]
 pub struct MigrationDiff {
     pub file_path: String,
     pub before_hash: String,
@@ -70,6 +72,7 @@ pub struct Original {
 }
 
 #[derive(Debug, Clone, Serialize, Shape)]
+#[shape(define)]
 pub struct RollbackSummary {
     pub restored_count: usize,
     pub skipped_count: usize,

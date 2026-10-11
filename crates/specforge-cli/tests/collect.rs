@@ -339,7 +339,7 @@ fn collect_then_analyze_scores_the_recorded_tests() {
     let fx = Fixture::new();
     fx.cmd(&["collect", "--yes"]).assert().success();
     let out = specforge_cmd()
-        .args(["analyze", "coverage", "--json", "--path"])
+        .args(["analyze", "coverage", "--format", "json", "--path"])
         .arg(fx.root())
         .assert()
         .success()
@@ -491,7 +491,7 @@ mod tests {
         .stdout(predicate::str::contains("2 linked by naming convention"));
 
     let out = specforge_cmd()
-        .args(["analyze", "coverage", "--json", "--path"])
+        .args(["analyze", "coverage", "--format", "json", "--path"])
         .arg(root)
         .assert()
         .get_output()

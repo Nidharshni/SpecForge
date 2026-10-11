@@ -150,10 +150,10 @@ fn a_registry_install_loads_through_check() {
     assert!(!codes(&found).contains(&"E024"), "{found:?}");
 }
 
-/// The JSON `specforge add` prints names a local source and no key, and a
-/// registry package's key and no source.
+/// The JSON `specforge add` always names its source, and a key only when the
+/// package is signed.
 #[test]
-fn add_json_names_a_local_source_and_a_registry_key() {
+fn add_json_names_its_source_and_a_key_only_when_signed() {
     let dir = greeting_project();
     std::fs::write(dir.path().join("greet.wasm"), greet_wasm()).unwrap();
     let out = specforge()
@@ -185,9 +185,9 @@ fn add_json_names_a_local_source_and_a_registry_key() {
         .unwrap();
     assert!(out.status.success(), "{out:?}");
     let remote: Value = serde_json::from_slice(&out.stdout).unwrap();
-    assert_eq!(remote["key_id"], Value::Null);
-    assert!(remote.get("key_id").is_some(), "{remote}");
-    assert!(remote.get("source").is_none(), "{remote}");
+    assert!(remote.get("key_id").is_none(), "{remote}");
+    assert_eq!(remote["source"], "registry", "{remote}");
+    assert_eq!(remote["publisher"], "unsigned", "{remote}");
 }
 
 #[specforge_test(
@@ -347,6 +347,110 @@ fn a_bulk_update_reports_batch_update_completed() {
     assert!(
         chrono::DateTime::parse_from_rfc3339(timestamp).is_ok(),
         "{output}"
+    );
+}
+
+/// `specforge update --major --allow-unsigned --format json` over a lock
+/// with greet one version behind a registry serving 0.1.0, and `second` as
+/// the lock's other entry: the exit status and the document, with the clock
+/// and the hashes redacted.
+fn update_json(second: Value) -> (bool, Value, TempDir) {
+    let registry = serve(vec![Package::new("@sdk/greet", "0.1.0", greet_wasm())]);
+    let dir = project_on(&registry);
+    let lock = json!({
+        "lockfile_version": 1,
+        "entries": [
+            {"name": "@sdk/greet", "version": "0.0.9", "source": "registry", "wasm_hash": "00"},
+            second,
+        ],
+    });
+    std::fs::write(dir.path().join("specforge.lock"), lock.to_string()).unwrap();
+    let home = TempDir::new().unwrap();
+    let out = specforge()
+        .args(["update", "--major", "--allow-unsigned", "--format", "json"])
+        .args(["--path"])
+        .arg(dir.path())
+        .env("HOME", home.path())
+        .output()
+        .unwrap();
+    let mut document: Value = serde_json::from_slice(&out.stdout)
+        .unwrap_or_else(|e| panic!("update is not JSON ({e}): {out:?}"));
+    document["batch_update_completed"]["timestamp"] = json!("[TIME]");
+    let text = redact_hashes(&serde_json::to_string_pretty(&document).unwrap());
+    (
+        out.status.success(),
+        serde_json::from_str(&text).unwrap(),
+        dir,
+    )
+}
+
+/// `text` with every 64-digit hex run replaced by `[SHA256]`.
+fn redact_hashes(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut run = String::new();
+    for c in text.chars().chain(std::iter::once(' ')) {
+        if c.is_ascii_hexdigit() {
+            run.push(c);
+            continue;
+        }
+        out.push_str(if run.len() == 64 { "[SHA256]" } else { &run });
+        run.clear();
+        out.push(c);
+    }
+    out.pop();
+    out
+}
+
+#[specforge_test(
+    behavior = "update_all_extensions",
+    verify = "update --format json prints every locked extension's status and the batch_update_completed payload"
+)]
+fn update_json_lists_every_locked_extension() {
+    let local = json!({"name": "@acme/local", "version": "1.0.0", "source": "local:local.wasm", "wasm_hash": "00"});
+    let (ok, document, dir) = update_json(local);
+    assert!(ok, "{document}");
+    assert_eq!(lock_entry(dir.path(), "@sdk/greet")["version"], "0.1.0");
+    assert_eq!(document["ok"], true, "{document}");
+    let rows = document["extensions"].as_array().unwrap();
+    assert_eq!(rows.len(), 2, "{document}");
+    assert_eq!(rows[0]["status"], "updated", "{document}");
+    assert_eq!(rows[0]["name"], "@sdk/greet");
+    assert_eq!(rows[0]["publisher"], "unsigned");
+    assert!(rows[0].get("key_id").is_none(), "{document}");
+    assert_eq!(rows[1]["status"], "not_from_registry", "{document}");
+    insta::assert_snapshot!(
+        "update_json_lists_every_locked_extension",
+        serde_json::to_string_pretty(&document).unwrap()
+    );
+}
+
+#[test]
+fn a_failed_update_prints_its_document() {
+    let gone =
+        json!({"name": "@acme/gone", "version": "1.0.0", "source": "registry", "wasm_hash": "00"});
+    let (ok, document, dir) = update_json(gone);
+    assert!(!ok, "{document}");
+    assert_eq!(lock_entry(dir.path(), "@sdk/greet")["version"], "0.0.9");
+    let mut keys: Vec<&str> = document
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(String::as_str)
+        .collect();
+    keys.sort_unstable();
+    assert_eq!(
+        keys,
+        ["batch_update_completed", "extensions", "ok"],
+        "{document}"
+    );
+    assert_eq!(document["ok"], false, "{document}");
+    let rows = document["extensions"].as_array().unwrap();
+    assert_eq!(rows[0]["status"], "held_back", "{document}");
+    assert_eq!(rows[1]["status"], "failed", "{document}");
+    assert_eq!(rows[1]["code"], "R-RES-001", "{document}");
+    insta::assert_snapshot!(
+        "a_failed_update_prints_its_document",
+        serde_json::to_string_pretty(&document).unwrap()
     );
 }
 
@@ -671,7 +775,7 @@ fn a_wasm_file_entry_is_removed_by_its_declared_name_or_its_entry() {
 
         assert!(ok, "{entry} by {name}: {output}");
         assert_eq!(
-            output["removed"], "@sdk/greet",
+            output["extension"], "@sdk/greet",
             "{entry} by {name}: {output}"
         );
         assert_eq!(
@@ -698,7 +802,7 @@ fn a_wasm_file_entry_is_removed_by_its_declared_name_or_its_entry() {
     enable(dir.path(), json!(["@specforge/software", "missing.wasm"]));
     let (ok, output) = remove(dir.path(), "missing.wasm", &[]);
     assert!(ok, "{output}");
-    assert_eq!(output["removed"], "missing.wasm", "{output}");
+    assert_eq!(output["extension"], "missing.wasm", "{output}");
     assert_eq!(enabled(dir.path()), json!(["@specforge/software"]));
 }
 
@@ -803,7 +907,7 @@ fn removing_a_wasm_file_no_entry_names_is_not_found() {
 // extensions listing does (it called it "builtin" before 05-T4).
 #[specforge_test(
     behavior = "run_doctor_check",
-    verify = "doctor gives each extension the source the extensions listing gives it"
+    verify = "doctor lists the extensions the extensions listing lists, each with its version, source and status"
 )]
 fn doctor_lists_a_wasm_file_entry_with_its_file_source() {
     let dir = greet_file_project();

@@ -532,7 +532,10 @@ behavior discover_format_targets "Discover Format Targets" {
     nested project's sources where it reaches that project's
     specforge.json, never the rest of its files. When explicit paths are
     provided, only those paths MUST be formatted. Directories provided as
-    arguments MUST be recursively searched for .spec files. Non-.spec
+    arguments MUST be recursively searched for .spec files.
+    A directory is walked as discovery walks (no skipped directory
+    below it, no symlink, files only). A file reached by more than one
+    argument MUST be formatted once. Non-.spec
     files MUST be skipped without error.
   """
   verify unit "no arguments formats all .spec files under spec_root"
@@ -541,5 +544,7 @@ behavior discover_format_targets "Discover Format Targets" {
   verify unit "explicit file paths format only those files"
   verify unit "directory argument recursively discovers .spec files"
   verify unit "non-.spec files are skipped with no error"
+  verify unit "a directory named like a .spec file is no target, walked or discovered"
+  verify unit "a file several arguments reach is formatted once"
   verify contract "Discover Format Targets: format target discovery holds — project_root_available, filesystem_accessible, all_spec_files_discovered, exclusions_applied, non_spec_skipped"
 }

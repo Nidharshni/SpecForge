@@ -204,6 +204,7 @@ name = "specforge-coverage"
 version = "0.1.0"
 dependencies = [
  "serde",
+ "specforge-protocol-types",
 ]
 
 [[package]]
@@ -242,7 +243,6 @@ dependencies = [
 name = "specforge-protocol-types"
 version = "0.1.0"
 dependencies = [
- "semver",
  "serde",
  "serde_json",
 ]

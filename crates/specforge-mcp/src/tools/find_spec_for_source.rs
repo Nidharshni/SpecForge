@@ -1,3 +1,5 @@
+use crate::target::Project;
+use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
 use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_graph::Graph;
@@ -17,7 +19,7 @@ pub struct Args {
     file_path: String,
 }
 
-/// `specforge.find_spec_for_source`'s reply (`McpSpecForSourceResult`).
+/// `specforge.find_spec_for_source`'s reply.
 #[derive(Debug, Serialize, Shape)]
 pub struct Reply {
     file_path: String,
@@ -82,18 +84,32 @@ impl Anchored {
 
 /// The entities anchored to the source files `file_path` names, under the
 /// one file rule (`specforge_ops::navigate::anchors_of_file`).
-pub fn call(project: &ProjectRef<'_>, args: Args) -> Answered<Reply> {
-    let manifest = source_anchors(&project.view()).map_err(McpError::from)?;
-    let FileAnchors { mode, anchors } = anchors_of_file(&manifest, &args.file_path);
-    let entities: Vec<Anchored> = anchors
-        .iter()
-        .map(|anchor| Anchored::of(anchor, project.graph()))
-        .collect();
-    Ok(Reply {
-        file_path: args.file_path,
-        match_mode: mode.into(),
-        count: entities.len(),
-        entities,
+pub(crate) struct Tool;
+
+impl CoreTool for Tool {
+    const NAME: &'static str = "specforge.find_spec_for_source";
+    const DESCRIPTION: &'static str = "Find specforge entities anchored to a source file";
+    const EFFECT: Effect = Effect::Reads {
+        group: ToolGroup::Navigation,
+    };
+    const SPEC: ReplySpec = ReplySpec::Type("McpSpecForSourceResult");
+    type Args = Args;
+    type Input = Project;
+    type Returns = Answered<Reply>;
+
+    fn call(project: ProjectRef<'_>, args: Args) -> Answered<Reply> {
+        let manifest = source_anchors(&project.view()).map_err(McpError::from)?;
+        let FileAnchors { mode, anchors } = anchors_of_file(&manifest, &args.file_path);
+        let entities: Vec<Anchored> = anchors
+            .iter()
+            .map(|anchor| Anchored::of(anchor, project.graph()))
+            .collect();
+        Ok(Reply {
+            file_path: args.file_path,
+            match_mode: mode.into(),
+            count: entities.len(),
+            entities,
+        }
+        .into())
     }
-    .into())
 }

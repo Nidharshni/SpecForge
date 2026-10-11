@@ -1,0 +1,41 @@
+---
+source: crates/specforge-cli/src/main.rs
+expression: command.clone().render_long_help().to_string()
+---
+Search for extensions in registries
+
+Usage: specforge search [OPTIONS] <QUERY>
+
+Arguments:
+  <QUERY>
+          Search query
+
+Options:
+      --contributes <CONTRIBUTES>
+          Only extensions that declare this category of contribution
+
+          Possible values:
+          - entities:         entity kinds
+          - edges:            edge types
+          - shared_fields:    shared fields
+          - enhancements:     enhancements of other extensions' kinds
+          - validation_rules: validation rules
+          - surfaces:         commands, MCP tools and resources
+          - collectors:       test collectors
+          - analyzers:        source analyzers
+          - passes:           compiler passes
+          - feature_flags:    feature flags
+
+      --path <PATH>
+          Path to the project root (for registry config)
+          
+          [default: .]
+
+      --format <FORMAT>
+          Output format: human or json
+          
+          [default: human]
+          [possible values: human, json]
+
+  -h, --help
+          Print help (see a summary with '-h')

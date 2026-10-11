@@ -1,0 +1,60 @@
+---
+source: crates/specforge-cli/src/main.rs
+expression: command.clone().render_long_help().to_string()
+---
+Render the logical data model (entity kinds, fields, relationships)
+
+Usage: specforge model [OPTIONS] [PATH]
+
+Arguments:
+  [PATH]
+          Path to the spec root directory
+          
+          [default: .]
+
+Options:
+      --format <FORMAT>
+          Output format
+
+          Possible values:
+          - markdown
+          - mermaid:  ER diagram
+          - dot:      Graphviz
+          - json
+          - dbml:     dbdiagram.io
+          
+          [default: markdown]
+
+      --group-by <GROUP_BY>
+          How to group entities
+
+          Possible values:
+          - extension: under a header per extension
+          - none:      one flat list
+          
+          [default: extension]
+
+      --fields <FIELDS>
+          Field detail level
+
+          Possible values:
+          - none
+          - keys: key fields
+          - all
+          
+          [default: keys]
+
+      --extension <EXTENSION>
+          Filter to a single extension
+
+      --kinds <KINDS>
+          Filter to specific entity kinds (comma-separated)
+
+      --root <ROOT>
+          Root entity kind for depth-scoped output
+
+      --depth <DEPTH>
+          Maximum depth from root kind (requires --root)
+
+  -h, --help
+          Print help (see a summary with '-h')

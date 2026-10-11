@@ -1,8 +1,8 @@
 //! `specforge login` and `specforge logout`: a registry credential, kept
 //! under the alias of the registry it is for (ADR 0045).
 
-use crate::OutputFormat;
-use crate::outcome::{Exit, Refusal};
+use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
+use crate::terminal::{Terminal, outln};
 use serde_json::json;
 use specforge_common::codes;
 use specforge_ops::OpError;
@@ -11,25 +11,97 @@ use specforge_registry_client::credentials::{
     write_credentials,
 };
 use specforge_registry_client::{HttpRegistryClient, RegistryClient, RegistryCredential, Retrying};
-use std::path::Path;
+use std::path::{Path, PathBuf};
+
+// `specforge login`'s command line.
+#[derive(clap::Args)]
+pub(crate) struct Args {
+    /// Registry alias (defaults to the default registry)
+    #[arg(long)]
+    registry: Option<String>,
+
+    /// Authentication token, kept as a secret (OS keyring, else a 0600 file).
+    /// Exactly one of --token, --token-env, --token-file
+    #[arg(long)]
+    token: Option<String>,
+
+    /// Environment variable that holds the token; the variable's name is kept, not the token
+    #[arg(long)]
+    token_env: Option<String>,
+
+    /// File that holds the token; the file's path is kept, not the token
+    #[arg(long)]
+    token_file: Option<PathBuf>,
+
+    /// Path to the project root (for registry config)
+    #[arg(long, default_value = ".")]
+    path: PathBuf,
+
+    #[command(flatten)]
+    output: OutputArg,
+}
+
+// `specforge logout`'s command line.
+#[derive(clap::Args)]
+pub(crate) struct LogoutArgs {
+    /// Registry alias (defaults to the default registry)
+    #[arg(long)]
+    registry: Option<String>,
+
+    /// The project whose specforge.json names the default registry (when
+    /// --registry is not given)
+    #[arg(long, default_value = ".")]
+    path: PathBuf,
+
+    #[command(flatten)]
+    output: OutputArg,
+}
+
+impl Args {
+    pub(crate) fn run(self, terminal: &Terminal) -> Exit {
+        login(
+            self.registry.as_deref(),
+            &TokenSource {
+                token: self.token.as_deref(),
+                token_env: self.token_env.as_deref(),
+                token_file: self.token_file.as_deref(),
+            },
+            &self.path,
+            self.output.format,
+            terminal,
+        )
+    }
+}
+
+impl LogoutArgs {
+    pub(crate) fn run(self, terminal: &Terminal) -> Exit {
+        logout(
+            self.registry.as_deref(),
+            &self.path,
+            self.output.format,
+            terminal,
+        )
+    }
+}
 
 /// Where the token to log in with comes from: exactly one of the three is given.
-pub(crate) struct TokenSource<'a> {
-    pub token: Option<&'a str>,
-    pub token_env: Option<&'a str>,
-    pub token_file: Option<&'a Path>,
+struct TokenSource<'a> {
+    token: Option<&'a str>,
+    token_env: Option<&'a str>,
+    token_file: Option<&'a Path>,
 }
 
 /// Validate the token `source` gives against the registry `registry_alias` names (the default
 /// registry when none is given) and keep it under that registry's alias: `--token` as a secret
 /// (OS keyring, else a 0600 file), `--token-env` and `--token-file` as references.
-pub(crate) fn run(
+fn login(
     registry_alias: Option<&str>,
     source: &TokenSource<'_>,
     path: &Path,
     format: OutputFormat,
+    terminal: &Terminal,
 ) -> Exit {
-    let refuse = |error: &OpError| Refusal::of(format).report(error);
+    let refuse = |error: &OpError| Refusal::of(format).report(terminal, error);
     let given = [
         source.token.is_some(),
         source.token_env.is_some(),
@@ -48,7 +120,7 @@ pub(crate) fn run(
         Ok(configured) => configured,
         Err(error) => return refuse(&error),
     };
-    format.eprint_diagnostics(&configured.diagnostics);
+    terminal.diagnostics(&configured.diagnostics);
     let registry = match configured.named(registry_alias) {
         Ok(registry) => registry.clone(),
         Err(error) => return refuse(&error),
@@ -116,7 +188,7 @@ pub(crate) fn run(
                 "status": "authenticated",
                 "source": kept,
             });
-            println!("{}", serde_json::to_string_pretty(&output).unwrap());
+            terminal.json(&output);
         }
         OutputFormat::Human => {
             let from = match (source.token_env, source.token_file) {
@@ -124,7 +196,7 @@ pub(crate) fn run(
                 (_, Some(file)) => format!(" (token from file {})", file.display()),
                 _ => String::new(),
             };
-            println!("logged in to registry '{alias}'{from}");
+            outln!(terminal, "logged in to registry '{alias}'{from}");
         }
     }
 
@@ -134,13 +206,18 @@ pub(crate) fn run(
 /// Forget the credential of the registry `registry_alias` names, without
 /// reading any project; with none given, of the default registry of the
 /// project at `path`.
-pub(crate) fn run_logout(registry_alias: Option<&str>, path: &Path, format: OutputFormat) -> Exit {
-    let refuse = |error: &OpError| Refusal::of(format).report(error);
+fn logout(
+    registry_alias: Option<&str>,
+    path: &Path,
+    format: OutputFormat,
+    terminal: &Terminal,
+) -> Exit {
+    let refuse = |error: &OpError| Refusal::of(format).report(terminal, error);
     let alias = match registry_alias {
         Some(alias) => alias.to_string(),
         None => match specforge_ops_registry::configured(path, "logout") {
             Ok(configured) => {
-                format.eprint_diagnostics(&configured.diagnostics);
+                terminal.diagnostics(&configured.diagnostics);
                 match configured.named(None) {
                     Ok(registry) => registry.alias.clone(),
                     Err(error) => return refuse(&error),
@@ -164,9 +241,9 @@ pub(crate) fn run_logout(registry_alias: Option<&str>, path: &Path, format: Outp
                     "registry": alias,
                     "status": "not_found",
                 });
-                println!("{}", serde_json::to_string_pretty(&output).unwrap());
+                terminal.json(&output);
             }
-            OutputFormat::Human => println!("no credentials found for registry '{alias}'"),
+            OutputFormat::Human => outln!(terminal, "no credentials found for registry '{alias}'"),
         }
         return Exit::Passed;
     }
@@ -182,9 +259,9 @@ pub(crate) fn run_logout(registry_alias: Option<&str>, path: &Path, format: Outp
                 "registry": alias,
                 "status": "removed",
             });
-            println!("{}", serde_json::to_string_pretty(&output).unwrap());
+            terminal.json(&output);
         }
-        OutputFormat::Human => println!("logged out from registry '{alias}'"),
+        OutputFormat::Human => outln!(terminal, "logged out from registry '{alias}'"),
     }
 
     Exit::Passed

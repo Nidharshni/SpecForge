@@ -24,7 +24,7 @@ struct PassEntity {
     #[serde(default)]
     testable: bool,
     #[serde(default)]
-    exempt: bool,
+    owes_none: bool,
     #[serde(default)]
     verify_kinds: Vec<String>,
     #[serde(default)]
@@ -71,7 +71,7 @@ fn assess_graded(input: Value, grading: Option<&RiskGrading>) -> (Vec<Entity>, A
             id: e.id,
             kind: e.kind,
             testable: e.testable,
-            exempt: e.exempt,
+            owes_none: e.owes_none,
             verify_kinds: e.verify_kinds,
             verify_texts: e.verify_texts,
         })
@@ -270,12 +270,12 @@ fn exempt_entities_leave_a001_and_the_testable_count() {
     let (_, out) = assess_input(json!({
         "entities": [
             // A union type and an abstract behavior: exempt, nothing declared.
-            {"id": "Status", "kind": "type", "testable": true, "exempt": true},
-            {"id": "base_login", "kind": "behavior", "testable": true, "exempt": true},
+            {"id": "Status", "kind": "type", "testable": true, "owes_none": true},
+            {"id": "base_login", "kind": "behavior", "testable": true, "owes_none": true},
             // A governance kind no rule requires obligations of.
-            {"id": "lost_task", "kind": "failure_mode", "testable": true, "exempt": true},
+            {"id": "lost_task", "kind": "failure_mode", "testable": true, "owes_none": true},
             // ... unless it declares some: then it counts like any other.
-            {"id": "latency", "kind": "constraint", "testable": true, "exempt": true,
+            {"id": "latency", "kind": "constraint", "testable": true, "owes_none": true,
              "verify_kinds": ["load"], "verify_texts": ["p99 under 50ms"]},
             {"id": "logout", "kind": "behavior", "testable": true}
         ]
@@ -387,4 +387,76 @@ fn without_grading_no_kind_is_risk_tallied_and_nothing_is_a002() {
         hazards.findings[0].suggestion.as_deref(),
         Some("severe-risk hazard: add at least one `verify property` obligation")
     );
+}
+
+#[specforge_test(
+    behavior = "te_coverage_pass",
+    verify = "an entity counts toward coverage when its kind is testable and it owes or declares obligations, and is exempt when testable and neither"
+)]
+fn counting_is_testable_and_owing_or_declaring() {
+    for testable in [false, true] {
+        for owes_obligations in [false, true] {
+            for declared in 0..=2 {
+                let counting = Counting {
+                    testable,
+                    owes_obligations,
+                    declared,
+                };
+                assert_eq!(
+                    counting.counts(),
+                    testable && (owes_obligations || declared > 0),
+                    "{counting:?}"
+                );
+                assert_eq!(
+                    counting.exempt(),
+                    testable && !counting.counts(),
+                    "{counting:?}"
+                );
+            }
+        }
+    }
+    let entity = Entity {
+        testable: true,
+        owes_none: true,
+        verify_texts: vec!["a".into(), "b".into()],
+        verify_kinds: vec!["unit".into(), "unit".into()],
+        ..Entity::default()
+    };
+    assert_eq!(
+        entity.counting(),
+        Counting {
+            testable: true,
+            owes_obligations: false,
+            declared: 2,
+        }
+    );
+    assert!(entity.counts_toward_coverage());
+}
+
+#[specforge_test(
+    behavior = "te_coverage_pass",
+    verify = "the rule reads a pass entity as the host decided it, with no risk unless the grading caller sets one"
+)]
+fn a_pass_entity_is_read_as_the_host_decided_it() {
+    let mut wire = specforge_protocol_types::PassEntity {
+        id: "a".into(),
+        kind: "invariant".into(),
+        testable: true,
+        owes_none: true,
+        verify_kinds: vec!["unit".into(), "property".into()],
+        verify_texts: vec!["one".into(), "two".into()],
+        incoming_edge_count: 0,
+        ..specforge_protocol_types::PassEntity::default()
+    };
+    wire.fields.insert("risk".into(), "high".into());
+    let entity = Entity::from(&wire);
+    assert_eq!(entity.id, "a");
+    assert_eq!(entity.kind, "invariant");
+    assert!(entity.testable && entity.owes_none);
+    assert_eq!(entity.verify_kinds, wire.verify_kinds);
+    assert_eq!(entity.verify_texts, wire.verify_texts);
+    assert_eq!(entity.risk, None);
+    assert!(!entity.referenced);
+    wire.incoming_edge_count = 2;
+    assert!(Entity::from(&wire).referenced);
 }

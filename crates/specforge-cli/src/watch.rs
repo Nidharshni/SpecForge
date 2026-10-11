@@ -8,16 +8,48 @@
 //! does, is the session's (`classify_project_changes`); following the
 //! session's inputs and catching up is the watch crate's loop (ADR 0035).
 
+use crate::terminal::{Terminal, errln, outln};
+
 use std::path::{Path, PathBuf};
 
-use crate::OutputFormat;
-use crate::outcome::{Exit, Refusal};
+use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use specforge_ops::check::Counts;
 use specforge_ops::{OpError, OpErrorKind};
 use specforge_project::{ProjectSession, UpdateKind};
 use specforge_watch::{Applied, DEFAULT_DEBOUNCE_WINDOW, Notify, SessionWatch, WatchEvent};
 
-pub fn run(path: &Path, json: bool, verify_incremental: bool) -> Exit {
+// `specforge watch`'s command line.
+#[derive(clap::Args)]
+pub(crate) struct Args {
+    /// Project directory
+    #[arg(long, default_value = ".")]
+    path: PathBuf,
+
+    #[command(flatten)]
+    output: OutputArg,
+
+    /// Check every incremental rebuild against a cold rebuild (slower)
+    #[arg(long, default_value_t = false)]
+    verify_incremental: bool,
+}
+
+impl Args {
+    pub(crate) fn run(self, terminal: &Terminal) -> Exit {
+        watch_project(
+            &self.path,
+            self.output.format,
+            self.verify_incremental,
+            terminal,
+        )
+    }
+}
+
+fn watch_project(
+    path: &Path,
+    format: OutputFormat,
+    verify_incremental: bool,
+    terminal: &Terminal,
+) -> Exit {
     // A debug build checks every rebuild (ProjectSession); a release build
     // only when asked (the check costs a cold rebuild per change).
     let mut session = ProjectSession::open(path);
@@ -31,16 +63,10 @@ pub fn run(path: &Path, json: bool, verify_incremental: bool) -> Exit {
     let mut watch = match SessionWatch::start(session, watchers) {
         Ok(watch) => watch,
         Err(e) => {
-            let format = if json {
-                OutputFormat::Json
-            } else {
-                OutputFormat::Human
-            };
-            return Refusal::of(format).report(&OpError::new(
-                OpErrorKind::Internal,
-                "watch_failed",
-                e,
-            ));
+            return Refusal::of(format).report(
+                terminal,
+                &OpError::new(OpErrorKind::Internal, "watch_failed", e),
+            );
         }
     };
 
@@ -49,10 +75,10 @@ pub fn run(path: &Path, json: bool, verify_incremental: bool) -> Exit {
     // the watchers were armed.
     for event in watch.catch_up() {
         if let WatchEvent::Unwatched(e) = event {
-            eprintln!("warning: {e}");
+            errln!(terminal, "warning: {e}");
         }
     }
-    print_ready(watch.session(), json);
+    print_ready(watch.session(), format, terminal);
 
     // Debounced batches of changed paths. The session says what they are
     // and applies them: sources take the incremental path (tree-sitter
@@ -63,18 +89,23 @@ pub fn run(path: &Path, json: bool, verify_incremental: bool) -> Exit {
     for batch in &batches {
         if debug {
             let roles: Vec<_> = batch.iter().map(|path| watch.classify(path)).collect();
-            eprintln!("[watch] batch: {batch:?} -> {roles:?}");
+            errln!(terminal, "[watch] batch: {batch:?} -> {roles:?}");
         }
         for event in watch.changed(&batch) {
             match event {
                 WatchEvent::Applied(applied) => {
-                    let rendered = render(&applied, json, unix_seconds());
-                    println!("{}", rendered.line);
+                    let rendered = render(&applied, format, unix_seconds());
+                    outln!(terminal, "{}", rendered.line);
                     if let Some(warning) = rendered.warning {
-                        eprintln!("{warning}");
+                        errln!(terminal, "{warning}");
                     }
                 }
-                WatchEvent::Unwatched(e) => eprintln!("warning: {e}"),
+                WatchEvent::Unwatched(e) => errln!(terminal, "warning: {e}"),
+            }
+            // The reader has gone (`| head`): nobody sees what a watch
+            // would write next.
+            if terminal.closed() {
+                return Exit::Passed;
             }
         }
     }
@@ -90,15 +121,16 @@ fn unix_seconds() -> u64 {
 }
 
 /// The `ready` event: the session as opened, and caught up with disk.
-fn print_ready(session: &ProjectSession, json: bool) {
-    let spec_root: PathBuf = std::fs::canonicalize(&session.project().environment().spec_root)
-        .unwrap_or_else(|_| session.project().environment().spec_root.clone());
+fn print_ready(session: &ProjectSession, format: OutputFormat, terminal: &Terminal) {
+    let spec_root: PathBuf = std::fs::canonicalize(session.project().environment().spec_root())
+        .unwrap_or_else(|_| session.project().environment().spec_root().to_path_buf());
     let diagnostics = session.project().diagnostics();
     let Counts {
         errors, warnings, ..
     } = Counts::of(&diagnostics);
-    if json {
-        println!(
+    if format == OutputFormat::Json {
+        outln!(
+            terminal,
             "{}",
             serde_json::json!({
                 "event": "ready",
@@ -112,7 +144,8 @@ fn print_ready(session: &ProjectSession, json: bool) {
             })
         );
     } else {
-        println!(
+        outln!(
+            terminal,
             "specforge watch: {} ({} files, {} nodes, {} edges, {} errors, {} warnings)",
             spec_root.display(),
             session.project().file_count(),
@@ -121,7 +154,7 @@ fn print_ready(session: &ProjectSession, json: bool) {
             errors,
             warnings
         );
-        println!("watching for changes (Ctrl-C to stop)");
+        outln!(terminal, "watching for changes (Ctrl-C to stop)");
     }
 }
 
@@ -136,13 +169,13 @@ struct Rendered {
 /// `rechecked` for check inputs (with the same fields as `rebuilt`),
 /// `rebuilt` for sources. `stamp` (seconds since the epoch) heads a text
 /// line.
-fn render(applied: &Applied, json: bool, stamp: u64) -> Rendered {
+fn render(applied: &Applied, format: OutputFormat, stamp: u64) -> Rendered {
     let update = &applied.update;
     let Counts {
         errors, warnings, ..
     } = Counts::of(&update.diagnostics);
     if update.kind == UpdateKind::Environment {
-        let line = if json {
+        let line = if format == OutputFormat::Json {
             serde_json::json!({
                 "event": "extensions_reloaded",
                 "extensions": applied.extensions,
@@ -172,7 +205,7 @@ fn render(applied: &Applied, json: bool, stamp: u64) -> Rendered {
         UpdateKind::Checks => "rechecked",
         _ => "rebuilt",
     };
-    if json {
+    if format == OutputFormat::Json {
         let line = serde_json::json!({
             "event": event,
             "changed": applied.changed,
@@ -251,7 +284,11 @@ mod tests {
 
     #[test]
     fn a_rebuild_renders_todays_json_fields() {
-        let rendered = render(&applied(UpdateKind::Sources, Some(Ok(()))), true, 0);
+        let rendered = render(
+            &applied(UpdateKind::Sources, Some(Ok(()))),
+            OutputFormat::Json,
+            0,
+        );
         assert_eq!(
             keys(&rendered.line),
             [
@@ -280,11 +317,11 @@ mod tests {
 
     #[test]
     fn a_check_input_renders_rechecked() {
-        let rendered = render(&applied(UpdateKind::Checks, None), true, 0);
+        let rendered = render(&applied(UpdateKind::Checks, None), OutputFormat::Json, 0);
         let value: serde_json::Value = serde_json::from_str(&rendered.line).unwrap();
         assert_eq!(value["event"], "rechecked");
         assert_eq!(value["verification"], serde_json::Value::Null);
-        let text = render(&applied(UpdateKind::Checks, None), false, 12);
+        let text = render(&applied(UpdateKind::Checks, None), OutputFormat::Human, 12);
         assert!(
             text.line.starts_with("[12] rechecked 1 file(s)"),
             "{}",
@@ -294,7 +331,11 @@ mod tests {
 
     #[test]
     fn a_reload_renders_extensions_reloaded() {
-        let rendered = render(&applied(UpdateKind::Environment, None), true, 0);
+        let rendered = render(
+            &applied(UpdateKind::Environment, None),
+            OutputFormat::Json,
+            0,
+        );
         let value: serde_json::Value = serde_json::from_str(&rendered.line).unwrap();
         assert_eq!(value["event"], "extensions_reloaded");
         assert_eq!(
@@ -303,7 +344,11 @@ mod tests {
         );
         assert_eq!(value["files"], 3);
         assert_eq!(value["nodes"], 7);
-        let text = render(&applied(UpdateKind::Environment, None), false, 0);
+        let text = render(
+            &applied(UpdateKind::Environment, None),
+            OutputFormat::Human,
+            0,
+        );
         assert_eq!(
             text.line,
             "[reload] extension environment changed: 1 extension(s), 3 file(s) | 0 errors, 0 warnings"
@@ -313,12 +358,12 @@ mod tests {
     #[test]
     fn a_divergence_adds_the_stderr_line_in_text_mode() {
         let diverged = applied(UpdateKind::Sources, Some(Err("nodes differ".to_string())));
-        let text = render(&diverged, false, 0);
+        let text = render(&diverged, OutputFormat::Human, 0);
         assert_eq!(
             text.warning.as_deref(),
             Some("verification FAILED: nodes differ")
         );
-        let json = render(&diverged, true, 0);
+        let json = render(&diverged, OutputFormat::Json, 0);
         assert_eq!(json.warning, None);
         let value: serde_json::Value = serde_json::from_str(&json.line).unwrap();
         assert_eq!(value["verification_failed"], true);

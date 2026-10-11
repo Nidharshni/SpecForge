@@ -1365,11 +1365,11 @@ fn schema_reflects_current_state() {
         let runtime = specforge_component::ComponentRuntime::with_user_cache();
         let ctx = specforge_project::CompiledProject::compile(dir, Some(Arc::new(runtime)));
         let schema = generate_schema(
-            &ctx.environment().registries.kinds,
-            &ctx.environment().registries.edges,
-            &ctx.environment().registries.fields,
+            ctx.environment().registries().kinds(),
+            ctx.environment().registries().edges(),
+            ctx.environment().registries().fields(),
             &ctx.environment()
-                .registries
+                .registries()
                 .extension_info()
                 .map(|(name, version)| (name.to_string(), version.to_string()))
                 .collect::<Vec<_>>(),
@@ -2035,7 +2035,7 @@ fn ticket_registries() -> specforge_registry::RegistryBuild {
 )]
 fn a_field_type_is_named_in_the_schema_as_declared() {
     let build = ticket_registries();
-    let schema = generate_schema(&build.kinds, &build.edges, &build.fields, &[]);
+    let schema = generate_schema(build.kinds(), build.edges(), build.fields(), &[]);
     let ticket = schema
         .entity_kinds
         .iter()
@@ -2059,7 +2059,7 @@ fn a_field_type_is_named_in_the_schema_as_declared() {
 )]
 fn the_published_schema_lists_the_field_types_the_host_reads() {
     let build = ticket_registries();
-    let schema = generate_schema(&build.kinds, &build.edges, &build.fields, &[]);
+    let schema = generate_schema(build.kinds(), build.edges(), build.fields(), &[]);
     let published: serde_json::Value =
         serde_json::from_str(&publish_json_schema_format(&schema, EmitFormat::Json).unwrap())
             .unwrap();
@@ -2088,7 +2088,7 @@ fn the_published_schema_lists_the_field_types_the_host_reads() {
 )]
 fn the_schema_carries_a_declared_default_value() {
     let build = ticket_registries();
-    let schema = generate_schema(&build.kinds, &build.edges, &build.fields, &[]);
+    let schema = generate_schema(build.kinds(), build.edges(), build.fields(), &[]);
     let ticket = schema
         .entity_kinds
         .iter()
@@ -2116,4 +2116,105 @@ fn the_schema_carries_a_declared_default_value() {
         .find(|f| f["name"] == "owner")
         .expect("owner is a field of the model");
     assert_eq!(owner["default_value"], "nobody");
+}
+
+/// A field of `kind` that writes `edge` towards `target`.
+fn edge_writer(kind: &str, field: &str, edge: &str, target: &str) -> FieldRegistryEntry {
+    FieldRegistryEntry::new(
+        kind,
+        "@specforge/software",
+        specforge_registry::FieldDescriptor {
+            name: field.to_string(),
+            field_type: FieldType::ReferenceList.as_str().to_string(),
+            edge: Some(edge.to_string()),
+            target_kind: Some(target.to_string()),
+            ..Default::default()
+        },
+    )
+    .unwrap()
+}
+
+// B:generate_schema_from_registries — an edge type that leaves a side open takes its writers
+#[specforge_test(
+    behavior = "generate_schema_from_registries",
+    verify = "an edge type that declares no source or target kind names those of the fields that write it"
+)]
+fn an_open_edge_type_takes_the_kinds_of_the_fields_writing_it() {
+    let mut kinds = KindRegistry::new();
+    for name in ["a", "b", "c"] {
+        kinds.register(make_kind_entry(name, "@specforge/software", false));
+    }
+    let mut edges = EdgeRegistry::new();
+    edges.register(make_edge_entry(
+        "relates",
+        "@specforge/software",
+        None,
+        None,
+    ));
+    edges.register(make_edge_entry(
+        "owns",
+        "@specforge/software",
+        Some("a"),
+        None,
+    ));
+    let mut fields = FieldRegistry::new();
+    fields.register(edge_writer("a", "x", "relates", "c"));
+    fields.register(edge_writer("b", "y", "relates", "a"));
+    fields.register(edge_writer("a", "z", "owns", "c"));
+    fields.register(edge_writer("b", "w", "owns", "b"));
+
+    let schema = generate_schema(&kinds, &edges, &fields, &[]);
+    let edge = |label: &str| {
+        schema
+            .edge_types
+            .iter()
+            .find(|e| e.label == label)
+            .unwrap()
+            .clone()
+    };
+    let relates = edge("relates");
+    assert_eq!(relates.source_kinds, Some(vec!["a".into(), "b".into()]));
+    assert_eq!(relates.target_kinds, Some(vec!["a".into(), "c".into()]));
+    // A side the edge type declares is kept; the open side is inferred, sorted.
+    let owns = edge("owns");
+    assert_eq!(owns.source_kinds, Some(vec!["a".into()]));
+    assert_eq!(owns.target_kinds, Some(vec!["b".into(), "c".into()]));
+}
+
+/// A latent defect (plan 12 section 11, ADR 0007 known gap) pinned as it
+/// stands; it flips when implicit edge types take every writer.
+#[test]
+fn an_undeclared_edge_two_kinds_write_names_only_the_first_writer() {
+    use specforge_protocol_types::{EntityKindDescriptor, ExtensionDeclaration, FieldDescriptor};
+    let writer = |name: &str| EntityKindDescriptor {
+        name: name.to_string(),
+        fields: vec![FieldDescriptor {
+            name: "to_gamma".to_string(),
+            field_type: FieldType::ReferenceList.as_str().to_string(),
+            edge: Some("links".to_string()),
+            target_kind: Some("gamma".to_string()),
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+    let declaration = ExtensionDeclaration {
+        entities: vec![
+            writer("alpha"),
+            writer("beta"),
+            EntityKindDescriptor {
+                name: "gamma".to_string(),
+                ..Default::default()
+            },
+        ],
+        ..Default::default()
+    };
+    let build = specforge_registry::build_registries(vec![declaration]);
+
+    let schema = generate_schema(build.kinds(), build.edges(), build.fields(), &[]);
+    let links = schema
+        .edge_types
+        .iter()
+        .find(|e| e.label == "links")
+        .expect("the implicit edge type is registered");
+    assert_eq!(links.source_kinds, Some(vec!["alpha".to_string()]));
 }

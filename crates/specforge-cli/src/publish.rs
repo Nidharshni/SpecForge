@@ -1,36 +1,56 @@
 //! `specforge publish`: the publish operation, presented.
 
-use crate::OutputFormat;
-use crate::outcome::{Exit, Refusal};
+use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
+use crate::terminal::{Terminal, outln};
 use serde_json::json;
 use specforge_component::ComponentRuntime;
 use specforge_ops::publish::{self, PublishOutcome};
 use specforge_ops_registry::ConfiguredRegistry;
-use std::path::Path;
+use std::path::PathBuf;
 
-/// Publish the extension at `extension` (a `.wasm` component or its crate
-/// directory) to the registry that serves its name among those `project`'s
-/// `specforge.json` configures (ADR 0045). The package's manifest is the
-/// declaration read from the binary (ADR 0012): a binary whose declaration
-/// has errors is refused before any network call. The declaration's
-/// warnings, then what reading the registry configuration reported, go to
-/// stderr whatever the result.
-pub(crate) fn run(extension: &Path, project: &Path, format: OutputFormat) -> Exit {
-    let registry = ConfiguredRegistry::for_project(project, "publish");
-    let runtime = ComponentRuntime::with_user_cache();
-    let report = publish::publish(extension, &registry, &runtime);
-    format.eprint_diagnostics(&report.warnings);
-    format.eprint_diagnostics(&registry.reported());
-    match &report.result {
-        Ok(outcome) => {
-            present(outcome, format);
-            Exit::Passed
+// `specforge publish`'s command line.
+#[derive(clap::Args)]
+pub(crate) struct Args {
+    /// The extension to publish: a .wasm component, or the extension's
+    /// crate directory (its target/wasm32-wasip2/release component).
+    /// Defaults to the --path directory
+    extension: Option<PathBuf>,
+
+    /// The project whose specforge.json configures the registries
+    #[arg(long, default_value = ".")]
+    path: PathBuf,
+
+    #[command(flatten)]
+    output: OutputArg,
+}
+
+impl Args {
+    /// Publish the extension at `extension` (a `.wasm` component or its
+    /// crate directory) to the registry that serves its name among those
+    /// `project`'s `specforge.json` configures (ADR 0045). The package's
+    /// manifest is the declaration read from the binary (ADR 0012): a
+    /// binary whose declaration has errors is refused before any network
+    /// call. The declaration's warnings, then what reading the registry
+    /// configuration reported, go to stderr whatever the result.
+    pub(crate) fn run(self, terminal: &Terminal) -> Exit {
+        let format = self.output.format;
+        let extension = self.extension.as_deref().unwrap_or(&self.path);
+        let registry = ConfiguredRegistry::for_project(&self.path, "publish");
+        let runtime = ComponentRuntime::with_user_cache();
+        let report = publish::publish(extension, &registry, &runtime);
+        terminal.diagnostics(&report.warnings);
+        terminal.diagnostics(&registry.reported());
+        match &report.result {
+            Ok(outcome) => {
+                present(outcome, format, terminal);
+                Exit::Passed
+            }
+            Err(error) => Refusal::of(format).report(terminal, error),
         }
-        Err(error) => Refusal::of(format).report(error),
     }
 }
 
-fn present(outcome: &PublishOutcome, format: OutputFormat) {
+fn present(outcome: &PublishOutcome, format: OutputFormat, terminal: &Terminal) {
     let published = &outcome.published;
     match format {
         OutputFormat::Json => {
@@ -45,17 +65,21 @@ fn present(outcome: &PublishOutcome, format: OutputFormat) {
                 "signed": true,
                 "key_created": published.key_created,
             });
-            println!("{}", serde_json::to_string_pretty(&output).unwrap());
+            terminal.json(&output);
         }
         OutputFormat::Human => {
             if published.key_created {
-                println!("generated publisher signing key {}", published.key_id);
+                outln!(
+                    terminal,
+                    "generated publisher signing key {}",
+                    published.key_id
+                );
             }
-            println!("published {} v{}", outcome.name, outcome.version);
-            println!("  registry: {}", published.registry);
-            println!("  url: {}", published.url);
-            println!("  size: {} bytes", outcome.size_bytes);
-            println!("  signed by key: {}", published.key_id);
+            outln!(terminal, "published {} v{}", outcome.name, outcome.version);
+            outln!(terminal, "  registry: {}", published.registry);
+            outln!(terminal, "  url: {}", published.url);
+            outln!(terminal, "  size: {} bytes", outcome.size_bytes);
+            outln!(terminal, "  signed by key: {}", published.key_id);
         }
     }
 }

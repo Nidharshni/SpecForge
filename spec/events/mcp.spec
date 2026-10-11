@@ -88,7 +88,9 @@ event mcp_mutation_completed "MCP Mutation Completed" {
   // (relative to the project root), so a client sees what the event
   // counts. entities_affected: the entities the call changed (the renamed
   // one, the ones a removal strands, the ones an inference step produced).
-  // A preview (dry_run, check, diff) is no mutation and emits nothing.
+  // A preview is no mutation and emits nothing: a call whose arguments ask
+  // for one (dry_run; check or diff without write), whatever its operation
+  // answered.
   channel "mcp.mutation_completed"
   payload {
     toolName          string
@@ -101,6 +103,7 @@ event mcp_mutation_completed "MCP Mutation Completed" {
   verify integration "files_changed is the number of files the call wrote, for every mutation tool"
   verify integration "a mutation that fails after writing reports the files it wrote"
   verify integration "a mutation's reply lists in files_written the files files_changed counts"
+  verify integration "a call whose arguments ask for a preview records nothing and lists no files_written, whatever its operation answered"
 }
 
 // ── MCP Subscription Lifecycle Events ────────────────────────

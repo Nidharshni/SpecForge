@@ -121,7 +121,7 @@ fn registered_kinds_at_top_level() {
     let (site, found) = complete(TWO_KINDS, 3, 0, &view);
     assert_eq!(site, "Keywords { prefix: \"\" }");
     let names = labels(&found);
-    for kind in view.registries().kinds.keywords() {
+    for kind in view.registries().kinds().keywords() {
         assert!(names.contains(&kind.as_str()), "{kind} in {names:?}");
     }
     let behavior = found.iter().find(|i| i.label == "behavior").unwrap();
@@ -134,7 +134,7 @@ fn registered_kinds_at_top_level() {
 )]
 fn use_is_suggested_and_define_never_is() {
     // With and without extensions.
-    let empty = specforge_project::Environment::with_registries(RegistryBuild::default());
+    let empty = specforge_project::Environment::with_registries(RegistryBuild::default(), None);
     let graph = Graph::new();
     let recorded = RecordedCoverage::over(&graph, &empty);
     let bare = ProjectView::new(&graph, &empty, None, &recorded);
@@ -311,7 +311,7 @@ impl Fixture {
                 methods: Vec::new(),
             });
         }
-        let env = specforge_project::Environment::with_registries(registries);
+        let env = specforge_project::Environment::with_registries(registries, None);
         let recorded = RecordedCoverage::over(&graph, &env);
         Fixture {
             env,

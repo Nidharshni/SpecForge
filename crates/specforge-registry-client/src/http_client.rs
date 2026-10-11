@@ -10,8 +10,9 @@ use specforge_registry_wire::{
 
 use super::registry_client::{RegistryClient, RegistryError};
 use super::registry_config::{RegistryConfig, RegistryCredential};
-use specforge_protocol_types::package::Version;
-use specforge_protocol_types::{ExtensionDeclaration, PackageName};
+use specforge_package::PackageName;
+use specforge_package::Version;
+use specforge_protocol_types::ExtensionDeclaration;
 
 pub struct HttpRegistryClient {
     client: Client,
@@ -165,9 +166,8 @@ impl RegistryClient for HttpRegistryClient {
         registry: &RegistryConfig,
         credential: Option<&RegistryCredential>,
     ) -> Result<String, RegistryError> {
-        let name = declaration
-            .package_name()
-            .map_err(|why| RegistryError::InvalidPackage {
+        let name =
+            PackageName::declared_by(declaration).map_err(|why| RegistryError::InvalidPackage {
                 message: why.to_string(),
             })?;
         let version =

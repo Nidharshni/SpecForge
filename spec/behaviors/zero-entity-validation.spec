@@ -241,9 +241,11 @@ behavior snapshot_entities_once "Snapshot the Entities Once per Compile" {
     kind) and neither a union body, nor a set field whose registry entry
     exempts obligations, nor its kind accepting no verify statements
     exempts it. It counts toward coverage when its
-    kind is testable and it owes obligations or declares some. The
-    rules, the pass input's `exempt` (it owes none), the coverage rule,
-    stats and the verify-stub fix all read this one standing.
+    kind is testable and it owes obligations or declares some: the
+    coverage rule's one counting rule, read with the standing's facts.
+    The rules, the pass input's `owes_none` (it owes none, and may still
+    count by declaring some), stats and the verify-stub fix all read this
+    one standing.
   """
   verify unit "every field an entity writes has one text, the same for declarative rules, custom validators and compiler passes"
   verify unit "a variant list or type union is its members joined by ' | ', a mixed list or expression group its items joined by ', '"
@@ -254,6 +256,8 @@ behavior snapshot_entities_once "Snapshot the Entities Once per Compile" {
   verify unit "the checks, the check passes and the coverage of one compile read one snapshot"
   verify unit "a session's snapshot follows every update"
   verify unit "every written field keeps its value shape and value span beside its text"
+  verify unit "the coverage rule reads each entity as the pass input carries it"
+  verify unit "the standing counts an entity toward coverage exactly as the coverage rule counts the pass entity it sends"
 }
 
 // -- Entity Checks -----------------------------------------------------------

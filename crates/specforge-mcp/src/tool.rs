@@ -2,18 +2,24 @@
 //! `tools/call` reply.
 //!
 //! Handlers return a [`ToolOutcome`] (a mutation's handler, a
-//! [`Replied`](crate::mutation::Replied) holding one); [`envelope`] alone
-//! builds `content`, `isError` and `_meta`. What a mutation wrote crosses
-//! to the dispatcher typed (ADR 0022), never read back from the reply.
+//! [`Mutation`](crate::mutation::Mutation) that [`crate::mutation::complete`]
+//! turns into one); [`envelope`] alone builds `content`, `isError` and
+//! `_meta`. What a mutation wrote crosses to the dispatcher typed (ADR 0022),
+//! never read back from the reply.
 
+use std::marker::PhantomData;
+
+use serde::Serialize;
 use serde_json::{Value, json};
 use specforge_common::{Diagnostic, Severity};
 use specforge_graph::Graph;
 
-use crate::args::Argument;
-use crate::mutation::Replied;
+use crate::args::{Argument, Arguments};
+use crate::mutation::{Mutation, MutationArgs, MutationReply};
 use crate::protocol::{JsonRpcError, JsonRpcResponse, error_codes};
-use crate::target::{Call, ProjectTarget, TargetSpec, WithoutProject};
+use crate::reply::{Answered, Object, Source, Text};
+use crate::surface_call::Ran;
+use crate::target::{Call, Input, TargetSpec};
 use crate::types::McpToolDescriptor;
 use specforge_ops::{OpError, OpErrorKind};
 
@@ -114,252 +120,264 @@ pub fn read_only_annotations() -> Value {
     json!({ "readOnlyHint": true, "openWorldHint": false })
 }
 
-/// What a tool does to its environment, with the handler that does it: the
-/// one declaration its category, annotations, call target and reply's
-/// `files_written` derive from (ADR 0024, round-5 amendment).
-#[derive(Clone, Copy)]
+/// What a tool does to its environment: the one declaration its category,
+/// annotations and a mutation's `files_written` derive from (ADR 0024 A1,
+/// ADR 0049). A core tool states it as [`CoreTool::EFFECT`]; that it agrees
+/// with what the tool's handler answers is checked when the table is built
+/// ([`spec`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Effect {
     /// It only reads: `readOnlyHint`, listed in `group`.
-    Reads { group: ToolGroup, handler: Handler },
+    Reads { group: ToolGroup },
     /// It writes output artifacts, not its target's project files (collect
     /// writes the recorded test report, render an export): listed in
     /// `group`, annotated with `hints`; its reply is all there is (ADR 0022).
-    WritesOutput {
-        group: ToolGroup,
-        hints: WriteHints,
-        handler: Handler,
-    },
+    WritesOutput { group: ToolGroup, hints: WriteHints },
     /// It writes its target's project files: category `mutation`, annotated
-    /// with `hints`; its handler says what it wrote, which the reply lists
-    /// as `files_written` (ADR 0022).
-    Mutates {
-        hints: WriteHints,
-        handler: MutationHandler,
-    },
+    /// with `hints`; its handler answers a `Mutation`, whose files the reply
+    /// lists as `files_written` (ADR 0022).
+    Mutates { hints: WriteHints },
 }
 
-/// How a tool that is no mutation runs. The variant is what its handler is
-/// given, and so its call target: whether it reads a project, and what a
-/// call with nothing served gets. Built only by the table's `unscoped!`,
-/// `view!` and `project!`, whose `run` reads the typed arguments and hands
-/// the handler exactly its variant's input; no handler is given the call.
-#[derive(Clone, Copy)]
-pub enum Handler {
-    /// Reads no project (explain). Its handler is
-    /// `fn(Args) -> Answered<Reply>` (or `Answered<Text>`).
-    Unscoped {
-        arguments: fn() -> Vec<Argument>,
-        reply: Option<fn() -> Value>,
-        run: fn(&Call<'_>, Value) -> ToolOutcome,
-    },
-    /// Reads the project view of `target`'s project; with nothing served,
-    /// the empty session's (a read that then names a file or an entity is
-    /// refused as no project, ADR 0025). Its handler is
-    /// `fn(ProjectView<'_>, Args) -> Answered<Reply>` (or `Answered<Text>`).
-    View {
-        target: ProjectTarget,
-        arguments: fn() -> Vec<Argument>,
-        reply: Option<fn() -> Value>,
-        run: fn(&Call<'_>, Value) -> ToolOutcome,
-    },
-    /// Acts on `target`'s project on disk (its root, its runtime, its view):
-    /// with nothing served and no project named, the call target refuses it
-    /// as no project before it runs. Its handler is
-    /// `fn(&ProjectRef<'_>, Args) -> Answered<Reply>` (or `Answered<Text>`).
-    Project {
-        target: ProjectTarget,
-        arguments: fn() -> Vec<Argument>,
-        reply: Option<fn() -> Value>,
-        run: fn(&Call<'_>, Value) -> ToolOutcome,
-    },
-}
-
-impl Handler {
-    /// The call target this handler's input makes: `Unscoped`, a project
-    /// read over the empty session when nothing is served (`View`), or one
-    /// refused then (`Project`).
-    pub fn target(&self) -> TargetSpec {
-        match *self {
-            Handler::Unscoped { .. } => TargetSpec::Unscoped,
-            Handler::View { target, .. } => TargetSpec::Project {
-                target,
-                without: WithoutProject::EmptySession,
-            },
-            Handler::Project { target, .. } => TargetSpec::Project {
-                target,
-                without: WithoutProject::Refused,
-            },
-        }
+impl Effect {
+    /// Whether it writes its target's project files.
+    pub const fn is_mutation(self) -> bool {
+        matches!(self, Effect::Mutates { .. })
     }
 
-    /// The arguments it reads, in field order.
-    pub fn arguments(&self) -> Vec<Argument> {
-        match *self {
-            Handler::Unscoped { arguments, .. }
-            | Handler::View { arguments, .. }
-            | Handler::Project { arguments, .. } => arguments(),
-        }
-    }
-
-    /// The outputSchema its reply type derives: `None` for a handler
-    /// answering text.
-    pub fn reply(&self) -> Option<fn() -> Value> {
-        match *self {
-            Handler::Unscoped { reply, .. }
-            | Handler::View { reply, .. }
-            | Handler::Project { reply, .. } => reply,
-        }
-    }
-
-    /// Run it on the resolved call.
-    pub(crate) fn run(&self, call: &Call<'_>, arguments: Value) -> ToolOutcome {
-        match *self {
-            Handler::Unscoped { run, .. }
-            | Handler::View { run, .. }
-            | Handler::Project { run, .. } => run(call, arguments),
-        }
-    }
-}
-
-/// How a mutation runs: what its handler is given, and so its target. Built
-/// only by the table's `mutation!` and `create!`.
-#[derive(Clone, Copy)]
-pub enum MutationHandler {
-    /// Writes `target`'s project, refused as no project before it runs when
-    /// nothing is served and the call names none. Its handler is
-    /// `fn(&ProjectRef<'_>, Args) -> Mutation<Reply>`.
-    Project {
-        target: ProjectTarget,
-        arguments: fn() -> Vec<Argument>,
-        reply: fn() -> Value,
-        run: fn(&Call<'_>, Value) -> Replied,
-    },
-    /// Creates the project its required `path` names (init); the target
-    /// refuses a missing path and one inside the served project. Its handler
-    /// is `fn(&Path, &SharedRuntime, Args) -> Mutation<Reply>`: the
-    /// directory, and the runtime its extensions' declarations are read in
-    /// (the host's, ADR 0028 D7).
-    New {
-        arguments: fn() -> Vec<Argument>,
-        reply: fn() -> Value,
-        run: fn(&Call<'_>, Value) -> Replied,
-    },
-}
-
-impl MutationHandler {
-    /// The call target this handler's input makes.
-    pub fn target(&self) -> TargetSpec {
-        match *self {
-            MutationHandler::Project { target, .. } => TargetSpec::Project {
-                target,
-                without: WithoutProject::Refused,
-            },
-            MutationHandler::New { .. } => TargetSpec::NewProject,
-        }
-    }
-
-    /// The arguments it reads, in field order.
-    pub fn arguments(&self) -> Vec<Argument> {
-        match *self {
-            MutationHandler::Project { arguments, .. } | MutationHandler::New { arguments, .. } => {
-                arguments()
-            }
-        }
-    }
-
-    /// The outputSchema its reply type derives, `files_written` included
-    /// ([`crate::mutation::output_schema`]).
-    pub fn reply(&self) -> fn() -> Value {
-        match *self {
-            MutationHandler::Project { reply, .. } | MutationHandler::New { reply, .. } => reply,
-        }
-    }
-
-    /// Run it on the resolved call.
-    pub(crate) fn run(&self, call: &Call<'_>, arguments: Value) -> Replied {
-        match *self {
-            MutationHandler::Project { run, .. } | MutationHandler::New { run, .. } => {
-                run(call, arguments)
-            }
-        }
-    }
-}
-
-/// One core tool: everything the server lists, dispatches and reports about
-/// it, from three fields.
-pub struct ToolSpec {
-    pub name: &'static str,
-    pub description: &'static str,
-    /// What it does, and the handler that does it.
-    pub effect: Effect,
-}
-
-impl ToolSpec {
-    /// `Mutation` for a mutation, else its effect's group.
-    pub fn category(&self) -> Category {
-        match self.effect {
-            Effect::Reads { group, .. } | Effect::WritesOutput { group, .. } => group.into(),
+    /// `Mutation` for a mutation, else its group.
+    pub fn category(self) -> Category {
+        match self {
+            Effect::Reads { group } | Effect::WritesOutput { group, .. } => group.into(),
             Effect::Mutates { .. } => Category::Mutation,
         }
     }
 
     /// `read_only_annotations()` for `Reads`, else its hints' annotations.
-    pub fn annotations(&self) -> Value {
-        match self.effect {
+    pub fn annotations(self) -> Value {
+        match self {
             Effect::Reads { .. } => read_only_annotations(),
-            Effect::WritesOutput { hints, .. } | Effect::Mutates { hints, .. } => {
-                hints.annotations()
-            }
+            Effect::WritesOutput { hints, .. } | Effect::Mutates { hints } => hints.annotations(),
         }
     }
+}
 
-    /// Whether it writes its target's project files (`Effect::Mutates`).
-    pub fn is_mutation(&self) -> bool {
-        matches!(self.effect, Effect::Mutates { .. })
+/// Where `spec/types` states a core tool's reply (ADR 0048 D8): what the
+/// reflection test compares the derived output schema with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReplySpec {
+    /// The `Mcp*` type of `spec/types/mcp.spec` the reply is.
+    Type(&'static str),
+    /// A document another spec states (the agent export, ADR 0007; the
+    /// GraphProtocolSchema). The text says which.
+    Document(&'static str),
+    /// A document in text: no outputSchema, no spec type.
+    Text,
+}
+
+impl ReplySpec {
+    /// Whether the reply is text.
+    pub const fn is_text(self) -> bool {
+        matches!(self, ReplySpec::Text)
+    }
+}
+
+/// One core MCP tool, stated once in its own module under `tools/`
+/// (CONTEXT.md "Tool spec"). Implemented on the module's unit struct
+/// `Tool`; listed by [`crate::tools::CORE_TOOLS`] as [`spec`]`(&x::Tool)`.
+/// Everything the server lists, dispatches, checks and reports about the
+/// tool derives from it ([`ToolSpec`]).
+pub trait CoreTool: Sync + 'static {
+    /// Its name as `tools/list` lists it and every prompt names it.
+    const NAME: &'static str;
+    /// Its `tools/list` description.
+    const DESCRIPTION: &'static str;
+    /// What it does to its environment.
+    const EFFECT: Effect;
+    /// Where the spec states its reply; a text reply states none.
+    const SPEC: ReplySpec = ReplySpec::Text;
+    /// The paths of its outputSchema (`$.nodes[].fields`) whose content an
+    /// extension defines: open values no core type can close (ADR 0048 D1).
+    /// The reflection test holds the schema to exactly these.
+    const OPEN_VALUES: &'static [&'static str] = &[];
+    /// The typed arguments it reads (ADR 0033), as its reply kind reads
+    /// them before the handler runs: a mutation's arguments say whether the
+    /// call only previews (`MutationArgs`); a read's say nothing.
+    type Args: Arguments + Previews<Self::Returns>;
+    /// What its handler is given before its arguments, and so its call
+    /// target (ADR 0024 A2): `Unscoped`, `View`, `Project` or `NewProject`
+    /// ([`crate::target`]).
+    type Input: Input;
+    /// What its handler returns, and so its reply kind: `Answered<Reply>`,
+    /// `Answered<Text>` or `Mutation<Reply>` ([`Handled`]).
+    type Returns: Handled;
+    /// The handler: its input, then its typed arguments.
+    fn call(input: <Self::Input as Input>::Given<'_>, args: Self::Args) -> Self::Returns;
+}
+
+/// A tool's arguments as its reply kind reads them before the handler takes
+/// them: whether the call only previews (ADR 0022). Two blanket
+/// implementations, never written by hand: a read never previews, and a
+/// mutation's arguments say ([`MutationArgs::previews`]). A mutation whose
+/// `Args` are no `MutationArgs`, or whose `Reply` is no `MutationReply`,
+/// does not build.
+pub trait Previews<H> {
+    fn previews(&self) -> bool;
+}
+
+impl<A: Arguments, R> Previews<Answered<R>> for A {
+    fn previews(&self) -> bool {
+        false
+    }
+}
+
+impl<A: MutationArgs, R: MutationReply> Previews<Mutation<R>> for A {
+    fn previews(&self) -> bool {
+        MutationArgs::previews(self)
+    }
+}
+
+/// What a core tool's handler returns: its reply kind. Three
+/// implementations: `Answered<Text>`, `Answered<R>` (`R: Object +
+/// Serialize`, ADR 0048) and `Mutation<R>` (`R: MutationReply`, ADR 0022).
+pub trait Handled: Sized {
+    /// Whether the handler is a mutation's: it wrote its target's project
+    /// files, which the pipeline refreshes and reports (ADR 0022). The tool's
+    /// effect must be `Mutates` exactly then.
+    const MUTATES: bool;
+    /// Whether the tool lists an outputSchema; read without building it.
+    const TYPED: bool;
+    /// The outputSchema `tools/list` lists and every structured reply is
+    /// checked against: `None` for text. The one place a core tool's output
+    /// schema is built.
+    fn output_schema() -> Option<&'static Value>;
+    /// A call refused before its handler ran (an undeclared name, arguments
+    /// that do not read, a call target that refused): the refusal as it is
+    /// for a read; for a mutation a failed mutation that wrote nothing
+    /// ([`crate::mutation::refused`]).
+    fn refused(error: Box<McpError>, tool: &'static str) -> Ran<ToolOutcome>;
+    /// The rest of a call whose handler ran: a read's reply checked against
+    /// its schema; a mutation completed ([`crate::mutation::complete`]: the
+    /// target brought up to date, the reply sent once and checked, its events
+    /// recorded), `preview` read from its arguments beforehand.
+    fn finish(self, call: &mut Call<'_>, tool: &'static str, preview: bool) -> Ran<ToolOutcome>;
+}
+
+impl Handled for Answered<Text> {
+    const MUTATES: bool = false;
+    const TYPED: bool = false;
+
+    fn output_schema() -> Option<&'static Value> {
+        None
     }
 
-    /// Its call target: its handler's ([`Handler::target`],
-    /// [`MutationHandler::target`]).
-    pub fn target(&self) -> TargetSpec {
-        match &self.effect {
-            Effect::Reads { handler, .. } | Effect::WritesOutput { handler, .. } => {
-                handler.target()
-            }
-            Effect::Mutates { handler, .. } => handler.target(),
-        }
+    fn refused(error: Box<McpError>, _: &'static str) -> Ran<ToolOutcome> {
+        Ran::of(ToolOutcome::Refused(error))
     }
 
-    /// The outputSchema `tools/list` lists: the one its handler's reply type
-    /// derives (a mutation's with `files_written`); none for a tool whose
-    /// reply is text.
-    pub fn output_schema(&self) -> Option<Value> {
-        match &self.effect {
-            Effect::Reads { handler, .. } | Effect::WritesOutput { handler, .. } => {
-                handler.reply().map(|reply| reply())
-            }
-            Effect::Mutates { handler, .. } => Some(handler.reply()()),
-        }
+    fn finish(self, _: &mut Call<'_>, _: &'static str, _: bool) -> Ran<ToolOutcome> {
+        Ran::of(crate::reply::text(self))
+    }
+}
+
+impl<R: Object + Serialize + 'static> Handled for Answered<R> {
+    const MUTATES: bool = false;
+    const TYPED: bool = true;
+
+    fn output_schema() -> Option<&'static Value> {
+        Some(crate::reply::output_schema::<R>())
     }
 
-    /// The input schema `tools/list` lists: the handler's arguments, then
-    /// the target's, and no other property ([`crate::args::input_schema`]).
-    pub fn input_schema(&self) -> Value {
+    fn refused(error: Box<McpError>, _: &'static str) -> Ran<ToolOutcome> {
+        Ran::of(ToolOutcome::Refused(error))
+    }
+
+    fn finish(self, _: &mut Call<'_>, tool: &'static str, _: bool) -> Ran<ToolOutcome> {
+        let schema = Self::output_schema().expect("a typed reply has an outputSchema");
+        Ran::of(crate::reply::conforming(
+            tool,
+            Source::Core,
+            schema,
+            crate::reply::structured(self),
+        ))
+    }
+}
+
+impl<R: MutationReply> Handled for Mutation<R> {
+    const MUTATES: bool = true;
+    const TYPED: bool = true;
+
+    /// `WrittenReply<R, R::After>`'s schema ([`crate::mutation::output_schema`]).
+    fn output_schema() -> Option<&'static Value> {
+        Some(crate::mutation::output_schema::<R>())
+    }
+
+    fn refused(error: Box<McpError>, tool: &'static str) -> Ran<ToolOutcome> {
+        let (outcome, events) = crate::mutation::refused(tool, error);
+        Ran { outcome, events }
+    }
+
+    fn finish(self, call: &mut Call<'_>, tool: &'static str, preview: bool) -> Ran<ToolOutcome> {
+        // `complete` owns the order: refresh, send once, check against the
+        // schema, record the events.
+        let schema = Self::output_schema().expect("a mutation has an outputSchema");
+        let (outcome, events) = crate::mutation::complete::<R>(call, tool, schema, preview, self);
+        Ran { outcome, events }
+    }
+}
+
+/// A core tool as the table holds it: everything the server lists,
+/// dispatches, checks and reports about it. Implemented once, for every
+/// [`CoreTool`]; listings, the tools adapter, events and the reflection
+/// tests read it.
+pub trait ToolSpec: Sync {
+    fn name(&self) -> &'static str;
+    fn description(&self) -> &'static str;
+    fn effect(&self) -> Effect;
+    /// Where the spec states its reply.
+    fn spec_reply(&self) -> ReplySpec;
+    /// The open values of its outputSchema ([`CoreTool::OPEN_VALUES`]).
+    fn open_values(&self) -> &'static [&'static str];
+    /// Its declared arguments, in field order.
+    fn arguments(&self) -> Vec<Argument>;
+    /// Its call target: its input's ([`Input::TARGET`]).
+    fn target(&self) -> TargetSpec;
+    /// Its outputSchema ([`Handled::output_schema`]); `None` for text.
+    fn output_schema(&self) -> Option<&'static Value>;
+    /// Whether it lists an outputSchema, without building it.
+    fn is_typed(&self) -> bool;
+    /// Run it on its resolved call: a name neither it nor its target
+    /// declares is refused first, then its arguments are read, its input
+    /// given and its reply finished. The request pipeline's; a test cannot
+    /// build a `Call`.
+    fn run(&self, call: &mut Call<'_>, arguments: &Value) -> Ran<ToolOutcome>;
+    /// The outcome of a call refused before it ran.
+    fn refused(&self, error: McpError) -> Ran<ToolOutcome>;
+
+    /// `Mutation` for a mutation, else its effect's group.
+    fn category(&self) -> Category {
+        self.effect().category()
+    }
+
+    /// `readOnlyHint` for a read, else its hints'.
+    fn annotations(&self) -> Value {
+        self.effect().annotations()
+    }
+
+    /// Whether it writes its target's project files.
+    fn is_mutation(&self) -> bool {
+        self.effect().is_mutation()
+    }
+
+    /// The input schema `tools/list` lists: its arguments, then its target's,
+    /// and no other property ([`crate::args::input_schema`]).
+    fn input_schema(&self) -> Value {
         crate::args::input_schema(&self.arguments(), self.target())
     }
 
-    /// The handler's declared arguments, in field order.
-    pub fn arguments(&self) -> Vec<Argument> {
-        match &self.effect {
-            Effect::Reads { handler, .. } | Effect::WritesOutput { handler, .. } => {
-                handler.arguments()
-            }
-            Effect::Mutates { handler, .. } => handler.arguments(),
-        }
-    }
-
-    /// Every argument the call reads: the handler's, then the target's
+    /// Every argument the call reads: its own, then its target's
     /// ([`TargetSpec::fields`]).
-    pub fn reads(&self) -> Vec<&'static str> {
+    fn reads(&self) -> Vec<&'static str> {
         self.arguments()
             .iter()
             .map(|argument| argument.name)
@@ -369,21 +387,110 @@ impl ToolSpec {
 
     /// The refusal of a call that sends a name neither the tool nor its
     /// target declares ([`crate::args::undeclared`]).
-    pub fn undeclared(&self, arguments: &Value) -> Option<McpError> {
+    fn undeclared(&self, arguments: &Value) -> Option<McpError> {
         crate::args::undeclared(arguments, &self.arguments(), self.target())
     }
 
     /// The tool as `tools/list` describes it.
-    pub fn descriptor(&self) -> McpToolDescriptor {
+    fn descriptor(&self) -> McpToolDescriptor {
         McpToolDescriptor {
-            name: self.name.into(),
-            description: self.description.into(),
+            name: self.name().into(),
+            description: self.description().into(),
             input_schema: self.input_schema(),
-            output_schema: self.output_schema(),
+            output_schema: self.output_schema().cloned(),
             category: Some(self.category().as_str().into()),
             source: Some(CORE_SOURCE.into()),
             annotations: self.annotations(),
         }
+    }
+}
+
+/// `tool` as the table holds it, its declarations checked when the table is
+/// built (at compile time, `cargo check` included): its effect is `Mutates`
+/// exactly when its handler answers a `Mutation`, and it names a spec type
+/// exactly when its reply is typed.
+pub const fn spec<T: CoreTool>(tool: &'static T) -> &'static dyn ToolSpec {
+    let () = Agrees::<T>::CHECKED;
+    tool
+}
+
+struct Agrees<T>(PhantomData<T>);
+
+impl<T: CoreTool> Agrees<T> {
+    const CHECKED: () = {
+        assert!(
+            T::EFFECT.is_mutation() == <T::Returns as Handled>::MUTATES,
+            "a core tool's effect is Mutates exactly when its handler answers a Mutation"
+        );
+        assert!(
+            T::SPEC.is_text() != <T::Returns as Handled>::TYPED,
+            "a core tool names a spec type exactly when it answers a typed reply"
+        );
+    };
+}
+
+impl<T: CoreTool> ToolSpec for T {
+    fn name(&self) -> &'static str {
+        T::NAME
+    }
+
+    fn description(&self) -> &'static str {
+        T::DESCRIPTION
+    }
+
+    fn effect(&self) -> Effect {
+        T::EFFECT
+    }
+
+    fn spec_reply(&self) -> ReplySpec {
+        T::SPEC
+    }
+
+    fn open_values(&self) -> &'static [&'static str] {
+        T::OPEN_VALUES
+    }
+
+    fn arguments(&self) -> Vec<Argument> {
+        <T::Args as Arguments>::declared()
+    }
+
+    fn target(&self) -> TargetSpec {
+        <T::Input as Input>::TARGET
+    }
+
+    fn output_schema(&self) -> Option<&'static Value> {
+        <T::Returns as Handled>::output_schema()
+    }
+
+    fn is_typed(&self) -> bool {
+        <T::Returns as Handled>::TYPED
+    }
+
+    fn run(&self, call: &mut Call<'_>, arguments: &Value) -> Ran<ToolOutcome> {
+        // A name the tool and its target do not declare is refused before
+        // anything is read (a refused mutation is a failed one).
+        if let Some(error) = self.undeclared(arguments) {
+            return self.refused(error);
+        }
+        let args = match crate::args::read::<T::Args>(arguments) {
+            Ok(args) => args,
+            // Arguments that do not read cannot say they asked for a preview.
+            Err(refused) => return <T::Returns as Handled>::refused(refused, T::NAME),
+        };
+        // Read before the handler takes the arguments (ADR 0022).
+        let preview = <T::Args as Previews<T::Returns>>::previews(&args);
+        let returned = match <T::Input as Input>::given(call) {
+            // The input borrows the call; what the handler returns does not.
+            Ok(input) => T::call(input, args),
+            // The call target refused a call with no project before this
+            // runs; unreachable, answered rather than panicked.
+            Err(refused) => return <T::Returns as Handled>::refused(refused, T::NAME),
+        };
+        returned.finish(call, T::NAME, preview)
+    }
+
+    fn refused(&self, error: McpError) -> Ran<ToolOutcome> {
+        <T::Returns as Handled>::refused(Box::new(error), T::NAME)
     }
 }
 
@@ -565,7 +672,7 @@ impl McpError {
         self
     }
 
-    fn set_data_field(&mut self, key: &str, value: Value) {
+    pub(crate) fn set_data_field(&mut self, key: &str, value: Value) {
         if let Value::Object(data) = self.data.get_or_insert_with(|| json!({})) {
             data.insert(key.to_string(), value);
         }
@@ -755,28 +862,6 @@ impl ToolOutcome {
             meta.insert(key.into(), value);
         }
         self
-    }
-
-    /// The same outcome with `value` under `key`: in its payload when that
-    /// is a JSON object, in its `McpError`'s `data` when it refused. A
-    /// text payload is left as it is.
-    pub(crate) fn with_field(mut self, key: &str, value: Value) -> Self {
-        self.set_field(key, value);
-        self
-    }
-
-    /// [`Self::with_field`], in place.
-    pub(crate) fn set_field(&mut self, key: &str, value: Value) {
-        match self {
-            ToolOutcome::Done {
-                payload: Payload::Json(Value::Object(object)),
-                ..
-            } => {
-                object.insert(key.to_string(), value);
-            }
-            ToolOutcome::Done { .. } => {}
-            ToolOutcome::Refused(error) => error.set_data_field(key, value),
-        }
     }
 
     /// The same outcome, a failure naming `tool` unless it names one.
@@ -999,5 +1084,185 @@ mod tests {
             json["message"],
             "unresolved entity 'ghost' — not found in graph"
         );
+    }
+}
+
+#[cfg(test)]
+mod spec_tests {
+    use super::*;
+    use crate::mutation::{Mutated, NoDiagnostics, Written};
+    use crate::reply::Answer;
+    use crate::state::McpState;
+    use crate::target::{CallTarget, Unscoped};
+    use specforge_common::shape::Shape;
+
+    #[derive(Debug, Serialize, Shape)]
+    struct Probe {
+        name: String,
+    }
+
+    #[derive(Debug, Arguments)]
+    struct ProbeArgs {
+        /// A name
+        name: String,
+    }
+
+    /// A read probe: unscoped, a typed reply; its handler panics when it
+    /// runs on "boom", so a call that never reaches it is shown.
+    struct ReadProbe;
+
+    impl CoreTool for ReadProbe {
+        const NAME: &'static str = "specforge.probe";
+        const DESCRIPTION: &'static str = "A probe";
+        const EFFECT: Effect = Effect::Reads {
+            group: ToolGroup::Navigation,
+        };
+        const SPEC: ReplySpec = ReplySpec::Type("McpProbe");
+        type Args = ProbeArgs;
+        type Input = Unscoped;
+        type Returns = Answered<Probe>;
+
+        fn call(_: (), args: ProbeArgs) -> Answered<Probe> {
+            assert_ne!(args.name, "boom", "the handler ran");
+            Ok(Answer::new(Probe { name: args.name }))
+        }
+    }
+
+    #[derive(Debug, Arguments)]
+    struct MutationProbeArgs {
+        /// Only preview
+        dry_run: bool,
+    }
+
+    impl MutationArgs for MutationProbeArgs {
+        fn previews(&self) -> bool {
+            self.dry_run
+        }
+    }
+
+    #[derive(Debug, Serialize, Shape)]
+    struct MutationProbeReply {
+        ok: bool,
+    }
+
+    impl MutationReply for MutationProbeReply {
+        type After = NoDiagnostics;
+    }
+
+    struct MutationProbe;
+
+    impl CoreTool for MutationProbe {
+        const NAME: &'static str = "specforge.probe_mutation";
+        const DESCRIPTION: &'static str = "A mutation probe";
+        const EFFECT: Effect = Effect::Mutates {
+            hints: WriteHints {
+                destructive: false,
+                idempotent: true,
+                open_world: false,
+            },
+        };
+        const SPEC: ReplySpec = ReplySpec::Type("McpProbeMutation");
+        type Args = MutationProbeArgs;
+        type Input = Unscoped;
+        type Returns = Mutation<MutationProbeReply>;
+
+        fn call(_: (), _: MutationProbeArgs) -> Mutation<MutationProbeReply> {
+            Ok(Mutated::new(
+                Answer::new(MutationProbeReply { ok: true }),
+                Written::nothing(),
+            ))
+        }
+    }
+
+    #[specforge_test_macros::test(
+        behavior = "list_mcp_tools",
+        verify = "a core tool's spec is derived from its one module: its name, description, effect, arguments, target and reply"
+    )]
+    fn a_core_tool_spec_is_derived_from_its_module() {
+        let tool = spec(&ReadProbe);
+        assert_eq!(tool.name(), "specforge.probe");
+        assert_eq!(tool.description(), "A probe");
+        assert_eq!(tool.category(), Category::Navigation);
+        assert_eq!(tool.annotations(), read_only_annotations());
+        assert_eq!(tool.target(), TargetSpec::Unscoped);
+        assert!(!tool.is_mutation());
+        assert!(tool.is_typed());
+        assert_eq!(tool.spec_reply(), ReplySpec::Type("McpProbe"));
+        assert_eq!(tool.reads(), vec!["name"]);
+        let input = tool.input_schema();
+        assert_eq!(input["properties"]["name"]["type"], "string", "{input}");
+        let output = tool.output_schema().expect("a typed reply lists a schema");
+        assert_eq!(output["properties"]["name"]["type"], "string", "{output}");
+        let descriptor = tool.descriptor();
+        assert_eq!(descriptor.category.as_deref(), Some("navigation"));
+        assert_eq!(descriptor.source.as_deref(), Some(CORE_SOURCE));
+    }
+
+    #[specforge_test_macros::test(
+        behavior = "list_mcp_tools",
+        verify = "a core tool's spec is derived from its one module: its name, description, effect, arguments, target and reply"
+    )]
+    fn a_core_tool_runs_its_handler_on_its_input() {
+        let tool = spec(&ReadProbe);
+        let mut state = McpState::new();
+        let mut call = Call::new(&mut state, CallTarget::Unscoped);
+
+        let ran = tool.run(&mut call, &json!({"name": "a"}));
+        let ToolOutcome::Done {
+            payload: Payload::Json(reply),
+            ..
+        } = ran.outcome
+        else {
+            panic!("the probe answers a structured reply");
+        };
+        assert_eq!(reply, json!({"name": "a"}));
+        assert!(ran.events.is_empty());
+
+        // Arguments that do not read never reach the handler.
+        let ran = tool.run(&mut call, &json!({"name": 3}));
+        let ToolOutcome::Refused(error) = ran.outcome else {
+            panic!("a name that is no string is refused");
+        };
+        assert_eq!(error.code, ErrorCode::InvalidInput);
+        assert_eq!(error.argument.as_deref(), Some("name"));
+
+        let ran = tool.run(&mut call, &json!({"name": "a", "bogus": 1}));
+        let ToolOutcome::Refused(error) = ran.outcome else {
+            panic!("an undeclared name is refused");
+        };
+        assert_eq!(error.message, "unknown argument 'bogus'");
+    }
+
+    #[specforge_test_macros::test(
+        behavior = "list_mcp_tools",
+        verify = "a core tool's spec is derived from its one module: its name, description, effect, arguments, target and reply"
+    )]
+    fn a_refused_mutation_reports_a_failed_mutation() {
+        let tool = spec(&MutationProbe);
+        assert!(tool.is_mutation());
+        assert_eq!(tool.category(), Category::Mutation);
+
+        let ran = tool.refused(McpError::new(ErrorCode::InvalidInput, "no"));
+        let ToolOutcome::Refused(error) = ran.outcome else {
+            panic!("a refused call is a failure");
+        };
+        assert_eq!(error.data, Some(json!({"files_written": []})));
+        let names: Vec<_> = ran.events.iter().map(|(name, _)| name.as_str()).collect();
+        assert_eq!(names, vec!["mcp_mutation_completed"]);
+        assert_eq!(ran.events[0].1["success"], false);
+
+        // A preview reaches `complete` as one: no event, no `files_written`.
+        let mut state = McpState::new();
+        let mut call = Call::new(&mut state, CallTarget::Unscoped);
+        let ran = tool.run(&mut call, &json!({"dry_run": true}));
+        let ToolOutcome::Done {
+            payload: Payload::Json(reply),
+            ..
+        } = ran.outcome
+        else {
+            panic!("a preview answers its reply");
+        };
+        assert_eq!(reply, json!({"ok": true}));
+        assert!(ran.events.is_empty());
     }
 }

@@ -64,8 +64,30 @@ fn reply_shapes_today() {
 
 /// The paths of `schema` that are open: an object without `properties` or
 /// without `additionalProperties: false`, an array without `items`, a value
-/// of any shape (`{}`). A union is open where its branches are.
-fn open_paths(schema: &Value, path: &str, found: &mut BTreeSet<String>) {
+/// of any shape (`{}`). A union is open where its branches are. A reference
+/// is read as the definition of `root` it names (paths read as if it were
+/// inline); `stack` holds the definitions on the way down, so a recursive one
+/// stops.
+fn open_paths<'v>(
+    root: &'v Value,
+    schema: &'v Value,
+    path: &str,
+    stack: &mut Vec<&'v str>,
+    found: &mut BTreeSet<String>,
+) {
+    if let Some(reference) = schema.get("$ref").and_then(Value::as_str) {
+        if stack.contains(&reference) {
+            return;
+        }
+        let target = reference
+            .strip_prefix('#')
+            .and_then(|pointer| root.pointer(pointer))
+            .unwrap_or_else(|| panic!("{path}: {reference} names no definition"));
+        stack.push(reference);
+        open_paths(root, target, path, stack, found);
+        stack.pop();
+        return;
+    }
     let Some(object) = schema.as_object() else {
         return;
     };
@@ -78,7 +100,7 @@ fn open_paths(schema: &Value, path: &str, found: &mut BTreeSet<String>) {
         if let Some(branches) = schema.get(key).and_then(Value::as_array) {
             composed = true;
             for branch in branches {
-                open_paths(branch, path, found);
+                open_paths(root, branch, path, stack, found);
             }
         }
     }
@@ -95,36 +117,18 @@ fn open_paths(schema: &Value, path: &str, found: &mut BTreeSet<String>) {
             found.insert(path.to_string());
         }
         for (key, property) in properties.into_iter().flatten() {
-            open_paths(property, &format!("{path}.{key}"), found);
+            open_paths(root, property, &format!("{path}.{key}"), stack, found);
         }
     }
     if types.contains(&"array") {
         match schema.get("items") {
-            Some(items) => open_paths(items, &format!("{path}[]"), found),
+            Some(items) => open_paths(root, items, &format!("{path}[]"), stack, found),
             None => {
                 found.insert(format!("{path}[] (no items)"));
             }
         }
     }
 }
-
-/// The open values of the core output schemas: content an extension
-/// defines, which no core type can close.
-const OPEN: &[(&str, &str)] = &[
-    // The export document: a context node is open to the headline fields
-    // its extension declares; `fields` and `verify` are content too.
-    ("specforge.query", "$.nodes[]"),
-    ("specforge.query", "$.nodes[].fields"),
-    ("specforge.query", "$.nodes[].verify"),
-    // What a pass summarizes is the pass's own.
-    ("specforge.analyze", "$.passes[].summary"),
-    // The rules an extension declares.
-    ("specforge.schema", "$.validation_rules[]"),
-    // Every field the entity declares, whatever its kind names them.
-    ("specforge.inspect", "$.fields"),
-    // A map from an entity kind to its enhancements: the keys are kinds.
-    ("specforge.doctor", "$.enhancements"),
-];
 
 #[specforge_test(
     behavior = "follow_negotiated_mcp_revision",
@@ -137,14 +141,18 @@ fn every_core_output_schema_is_closed() {
             continue;
         };
         let mut paths = BTreeSet::new();
-        open_paths(&schema, "$", &mut paths);
+        open_paths(schema, schema, "$", &mut Vec::new(), &mut paths);
         for path in paths {
-            found.insert((spec.name.to_string(), path));
+            found.insert((spec.name().to_string(), path));
         }
     }
-    let listed: BTreeSet<(String, String)> = OPEN
+    let listed: BTreeSet<(String, String)> = specforge_mcp::tools::CORE_TOOLS
         .iter()
-        .map(|(tool, path)| (tool.to_string(), path.to_string()))
+        .flat_map(|tool| {
+            tool.open_values()
+                .iter()
+                .map(move |path| (tool.name().to_string(), (*path).to_string()))
+        })
         .collect();
     let unlisted: Vec<_> = found.difference(&listed).collect();
     let stale: Vec<_> = listed.difference(&found).collect();

@@ -2,8 +2,8 @@
 //! and what the peer rule reports of them.
 
 use specforge_common::Diagnostic;
+use specforge_package::peers::{Member, Peers};
 use specforge_protocol_types::ExtensionDeclaration;
-use specforge_protocol_types::peers::{Member, Peers};
 
 /// `declarations` (entry order) in load order (`Peers::load_order`).
 pub(crate) fn in_load_order(declarations: Vec<ExtensionDeclaration>) -> Vec<ExtensionDeclaration> {

@@ -73,6 +73,11 @@ signature over the manifest's hash).
 *(Amended by ADR 0041: the build first puts the declarations in load order, dependencies first; the
 declarations' own diagnostics are E030, W021, the peers' E073 and E027, the cycles' E027, then W145.)*
 
+*(Amended in architecture round 6, plan 08: `Environment::diagnostics()` reports the environment's own
+first — the load's failures and warnings, provider registration (W118/E057), I002 — then the registry
+build's whole list in its one order, `RegistryBuild::diagnostics()`, which ends with the surfaces' E055
+and E039; see the amendment below.)*
+
 `build_registries(Vec<ExtensionDeclaration>) -> RegistryBuild` checks the declarations
 themselves (E030 identity and shape, W021 consistency against the loaded peers, E027 peer
 dependencies, W145 pass order cycles, in that order, extension by extension within each),
@@ -119,3 +124,38 @@ declaration order (it was an `eprintln!` the LSP and MCP sent to stderr).
   server-verified derivation of the declaration.
 - A category too large to describe on every load: then a batched describe and a minor protocol
   version.
+
+## The registry build reports its diagnostics in one order (amendment, architecture round 6, plan 08)
+
+D11 put the build's diagnostics in three public lists (declaration, registry, surface) and left the
+order to whoever read them. Three readers stitched them in two orders: the environment interleaved
+provider registration and I002 between the declaration and registry lists and reported the surface
+list last, after the graph and the checks; `publish` and the registry's tests chained the three. The
+environment also appended the custom rules' load-time probes (W112) to the registry list from
+outside.
+
+- **One order, owned by the build.** `RegistryBuild::diagnostics()` is every diagnostic the build
+  reports: the declarations' own (E030, W021, E073 and E027, W145), the registries' (E026, W018,
+  W019, W021, I004; W017; the rule set's W150, W147 or W112; W023), the custom rules' probes (W112),
+  then the surfaces' (E055, E039), each group extension by extension in load order. The lists are
+  private.
+- **The build runs its probes.** `RegistryBuild::probe(&dyn CustomVerdicts)` asks the port once per
+  custom rule and keeps the W112s in their place; probing again replaces them. The environment
+  probes when its extensions loaded in a runtime.
+- **The environment's own, then the build's.** `Environment::diagnostics()` reports, in order: E069,
+  the extension load's failures (E033 once, then E028/E070/W149 per entry) and warnings (W153, then
+  W138), provider registration (W118/E057), I002, then `RegistryBuild::diagnostics()`.
+  `CompiledProject::diagnostics()` follows with the imports', the graph build's and the checks'.
+- **Read through methods.** The build's registries, rule set, passes and surfaces are read through
+  `kinds()`, `fields()`, `edges()`, `rules()`, `passes()` and `surfaces()`; none is a public field.
+
+Consequences: provider registration (W118/E057) now comes before the declarations' own diagnostics
+instead of between them and the registries'; E055 and E039 now come with the environment's
+diagnostics, before the imports', instead of last. A consumer diffing `check` output sees either only
+when both kinds occur in one project. I002 is unaffected: it is reported only when no declaration
+loaded, when the build reports nothing.
+
+**Amended by ADR 0050 (2026-10-11):** D2: contribution flags are gone; what a declaration contributes is its
+content (`ExtensionDeclaration::declares`), and the handshake's `providers` says it implements configured
+providers. D3: the `fields` category is gone; the declared categories are the
+protocol's only describe categories.

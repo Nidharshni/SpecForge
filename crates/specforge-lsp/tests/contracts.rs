@@ -88,13 +88,8 @@ pub(crate) fn project_with(extensions: &[&str]) -> tempfile::TempDir {
     dir
 }
 
-/// The kind and field registries `extensions` populate.
-pub(crate) fn registries_for(
-    extensions: &[&str],
-) -> (
-    specforge_registry::KindRegistry,
-    specforge_registry::FieldRegistry,
-) {
+/// The registry build `extensions` populate.
+pub(crate) fn registries_for(extensions: &[&str]) -> specforge_registry::RegistryBuild {
     let names: Vec<String> = extensions.iter().map(|s| s.to_string()).collect();
     let runtime = wasm_runtime_for(&names);
     let declarations: Vec<_> = names
@@ -105,8 +100,7 @@ pub(crate) fn registries_for(
             loaded.declaration
         })
         .collect();
-    let build = specforge_registry::build_registries(declarations);
-    (build.kinds, build.fields)
+    specforge_registry::build_registries(declarations)
 }
 
 // B:lsp_shutdown — verify contract "requires/ensures consistency for LSP shutdown"
@@ -783,13 +777,9 @@ fn provide_semantic_tokens_contract() {
     // Requires: source text + registered kinds
     // Ensures: tokens classified with correct types (keyword, property, string for triple-quoted)
     let source = "behavior foo \"Foo\" {\n  contract \"\"\"\n    hello\n  \"\"\"\n}\n";
-    let registries = {
-        let mut registries = specforge_registry::RegistryBuild::default();
-        registries.kinds = verifiable(&["behavior"], &[]);
-        registries
-    };
+    let registries = verifiable(&["behavior"], &[]);
     let graph = Graph::new();
-    let env = specforge_project::Environment::with_registries(registries);
+    let env = specforge_project::Environment::with_registries(registries, None);
     let recorded = specforge_project::coverage::RecordedCoverage::over(&graph, &env);
     let view = specforge_ops::view::ProjectView::new(&graph, &env, None, &recorded);
     let tokens = specforge_lsp::Document::new("file:///t.spec".into(), source.into()).tokens(&view);
@@ -827,11 +817,8 @@ fn code_action_create_entity_stub_contract() {
     let state = buffers(&[("/p/auth.spec", text)]);
     let diagnostics = state.session().unwrap().project().diagnostics();
     let fixes_with = |target_kind: Option<&str>| {
-        let env = specforge_project::Environment::with_registries({
-            let mut build = specforge_registry::RegistryBuild::default();
-            build.fields = invariants_field(target_kind);
-            build
-        });
+        let env =
+            specforge_project::Environment::with_registries(invariants_field(target_kind), None);
         let recorded = specforge_project::coverage::RecordedCoverage::over(state.graph(), &env);
         let view = specforge_ops::view::ProjectView::new(state.graph(), &env, None, &recorded);
         let nav = specforge_ops::navigate::Navigator::new(view, |_: &str| Some(text.to_string()));
@@ -864,7 +851,7 @@ fn code_action_create_entity_stub_contract() {
 }
 
 /// `behavior.invariants` as a reference list targeting `target_kind`.
-fn invariants_field(target_kind: Option<&str>) -> specforge_registry::FieldRegistry {
+fn invariants_field(target_kind: Option<&str>) -> specforge_registry::RegistryBuild {
     crate::registries::registries("@test/ext", |c| {
         c.kind("behavior", |k| {
             k.field("invariants", |f| {
@@ -874,13 +861,17 @@ fn invariants_field(target_kind: Option<&str>) -> specforge_registry::FieldRegis
                 }
             });
         });
+        if let Some(target_kind) = target_kind {
+            c.kind(target_kind, |k| {
+                k.keyword(target_kind);
+            });
+        }
     })
-    .fields
 }
 
 // B:code_actions_for_missing_verify — verify contract "requires/ensures consistency for missing verify code actions"
 /// A registry where `kinds` accept verify statements of `verify_kinds`.
-fn verifiable(kinds: &[&str], verify_kinds: &[&str]) -> specforge_registry::KindRegistry {
+fn verifiable(kinds: &[&str], verify_kinds: &[&str]) -> specforge_registry::RegistryBuild {
     crate::registries::registries("@test/ext", |c| {
         for kind in kinds {
             c.kind(kind, |k| {
@@ -890,7 +881,6 @@ fn verifiable(kinds: &[&str], verify_kinds: &[&str]) -> specforge_registry::Kind
             });
         }
     })
-    .kinds
 }
 
 #[specforge_test(
@@ -902,11 +892,7 @@ fn code_actions_for_missing_verify_contract() {
     // Ensures: quickfix code action with verify stub targeting the .spec file
     let text = "\n\n\n\nbehavior my_behavior \"B\" {\n  contract \"c\"\n}\n";
     let state = buffers(&[("/p/a.spec", text)]);
-    let env = specforge_project::Environment::with_registries({
-        let mut build = specforge_registry::RegistryBuild::default();
-        build.kinds = verifiable(&["behavior"], &[]);
-        build
-    });
+    let env = specforge_project::Environment::with_registries(verifiable(&["behavior"], &[]), None);
     let recorded = specforge_project::coverage::RecordedCoverage::over(state.graph(), &env);
     let view = specforge_ops::view::ProjectView::new(state.graph(), &env, None, &recorded);
     let nav = specforge_ops::navigate::Navigator::new(view, |_: &str| Some(text.to_string()));

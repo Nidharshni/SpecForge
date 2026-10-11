@@ -1,0 +1,31 @@
+---
+source: crates/specforge-cli/src/main.rs
+expression: command.clone().render_long_help().to_string()
+---
+Show inference progress (analyzed files, gaps, stale entries)
+
+Usage: specforge infer-status [OPTIONS]
+
+Options:
+      --path <PATH>
+          Path to the project root
+          
+          [default: .]
+
+      --format <FORMAT>
+          Output format: human or json
+          
+          [default: human]
+          [possible values: human, json]
+
+      --gaps
+          Show unanalyzed files grouped by directory
+
+      --stale
+          Show stale and deleted files
+
+      --gaps-detail
+          Show detailed gap analysis (pub Rust items without spec entities)
+
+  -h, --help
+          Print help

@@ -2788,6 +2788,7 @@ dependencies = [
  "specforge-mcp",
  "specforge-ops",
  "specforge-ops-registry",
+ "specforge-package",
  "specforge-parser",
  "specforge-project",
  "specforge-protocol-types",
@@ -2811,6 +2812,7 @@ dependencies = [
  "serde",
  "serde_json",
  "specforge-diagnostics",
+ "specforge-package",
  "specforge-protocol-types",
  "specforge-shape-macros",
  "specforge-test",
@@ -2845,6 +2847,7 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+ "specforge-protocol-types",
  "specforge-test",
  "specforge-test-macros",
 ]
@@ -2948,6 +2951,7 @@ dependencies = [
  "specforge-common",
  "specforge-extension-sdk",
  "specforge-installed",
+ "specforge-package",
  "specforge-protocol-types",
  "specforge-test",
  "specforge-test-macros",
@@ -3059,6 +3063,7 @@ dependencies = [
  "specforge-installed",
  "specforge-migrate",
  "specforge-ops",
+ "specforge-package",
  "specforge-parser",
  "specforge-project",
  "specforge-protocol-types",
@@ -3069,7 +3074,6 @@ dependencies = [
  "specforge-wasm",
  "strsim",
  "tempfile",
- "walkdir",
 ]
 
 [[package]]
@@ -3081,6 +3085,7 @@ dependencies = [
  "sha2",
  "specforge-common",
  "specforge-ops",
+ "specforge-package",
  "specforge-protocol-types",
  "specforge-registry-client",
  "specforge-registry-server",
@@ -3088,6 +3093,18 @@ dependencies = [
  "specforge-test",
  "specforge-test-macros",
  "tempfile",
+]
+
+[[package]]
+name = "specforge-package"
+version = "0.1.0"
+dependencies = [
+ "semver",
+ "serde",
+ "serde_json",
+ "specforge-protocol-types",
+ "specforge-test",
+ "specforge-test-macros",
 ]
 
 [[package]]
@@ -3121,6 +3138,7 @@ dependencies = [
  "specforge-extension-sdk",
  "specforge-graph",
  "specforge-installed",
+ "specforge-package",
  "specforge-parser",
  "specforge-protocol-types",
  "specforge-registry",
@@ -3136,7 +3154,6 @@ dependencies = [
 name = "specforge-protocol-types"
 version = "0.1.0"
 dependencies = [
- "semver",
  "serde",
  "serde_json",
  "specforge-test",
@@ -3155,6 +3172,7 @@ dependencies = [
  "specforge-emitter",
  "specforge-extension-sdk",
  "specforge-graph",
+ "specforge-package",
  "specforge-parser",
  "specforge-protocol-types",
  "specforge-test",
@@ -3178,6 +3196,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "specforge-common",
+ "specforge-package",
  "specforge-protocol-types",
  "specforge-registry-client",
  "specforge-registry-server",
@@ -3203,6 +3222,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "specforge-package",
  "specforge-protocol-types",
  "specforge-registry-client",
  "specforge-registry-server",
@@ -3224,6 +3244,7 @@ dependencies = [
  "form_urlencoded",
  "serde",
  "serde_json",
+ "specforge-package",
  "specforge-protocol-types",
  "specforge-test",
  "specforge-test-macros",

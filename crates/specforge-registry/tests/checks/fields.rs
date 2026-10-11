@@ -4,7 +4,9 @@ use specforge_common::{SourceSpan, Sym};
 use specforge_registry::entity::EntityRecord;
 use specforge_test_macros::test as spec;
 
-use crate::support::{build, check, coded_in, software, span};
+use specforge_extension_sdk::prelude::FieldType;
+
+use crate::support::{build, check, coded_in, declare, peer, software, span};
 
 #[spec(
     behavior = "detect_unknown_entity_fields",
@@ -55,14 +57,14 @@ fn w020_includes_field_name_entity_kind_and_source_span() {
     verify = "expression is checked like any other field (W020 where undeclared)"
 )]
 fn expression_is_checked_like_any_other_field() {
-    let mut build = build([software()]);
+    let alone = build([software()]);
     // software's invariant and behavior declare no `expression`; without an
     // extension that declares it (formal enhances invariant), it is W020.
     let entities = vec![
         EntityRecord::new("invariant", "i1", span("test.spec")).with_fields(&["expression"]),
         EntityRecord::new("behavior", "b1", span("test.spec")).with_fields(&["expression"]),
     ];
-    let diags = check(&build, &entities);
+    let diags = check(&alone, &entities);
     let flagged: Vec<&str> = diags.iter().map(|d| d.message.as_str()).collect();
     assert_eq!(diags.len(), 2, "{flagged:?}");
     assert!(
@@ -72,22 +74,21 @@ fn expression_is_checked_like_any_other_field() {
         "{flagged:?}"
     );
 
-    // Declared on a kind, it is a field of that kind like any other.
-    build.fields.register(
-        specforge_registry::FieldRegistryEntry::new(
-            "invariant",
-            "@specforge/formal",
-            specforge_protocol_types::FieldDescriptor {
-                name: "expression".to_string(),
-                field_type: "string".to_string(),
-                normative: true,
-                proof_role: Some("claim".to_string()),
-                ..Default::default()
-            },
-        )
-        .unwrap(),
-    );
-    let diags = check(&build, &entities);
+    // Declared on a kind (formal enhances invariant), it is a field of that
+    // kind like any other.
+    let formal = declare("@specforge/formal", |c| {
+        c.meta.peer_dependencies = vec![peer("@specforge/software", "^1")];
+        c.enhance("invariant", "@specforge/software", |e| {
+            e.field("expression", |f| {
+                f.field_type(FieldType::String)
+                    .normative()
+                    .proof_role("claim");
+            });
+        });
+    });
+    let with_formal = build([software(), formal]);
+    assert!(with_formal.diagnostics().next().is_none());
+    let diags = check(&with_formal, &entities);
     assert_eq!(diags.len(), 1, "{diags:?}");
     assert!(diags[0].message.contains("behavior"), "{diags:?}");
 }
@@ -120,8 +121,14 @@ fn structural_fields_not_checked_against_field_registry() {
     verify = "verify on a kind no extension made testable produces W020"
 )]
 fn verify_on_non_testable_kind_produces_w020() {
-    let mut build = build([software()]);
-    build.kinds.get_mut("behavior").unwrap().supports_verify = false;
+    let build = build([declare("@specforge/software", |c| {
+        c.kind("Behavior", |k| {
+            k.keyword("behavior")
+                .testable(true)
+                .singleton(false)
+                .supports_verify(false);
+        });
+    })]);
     let entities = vec![
         EntityRecord::new("behavior", "b1", span("test.spec")).with_fields(&["title", "verify"]),
     ];

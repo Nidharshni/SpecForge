@@ -5,17 +5,17 @@ use std::collections::BTreeMap;
 
 use serde::Serialize;
 use serde_json::{Value, json};
-use specforge_common::shape::{Object, Shape, violations};
+use specforge_common::shape::{Definitions, Object, Shape, build, document, violations};
 use specforge_common::{DiagnosticJson, DiagnosticList, SourceSpan};
 
 fn schema<T: Shape>() -> Value {
-    T::schema()
+    specforge_common::shape::build::<T>()
 }
 
 /// What `value` serializes as conforms to the derived schema.
 fn accepts<T: Shape + Serialize>(value: &T) {
     let written = serde_json::to_value(value).expect("a value serializes");
-    let found = violations(&T::schema(), &written);
+    let found = violations(&schema::<T>(), &written);
     assert!(found.is_empty(), "{written} breaks its schema: {found:?}");
 }
 
@@ -503,4 +503,221 @@ fn minimum_refuses_a_smaller_number() {
         violations(&nested, &json!({"n": 3})),
         ["$.n: 3 is below the minimum 5"]
     );
+}
+
+#[derive(Serialize, Shape)]
+struct Left {
+    left: String,
+}
+
+#[derive(Serialize, Shape)]
+struct Right {
+    right: usize,
+}
+
+#[derive(Serialize, Shape)]
+#[serde(untagged)]
+enum Wrapped {
+    A(Left),
+    B(Right),
+}
+
+#[test]
+fn an_untagged_union_of_object_newtypes_is_an_object() {
+    is_object::<Wrapped>();
+    assert_eq!(schema::<Wrapped>()["type"], "object");
+    accepts(&Wrapped::A(Left { left: "l".into() }));
+    accepts(&Wrapped::B(Right { right: 1 }));
+}
+
+/// The derive only unions `Object`s, so a scalar branch is reached through
+/// `one_of` directly: a union is typed `object` only when every branch is.
+#[test]
+fn an_untagged_union_of_a_scalar_newtype_states_no_type() {
+    let mixed = specforge_common::shape::one_of(
+        vec![schema::<String>(), schema::<Left>()],
+        &Definitions::default(),
+    );
+    assert_eq!(mixed.get("type"), None);
+    assert_eq!(mixed["oneOf"].as_array().map(Vec::len), Some(2));
+}
+
+// ── named shapes (ADR 0051) ─────────────────────────────────────────────────
+
+#[derive(Serialize, Shape)]
+#[shape(define)]
+struct Named {
+    id: String,
+}
+
+#[derive(Serialize, Shape)]
+struct HoldsNamedTwice {
+    first: Named,
+    others: Vec<Named>,
+}
+
+#[derive(Serialize, Shape)]
+#[shape(define = "Other")]
+struct Relabeled {
+    id: String,
+}
+
+#[derive(Serialize, Shape)]
+#[shape(define)]
+struct Tree {
+    label: String,
+    children: Vec<Tree>,
+}
+
+#[derive(Serialize, Shape)]
+#[shape(define = "Clash")]
+struct ClashOne {
+    one: bool,
+}
+
+#[derive(Serialize, Shape)]
+#[shape(define = "Clash")]
+struct ClashTwo {
+    two: bool,
+}
+
+#[derive(Serialize, Shape)]
+struct HoldsClashing {
+    one: ClashOne,
+    two: ClashTwo,
+}
+
+#[derive(Serialize, Shape)]
+#[shape(define)]
+struct NamedLeft {
+    left: String,
+}
+
+#[derive(Serialize, Shape)]
+#[shape(define)]
+struct NamedRight {
+    right: u32,
+}
+
+#[derive(Serialize, Shape)]
+#[serde(untagged)]
+enum NamedUnion {
+    A(NamedLeft),
+    B(NamedRight),
+}
+
+#[derive(Serialize, Shape)]
+struct FlattensNamedUnion {
+    #[serde(flatten)]
+    union: NamedUnion,
+    extra: bool,
+}
+
+#[test]
+fn a_defined_shape_is_referenced_and_defined_once() {
+    let document = build::<HoldsNamedTwice>();
+    let reference = json!({"$ref": "#/$defs/Named"});
+    assert_eq!(document["properties"]["first"], reference);
+    assert_eq!(document["properties"]["others"]["items"], reference);
+    assert_eq!(
+        document["$defs"],
+        json!({"Named": {
+            "type": "object",
+            "properties": {"id": {"type": "string"}},
+            "required": ["id"],
+            "additionalProperties": false
+        }})
+    );
+    accepts(&HoldsNamedTwice {
+        first: Named { id: "a".into() },
+        others: vec![Named { id: "b".into() }],
+    });
+    let broken = json!({"first": {"id": 1}, "others": []});
+    assert_eq!(
+        violations(&document, &broken),
+        ["$.first.id: expected string, got integer"]
+    );
+}
+
+#[test]
+fn the_root_of_a_document_is_its_own_body() {
+    let document = build::<Named>();
+    assert!(document.get("$ref").is_none(), "{document}");
+    assert_eq!(document["type"], "object");
+    assert!(document.get("$defs").is_none(), "{document}");
+}
+
+#[test]
+fn define_names_the_definition() {
+    #[derive(Serialize, Shape)]
+    struct Holds {
+        renamed: Relabeled,
+    }
+    let document = build::<Holds>();
+    assert_eq!(
+        document["properties"]["renamed"],
+        json!({"$ref": "#/$defs/Other"})
+    );
+    assert!(document["$defs"]["Other"].is_object(), "{document}");
+}
+
+#[test]
+fn a_defined_shape_may_be_recursive() {
+    let document = build::<Tree>();
+    assert_eq!(
+        document["properties"]["children"]["items"],
+        json!({"$ref": "#/$defs/Tree"}),
+        "{document}"
+    );
+    assert!(document["$defs"]["Tree"].is_object(), "{document}");
+    accepts(&Tree {
+        label: "root".into(),
+        children: vec![Tree {
+            label: "leaf".into(),
+            children: vec![],
+        }],
+    });
+    let held = build::<Vec<Tree>>();
+    let bad = json!([{"label": "r", "children": [{"label": "c", "children": [], "extra": 1}]}]);
+    assert_eq!(
+        violations(&held, &bad),
+        ["$[0].children[0].extra: undeclared key"]
+    );
+}
+
+#[test]
+#[should_panic(expected = "two shapes are named Clash")]
+fn two_shapes_with_one_name_are_a_bug() {
+    let _ = build::<HoldsClashing>();
+}
+
+#[test]
+fn a_union_of_defined_objects_is_an_object() {
+    is_object::<NamedUnion>();
+    let document = build::<NamedUnion>();
+    assert_eq!(document["type"], "object", "{document}");
+    assert_eq!(document["oneOf"][0], json!({"$ref": "#/$defs/NamedLeft"}));
+    accepts(&NamedUnion::A(NamedLeft { left: "l".into() }));
+    accepts(&NamedUnion::B(NamedRight { right: 1 }));
+}
+
+#[test]
+fn a_flattened_union_of_defined_branches_merges_their_bodies() {
+    let document = build::<FlattensNamedUnion>();
+    assert_eq!(document["type"], "object");
+    let branches = document["oneOf"].as_array().expect("a union");
+    assert_eq!(branches.len(), 2);
+    for branch in branches {
+        assert!(branch["properties"]["extra"].is_object(), "{branch}");
+        assert!(branch.get("$ref").is_none(), "{branch}");
+    }
+    assert!(branches[0]["properties"]["left"].is_object());
+    assert!(branches[1]["properties"]["right"].is_object());
+}
+
+#[test]
+fn a_document_is_built_once_per_type() {
+    assert!(std::ptr::eq(document::<Named>(), document::<Named>()));
+    assert_eq!(document::<Named>(), &build::<Named>());
+    assert!(!std::ptr::eq(document::<Named>(), document::<NamedLeft>()));
 }

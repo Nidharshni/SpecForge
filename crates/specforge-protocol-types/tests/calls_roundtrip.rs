@@ -98,13 +98,13 @@ fn a_pass_entity_carries_its_exemption() {
     let exempt: Vec<(&str, bool)> = input
         .entities
         .iter()
-        .map(|e| (e.id.as_str(), e.exempt))
+        .map(|e| (e.id.as_str(), e.owes_none))
         .collect();
     assert_eq!(exempt, [("a", false), ("b", false), ("c", true)]);
     // An older host's entity, without the key, owes obligations.
     let older: PassInput =
         serde_json::from_value(json!({"entities": [{"id": "a", "kind": "k"}]})).unwrap();
-    assert!(!older.entities[0].exempt);
+    assert!(!older.entities[0].owes_none);
 }
 
 #[test]

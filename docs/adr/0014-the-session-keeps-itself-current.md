@@ -54,10 +54,18 @@ before each read) with disk, and `ensure_fresh` applies exactly that.
   to date after the write, not compiled again.)* the served session is never touched or reloaded.
 - **D5. A `path` while nothing is served is adopted** by every tool that takes one (and `init`
   serves the project it created), so "a project is served" never depends on which tool came first.
+  *(Round 6 plan 12: only a project is adopted: a `path` naming a directory that holds neither
+  `specforge.json` nor `specforge.spec` is read for that call as another project, and nothing becomes served.)*
 - **D6. Path normalization.** Canonical, then the nearest enclosing project (`specforge.json` or
   `specforge.spec`), else the directory itself; one that does not exist is `file_not_found` on
   `path`. A path inside the served project is the served project. `init`'s path is used as given and
   may not lie inside the served project.
+  *(Round 6 plan 12: the server's own root (`projectRoot`, else the path `specforge mcp` was started
+  with) is read by the first step of this rule only: the nearest enclosing project, the root included;
+  with none, nothing is served. It used to be served as given, so a directory with no project, or a
+  project's subdirectory, became a project of its own with default configuration, and init beneath it
+  was refused as inside the current project. The served root now always holds a project, so init's
+  refusal is about a real one.)*
 - **D7. One refusal for "no project".** With nothing served and no `path`, `Call::project` is
   `precondition_failed`; analyze no longer runs over an empty graph with a `NoRuntime`. Tools that
   answer usefully without a project (list, stats, coverage and the other reads of the whole

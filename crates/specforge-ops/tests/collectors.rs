@@ -120,11 +120,14 @@ fn collect_maps_results_to_the_views_entities() {
     use specforge_ops::collect::{Consent, Mode, Request, collect};
     use specforge_ops::view::ProjectView;
 
-    let runtime = wasm_runtime_for(&["@specforge/testing", "@specforge/cargo-test"]);
-    let mut env = specforge_project::Environment::from_declarations(vec![load_via_protocol(
+    let runtime: specforge_project::SharedRuntime = std::sync::Arc::new(wasm_runtime_for(&[
+        "@specforge/testing",
         "@specforge/cargo-test",
-    )]);
-    env.runtime = Some(std::sync::Arc::new(runtime));
+    ]));
+    let env = specforge_project::Environment::with_registries(
+        specforge_registry::build_registries(vec![load_via_protocol("@specforge/cargo-test")]),
+        Some(runtime),
+    );
     let (graph, _) = specforge_graph::build_graph(&[specforge_parser::parse(
         "behavior a \"A\" {\n}\n",
         "main.spec",

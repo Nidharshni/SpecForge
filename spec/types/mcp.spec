@@ -132,10 +132,20 @@ type McpPromptArgument {
 
 // ── Core tool replies ─────────────────────────────────────────────────────
 // Each core tool's reply as its structuredContent and outputSchema carry it
-// (ADR 0048): an optional field is absent, never null; a mutation's reply
+// (ADRs 0048, 0051): a domain type a reply embeds from another spec file
+// (Diagnostic, MigrationResult, MigrationDiff, RollbackSummary) is one
+// $defs entry the reply's fields refer to; an optional field is absent,
+// never null; a mutation's reply
 // also carries files_written (string[], absent from a preview), which the
-// mutation pipeline adds to every mutation tool. A test holds each type
-// below to the schema its tool's reply type derives.
+// mutation pipeline adds to every mutation tool, and rename's diagnostics,
+// which it adds after a successful rename (ADR 0022). A test holds each
+// type below to the schema its tool's reply type derives. Where the CLI
+// prints the same operation's outcome under --format json, it prints the same
+// document, with only its own keys added (ADR 0052): McpStatsResult,
+// McpAddExtensionResult, McpRemoveExtensionResult, McpInitResult,
+// McpExtensionsResult, McpMigrateResult, McpAnalyzeResult, McpCollectResult,
+// McpProvidersResult, McpDoctorReport, McpInferProgressResult,
+// McpInferGapsResult and McpTraceChainResult.
 
 type McpInspectResult {
   entity_id           string     @readonly
@@ -258,13 +268,23 @@ type McpFixSuggestion {
 }
 
 type McpStatsResult {
+  /// Every entity of the graph.
+  entity_count       integer
+  /// The entities of each kind, by kind.
   entity_counts      McpEntityCount[]
-  /// Testable entities with at least one verify statement, in percent.
+  edge_count         integer
+  /// Entities no edge links to another entity.
+  unconnected_count  integer
+  /// The entities that count toward coverage.
+  testable_count     integer
+  /// Testable entities with at least one verify statement.
+  declared_count     integer
+  /// Entities of any kind with at least one verify statement.
+  verified_count     integer
+  /// declared_count over testable_count, in percent (0 when nothing is testable).
   declared_pct       float
   /// Testable entities proven, in percent; absent without recorded test results.
   proof_pct          float @optional
-  edge_count         integer
-  unconnected_count  integer
   diagnostic_summary McpDiagnosticSummary
   verify unit "McpStatsResult schema is valid"
 }
@@ -298,6 +318,8 @@ type McpListedEntity {
 
 type McpExtensionsResult {
   extensions            McpExtensionInfo[]
+  /// How many extensions are listed.
+  count                 integer
   lock_file_entries     McpLockEntry[]
   entity_kinds_in_graph string[]
   verify unit "McpExtensionsResult schema is valid"
@@ -311,7 +333,8 @@ type McpLockEntry {
 
 type McpExtensionInfo {
   name             string @readonly
-  /// The loaded version, else the locked one; absent when neither.
+  /// The loaded version; else an installed extension's locked one; else the
+  /// version a legacy name@version entry writes; absent otherwise.
   version          string @optional
   /// "builtin", the lock entry's source ("registry", "local:<path>"), or
   /// "file:<path>" for a .wasm file entry of specforge.json.
@@ -360,9 +383,13 @@ type McpDoctorFinding {
 
 type McpDoctorExtension {
   name              string @readonly
-  version           string
+  /// The version the extensions listing gives it; absent when it has none.
+  version           string @optional
   /// Where it comes from: builtin, the lock entry's source, file:<path>, or unknown.
   source            string
+  /// "loaded"; "not_loaded" (enabled, but not installed or it failed to
+  /// load); "not_configured" (installed, but not enabled).
+  status            "loaded" | "not_loaded" | "not_configured"
   enhancement_count integer
   verify unit "McpDoctorExtension schema is valid"
 }
@@ -386,12 +413,16 @@ type McpDoctorReport {
 }
 
 type McpInitResult {
-  project_path         string @readonly
-  config_file          string @readonly
-  starter_file         string @readonly
-  extensions_installed string[]
+  /// The new project's root, absolute.
+  project_root         string @readonly
   name                 string
   version              string
+  /// specforge.json, relative to project_root.
+  config_file          string @readonly
+  /// The starter spec file, relative to project_root.
+  starter_file         string @readonly
+  /// The extensions enabled: builtins by name, local installs by the name they declare.
+  extensions_installed string[]
   verify unit "McpInitResult schema is valid"
 }
 
@@ -494,7 +525,8 @@ type McpRenameResult {
   edits          McpRenameEdit[]
   /// Present (true) for a preview.
   dry_run        boolean      @optional
-  /// What specforge check reports for the project once the edits are made.
+  /// What specforge check reports for the project once the edits are made;
+  /// absent from a preview.
   diagnostics    Diagnostic[] @optional
   verify unit "McpRenameResult schema is valid"
 }
@@ -681,62 +713,80 @@ type McpRenderResult {
   verify unit "McpRenderResult schema is valid"
 }
 
-type McpAddExtensionResult = McpAddExtensionBuiltin
-  | McpAddExtensionPackage
+type McpAddExtensionResult = McpAddExtensionEnabled
+  | McpAddExtensionInstalled
   | McpAddExtensionPresent
   | McpAddExtensionPlanned
 
-type McpAddExtensionBuiltin "A builtin extension enabled" {
+/// How a registry package's publisher was accepted: unsigned (allowed),
+/// pinned (its key matched the pin), pinned_now (pinned on first use) or
+/// repinned (a key change accepted with consent).
+type PublisherAcceptance = "unsigned" | "pinned" | "pinned_now" | "repinned"
+
+type McpAddExtensionEnabled "A builtin extension enabled" {
+  action        "enabled" @literal
   extension     string    @readonly
-  installed     boolean
   source        "builtin" @literal
+  /// False when the builtin was already enabled: nothing changed.
   changed       boolean
   /// The required builtin peers enabled first.
   peers_enabled string[]
-  note          string
-  verify unit "McpAddExtensionBuiltin schema is valid"
+  /// Whether the server serves the extension from the next call on;
+  /// absent for a preview (MCP only).
+  note          string    @optional
+  verify unit "McpAddExtensionEnabled schema is valid"
 }
 
-type McpAddExtensionPackage "A package installed and locked" {
-  extension string @readonly
-  installed boolean
+type McpAddExtensionInstalled "A package installed and locked" {
+  action    "installed"         @literal
+  extension string              @readonly
   version   string
   sha256    string
-  /// The publisher key id; absent for an unsigned package.
-  key_id    string @optional
-  /// How the publisher was accepted: unsigned, pinned, pinned_now or repinned; absent for a local file.
-  publisher string @optional
+  /// "registry", or "local:<path>" for a local file.
   source    string
-  note      string
-  verify unit "McpAddExtensionPackage schema is valid"
+  /// The publisher key id; absent for an unsigned package or a local file.
+  key_id    string              @optional
+  /// Absent for a local file.
+  publisher PublisherAcceptance @optional
+  /// Whether the server serves the extension from the next call on;
+  /// absent for a preview (MCP only).
+  note      string              @optional
+  verify unit "McpAddExtensionInstalled schema is valid"
 }
 
 type McpAddExtensionPresent "An extension already installed and enabled: nothing changed" {
-  extension       string @readonly
-  installed       boolean
-  already_present boolean
-  version         string
-  message         string
+  action    "already_present" @literal
+  extension string            @readonly
+  version   string
+  /// Whether the server serves the extension from the next call on;
+  /// absent for a preview (MCP only).
+  note      string            @optional
   verify unit "McpAddExtensionPresent schema is valid"
 }
 
 type McpAddExtensionPlanned "What a dry run would install or enable" {
-  extension string @readonly
-  installed boolean
-  dry_run   boolean
-  version   string @optional
+  action    "planned" @literal
+  extension string    @readonly
+  /// Absent for a builtin, which tracks the binary.
+  version   string    @optional
+  /// "builtin", "registry", or "local:<path>".
   source    string
+  /// Whether the server serves the extension from the next call on;
+  /// absent for a preview (MCP only).
+  note      string    @optional
   verify unit "McpAddExtensionPlanned schema is valid"
 }
 
 type McpRemoveExtensionResult {
-  removed_extension string
-  /// Absent when the extension had no known version.
-  version           string  @optional
+  /// "planned" for a dry run, which changes nothing.
+  action    "removed" | "planned"
+  extension string @readonly
+  /// builtin, the lock entry's source (registry, local:<path>), file:<path> or unknown.
+  source    string
+  /// The locked version, or a builtin's loaded one; absent when neither is known.
+  version   string @optional
   /// The entities of the removed extension's kinds, which the project still holds.
-  stranded          McpStrandedEntity[]
-  /// Present (true) for a preview.
-  dry_run           boolean @optional
+  stranded  McpStrandedEntity[]
   verify unit "McpRemoveExtensionResult schema is valid"
 }
 
@@ -746,22 +796,15 @@ type McpStrandedEntity "An entity a removal strands" {
   verify unit "McpStrandedEntity schema is valid"
 }
 
-type McpMigrateResult = McpMigrateCurrent | McpMigrateRan
-
-type McpMigrateCurrent "A project already at the latest format version" {
-  ok           boolean
-  from_version string
-  to_version   string
-  migrated     boolean
-  dry_run      boolean
-  message      string
-  verify unit "McpMigrateCurrent schema is valid"
-}
-
-type McpMigrateRan "A migration that ran, or was previewed" {
+type McpMigrateResult "A migration: what it ran or previewed, or that nothing was pending" {
+  /// No file failed and nothing was rolled back: the verdict specforge migrate exits by.
   ok                       boolean
+  /// Some file was behind to_version; when false nothing else ran.
+  pending                  boolean
+  /// The oldest format version among the project's files.
   from_version             string
   to_version               string
+  /// The migrated files are on disk now.
   migrated                 boolean
   dry_run                  boolean
   files_migrated           integer
@@ -769,6 +812,8 @@ type McpMigrateRan "A migration that ran, or was previewed" {
   files_failed             integer
   results                  MigrationResult[]
   diffs                    MigrationDiff[]
+  /// The .bak copy of each migrated file (none with no_backup or a dry run).
+  backups                  MigrationBackup[]
   /// extension:hook for each migration hook that ran.
   hooks_invoked            string[]
   /// Why each failing hook failed.
@@ -783,7 +828,7 @@ type McpMigrateRan "A migration that ran, or was previewed" {
   post_migration_validated boolean
   /// What compiling the migrated project reported as errors.
   post_migration_errors    Diagnostic[]
-  verify unit "McpMigrateRan schema is valid"
+  verify unit "McpMigrateResult schema is valid"
 }
 
 type McpInferProgressResult {

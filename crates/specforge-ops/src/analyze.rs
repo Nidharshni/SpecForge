@@ -279,7 +279,7 @@ impl AnalyzeOutcome {
     }
 }
 
-/// The document both surfaces answer with (`specforge analyze --json`,
+/// The document both surfaces answer with (`specforge analyze --format json`,
 /// `specforge.analyze`).
 #[derive(Debug, Clone, PartialEq, Serialize, Shape)]
 pub struct AnalyzeDocument {
@@ -450,8 +450,8 @@ fn analyze_via(
     let registries = view.registries();
     let base = AnalysisContext {
         graph: view.graph(),
-        kind_registry: &registries.kinds,
-        field_registry: &registries.fields,
+        kind_registry: registries.kinds(),
+        field_registry: registries.fields(),
         entities: view.entities(),
         project_root: view.root(),
         test_results: report.as_deref(),
@@ -492,7 +492,7 @@ fn analyze_via(
         // across extensions they are advisory.
         passes_run.extend(
             passes::run_extension_passes(
-                &registries.passes,
+                registries.passes(),
                 &input,
                 runtime.as_ref(),
                 &selection.extension,
@@ -597,7 +597,7 @@ fn declared_pass_names(view: &ProjectView) -> Vec<String> {
         return Vec::new();
     }
     view.registries()
-        .passes
+        .passes()
         .iter()
         .filter(|p| !p.is_check_phase())
         .map(DeclaredPass::full_name)
@@ -632,21 +632,20 @@ mod tests {
     use std::sync::Mutex;
 
     const EXT: &str = "@t/x";
+    const TESTING: &str = "@specforge/testing";
 
     /// `@t/x`, declaring `scan` (warns W900) and `hidden` (check phase);
     /// the runtime records the input every pass receives.
-    fn scanning_extension() -> InProcessRuntime {
-        InProcessRuntime::new().with(|| {
-            let mut c = ContributionsBuilder::new(ExtensionMeta::new(EXT, "1.0.0"));
-            c.pass("scan", |p| {
-                p.run(|_: &PassInput| vec![PassDiagnostic::warning("W900", "scanned")]);
-            });
-            c.pass("hidden", |p| {
-                p.phase("check")
-                    .run(|_: &PassInput| Vec::<PassDiagnostic>::new());
-            });
-            c
-        })
+    fn scanning() -> ContributionsBuilder {
+        let mut c = ContributionsBuilder::new(ExtensionMeta::new(EXT, "1.0.0"));
+        c.pass("scan", |p| {
+            p.run(|_: &PassInput| vec![PassDiagnostic::warning("W900", "scanned")]);
+        });
+        c.pass("hidden", |p| {
+            p.phase("check")
+                .run(|_: &PassInput| Vec::<PassDiagnostic>::new());
+        });
+        c
     }
 
     /// The `proved_claims` each `scan` call received (`null` when absent).
@@ -664,38 +663,50 @@ mod tests {
         env: specforge_project::Environment,
         recorded: std::sync::OnceLock<coverage::RecordedCoverage>,
         dir: tempfile::TempDir,
-    }
-
-    /// `name`, a pass of `extension` in `phase`.
-    fn declared(extension: &str, name: &str, phase: Option<&str>) -> DeclaredPass {
-        DeclaredPass {
-            extension: extension.to_string(),
-            pass: specforge_protocol_types::CompilerPassDescriptor {
-                name: name.to_string(),
-                phase: phase.map(str::to_string),
-                ..Default::default()
-            },
-        }
+        /// The runtime the environment loaded its extensions in: what it
+        /// records is what a test then runs.
+        runtime: std::sync::Arc<InProcessRuntime>,
     }
 
     impl Project {
-        fn new() -> Self {
+        /// A project at a temp root whose `specforge.json` enables
+        /// `entries`, each loaded from `runtime` through the production
+        /// load (a named entry that is no builtin installed first, ADR 0028
+        /// D3), with an empty graph. The runtime's calls are cleared after
+        /// the load: what it records is what the test then runs.
+        fn serving(runtime: InProcessRuntime, entries: &[&str]) -> Self {
             let dir = tempfile::TempDir::new().unwrap();
-            std::fs::write(dir.path().join("specforge.json"), "{}").unwrap();
-            let mut registries = specforge_registry::RegistryBuild::default();
-            registries.passes = vec![
-                declared(EXT, "scan", None),
-                declared(EXT, "hidden", Some("check")),
-            ];
-            let mut env = specforge_project::Environment::with_registries(registries);
-            // The environment the extension passes were loaded in.
-            env.runtime = Some(std::sync::Arc::new(scanning_extension()));
+            std::fs::write(
+                dir.path().join("specforge.json"),
+                json!({ "extensions": entries }).to_string(),
+            )
+            .unwrap();
+            let entries: Vec<String> = entries.iter().map(|e| e.to_string()).collect();
+            specforge_installed::testing::install_enabled(
+                dir.path(),
+                &entries,
+                &specforge_project::builtins(),
+            );
+            let runtime = std::sync::Arc::new(runtime);
+            let env = specforge_project::Environment::load(dir.path(), Some(runtime.clone()));
+            assert!(
+                env.diagnostics().all(|d| d.code != "E028"),
+                "{:?}",
+                env.diagnostics().collect::<Vec<_>>()
+            );
+            runtime.clear_calls();
             Self {
                 graph: Graph::new(),
                 env,
                 recorded: std::sync::OnceLock::new(),
                 dir,
+                runtime,
             }
+        }
+
+        /// `@t/x` alone, as most tests serve it.
+        fn new() -> Self {
+            Self::serving(InProcessRuntime::new().with(scanning), &[EXT])
         }
 
         fn view(&self) -> ProjectView<'_> {
@@ -774,7 +785,6 @@ mod tests {
         verify = "an analyze pass that traps is reported as an E028 finding of that pass"
     )]
     fn an_analyze_pass_that_traps_is_an_e028_finding_and_the_analysis_fails() {
-        let mut project = Project::new();
         for answer in [
             WasmCallResult::Trap(WasmTrapInfo {
                 kind: "call_failed".into(),
@@ -783,11 +793,12 @@ mod tests {
             }),
             WasmCallResult::Ok(b"not diagnostics".to_vec()),
         ] {
-            project.env.runtime = Some(std::sync::Arc::new(InProcessRuntime::new().answer_raw(
-                EXT,
-                "__pass_scan",
-                answer,
-            )));
+            let project = Project::serving(
+                InProcessRuntime::new()
+                    .with(scanning)
+                    .answer_raw(EXT, "__pass_scan", answer),
+                &[EXT],
+            );
             let outcome = analyze(&project.view(), &AnalyzeOptions::default()).unwrap();
             assert!(!outcome.ok(), "a failed pass fails the analysis");
             let scan = outcome
@@ -889,12 +900,12 @@ mod tests {
         verify = "the recorded test report is read at the view's root, never an ancestor's"
     )]
     fn a_sub_path_does_not_read_the_ancestors_report() {
-        let mut project = Project::new();
-        project
-            .env
-            .registries
-            .passes
-            .push(declared("@specforge/testing", "coverage", None));
+        let project = Project::serving(
+            InProcessRuntime::new()
+                .with(scanning)
+                .with(coverage(tally(0, 0))),
+            &[EXT, TESTING],
+        );
         std::fs::write(project.dir.path().join("specforge-report.json"), "{}").unwrap();
         let sub = project.dir.path().join("sub");
         std::fs::create_dir(&sub).unwrap();
@@ -913,12 +924,12 @@ mod tests {
 
     #[test]
     fn min_needs_a_report_and_comes_after_the_other_checks() {
-        let mut project = Project::new();
-        project
-            .env
-            .registries
-            .passes
-            .push(declared("@specforge/testing", "coverage", None));
+        let project = Project::serving(
+            InProcessRuntime::new()
+                .with(scanning)
+                .with(coverage(tally(0, 0))),
+            &[EXT, TESTING],
+        );
         let min = AnalyzeOptions {
             min: Some(50.0),
             ..Default::default()
@@ -943,29 +954,25 @@ mod tests {
 
     #[test]
     fn prove_runs_last_and_tells_the_passes_it_ran() {
-        let mut project = Project::new();
-        let fake = std::sync::Arc::new(scanning_extension());
-        project.env.runtime = Some(fake.clone());
+        let project = Project::new();
         analyze(&project.view(), &AnalyzeOptions::default()).unwrap();
-        assert_eq!(proved_seen(&fake), vec![Value::Null]);
+        assert_eq!(proved_seen(&project.runtime), vec![Value::Null]);
 
-        let fake = std::sync::Arc::new(scanning_extension());
-        project.env.runtime = Some(fake.clone());
+        project.runtime.clear_calls();
         let options = AnalyzeOptions {
             prove: Some(ProveOptions::default()),
             ..Default::default()
         };
         let outcome = analyze(&project.view(), &options).unwrap();
         assert_eq!(names(&outcome), vec!["contracts", "@t/x:scan", "prove"]);
-        assert_eq!(proved_seen(&fake), vec![json!([])]);
+        assert_eq!(proved_seen(&project.runtime), vec![json!([])]);
     }
 
     /// A `@specforge/testing` whose `coverage` pass answers `summary`.
-    fn coverage_answering(summary: Value) -> InProcessRuntime {
-        InProcessRuntime::new().with(move || {
+    fn coverage(summary: Value) -> impl Fn() -> ContributionsBuilder + Send + Sync + 'static {
+        move || {
             let summary = summary.clone();
-            let mut c =
-                ContributionsBuilder::new(ExtensionMeta::new("@specforge/testing", "1.0.0"));
+            let mut c = ContributionsBuilder::new(ExtensionMeta::new(TESTING, "1.0.0"));
             c.pass("coverage", |p| {
                 p.run(move |_: &PassInput| PassOutput {
                     diagnostics: Vec::new(),
@@ -973,21 +980,19 @@ mod tests {
                 });
             });
             c
-        })
+        }
     }
 
     /// A project with a (blank) recorded report, gated at `min`, whose
     /// testing extension reports `proven` of `total`.
     fn gate_of(pass_name: &str, min: Option<f64>, summary: Value) -> Gate {
-        let mut project = Project::new();
-        project.env.registries.passes = vec![declared("@specforge/testing", "coverage", None)];
+        let project = Project::serving(InProcessRuntime::new().with(coverage(summary)), &[TESTING]);
         std::fs::write(project.dir.path().join("specforge-report.json"), "{}").unwrap();
         let options = AnalyzeOptions {
             pass: pass_name.to_string(),
             min,
             ..Default::default()
         };
-        project.env.runtime = Some(std::sync::Arc::new(coverage_answering(summary)));
         analyze(&project.view(), &options).unwrap().gate
     }
 
@@ -1108,14 +1113,13 @@ mod tests {
         verify = "a gate without the coverage pass exits 2 with E068"
     )]
     fn a_minimum_without_the_coverage_pass_is_refused_before_any_pass_runs() {
-        let mut project = Project::new();
-        project.env.registries.passes = vec![
-            declared("@specforge/testing", "coverage", None),
-            declared(EXT, "scan", None),
-        ];
+        let project = Project::serving(
+            InProcessRuntime::new()
+                .with(scanning)
+                .with(coverage(tally(0, 0))),
+            &[TESTING, EXT],
+        );
         std::fs::write(project.dir.path().join("specforge-report.json"), "{}").unwrap();
-        let runtime = std::sync::Arc::new(scanning_extension());
-        project.env.runtime = Some(runtime.clone());
         let options = AnalyzeOptions {
             min: Some(10.0),
             ..pass("contracts")
@@ -1124,10 +1128,10 @@ mod tests {
             analyze(&project.view(), &options).unwrap_err(),
             AnalyzeError::MinWithoutCoveragePass
         );
-        assert!(runtime.calls().is_empty(), "no pass ran");
+        assert!(project.runtime.calls().is_empty(), "no pass ran");
 
         // Not declared at all: the same refusal.
-        project.env.registries.passes.clear();
+        let project = Project::new();
         let all = AnalyzeOptions {
             min: Some(10.0),
             ..Default::default()
@@ -1194,9 +1198,7 @@ mod tests {
 
     #[test]
     fn the_z3_timeout_reaches_the_prove_step_and_its_claims_reach_coverage() {
-        let mut project = Project::new();
-        let fake = std::sync::Arc::new(scanning_extension());
-        project.env.runtime = Some(fake.clone());
+        let project = Project::new();
         let seen = Mutex::new(None);
         let prove = |ctx: &AnalysisContext, o: &ProveOptions| {
             *seen.lock().unwrap() = Some(o.z3_timeout);
@@ -1209,14 +1211,12 @@ mod tests {
             *seen.lock().unwrap(),
             Some(std::time::Duration::from_secs(7))
         );
-        assert_eq!(proved_seen(&fake), vec![json!(["claim_a"])]);
+        assert_eq!(proved_seen(&project.runtime), vec![json!(["claim_a"])]);
     }
 
     #[test]
     fn prove_with_z3_missing_is_a_last_w098_report_with_empty_proved_claims() {
-        let mut project = Project::new();
-        let fake = std::sync::Arc::new(scanning_extension());
-        project.env.runtime = Some(fake.clone());
+        let project = Project::new();
         let prove =
             |ctx: &AnalysisContext, _: &ProveOptions| crate::prove::analyze_with(ctx, &NoZ3);
         let mut options = prove_options(1);
@@ -1225,7 +1225,7 @@ mod tests {
         let report = lenient.passes.last().unwrap();
         assert!(report.findings.iter().any(|f| f.code == "W098"));
         assert!(lenient.ok());
-        assert_eq!(proved_seen(&fake), vec![json!([])]);
+        assert_eq!(proved_seen(&project.runtime), vec![json!([])]);
 
         options.strict = true;
         let strict = analyze_via(&project.view(), &options, &prove).unwrap();

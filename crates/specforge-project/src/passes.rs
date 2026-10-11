@@ -56,7 +56,7 @@ pub struct ExtensionPassReport {
 /// ADR 0019), and the test results and proved claims when the caller has
 /// them. Each entity carries how the coverage rule sees it: `testable` is
 /// its kind's flag (a kind that merely accepts `verify` statements, a
-/// formal `property`, does not count), and `exempt` says it owes no
+/// formal `property`, does not count), and `owes_none` says it owes no
 /// obligations of its own (ADR 0004, D2-b), its standing's.
 pub fn pass_input(input: &AnalysisContext) -> PassInput {
     PassInput {

@@ -1,6 +1,7 @@
 //! `specforge update`: move registry installs to newer published versions,
-//! through the steps `add` uses (fetch, integrity, trust, the ADR-0001
-//! diamond gate, the handshake's name and version check, install).
+//! through the lock plan `add` uses (fetch, integrity, trust, the peer rule
+//! over the lock the whole update leaves, the handshake's name and version
+//! check, install).
 //!
 //! An update is all or nothing (`update_all_extensions`): every newer
 //! package is fetched and checked before anything is written, and if one
@@ -10,15 +11,16 @@
 //! pinned while checking a signature stays pinned: it records trust, not
 //! a change to the project.)
 
-use super::add::{Checked, fetch_checked};
-use super::diamond::broken_requirers;
-use super::{Trust, published_versions};
-use crate::registry::{NO_REGISTRY, Publisher, Registry};
-use crate::{OpError, OpErrorKind, Writes};
+use super::Trust;
+use super::lock_plan::{Fetch, Install, LockPlan, Verb};
+use crate::registry::{Acceptance, NO_REGISTRY, Publisher, Registry};
+use crate::{OpError, OpErrorKind};
+use serde::Serialize;
+use specforge_common::shape::Shape;
 use specforge_common::{Code, codes};
-use specforge_installed::{Installed, LockFile, LockSource, LockState, Pin};
-use specforge_protocol_types::PackageName;
-use specforge_protocol_types::package::VersionRequirement;
+use specforge_installed::{Installed, LockState};
+use specforge_package::PackageName;
+use specforge_package::VersionRequirement;
 use specforge_wasm::WasmRuntime;
 use std::path::Path;
 
@@ -98,6 +100,63 @@ impl UpdateOutcome {
         })
     }
 
+    /// The document `specforge update` prints, stamped `ended_at` (the
+    /// adapter passes `Utc::now()`, a test a fixed time).
+    pub fn document(&self, ended_at: chrono::DateTime<chrono::Utc>) -> UpdateDocument {
+        let applied = self.applied();
+        let counts = self.batch_update_completed();
+        UpdateDocument {
+            ok: applied,
+            extensions: self
+                .extensions
+                .iter()
+                .map(|e| {
+                    let name = e.name.clone();
+                    match &e.status {
+                        UpdateStatus::Updated {
+                            from,
+                            to,
+                            sha256,
+                            publisher,
+                        } if applied => UpdateRow::Updated {
+                            name,
+                            from: from.clone(),
+                            to: to.clone(),
+                            sha256: sha256.clone(),
+                            key_id: publisher.key_id().map(str::to_string),
+                            publisher: publisher.acceptance(),
+                        },
+                        UpdateStatus::Updated { from, to, .. } => UpdateRow::HeldBack {
+                            name,
+                            from: from.clone(),
+                            to: to.clone(),
+                        },
+                        UpdateStatus::UpToDate { version } => UpdateRow::UpToDate {
+                            name,
+                            version: version.clone(),
+                        },
+                        UpdateStatus::NotFromRegistry { source } => UpdateRow::NotFromRegistry {
+                            name,
+                            source: source.clone(),
+                        },
+                        UpdateStatus::Failed(error) => UpdateRow::Failed {
+                            name,
+                            code: error.code.to_string(),
+                            message: error.message.clone(),
+                            suggestion: error.suggestion.clone(),
+                        },
+                    }
+                })
+                .collect(),
+            batch_update_completed: BatchUpdateEvent {
+                updated_count: counts.updated_count,
+                failed_count: counts.failed_count,
+                skipped_count: counts.skipped_count,
+                timestamp: ended_at.to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+            },
+        }
+    }
+
     /// The `batch_update_completed` event's counts
     /// (`spec/events/wasm-extensions.spec`). An extension counts as
     /// updated only when the update was applied; one an aborted update
@@ -116,6 +175,67 @@ impl UpdateOutcome {
             skipped_count: self.extensions.len() - updated_count - failed_count,
         }
     }
+}
+
+/// What `specforge update --format json` prints: whether the update was
+/// written, what became of each locked extension, and the
+/// `batch_update_completed` event's payload.
+#[derive(Debug, Clone, PartialEq, Serialize, Shape)]
+pub struct UpdateDocument {
+    /// No extension failed, so the update was written (`specforge update`
+    /// exits 1 otherwise).
+    pub ok: bool,
+    /// Every locked extension the update looked at, in lock order.
+    pub extensions: Vec<UpdateRow>,
+    pub batch_update_completed: BatchUpdateEvent,
+}
+
+/// One locked extension and what became of it.
+#[derive(Debug, Clone, PartialEq, Serialize, Shape)]
+#[serde(tag = "status", rename_all = "snake_case")]
+pub enum UpdateRow {
+    /// Moved from `from` to `to`.
+    Updated {
+        name: String,
+        from: String,
+        to: String,
+        sha256: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        key_id: Option<String>,
+        publisher: Acceptance,
+    },
+    /// Would have moved, but another extension failed, so nothing was
+    /// applied.
+    HeldBack {
+        name: String,
+        from: String,
+        to: String,
+    },
+    /// Already at the newest version the request allows.
+    UpToDate { name: String, version: String },
+    /// Not a registry install; a registry never replaces it (ADR 0004 D3-b).
+    NotFromRegistry { name: String, source: String },
+    /// Its newer version could not be fetched, checked or installed.
+    Failed {
+        name: String,
+        code: String,
+        message: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        suggestion: Option<String>,
+    },
+}
+
+/// `batch_update_completed` as `specforge update --format json` carries it
+/// (`spec/events/wasm-extensions.spec`): the counts and when the update
+/// ended.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Shape)]
+#[serde(rename_all = "camelCase")]
+pub struct BatchUpdateEvent {
+    pub updated_count: usize,
+    pub failed_count: usize,
+    pub skipped_count: usize,
+    /// RFC 3339, UTC, milliseconds.
+    pub timestamp: String,
 }
 
 /// The payload of `batch_update_completed`, which an update that ran to
@@ -168,10 +288,15 @@ pub fn update(
         }
     };
 
-    // Plan: resolve and check every newer package against the lock as it
-    // will be, before anything is written.
-    let mut staged = lock.clone();
-    let mut planned: Vec<(String, Checked)> = Vec::new();
+    // Every newer package is fetched and staged; every upgrade is then judged against the lock as
+    // the whole update leaves it, whatever order the lock lists the extensions in.
+    let mut plan = LockPlan::new(&installed, Verb::Update)?;
+    let fetch = Fetch {
+        registry,
+        runtime,
+        allow_unsigned: req.allow_unsigned,
+        trust: req.trust,
+    };
     let mut extensions = Vec::new();
     for entry in lock
         .entries
@@ -183,25 +308,21 @@ pub fn update(
                 source: entry.source.to_string(),
             }
         } else {
-            match plan_one(req, registry, runtime, &staged, &entry.name, &entry.version) {
+            match newer(req, &fetch, &entry.name, &entry.version) {
                 Ok(None) => UpdateStatus::UpToDate {
                     version: entry.version.clone(),
                 },
-                Ok(Some(checked)) => {
+                Ok(Some(install)) => {
                     let status = UpdateStatus::Updated {
                         from: entry.version.clone(),
-                        to: checked.binary.candidate().version().to_string(),
-                        sha256: checked.package.sha256.clone(),
-                        publisher: checked.package.publisher.clone(),
+                        to: install.version().to_string(),
+                        sha256: install.sha256().to_string(),
+                        publisher: install
+                            .publisher()
+                            .cloned()
+                            .expect("a fetched install has a publisher"),
                     };
-                    if let Some(staged_entry) =
-                        staged.entries.iter_mut().find(|e| e.name == entry.name)
-                    {
-                        staged_entry.version = checked.binary.candidate().version().to_string();
-                        staged_entry.peer_dependencies =
-                            checked.binary.candidate().peers().to_vec();
-                    }
-                    planned.push((entry.name.to_string(), checked));
+                    plan.stage(install);
                     status
                 }
                 Err(error) if error.is(NO_REGISTRY) => return Err(error),
@@ -214,104 +335,46 @@ pub fn update(
         });
     }
 
-    // An update must also leave the extensions that require it satisfied.
-    for (dependent, peer) in broken_dependents(&staged, &planned, registry) {
-        if let Some(e) = extensions.iter_mut().find(|e| e.name == peer.0) {
-            let failed = OpError::new(
-                peer.1.kind,
-                peer.1.code.clone(),
-                format!("updating {} breaks {dependent}: {}", peer.0, peer.1.message),
-            );
-            e.status = UpdateStatus::Failed(failed);
+    let checked = match plan.check() {
+        Ok(checked) => Some(checked),
+        Err(refused) => {
+            for (name, error) in refused.failures {
+                if let Some(e) = extensions.iter_mut().find(|e| e.name == name.as_str()) {
+                    e.status = UpdateStatus::Failed(error);
+                }
+            }
+            None
         }
-    }
-
+    };
     let outcome = UpdateOutcome { extensions };
-    if !outcome.applied() || planned.is_empty() {
-        return Ok(outcome);
+    // Apply: one change that places every binary and writes the lock once. A failure puts the
+    // previous binaries and lock back.
+    if let Some(checked) =
+        checked.filter(|_| outcome.applied() && outcome.updated().next().is_some())
+    {
+        checked.commit()?;
     }
-
-    // Apply: one change that places every binary and writes the lock once.
-    // A failure puts the previous binaries and lock back.
-    let mut change = installed.change().map_err(OpError::from)?;
-    for (_, checked) in &planned {
-        change.install(
-            checked.binary.module().clone(),
-            Pin {
-                name: checked.package.name.clone(),
-                version: checked.binary.candidate().version().to_string(),
-                source: LockSource::Registry,
-                key_id: checked.package.publisher.key_id().map(str::to_string),
-                peers: checked.binary.candidate().peers().to_vec(),
-            },
-        );
-    }
-    change
-        .commit()
-        .map_err(|failed| OpError::from(failed.error).with_writes(Writes::of(failed.left)))?;
     Ok(outcome)
 }
 
-/// The newer package `name` (locked at `current`) moves to, checked, or
-/// `None` when it is up to date.
-fn plan_one(
+/// The newer package `name` (locked at `current`) moves to, fetched, or `None` when it is up to
+/// date: within the caret range of the locked version unless `--major`.
+fn newer<'a>(
     req: &UpdateRequest,
-    registry: &dyn Registry,
-    runtime: &dyn WasmRuntime,
-    staged: &LockFile,
-    package: &PackageName,
+    fetch: &Fetch<'a>,
+    name: &PackageName,
     current: &str,
-) -> Result<Option<Checked>, OpError> {
-    // Within the caret range of the locked version unless --major: a new
-    // major version is a breaking change the user opts into.
+) -> Result<Option<Install<'a>>, OpError> {
+    // A new major version is a breaking change the user opts into.
     let requirement = match semver::Version::parse(current) {
         Ok(current) if !req.major => VersionRequirement::compatible_with(&current),
         _ => VersionRequirement::Latest,
     };
-    let latest = super::resolve_requirement(registry, package, &requirement)?;
+    let latest = super::resolve_requirement(fetch.registry, name, &requirement)?;
     if latest.to_string() == current {
         return Ok(None);
     }
-    // The package's own locked peers are the ones it replaces.
-    let mut others = staged.clone();
-    others.entries.retain(|e| e.name != *package);
-    fetch_checked(
-        registry,
-        runtime,
-        &others,
-        package,
-        &latest,
-        req.allow_unsigned,
-        req.trust,
-    )
-    .map(Some)
-}
-
-/// Each locked extension a planned update leaves outside its declared peer
-/// range: `(dependent, (updated peer, why))`.
-fn broken_dependents(
-    staged: &LockFile,
-    planned: &[(String, Checked)],
-    registry: &dyn Registry,
-) -> Vec<(String, (String, OpError))> {
-    let names: Vec<&str> = planned.iter().map(|(name, _)| name.as_str()).collect();
-    let published = published_versions(registry);
-    let mut broken: Vec<(String, (String, OpError))> = names
-        .iter()
-        .flat_map(|name| {
-            broken_requirers(staged, name, &names, Some(&published))
-                .into_iter()
-                .map(move |(dependent, error)| (dependent, (name.to_string(), error)))
-        })
-        .collect();
-    // In lock order, as the dependents are reported.
-    broken.sort_by_key(|(dependent, _)| {
-        staged
-            .entries
-            .iter()
-            .position(|e| e.name.as_str() == dependent)
-    });
-    broken
+    fetch.install(name, &latest).map(Some)
 }
 
 #[cfg(test)]
@@ -319,7 +382,7 @@ mod tests {
     use super::super::fixtures::{declaration_of, entry, greet, installed, project};
     use super::*;
     use crate::registry::testing::{MemoryRegistry, Published, declaration};
-    use specforge_installed::{hex_sha256, lock_path};
+    use specforge_installed::{LockSource, hex_sha256, lock_path};
     use specforge_test_macros::test as specforge_test;
 
     /// What the tests serve in process: `@sdk/greet` and `@test/probe`.
@@ -486,7 +549,12 @@ mod tests {
         assert!(!outcome.applied());
         let (name, error) = outcome.failures().next().unwrap();
         assert_eq!(name, "@sdk/greet");
-        assert!(error.message.contains("breaks @acme/user"), "{error:?}");
+        assert!(
+            error
+                .message
+                .starts_with("updating '@sdk/greet' 0.1.0 breaks '@acme/user': "),
+            "{error:?}"
+        );
         assert_eq!(std::fs::read(lock_path(dir.path())).unwrap(), lock_before);
     }
 
@@ -623,5 +691,156 @@ mod tests {
                 assert_eq!(files_under(dir.path()), before, "{config}");
             }
         }
+    }
+
+    use crate::testing::declaring;
+    use specforge_wasm::testing::InProcessRuntime;
+
+    const A1_1: &[u8] = b"\0asm in-process @x/a 1.1.0";
+    const A2: &[u8] = b"\0asm in-process @x/a 2.0.0";
+    const B2: &[u8] = b"\0asm in-process @x/b 2.0.0";
+
+    /// `@x/a` 1.1.0 (wants `@x/b` ^1), `@x/a` 2.0.0 (wants ^2) and `@x/b` 2.0.0, served in process.
+    fn coupled_runtime() -> InProcessRuntime {
+        crate::testing::candidates()
+            .binary(A1_1, declaring("@x/a", "1.1.0", &[("@x/b", "^1", false)]))
+            .binary(A2, declaring("@x/a", "2.0.0", &[("@x/b", "^2", false)]))
+            .binary(B2, declaring("@x/b", "2.0.0", &[]))
+    }
+
+    /// `wasm` published with the declaration it declares in `runtime`.
+    fn served(runtime: &InProcessRuntime, wasm: &[u8]) -> Published {
+        Published::new(
+            wasm.to_vec(),
+            crate::publish::declare(runtime, wasm).unwrap().0,
+        )
+    }
+
+    /// A project locking `@x/a` 1.0.0 (wanting `@x/b` ^1) and `@x/b` 1.0.0, `@x/a` first or second.
+    fn coupled(a_first: bool) -> tempfile::TempDir {
+        let a = entry("@x/a", "1.0.0", "registry", &[("@x/b", "^1")]);
+        let b = entry("@x/b", "1.0.0", "registry", &[]);
+        project(if a_first { vec![a, b] } else { vec![b, a] })
+    }
+
+    #[specforge_test(
+        behavior = "update_all_extensions",
+        verify = "every upgrade is judged against the lock as the whole update leaves it, whatever order the lock lists them in"
+    )]
+    fn an_update_is_judged_against_the_lock_it_leaves_in_any_lock_order() {
+        let runtime = coupled_runtime();
+        for a_first in [true, false] {
+            // a -> 2.0.0 (wants b ^2) and b -> 2.0.0: fine together.
+            let together = || {
+                MemoryRegistry::new()
+                    .serving(served(&runtime, A2))
+                    .serving(served(&runtime, B2))
+            };
+            let dir = coupled(a_first);
+            let outcome = update(&request(dir.path(), true), &together(), &runtime).unwrap();
+            assert!(outcome.applied(), "a first: {a_first}: {outcome:?}");
+            let lock = specforge_installed::read_lock_file(&lock_path(dir.path())).unwrap();
+            let locked: Vec<(&str, &str)> = lock
+                .entries
+                .iter()
+                .map(|e| (e.name.as_str(), e.version.as_str()))
+                .collect();
+            let mut want = [("@x/a", "2.0.0"), ("@x/b", "2.0.0")];
+            if !a_first {
+                want.reverse();
+            }
+            assert_eq!(locked, want, "the lock keeps its order");
+
+            // a -> 1.1.0 (still wants b ^1) and b -> 2.0.0: never satisfiable together.
+            let apart = MemoryRegistry::new()
+                .serving(served(&runtime, A1_1))
+                .serving(old("@x/b", "1.0.0"))
+                .serving(served(&runtime, B2));
+            let dir = coupled(a_first);
+            let lock_before = std::fs::read(lock_path(dir.path())).unwrap();
+            let outcome = update(&request(dir.path(), true), &apart, &runtime).unwrap();
+            assert!(!outcome.applied(), "a first: {a_first}: {outcome:?}");
+            let failures: Vec<(&str, &str, &str)> = outcome
+                .failures()
+                .map(|(n, e)| (n, e.code.as_ref(), e.message.as_str()))
+                .collect();
+            assert_eq!(
+                failures,
+                [(
+                    "@x/a",
+                    "R-RES-006",
+                    "version diamond: '@x/a' requires peer '@x/b' ^1 but this update locks 2.0.0; @x/b 1.0.0 would satisfy every requirer"
+                )]
+            );
+            assert!(matches!(
+                status_of(&outcome, "@x/b"),
+                UpdateStatus::Updated { .. }
+            ));
+            assert_eq!(std::fs::read(lock_path(dir.path())).unwrap(), lock_before);
+        }
+    }
+
+    #[specforge_test(
+        behavior = "update_all_extensions",
+        verify = "the update document lists every locked extension's status, held back when another failed"
+    )]
+    fn update_document_lists_each_status() {
+        let row = |name: &str, status| ExtensionUpdate {
+            name: name.into(),
+            status,
+        };
+        let outcome = UpdateOutcome {
+            extensions: vec![
+                row(
+                    "@a/moved",
+                    UpdateStatus::Updated {
+                        from: "1.0.0".into(),
+                        to: "1.1.0".into(),
+                        sha256: "ab".into(),
+                        publisher: Publisher::Unsigned,
+                    },
+                ),
+                row(
+                    "@a/same",
+                    UpdateStatus::UpToDate {
+                        version: "2.0.0".into(),
+                    },
+                ),
+                row(
+                    "@a/local",
+                    UpdateStatus::NotFromRegistry {
+                        source: "local:x.wasm".into(),
+                    },
+                ),
+                row(
+                    "@a/gone",
+                    UpdateStatus::Failed(
+                        OpError::diagnostic(codes::E063, "no registry").with_suggestion("add one"),
+                    ),
+                ),
+            ],
+        };
+        let ended_at = chrono::DateTime::parse_from_rfc3339("2026-10-11T12:00:00.123Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+
+        let document = serde_json::to_value(outcome.document(ended_at)).unwrap();
+
+        assert_eq!(document["ok"], false);
+        assert_eq!(
+            document["extensions"],
+            serde_json::json!([
+                {"status": "held_back", "name": "@a/moved", "from": "1.0.0", "to": "1.1.0"},
+                {"status": "up_to_date", "name": "@a/same", "version": "2.0.0"},
+                {"status": "not_from_registry", "name": "@a/local", "source": "local:x.wasm"},
+                {"status": "failed", "name": "@a/gone", "code": "E063", "message": "no registry",
+                 "suggestion": "add one"},
+            ])
+        );
+        assert_eq!(
+            document["batch_update_completed"],
+            serde_json::json!({"updatedCount": 0, "failedCount": 1, "skippedCount": 3,
+                "timestamp": "2026-10-11T12:00:00.123Z"})
+        );
     }
 }

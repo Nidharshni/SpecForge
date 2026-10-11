@@ -1,12 +1,13 @@
 //! `spec/types/mcp.spec`'s reply types are the schemas the replies derive
 //! (ADR 0048 D8).
 //!
-//! Each core tool's reply is named once in [`REPLIES`]: an `Mcp*` type, a
-//! document specified elsewhere, or text. The spec types reached from a
+//! Each core tool names its reply's spec type (`CoreTool::SPEC`): an `Mcp*`
+//! type, a document specified elsewhere, or text. The spec types reached from a
 //! tool's type are compared with the schema its reply derives:
 //!
-//! 1. a name in [`SHARED`] is a domain type the reply embeds, compared by
-//!    identity (it is not a field-by-field copy of the wire);
+//! 1. a name in [`SHARED`] is a domain type the reply embeds: its schema is a
+//!    reference to the document's one definition of that name (ADR 0051), not
+//!    a field-by-field copy of the wire;
 //! 2. a union of named types is a `oneOf`/`anyOf` of the same length,
 //!    compared in order;
 //! 3. an alias of string literals is a string `enum` of the same set;
@@ -24,71 +25,9 @@ use std::path::Path;
 use std::sync::OnceLock;
 
 use serde_json::Value;
+use specforge_mcp::tool::ReplySpec;
 use specforge_parser::FieldValue;
 use specforge_test::prelude::*;
-
-/// What a core tool's reply is, in the spec.
-enum Spec {
-    /// An `Mcp*` type of `spec/types/mcp.spec`.
-    Type(&'static str),
-    /// A document specified elsewhere.
-    Document(#[allow(dead_code)] &'static str),
-    /// A document in text: no outputSchema.
-    Text,
-}
-
-use Spec::{Document, Text, Type};
-
-/// Each core tool's reply as the spec names it: an `Mcp*` type, or why it
-/// has none.
-const REPLIES: &[(&str, Spec)] = &[
-    ("specforge.query", Document("the agent export, ADR 0007")),
-    ("specforge.validate", Text),
-    ("specforge.analyze", Type("McpAnalyzeResult")),
-    ("specforge.export", Text),
-    ("specforge.trace", Type("McpTraceResult")),
-    ("specforge.search", Type("McpSearchResults")),
-    ("specforge.explain", Type("McpExplainResult")),
-    (
-        "specforge.schema",
-        Document("specforge schema's GraphProtocolSchema document"),
-    ),
-    ("specforge.model", Text),
-    ("specforge.outline_extensions", Text),
-    ("specforge.coverage", Type("McpCoverageResults")),
-    ("specforge.stats", Type("McpStatsResult")),
-    ("specforge.list", Type("McpListResult")),
-    ("specforge.inspect", Type("McpInspectResult")),
-    ("specforge.find_definition", Type("McpDefinitionResult")),
-    ("specforge.find_references", Type("McpReferenceResult")),
-    ("specforge.outline", Type("McpOutlineResult")),
-    ("specforge.suggest_fixes", Type("McpFixSuggestions")),
-    ("specforge.format", Type("McpFormatResult")),
-    ("specforge.rename", Type("McpRenameResult")),
-    ("specforge.init", Type("McpInitResult")),
-    ("specforge.add_extension", Type("McpAddExtensionResult")),
-    (
-        "specforge.remove_extension",
-        Type("McpRemoveExtensionResult"),
-    ),
-    ("specforge.migrate", Type("McpMigrateResult")),
-    ("specforge.extensions", Type("McpExtensionsResult")),
-    ("specforge.providers", Type("McpProvidersResult")),
-    ("specforge.doctor", Type("McpDoctorReport")),
-    ("specforge.collect", Type("McpCollectResult")),
-    ("specforge.render", Type("McpRenderResult")),
-    ("specforge.infer_progress", Type("McpInferProgressResult")),
-    ("specforge.infer_gaps", Type("McpInferGapsResult")),
-    ("specforge.infer_session", Type("McpInferSessionResult")),
-    (
-        "specforge.find_implementation",
-        Type("McpImplementationResult"),
-    ),
-    (
-        "specforge.find_spec_for_source",
-        Type("McpSpecForSourceResult"),
-    ),
-];
 
 /// Domain types a reply embeds, specified in their own spec files: their
 /// drift from the wire is not this test's (the spec gives the domain, the
@@ -97,6 +36,7 @@ const SHARED: &[&str] = &[
     "Diagnostic",
     "MigrationResult",
     "MigrationDiff",
+    "MigrationBackup",
     "RollbackSummary",
 ];
 
@@ -293,22 +233,44 @@ fn merged(schema: &Value) -> Value {
     })
 }
 
-fn check_type(name: &str, schema: &Value, report: &mut Report) {
+/// The schema a `#…` reference of `root` names; `schema` itself otherwise.
+fn resolve<'v>(root: &'v Value, schema: &'v Value) -> &'v Value {
+    schema
+        .get("$ref")
+        .and_then(Value::as_str)
+        .and_then(|reference| reference.strip_prefix('#'))
+        .and_then(|pointer| root.pointer(pointer))
+        .unwrap_or(schema)
+}
+
+fn check_type(name: &str, root: &Value, schema: &Value, report: &mut Report) {
     report.reached.insert(name.to_string());
     if SHARED.contains(&name) {
+        // A domain type another spec file declares: the reply refers to its one definition.
+        let expected = serde_json::json!({ "$ref": format!("#/$defs/{name}") });
+        if schema != &expected {
+            report.violate(
+                name,
+                format!(
+                    "a shared domain type is referred to as {expected}, but the schema is {}",
+                    shape(schema)
+                ),
+            );
+        }
         return;
     }
+    let schema = resolve(root, schema);
     let Some(spec) = spec_types().get(name) else {
         report.violate(name, "no spec file declares this type".to_string());
         return;
     };
     match spec {
-        SpecType::Alias(members) => check_alias(name, members, schema, report),
-        SpecType::Record(fields) => check_record(name, fields, schema, report),
+        SpecType::Alias(members) => check_alias(name, members, root, schema, report),
+        SpecType::Record(fields) => check_record(name, fields, root, schema, report),
     }
 }
 
-fn check_alias(name: &str, members: &[String], schema: &Value, report: &mut Report) {
+fn check_alias(name: &str, members: &[String], root: &Value, schema: &Value, report: &mut Report) {
     let named = members
         .iter()
         .all(|m| spec_types().contains_key(m) || SHARED.contains(&m.as_str()));
@@ -329,7 +291,7 @@ fn check_alias(name: &str, members: &[String], schema: &Value, report: &mut Repo
             return;
         };
         for (member, branch) in members.iter().zip(branches) {
-            check_type(member, branch, report);
+            check_type(member, root, branch, report);
         }
         return;
     }
@@ -342,7 +304,13 @@ fn check_alias(name: &str, members: &[String], schema: &Value, report: &mut Repo
     }
 }
 
-fn check_record(name: &str, fields: &[SpecField], schema: &Value, report: &mut Report) {
+fn check_record(
+    name: &str,
+    fields: &[SpecField],
+    root: &Value,
+    schema: &Value,
+    report: &mut Report,
+) {
     let schema = if schema.get("oneOf").is_some() {
         merged(schema)
     } else {
@@ -402,12 +370,13 @@ fn check_record(name: &str, fields: &[SpecField], schema: &Value, report: &mut R
                     ),
                 );
             }
-            check_ty(name, &field.name, &field.ty, property, report);
+            check_ty(name, &field.name, &field.ty, root, property, report);
         }
     }
 }
 
-fn check_ty(owner: &str, field: &str, ty: &Ty, schema: &Value, report: &mut Report) {
+fn check_ty(owner: &str, field: &str, ty: &Ty, root: &Value, written: &Value, report: &mut Report) {
+    let schema = resolve(root, written);
     let mismatch = |report: &mut Report, wanted: &str| {
         report.violate(
             owner,
@@ -420,7 +389,7 @@ fn check_ty(owner: &str, field: &str, ty: &Ty, schema: &Value, report: &mut Repo
     match ty {
         Ty::List(inner) => {
             if schema["type"] == "array" && schema.get("items").is_some() {
-                check_ty(owner, field, inner, &schema["items"], report);
+                check_ty(owner, field, inner, root, &schema["items"], report);
             } else {
                 mismatch(report, "a list");
             }
@@ -464,7 +433,7 @@ fn check_ty(owner: &str, field: &str, ty: &Ty, schema: &Value, report: &mut Repo
                     mismatch(report, "an object");
                 }
             }
-            other => check_type(other, schema, report),
+            other => check_type(other, root, written, report),
         },
         Ty::Unsupported(text) => report.violate(
             owner,
@@ -488,18 +457,20 @@ fn report() -> &'static Report {
     static REPORT: OnceLock<Report> = OnceLock::new();
     REPORT.get_or_init(|| {
         let mut report = Report::default();
-        for (tool, spec) in REPLIES {
-            let Type(name) = spec else { continue };
-            let core = specforge_mcp::tools::core_tool(tool).expect("a core tool");
-            let schema = core
-                .output_schema()
-                .unwrap_or_else(|| panic!("{tool} names {name} but lists no outputSchema"));
-            let schema = if core.is_mutation() {
-                without_files_written(schema)
-            } else {
-                schema
+        for tool in specforge_mcp::tools::CORE_TOOLS {
+            let ReplySpec::Type(name) = tool.spec_reply() else {
+                continue;
             };
-            check_type(name, &schema, &mut report);
+            // A typed spec is a typed reply: the table does not build otherwise.
+            let schema = tool
+                .output_schema()
+                .expect("a typed reply lists its outputSchema");
+            let schema = if tool.is_mutation() {
+                without_files_written(schema.clone())
+            } else {
+                schema.clone()
+            };
+            check_type(name, &schema, &schema, &mut report);
         }
         report
     })
@@ -518,28 +489,6 @@ fn assert_reply_type(name: &str) {
         "{name}:\n  {}",
         violations.join("\n  ")
     );
-}
-
-#[test]
-fn every_core_tool_names_its_reply_in_the_spec() {
-    let named: BTreeSet<&str> = REPLIES.iter().map(|(tool, _)| *tool).collect();
-    assert_eq!(named.len(), REPLIES.len(), "a tool is named twice");
-    let core: BTreeSet<&str> = specforge_mcp::tools::CORE_TOOLS
-        .iter()
-        .map(|t| t.name)
-        .collect();
-    assert_eq!(named, core, "REPLIES names exactly the core tools");
-    for (tool, spec) in REPLIES {
-        let listed = specforge_mcp::tools::core_tool(tool)
-            .expect("a core tool")
-            .output_schema()
-            .is_some();
-        assert_eq!(
-            listed,
-            !matches!(spec, Text),
-            "{tool}: Text exactly when it lists no outputSchema"
-        );
-    }
 }
 
 #[test]
@@ -642,14 +591,13 @@ reply_type! {
     mcp_collect_result => "McpCollectResult", "McpCollectResult schema is valid",
     mcp_collect_runner => "McpCollectRunner", "McpCollectRunner schema is valid",
     mcp_render_result => "McpRenderResult", "McpRenderResult schema is valid",
-    mcp_add_extension_builtin => "McpAddExtensionBuiltin", "McpAddExtensionBuiltin schema is valid",
-    mcp_add_extension_package => "McpAddExtensionPackage", "McpAddExtensionPackage schema is valid",
+    mcp_add_extension_enabled => "McpAddExtensionEnabled", "McpAddExtensionEnabled schema is valid",
+    mcp_add_extension_installed => "McpAddExtensionInstalled", "McpAddExtensionInstalled schema is valid",
     mcp_add_extension_present => "McpAddExtensionPresent", "McpAddExtensionPresent schema is valid",
     mcp_add_extension_planned => "McpAddExtensionPlanned", "McpAddExtensionPlanned schema is valid",
     mcp_remove_extension_result => "McpRemoveExtensionResult", "McpRemoveExtensionResult schema is valid",
     mcp_stranded_entity => "McpStrandedEntity", "McpStrandedEntity schema is valid",
-    mcp_migrate_current => "McpMigrateCurrent", "McpMigrateCurrent schema is valid",
-    mcp_migrate_ran => "McpMigrateRan", "McpMigrateRan schema is valid",
+    mcp_migrate_result => "McpMigrateResult", "McpMigrateResult schema is valid",
     mcp_infer_progress_result => "McpInferProgressResult", "McpInferProgressResult schema is valid",
     mcp_infer_summary => "McpInferSummary", "McpInferSummary schema is valid",
     mcp_infer_session_row => "McpInferSessionRow", "McpInferSessionRow schema is valid",

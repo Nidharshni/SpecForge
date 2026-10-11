@@ -27,6 +27,7 @@ specforge-graph = { path = "../specforge-graph" }
 specforge-migrate = { workspace = true }
 specforge-parser = { workspace = true }
 specforge-project = { workspace = true }
+specforge-package = { path = "../specforge-package" }
 specforge-protocol-types = { path = "../specforge-protocol-types" }
 specforge-registry = { workspace = true }
 specforge-wasm = { workspace = true }
@@ -37,7 +38,6 @@ getrandom = "0.3"
 sha2 = { workspace = true }
 semver = { workspace = true }
 strsim = { workspace = true }
-walkdir = { workspace = true }
 
 [dev-dependencies]
 # The production adapter, in the tests that load the builtins.

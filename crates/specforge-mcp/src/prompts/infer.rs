@@ -7,19 +7,20 @@ use specforge_ops::navigate::{anchors_of_file, source_anchors};
 
 use crate::args::Arguments;
 use crate::prompt::{PromptOutcome, Rendered};
+use crate::tool::CoreTool;
 use crate::tool::{ErrorCode, McpError};
-use crate::tools::core_tool_name;
 use crate::tools::find_spec_for_source::{Anchored, MatchMode};
+use crate::tools::{analyze, infer_progress, infer_session, query, schema, search, validate};
 use specforge_ops::view::ProjectView;
 
 /// The core tools the workflow protocol names, in the order it lists them.
 const WORKFLOW_TOOLS: [&str; 6] = [
-    "specforge.infer_session",
-    "specforge.infer_progress",
-    "specforge.validate",
-    "specforge.query",
-    "specforge.search",
-    "specforge.schema",
+    infer_session::Tool::NAME,
+    infer_progress::Tool::NAME,
+    validate::Tool::NAME,
+    query::Tool::NAME,
+    search::Tool::NAME,
+    schema::Tool::NAME,
 ];
 
 /// `specforge://prompts/infer`'s arguments.
@@ -115,7 +116,7 @@ fn rendered(instruction: impl Into<String>, payload: Value) -> Rendered {
 
 fn get_overview(project: &ProjectView) -> Rendered {
     let guide = infer::guide(project);
-    let mut payload = guide.to_json();
+    let mut payload = serde_json::to_value(guide.document()).expect("a document serializes");
     payload["output_format"] = Value::from(format!(
         "Write .spec files in the {} directory. Use `keyword entity_id \"Title\" {{ fields }}` syntax. Entity IDs are snake_case identifiers (letters, digits, underscores, 2-60 chars).",
         guide.spec_directory
@@ -128,7 +129,7 @@ fn get_overview(project: &ProjectView) -> Rendered {
          write .spec files, and validate them with {}. \
          Each kind has signals describing what to look for in code. \
          Do not duplicate entities that already exist.",
-        core_tool_name("specforge.validate")
+        validate::Tool::NAME
     );
 
     rendered(instruction, payload)
@@ -137,7 +138,7 @@ fn get_overview(project: &ProjectView) -> Rendered {
 fn get_kind_scoped(project: &ProjectView, kind_name: &str) -> PromptOutcome {
     let guide = infer::kind_guide(project, kind_name)
         .map_err(|error| Box::new(McpError::from(error).with_argument("scope")))?;
-    let mut payload = guide.to_json();
+    let mut payload = serde_json::to_value(guide.document()).expect("a document serializes");
     payload["validation"] = Value::from(validation());
 
     let instruction = format!(
@@ -153,8 +154,8 @@ fn get_kind_scoped(project: &ProjectView, kind_name: &str) -> PromptOutcome {
 fn validation() -> String {
     format!(
         "After writing .spec files, call {} to check for errors (and {} for coverage/contract findings). Fix any errors before proceeding.",
-        core_tool_name("specforge.validate"),
-        core_tool_name("specforge.analyze"),
+        validate::Tool::NAME,
+        analyze::Tool::NAME,
     )
 }
 
@@ -247,15 +248,15 @@ fn get_plan(
         plan.unanalyzed.total,
         plan.stale.total,
         plan.target_spec_directory,
-        core_tool_name("specforge.infer_session"),
-        core_tool_name("specforge.validate"),
+        infer_session::Tool::NAME,
+        validate::Tool::NAME,
     );
 
     Ok(rendered(instruction, result))
 }
 
 fn get_workflow(project: &ProjectView) -> Rendered {
-    let tool_names = WORKFLOW_TOOLS.map(core_tool_name);
+    let tool_names = WORKFLOW_TOOLS;
 
     let installed_kinds: Vec<&str> = infer::guide(project)
         .kinds

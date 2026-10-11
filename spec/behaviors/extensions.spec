@@ -77,13 +77,15 @@ behavior load_extension_manifests "Load Extension Manifests" {
     array) is replaced by its default, and an extensions or exclude item
     that is not a string is ignored; the rest of the file is used. A
     missing specforge.json is the default config and produces no E069.
+    Before any source, the environment MUST report its own diagnostics —
+    E069, the load's failures and warnings, provider registration (W118,
+    E057), then I002 — and then the registry build's, in the build's one
+    order (build_registries_from_declarations).
     This behavior orchestrates: for each extension, it loads its
     binary and reads its declaration once. Once all declarations are loaded
     and the extension_manifests_loaded event is produced, the registry build
     (build_registries_from_declarations) validates them and populates the
-    KindRegistry, FieldRegistry, and EdgeRegistry. The grammars and
-    body_parsers contribution flags are reserved: nothing reads those
-    contributions.
+    KindRegistry, FieldRegistry, and EdgeRegistry.
   """
   verify unit "installed extension manifest is loaded"
   verify unit "an installed extension loads only when its binary is the one its specforge.lock entry pins"
@@ -100,6 +102,7 @@ behavior load_extension_manifests "Load Extension Manifests" {
   verify unit "E069 names why specforge.json can't be used"
   verify unit "E069 names a mistyped key or a non-string item, and the rest of specforge.json is used"
   verify integration "a specforge.json that is there and can't be used produces E069 first and an I002 that names it"
+  verify integration "the environment reports its own diagnostics, then the registry build's, before any source"
   verify contract "Load Extension Manifests: extension manifest loading holds — all_files_parsed, extensions_config_available, all_extensions_attempted, loaded_manifests_available, failed_extensions_diagnosed, loaded_event_fired, extension_isolation"
 }
 
@@ -111,9 +114,9 @@ behavior load_extension_declaration "Load Extension Declaration" {
   types      [ExtensionDeclaration, HandshakeResponse]
   contract   """
     The host MUST read an extension's declaration through one loader: its
-    handshake, then every declared describe category (entities, edges,
+    handshake, then every describe category (entities, edges,
     shared_fields, enhancements, validation_rules, surfaces, collectors,
-    analyzers, passes, feature_flags), whatever its contribution flags say.
+    analyzers, passes, feature_flags), the only ones the protocol defines.
     A category that does not parse MUST fail the extension's load (E028)
     naming the category. A describe item key the protocol does not define
     MUST produce W138. The declaration is read once per environment load;
@@ -128,7 +131,7 @@ behavior load_extension_declaration "Load Extension Declaration" {
   verify unit "a declaration round-trips through its wire answers unchanged"
   verify unit "a describe category that does not parse fails the load naming the category"
   verify unit "a describe item key the protocol does not define produces W138"
-  verify unit "the fields category is every kind's fields, concatenated"
+  verify unit "the declared categories are the protocol's only describe categories"
   verify unit "an absent short is the name's last segment"
   verify unit "a declaration's default short name is its package name's base"
   verify unit "the SDK's short name reaches the handshake as ext_short"
@@ -156,11 +159,18 @@ behavior build_registries_from_declarations "Build Registries From Declarations"
     malformed ext_short), self-consistency (W021), peer requirements (E073,
     E027, and E027 for a cycle among required peers), the order of declared
     passes (W145 when their constraints form a cycle, declaration order
-    kept), the kind, field and edge registries, the rules and the surfaces.
-    It MUST be pure.
+    kept), the kind, field and edge registries, the rules, the surfaces and
+    the graph inputs (registry_build_graph_inputs). It MUST report its
+    diagnostics in one order: the declarations' own, the registries', the
+    custom rules' probes, then the surfaces'. A custom rule whose function
+    its extension cannot answer through is W112, after the registries'
+    diagnostics, once, when the build is probed in the runtime its
+    extensions loaded in. It MUST be pure: the probe, through the
+    CustomVerdicts port its caller passes, is the one call it makes out.
+    It is read only through its methods; nothing assigns its registries.
 
     Its outcomes are stated by registry_build_kinds, registry_build_fields,
-    registry_build_edges, registry_build_rules,
+    registry_build_edges, registry_build_graph_inputs, registry_build_rules,
     registry_build_declaration_consistency,
     registry_build_peer_dependencies and registry_build_load_order. The build produces
     registries_populated: nothing reads a registry before every loaded
@@ -175,6 +185,8 @@ behavior build_registries_from_declarations "Build Registries From Declarations"
   verify integration "a passes description that does not parse fails the extension's load"
   verify unit "a build of no declarations has empty registries, no rules and no diagnostics"
   verify unit "the declarations' own diagnostics come in a fixed order: E030, W021, the peers' E073 and E027, the cycles' E027, W145"
+  verify unit "the registry build reports its diagnostics in one order: the declarations', the registries', the custom rules' probes, the surfaces'"
+  verify unit "probing the build reports each custom rule whose function cannot answer once, as W112 after the registries' diagnostics"
   verify integration "every loaded declaration is registered before a compile checks anything"
 }
 
@@ -371,8 +383,11 @@ behavior remove_extension "Remove Extension" {
     the same dependents (E027) and stranded-entity checks as any extension. A name
     more than one specforge.json entry enables MUST be refused as
     ambiguous (extension_conflict), naming the entries and changing
-    nothing; a name no entry, lock entry or builtin matches is
-    extension_not_found. Every refusal MUST be decided before anything is
+    nothing. An entry that enables an extension neither builtin nor
+    installed (it does not load, E028) MUST be removable by its name,
+    dropping only its specforge.json entry; a name no entry or lock entry
+    has is extension_not_found (E072 when it is no package name). Every
+    refusal MUST be decided before anything is
     written, and a specforge.json the compile could not read refuses every
     removal (config_invalid), changing nothing. A removal is all or
     nothing: a failure at any step leaves specforge.json, specforge.lock
@@ -388,8 +403,10 @@ behavior remove_extension "Remove Extension" {
     since the keyword is no longer in the KindRegistry. Reference list
     entries pointing to those entities MUST produce E003 (dangling
     reference). The user MUST either reinstall the extension or remove
-    the affected entity blocks. Its JSON output lists the files it wrote or
-    deleted as files_written.
+    the affected entity blocks. Its JSON output is the remove document
+    specforge.remove_extension answers (McpRemoveExtensionResult: the
+    extension, its source and version, the stranded entities), with the
+    files it wrote or deleted as files_written.
   """
   verify unit "delegates to uninstall_wasm_extension for lifecycle cleanup"
   verify unit "extension is removed from extensions list"
@@ -397,7 +414,9 @@ behavior remove_extension "Remove Extension" {
   verify unit ".spec files are not modified by removal"
   verify contract "Remove Extension: extension removal holds — extension_installed, filesystem_available, extension_entry_removed, spec_files_unchanged, extension_removed_emitted"
   verify unit "specforge remove for non-existent extension reports error"
+  verify unit "an enabled entry that is not installed is removed from specforge.json by its name"
   verify integration "remove --format json lists the files it wrote in files_written"
+  verify unit "the remove document names the extension's source and version whatever its origin"
   verify unit "specforge remove with no lock file reports error"
   verify unit "a removal that fails changes nothing"
   verify integration "removing an installed extension drops its specforge.json entry"
@@ -413,7 +432,7 @@ behavior list_installed_extensions "List Installed Extensions" {
   features   [extension_management]
   invariants [diagnostic_determinism, zero_domain_knowledge_core]
   category   query
-  types      [ExtensionDeclaration, KindRegistryEntry]
+  types      [ExtensionDeclaration, KindRegistryEntry, McpExtensionsResult]
   requires {
     kind_registry_ready "KindRegistry is populated with entity kinds from loaded extensions"
   }
@@ -426,17 +445,24 @@ behavior list_installed_extensions "List Installed Extensions" {
     When specforge extensions is invoked, the system MUST list all installed
     extensions with their name, version, entity count, and registered entity types.
     The listing MUST query the KindRegistry to enumerate entity kinds per
-    extension. Each entry MUST carry its source (builtin, registry,
-    local:<path>, or file:<path> for a .wasm file entry of specforge.json,
-    listed under the name its component declares) and its status (loaded, not_loaded, not_configured). The
-    CLI and the MCP extensions tool MUST list the same entries.
+    extension. Each entry MUST carry its source, where the extension load
+    takes it from whatever order the entries are in: file:<path> when only
+    .wasm file entries of specforge.json enable it (listed under the name
+    its component declares), builtin for a builtin's name, else the lock
+    entry's source (registry, local:<path>), else unknown; its version: the
+    loaded one, else an installed extension's locked one, else the version
+    a legacy name@version entry writes; and its status (loaded, not_loaded,
+    not_configured). The CLI and the MCP extensions tool MUST answer the same
+    document (McpExtensionsResult: the entries, their count, the lock's
+    entries and the kinds the graph uses).
     Output order MUST be deterministic (alphabetical by extension name).
   """
   verify unit "list shows all installed extensions"
   verify unit "list includes entity counts and entity types"
   verify unit "output order is deterministic"
   verify integration "a .wasm file entry is listed under the name it declares, loaded, with source file:<path>"
-  verify integration "the CLI and the MCP extensions tool list the same entries"
+  verify unit "an extension's source is where the extension load takes it from, whatever order its entries are in"
+  verify integration "the CLI and the MCP extensions tool answer the same document"
   verify contract "List Installed Extensions: extension listing holds — kind_registry_ready, all_extensions_listed, entity_counts_included, output_deterministic"
 }
 
@@ -493,7 +519,13 @@ behavior management_operations_over_the_project_view "Management Operations over
     collect, and inference progress and gaps MUST each be one operation
     over the project view and a request, shared by the CLI and MCP; a
     surface builds the view from the project it holds, maps its arguments
-    and renders the outcome. An operation MUST read the project's config,
+    and renders the outcome.
+    The extensions listing, doctor and remove MUST read the project's
+    extensions from one inventory over the view, one row per name: every
+    extension a specforge.json entry enables, the lock pins or the compile
+    loaded, with its origin, status, entries, declaration and lock entry; so
+    they cannot disagree about which extensions the project has, where each
+    comes from or whether it loaded. An operation MUST read the project's config,
     what each specforge.json entry enabled, the specforge.lock the compile
     read (absent, read, or unreadable with its E033 problem), the loaded
     declarations and what the surface reports for the project from the
@@ -514,6 +546,7 @@ behavior management_operations_over_the_project_view "Management Operations over
   verify unit "the extensions listing reads the config entries from the view, never specforge.json again"
   verify unit "doctor reads the diagnostics its view reports"
   verify unit "list, doctor and remove read the lock the compile read, once"
+  verify unit "list, doctor and remove read one inventory of the project's extensions"
   verify integration "add, update and remove refuse an unusable specforge.json with one refusal, before they write"
   verify unit "collect maps test results to the entities of its view"
   verify contract "Management Operations over the Project View: management operations hold — project_compiled, one_project_read, root_for_disk"
@@ -892,7 +925,8 @@ behavior pin_publisher_key "Pin Publisher Key" {
     refused with R-TRUST-005 whatever the consent. A refused package
     leaves the pin as it was. A re-pin is reported as W156; a first-use
     pin is part of the outcome. The decision on a key change belongs to
-    the surface: the CLI asks on its terminal, and a surface nobody can be
+    the surface: the CLI asks on its terminal (y or yes, in any case,
+    consents; any other answer refuses), and a surface nobody can be
     asked on refuses.
   """
   verify integration "the key of the first verified install is pinned and accepted again"
@@ -901,6 +935,7 @@ behavior pin_publisher_key "Pin Publisher Key" {
   verify integration "a denied key is refused even with consent"
   verify integration "consent to a key change is reported as W156"
   verify integration "a key change is decided by the surface that can ask"
+  verify unit "the CLI asks its terminal about a key change: yes at the prompt consents, and with nobody to ask nothing is asked"
 }
 
 behavior configure_registries "Configure Registries" {

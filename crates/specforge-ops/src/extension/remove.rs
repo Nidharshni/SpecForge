@@ -1,14 +1,15 @@
 //! `specforge remove` and `specforge.remove_extension`.
 
-use super::{NOT_FOUND, Origin, builtin_name};
+use super::{Inventory, NOT_FOUND, Origin, ProjectExtension, Selection};
 use crate::view::ProjectView;
 use crate::{OpError, OpErrorKind, Writes};
+use serde::Serialize;
+use specforge_common::shape::Shape;
 use specforge_common::{ExtensionEntry, codes};
 use specforge_graph::Graph;
-use specforge_installed::{Installed, LockFile, LockState};
+use specforge_installed::{Installed, LockState};
+use specforge_package::PackageName;
 use specforge_project::EnabledExtension;
-use specforge_protocol_types::ExtensionDeclaration;
-use specforge_protocol_types::PackageName;
 use specforge_registry::KindRegistry;
 use std::path::Path;
 
@@ -21,17 +22,13 @@ pub struct RemoveRequest<'a> {
     pub dry_run: bool,
 }
 
-/// What a removal reads of its project: the view's root, what each
-/// `specforge.json` entry enabled in the compile (how a `.wasm` file entry
-/// is found by the name its component declared), the declarations it
-/// loaded, its kinds and its graph.
+/// What a removal reads of its project: the view's root, the project's
+/// extensions ([`Inventory`]), its kinds and its graph.
 struct Removing<'a> {
     root: &'a Path,
-    name: &'a str,
     force: bool,
     dry_run: bool,
-    enabled: &'a [EnabledExtension],
-    loaded: &'a [ExtensionDeclaration],
+    inventory: &'a Inventory<'a>,
     kinds: &'a KindRegistry,
     graph: &'a Graph,
     /// The project's installed extensions, as the compile read them.
@@ -40,7 +37,7 @@ struct Removing<'a> {
 
 /// A stranded entity (CONTEXT.md): one whose kind only the removed
 /// extension declares; the next compile reports it E024.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Shape)]
 pub struct StrandedEntity {
     pub entity_id: String,
     pub kind: String,
@@ -60,7 +57,7 @@ impl StrandedEntity {
 #[derive(Debug, Clone, PartialEq)]
 pub struct RemoveOutcome {
     pub name: String,
-    /// The locked version; for a builtin, the loaded one, if it loaded.
+    /// Its version as the inventory gives it ([`ProjectExtension::version`]).
     pub version: Option<String>,
     pub origin: Origin,
     /// The entities the removal strands, in id order: their kind only the
@@ -73,11 +70,55 @@ pub struct RemoveOutcome {
     pub writes: Writes,
 }
 
+impl RemoveOutcome {
+    /// The document both surfaces print.
+    pub fn document(&self) -> RemoveDocument {
+        RemoveDocument {
+            action: if self.dry_run {
+                RemoveAction::Planned
+            } else {
+                RemoveAction::Removed
+            },
+            extension: self.name.clone(),
+            source: self.origin.source(),
+            version: self.version.clone(),
+            stranded: self.stranded.clone(),
+        }
+    }
+}
+
+/// What `specforge remove --format json` and `specforge.remove_extension`
+/// print (`McpRemoveExtensionResult`).
+#[derive(Debug, Clone, PartialEq, Serialize, Shape)]
+pub struct RemoveDocument {
+    pub action: RemoveAction,
+    pub extension: String,
+    /// `builtin`, the lock entry's source, `file:<path>` or `unknown`
+    /// ([`Origin::source`]).
+    pub source: String,
+    /// The locked version; for a builtin, the loaded one. Absent when
+    /// neither is known.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
+    /// The entities the removal strands, in id order.
+    pub stranded: Vec<StrandedEntity>,
+}
+
+/// Whether the removal was made or only previewed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Shape)]
+#[serde(rename_all = "snake_case")]
+pub enum RemoveAction {
+    Removed,
+    /// A dry run: nothing changed.
+    Planned,
+}
+
 /// Remove `name` from the project the view was compiled from: a locked
 /// install is uninstalled (binary, lock entry and `specforge.json` entry);
 /// a builtin is disabled (its `specforge.json` entry); a `.wasm` file
 /// entry, named by the extension it loaded as, its entry or its path, is
-/// dropped from `specforge.json` (the file and the lock are left alone).
+/// dropped from `specforge.json` (the file and the lock are left alone); an
+/// enabled entry that does not load (E028) is dropped by its name.
 /// Refused with E027 while another loaded or locked extension requires it
 /// as a non-optional peer, unless `force`; with `extension_conflict` when
 /// more than one entry enables `name`.
@@ -95,162 +136,130 @@ pub fn remove(view: &ProjectView, req: &RemoveRequest) -> Result<RemoveOutcome, 
     let root = view.project_root()?;
     if let Some(problem) = view
         .env()
-        .config_problems
+        .config_problems()
         .iter()
         .find(|problem| problem.blocks_edits())
     {
         return Err(crate::config::refusal(problem));
     }
-    let req = &Removing {
+    let inventory = super::inventory(view);
+    let removing = &Removing {
         root,
-        name: req.name,
         force: req.force,
         dry_run: req.dry_run,
-        enabled: &view.env().enabled,
-        loaded: view.registries().declarations(),
-        kinds: &view.registries().kinds,
+        inventory: &inventory,
+        kinds: view.registries().kinds(),
         graph: view.graph(),
         installed: view.installed(),
     };
-    // The `.wasm` file entries `name` names, and whether a named entry
-    // (legacy `name@version` duplicates included) enables it too.
-    let files: Vec<&EnabledExtension> = req
-        .enabled
-        .iter()
-        .filter(|e| {
-            e.file
-                .as_deref()
-                .is_some_and(|path| e.entry == req.name || path == req.name || e.name == req.name)
-        })
-        .collect();
-    let named: Vec<&EnabledExtension> = req
-        .enabled
-        .iter()
-        .filter(|e| e.file.is_none() && e.name == req.name)
-        .collect();
-    match (files.as_slice(), named.is_empty()) {
-        ([], _) => {}
-        ([file], true) => return remove_file(req, file),
-        _ => {
-            // In the order specforge.json lists them.
-            let entries: Vec<&str> = req
-                .enabled
-                .iter()
-                .filter(|e| files.contains(e) || named.contains(e))
-                .map(|e| e.entry.as_str())
-                .collect();
-            let quoted: Vec<String> = entries.iter().map(|e| format!("'{e}'")).collect();
-            let error = OpError::new(
-                OpErrorKind::Conflict,
-                "extension_conflict",
-                format!(
-                    "'{}' is enabled by {} specforge.json entries: {}",
-                    req.name,
-                    quoted.len(),
-                    quoted.join(", ")
-                ),
-            )
-            .with_suggestion(
-                "remove one entry by its text as specforge.json writes it, or edit specforge.json",
-            );
-            return Err(
-                error.with_data(serde_json::json!({"extension": req.name, "entries": entries}))
-            );
-        }
+    match inventory.select(req.name) {
+        Selection::File { entry, extension } => remove_file(removing, entry, extension),
+        Selection::Named(extension) => remove_named(removing, extension),
+        Selection::Ambiguous(entries) => Err(ambiguous(req.name, &entries)),
+        Selection::Nothing => Err(nothing_named(req.name, view.installed().lock())),
     }
-    if ExtensionEntry::parse(req.name)
-        .file(Path::new(""))
-        .is_some()
-    {
-        return Err(OpError::new(
+}
+
+/// The refusal for an argument that more than one entry enables, naming
+/// the entries in the order specforge.json lists them.
+fn ambiguous(name: &str, entries: &[&EnabledExtension]) -> OpError {
+    let entries: Vec<&str> = entries.iter().map(|e| e.entry.as_str()).collect();
+    let quoted: Vec<String> = entries.iter().map(|e| format!("'{e}'")).collect();
+    let error = OpError::new(
+        OpErrorKind::Conflict,
+        "extension_conflict",
+        format!(
+            "'{name}' is enabled by {} specforge.json entries: {}",
+            quoted.len(),
+            quoted.join(", ")
+        ),
+    )
+    .with_suggestion(
+        "remove one entry by its text as specforge.json writes it, or edit specforge.json",
+    );
+    error.with_data(serde_json::json!({"extension": name, "entries": entries}))
+}
+
+/// The refusal for an argument the project has nothing under: a file no
+/// entry names; E072 for a name that could never be installed; else
+/// `extension_not_found`, saying why nothing is locked when there is no
+/// readable lock.
+fn nothing_named(name: &str, lock: &LockState) -> OpError {
+    if ExtensionEntry::parse(name).file(Path::new("")).is_some() {
+        return OpError::new(
             OpErrorKind::ExtensionNotFound,
             NOT_FOUND,
-            format!(
-                "extension '{}' is not enabled: no specforge.json entry names that file",
-                req.name
-            ),
+            format!("extension '{name}' is not enabled: no specforge.json entry names that file"),
         )
         .with_suggestion("`specforge extensions` lists what the project enables")
-        .with_data(serde_json::json!({ "extension": req.name })));
+        .with_data(serde_json::json!({ "extension": name }));
     }
-
-    // What is deleted below is a directory named by this argument: it must
-    // be a package name (E072), before anything is read or removed.
-    let package = PackageName::parse(req.name)
-        .map_err(|why| OpError::from(specforge_common::package::invalid(&why)))?;
-
-    let lock = req.installed.lock().file();
-    let locked = req
-        .installed
-        .lock()
-        .entries()
-        .iter()
-        .find(|e| e.name.as_str() == req.name);
-
-    let (version, origin) = match (locked, builtin_name(req.name)) {
-        (Some(entry), _) => (
-            Some(entry.version.clone()),
-            Origin::Installed {
-                source: entry.source.clone(),
-            },
-        ),
-        (None, Some(builtin)) => {
-            // Enabled when an entry of the compile's config names it.
-            if !req
-                .enabled
-                .iter()
-                .any(|e| e.file.is_none() && e.name == builtin)
-            {
-                return Err(not_installed(req.name, None));
-            }
-            let loaded = req.loaded.iter().find(|d| d.name() == builtin);
-            (loaded.map(|d| d.version().to_string()), Origin::Builtin)
-        }
-        (None, None) => {
-            let why = match req.installed.lock() {
-                LockState::Absent => Some("no lock file found"),
-                LockState::Unreadable(problem) => Some(problem.message.as_str()),
-                LockState::Read(_) => None,
-            };
-            return Err(not_installed(req.name, why));
-        }
+    if let Err(why) = PackageName::parse(name) {
+        return OpError::from(specforge_common::package::invalid(&why));
+    }
+    let why = match lock {
+        LockState::Absent => Some("no lock file found"),
+        LockState::Unreadable(problem) => Some(problem.message.as_str()),
+        LockState::Read(_) => None,
     };
+    not_installed(name, why)
+}
 
-    refuse_if_required(req, req.name, lock)?;
-
-    let stranded = stranded(req.graph, req.kinds, req.name);
+/// Remove the extension `extension` names: its lock entry, binary and
+/// `specforge.json` entries as one change when it is locked; else its
+/// `specforge.json` entries (a builtin, or an entry that does not load).
+fn remove_named(req: &Removing, extension: &ProjectExtension) -> Result<RemoveOutcome, OpError> {
+    // Neither builtin nor locked while the lock can't be read: whether it
+    // is installed is not known, so nothing is removed.
+    if extension.origin == Origin::Unknown
+        && let Some(problem) = req.installed.lock().problem()
+    {
+        return Err(not_installed(
+            extension.name,
+            Some(problem.message.as_str()),
+        ));
+    }
+    // Loaded, but neither enabled nor locked (a view assembled in a test).
+    if !extension.enabled() && extension.lock.is_none() {
+        return Err(not_installed(extension.name, None));
+    }
+    refuse_if_required(req, extension)?;
     let mut outcome = RemoveOutcome {
-        name: req.name.to_string(),
-        version,
-        stranded,
+        name: extension.name.to_string(),
+        version: extension.version().map(str::to_string),
+        origin: extension.origin.clone(),
+        stranded: stranded(req.graph, req.kinds, extension.name),
         dry_run: req.dry_run,
-        origin,
         writes: Writes::none(),
     };
     if req.dry_run {
         return Ok(outcome);
     }
-
     // An installed extension: its binary, its lock entry and its
     // specforge.json entry go as one change, all or nothing. Anything else
-    // (a builtin) is its specforge.json entry alone; a project without
-    // specforge.json (an install only the lock knows) has no entry to drop.
-    let drop_entry = || match crate::config::remove_extension(req.root, req.name) {
+    // is its specforge.json entry alone; a project without specforge.json
+    // (an install only the lock knows) has no entry to drop.
+    let drop_entry = || match crate::config::remove_extension(req.root, extension.name) {
         Err(e) if e.code == "config_not_found" => Ok(false),
         other => other,
     };
     let config_file = req.root.join(crate::config::CONFIG_FILE);
-    if matches!(outcome.origin, Origin::Installed { .. }) && lock.is_some() {
-        // Dependents are checked above, over the loaded declarations and the lock.
-        let mut change = req.installed.change().map_err(OpError::from)?;
-        change.uninstall(&package);
-        let committed = change
-            .commit_with(&config_file, drop_entry)
-            .map_err(|failed| failed.error.with_writes(Writes::of(failed.left)))?;
-        outcome.writes = Writes::of(committed.changed);
-    } else {
-        let dropped = drop_entry()?;
-        outcome.writes.record_if(dropped, config_file);
+    match extension.lock {
+        // Its directory is named by the lock entry's package name, which
+        // the lock read validated (ADR 0036): nothing outside
+        // `.specforge/extensions` can be deleted.
+        Some(locked) => {
+            let mut change = req.installed.change().map_err(OpError::from)?;
+            change.uninstall(&locked.name);
+            let committed = change
+                .commit_with(&config_file, drop_entry)
+                .map_err(|failed| failed.error.with_writes(Writes::of(failed.left)))?;
+            outcome.writes = Writes::of(committed.changed);
+        }
+        None => {
+            let dropped = drop_entry()?;
+            outcome.writes.record_if(dropped, config_file);
+        }
     }
     Ok(outcome)
 }
@@ -258,20 +267,20 @@ pub fn remove(view: &ProjectView, req: &RemoveRequest) -> Result<RemoveOutcome, 
 /// Remove the `.wasm` file entry `file`: only its `specforge.json` entry
 /// goes. The extension it loaded as (if it loaded) is what dependents and
 /// stranded entities are checked against.
-fn remove_file(req: &Removing, file: &EnabledExtension) -> Result<RemoveOutcome, OpError> {
-    let declaration = req.loaded.iter().find(|d| d.name() == file.name);
-    if declaration.is_some() {
-        refuse_if_required(req, &file.name, req.installed.lock().file())?;
-    }
-    let stranded = stranded(req.graph, req.kinds, &file.name);
+fn remove_file(
+    req: &Removing,
+    file: &EnabledExtension,
+    extension: &ProjectExtension,
+) -> Result<RemoveOutcome, OpError> {
+    refuse_if_required(req, extension)?;
     let mut outcome = RemoveOutcome {
         name: file.name.clone(),
-        version: declaration.map(|d| d.version().to_string()),
-        stranded,
-        dry_run: req.dry_run,
+        version: extension.version().map(str::to_string),
         origin: Origin::File {
             path: file.file.clone().unwrap_or_default(),
         },
+        stranded: stranded(req.graph, req.kinds, &file.name),
+        dry_run: req.dry_run,
         writes: Writes::none(),
     };
     if !req.dry_run {
@@ -283,18 +292,22 @@ fn remove_file(req: &Removing, file: &EnabledExtension) -> Result<RemoveOutcome,
     Ok(outcome)
 }
 
-/// E027 when another loaded or locked extension requires `name` as a
-/// non-optional peer, unless the request forces it.
-fn refuse_if_required(req: &Removing, name: &str, lock: Option<&LockFile>) -> Result<(), OpError> {
-    let dependents = dependents(name, req.loaded, lock);
-    if dependents.is_empty() || req.force {
+/// E027 when another loaded or locked extension requires `extension` as a
+/// non-optional peer and it is itself loaded or locked, unless the request
+/// forces it. An entry that loads nothing breaks nobody by going.
+fn refuse_if_required(req: &Removing, extension: &ProjectExtension) -> Result<(), OpError> {
+    if req.force || (extension.declaration.is_none() && extension.lock.is_none()) {
+        return Ok(());
+    }
+    let dependents = req.inventory.dependents(extension.name);
+    if dependents.is_empty() {
         return Ok(());
     }
     Err(OpError::diagnostic(
         codes::E027,
         format!(
             "cannot uninstall '{}': required by {}",
-            name,
+            extension.name,
             dependents.join(", ")
         ),
     )
@@ -308,28 +321,6 @@ fn not_installed(name: &str, why: Option<&str>) -> OpError {
     }
     OpError::new(OpErrorKind::ExtensionNotFound, NOT_FOUND, message)
         .with_data(serde_json::json!({ "extension": name }))
-}
-
-/// The extensions that require `name` as a non-optional peer: loaded ones
-/// (their handshake) and locked ones (the peers recorded at install).
-fn dependents(name: &str, loaded: &[ExtensionDeclaration], lock: Option<&LockFile>) -> Vec<String> {
-    let requires = |peers: &[specforge_registry::PeerDependency]| {
-        peers.iter().any(|p| p.name == name && !p.optional)
-    };
-    let mut out: Vec<String> = loaded
-        .iter()
-        .filter(|d| d.name() != name && requires(d.peers()))
-        .map(|d| d.name().to_string())
-        .chain(
-            lock.iter()
-                .flat_map(|lock| &lock.entries)
-                .filter(|e| e.name.as_str() != name && requires(&e.peer_dependencies))
-                .map(|e| e.name.to_string()),
-        )
-        .collect();
-    out.sort();
-    out.dedup();
-    out
 }
 
 /// The entities whose kind only `extension` defines, in id order.
@@ -633,16 +624,147 @@ mod tests {
         assert!(!lock.contains("@acme/x"), "{lock}");
     }
 
+    #[specforge_test(
+        behavior = "remove_extension",
+        verify = "an enabled entry that is not installed is removed from specforge.json by its name"
+    )]
+    fn an_enabled_entry_that_is_not_installed_is_removed_by_its_name() {
+        let fixture = Fixture::new().config(&["@specforge/product", "@acme/missing@1.2.0"]);
+        write_config(
+            &fixture,
+            r#"{"extensions": ["@specforge/product", "@acme/missing@1.2.0"]}"#,
+        );
+        let before = files_under(fixture.dir.path());
+
+        let request = RemoveRequest {
+            name: "@acme/missing",
+            force: false,
+            dry_run: true,
+        };
+        let planned = remove(&fixture.view(), &request).unwrap();
+        assert_eq!(planned.origin, Origin::Unknown);
+        assert_eq!(planned.version.as_deref(), Some("1.2.0"));
+        assert!(planned.writes.is_empty());
+        assert_eq!(files_under(fixture.dir.path()), before);
+
+        let outcome = remove(&fixture.view(), &removing("@acme/missing")).unwrap();
+
+        assert_eq!(outcome.origin, Origin::Unknown);
+        assert_eq!(outcome.version.as_deref(), Some("1.2.0"));
+        assert_eq!(
+            outcome.writes,
+            Writes::of([fixture.dir.path().join("specforge.json")])
+        );
+        let config: serde_json::Value =
+            serde_json::from_str(&text(fixture.dir.path().join("specforge.json"))).unwrap();
+        assert_eq!(
+            config["extensions"],
+            serde_json::json!(["@specforge/product"])
+        );
+
+        // Without a legacy version the entry has none.
+        let plain = Fixture::new().config(&["@acme/missing"]);
+        write_config(&plain, r#"{"extensions": ["@acme/missing"]}"#);
+        let outcome = remove(&plain.view(), &removing("@acme/missing")).unwrap();
+        assert_eq!((outcome.origin, outcome.version), (Origin::Unknown, None));
+    }
+
+    #[test]
+    fn an_entry_that_is_no_package_name_is_removed_by_its_text() {
+        let fixture = Fixture::new().config(&["Bad Name"]);
+        write_config(&fixture, r#"{"extensions": ["Bad Name"]}"#);
+
+        let outcome = remove(&fixture.view(), &removing("Bad Name")).unwrap();
+
+        assert_eq!(outcome.origin, Origin::Unknown);
+        let config: serde_json::Value =
+            serde_json::from_str(&text(fixture.dir.path().join("specforge.json"))).unwrap();
+        assert_eq!(config["extensions"], serde_json::json!([]));
+    }
+
+    #[test]
+    fn an_entry_of_unknown_origin_is_not_removed_under_an_unreadable_lock() {
+        let mut fixture = Fixture::new().config(&["@acme/x"]);
+        write_config(&fixture, r#"{"extensions": ["@acme/x"]}"#);
+        std::fs::write(
+            specforge_installed::lock_path(fixture.dir.path()),
+            "not valid json {{{",
+        )
+        .unwrap();
+        fixture = fixture.read_lock();
+        let before = files_under(fixture.dir.path());
+
+        let refused = remove(&fixture.view(), &removing("@acme/x")).unwrap_err();
+
+        assert_eq!(refused.code, NOT_FOUND);
+        assert!(refused.message.contains("corrupt lock file"), "{refused:?}");
+        assert_eq!(files_under(fixture.dir.path()), before);
+    }
+
+    #[test]
+    fn a_builtin_named_by_a_stray_lock_entry_is_uninstalled_as_a_builtin() {
+        let fixture = installed(
+            Fixture::new().config(&["@specforge/product"]),
+            "@specforge/product",
+        );
+        write_config(&fixture, r#"{"extensions": ["@specforge/product"]}"#);
+
+        let outcome = remove(&fixture.view(), &removing("@specforge/product")).unwrap();
+
+        assert_eq!(outcome.origin, Origin::Builtin);
+        let lock = text(specforge_installed::lock_path(fixture.dir.path()));
+        assert!(!lock.contains("@specforge/product"), "{lock}");
+        let config: serde_json::Value =
+            serde_json::from_str(&text(fixture.dir.path().join("specforge.json"))).unwrap();
+        assert_eq!(config["extensions"], serde_json::json!([]));
+    }
+
+    #[specforge_test(
+        behavior = "remove_extension",
+        verify = "a .wasm file entry is removed by the name it declares or by its entry as written, leaving its file in place"
+    )]
+    fn remove_selects_a_file_entry_by_its_text_its_path_or_its_name() {
+        let fixture = Fixture::new()
+            .enabled(vec![EnabledExtension {
+                entry: "@sdk/greet=greet.wasm".into(),
+                name: "@sdk/greet".into(),
+                file: Some("greet.wasm".into()),
+                failure: None,
+            }])
+            .declarations(vec![Fixture::declaration("@sdk/greet", "0.1.0")]);
+        write_config(&fixture, r#"{"extensions": ["@sdk/greet=greet.wasm"]}"#);
+
+        for argument in ["@sdk/greet=greet.wasm", "greet.wasm", "@sdk/greet"] {
+            let request = RemoveRequest {
+                name: argument,
+                force: false,
+                dry_run: true,
+            };
+            let outcome = remove(&fixture.view(), &request).unwrap();
+
+            assert_eq!(outcome.name, "@sdk/greet", "{argument}");
+            assert_eq!(
+                outcome.origin,
+                Origin::File {
+                    path: "greet.wasm".into()
+                },
+                "{argument}"
+            );
+            assert_eq!(outcome.version.as_deref(), Some("0.1.0"), "{argument}");
+            assert!(outcome.writes.is_empty(), "{argument}");
+        }
+    }
+
     #[test]
     fn an_unreadable_lock_is_why_nothing_is_installed() {
-        let mut fixture = Fixture::new();
+        let fixture = Fixture::new();
         write_config(&fixture, r#"{"extensions": []}"#);
         std::fs::write(
             specforge_installed::lock_path(fixture.dir.path()),
             "not valid json {{{",
         )
         .unwrap();
-        fixture.env.installed = Installed::at(fixture.dir.path());
+        let fixture = fixture.read_lock();
 
         let refused = remove(&fixture.view(), &removing("@acme/x")).unwrap_err();
 
@@ -652,6 +774,60 @@ mod tests {
         assert_eq!(
             text(specforge_installed::lock_path(fixture.dir.path())),
             "not valid json {{{"
+        );
+    }
+
+    #[specforge_test(
+        behavior = "remove_extension",
+        verify = "the remove document names the extension's source and version whatever its origin"
+    )]
+    fn remove_document_names_source_and_version() {
+        use specforge_installed::LockSource;
+
+        let outcome = |origin, version: Option<&str>, dry_run| RemoveOutcome {
+            name: "@acme/x".into(),
+            version: version.map(String::from),
+            origin,
+            stranded: vec![StrandedEntity {
+                entity_id: "a".into(),
+                kind: "greeting".into(),
+            }],
+            dry_run,
+            writes: Writes::default(),
+        };
+        let document = |outcome: RemoveOutcome| serde_json::to_value(outcome.document()).unwrap();
+        let stranded = serde_json::json!([{"entity_id": "a", "kind": "greeting"}]);
+
+        assert_eq!(
+            document(outcome(Origin::Builtin, Some("1.0.0"), false)),
+            serde_json::json!({"action": "removed", "extension": "@acme/x", "source": "builtin",
+                "version": "1.0.0", "stranded": stranded})
+        );
+        assert_eq!(
+            document(outcome(
+                Origin::Installed {
+                    source: LockSource::Registry
+                },
+                Some("0.1.0"),
+                false
+            )),
+            serde_json::json!({"action": "removed", "extension": "@acme/x", "source": "registry",
+                "version": "0.1.0", "stranded": stranded})
+        );
+        assert_eq!(
+            document(outcome(
+                Origin::File {
+                    path: "x.wasm".into()
+                },
+                None,
+                false
+            )),
+            serde_json::json!({"action": "removed", "extension": "@acme/x", "source": "file:x.wasm",
+                "stranded": stranded})
+        );
+        assert_eq!(
+            document(outcome(Origin::Unknown, None, true))["action"],
+            "planned"
         );
     }
 }

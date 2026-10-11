@@ -1,7 +1,8 @@
 # A core tool's reply is one typed definition
 
-**Status:** accepted (2026-10-09). Supersedes ADR 0033's consequence "Output schemas stay
-hand-written". Amends ADR 0004 D2-c, ADR 0015 I5 and ADR 0016 (the inspect aliases).
+**Status:** accepted (2026-10-09); D1's "inline", D3's checked keywords, "Rejected: schemars" and
+"What would reopen it" amended by ADR 0051 (2026-10-11). Supersedes ADR 0033's consequence "Output schemas stay
+hand-written". Amends ADR 0004 D2-c, ADR 0015 I5 and ADR 0016 (the inspect aliases). D2's tool table and D9 are refined by ADR 0049: a tool's module names its reply (`type Returns`).
 
 Every core MCP tool's reply was written three times: a spec type in `spec/types/mcp.spec`, a
 hand-written output schema in `tools/table.rs` (25 schemas, 199 lines) and a `json!` in the handler
@@ -25,7 +26,8 @@ structure. `operations/mod.rs`, the most-changed file of the workspace, held 11 
 - **D2. One reply type per tool.** A core tool's handler answers its module's `Reply` (`Answered<R>`,
   a mutation `Mutation<R>`) or `Text`; the tool table names it once (`typed!(h, Args => Reply)`), and
   the outputSchema is derived from it. A mutation's reply is `WrittenReply<R>`: `files_written` is a
-  derived field. The documents both surfaces print (analyze, collect, providers, the extension
+  derived field (sent as that type, with rename's fresh diagnostics a derived field beside it: ADR 0022,
+  round-6 amendment). The documents both surfaces print (analyze, collect, providers, the extension
   entry, inference progress and gaps, trace, schema) are typed once in ops; query's schema is the
   emitter's derived document schemas plus the `coverage_status` ops adds.
 - **D3. A structured result its schema refuses is never sent.** Every core reply with an

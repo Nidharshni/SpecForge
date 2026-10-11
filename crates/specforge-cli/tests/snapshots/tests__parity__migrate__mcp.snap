@@ -30,6 +30,12 @@ expression: mcp_snap
   },
   "ok": true,
   "payload": {
+    "backups": [
+      {
+        "backup_path": "[ROOT]/spec/old.spec.bak",
+        "original_path": "[ROOT]/spec/old.spec"
+      }
+    ],
     "diffs": [
       {
         "after_hash": "[SHA256]",
@@ -52,6 +58,7 @@ expression: mcp_snap
     "hooks_invoked": [],
     "migrated": true,
     "ok": true,
+    "pending": true,
     "post_migration_errors": [],
     "post_migration_validated": true,
     "results": [

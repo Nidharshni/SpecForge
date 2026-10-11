@@ -77,7 +77,7 @@ pub fn check_and_pin(
                     Diagnostic::new(
                         codes::W155,
                         format!(
-                            "{name} {} is not signed, and was installed because --allow-unsigned was given",
+                            "{name} {} is not signed, and was accepted because --allow-unsigned was given",
                             metadata.version
                         ),
                     )

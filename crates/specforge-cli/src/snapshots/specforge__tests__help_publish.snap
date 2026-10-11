@@ -1,0 +1,26 @@
+---
+source: crates/specforge-cli/src/main.rs
+expression: command.clone().render_long_help().to_string()
+---
+Publish an extension to the registry that serves its name: its binary, and the declaration read from it as the package's manifest
+
+Usage: specforge publish [OPTIONS] [EXTENSION]
+
+Arguments:
+  [EXTENSION]
+          The extension to publish: a .wasm component, or the extension's crate directory (its target/wasm32-wasip2/release component). Defaults to the --path directory
+
+Options:
+      --path <PATH>
+          The project whose specforge.json configures the registries
+          
+          [default: .]
+
+      --format <FORMAT>
+          Output format: human or json
+          
+          [default: human]
+          [possible values: human, json]
+
+  -h, --help
+          Print help

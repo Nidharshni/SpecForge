@@ -8,19 +8,19 @@
 //! registers the surfaces. Callers read [`RegistryBuild`].
 //! It is pure: no I/O, no runtime.
 
-use std::collections::{HashMap, HashSet};
-
 use specforge_common::Diagnostic;
+use specforge_graph::GraphInputs;
 use specforge_protocol_types::{CompilerPassDescriptor, ExtensionDeclaration};
 
 use super::declaration::{consistency, order_passes, shape};
+use super::graph_inputs;
 use super::peers;
-use super::populate::{keyword, populate};
+use super::populate::populate;
 use super::validate::validate_extension_testability;
-use crate::rules::{Registries, Rules};
+use crate::rules::{CustomVerdicts, Registries, Rules};
 use crate::{
-    EdgeRegistry, FieldRegistry, FieldType, KindRegistry, SurfaceRegistryEntry,
-    refuse_malformed_tool_schemas, register_surface_contributions,
+    EdgeRegistry, FieldRegistry, KindRegistry, SurfaceRegistryEntry, refuse_malformed_tool_schemas,
+    register_surface_contributions,
 };
 
 /// The phase a pass declares to run with every compile instead of under
@@ -49,51 +49,108 @@ impl DeclaredPass {
 }
 
 /// Everything the compiler derives from the loaded declarations, before
-/// any `.spec` file is read.
+/// any `.spec` file is read. Callers read it through its methods: the
+/// registries, the rule set and passes, the graph inputs, and its
+/// diagnostics in one order.
 #[derive(Debug, Default)]
 pub struct RegistryBuild {
     /// The declarations the build was made from, in load order; MCP tools
     /// refused for a malformed schema (E055) are left out of their surfaces.
     declarations: Vec<ExtensionDeclaration>,
-    pub kinds: KindRegistry,
-    pub fields: FieldRegistry,
-    pub edges: EdgeRegistry,
+    pub(crate) kinds: KindRegistry,
+    pub(crate) fields: FieldRegistry,
+    pub(crate) edges: EdgeRegistry,
     /// The rule set: the extensions' rules (checked and resolved against
     /// the registries) plus the host-generated E006 rules for required
     /// fields, each with its origin (ADR 0020).
-    pub rules: Rules,
-    /// Kinds whose bodies an extension parses: the core grammar's parse
-    /// errors inside them are not reported.
-    pub body_parser_kinds: HashSet<String>,
-    /// (kind, field) pairs registered as single references (empty when no
-    /// kind is registered).
-    pub single_reference_fields: HashSet<(String, String)>,
-    /// Inverse field pairs that are not reference cycles.
-    pub bidirectional_pairs: Vec<(String, String)>,
-    /// (kind, field) reference fields whose target kind no loaded extension
-    /// declares, mapped to that kind.
-    pub absent_reference_targets: HashMap<(String, String), String>,
+    pub(crate) rules: Rules,
     /// Registered surface contributions (first registration wins).
-    pub surfaces: Vec<SurfaceRegistryEntry>,
+    pub(crate) surfaces: Vec<SurfaceRegistryEntry>,
     /// Every declared pass with its extension: extension by extension in
     /// load order, each extension's in its after/before order.
-    pub passes: Vec<DeclaredPass>,
-    /// The declarations' own diagnostics: E030 identity and shape, W021
-    /// self-consistency, the peers' E073 and E027 (a cycle's after the declarations'), W145 pass cycles — in that order,
-    /// extension by extension within each. Reported before
-    /// `registry_diagnostics`.
-    pub declaration_diagnostics: Vec<Diagnostic>,
-    /// Populate (E026, W018, W019, W021, I004), W017, rule-parse (W112),
-    /// then duplicate rule codes (W023) diagnostics, in that order.
-    /// `specforge_project::Environment::load` appends the custom rules'
-    /// probes (W112) when the extensions ran in a runtime.
-    pub registry_diagnostics: Vec<Diagnostic>,
+    pub(crate) passes: Vec<DeclaredPass>,
+    /// E030 identity and shape, W021 self-consistency, the peers' E073 and
+    /// E027 (a cycle's after the declarations'), W145 pass cycles — in that
+    /// order, extension by extension within each.
+    declaration_diagnostics: Vec<Diagnostic>,
+    /// Populate (E026, W018, W019, W021, I004), W017, the rule set's (W150,
+    /// W147 or W112 per declared rule), then W023 — in that order.
+    registry_diagnostics: Vec<Diagnostic>,
+    /// The custom rules' probes (W112), set by [`Self::probe`]; empty until then.
+    probe_diagnostics: Vec<Diagnostic>,
     /// Refused MCP tools (E055) and surface registration conflicts (E039).
-    /// `specforge check` reports them after the graph's own diagnostics.
-    pub surface_diagnostics: Vec<Diagnostic>,
+    surface_diagnostics: Vec<Diagnostic>,
 }
 
 impl RegistryBuild {
+    /// The kinds the declarations register, each under its keyword (first
+    /// in load order wins, E026).
+    pub fn kinds(&self) -> &KindRegistry {
+        &self.kinds
+    }
+
+    /// The fields registered on each kind: its own, its extension's shared
+    /// fields and enhancements.
+    pub fn fields(&self) -> &FieldRegistry {
+        &self.fields
+    }
+
+    /// The edge types: declared, and every label a field maps to without
+    /// declaring it.
+    pub fn edges(&self) -> &EdgeRegistry {
+        &self.edges
+    }
+
+    /// The rule set (ADR 0020).
+    pub fn rules(&self) -> &Rules {
+        &self.rules
+    }
+
+    /// Every declared pass with its extension, in order (both phases).
+    pub fn passes(&self) -> &[DeclaredPass] {
+        &self.passes
+    }
+
+    /// The surface contributions registered (first registration wins; a
+    /// later duplicate is E039).
+    pub fn surfaces(&self) -> &[SurfaceRegistryEntry] {
+        &self.surfaces
+    }
+
+    /// What the graph build reads of these declarations: body-parser kinds,
+    /// single and absent-target reference fields, inverse pairs, value
+    /// coercions and derived references (ADR 0032, amended). The one place
+    /// they are derived; `Environment::graph_config` adds the provider
+    /// schemes.
+    pub fn graph_inputs(&self) -> GraphInputs {
+        graph_inputs::derive(&self.declarations, &self.kinds, &self.fields)
+    }
+
+    /// Ask `verdicts` once for each `custom` rule's function, on an entity
+    /// of its target kind that declares nothing (ADR 0020): a function that
+    /// cannot answer is W112, reported after the registries' diagnostics; the
+    /// rule stays registered. Probing again replaces the earlier result.
+    /// `Environment::assemble` probes when its extensions loaded in a runtime;
+    /// `NoVerdicts` answers nothing, so probing with it reports nothing.
+    pub fn probe(&mut self, verdicts: &dyn CustomVerdicts) {
+        self.probe_diagnostics = self.rules.probe(verdicts);
+    }
+
+    /// Every diagnostic the build reports, in its one order: the
+    /// declarations' own (E030, W021, E073 and E027, W145), the registries'
+    /// (E026, W018, W019, W021, I004; W017; W150, W147 or W112 per rule;
+    /// W023), the custom rules' probes (W112), then the surfaces' (E055,
+    /// E039); each group extension by extension in load order.
+    /// `specforge check` reports them right after the environment's own,
+    /// before any source (ADR 0012 D11, amended).
+    pub fn diagnostics(&self) -> impl Iterator<Item = &Diagnostic> {
+        self.declaration_diagnostics
+            .iter()
+            .chain(&self.registry_diagnostics)
+            .chain(&self.probe_diagnostics)
+            .chain(&self.surface_diagnostics)
+    }
+
     /// The declarations the build was made from, in load order.
     pub fn declarations(&self) -> &[ExtensionDeclaration] {
         &self.declarations
@@ -176,24 +233,6 @@ pub fn build_registries(declarations: Vec<ExtensionDeclaration>) -> RegistryBuil
     );
     registry_diagnostics.extend(rule_diagnostics);
 
-    let body_parser_kinds: HashSet<String> = declarations
-        .iter()
-        .flat_map(|d| d.entities.iter())
-        .filter(|k| k.has_body_parser)
-        .map(|k| keyword(k).to_string())
-        .collect();
-    let single_reference_fields: HashSet<(String, String)> = if kinds.is_empty() {
-        HashSet::new()
-    } else {
-        fields
-            .iter()
-            .filter(|(_, _, entry)| entry.field_type() == FieldType::Reference)
-            .map(|(kind, field, _)| (kind.to_string(), field.to_string()))
-            .collect()
-    };
-    let bidirectional_pairs = fields.bidirectional_pairs();
-    let absent_reference_targets = fields.absent_reference_targets(&kinds);
-
     let surface_inputs: Vec<(String, _)> = declarations
         .iter()
         .map(|d| (d.name().to_string(), d.surfaces.clone()))
@@ -207,14 +246,11 @@ pub fn build_registries(declarations: Vec<ExtensionDeclaration>) -> RegistryBuil
         fields,
         edges,
         rules,
-        body_parser_kinds,
-        single_reference_fields,
-        bidirectional_pairs,
-        absent_reference_targets,
         surfaces,
         passes,
         declaration_diagnostics,
         registry_diagnostics,
+        probe_diagnostics: Vec::new(),
         surface_diagnostics,
     }
 }

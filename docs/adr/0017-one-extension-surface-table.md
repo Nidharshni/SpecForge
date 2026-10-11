@@ -1,6 +1,6 @@
 # One extension surface table; the host normalizes command args
 
-**Status:** accepted (2026-10-06)
+**Status:** accepted (2026-10-06); D8's adapters are one module and D9's matching rule is the core resources' (ADR 0049).
 
 An extension command is derived for each surface, and an extension surface was looked up five ways:
 

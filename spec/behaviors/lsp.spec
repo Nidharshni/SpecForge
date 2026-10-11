@@ -230,6 +230,7 @@ behavior find_all_references "Find All References" {
   verify unit "find-refs excludes what the entity itself references"
   verify unit "find-refs omits the declaration when the request excludes it"
   verify unit "each reference is the identifier token as written"
+  verify unit "reference ranges are UTF-16 after multi-byte text"
   verify contract "Find All References: find all references holds — graph_available, all_references_returned, declaration_included"
 }
 
@@ -688,7 +689,10 @@ behavior provide_semantic_tokens "Provide Semantic Tokens" {
     strings and comments hold no other token, a comment after code on its
     line is a comment, the fields after a nested block are classified like
     the ones before it, and a define block's name is not a declaration
-    (define blocks register nothing, ADR 0005). A reference is classified
+    (define blocks register nothing, ADR 0005). A line that starts a
+    top-level form of the grammar (lex_spec_text) closes every body, block
+    and list left open before it, so a union or an inline ref after a body
+    being typed is classified as its own form. A reference is classified
     as the token type of the kind of the entity it names (an unresolved one
     as variable), with the reference modifier; an enum field's value is an
     enumMember and a boolean field's value a keyword.
@@ -719,6 +723,8 @@ behavior provide_semantic_tokens "Provide Semantic Tokens" {
   verify unit "classification agrees with the grammar on every spec file of the repository"
   verify unit "a reference is classified as the kind of the entity it names"
   verify unit "an enum field's value is an enumMember and a boolean field's value a keyword"
+  verify unit "a union and an inline ref after an unclosed body are classified as top-level forms"
+  verify unit "the document resumes at every top-level form of the repository's spec after an unclosed body"
 }
 
 behavior complete_field_names "Complete Field Names" {
@@ -777,6 +783,9 @@ behavior complete_keywords "Complete Keywords" {
     When a user types at the top level of a .spec file (outside any entity
     block), the LSP MUST delegate to complete_extension_defined_keywords
     (behaviors/zero-entity-lsp.spec) for extension-aware keyword completions.
+    A line that starts a top-level form of the grammar (lex_spec_text) ends
+    any entity block left unclosed before it, so the keywords are suggested
+    after such a form.
     The structural keyword use MUST always be included in addition to
     extension-defined keywords; define MUST NOT be suggested: it is a
     reserved word whose blocks register nothing (W143, ADR 0005). Each
@@ -798,6 +807,7 @@ behavior complete_keywords "Complete Keywords" {
   verify unit "keyword completion answers with the registered kinds as soon as the environment is loaded, before indexing ends"
   verify unit "use is always suggested and define never is"
   verify unit "verify suggests the kinds the entity's kind allows"
+  verify unit "keywords are suggested after a top-level form that follows an unclosed body"
   verify unit "no keyword suggestions inside entity blocks"
   verify unit "snippet templates based on kind field definitions"
   verify contract "Complete Keywords: keyword completion holds — kind_registry_available, cursor_at_top_level, keywords_delegated, structural_keywords_included"

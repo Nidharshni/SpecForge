@@ -4,13 +4,13 @@
 //! the exact bytes each vendored blob answers) must deserialize against the
 //! shared Rust protocol types, and the handshake's critical fields must be
 //! present — a truncated handshake now FAILS deserialization instead of
-//! silently yielding empty contribution flags / no peer dependencies / no
+//! silently yielding no peer dependencies / no
 //! sandbox limits.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use specforge_protocol_types::{ContributionFlags, DescribeResponse, HandshakeResponse};
+use specforge_protocol_types::{DescribeResponse, HandshakeResponse};
 
 /// Handshake fields the host requires on the wire. Drift between this list
 /// and `HandshakeResponse`'s required fields fails the conformance test.
@@ -18,7 +18,6 @@ const REQUIRED_HANDSHAKE_KEYS: &[&str] = &[
     "protocol_version",
     "name",
     "version",
-    "contribution_flags",
     "peer_dependencies",
     "sandbox_policy",
 ];
@@ -114,47 +113,18 @@ fn every_builtin_describe_fixture_parses_against_protocol_types() {
 }
 
 #[test]
-fn truncated_handshake_missing_contribution_flags_fails_deserialization() {
-    let dir = extension_dirs().remove(0);
-    let raw = fs::read_to_string(dir.join("handshake.json")).expect("fixture exists");
-    let mut value: serde_json::Value = serde_json::from_str(&raw).expect("fixture is JSON");
-    value
-        .as_object_mut()
-        .expect("handshake is an object")
-        .remove("contribution_flags");
-
-    let truncated = serde_json::to_string(&value).expect("re-serialize");
-    let err = serde_json::from_str::<HandshakeResponse>(&truncated)
-        .expect_err("handshake missing contribution_flags must FAIL deserialization (C7-07)");
-    assert!(
-        err.to_string().contains("contribution_flags"),
-        "deserialization error should name the missing critical field, got: {err}"
-    );
-}
-
-#[test]
-fn every_contribution_flag_defaults_false_when_absent() {
-    // Per-flag `default` stays: individual flags are genuinely optional
-    // (absent = extension does not contribute that category). Only the
-    // handshake envelope fields became required.
-    let flags: ContributionFlags =
-        serde_json::from_str("{}").expect("empty object deserializes to all-false flags");
-    assert!(!flags.entities && !flags.analyzers && !flags.validators);
-}
-
-#[test]
 fn handshake_with_all_fields_round_trips() {
     let raw = r#"{
         "protocol_version": "1.0.0",
         "name": "@acme/test",
         "version": "0.1.0",
-        "contribution_flags": { "entities": true },
+        "providers": true,
         "peer_dependencies": [],
         "sandbox_policy": { "max_execution_ms": 5000 }
     }"#;
     let response: HandshakeResponse = serde_json::from_str(raw).expect("full handshake parses");
     assert_eq!(response.name, "@acme/test");
-    assert!(response.contribution_flags.entities);
+    assert!(response.providers);
     assert_eq!(
         response.sandbox_policy.and_then(|p| p.max_execution_ms),
         Some(5000)
@@ -195,11 +165,11 @@ fn an_older_minor_protocol_still_loads() {
     use specforge_protocol_types::{PROTOCOL_VERSION, ProtocolError};
     use specforge_wasm::protocol::load_declaration;
 
-    assert_eq!(PROTOCOL_VERSION, "1.1.0");
-    // A guest built with the 1.0 SDK loads under a 1.1 host: only the
+    assert_eq!(PROTOCOL_VERSION, "1.2.0");
+    // A guest built with the 1.0 SDK loads under a 1.2 host: only the
     // major is checked.
     let loaded = load_declaration(&guest_answering("1.0.0"), "@test/older")
-        .expect("a 1.0.0 guest loads under a 1.1.0 host");
+        .expect("a 1.0.0 guest loads under a 1.2.0 host");
     assert_eq!(loaded.declaration.name(), "@test/older");
     // Another major still does not.
     match load_declaration(&guest_answering("2.0.0"), "@test/older").unwrap_err() {
@@ -207,7 +177,7 @@ fn an_older_minor_protocol_still_loads() {
             host_version,
             extension_version,
         } => {
-            assert_eq!(host_version, "1.1.0");
+            assert_eq!(host_version, "1.2.0");
             assert_eq!(extension_version, "2.0.0");
         }
         other => panic!("expected IncompatibleVersion, got {other:?}"),

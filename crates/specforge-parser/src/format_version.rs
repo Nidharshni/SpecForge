@@ -16,6 +16,7 @@ use specforge_common::{Diagnostic, SourceSpan, Sym, codes};
 
 /// The DSL format version embedded in spec file headers.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Shape)]
+#[shape(define)]
 pub struct FormatVersion {
     pub major: u32,
     pub minor: u32,

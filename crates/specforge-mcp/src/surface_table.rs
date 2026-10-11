@@ -15,8 +15,8 @@
 //!
 //! Nothing here knows how a command's schema is derived or how its tool is
 //! named: that is `specforge_ops::command::ExtensionCommand`'s. Nothing
-//! here calls an extension either: dispatch is the tools' and resources'
-//! adapters, over the `WasmRuntime` seam.
+//! here calls an extension either: dispatch is `extension_dispatch`'s,
+//! over the `WasmRuntime` seam.
 
 use serde_json::Value;
 use specforge_common::{Code, Diagnostic, codes};
@@ -138,29 +138,10 @@ impl ResourceEntry {
         }
     }
 
-    /// Whether its template names `uri`: the template itself when it has
-    /// no `{placeholder}`, else its text before the first placeholder
-    /// followed by more (`acme://doc/{id}` names `acme://doc/d1`), whatever
-    /// the scheme.
+    /// Whether its template names `uri`, by the one rule core resources
+    /// follow too ([`crate::uri_template::names`]), whatever the scheme.
     pub fn names(&self, uri: &str) -> bool {
-        match self.uri_template.split_once('{') {
-            Some((head, _)) => uri.len() > head.len() && uri.starts_with(head),
-            None => uri == self.uri_template,
-        }
-    }
-
-    /// A URI its template names: each placeholder filled with `x`. What
-    /// decides whether a template another resource serves shadows it.
-    fn probe(&self) -> String {
-        let mut probe = String::new();
-        let mut rest = self.uri_template.as_str();
-        while let Some((head, tail)) = rest.split_once('{') {
-            probe.push_str(head);
-            probe.push('x');
-            rest = tail.split_once('}').map_or("", |(_, after)| after);
-        }
-        probe.push_str(rest);
-        probe
+        crate::uri_template::names(&self.uri_template, uri)
     }
 }
 
@@ -172,7 +153,7 @@ impl ExtensionSurfaceTable {
     /// serves; each with an I017 saying why.
     pub fn build(
         registries: &RegistryBuild,
-        core_tools: &[ToolSpec],
+        core_tools: &[&dyn ToolSpec],
         core_resources: &[ResourceSpec],
     ) -> Self {
         let mut table = ExtensionSurfaceTable::default();
@@ -211,10 +192,10 @@ impl ExtensionSurfaceTable {
                     extension: extension.to_string(),
                     export: resource.export.clone(),
                 };
-                let probe = entry.probe();
+                let probe = crate::uri_template::probe(&entry.uri_template);
                 let shadow = core_resources
                     .iter()
-                    .find(|core| core.matches(&probe))
+                    .find(|core| core.names(&probe))
                     .map(|core| format!("the core resource '{}' serves its URIs", core.uri))
                     .or_else(|| {
                         table
@@ -316,8 +297,8 @@ impl ExtensionSurfaceTable {
 
     /// Why an explicit tool named `name` is not served: a core tool or an
     /// earlier extension tool has the name.
-    fn tool_name_taken(&self, name: &str, core_tools: &[ToolSpec]) -> Option<String> {
-        if core_tools.iter().any(|core| core.name == name) {
+    fn tool_name_taken(&self, name: &str, core_tools: &[&dyn ToolSpec]) -> Option<String> {
+        if core_tools.iter().any(|core| core.name() == name) {
             return Some("a core tool has that name".to_string());
         }
         self.tool(name)
@@ -326,8 +307,8 @@ impl ExtensionSurfaceTable {
 
     /// Why a command whose tool would be `name` is not served: the name is
     /// a core tool's, or an explicit tool's.
-    fn command_name_taken(&self, name: &str, core_tools: &[ToolSpec]) -> Option<String> {
-        if core_tools.iter().any(|core| core.name == name) {
+    fn command_name_taken(&self, name: &str, core_tools: &[&dyn ToolSpec]) -> Option<String> {
+        if core_tools.iter().any(|core| core.name() == name) {
             return Some(format!("core tool '{name}' already exists"));
         }
         self.tool(name)

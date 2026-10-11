@@ -373,6 +373,32 @@ fn init_refuses_a_directory_whose_starter_file_exists() {
 }
 
 #[specforge_test_macros::test(
+    behavior = "non_interactive_init",
+    verify = "init refuses local extensions the lock plan refuses before it writes anything"
+)]
+fn init_refuses_local_extensions_over_an_unreadable_lock_before_writing() {
+    use specforge_ops::init;
+    let blobs = Blobs::new();
+    let scratch = TempDir::new().unwrap();
+    let dir = scratch.path().join("victim");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("specforge.lock"), "garbage\n").unwrap();
+    let before = files_under(&dir);
+    let extensions = [blobs.greet().display().to_string()];
+    let request = init::Request {
+        dir: &dir,
+        name: Some("demo"),
+        version: init::DEFAULT_VERSION,
+        extensions: &extensions,
+    };
+
+    let error = init::plan(&request, &candidates()).unwrap_err();
+
+    assert_eq!(error.code, "E033", "{error:?}");
+    assert_eq!(files_under(&dir), before);
+}
+
+#[specforge_test_macros::test(
     behavior = "scaffold_new_project",
     verify = "a failed init leaves the directory as it was, files that were there included"
 )]
@@ -383,7 +409,10 @@ fn a_failed_init_puts_back_what_was_there() {
     let dir = scratch.path().join("victim");
     std::fs::create_dir_all(dir.join(".specforge")).unwrap();
     std::fs::write(dir.join(".specforge/keep.txt"), "keep\n").unwrap();
-    std::fs::write(dir.join("specforge.lock"), "garbage\n").unwrap();
+    // `.specforge/extensions` is a file: no module can be placed under it.
+    std::fs::write(dir.join(".specforge/extensions"), "not a directory\n").unwrap();
+    let empty_lock = "{\"lockfile_version\": 1, \"entries\": []}";
+    std::fs::write(dir.join("specforge.lock"), empty_lock).unwrap();
     let extensions = [blobs.greet().display().to_string()];
     let request = init::Request {
         dir: &dir,
@@ -395,15 +424,19 @@ fn a_failed_init_puts_back_what_was_there() {
     let plan = init::plan(&request, &candidates()).unwrap();
     let error = init::apply(&dir, plan).unwrap_err();
 
-    assert_eq!(error.code, "E033", "{error:?}");
+    assert_eq!(error.code, "E032", "{error:?}");
     assert!(error.writes.is_empty(), "{:?}", error.writes);
     assert_eq!(
         std::fs::read_to_string(dir.join(".specforge/keep.txt")).unwrap(),
         "keep\n"
     );
     assert_eq!(
+        std::fs::read_to_string(dir.join(".specforge/extensions")).unwrap(),
+        "not a directory\n"
+    );
+    assert_eq!(
         std::fs::read_to_string(dir.join("specforge.lock")).unwrap(),
-        "garbage\n"
+        empty_lock
     );
     for gone in ["spec", "specforge.json", ".gitignore"] {
         assert!(!dir.join(gone).exists(), "{gone} is removed again");

@@ -76,7 +76,7 @@ impl<'a> ExtensionEntry<'a> {
         }
         // The one rule that splits `name@requirement`: the requirement of
         // a legacy entry is not read here.
-        ExtensionEntry::Named(specforge_protocol_types::package::split_requirement(entry).0)
+        ExtensionEntry::Named(specforge_package::split_requirement(entry).0)
     }
 
     /// The package a named entry names, or why its name is none (a name
@@ -84,14 +84,9 @@ impl<'a> ExtensionEntry<'a> {
     /// for a `.wasm` file entry, which names a file.
     pub fn package_name(
         &self,
-    ) -> Option<
-        Result<
-            specforge_protocol_types::PackageName,
-            specforge_protocol_types::package::PackageNameError,
-        >,
-    > {
+    ) -> Option<Result<specforge_package::PackageName, specforge_package::PackageNameError>> {
         match *self {
-            ExtensionEntry::Named(name) => Some(specforge_protocol_types::PackageName::parse(name)),
+            ExtensionEntry::Named(name) => Some(specforge_package::PackageName::parse(name)),
             ExtensionEntry::File { .. } => None,
         }
     }
@@ -156,7 +151,8 @@ impl ProjectConfig {
 
     /// The project's sources: every `.spec` file under the spec root that
     /// discovery keeps (no skipped directory, no `exclude` entry), sorted —
-    /// the files a compile reads, and what format and migrate rewrite.
+    /// the files a compile reads, and what format and migrate rewrite (see
+    /// [`crate::walk_spec_files`]).
     pub fn spec_files(&self, root: &Path) -> Vec<PathBuf> {
         crate::discover_spec_files(&self.spec_root_in(root), &self.exclude)
     }
@@ -292,7 +288,21 @@ pub fn read_project_config(project_root: &Path) -> ConfigRead {
             });
         }
     };
-    let value: serde_json::Value = match serde_json::from_str(&content) {
+    parse_project_config(&path, &content)
+}
+
+/// Parse `content`, the text of the `specforge.json` at `path` (named in
+/// each problem): the config it gives and every way it is not used as
+/// written, in file order. `found` is true. [`read_project_config`] reads
+/// the file, then parses it.
+pub fn parse_project_config(path: &Path, content: &str) -> ConfigRead {
+    let path = path.to_path_buf();
+    let unusable = |problem: ConfigProblem| ConfigRead {
+        config: ProjectConfig::default(),
+        problems: vec![problem],
+        found: true,
+    };
+    let value: serde_json::Value = match serde_json::from_str(content) {
         Ok(value) => value,
         Err(e) => {
             return unusable(ConfigProblem::NotJson {
@@ -309,7 +319,7 @@ pub fn read_project_config(project_root: &Path) -> ConfigRead {
     let mut config = ProjectConfig::default();
     // The keys in the order the file writes them, so the problems are
     // reported in file order.
-    for key in keys_in_file_order(&content) {
+    for key in keys_in_file_order(content) {
         let Some(item) = object.get(&key) else {
             continue;
         };
@@ -481,6 +491,30 @@ pub fn validate_project_name(name: &str) -> Result<(), &'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use specforge_test_macros::test as specforge_test;
+
+    #[specforge_test(
+        behavior = "load_extension_manifests",
+        verify = "E069 names why specforge.json can't be used"
+    )]
+    fn parsing_a_config_text_is_reading_it_from_its_file() {
+        let texts = [
+            r#"{"name": "p", "spec_root": "spec", "exclude": ["gen"], "extensions": ["@a/b"],
+                "inference": {"global": "g", "density_threshold": 0.5}}"#,
+            r#"{"name": 5}"#,
+            r#"{ "extensions": ["#,
+            "[1]",
+        ];
+        for text in texts {
+            let dir = tempfile::TempDir::new().unwrap();
+            let path = dir.path().join("specforge.json");
+            std::fs::write(&path, text).unwrap();
+            let read = read_project_config(dir.path());
+            let parsed = parse_project_config(&path, text);
+            assert!(parsed.found, "{text}");
+            assert_eq!(format!("{read:?}"), format!("{parsed:?}"), "{text}");
+        }
+    }
 
     #[test]
     fn project_root_of_is_the_nearest_project_else_the_path() {

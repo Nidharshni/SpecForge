@@ -84,6 +84,38 @@ nearest project, else the directory itself" on their own.
   `test_results`; with no project served a relative one is invalid input on `out_dir`. `output_files` lists
   absolute paths.
 
+## Amendment (architecture round 6, plan 11)
+
+- **D4b. A core command writes through the terminal `main` gives it.** `specforge_cli::terminal::Terminal`
+  is a command's stdout, its stderr, the input a prompt reads, and two facts fixed when it is made: whether
+  each stream is coloured (`NO_COLOR`, then `CLICOLOR_FORCE`, then whether the stream is a terminal) and
+  whether anyone can answer (stdin is a terminal). `main` makes the process's terminal, runs the command
+  with it and turns its `Exit` into the process code (D4a); a test captures one. No other module names the
+  process's stdio: the crate denies `clippy::print_stdout` and `clippy::print_stderr`. Extension commands
+  write through it too and keep their own code (ADR 0011). A prompt (a publisher key change, a collector's
+  command) is asked of the terminal by one rule: nobody to ask is no; otherwise `y` or `yes`, in any case,
+  is yes. A reader that closes stdout early (`| head`) ends the output quietly; the exit stays the
+  command's. `specforge explain` bolds the code by the colour rule.
+  - Rejected: a command returning what it rendered (`Rendered { stdout, stderr, exit }`) for `main` to
+    print once. `watch` and `mcp` write without end, `collect` announces its runner before the runner's
+    own output and asks before it runs, `add` and `update` ask in the middle of the operation, and in a
+    terminal stderr lines interleave with stdout lines: a returned value needs a second shape for each of
+    those; the terminal is one shape for all (`extension_command::ended` was its first instance).
+- **D5b. A command's arguments are its module's.** Each command module declares its clap arguments
+  (`Args`) and builds its operation's request from them; `main` only dispatches. Every core command whose
+  output has a human and a JSON form takes `--format human|json` (`analyze` and `watch` lost `--json`;
+  `trace`'s default stays json); every path argument is a path. This replaces D5's "(`analyze --json`;"
+  parenthesis: the error document is printed under `--format json` on every core command.
+- **D9. The CLI's process-level tests stay processes.** At `734f617f`, 47 of the 53 CLI test modules ran
+  the binary. A process start cost about 7 ms; the suite's time was compiling, the LSP, cargo builds,
+  watch debouncing and the local registry (34 tests of a second or more held 74% of it, and the slowest
+  spawned nothing). Moving them in process would save under a second and lose the binary contract (clap,
+  the exit table, the streams, the environment). In-process tests are for what a process cannot reach: a
+  terminal that answers, colour as a fact, a closed stdout, an argument mapping.
+
+What would reopen D4b and D9: process start dominating the CLI suite's time, or a second front end (a TUI,
+an embedding) that needs a command's output as a value rather than as writes.
+
 ## What would reopen it
 
 A surface that needs a failure kind ops cannot know (a transport failure), or a command whose exit

@@ -374,23 +374,10 @@ impl RecordedCoverage {
 mod tests {
     use super::*;
     use specforge_protocol_types::{
-        ExtensionDeclaration, ValidationRuleDescriptor, ValidationSeverity,
+        EntityKindDescriptor, ExtensionDeclaration, ValidationRuleDescriptor, ValidationSeverity,
     };
-    use specforge_registry::rules::{Registries, Rules};
-    use specforge_registry::{KindRegistryEntry, RegistryBuild};
+    use specforge_registry::{RegistryBuild, build_registries};
     use specforge_test_macros::test as specforge_test;
-
-    fn kind(name: &str, testable: bool, supports_verify: bool) -> KindRegistryEntry {
-        KindRegistryEntry {
-            kind_name: name.into(),
-            source_extension: "@test/ext".into(),
-            testable,
-            supports_verify,
-            allowed_verify_kinds: Vec::new(),
-            lifecycle_field: None,
-            ..Default::default()
-        }
-    }
 
     fn graph_of(source: &str) -> Graph {
         let (graph, _) =
@@ -398,30 +385,38 @@ mod tests {
         graph
     }
 
-    /// The rule set of one W004 rule on `kind`, over `registries`.
-    fn w004(kind: &str, registries: &RegistryBuild) -> Rules {
-        let declaration = ExtensionDeclaration {
+    /// The registry build of one extension declaring the testable `behavior`
+    /// kind and one W004 rule on it.
+    fn w004_registries() -> RegistryBuild {
+        let mut declaration = ExtensionDeclaration {
+            entities: vec![EntityKindDescriptor {
+                name: "behavior".into(),
+                keyword: Some("behavior".into()),
+                testable: true,
+                supports_verify: true,
+                ..Default::default()
+            }],
             validation_rules: vec![ValidationRuleDescriptor {
                 code: "W004".into(),
                 severity: ValidationSeverity::Warning,
                 message_template: "{kind} '{id}' is testable but declares no verify obligations"
                     .into(),
                 check: "no_verify_statements".into(),
-                target_kind: Some(kind.into()),
+                target_kind: Some("behavior".into()),
                 field: Some("verify".into()),
                 ..Default::default()
             }],
             ..Default::default()
         };
-        Rules::build(
-            &[declaration],
-            Registries {
-                kinds: &registries.kinds,
-                fields: &registries.fields,
-                edges: &registries.edges,
-            },
-        )
-        .0
+        declaration.handshake.name = "@specforge/testing".into();
+        declaration.handshake.version = "1.0.0".into();
+        let build = build_registries(vec![declaration]);
+        assert!(
+            build.diagnostics().next().is_none(),
+            "{:?}",
+            build.diagnostics().collect::<Vec<_>>()
+        );
+        build
     }
 
     /// A project whose `behavior` kind is testable and must declare
@@ -433,9 +428,7 @@ mod tests {
 
     impl Scored {
         fn new() -> Self {
-            let mut registries = RegistryBuild::default();
-            registries.kinds.register(kind("behavior", true, true));
-            registries.rules = w004("behavior", &registries);
+            let registries = w004_registries();
             Scored {
                 graph: graph_of(
                     "behavior login \"Login\" {\n  verify unit \"logs in\"\n}\n\n\
@@ -511,10 +504,16 @@ mod tests {
 
         // A memo is made with its snapshot and hands that one out: its
         // coverage scores it, not one taken later from other inputs.
-        let mut env = Environment::empty();
-        env.spec_root = dir.path().join("spec");
+        let env = Environment::assemble(
+            specforge_common::parse_project_config(
+                &dir.path().join("specforge.json"),
+                r#"{"spec_root": "spec"}"#,
+            ),
+            specforge_installed::Installed::unread(dir.path()),
+            crate::ExtensionLoad::NoRuntime,
+        );
         let over = RecordedCoverage::over(&project.graph, &env);
-        assert_eq!(over.entities().spec_root(), env.spec_root);
+        assert_eq!(over.entities().spec_root(), env.spec_root());
         assert!(std::ptr::eq(
             over.at(None).unwrap().coverage.entities(),
             &**over.entities()

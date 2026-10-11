@@ -1,30 +1,44 @@
-use std::path::Path;
-
+use crate::outcome::{Exit, OutputFormat, Refusal};
+use crate::pipeline;
+use crate::terminal::{Terminal, out};
 use specforge_ops::trace::Target;
 use specforge_ops::view::ProjectView;
+use std::path::PathBuf;
 
-use crate::OutputFormat;
-use crate::outcome::{Exit, Refusal};
-use crate::pipeline;
+// `specforge trace`'s command line.
+#[derive(clap::Args)]
+pub(crate) struct Args {
+    /// Entity ID to trace (omit to trace every entity)
+    entity: Option<String>,
 
-/// `specforge trace [entity]`: the trace operation over the project
-/// compiled at `path`: one entity's chain, or every entity's when none is
-/// named. Expected edges come from the loaded extensions' registries; the
-/// ones a chain lacks are reported as missing.
-pub fn run(path: &Path, entity: Option<&str>, format: OutputFormat) -> Exit {
-    let project = pipeline::compile_project(path);
-    let target = entity.map_or(Target::Every, Target::Entity);
-    let outcome = match specforge_ops::trace::trace(&ProjectView::of(&project), target) {
-        Ok(outcome) => outcome,
-        Err(error) => return Refusal::of(format).report(&error.into()),
-    };
+    /// Path to the spec root directory
+    #[arg(long, default_value = ".")]
+    path: PathBuf,
 
-    match format {
-        OutputFormat::Human => print!("{}", outcome.to_human()),
-        OutputFormat::Json => println!(
-            "{}",
-            serde_json::to_string_pretty(&outcome).expect("a trace serializes")
-        ),
+    /// Output format: json or human
+    #[arg(long, default_value = "json")]
+    format: OutputFormat,
+}
+
+impl Args {
+    /// `specforge trace [entity]`: the trace operation over the project
+    /// compiled at `path`: one entity's chain, or every entity's when none
+    /// is named. Expected edges come from the loaded extensions'
+    /// registries; the ones a chain lacks are reported as missing.
+    pub(crate) fn run(self, terminal: &Terminal) -> Exit {
+        let project = pipeline::compile_project(&self.path);
+        let target = self.entity.as_deref().map_or(Target::Every, Target::Entity);
+        let outcome = match specforge_ops::trace::trace(&ProjectView::of(&project), target) {
+            Ok(outcome) => outcome,
+            Err(error) => {
+                return Refusal::of(self.format).report(terminal, &error.into());
+            }
+        };
+
+        match self.format {
+            OutputFormat::Human => out!(terminal, "{}", outcome.to_human()),
+            OutputFormat::Json => terminal.json(&outcome),
+        }
+        Exit::Passed
     }
-    Exit::Passed
 }

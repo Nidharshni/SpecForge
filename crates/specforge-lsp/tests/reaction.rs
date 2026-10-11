@@ -165,7 +165,8 @@ fn lsp_initialize_contract() {
 
     // extensions_loaded, lsp_initialized_emitted: once the registries are populated the
     // server announces how many extensions and entity kinds it loaded.
-    let kinds = registries_for(&extensions).0;
+    let build = registries_for(&extensions);
+    let kinds = build.kinds();
     assert!(kinds.len() >= 5, "software alone declares five kinds");
     let mut served = Served::at(project_with(&extensions)).open(&[]);
     assert!(

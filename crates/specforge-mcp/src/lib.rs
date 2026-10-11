@@ -1,6 +1,7 @@
 extern crate self as specforge_mcp;
 
 pub mod args;
+mod extension_dispatch;
 pub mod lifecycle;
 pub mod modern;
 pub mod mutation;
@@ -18,6 +19,7 @@ pub mod target;
 pub mod tool;
 pub mod tools;
 pub mod types;
+mod uri_template;
 
 use protocol::router::route;
 use protocol::{JsonRpcResponse, parse_request_value};

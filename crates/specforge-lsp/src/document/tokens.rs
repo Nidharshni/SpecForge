@@ -70,7 +70,7 @@ pub struct SemanticToken {
 /// when the legend carries it, else `function`.
 fn kind_token(view: &ProjectView, kind: &str) -> &'static str {
     view.registries()
-        .kinds
+        .kinds()
         .get(kind)
         .and_then(|entry| entry.declared.semantic_token.as_deref())
         .and_then(|token| TOKEN_TYPES.iter().find(|t| **t == token).copied())
@@ -107,7 +107,7 @@ fn classify(
         Role::Key => Some(("property", 0)),
         Role::VerifyKind => Some(("enumMember", 0)),
         Role::Value | Role::Item | Role::ImportName if lexeme.is_name() => {
-            let fields = &view.registries().fields;
+            let fields = view.registries().fields();
             if syntax.reference_position(text, i as u32, fields) {
                 let token = view
                     .graph()

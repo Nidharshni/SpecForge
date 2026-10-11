@@ -91,8 +91,8 @@ pub fn inspect<'v>(view: &ProjectView<'v>, entity_id: &str) -> Result<EntityFact
     });
     Ok(EntityFacts {
         node,
-        kind: view.registries().kinds.get(node.kind.raw.as_str()),
-        headline: specforge_emitter::context::headline_statement(node, &view.registries().fields),
+        kind: view.registries().kinds().get(node.kind.raw.as_str()),
+        headline: specforge_emitter::context::headline_statement(node, view.registries().fields()),
         standing,
         obligations: &record.obligations,
         references: References::of(view, entity_id),
