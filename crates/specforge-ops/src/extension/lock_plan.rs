@@ -17,7 +17,7 @@ use specforge_installed::{Change, Installed, LockFile, LockSource, Module, Pin};
 use specforge_package::PackageName;
 use specforge_package::Version;
 use specforge_package::peers::{Member, PeerRequirement, Peers, Verdict};
-use specforge_protocol_types::{ExtensionDeclaration, PeerDependency};
+use specforge_protocol_types::{DeclaredCategory, ExtensionDeclaration, PeerDependency};
 use specforge_wasm::WasmRuntime;
 
 use super::Trust;
@@ -549,10 +549,10 @@ fn first_difference(
     if served.handshake != binary.handshake {
         return Some("handshake");
     }
-    specforge_protocol_types::DECLARED_CATEGORIES
-        .iter()
-        .copied()
-        .find(|category| served.describe_items(category) != binary.describe_items(category))
+    DeclaredCategory::ALL
+        .into_iter()
+        .find(|category| served.describe_items(*category) != binary.describe_items(*category))
+        .map(DeclaredCategory::name)
 }
 
 /// `path` as the lock records it: relative to the project root when it is under it, absolute

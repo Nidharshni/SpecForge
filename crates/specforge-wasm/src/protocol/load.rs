@@ -3,7 +3,7 @@
 //! Everything the host knows about an extension it reads here, once per
 //! environment load: the handshake (its protocol major checked, its
 //! sandbox applied), then every category of
-//! [`DeclaredCategory::ALL`], whatever its contribution flags say. Nothing
+//! [`DeclaredCategory::ALL`], the only categories the protocol defines. Nothing
 //! describes a category again outside this load.
 
 use specforge_common::{Diagnostic, codes};
@@ -55,7 +55,7 @@ pub fn load_declaration(
             calls
                 .describe(extension, category)
                 .map_err(|error| ProtocolError::DescribeFailed {
-                    category: category.to_string(),
+                    category: category.name().to_string(),
                     reason: reason(&error),
                 })
         },

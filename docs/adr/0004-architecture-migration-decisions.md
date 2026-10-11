@@ -106,7 +106,9 @@ Changed answers are marked *(amended)*.
   governance manifest's peer is corrected); I005 follows D3-c. *(amended)* The **I004** keyword hint is
   removed: E024 already names the extension to install, and both would report every entity twice.
   **Define blocks** and **grammar and body-parser contributions** are removed from the spec and the
-  registry (define blocks warn when used); the protocol flags stay reserved.
+  registry (define blocks warn when used); the protocol flags stay reserved. *(Amended by ADR 0050: the
+  reserved protocol flags and the `grammars` and `body_parsers` describe categories are removed; a kind
+  keeps `has_body_parser`.)*
 
 ## Diagnostic catalog (plan 06)
 

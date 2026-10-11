@@ -7,7 +7,7 @@
 use specforge_extension_sdk::prelude::*;
 use specforge_extension_sdk::testing::MockHost;
 use specforge_extension_sdk::{ExtensionDeclaration, HandshakeResponse, Served, no_other_exports};
-use specforge_protocol_types::{DeclaredCategory, DescribeResponse, SUPPORTED_CATEGORIES};
+use specforge_protocol_types::{DeclaredCategory, DescribeResponse};
 
 fn reports() -> ContributionsBuilder {
     let mut meta = ExtensionMeta::new("@acme/reports", "0.1.0");
@@ -67,7 +67,10 @@ fn the_short_name_reaches_the_handshake() {
 )]
 fn a_raw_category_that_does_not_parse_panics() {
     let mut b = ContributionsBuilder::new(ExtensionMeta::new("@acme/raw", "1.0.0"));
-    b.raw_category("passes", serde_json::json!([{ "nam": "x" }]));
+    b.raw_category(
+        DeclaredCategory::Passes,
+        serde_json::json!([{ "nam": "x" }]),
+    );
     let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| b.declaration()))
         .expect_err("a malformed raw category panics");
     let message = panic.downcast_ref::<String>().cloned().unwrap_or_default();
@@ -91,7 +94,7 @@ fn the_guest_serves_its_declaration() {
         handshake,
         |category| {
             Ok(serde_json::from_str::<DescribeResponse>(
-                &b.describe_response_json(category).unwrap(),
+                &b.describe_response_json(category.name()).unwrap(),
             )
             .unwrap())
         },
@@ -102,16 +105,15 @@ fn the_guest_serves_its_declaration() {
     assert_eq!(declared.surfaces.commands[0].id, "list");
     assert_eq!(declared.passes[0].name, "audit");
     assert!(declared.handshake.contribution_flags.entities);
-    for category in SUPPORTED_CATEGORIES {
+    for category in DeclaredCategory::ALL {
         assert_eq!(
-            b.describe_response_json(category),
-            declared.describe_json(category),
-            "{category}"
+            b.describe_response_json(category.name()),
+            Some(declared.describe_json(category)),
+            "{category:?}"
         );
     }
-    let fields: serde_json::Value =
-        serde_json::from_str(&b.describe_response_json("fields").unwrap()).unwrap();
-    assert_eq!(fields["items"][0]["name"], "title");
+    // `fields` is no category: nothing serves it.
+    assert_eq!(b.describe_response_json("fields"), None);
 }
 
 fn dispatch(export: &str, _input: &[u8]) -> Option<Result<Vec<u8>, String>> {
@@ -157,7 +159,7 @@ fn a_served_guest_routes_every_export() {
 }
 
 /// What a served guest answers is what its builder declares, for every
-/// category the protocol supports: the answers it reads from one declaration
+/// category the protocol defines: the answers it reads from one declaration
 /// are the ones the builder gives.
 #[specforge_test_macros::test(
     behavior = "call_extension_exports",
@@ -165,9 +167,14 @@ fn a_served_guest_routes_every_export() {
 )]
 fn served_answers_what_the_builder_declares() {
     let builder = reports();
-    let expected: Vec<(&str, Option<String>)> = SUPPORTED_CATEGORIES
+    let expected: Vec<(&str, Option<String>)> = DeclaredCategory::ALL
         .iter()
-        .map(|category| (*category, builder.describe_response_json(category)))
+        .map(|category| {
+            (
+                category.name(),
+                builder.describe_response_json(category.name()),
+            )
+        })
         .collect();
     let handshake = builder.handshake_json();
     let served = Served::new(builder);
@@ -210,13 +217,13 @@ fn a_raw_category_and_a_loaded_one_parse_alike() {
     let declared = built.declaration();
 
     for category in DeclaredCategory::ALL {
-        let items = declared.describe_items(category.name()).unwrap();
+        let items = declared.describe_items(category);
         // The category is served raw, in place of the builder's own.
         let mut raw = ContributionsBuilder::new(ExtensionMeta::new("@acme/reports", "0.1.0"));
-        raw.raw_category(category.name(), items.clone());
+        raw.raw_category(category, items.clone());
         assert_eq!(
-            raw.declaration().describe_items(category.name()),
-            Some(items),
+            raw.declaration().describe_items(category),
+            items,
             "{category:?}"
         );
     }
@@ -227,7 +234,7 @@ fn a_raw_category_and_a_loaded_one_parse_alike() {
         handshake,
         |category| {
             Ok(serde_json::from_str::<DescribeResponse>(
-                &built.describe_response_json(category).unwrap(),
+                &built.describe_response_json(category.name()).unwrap(),
             )
             .unwrap())
         },

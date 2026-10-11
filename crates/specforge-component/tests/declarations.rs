@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 
 use specforge_component::ComponentRuntime;
 use specforge_component::builtins::BUILTIN_EXTENSIONS;
-use specforge_protocol_types::{PROTOCOL_VERSION, SUPPORTED_CATEGORIES};
+use specforge_protocol_types::{DECLARED_CATEGORIES, PROTOCOL_VERSION};
 use specforge_wasm::runtime::{WasmCallResult, WasmRuntime};
 
 fn repo_root() -> PathBuf {
@@ -56,7 +56,6 @@ fn builtin_declarations_match_their_snapshots() {
 
     let handshake_request = serde_json::to_vec(&serde_json::json!({
         "host_version": PROTOCOL_VERSION,
-        "supported_categories": SUPPORTED_CATEGORIES,
     }))
     .unwrap();
     let snapshots = root.join("crates/specforge-component/tests/declarations");
@@ -67,7 +66,7 @@ fn builtin_declarations_match_their_snapshots() {
             "handshake.json".to_string(),
             answer(&runtime, name, "__handshake", &handshake_request),
         )];
-        for category in SUPPORTED_CATEGORIES {
+        for category in DECLARED_CATEGORIES {
             let request = serde_json::to_vec(&serde_json::json!({ "category": category })).unwrap();
             answers.push((
                 format!("describe_{category}.json"),
@@ -90,5 +89,5 @@ fn builtin_declarations_match_their_snapshots() {
          If the change is intended, regenerate them with \
          `cargo run -p xtask --bin snapshot-builtins` and review the diff"
     );
-    assert_eq!(compared, 10 * (1 + SUPPORTED_CATEGORIES.len()));
+    assert_eq!(compared, 10 * (1 + DECLARED_CATEGORIES.len()));
 }

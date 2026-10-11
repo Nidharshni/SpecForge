@@ -32,8 +32,21 @@ reading and judging it is the host's. The crate depends on the protocol types, s
 that read names or peers depend on it with plain path dependencies (the root manifest's inherited tables are a
 blob input). It stays pure and diagnostic-free; `specforge_common::{package, peers}` build the diagnostics.
 
+## D3. The declared categories are the only describe categories
+
+`DeclaredCategory::ALL` is the protocol's one list. A guest answers those ten; `fields` (derived, ADR 0012 D3),
+`grammars` and `body_parsers` (reserved, ADR 0004 D5-a) are gone, with `SUPPORTED_CATEGORIES`, the handshake
+request's `supported_categories` (no guest read it), `GrammarDescriptor`, `BodyParserDescriptor` and
+`ProtocolError::UnsupportedCategory`. `describe_items`, `describe_json`, `from_wire`'s callback,
+`ExtensionCalls::describe` and the SDK's `raw_category` take a `DeclaredCategory`, so an undefined category does
+not compile. `ExtensionDeclaration::declares(category)` says whether a declaration declares anything in a
+category (an exhaustive match, so a new category cannot be forgotten); the package registry's search filter and
+its in-memory adapter read it, and `specforge_registry_wire::declares` is gone.
+
 ## Rejected
 
+- Deriving `SUPPORTED_CATEGORIES` from the declared ones plus a reserved list: it keeps three categories nothing
+  reads.
 - A `host` cargo feature on the protocol types gating `package` and `peers`: a cfg-stripped module is not a blob
   input, but the guest/host split would be a build flag, the manifest would keep the optional `semver`, and one
   forgotten `#[cfg]` makes a host-only item a blob input again.
@@ -45,6 +58,8 @@ blob input). It stays pure and diagnostic-free; `specforge_common::{package, pee
 
 - An edit to the package names or the peer rule stales no builtin blob; protocol-types drops `semver`; each blob
   has two fewer recorded inputs.
+- The pinned describe snapshots lose `describe_fields.json`, `describe_grammars.json` and
+  `describe_body_parsers.json`.
 
 ## What would reopen it
 

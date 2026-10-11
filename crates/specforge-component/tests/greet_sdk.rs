@@ -89,10 +89,10 @@ mod greet;
 fn every_call(
     declaration: &specforge_protocol_types::ExtensionDeclaration,
 ) -> Vec<(String, Vec<u8>)> {
-    use specforge_protocol_types::SUPPORTED_CATEGORIES;
+    use specforge_protocol_types::DECLARED_CATEGORIES;
     let request = |category: &str| format!(r#"{{"category":"{category}"}}"#).into_bytes();
     let mut calls = vec![("__handshake".to_string(), b"{}".to_vec())];
-    for category in SUPPORTED_CATEGORIES.iter().copied().chain(["nope"]) {
+    for category in DECLARED_CATEGORIES.iter().copied().chain(["nope"]) {
         calls.push(("__describe".to_string(), request(category)));
     }
     let surfaces = &declaration.surfaces;
@@ -180,4 +180,4 @@ fn greet_answers_alike_through_both_runtimes() {
     }
 }
 
-const SUPPORTED_CATEGORY_COUNT: usize = specforge_protocol_types::SUPPORTED_CATEGORIES.len();
+const SUPPORTED_CATEGORY_COUNT: usize = specforge_protocol_types::DECLARED_CATEGORIES.len();

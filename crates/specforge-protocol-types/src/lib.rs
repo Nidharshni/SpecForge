@@ -47,23 +47,6 @@ pub use vocabulary::{CheckKind, ConstraintKind, FieldType, ProofRole};
 /// version guarantees; 1.1.0 is the field-text rule of ADR 0019.
 pub const PROTOCOL_VERSION: &str = "1.1.0";
 
-/// All supported describe categories that the host can request.
-pub const SUPPORTED_CATEGORIES: &[&str] = &[
-    "entities",
-    "edges",
-    "fields",
-    "shared_fields",
-    "enhancements",
-    "validation_rules",
-    "surfaces",
-    "grammars",
-    "body_parsers",
-    "collectors",
-    "passes",
-    "feature_flags",
-    "analyzers",
-];
-
 /// Errors that can occur during the extension protocol lifecycle.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProtocolError {
@@ -78,8 +61,6 @@ pub enum ProtocolError {
     DescribeFailed { category: String, reason: String },
     /// JSON deserialization of a protocol message failed.
     DeserializationError(String),
-    /// The host requested an unsupported describe category.
-    UnsupportedCategory(String),
 }
 
 impl fmt::Display for ProtocolError {
@@ -98,7 +79,6 @@ impl fmt::Display for ProtocolError {
                 write!(f, "describe '{}' failed: {}", category, reason)
             }
             Self::DeserializationError(msg) => write!(f, "deserialization error: {}", msg),
-            Self::UnsupportedCategory(cat) => write!(f, "unsupported category: {}", cat),
         }
     }
 }
@@ -117,7 +97,6 @@ impl From<serde_json::Error> for ProtocolError {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct HandshakeRequest {
     pub host_version: String,
-    pub supported_categories: Vec<String>,
 }
 
 /// Returned by the extension's `__handshake` export.
@@ -539,26 +518,6 @@ pub struct McpResourceDescriptor {
     pub description: Option<String>,
     pub export: String,
     pub mime_type: String,
-}
-
-// ── Grammar Descriptor ──
-
-/// Describes a grammar contribution for an entity kind's body content.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct GrammarDescriptor {
-    pub entity_kind: String,
-    pub grammar_wasm_path: String,
-    #[serde(default)]
-    pub export_name: Option<String>,
-}
-
-// ── Body Parser Descriptor ──
-
-/// Describes a body parser contribution for an entity kind.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct BodyParserDescriptor {
-    pub entity_kind: String,
-    pub export_name: String,
 }
 
 // ── Collector Descriptor ──

@@ -56,19 +56,19 @@ fn colliding_extensions_with(peer: bool, custom: bool) -> InProcessRuntime {
                 // Declared as given (`raw_category`): a builder would refuse
                 // a rule whose check does not exist.
                 c.raw_category(
-                    "entities",
+                    specforge_extension_sdk::DeclaredCategory::Entities,
                     serde_json::json!([{"name": "gadget", "description": format!("gadget from {ext}")}]),
                 );
                 c.raw_category(
-                    "edges",
+                    specforge_extension_sdk::DeclaredCategory::Edges,
                     serde_json::json!([{"label": "GadgetUses", "source_kind": "gadget", "target_kind": "gadget"}]),
                 );
                 c.raw_category(
-                    "validation_rules",
+                    specforge_extension_sdk::DeclaredCategory::ValidationRules,
                     serde_json::Value::Array(rules),
                 );
                 c.raw_category(
-                    "surfaces",
+                    specforge_extension_sdk::DeclaredCategory::Surfaces,
                     serde_json::json!([{"commands": [{
                         "id": "hello",
                         "title": "Hello",

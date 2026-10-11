@@ -288,7 +288,7 @@ impl Registry for MemoryRegistry {
                     .keywords
                     .iter()
                     .any(|k| k.to_ascii_lowercase().contains(&needle));
-            if !matches || contributes.is_some_and(|c| !Self::declares(published, c)) {
+            if !matches || contributes.is_some_and(|c| !published.declaration.declares(c)) {
                 continue;
             }
             match latest.iter().position(|p| p.name() == published.name()) {
@@ -316,17 +316,6 @@ impl Registry for MemoryRegistry {
             failures: Vec::new(),
             asked: 1,
         })
-    }
-}
-
-impl MemoryRegistry {
-    /// Whether `published` declares `category`.
-    fn declares(published: &Published, category: DeclaredCategory) -> bool {
-        published
-            .declaration
-            .describe_items(category.name())
-            .and_then(|items| items.as_array().map(|a| !a.is_empty()))
-            .unwrap_or(false)
     }
 }
 

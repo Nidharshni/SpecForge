@@ -9,7 +9,7 @@
 //! what input.
 
 use serde_json::{Value, json};
-use specforge_extension_sdk::{ContributionsBuilder, ExtensionMeta};
+use specforge_extension_sdk::{ContributionsBuilder, DeclaredCategory, ExtensionMeta};
 use specforge_mcp::McpServer;
 
 use crate::support::TestProject;
@@ -142,9 +142,9 @@ impl FakeExtension {
         let passes = self.passes.clone();
         let mut runtime = InProcessRuntime::new().with(move || {
             let mut c = ContributionsBuilder::new(ExtensionMeta::new(EXT, "0.1.0"));
-            c.raw_category("surfaces", json!([surfaces.clone()]));
+            c.raw_category(DeclaredCategory::Surfaces, json!([surfaces.clone()]));
             if passes.as_array().is_some_and(|p| !p.is_empty()) {
-                c.raw_category("passes", passes.clone());
+                c.raw_category(DeclaredCategory::Passes, passes.clone());
             }
             c
         });

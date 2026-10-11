@@ -23,7 +23,7 @@ fn rules() -> ContributionsBuilder {
         k.keyword("gadget");
     });
     c.raw_category(
-        "validation_rules",
+        specforge_extension_sdk::DeclaredCategory::ValidationRules,
         json!([{
             "code": "E902", "severity": "error", "check": "custom",
             "message_template": "gadget '{id}' failed the absent check",

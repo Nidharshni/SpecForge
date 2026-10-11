@@ -72,7 +72,7 @@ impl Contributions for Probe {
         // override the builders can no longer declare. The builders above
         // still route the handlers.
         c.raw_category(
-            "surfaces",
+            specforge_extension_sdk::DeclaredCategory::Surfaces,
             json!([{
                 "commands": [
                     {

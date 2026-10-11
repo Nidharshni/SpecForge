@@ -47,10 +47,7 @@ The handshake is the first call the host makes after loading a Wasm binary. It e
 **Input:**
 
 ```json
-{
-  "host_version": "1.1.0",
-  "supported_categories": ["entities", "edges", "fields", "shared_fields", "enhancements", "validation_rules", "surfaces", "grammars", "body_parsers", "collectors", "passes", "feature_flags", "analyzers"]
-}
+{ "host_version": "1.1.0" }
 ```
 
 **Output** (`specforge_protocol_types::HandshakeResponse`):
@@ -132,7 +129,6 @@ A category whose answer fails or doesn't parse as its descriptors fails the exte
 | `entities` | Entity kind descriptors (keyword, fields, LSP and DOT metadata) | Always |
 | `edges` | Edge type descriptors (label, source/target kind, visual style) | Always |
 | `shared_fields` | Field descriptors every kind of the extension gets (a kind's own field of the same name wins) | Always |
-| `fields` | Every kind's fields, concatenated (derived; the SDK answers it) | Never |
 | `enhancements` | Fields, edge types and verify kinds added to other extensions' entity kinds | Always |
 | `validation_rules` | Declarative and custom validation rule descriptors | Always |
 | `surfaces` | One descriptor of the CLI commands, MCP tools and MCP resources, or none | Always |
@@ -140,7 +136,6 @@ A category whose answer fails or doesn't parse as its descriptors fails the exte
 | `analyzers` | Language analyzer descriptors (`specforge infer`) | Always |
 | `passes` | Compiler pass descriptors with ordering constraints | Always |
 | `feature_flags` | Feature flag descriptors | Always |
-| `grammars`, `body_parsers` | Reserved | Never |
 
 ### Category: entities
 
@@ -240,8 +235,6 @@ Returns the field descriptors every entity kind of the extension gets; a kind's 
   ]
 }
 ```
-
-The `fields` category is derived: every kind's fields (from its `entities` descriptor), concatenated. The SDK answers it; the host never asks for it.
 
 ### Category: enhancements
 
@@ -419,13 +412,11 @@ named as a core tool, a resource whose URIs a core resource serves, a command wh
 is reported with I017. A resource template may use any scheme; its read failing (a trap, an answer that
 is not `{content, mime_type}`) is a JSON-RPC internal error whose `data` is an McpError carrying E028.
 
-### Reserved: grammars and body_parsers
+### Body syntax
 
-The `grammars` and `body_parsers` contribution flags are reserved. The host ignores them and
-never calls `__describe` for these categories: extensions cannot contribute grammars or body
-parsers (ADR 0004, D5-a). A kind whose body syntax the core grammar does not parse sets
-`has_body_parser` on its entity descriptor instead; the compiler then leaves parse errors
-inside entities of that kind unreported.
+Extensions cannot contribute grammars or body parsers (ADR 0004, D5-a, ADR 0050). A kind whose
+body syntax the core grammar does not parse sets `has_body_parser` on its entity descriptor
+instead; the compiler then leaves parse errors inside entities of that kind unreported.
 
 ### Category: collectors
 
@@ -535,7 +526,7 @@ table below and the goldens in `crates/specforge-wasm/tests/wire/`.
 
 | Operation | Export | Input | Answer |
 |---|---|---|---|
-| Handshake | `__handshake` | `HandshakeRequest` `{"host_version", "supported_categories"}` | `HandshakeResponse` |
+| Handshake | `__handshake` | `HandshakeRequest` `{"host_version"}` | `HandshakeResponse` |
 | Describe | `__describe` | `DescribeRequest` `{"category"}` | `DescribeResponse` `{"category", "items"}` |
 | Command | the command's `export` (`cmd__<id>`) | `CommandInput` `{"args", "cwd", "format", "today", "graph"}`; `cwd` is the project root, absolute and canonical | `CommandOutput` `{"exit_code", "stdout"?, "stderr"?}` |
 | MCP tool | the tool's `export` (`mcp__<name>`) | the JSON its `input_schema` describes | the JSON its `output_schema` describes |

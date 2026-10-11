@@ -36,9 +36,12 @@ fn kind_extensions(specs: Vec<serde_json::Value>) -> InProcessRuntime {
                     })
                     .collect();
                 let mut c = ContributionsBuilder::new(meta);
-                for category in ["entities", "edges"] {
-                    if !spec[category].is_null() {
-                        c.raw_category(category, spec[category].clone());
+                for category in [
+                    specforge_extension_sdk::DeclaredCategory::Entities,
+                    specforge_extension_sdk::DeclaredCategory::Edges,
+                ] {
+                    if !spec[category.name()].is_null() {
+                        c.raw_category(category, spec[category.name()].clone());
                     }
                 }
                 c

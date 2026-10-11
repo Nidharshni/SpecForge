@@ -48,10 +48,9 @@ pub struct ExtensionDeclaration {
     pub feature_flags: Vec<FeatureFlagDescriptor>,
 }
 
-/// A describe category the host reads, in the order it reads them (ADR
-/// 0012 D2). `fields` (derived: every kind's fields), `grammars` and
-/// `body_parsers` (reserved, ADR 0004 D5-a) are answered by the SDK but
-/// never read, so they are not one.
+/// A describe category, in the order the host reads them (ADR 0012 D2). The
+/// protocol defines no other: a guest answers these ten and nothing else
+/// (ADR 0050).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DeclaredCategory {
     Entities,
@@ -67,7 +66,8 @@ pub enum DeclaredCategory {
 }
 
 impl DeclaredCategory {
-    /// Every declared category, in the host's read order.
+    /// Every describe category, in the host's read order: the protocol's one
+    /// list of them.
     pub const ALL: [DeclaredCategory; 10] = [
         DeclaredCategory::Entities,
         DeclaredCategory::Edges,
@@ -97,8 +97,8 @@ impl DeclaredCategory {
         }
     }
 
-    /// The declared category named `name`; `None` for `fields`, the
-    /// reserved categories and any name the protocol does not define.
+    /// The category named `name`; `None` for a name the protocol does not
+    /// define.
     pub fn from_name(name: &str) -> Option<DeclaredCategory> {
         DeclaredCategory::ALL
             .into_iter()
@@ -216,28 +216,35 @@ impl ExtensionDeclaration {
         }
     }
 
-    /// The wire `items` of `category`: each declared category as declared,
-    /// `fields` as every kind's fields concatenated, `surfaces` as one
-    /// descriptor (none when nothing is declared), the reserved `grammars`
-    /// and `body_parsers` empty. `None` for a category the protocol does
-    /// not define.
-    pub fn describe_items(&self, category: &str) -> Option<Value> {
-        if let Some(declared) = DeclaredCategory::from_name(category) {
-            return Some(self.items_of(declared));
-        }
+    /// Whether it declares anything in `category`: a non-empty list, or for
+    /// `surfaces` a descriptor with a command, an MCP tool or an MCP
+    /// resource. What an extension contributes is this, read from its
+    /// content, never a flag it sets (ADR 0050).
+    pub fn declares(&self, category: DeclaredCategory) -> bool {
         match category {
-            "fields" => {
-                let fields: Vec<&FieldDescriptor> =
-                    self.entities.iter().flat_map(|k| &k.fields).collect();
-                Some(to_items(&fields))
-            }
-            "grammars" | "body_parsers" => Some(Value::Array(vec![])),
-            _ => None,
+            DeclaredCategory::Entities => !self.entities.is_empty(),
+            DeclaredCategory::Edges => !self.edges.is_empty(),
+            DeclaredCategory::SharedFields => !self.shared_fields.is_empty(),
+            DeclaredCategory::Enhancements => !self.enhancements.is_empty(),
+            DeclaredCategory::ValidationRules => !self.validation_rules.is_empty(),
+            DeclaredCategory::Surfaces => self.surfaces != SurfaceDescriptor::default(),
+            DeclaredCategory::Collectors => !self.collectors.is_empty(),
+            DeclaredCategory::Analyzers => !self.analyzers.is_empty(),
+            DeclaredCategory::Passes => !self.passes.is_empty(),
+            DeclaredCategory::FeatureFlags => !self.feature_flags.is_empty(),
         }
     }
 
-    /// The wire `items` of a declared category.
-    fn items_of(&self, category: DeclaredCategory) -> Value {
+    /// The categories it declares something in, in the host's read order.
+    pub fn declared_categories(&self) -> impl Iterator<Item = DeclaredCategory> + '_ {
+        DeclaredCategory::ALL
+            .into_iter()
+            .filter(|category| self.declares(*category))
+    }
+
+    /// The wire `items` of `category`: as declared, `surfaces` as one
+    /// descriptor (none when nothing is declared).
+    pub fn describe_items(&self, category: DeclaredCategory) -> Value {
         match category {
             DeclaredCategory::Entities => to_items(&self.entities),
             DeclaredCategory::Edges => to_items(&self.edges),
@@ -292,16 +299,13 @@ impl ExtensionDeclaration {
 
     /// The `__describe` wire answer for `category` (its
     /// [`describe_items`](Self::describe_items) in the response envelope,
-    /// pretty JSON); `None` for a category the protocol does not define.
-    pub fn describe_json(&self, category: &str) -> Option<String> {
-        let items = self.describe_items(category)?;
-        Some(
-            DescribeResponse {
-                category: category.to_string(),
-                items,
-            }
-            .wire_json(),
-        )
+    /// pretty JSON).
+    pub fn describe_json(&self, category: DeclaredCategory) -> String {
+        DescribeResponse {
+            category: category.name().to_string(),
+            items: self.describe_items(category),
+        }
+        .wire_json()
     }
 
     /// Assemble a declaration from its wire answers: `describe` fetches one
@@ -311,7 +315,7 @@ impl ExtensionDeclaration {
     /// item key a descriptor does not define (a host reports it as W138).
     pub fn from_wire(
         handshake: HandshakeResponse,
-        mut describe: impl FnMut(&str) -> Result<DescribeResponse, ProtocolError>,
+        mut describe: impl FnMut(DeclaredCategory) -> Result<DescribeResponse, ProtocolError>,
         mut unknown: impl FnMut(UnknownKey),
     ) -> Result<Self, ProtocolError> {
         let mut declaration = ExtensionDeclaration {
@@ -319,7 +323,7 @@ impl ExtensionDeclaration {
             ..Default::default()
         };
         for category in DeclaredCategory::ALL {
-            let items = describe(category.name())?.items;
+            let items = describe(category)?.items;
             declaration.set_category(category, &items)?;
             report_unknown_keys(category, &items, &mut unknown);
         }

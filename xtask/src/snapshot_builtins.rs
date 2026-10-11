@@ -1,6 +1,6 @@
 //! Pins the wire declaration of every builtin and of the SDK greet fixture:
 //! the exact bytes each blob answers to `__handshake` and to `__describe`
-//! for every category the protocol supports, written to
+//! for every category the protocol defines, written to
 //! `crates/specforge-component/tests/declarations/<dir>/{handshake,describe_<category>}.json`.
 //!
 //! The files are generated, never edited: they are the golden wire fixtures
@@ -13,7 +13,7 @@
 
 use specforge_component::ComponentRuntime;
 use specforge_component::builtins::BUILTIN_EXTENSIONS;
-use specforge_protocol_types::{PROTOCOL_VERSION, SUPPORTED_CATEGORIES};
+use specforge_protocol_types::{DeclaredCategory, PROTOCOL_VERSION};
 use specforge_wasm::runtime::{WasmCallResult, WasmRuntime};
 use std::path::Path;
 
@@ -102,20 +102,20 @@ fn main() {
 }
 
 /// Every wire answer of `extension`, as (file name, exact bytes): its
-/// handshake, then its describe answer for each supported category.
+/// handshake, then its describe answer for each category the protocol defines.
 fn wire_answers(
     runtime: &ComponentRuntime,
     extension: &str,
 ) -> Result<Vec<(String, Vec<u8>)>, String> {
     let request = serde_json::json!({
         "host_version": PROTOCOL_VERSION,
-        "supported_categories": SUPPORTED_CATEGORIES,
     });
     let mut answers = vec![(
         "handshake.json".to_string(),
         answer(runtime, extension, "__handshake", &request)?,
     )];
-    for category in SUPPORTED_CATEGORIES {
+    for category in DeclaredCategory::ALL {
+        let category = category.name();
         let request = serde_json::json!({ "category": category });
         answers.push((
             format!("describe_{category}.json"),

@@ -6,7 +6,6 @@ use specforge_protocol_types::*;
 fn handshake_request_round_trip() {
     let req = HandshakeRequest {
         host_version: "1.0.0".to_string(),
-        supported_categories: vec!["entities".to_string(), "edges".to_string()],
     };
     let json = serde_json::to_string(&req).unwrap();
     let decoded: HandshakeRequest = serde_json::from_str(&json).unwrap();
@@ -17,15 +16,10 @@ fn handshake_request_round_trip() {
 fn handshake_request_json_field_names() {
     let req = HandshakeRequest {
         host_version: "1.0.0".to_string(),
-        supported_categories: vec!["entities".to_string()],
     };
     let json = serde_json::to_string(&req).unwrap();
     assert!(
         json.contains("host_version"),
-        "expected snake_case field name"
-    );
-    assert!(
-        json.contains("supported_categories"),
         "expected snake_case field name"
     );
 }
@@ -33,13 +27,6 @@ fn handshake_request_json_field_names() {
 #[test]
 fn protocol_version_constant() {
     assert_eq!(PROTOCOL_VERSION, "1.1.0");
-}
-
-#[test]
-fn supported_categories_has_13_entries() {
-    assert_eq!(SUPPORTED_CATEGORIES.len(), 13);
-    assert!(SUPPORTED_CATEGORIES.contains(&"entities"));
-    assert!(SUPPORTED_CATEGORIES.contains(&"feature_flags"));
 }
 
 // ── Step 2: HandshakeResponse + ContributionFlags ──
@@ -636,41 +623,6 @@ fn command_arg_type_round_trip_all_variants() {
     }
 }
 
-// ── Step 11: GrammarDescriptor ──
-
-#[test]
-fn grammar_descriptor_round_trip() {
-    let grammar = GrammarDescriptor {
-        entity_kind: "behavior".to_string(),
-        grammar_wasm_path: "grammars/behavior.wasm".to_string(),
-        export_name: Some("parse_behavior_body".to_string()),
-    };
-    let json = serde_json::to_string(&grammar).unwrap();
-    let decoded: GrammarDescriptor = serde_json::from_str(&json).unwrap();
-    assert_eq!(grammar, decoded);
-}
-
-#[test]
-fn grammar_descriptor_minimal() {
-    let json = r#"{"entity_kind": "process", "grammar_wasm_path": "grammar.wasm"}"#;
-    let grammar: GrammarDescriptor = serde_json::from_str(json).unwrap();
-    assert_eq!(grammar.entity_kind, "process");
-    assert!(grammar.export_name.is_none());
-}
-
-// ── Step 12: BodyParserDescriptor ──
-
-#[test]
-fn body_parser_descriptor_round_trip() {
-    let parser = BodyParserDescriptor {
-        entity_kind: "behavior".to_string(),
-        export_name: "parse__behavior".to_string(),
-    };
-    let json = serde_json::to_string(&parser).unwrap();
-    let decoded: BodyParserDescriptor = serde_json::from_str(&json).unwrap();
-    assert_eq!(parser, decoded);
-}
-
 // ── Step 13: CollectorDescriptor ──
 
 #[test]
@@ -827,12 +779,6 @@ fn protocol_error_display_describe_failed() {
 fn protocol_error_display_deserialization() {
     let err = ProtocolError::DeserializationError("missing field 'name'".to_string());
     assert!(err.to_string().contains("missing field 'name'"));
-}
-
-#[test]
-fn protocol_error_display_unsupported_category() {
-    let err = ProtocolError::UnsupportedCategory("widgets".to_string());
-    assert_eq!(err.to_string(), "unsupported category: widgets");
 }
 
 #[test]

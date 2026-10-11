@@ -4,7 +4,7 @@
 //! are served in process from their SDK builders (`InProcessRuntime`).
 
 use specforge_extension_sdk::prelude::*;
-use specforge_protocol_types::{DECLARED_CATEGORIES, ProtocolError};
+use specforge_protocol_types::{DECLARED_CATEGORIES, DeclaredCategory, ProtocolError};
 use specforge_wasm::protocol::load_declaration;
 use specforge_wasm::testing::InProcessRuntime;
 use specforge_wasm::{WasmCallResult, WasmRuntime, WasmTrapInfo};
@@ -93,7 +93,7 @@ fn a_commands_only_extension_has_its_commands() {
 fn typo() -> ContributionsBuilder {
     let mut b = ContributionsBuilder::new(ExtensionMeta::new("@acme/typo", "0.1.0"));
     b.raw_category(
-        "entities",
+        DeclaredCategory::Entities,
         serde_json::json!([{ "name": "x", "testabel": true }]),
     );
     b

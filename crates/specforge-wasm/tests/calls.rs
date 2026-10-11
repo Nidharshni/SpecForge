@@ -16,7 +16,7 @@ use specforge_extension_sdk::{
     McpResourceContent, McpResourceRequest, MigrationInput, PassAnswer, ScanRequest, ScanResponse,
     ScannedItem, Served,
 };
-use specforge_protocol_types::{CommandInput as WireCommandInput, RawGraph};
+use specforge_protocol_types::{CommandInput as WireCommandInput, DeclaredCategory, RawGraph};
 use specforge_wasm::testing::InProcessRuntime;
 use specforge_wasm::{
     CallError, CallFailure, ExtensionCalls, Operation, WasmCallResult, WasmRuntime, WasmTrapInfo,
@@ -231,7 +231,7 @@ fn every_call_encodes_its_input_as_the_protocol_type() {
 
     calls.handshake(EXT).unwrap();
     assert_eq!(sent(&runtime), wire("handshake.input.json"));
-    calls.describe(EXT, "entities").unwrap();
+    calls.describe(EXT, DeclaredCategory::Entities).unwrap();
     assert_eq!(sent(&runtime), wire("describe.input.json"));
 
     // The graph is spliced as the host rendered it; the guest reads the
@@ -297,7 +297,7 @@ fn every_call_decodes_the_protocol_type() {
 
     let handshake = calls.handshake(EXT).unwrap().response;
     assert_eq!(handshake, extension().declaration().handshake);
-    let describe = calls.describe(EXT, "entities").unwrap();
+    let describe = calls.describe(EXT, DeclaredCategory::Entities).unwrap();
     assert_eq!(describe.category, "entities");
     assert_eq!(describe.items[0]["name"], "widget");
     assert_eq!(
@@ -367,7 +367,9 @@ fn perform(calls: &ExtensionCalls, operation: Operation, extension: &str) -> Res
     let export = export_of(operation);
     match operation {
         Operation::Handshake => calls.handshake(extension).map(drop),
-        Operation::Describe => calls.describe(extension, "entities").map(drop),
+        Operation::Describe => calls
+            .describe(extension, DeclaredCategory::Entities)
+            .map(drop),
         Operation::Command => calls
             .run_command(extension, export, &command_input())
             .map(drop),

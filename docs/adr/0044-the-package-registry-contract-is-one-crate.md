@@ -92,4 +92,5 @@ or a dry run of an exact version, asks nothing and shows nothing.
 
 **Amended by ADR 0050 (2026-10-11):** D1's reason for keeping host code out of the protocol types ("a blob input
 of every builtin") now holds for the protocol types themselves: the package names and the peer rule moved to
-`specforge-package`, which the wire crate depends on.
+`specforge-package`, which the wire crate depends on. `specforge_registry_wire::declares` is gone: a search
+filter reads `ExtensionDeclaration::declares`.

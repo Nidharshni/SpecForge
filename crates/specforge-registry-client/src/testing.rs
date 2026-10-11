@@ -322,7 +322,7 @@ impl RegistryClient for MemoryClient {
         let matches = |m: &Stored| {
             let declares = category.is_none_or(|category| {
                 serde_json::from_str::<ExtensionDeclaration>(&m.metadata.manifest)
-                    .is_ok_and(|d| specforge_registry_wire::declares(&d, category))
+                    .is_ok_and(|d| d.declares(category))
             });
             declares
                 && (m.name.to_ascii_lowercase().contains(&needle)

@@ -6,7 +6,7 @@ use specforge_extension_sdk::{
     ContributionsBuilder, ExtensionDeclaration, ExtensionMeta, HandshakeResponse, PeerDependency,
     SandboxPolicy, prelude::*,
 };
-use specforge_protocol_types::SUPPORTED_CATEGORIES;
+use specforge_protocol_types::DeclaredCategory;
 
 fn software_builder() -> ContributionsBuilder {
     let mut meta = ExtensionMeta::new("@specforge/software", "1.0.0");
@@ -105,7 +105,10 @@ fn load_pinned(dir: &str) -> ExtensionDeclaration {
     ExtensionDeclaration::from_wire(
         handshake,
         |category| {
-            Ok(serde_json::from_str(&pinned(dir, &format!("describe_{category}.json"))).unwrap())
+            Ok(
+                serde_json::from_str(&pinned(dir, &format!("describe_{}.json", category.name())))
+                    .unwrap(),
+            )
         },
         |key| panic!("{dir}: unknown key {key:?}"),
     )
@@ -123,11 +126,12 @@ fn every_pinned_declaration_round_trips_byte_for_byte() {
             pinned(dir, "handshake.json"),
             "{dir}: handshake"
         );
-        for category in SUPPORTED_CATEGORIES {
+        for category in DeclaredCategory::ALL {
+            let name = category.name();
             assert_eq!(
-                declaration.describe_json(category).unwrap(),
-                pinned(dir, &format!("describe_{category}.json")),
-                "{dir}: describe {category}"
+                declaration.describe_json(category),
+                pinned(dir, &format!("describe_{name}.json")),
+                "{dir}: describe {name}"
             );
         }
     }

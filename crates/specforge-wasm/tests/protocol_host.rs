@@ -6,7 +6,9 @@
 
 use serde_json::json;
 use specforge_extension_sdk::prelude::*;
-use specforge_protocol_types::{HandshakeResponse, PROTOCOL_VERSION, ProtocolError};
+use specforge_protocol_types::{
+    DeclaredCategory, HandshakeResponse, PROTOCOL_VERSION, ProtocolError,
+};
 use specforge_wasm::protocol::{Loaded, load_declaration};
 use specforge_wasm::testing::InProcessRuntime;
 use specforge_wasm::{ExtensionCalls, Limits, WasmCallResult, WasmTrapInfo};
@@ -221,7 +223,7 @@ fn a_surface_sandbox_override_is_w153() {
         // Served as an older guest describes it: the command with the
         // `sandbox` override the descriptor no longer has.
         c.raw_category(
-            "surfaces",
+            DeclaredCategory::Surfaces,
             json!([{
                 "commands": [{
                     "id": "x", "title": "X", "description": "", "export": "cmd__x",

@@ -395,7 +395,7 @@ fn provider_extensions(
                 let mut b = specforge_extension_sdk::ContributionsBuilder::new(
                     specforge_extension_sdk::ExtensionMeta::new(name, "1.0.0"),
                 );
-                b.raw_category("providers", serde_json::json!([]));
+                b.meta.providers = true;
                 b
             })
         },
@@ -683,7 +683,7 @@ mod declared_in_process {
         let typo = || {
             let mut b = ContributionsBuilder::new(ExtensionMeta::new("@acme/typo", "0.1.0"));
             b.raw_category(
-                "entities",
+                specforge_extension_sdk::DeclaredCategory::Entities,
                 serde_json::json!([{ "name": "memo", "testabel": true }]),
             );
             b

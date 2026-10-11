@@ -154,3 +154,6 @@ instead of between them and the registries'; E055 and E039 now come with the env
 diagnostics, before the imports', instead of last. A consumer diffing `check` output sees either only
 when both kinds occur in one project. I002 is unaffected: it is reported only when no declaration
 loaded, when the build reports nothing.
+
+**Amended by ADR 0050 (2026-10-11):** D3: the `fields` category is gone; the declared categories are the
+protocol's only describe categories.
