@@ -36,6 +36,6 @@ pub fn render(view: ProjectView<'_>, args: Args) -> PromptOutcome {
     );
     Ok(Rendered {
         instruction,
-        payload: review.to_json(),
+        payload: serde_json::to_value(review.document()).expect("a document serializes"),
     })
 }

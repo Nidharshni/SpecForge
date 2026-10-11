@@ -96,7 +96,7 @@ fn an_unconnected_entity_is_an_info() {
         unconnected[0].message(),
         "Entity 'gamma_orphan' is unconnected: no edge links it to another entity"
     );
-    let json = outcome.to_json();
+    let json = serde_json::to_value(outcome.document()).unwrap();
     assert_eq!(json["entity_id"], "*");
     assert_eq!(json["findings"][1]["severity"], "info");
 }

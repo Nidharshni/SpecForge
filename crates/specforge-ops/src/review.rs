@@ -4,10 +4,11 @@
 
 use std::collections::BTreeSet;
 
-use serde_json::{Value, json};
+use serde::Serialize;
+use specforge_common::shape::Shape;
 
 use crate::OpError;
-use crate::coverage::{CoverageQuery, CoverageRow, coverage};
+use crate::coverage::{CoverageQuery, CoverageRow, CoverageRowDocument, coverage};
 use crate::view::ProjectView;
 
 /// Hops around the reviewed entity when a request names none.
@@ -89,27 +90,40 @@ pub struct Review {
 
 impl Review {
     /// The review as the review prompt's payload and `specforge review
-    /// --format json` write it (`McpReviewPromptResult`): `entity_id`
-    /// (`"*"` for the whole project), `findings` (`entity_id`, `severity`,
-    /// `message`), `coverage_summary` (each row's [`CoverageRow::to_json`]).
-    pub fn to_json(&self) -> Value {
-        let findings: Vec<Value> = self
-            .findings
-            .iter()
-            .map(|finding| {
-                json!({
-                    "entity_id": finding.entity_id,
-                    "severity": finding.gap.severity(),
-                    "message": finding.message(),
+    /// --format json` write it.
+    pub fn document(&self) -> ReviewDocument {
+        ReviewDocument {
+            entity_id: self.entity_id.as_deref().unwrap_or("*").to_string(),
+            findings: self
+                .findings
+                .iter()
+                .map(|finding| FindingDocument {
+                    entity_id: finding.entity_id.clone(),
+                    severity: finding.gap.severity().to_string(),
+                    message: finding.message(),
                 })
-            })
-            .collect();
-        json!({
-            "entity_id": self.entity_id.as_deref().unwrap_or("*"),
-            "findings": findings,
-            "coverage_summary": self.rows.iter().map(CoverageRow::to_json).collect::<Vec<_>>(),
-        })
+                .collect(),
+            coverage_summary: self.rows.iter().map(CoverageRow::document).collect(),
+        }
     }
+}
+
+/// The review as `specforge review --format json` and the review prompt
+/// print it (`McpReviewPromptResult`).
+#[derive(Debug, Clone, PartialEq, Serialize, Shape)]
+pub struct ReviewDocument {
+    /// `*` for the whole project.
+    pub entity_id: String,
+    pub findings: Vec<FindingDocument>,
+    pub coverage_summary: Vec<CoverageRowDocument>,
+}
+
+/// One gap of one reviewed entity.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Shape)]
+pub struct FindingDocument {
+    pub entity_id: String,
+    pub severity: String,
+    pub message: String,
 }
 
 /// The review `request` asks for. An `entity_id` the graph lacks is

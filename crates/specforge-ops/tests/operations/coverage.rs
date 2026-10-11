@@ -204,7 +204,7 @@ fn a_coverage_row_is_one_document() {
     let project = project();
     let view = project.view();
 
-    let login = row(&view, "login").unwrap().unwrap().to_json();
+    let login = serde_json::to_value(row(&view, "login").unwrap().unwrap().document()).unwrap();
     assert_eq!(
         login,
         serde_json::json!({
@@ -221,7 +221,7 @@ fn a_coverage_row_is_one_document() {
         })
     );
 
-    let base = row(&view, "base").unwrap().unwrap().to_json();
+    let base = serde_json::to_value(row(&view, "base").unwrap().unwrap().document()).unwrap();
     assert_eq!(base["exempt"], true);
     assert_eq!(base["declared"], false);
     assert_eq!(base["obligations"], 0);

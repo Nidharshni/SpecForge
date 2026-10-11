@@ -165,7 +165,7 @@ fn paths_run_from_the_entity() {
             ("d", vec!["to", "next", "last"]),
         ]
     );
-    let json = exploration.to_json();
+    let json = serde_json::to_value(exploration.document()).unwrap();
     assert_eq!(
         json["relationship_paths"][1],
         serde_json::json!({"from_entity": "a", "to_entity": "c", "edge_types": ["to", "next"], "path_length": 2})
@@ -192,5 +192,8 @@ fn an_unknown_kind_is_a_notice() {
         exploration.notices[0].suggestion.as_deref(),
         Some("did you mean 'feature'?")
     );
-    assert_eq!(exploration.to_json()["notices"][0]["code"], "I020");
+    assert_eq!(
+        serde_json::to_value(exploration.document()).unwrap()["notices"][0]["code"],
+        "I020"
+    );
 }
