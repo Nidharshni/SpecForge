@@ -1365,9 +1365,9 @@ fn schema_reflects_current_state() {
         let runtime = specforge_component::ComponentRuntime::with_user_cache();
         let ctx = specforge_project::CompiledProject::compile(dir, Some(Arc::new(runtime)));
         let schema = generate_schema(
-            &ctx.environment().registries.kinds,
-            &ctx.environment().registries.edges,
-            &ctx.environment().registries.fields,
+            ctx.environment().registries.kinds(),
+            ctx.environment().registries.edges(),
+            ctx.environment().registries.fields(),
             &ctx.environment()
                 .registries
                 .extension_info()
@@ -2035,7 +2035,7 @@ fn ticket_registries() -> specforge_registry::RegistryBuild {
 )]
 fn a_field_type_is_named_in_the_schema_as_declared() {
     let build = ticket_registries();
-    let schema = generate_schema(&build.kinds, &build.edges, &build.fields, &[]);
+    let schema = generate_schema(build.kinds(), build.edges(), build.fields(), &[]);
     let ticket = schema
         .entity_kinds
         .iter()
@@ -2059,7 +2059,7 @@ fn a_field_type_is_named_in_the_schema_as_declared() {
 )]
 fn the_published_schema_lists_the_field_types_the_host_reads() {
     let build = ticket_registries();
-    let schema = generate_schema(&build.kinds, &build.edges, &build.fields, &[]);
+    let schema = generate_schema(build.kinds(), build.edges(), build.fields(), &[]);
     let published: serde_json::Value =
         serde_json::from_str(&publish_json_schema_format(&schema, EmitFormat::Json).unwrap())
             .unwrap();
@@ -2088,7 +2088,7 @@ fn the_published_schema_lists_the_field_types_the_host_reads() {
 )]
 fn the_schema_carries_a_declared_default_value() {
     let build = ticket_registries();
-    let schema = generate_schema(&build.kinds, &build.edges, &build.fields, &[]);
+    let schema = generate_schema(build.kinds(), build.edges(), build.fields(), &[]);
     let ticket = schema
         .entity_kinds
         .iter()
@@ -2210,7 +2210,7 @@ fn an_undeclared_edge_two_kinds_write_names_only_the_first_writer() {
     };
     let build = specforge_registry::build_registries(vec![declaration]);
 
-    let schema = generate_schema(&build.kinds, &build.edges, &build.fields, &[]);
+    let schema = generate_schema(build.kinds(), build.edges(), build.fields(), &[]);
     let links = schema
         .edge_types
         .iter()

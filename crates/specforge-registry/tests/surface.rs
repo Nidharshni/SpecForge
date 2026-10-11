@@ -305,7 +305,7 @@ fn build_with_tools(tools: Vec<McpToolDescriptor>) -> (Vec<String>, Vec<String>,
     declaration.surfaces = make_surfaces(vec![], tools, vec![]);
     let build = specforge_registry::build_registries(vec![declaration]);
     let registered = build
-        .surfaces
+        .surfaces()
         .iter()
         .filter(|e| e.surface_type == SurfaceType::McpTool)
         .map(|e| e.contribution_name.clone())

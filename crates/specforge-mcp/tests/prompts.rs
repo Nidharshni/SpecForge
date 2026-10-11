@@ -501,7 +501,7 @@ fn context_zero_extensions() {
         json!({"entity_id": "minimal"}),
     );
     assert!(
-        server.state().registries().kinds.is_empty(),
+        server.state().registries().kinds().is_empty(),
         "no extension may be installed"
     );
     let parsed: Value = serde_json::from_str(&prompt_text(&resp)).unwrap();

@@ -2168,7 +2168,7 @@ fn a_config_written_while_the_runtime_loads_is_seen_next_time() {
     assert_eq!(update.kind, UpdateKind::Environment);
     assert_eq!(seen.lock().unwrap()[1], ["@test/a", "@test/b"]);
     assert!(!e028(&session), "{:?}", session.project().diagnostics());
-    let kinds = &session.project().environment().registries.kinds;
+    let kinds = &session.project().environment().registries.kinds();
     assert!(kinds.contains("alpha") && kinds.contains("beta"));
     assert!(!session.stale().environment);
 }

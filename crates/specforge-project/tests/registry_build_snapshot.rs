@@ -134,7 +134,7 @@ fn graph_inputs(env: &Environment) -> Value {
 fn digest(env: &Environment) -> Value {
     let r = &env.registries;
     let kinds: BTreeMap<&str, Value> = r
-        .kinds
+        .kinds()
         .iter()
         .map(|(name, k)| {
             (
@@ -162,7 +162,7 @@ fn digest(env: &Environment) -> Value {
         })
         .collect();
     let fields: BTreeMap<String, Value> = r
-        .fields
+        .fields()
         .iter()
         .map(|(kind, field, f)| {
             (
@@ -191,7 +191,7 @@ fn digest(env: &Environment) -> Value {
         })
         .collect();
     let edges: BTreeMap<&str, Value> = r
-        .edges
+        .edges()
         .iter()
         .map(|(label, e)| {
             (
@@ -210,7 +210,7 @@ fn digest(env: &Environment) -> Value {
         })
         .collect();
     let rules: Vec<Value> = r
-        .rules
+        .rules()
         .iter()
         .map(|rule| {
             let mut described = rule.describe();
@@ -231,7 +231,7 @@ fn digest(env: &Environment) -> Value {
         "edges": edges,
         "rules": rules,
         "graph_inputs": graph_inputs(env),
-        "surfaces": r.surfaces.iter().map(|s| json!({
+        "surfaces": r.surfaces().iter().map(|s| json!({
             "surface_type": format!("{:?}", s.surface_type),
             "name": s.contribution_name,
             "extension": s.extension_name,

@@ -63,7 +63,7 @@ impl EntitySnapshot {
             .iter()
             .filter(|record| {
                 registries
-                    .kinds
+                    .kinds()
                     .get(&record.kind)
                     .is_some_and(|kind| kind.declared.declares_types)
             })
@@ -310,11 +310,11 @@ impl Standing {
     pub fn of(record: &EntityRecord, registries: &RegistryBuild) -> Standing {
         Standing {
             testable: registries
-                .kinds
+                .kinds()
                 .get(&record.kind)
                 .is_some_and(|kind| kind.testable),
             rule: registries
-                .rules
+                .rules()
                 .verify_rule_for(&record.kind)
                 .map(|rule| rule.code().to_string()),
             exemption: record.exemption.clone(),
@@ -486,7 +486,7 @@ fn record(
             .collect(),
         incoming,
         outgoing,
-        exemption: exemption(node, &registries.kinds, &registries.fields),
+        exemption: exemption(node, registries.kinds(), registries.fields()),
         methods: node
             .methods
             .iter()
@@ -929,7 +929,7 @@ mod tests {
         );
         let snapshot = snapshot(source, &registries);
         let mut ids: Vec<String> = registries
-            .rules
+            .rules()
             .check(&snapshot.rule_input(), &NoVerdicts)
             .into_iter()
             .map(|d| d.message.split('\'').nth(1).unwrap().to_string())

@@ -12,7 +12,8 @@ fn no_spec_side_tests_field_is_registered() {
     let declarations = specforge_installed::Installed::none()
         .load(&exts, &builtins, &runtime)
         .declarations;
-    let field_reg = specforge_registry::build_registries(declarations).fields;
+    let build = specforge_registry::build_registries(declarations);
+    let field_reg = build.fields();
     assert!(field_reg.contains("behavior", "invariants"));
     assert!(!field_reg.contains("behavior", "tests"));
     assert!(!field_reg.contains("invariant", "tests"));

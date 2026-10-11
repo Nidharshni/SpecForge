@@ -111,7 +111,7 @@ fn a_builtin_custom_rule_is_registered_with_its_wasm_function() {
 
     let w010 = env
         .registries
-        .rules
+        .rules()
         .iter()
         .find(|rule| rule.code() == "W010")
         .expect("W010 is registered");
@@ -123,7 +123,7 @@ fn a_builtin_custom_rule_is_registered_with_its_wasm_function() {
     assert_eq!(w010.origin().name(), "@specforge/software");
     assert!(
         env.registries
-            .rules
+            .rules()
             .iter()
             .any(|rule| rule.check_kind() != CheckKind::Custom),
         "declarative rules are registered beside the custom ones"
@@ -182,7 +182,7 @@ fn a_custom_rule_without_a_wasm_function_is_w112_and_not_registered() {
     );
     assert!(
         !env.registries
-            .rules
+            .rules()
             .iter()
             .any(|rule| rule.code() == "E903"),
         "a rule with nothing to dispatch to is not registered"
@@ -211,7 +211,7 @@ fn custom_rules_register_resolve_and_dispatch_through_a_compile() {
     let mut registered: Vec<(&str, &str)> = compiled
         .environment()
         .registries
-        .rules
+        .rules()
         .iter()
         .map(|rule| (rule.code(), rule.origin().name()))
         .collect();

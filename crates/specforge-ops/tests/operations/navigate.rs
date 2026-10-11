@@ -523,7 +523,7 @@ fn completion_keeps_the_fields_target_kind() {
         .project
         .environment()
         .registries
-        .fields
+        .fields()
         .get("behavior", "invariants")
         .and_then(|f| f.declared().target_kind.clone())
         .expect("@specforge/software's invariants field targets a kind");

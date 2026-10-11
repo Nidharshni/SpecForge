@@ -77,7 +77,7 @@ pub struct ExtensionListing {
 /// entries; the kinds its graph uses. The lock is the view's
 /// ([`ProjectView::lock`]): none without a root.
 pub fn list(view: &ProjectView) -> ExtensionListing {
-    let kinds = &view.registries().kinds;
+    let kinds = &view.registries().kinds();
     let extensions = super::inventory(view)
         .rows()
         .iter()

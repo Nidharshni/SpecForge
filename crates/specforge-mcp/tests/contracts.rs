@@ -1249,7 +1249,7 @@ fn contract_auto_promote_commands() {
         server
             .state()
             .registries()
-            .surfaces
+            .surfaces()
             .iter()
             .filter(|e| e.surface_type == ty)
             .map(|e| (e.contribution_name.clone(), e.export_name.clone()))

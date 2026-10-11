@@ -121,8 +121,14 @@ fn structural_fields_not_checked_against_field_registry() {
     verify = "verify on a kind no extension made testable produces W020"
 )]
 fn verify_on_non_testable_kind_produces_w020() {
-    let mut build = build([software()]);
-    build.kinds.get_mut("behavior").unwrap().supports_verify = false;
+    let build = build([declare("@specforge/software", |c| {
+        c.kind("Behavior", |k| {
+            k.keyword("behavior")
+                .testable(true)
+                .singleton(false)
+                .supports_verify(false);
+        });
+    })]);
     let entities = vec![
         EntityRecord::new("behavior", "b1", span("test.spec")).with_fields(&["title", "verify"]),
     ];

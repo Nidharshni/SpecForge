@@ -38,8 +38,8 @@ pub(crate) fn run(
     let registries = &env.registries;
     let mut input = pass_input(&AnalysisContext {
         graph,
-        kind_registry: &registries.kinds,
-        field_registry: &registries.fields,
+        kind_registry: registries.kinds(),
+        field_registry: registries.fields(),
         entities,
         project_root: Some(&env.root),
         // A compile has no test results and no proof.

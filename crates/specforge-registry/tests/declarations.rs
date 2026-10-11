@@ -35,7 +35,7 @@ fn an_empty_name_or_version_is_e030() {
             .contains("'@acme/b': its version is empty")
     );
     // The declarations still build: the registries hold their kinds.
-    assert!(build.kinds.contains("report"));
+    assert!(build.kinds().contains("report"));
 }
 
 #[specforge_test_macros::test(
@@ -102,7 +102,7 @@ fn passes(name: &str, declare: impl FnOnce(&mut ContributionsBuilder)) -> Extens
 }
 
 fn order(build: &specforge_registry::RegistryBuild) -> Vec<String> {
-    build.passes.iter().map(|p| p.full_name()).collect()
+    build.passes().iter().map(|p| p.full_name()).collect()
 }
 
 #[specforge_test_macros::test(
@@ -272,23 +272,23 @@ fn a_declared_default_value_reaches_the_field_registry() {
     });
     let build = build_registries(vec![c.declaration()]);
 
-    let status = build.fields.get("ticket", "status").expect("registered");
+    let status = build.fields().get("ticket", "status").expect("registered");
     assert_eq!(status.declared().default_value.as_deref(), Some("open"));
     assert_eq!(status.declared().enum_values, ["open", "closed"]);
     assert_eq!(
         status.declared().description.as_deref(),
         Some("Where the ticket stands")
     );
-    let summary = build.fields.get("ticket", "summary").expect("registered");
+    let summary = build.fields().get("ticket", "summary").expect("registered");
     assert_eq!(summary.declared().description, None);
     assert_eq!(summary.declared().default_value, None);
-    let ticket = build.kinds.get("ticket").expect("registered");
+    let ticket = build.kinds().get("ticket").expect("registered");
     assert_eq!(ticket.declared.incremental, Some(true));
     assert_eq!(
         ticket.declared.inference_guide.as_deref(),
         Some("Look for issue trackers")
     );
-    let blocks = build.edges.get("blocks").expect("registered");
+    let blocks = build.edges().get("blocks").expect("registered");
     assert_eq!(blocks.declared.edge_style.as_deref(), Some("dashed"));
     assert_eq!(blocks.source_extension, "@acme/tickets");
 }

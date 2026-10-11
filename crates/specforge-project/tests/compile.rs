@@ -128,7 +128,7 @@ fn graceful_degradation_contract() {
 
     // registries_populated_fired: with no extension, the registries are
     // built, and empty.
-    assert!(compiled.environment().registries.kinds.is_empty());
+    assert!(compiled.environment().registries.kinds().is_empty());
     // i002_emitted
     assert_eq!(codes(&compiled.diagnostics()), ["I002"]);
     // structural_mode_operational: generic nodes, raw keywords, a
@@ -307,7 +307,7 @@ fn soft_cross_extension_resolution_contract() {
         compiled
             .environment()
             .registries
-            .kinds
+            .kinds()
             .contains("invariant")
     );
     // known_extensions_catalog_available, suggestion_emitted: the unknown
@@ -620,7 +620,7 @@ mod declared_in_process {
         let env = load(&["@acme/cmds"], runtime);
         let registered: Vec<(&SurfaceType, &str)> = env
             .registries
-            .surfaces
+            .surfaces()
             .iter()
             .map(|s| (&s.surface_type, s.contribution_name.as_str()))
             .collect();
@@ -665,7 +665,7 @@ mod declared_in_process {
         ));
         let env = load(&["@acme/reports"], runtime);
         assert!(env.registries.declaration("@acme/reports").is_none());
-        assert!(!env.registries.kinds.contains("report"));
+        assert!(!env.registries.kinds().contains("report"));
         let e028: Vec<_> = env.diagnostics().filter(|d| d.code == "E028").collect();
         assert_eq!(e028.len(), 1, "{e028:?}");
         assert!(e028[0].message.contains("@acme/reports"), "{e028:?}");
@@ -688,7 +688,7 @@ mod declared_in_process {
         let runtime = Arc::new(InProcessRuntime::new().with(typo));
         let env = load(&["@acme/typo"], runtime);
         // The extension still loads, without the key it misspelled.
-        assert!(env.registries.kinds.contains("memo"));
+        assert!(env.registries.kinds().contains("memo"));
         let warnings: Vec<_> = env
             .diagnostics()
             .filter(|d| d.severity == specforge_common::Severity::Warning)
@@ -942,7 +942,7 @@ fn a_non_string_extension_entry_is_e069_and_the_others_load() {
         compiled
             .environment()
             .registries
-            .kinds
+            .kinds()
             .get("feature")
             .is_some(),
         "product loaded: its kinds are registered"

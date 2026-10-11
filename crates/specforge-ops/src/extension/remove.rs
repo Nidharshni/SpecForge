@@ -148,7 +148,7 @@ pub fn remove(view: &ProjectView, req: &RemoveRequest) -> Result<RemoveOutcome, 
         force: req.force,
         dry_run: req.dry_run,
         inventory: &inventory,
-        kinds: &view.registries().kinds,
+        kinds: view.registries().kinds(),
         graph: view.graph(),
         installed: view.installed(),
     };

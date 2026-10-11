@@ -131,7 +131,7 @@ fn load_patterns_for(ext_names: &[&str]) -> specforge_registry::RegistryBuild {
 fn state_starts_with_empty_registries() {
     let state = specforge_lsp::LspState::new();
     assert!(state.kind_registry().is_empty());
-    assert!(state.registries().rules.is_empty());
+    assert!(state.registries().rules().is_empty());
 }
 
 #[spec(
@@ -139,13 +139,13 @@ fn state_starts_with_empty_registries() {
     verify = "extensions produce E006 rules for required fields"
 )]
 fn extensions_produce_e006_rules() {
-    let patterns = load_patterns_for(&[
+    let build = load_patterns_for(&[
         "@specforge/software",
         "@specforge/product",
         "@specforge/governance",
         "@specforge/formal",
-    ])
-    .rules;
+    ]);
+    let patterns = build.rules();
     assert!(
         !patterns.is_empty(),
         "extensions should produce validation patterns"
@@ -162,13 +162,13 @@ fn extensions_produce_e006_rules() {
     verify = "E006 covers all required fields from builtin extensions"
 )]
 fn e006_covers_all_required_fields() {
-    let patterns = load_patterns_for(&[
+    let build = load_patterns_for(&[
         "@specforge/software",
         "@specforge/product",
         "@specforge/governance",
         "@specforge/formal",
-    ])
-    .rules;
+    ]);
+    let patterns = build.rules();
 
     let e006_targets: Vec<(String, String)> = patterns
         .iter()

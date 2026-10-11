@@ -453,7 +453,7 @@ impl<'d> Cursor<'d> {
             });
         }
         let word = word?;
-        let fields = &view.registries().fields;
+        let fields = &view.registries().fields();
         if self
             .syntax
             .reference_position(self.text, word as u32, fields)

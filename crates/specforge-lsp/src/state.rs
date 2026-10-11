@@ -328,15 +328,15 @@ impl LspState {
     }
 
     pub fn kind_registry(&self) -> &KindRegistry {
-        &self.registries().kinds
+        self.registries().kinds()
     }
 
     pub fn field_registry(&self) -> &FieldRegistry {
-        &self.registries().fields
+        self.registries().fields()
     }
 
     pub fn edge_registry(&self) -> &EdgeRegistry {
-        &self.registries().edges
+        self.registries().edges()
     }
 
     /// Everything built from the loaded extensions.

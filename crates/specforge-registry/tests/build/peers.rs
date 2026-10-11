@@ -220,7 +220,7 @@ fn an_extension_with_an_unsatisfied_peer_still_registers_its_kinds() {
     let build = build([product]);
 
     assert_eq!(codes(&build), ["E027"]);
-    let feature = build.kinds.get("feature").expect("registered");
+    let feature = build.kinds().get("feature").expect("registered");
     assert_eq!(feature.source_extension, "@specforge/product");
 }
 

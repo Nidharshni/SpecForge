@@ -76,11 +76,11 @@ fn kinds_fields_and_edges_come_from_the_descriptors() {
     let build = build_registries(vec![software(), product()]);
 
     let kinds: std::collections::BTreeSet<&str> =
-        build.kinds.keywords().map(String::as_str).collect();
+        build.kinds().keywords().map(String::as_str).collect();
     assert_eq!(kinds, ["behavior", "feature", "type"].into_iter().collect());
-    assert!(build.fields.contains("behavior", "contract"));
-    assert!(build.fields.contains("behavior", "owner"));
-    assert!(build.edges.contains("uses"));
+    assert!(build.fields().contains("behavior", "contract"));
+    assert!(build.fields().contains("behavior", "owner"));
+    assert!(build.edges().contains("uses"));
     assert_eq!(
         build.extension_info().collect::<Vec<_>>(),
         vec![("@test/software", "1.2.0"), ("@test/product", "0.3.0")]
@@ -95,10 +95,10 @@ fn kinds_fields_and_edges_come_from_the_descriptors() {
 fn two_extensions_populate_without_collision() {
     let build = build_registries(vec![software(), product()]);
 
-    assert!(build.kinds.contains("behavior"));
-    assert!(build.kinds.contains("feature"));
+    assert!(build.kinds().contains("behavior"));
+    assert!(build.kinds().contains("feature"));
     assert_eq!(
-        build.kinds.get("feature").unwrap().source_extension,
+        build.kinds().get("feature").unwrap().source_extension,
         "@test/product"
     );
     // No kind, field or edge collides (no E026, W018): the declarations'
@@ -112,7 +112,7 @@ fn rules_include_the_manifest_rules_and_the_required_field_rules() {
     let build = build_registries(vec![software()]);
 
     let codes: Vec<(&str, &str)> = build
-        .rules
+        .rules()
         .iter()
         .map(|rule| (rule.code(), rule.origin().name()))
         .collect();
@@ -184,7 +184,7 @@ fn surface_conflicts_come_last_in_the_builds_diagnostics() {
         "E039 comes last, after the registries' diagnostics: {reported:?}"
     );
     assert_eq!(reported.iter().filter(|c| **c == "E039").count(), 1);
-    assert_eq!(build.surfaces.len(), 1, "first registration wins");
+    assert_eq!(build.surfaces().len(), 1, "first registration wins");
     assert_eq!(
         build
             .declarations()
@@ -220,7 +220,10 @@ fn a_rule_code_declared_by_two_extensions_warns() {
     for part in ["'W900'", "'@ext/a'", "'@ext/b'"] {
         assert!(message.contains(part), "{message}");
     }
-    assert_eq!(build.rules.iter().filter(|r| r.code() == "W900").count(), 2);
+    assert_eq!(
+        build.rules().iter().filter(|r| r.code() == "W900").count(),
+        2
+    );
 }
 
 /// With no extension loaded the host knows no kind, field or edge: every
@@ -232,19 +235,19 @@ fn a_rule_code_declared_by_two_extensions_warns() {
 fn no_declarations_build_empty_registries() {
     let build = build_registries(Vec::new());
 
-    assert!(build.kinds.is_empty());
-    assert_eq!(build.kinds.len(), 0);
-    assert_eq!(build.kinds.keywords().count(), 0);
-    assert!(build.kinds.get("behavior").is_none());
-    assert!(build.fields.is_empty());
-    assert!(build.fields.get("behavior", "contract").is_none());
-    assert!(build.fields.fields_for_kind("behavior").is_empty());
-    assert!(build.edges.is_empty());
-    assert!(build.edges.get("enforces").is_none());
-    assert_eq!(build.edges.labels().count(), 0);
-    assert!(build.rules.is_empty());
-    assert!(build.surfaces.is_empty());
-    assert!(build.passes.is_empty());
+    assert!(build.kinds().is_empty());
+    assert_eq!(build.kinds().len(), 0);
+    assert_eq!(build.kinds().keywords().count(), 0);
+    assert!(build.kinds().get("behavior").is_none());
+    assert!(build.fields().is_empty());
+    assert!(build.fields().get("behavior", "contract").is_none());
+    assert!(build.fields().fields_for_kind("behavior").is_empty());
+    assert!(build.edges().is_empty());
+    assert!(build.edges().get("enforces").is_none());
+    assert_eq!(build.edges().labels().count(), 0);
+    assert!(build.rules().is_empty());
+    assert!(build.surfaces().is_empty());
+    assert!(build.passes().is_empty());
     assert_eq!(build.graph_inputs(), GraphInputs::default());
     assert!(build.declarations().is_empty());
     assert!(build.diagnostics().next().is_none());
@@ -276,7 +279,7 @@ fn registered(
     code: &str,
 ) -> Vec<(specforge_common::Severity, String)> {
     build
-        .rules
+        .rules()
         .iter()
         .filter(|rule| rule.code() == code)
         .map(|rule| (rule.severity(), rule.origin().name().to_string()))

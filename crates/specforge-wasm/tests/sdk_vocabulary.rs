@@ -99,21 +99,21 @@ fn sdk_vocabulary_round_trips_through_the_registry_build() {
     assert!(unread.is_empty(), "host could not read: {unread:?}");
     for t in FieldType::ALL {
         assert!(
-            build.fields.contains("thing", &format!("f_{t}")),
+            build.fields().contains("thing", &format!("f_{t}")),
             "field type {t} did not register"
         );
     }
 
     for code in ["W900", "E901"] {
         assert!(
-            build.rules.iter().any(|rule| rule.code() == code),
+            build.rules().iter().any(|rule| rule.code() == code),
             "rule {code} not registered"
         );
     }
     // What the rule `code` reports over `entities`.
     let fired = |code: &str, entities: &[specforge_registry::entity::EntityRecord]| {
         build
-            .rules
+            .rules()
             .check(&rules_over(entities), &NoVerdicts)
             .into_iter()
             .filter(|d| d.code == code)
@@ -155,8 +155,8 @@ fn older_sdk_check_names_still_load() {
         .filter(|d| d.code == "W019" || d.code == "W112")
         .collect();
     assert!(unread.is_empty(), "host could not read: {unread:?}");
-    assert!(build.rules.iter().any(|rule| rule.code() == "W900"));
-    assert!(build.rules.iter().any(|rule| rule.code() == "E901"));
+    assert!(build.rules().iter().any(|rule| rule.code() == "W900"));
+    assert!(build.rules().iter().any(|rule| rule.code() == "E901"));
 }
 
 /// Every constraint kind the SDK can name loads on the check that reads it:
@@ -229,7 +229,7 @@ fn sdk_constraint_kinds_load_for_the_checks_that_read_them() {
     for (i, (kind, _)) in uses.iter().enumerate() {
         let code = format!("X{i:03}");
         let rule = build
-            .rules
+            .rules()
             .iter()
             .find(|rule| rule.code() == code)
             .unwrap_or_else(|| panic!("rule {code} not registered"));

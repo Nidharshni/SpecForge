@@ -80,7 +80,7 @@ fn protocol_extension_loaded_with_runtime() {
 
     // KindRegistry should have "gadget"
     assert!(
-        ctx.environment().registries.kinds.contains("gadget"),
+        ctx.environment().registries.kinds().contains("gadget"),
         "expected gadget kind in registry"
     );
 }

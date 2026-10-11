@@ -214,7 +214,7 @@ pub fn check(
     let cache = match (options.record_cache, counts.errors == 0) {
         (false, _) => CacheRecord::NotRequested,
         (true, false) => CacheRecord::NotWritten,
-        (true, true) => match BuildCache::of(view.graph(), &view.registries().kinds).write(root) {
+        (true, true) => match BuildCache::of(view.graph(), view.registries().kinds()).write(root) {
             Ok(()) => CacheRecord::Written,
             Err(e) => CacheRecord::WriteFailed(e.to_string()),
         },
@@ -399,7 +399,7 @@ mod tests {
         );
         assert!(outcome.ok(), "{:?}", outcome.reported);
         assert_eq!(outcome.cache, CacheRecord::Written);
-        let expected = BuildCache::of(compiled.graph(), &compiled.environment().registries.kinds);
+        let expected = BuildCache::of(compiled.graph(), compiled.environment().registries.kinds());
         assert!(expected.statuses.contains_key("alpha"), "{expected:?}");
         assert_eq!(
             std::fs::read_to_string(dir.path().join(CACHE)).unwrap(),

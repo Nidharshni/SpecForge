@@ -46,21 +46,21 @@ fn an_edge_type_is_registered_with_its_label_and_description() {
     let build = build([software(), declared]);
     assert!(diagnostics(&build).is_empty(), "{:?}", diagnostics(&build));
 
-    let guards = build.edges.get("guards").unwrap();
+    let guards = build.edges().get("guards").unwrap();
     assert_eq!(guards.declared.label, "guards");
     assert_eq!(
         guards.declared.description.as_deref(),
         Some("A guards the B it names")
     );
     assert_eq!(guards.source_extension, "@test/ext");
-    let touches = build.edges.get("touches").unwrap();
+    let touches = build.edges().get("touches").unwrap();
     assert_eq!(touches.declared.label, "touches");
     assert_eq!(touches.declared.description, None);
     // An explicit edge type of another extension, merged into the same set.
-    let enforces = build.edges.get("enforces").unwrap();
+    let enforces = build.edges().get("enforces").unwrap();
     assert_eq!(enforces.declared.label, "enforces");
     assert_eq!(enforces.source_extension, "@specforge/software");
-    assert_eq!(build.edges.len(), 3);
+    assert_eq!(build.edges().len(), 3);
 }
 
 #[spec(
@@ -69,7 +69,7 @@ fn an_edge_type_is_registered_with_its_label_and_description() {
 )]
 fn an_edge_types_kind_constraints_are_recorded() {
     let build = build([software()]);
-    let enforces = build.edges.get("enforces").unwrap();
+    let enforces = build.edges().get("enforces").unwrap();
     assert_eq!(enforces.declared.source_kind.as_deref(), Some("behavior"));
     assert_eq!(enforces.declared.target_kind.as_deref(), Some("invariant"));
     assert_eq!(enforces.declared.edge_style.as_deref(), Some("dashed"));
@@ -98,17 +98,17 @@ fn a_fields_undeclared_edge_label_is_registered_as_an_edge() {
     });
     let build = build([software(), product(), declared]);
 
-    let assigned = build.edges.get("assigned_to").expect("implicit edge");
+    let assigned = build.edges().get("assigned_to").expect("implicit edge");
     assert_eq!(assigned.declared.label, "assigned_to");
     assert_eq!(assigned.declared.source_kind.as_deref(), Some("task"));
     assert_eq!(assigned.declared.target_kind.as_deref(), Some("person"));
     assert_eq!(assigned.source_extension, "@test/ext");
     // A label whose field names no target kind: an edge to no kind.
-    let owns = build.edges.get("owns").expect("implicit edge");
+    let owns = build.edges().get("owns").expect("implicit edge");
     assert_eq!(owns.declared.source_kind.as_deref(), Some("task"));
     assert_eq!(owns.declared.target_kind, None);
     // A label an edge type declares keeps the declared one.
-    let composes = build.edges.get("composes").unwrap();
+    let composes = build.edges().get("composes").unwrap();
     assert_eq!(composes.source_extension, "@specforge/product");
     assert_eq!(composes.declared.source_kind.as_deref(), Some("feature"));
     // The undeclared labels are the extension's authoring errors (W021),
@@ -133,7 +133,7 @@ fn an_edge_label_declared_twice_is_w018_and_the_first_keeps_it() {
     );
     assert_eq!(codes(&build), ["W018"]);
     // The first declaration keeps the label and its constraints.
-    let enforces = build.edges.get("enforces").unwrap();
+    let enforces = build.edges().get("enforces").unwrap();
     assert_eq!(enforces.source_extension, "@specforge/software");
     assert_eq!(enforces.declared.edge_style.as_deref(), Some("dashed"));
     assert_eq!(enforces.declared.source_kind.as_deref(), Some("behavior"));
@@ -153,7 +153,7 @@ fn an_edge_label_declared_twice_is_w018_and_the_first_keeps_it() {
     assert_eq!(w018.len(), 1);
     assert!(w018[0].message.contains("'links_to'"));
     assert_eq!(
-        links.edges.get("links_to").unwrap().source_extension,
+        links.edges().get("links_to").unwrap().source_extension,
         "@specforge/software"
     );
 }
@@ -168,17 +168,17 @@ fn edge_registration_holds() {
     let build = build([software(), product_redeclaring_enforces()]);
 
     // edge_types_registered: both extensions' edge types.
-    let mut labels: Vec<&str> = build.edges.labels().map(String::as_str).collect();
+    let mut labels: Vec<&str> = build.edges().labels().map(String::as_str).collect();
     labels.sort();
     assert_eq!(labels, ["composes", "enforces"]);
     assert_eq!(
-        build.edges.get("composes").unwrap().source_extension,
+        build.edges().get("composes").unwrap().source_extension,
         "@specforge/product"
     );
 
     // first_wins: W018, and the later constraints are discarded.
     assert_eq!(coded(&build, "W018").len(), 1);
-    let enforces = build.edges.get("enforces").unwrap();
+    let enforces = build.edges().get("enforces").unwrap();
     assert_eq!(enforces.source_extension, "@specforge/software");
     assert_eq!(enforces.declared.source_kind.as_deref(), Some("behavior"));
     assert!(

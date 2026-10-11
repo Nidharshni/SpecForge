@@ -232,9 +232,9 @@ impl<'a> ProjectView<'a> {
     pub fn schema(&self) -> GraphProtocolSchema {
         let registries = self.registries();
         generate_schema(
-            &registries.kinds,
-            &registries.edges,
-            &registries.fields,
+            registries.kinds(),
+            registries.edges(),
+            registries.fields(),
             &registries
                 .extension_info()
                 .map(|(name, version)| (name.to_string(), version.to_string()))

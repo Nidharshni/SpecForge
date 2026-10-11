@@ -282,7 +282,7 @@ fn registered_for(
     descriptor: &EntityKindDescriptor,
 ) -> bool {
     view.registries()
-        .kinds
+        .kinds()
         .get(keyword(descriptor))
         .is_some_and(|entry| entry.source_extension == declaration.name())
 }
@@ -308,7 +308,7 @@ fn kind_of<'a>(
     let keyword = keyword(descriptor);
     // Every field the registry build registered on the kind: the registry's
     // map has no declaration order, so by name.
-    let mut fields = view.registries().fields.fields_for_kind(keyword);
+    let mut fields = view.registries().fields().fields_for_kind(keyword);
     fields.sort_by(|a, b| a.name().cmp(b.name()));
     KindGuide {
         keyword,

@@ -270,15 +270,15 @@ fn a_pass_without_the_check_phase_runs_only_under_analyze() {
     let registries = &compiled.environment().registries;
     let ctx = specforge_project::passes::AnalysisContext {
         graph: compiled.graph(),
-        kind_registry: &registries.kinds,
-        field_registry: &registries.fields,
+        kind_registry: registries.kinds(),
+        field_registry: registries.fields(),
         entities: compiled.entities(),
         project_root: Some(dir.path()),
         test_results: None,
         proved_claims: None,
     };
     let reports = specforge_project::passes::run_extension_passes(
-        &registries.passes,
+        registries.passes(),
         &ctx,
         ext.as_ref(),
         "all",

@@ -505,9 +505,9 @@ fn the_builtin_extensions_rules_register_cleanly() {
 
     assert_eq!(env.registries.declarations().len(), 9);
     assert!(
-        env.registries.rules.len() > 80,
+        env.registries.rules().len() > 80,
         "{}",
-        env.registries.rules.len()
+        env.registries.rules().len()
     );
     let unworkable: Vec<&Diagnostic> = env
         .diagnostics()

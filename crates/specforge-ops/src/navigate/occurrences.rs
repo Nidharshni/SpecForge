@@ -271,7 +271,7 @@ impl<F: Fn(&str) -> Option<String>> Navigator<'_, F> {
         let registries = self.view.registries();
         let kind = holder.kind.raw.as_str();
         let derived = registries
-            .fields
+            .fields()
             .get(kind, edge.label.as_str())
             .and_then(|entry| entry.declared().derived_from.as_deref())
             .and_then(DerivedFrom::parse);

@@ -52,7 +52,7 @@ fn a_dependent_listed_first_loads_after_its_peer() {
     let names: Vec<&str> = build.declarations().iter().map(|d| d.name()).collect();
     assert_eq!(names, ["@t/base", "@t/dep"]);
     assert_eq!(
-        build.kinds.get("widget").unwrap().source_extension,
+        build.kinds().get("widget").unwrap().source_extension,
         "@t/base"
     );
     let e026 = coded(&build, "E026");
@@ -61,7 +61,7 @@ fn a_dependent_listed_first_loads_after_its_peer() {
         e026[0].message,
         "entity kind 'widget' registered by '@t/dep' conflicts with '@t/base' (first registration wins)"
     );
-    let passes: Vec<String> = build.passes.iter().map(DeclaredPass::full_name).collect();
+    let passes: Vec<String> = build.passes().iter().map(DeclaredPass::full_name).collect();
     assert_eq!(passes, ["@t/base:base", "@t/dep:dep"]);
 
     // Building with the entries swapped gives the same registries and diagnostics.
@@ -70,7 +70,7 @@ fn a_dependent_listed_first_loads_after_its_peer() {
     let swapped_names: Vec<&str> = swapped.declarations().iter().map(|d| d.name()).collect();
     assert_eq!(swapped_names, names);
     assert_eq!(
-        swapped.kinds.get("widget").unwrap().source_extension,
+        swapped.kinds().get("widget").unwrap().source_extension,
         "@t/base"
     );
     let messages = |b: &specforge_registry::RegistryBuild| -> Vec<String> {
@@ -93,10 +93,14 @@ fn first_wins_rules_follow_the_load_order() {
         widget("@t/base", vec![]),
     ]);
     assert_eq!(
-        build.kinds.get("widget").unwrap().source_extension,
+        build.kinds().get("widget").unwrap().source_extension,
         "@t/base"
     );
-    let passes: Vec<&str> = build.passes.iter().map(|p| p.extension.as_str()).collect();
+    let passes: Vec<&str> = build
+        .passes()
+        .iter()
+        .map(|p| p.extension.as_str())
+        .collect();
     assert_eq!(passes, ["@t/base", "@t/dep"]);
 }
 
@@ -168,5 +172,5 @@ fn a_required_cycle_is_one_e027_naming_its_extensions() {
         )
     );
     // Both extensions still load and register their kinds.
-    assert!(build.kinds.get("alpha").is_some() && build.kinds.get("beta").is_some());
+    assert!(build.kinds().get("alpha").is_some() && build.kinds().get("beta").is_some());
 }

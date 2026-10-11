@@ -379,9 +379,9 @@ pub fn rollback(root: &Path) -> RollbackOutcome {
 fn schema_of(project: &CompiledProject) -> specforge_emitter::GraphProtocolSchema {
     let registries = &project.environment().registries;
     specforge_emitter::generate_schema(
-        &registries.kinds,
-        &registries.edges,
-        &registries.fields,
+        registries.kinds(),
+        registries.edges(),
+        registries.fields(),
         &registries
             .extension_info()
             .map(|(name, version)| (name.to_string(), version.to_string()))

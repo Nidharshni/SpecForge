@@ -121,7 +121,7 @@ fn registered_kinds_at_top_level() {
     let (site, found) = complete(TWO_KINDS, 3, 0, &view);
     assert_eq!(site, "Keywords { prefix: \"\" }");
     let names = labels(&found);
-    for kind in view.registries().kinds.keywords() {
+    for kind in view.registries().kinds().keywords() {
         assert!(names.contains(&kind.as_str()), "{kind} in {names:?}");
     }
     let behavior = found.iter().find(|i| i.label == "behavior").unwrap();

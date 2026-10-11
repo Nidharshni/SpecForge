@@ -38,7 +38,10 @@ fn an_enhancement_registers_its_fields_on_the_target_kind() {
     });
     let build = build([software(), coverage]);
     assert!(diagnostics(&build).is_empty(), "{:?}", diagnostics(&build));
-    let field = build.fields.get("behavior", "coverage_threshold").unwrap();
+    let field = build
+        .fields()
+        .get("behavior", "coverage_threshold")
+        .unwrap();
     assert_eq!(field.kind_name(), "behavior");
     assert_eq!(field.field_type(), FieldType::String);
     assert_eq!(
@@ -47,8 +50,8 @@ fn an_enhancement_registers_its_fields_on_the_target_kind() {
         "the field is the kind's through the owner the enhancement names"
     );
     // The kind's own fields stay.
-    assert!(build.fields.contains("behavior", "contract"));
-    assert!(build.fields.contains("behavior", "invariants"));
+    assert!(build.fields().contains("behavior", "contract"));
+    assert!(build.fields().contains("behavior", "invariants"));
 
     // Two enhancements of one kind, with different fields: both register.
     let build = crate::support::build([
@@ -59,7 +62,7 @@ fn an_enhancement_registers_its_fields_on_the_target_kind() {
     assert!(diagnostics(&build).is_empty(), "{:?}", diagnostics(&build));
     assert_eq!(
         build
-            .fields
+            .fields()
             .get("behavior", "priority")
             .unwrap()
             .source_extension(),
@@ -67,7 +70,7 @@ fn an_enhancement_registers_its_fields_on_the_target_kind() {
     );
     assert_eq!(
         build
-            .fields
+            .fields()
             .get("behavior", "category")
             .unwrap()
             .source_extension(),
@@ -94,7 +97,7 @@ fn an_enhancement_of_an_unknown_kind_is_i004() {
         "extension '@test/ext': entity enhancement targets unknown kind 'nonexistent_kind' (extension may not be installed)"
     );
     assert_eq!(codes(&build), ["I004"]);
-    assert!(!build.fields.contains("nonexistent_kind", "extra"));
+    assert!(!build.fields().contains("nonexistent_kind", "extra"));
 }
 
 #[spec(
@@ -107,7 +110,7 @@ fn an_enhancement_of_a_kind_whose_owner_is_not_loaded_is_skipped_silently() {
     // The owner is not loaded: the project doesn't use it, nothing to say.
     let build = build([software(), enhancing()]);
     assert!(diagnostics(&build).is_empty(), "{:?}", diagnostics(&build));
-    assert!(!build.fields.contains("module", "layer"));
+    assert!(!build.fields().contains("module", "layer"));
 
     // The owner is loaded, yet declares no such kind: a real mismatch, I004.
     let product = declare("@specforge/product", |c| {
@@ -138,11 +141,11 @@ fn an_enhancement_with_verify_kinds_makes_its_target_testable() {
     });
 
     let before = build([untestable.clone()]);
-    assert!(!before.kinds.get("behavior").unwrap().testable);
+    assert!(!before.kinds().get("behavior").unwrap().testable);
 
     let build = build([untestable, testing]);
     assert!(diagnostics(&build).is_empty(), "{:?}", diagnostics(&build));
-    let behavior = build.kinds.get("behavior").unwrap();
+    let behavior = build.kinds().get("behavior").unwrap();
     assert!(behavior.testable && behavior.supports_verify);
     assert_eq!(behavior.allowed_verify_kinds, ["unit", "contract"]);
     assert_eq!(
@@ -163,7 +166,7 @@ fn an_enhancement_field_never_overwrites_a_kind_field() {
         enhancer("@test/ext", "behavior", "@test/ext", &["contract"]),
     ]);
     assert!(diagnostics(&build).is_empty(), "{:?}", diagnostics(&build));
-    let contract = build.fields.get("behavior", "contract").unwrap();
+    let contract = build.fields().get("behavior", "contract").unwrap();
     assert_eq!(contract.field_type(), FieldType::Block);
     assert_eq!(contract.source_extension(), "@specforge/software");
 }
@@ -192,13 +195,13 @@ fn enhancements_register_in_load_order() {
     let b = owner_enhancer("@test/b", FieldType::Reference);
 
     let a_first = build([software(), a.clone(), b.clone()]);
-    let owner = a_first.fields.get("behavior", "owner").unwrap();
+    let owner = a_first.fields().get("behavior", "owner").unwrap();
     assert_eq!(owner.source_extension(), "@test/a");
     assert_eq!(owner.field_type(), FieldType::String);
 
     // The load order decides which `owner` wins.
     let b_first = build([software(), b.clone(), a.clone()]);
-    let owner = b_first.fields.get("behavior", "owner").unwrap();
+    let owner = b_first.fields().get("behavior", "owner").unwrap();
     assert_eq!(owner.source_extension(), "@test/b");
     assert_eq!(owner.field_type(), FieldType::Reference);
 
@@ -207,7 +210,7 @@ fn enhancements_register_in_load_order() {
         let again = build([software(), a.clone(), b.clone()]);
         assert_eq!(
             again
-                .fields
+                .fields()
                 .get("behavior", "owner")
                 .unwrap()
                 .source_extension(),
@@ -230,11 +233,11 @@ fn enhancement_registration_holds() {
 
     // enhancement_registered_emitted: each registered field records the
     // extension, target kind, field and type the event carries.
-    let owner = build.fields.get("behavior", "owner").unwrap();
+    let owner = build.fields().get("behavior", "owner").unwrap();
     assert_eq!(owner.kind_name(), "behavior");
     assert_eq!(owner.source_extension(), "@test/a");
     assert_eq!(owner.field_type(), FieldType::String);
-    let note = build.fields.get("behavior", "reference_note").unwrap();
+    let note = build.fields().get("behavior", "reference_note").unwrap();
     assert_eq!(note.source_extension(), "@test/b");
 
     // registration_before_resolve: the registries the build hands on
@@ -269,7 +272,7 @@ fn enhancement_registration_holds() {
     ]);
     assert_eq!(
         swapped
-            .fields
+            .fields()
             .get("behavior", "owner")
             .unwrap()
             .source_extension(),
