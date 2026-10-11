@@ -88,7 +88,7 @@ impl CompiledProject {
 
     /// The root it was compiled from; `None` for a detached project.
     pub fn root(&self) -> Option<&Path> {
-        self.on_disk.then_some(self.env.root.as_path())
+        self.on_disk.then_some(self.env.root())
     }
 
     /// The graph of its sources.
@@ -186,7 +186,7 @@ impl CompiledProject {
 
     /// The one read of a source (`sources::read`) under its spec root.
     pub(crate) fn read_source(&self, key: &str) -> Read {
-        sources::read(&self.env.spec_root, key)
+        sources::read(self.env.spec_root(), key)
     }
 
     /// Whether the project already holds the state `read` gives for `key`.

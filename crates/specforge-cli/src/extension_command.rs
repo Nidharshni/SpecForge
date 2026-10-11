@@ -68,7 +68,7 @@ pub fn run(argv: &[String], builtins: &[String]) -> i32 {
             specforge_component::ComponentRuntime::with_user_cache(),
         )),
     );
-    let routed = ExtensionCommands::build(&env.registries);
+    let routed = ExtensionCommands::build(env.registries());
     let commands: Vec<&ExtensionCommand> = routed.of(&ext).collect();
     if commands.is_empty() {
         eprintln!(
@@ -214,7 +214,7 @@ pub fn with_extension_commands(mut cli: Command, root: &Path) -> Command {
             specforge_component::ComponentRuntime::with_user_cache(),
         )),
     );
-    let routed = ExtensionCommands::build(&env.registries);
+    let routed = ExtensionCommands::build(env.registries());
     for ext in routed.shorts() {
         if cli.find_subcommand(ext).is_none() {
             let commands: Vec<&ExtensionCommand> = routed.of(ext).collect();

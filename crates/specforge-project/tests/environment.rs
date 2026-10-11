@@ -81,9 +81,9 @@ fn an_environment_reports_its_config_its_load_its_providers_then_its_build() {
         "{}",
         w112.message
     );
-    assert!(Arc::ptr_eq(env.runtime.as_ref().unwrap(), &rt));
-    assert_eq!(env.spec_root, root);
-    let names: Vec<&str> = env.enabled.iter().map(|e| e.name.as_str()).collect();
+    assert!(Arc::ptr_eq(env.runtime().unwrap(), &rt));
+    assert_eq!(env.spec_root(), root);
+    let names: Vec<&str> = env.enabled().iter().map(|e| e.name.as_str()).collect();
     assert_eq!(names, [RULES, "@acme/missing"]);
 }
 
@@ -102,10 +102,10 @@ fn without_a_runtime_nothing_loads_and_each_entry_is_enabled_as_written() {
 
     let env = Environment::load(root, None);
 
-    assert!(env.runtime.is_none());
-    assert!(env.registries.declarations().is_empty());
+    assert!(env.runtime().is_none());
+    assert!(env.registries().declarations().is_empty());
     let enabled: Vec<(&str, Option<&str>, bool)> = env
-        .enabled
+        .enabled()
         .iter()
         .map(|e| (e.name.as_str(), e.file.as_deref(), e.failure.is_some()))
         .collect();
@@ -121,7 +121,7 @@ fn without_a_runtime_nothing_loads_and_each_entry_is_enabled_as_written() {
         messages,
         ["none of the 2 configured extensions loaded — operating in structural-only mode"]
     );
-    assert_eq!(env.spec_root, root.join("spec"));
+    assert_eq!(env.spec_root(), root.join("spec"));
 }
 
 #[specforge_test(
@@ -174,10 +174,10 @@ fn an_environment_assembles_from_the_parts_it_is_given() {
         "{}",
         w112.message
     );
-    assert_eq!(env.root, root);
-    assert_eq!(env.spec_root, root.join("spec"));
-    assert!(Arc::ptr_eq(env.runtime.as_ref().unwrap(), &rt));
-    assert_eq!(env.registries.declarations().len(), 1);
+    assert_eq!(env.root(), root);
+    assert_eq!(env.spec_root(), root.join("spec"));
+    assert!(Arc::ptr_eq(env.runtime().unwrap(), &rt));
+    assert_eq!(env.registries().declarations().len(), 1);
 
     let env = Environment::assemble(
         parse_project_config(
@@ -187,10 +187,10 @@ fn an_environment_assembles_from_the_parts_it_is_given() {
         Installed::unread(root),
         ExtensionLoad::NoRuntime,
     );
-    assert!(env.runtime.is_none());
-    let names: Vec<&str> = env.enabled.iter().map(|e| e.name.as_str()).collect();
+    assert!(env.runtime().is_none());
+    let names: Vec<&str> = env.enabled().iter().map(|e| e.name.as_str()).collect();
     assert_eq!(names, ["@acme/a"]);
-    assert!(env.enabled.iter().all(|e| e.failure.is_none()));
+    assert!(env.enabled().iter().all(|e| e.failure.is_none()));
     let messages: Vec<&str> = env.diagnostics().map(|d| d.message.as_str()).collect();
     assert_eq!(
         messages,

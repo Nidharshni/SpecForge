@@ -46,7 +46,7 @@ fn build_and_check(source: &str) -> (Graph, Vec<Diagnostic>) {
         specforge_registry::build_registries(vec![ticket_manifest()]),
         None,
     );
-    let pop_diags: Vec<_> = env.registries.diagnostics().collect();
+    let pop_diags: Vec<_> = env.registries().diagnostics().collect();
     assert!(pop_diags.is_empty(), "{pop_diags:?}");
     let parsed = specforge_parser::parse(source, "main.spec");
     assert!(parsed.errors.is_empty(), "{:?}", parsed.errors);

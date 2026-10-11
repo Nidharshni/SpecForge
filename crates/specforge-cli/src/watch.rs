@@ -91,8 +91,8 @@ fn unix_seconds() -> u64 {
 
 /// The `ready` event: the session as opened, and caught up with disk.
 fn print_ready(session: &ProjectSession, json: bool) {
-    let spec_root: PathBuf = std::fs::canonicalize(&session.project().environment().spec_root)
-        .unwrap_or_else(|_| session.project().environment().spec_root.clone());
+    let spec_root: PathBuf = std::fs::canonicalize(session.project().environment().spec_root())
+        .unwrap_or_else(|_| session.project().environment().spec_root().to_path_buf());
     let diagnostics = session.project().diagnostics();
     let Counts {
         errors, warnings, ..

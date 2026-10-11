@@ -136,7 +136,7 @@ pub fn remove(view: &ProjectView, req: &RemoveRequest) -> Result<RemoveOutcome, 
     let root = view.project_root()?;
     if let Some(problem) = view
         .env()
-        .config_problems
+        .config_problems()
         .iter()
         .find(|problem| problem.blocks_edits())
     {

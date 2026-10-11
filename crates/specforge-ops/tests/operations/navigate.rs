@@ -45,7 +45,7 @@ pub fn compile(extensions: &[&str], files: &[(&str, &str)]) -> Compiled {
 impl Compiled {
     /// A navigator reading the project's files from disk.
     pub fn navigator(&self) -> Navigator<'_, impl Fn(&str) -> Option<String> + '_> {
-        let spec_root = &self.project.environment().spec_root;
+        let spec_root = self.project.environment().spec_root().to_path_buf();
         Navigator::new(ProjectView::of(&self.project), move |file| {
             std::fs::read_to_string(spec_root.join(file)).ok()
         })
@@ -522,7 +522,7 @@ fn completion_keeps_the_fields_target_kind() {
     let target = p
         .project
         .environment()
-        .registries
+        .registries()
         .fields()
         .get("behavior", "invariants")
         .and_then(|f| f.declared().target_kind.clone())
@@ -966,7 +966,7 @@ fn with_registries<'a>(
     env: &'a Environment,
     recorded: &'a RecordedCoverage,
 ) -> Navigator<'a, impl Fn(&str) -> Option<String> + 'a> {
-    let spec_root = &p.project.environment().spec_root;
+    let spec_root = p.project.environment().spec_root().to_path_buf();
     Navigator::new(
         ProjectView::new(p.project.graph(), env, None, recorded),
         move |file| std::fs::read_to_string(spec_root.join(file)).ok(),

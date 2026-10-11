@@ -124,7 +124,11 @@ fn typed_since_the_compile(dir: &TempDir) -> (LspState, Url) {
 /// The compile catches up with the buffer.
 fn compile(state: &mut LspState) {
     let session = state.session_mut().expect("held");
-    let path = session.project().environment().spec_root.join("main.spec");
+    let path = session
+        .project()
+        .environment()
+        .spec_root()
+        .join("main.spec");
     session.update(SourceChange::Hold(&[Buffer::new(path, STALE_TYPED)]));
 }
 

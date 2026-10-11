@@ -132,7 +132,7 @@ fn graph_inputs(env: &Environment) -> Value {
 }
 
 fn digest(env: &Environment) -> Value {
-    let r = &env.registries;
+    let r = env.registries();
     let kinds: BTreeMap<&str, Value> = r
         .kinds()
         .iter()

@@ -513,7 +513,7 @@ mod tests {
             crate::ExtensionLoad::NoRuntime,
         );
         let over = RecordedCoverage::over(&project.graph, &env);
-        assert_eq!(over.entities().spec_root(), env.spec_root);
+        assert_eq!(over.entities().spec_root(), env.spec_root());
         assert!(std::ptr::eq(
             over.at(None).unwrap().coverage.entities(),
             &**over.entities()

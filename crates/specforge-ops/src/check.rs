@@ -399,7 +399,10 @@ mod tests {
         );
         assert!(outcome.ok(), "{:?}", outcome.reported);
         assert_eq!(outcome.cache, CacheRecord::Written);
-        let expected = BuildCache::of(compiled.graph(), compiled.environment().registries.kinds());
+        let expected = BuildCache::of(
+            compiled.graph(),
+            compiled.environment().registries().kinds(),
+        );
         assert!(expected.statuses.contains_key("alpha"), "{expected:?}");
         assert_eq!(
             std::fs::read_to_string(dir.path().join(CACHE)).unwrap(),

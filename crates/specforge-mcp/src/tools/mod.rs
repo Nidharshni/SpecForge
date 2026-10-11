@@ -88,7 +88,7 @@ pub static CORE_TOOLS: &[&dyn ToolSpec] = &[
 /// spec root, when it has a root (the empty session has none, so no file is
 /// a project's, ADR 0025).
 pub(crate) fn spec_root<'v>(view: &ProjectView<'v>) -> Option<&'v std::path::Path> {
-    view.root().map(|_| view.env().spec_root.as_path())
+    view.root().map(|_| view.env().spec_root())
 }
 
 /// The navigator over `view` (`specforge_ops::navigate`), each file's text

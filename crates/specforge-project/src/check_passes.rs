@@ -22,26 +22,26 @@ pub(crate) fn run(
     entities: &EntitySnapshot,
     runtime: &dyn WasmRuntime,
 ) -> Vec<Diagnostic> {
-    if env.registries.check_passes().next().is_none() {
+    if env.registries().check_passes().next().is_none() {
         return Vec::new();
     }
     let mut diagnostics = Vec::new();
     // The build cache is the check passes' declared input: read on every
     // compile that runs one, so a cache just written is seen.
-    let previous = match BuildCache::read(&env.root) {
+    let previous = match BuildCache::read(env.root()) {
         Ok(previous) => previous,
         Err(invalid) => {
             diagnostics.push(invalid);
             None
         }
     };
-    let registries = &env.registries;
+    let registries = env.registries();
     let mut input = pass_input(&AnalysisContext {
         graph,
         kind_registry: registries.kinds(),
         field_registry: registries.fields(),
         entities,
-        project_root: Some(&env.root),
+        project_root: Some(env.root()),
         // A compile has no test results and no proof.
         test_results: None,
         proved_claims: None,
@@ -49,7 +49,7 @@ pub(crate) fn run(
     input.previous = previous.as_ref().map(PassBuildCache::from);
     let encoded = ExtensionCalls::encode(&input);
     let calls = ExtensionCalls::new(runtime);
-    for declared in env.registries.check_passes() {
+    for declared in env.registries().check_passes() {
         let pass = &declared.pass;
         let answer = calls.run_pass(&declared.extension, &pass.name, &encoded);
         match answer {

@@ -110,7 +110,7 @@ fn a_builtin_custom_rule_is_registered_with_its_wasm_function() {
     let env = Environment::load(dir.path(), Some(Arc::new(runtime)));
 
     let w010 = env
-        .registries
+        .registries()
         .rules()
         .iter()
         .find(|rule| rule.code() == "W010")
@@ -122,7 +122,7 @@ fn a_builtin_custom_rule_is_registered_with_its_wasm_function() {
     );
     assert_eq!(w010.origin().name(), "@specforge/software");
     assert!(
-        env.registries
+        env.registries()
             .rules()
             .iter()
             .any(|rule| rule.check_kind() != CheckKind::Custom),
@@ -181,7 +181,7 @@ fn a_custom_rule_without_a_wasm_function_is_w112_and_not_registered() {
         warnings[0].message
     );
     assert!(
-        !env.registries
+        !env.registries()
             .rules()
             .iter()
             .any(|rule| rule.code() == "E903"),
@@ -207,10 +207,10 @@ fn custom_rules_register_resolve_and_dispatch_through_a_compile() {
     let compiled = CompiledProject::compile(dir.path(), Some(Arc::new(rules_extension())));
 
     // extension_manifests_loaded_fired + custom_patterns_registered
-    assert_eq!(compiled.environment().registries.declarations().len(), 1);
+    assert_eq!(compiled.environment().registries().declarations().len(), 1);
     let mut registered: Vec<(&str, &str)> = compiled
         .environment()
-        .registries
+        .registries()
         .rules()
         .iter()
         .map(|rule| (rule.code(), rule.origin().name()))

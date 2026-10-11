@@ -238,7 +238,7 @@ pub fn guide<'a>(view: &ProjectView<'a>) -> InferenceGuide<'a> {
             .collect(),
         kinds,
         entities_by_kind: view.entities_by_kind(),
-        conventions: view.env().config.inference.global.as_deref(),
+        conventions: view.env().config().inference.global.as_deref(),
         spec_directory: spec_directory(view),
     }
 }
@@ -317,7 +317,7 @@ fn kind_of<'a>(
         fields,
         guide: merged_guide(
             descriptor.inference_guide.as_deref().unwrap_or(""),
-            view.env().config.inference.kinds.get(keyword),
+            view.env().config().inference.kinds.get(keyword),
         ),
         existing: existing.get(keyword).cloned().unwrap_or_default(),
     }
@@ -340,7 +340,7 @@ fn merged_guide(extension_guide: &str, project_guide: Option<&String>) -> String
 fn spec_directory(view: &ProjectView) -> String {
     let relative = view
         .root()
-        .and_then(|root| view.env().spec_root.strip_prefix(root).ok())
+        .and_then(|root| view.env().spec_root().strip_prefix(root).ok())
         .filter(|relative| *relative != Path::new(""));
     match relative {
         Some(relative) => {

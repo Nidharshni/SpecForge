@@ -42,7 +42,7 @@ impl Status {
 #[derive(Debug, Clone)]
 pub struct Inventory<'a> {
     /// What each `specforge.json` entry enabled, in its order (the view's
-    /// `env().enabled`): an ambiguous selection names them in this order.
+    /// `env().enabled()`): an ambiguous selection names them in this order.
     entries: &'a [EnabledExtension],
     rows: Vec<ProjectExtension<'a>>,
 }
@@ -94,7 +94,7 @@ pub enum Selection<'i, 'a> {
 /// each `specforge.json` entry enabled, the lock the compile read (none
 /// without a root) and the declarations it loaded, never read again.
 pub fn inventory<'a>(view: &ProjectView<'a>) -> Inventory<'a> {
-    let entries: &'a [EnabledExtension] = &view.env().enabled;
+    let entries: &'a [EnabledExtension] = view.env().enabled();
     let declarations: &'a [ExtensionDeclaration] = view.registries().declarations();
     let locked: &'a [LockFileEntry] = view.lock().entries();
     let names: BTreeSet<&'a str> = entries
@@ -504,7 +504,7 @@ mod tests {
         let mut fixture = Fixture::new()
             .declarations(vec![dep, opt, Fixture::declaration("@a/base", "1.0.0")])
             .lock(&[("@a/locked", "1.0.0", "registry")]);
-        let mut lock = fixture.env().installed.lock().file().unwrap().clone();
+        let mut lock = fixture.env().installed().lock().file().unwrap().clone();
         lock.entries[0].peer_dependencies = vec![peer(false)];
         fixture = fixture.with_lock_file(lock);
         let view = fixture.view();

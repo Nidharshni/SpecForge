@@ -80,7 +80,7 @@ fn the_context_view_keeps_the_spec_root_and_the_resolved_files() {
 
     let compiled = compile(dir.path());
 
-    assert_eq!(compiled.environment().spec_root, dir.path().join("spec"));
+    assert_eq!(compiled.environment().spec_root(), dir.path().join("spec"));
     let mut files: Vec<String> = compiled.source_texts().into_keys().collect();
     files.sort();
     assert_eq!(files, ["a.spec"]);
@@ -128,7 +128,7 @@ fn graceful_degradation_contract() {
 
     // registries_populated_fired: with no extension, the registries are
     // built, and empty.
-    assert!(compiled.environment().registries.kinds().is_empty());
+    assert!(compiled.environment().registries().kinds().is_empty());
     // i002_emitted
     assert_eq!(codes(&compiled.diagnostics()), ["I002"]);
     // structural_mode_operational: generic nodes, raw keywords, a
@@ -306,7 +306,7 @@ fn soft_cross_extension_resolution_contract() {
     assert!(
         compiled
             .environment()
-            .registries
+            .registries()
             .kinds()
             .contains("invariant")
     );
@@ -619,7 +619,7 @@ mod declared_in_process {
         let runtime = Arc::new(InProcessRuntime::new().with(commands_only));
         let env = load(&["@acme/cmds"], runtime);
         let registered: Vec<(&SurfaceType, &str)> = env
-            .registries
+            .registries()
             .surfaces()
             .iter()
             .map(|s| (&s.surface_type, s.contribution_name.as_str()))
@@ -642,7 +642,10 @@ mod declared_in_process {
     fn the_declared_short_name_reaches_the_registry_build() {
         let runtime = Arc::new(InProcessRuntime::new().with(reports));
         let env = load(&["@acme/reports"], runtime);
-        let declaration = env.registries.declaration("@acme/reports").expect("loaded");
+        let declaration = env
+            .registries()
+            .declaration("@acme/reports")
+            .expect("loaded");
         assert_eq!(declaration.short(), "rep");
     }
 
@@ -664,8 +667,8 @@ mod declared_in_process {
             specforge_wasm::WasmCallResult::Ok(handshake),
         ));
         let env = load(&["@acme/reports"], runtime);
-        assert!(env.registries.declaration("@acme/reports").is_none());
-        assert!(!env.registries.kinds().contains("report"));
+        assert!(env.registries().declaration("@acme/reports").is_none());
+        assert!(!env.registries().kinds().contains("report"));
         let e028: Vec<_> = env.diagnostics().filter(|d| d.code == "E028").collect();
         assert_eq!(e028.len(), 1, "{e028:?}");
         assert!(e028[0].message.contains("@acme/reports"), "{e028:?}");
@@ -688,7 +691,7 @@ mod declared_in_process {
         let runtime = Arc::new(InProcessRuntime::new().with(typo));
         let env = load(&["@acme/typo"], runtime);
         // The extension still loads, without the key it misspelled.
-        assert!(env.registries.kinds().contains("memo"));
+        assert!(env.registries().kinds().contains("memo"));
         let warnings: Vec<_> = env
             .diagnostics()
             .filter(|d| d.severity == specforge_common::Severity::Warning)
@@ -756,7 +759,7 @@ mod passes_of_the_declaration {
             "{}",
             e028[0]
         );
-        assert_eq!(env.registries.check_passes().count(), 0);
+        assert_eq!(env.registries().check_passes().count(), 0);
     }
 
     /// One environment load describes each category of each extension
@@ -856,19 +859,19 @@ fn an_unusable_config_is_e069_then_i002_naming_it() {
     );
     assert!(
         matches!(
-            env.config_problems.as_slice(),
+            env.config_problems(),
             [specforge_common::ConfigProblem::NotJson { .. }]
         ),
         "{:?}",
-        env.config_problems
+        env.config_problems()
     );
-    assert!(env.config_found);
+    assert!(env.config_found());
 
     // No file at all: no problem, the old wording.
     let empty = TempDir::new().unwrap();
     let env = specforge_project::Environment::load(empty.path(), Some(runtime.clone()));
-    assert!(!env.config_found);
-    assert!(env.config_problems.is_empty());
+    assert!(!env.config_found());
+    assert!(env.config_problems().is_empty());
     let messages: Vec<&str> = env.diagnostics().map(|d| d.message.as_str()).collect();
     assert_eq!(
         messages,
@@ -888,12 +891,12 @@ fn the_environment_reads_the_lock_once_at_its_root() {
     let runtime: specforge_project::SharedRuntime = runtime;
     let load = || specforge_project::Environment::load(dir.path(), Some(runtime.clone()));
 
-    assert_eq!(load().installed.lock(), &LockState::Absent);
+    assert_eq!(load().installed().lock(), &LockState::Absent);
 
     let lock = LockFile::default();
     specforge_installed::write_lock_file(&lock, &specforge_installed::lock_path(dir.path()))
         .unwrap();
-    assert_eq!(load().installed.lock(), &LockState::Read(lock));
+    assert_eq!(load().installed().lock(), &LockState::Read(lock));
 
     // What changed on disk after the load is not what the environment holds.
     let env = load();
@@ -902,13 +905,17 @@ fn the_environment_reads_the_lock_once_at_its_root() {
         "not valid json {{{",
     )
     .unwrap();
-    assert!(matches!(env.installed.lock(), LockState::Read(_)));
+    assert!(matches!(env.installed().lock(), LockState::Read(_)));
     let reloaded = load();
     assert_eq!(
-        reloaded.installed.lock().problem().map(|p| p.code.as_str()),
+        reloaded
+            .installed()
+            .lock()
+            .problem()
+            .map(|p| p.code.as_str()),
         Some("E033")
     );
-    assert!(reloaded.installed.lock().entries().is_empty());
+    assert!(reloaded.installed().lock().entries().is_empty());
 }
 
 /// A non-string `extensions` item is one E069 (it is ignored); the other
@@ -941,7 +948,7 @@ fn a_non_string_extension_entry_is_e069_and_the_others_load() {
     assert!(
         compiled
             .environment()
-            .registries
+            .registries()
             .kinds()
             .get("feature")
             .is_some(),
@@ -1098,7 +1105,7 @@ fn an_unpinned_lock_entry_loads_with_w149() {
         .collect();
     assert_eq!(named, [("W149", specforge_common::Severity::Warning)]);
     assert!(
-        env.registries
+        env.registries()
             .declarations()
             .iter()
             .any(|d| d.name() == "@sdk/greet"),
@@ -1161,7 +1168,7 @@ fn a_project_listing_a_dependent_first_loads_its_peer_first() {
     );
     let loaded: Vec<&str> = compiled
         .environment()
-        .registries
+        .registries()
         .declarations()
         .iter()
         .map(|d| d.name())
@@ -1169,7 +1176,7 @@ fn a_project_listing_a_dependent_first_loads_its_peer_first() {
     assert_eq!(loaded, ["@acme/base", "@acme/dep"]);
     let enabled: Vec<&str> = compiled
         .environment()
-        .enabled
+        .enabled()
         .iter()
         .map(|e| e.name.as_str())
         .collect();

@@ -67,20 +67,20 @@ fn protocol_extension_loaded_with_runtime() {
     let e028: Vec<_> = diagnostics.iter().filter(|d| d.code == "E028").collect();
     assert!(e028.is_empty(), "should not have E028: {:?}", e028);
 
-    // Its declaration should appear in ctx.env.registries.declarations()
+    // Its declaration should appear in ctx.env.registries().declarations()
     assert_eq!(
-        ctx.environment().registries.declarations().len(),
+        ctx.environment().registries().declarations().len(),
         1,
         "expected 1 declaration from protocol extension"
     );
     assert_eq!(
-        ctx.environment().registries.declarations()[0].name(),
+        ctx.environment().registries().declarations()[0].name(),
         "@test/proto"
     );
 
     // KindRegistry should have "gadget"
     assert!(
-        ctx.environment().registries.kinds().contains("gadget"),
+        ctx.environment().registries().kinds().contains("gadget"),
         "expected gadget kind in registry"
     );
 }
@@ -135,7 +135,7 @@ fn protocol_handshake_trap_produces_e028() {
 
     // No declaration from the broken extension
     assert!(
-        ctx.environment().registries.declarations().is_empty(),
+        ctx.environment().registries().declarations().is_empty(),
         "broken extension should not produce a declaration"
     );
 }
