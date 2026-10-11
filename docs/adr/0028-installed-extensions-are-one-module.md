@@ -97,3 +97,50 @@ into the lock plan (`specforge_ops::extension::lock_plan`, ADR 0041 amendment 20
 change, judges the peers once, loads what it fetched, and commits only a checked plan. `init`'s local files
 are one change (they were one per file, each committed before the next was judged). `remove` still opens
 the change directly.
+
+## Amendment (2026-10-11): the project's extensions are one inventory
+
+D3 gave the extension load one owner, but "which extensions does this project have" still had
+three. `extension::list`, `doctor::diagnose` and `extension::remove` each joined what the entries
+enabled, the lock pinned and the compile loaded, each with its own version precedence, and named a
+source by `Origin::of` (ADR 0015 M6) except doctor's lock-only rows, which printed the lock entry's
+source directly. Doctor left out an enabled entry that neither loaded nor is locked and said nothing
+about status; `remove` refused that same entry ("not installed") although the listing listed it;
+and `Origin::of` itself disagreed with D3's load: it named a builtin by a stray lock entry, and took
+"file" from whichever entry came first where the load always takes a named entry before a `.wasm`
+file entry.
+
+- **D8. One inventory.** `specforge_ops::extension::inventory(&view)` is every extension the project
+  has (enabled by a `specforge.json` entry, pinned in the lock the compile read, or loaded), one row
+  per name, sorted: its origin, status (loaded, not loaded, not configured), the entries that enable
+  it, its declaration, its lock entry and why its entries did not load. It is pure over the project
+  view (no file is read; binary health stays `Installed::health`). The extensions listing, doctor and
+  remove read it and nothing else to know the project's extensions; it also answers which loaded or
+  locked extensions require a name (remove's E027) and what a `remove` argument names (a `.wasm` file
+  entry by its text, path or declared name; else an extension by name; ambiguous when a file entry
+  and another entry both match).
+- **D9. The origin follows the load.** A row's origin is a `.wasm` file only when no named entry
+  enables the name; else a builtin for a builtin's name; else the lock entry's source; else unknown,
+  the order D3's load tries them. Its version is the loaded declaration's; else, for an installed
+  extension, the locked one; else, for one of unknown origin, what a legacy `name@version` entry
+  writes; else none.
+- **D10. Doctor lists the inventory; remove acts on a row.** Doctor's extensions are the listing's
+  rows, in its order, each with its status (`McpDoctorExtension.status`; `version` optional), and its
+  load findings come from the rows. `remove` uninstalls a row with a lock entry (its directory named
+  by the lock entry's package name, validated when the lock was read, ADR 0036) and otherwise drops
+  the row's `specforge.json` entries, so an entry that does not load (E028) is removed by its name.
+  An argument that names nothing is `extension_not_found`, or E072 when it is no package name; an
+  entry of unknown origin under an unreadable lock is still refused, since whether it is installed
+  is not known. The E027 dependents check runs only when the removed extension is loaded or locked.
+
+Rejected: a port for where the rows come from (one adapter; the project view is already the seam,
+with a compiled and an in-memory adapter); rows carrying binary health (`health()` hashes every
+module: the listing and remove must not pay for it); one row per entry (the listing and doctor list
+extensions by name, and remove's ambiguity rule needs the entries of one name together).
+
+Consequences: `specforge doctor` and `specforge.doctor` list every extension the listing lists, by
+name, with `status`; their load findings are in extension-name order. A `.wasm` file entry that did
+not load has no version. A builtin is `builtin` even when a stray lock entry names it, and an
+extension a named entry loads is never `file:` because a refused `.wasm` file entry declares the same
+name. `specforge remove` and `specforge.remove_extension` remove an entry the project cannot load,
+by its name.
