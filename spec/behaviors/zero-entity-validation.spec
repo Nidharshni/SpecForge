@@ -254,6 +254,7 @@ behavior snapshot_entities_once "Snapshot the Entities Once per Compile" {
   verify unit "the checks, the check passes and the coverage of one compile read one snapshot"
   verify unit "a session's snapshot follows every update"
   verify unit "every written field keeps its value shape and value span beside its text"
+  verify unit "the coverage rule reads each entity as the pass input carries it"
 }
 
 // -- Entity Checks -----------------------------------------------------------

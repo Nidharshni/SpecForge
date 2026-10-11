@@ -58,6 +58,11 @@ fn state_snapshot(server: &McpServer) -> Value {
 
 fn init_server_with_project() -> (McpServer, TempDir) {
     let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("specforge.json"),
+        r#"{"name":"t","version":"0.1.0","extensions":[]}"#,
+    )
+    .unwrap();
     let spec_dir = dir.path().join("spec");
     fs::create_dir_all(&spec_dir).unwrap();
     fs::write(

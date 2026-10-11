@@ -3069,7 +3069,6 @@ dependencies = [
  "specforge-wasm",
  "strsim",
  "tempfile",
- "walkdir",
 ]
 
 [[package]]

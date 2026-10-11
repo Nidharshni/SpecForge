@@ -795,7 +795,8 @@ fn render_contract() {
 )]
 fn a_relative_out_dir_is_written_under_the_project_root() {
     let mut server = test_server();
-    let root = server.root().to_path_buf();
+    // The served project is its canonical path, which render writes under.
+    let root = std::fs::canonicalize(server.root()).unwrap();
     let in_cwd = std::env::current_dir().unwrap().join("rendered");
     assert!(!in_cwd.exists(), "a stale directory under the cwd");
 

@@ -4,8 +4,8 @@ use std::io::{self, BufRead, Write};
 use std::path::Path;
 
 pub fn run(path: &Path) -> Exit {
-    // The client drives the handshake; its `initialize` compiles `path`
-    // unless it names a `projectRoot` of its own.
+    // The client drives the handshake; its `initialize` serves the project at
+    // or above `path` unless it names a `projectRoot` of its own.
     let mut server = McpServer::with_project_root(path.to_path_buf());
 
     // Stdio loop: read JSON-RPC from stdin, write responses to stdout

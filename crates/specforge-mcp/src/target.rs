@@ -11,7 +11,7 @@
 use std::path::{Path, PathBuf};
 
 use serde_json::Value;
-use specforge_common::{Diagnostic, project_root_of};
+use specforge_common::{Diagnostic, is_project_root, project_root_of};
 use specforge_graph::Graph;
 use specforge_ops::view::ProjectView;
 use specforge_project::{ProjectSession, SharedRuntime};
@@ -582,10 +582,12 @@ impl<'s> Call<'s> {
 ///
 /// A `path` is canonical, then the nearest enclosing project (a directory
 /// with `specforge.json` or `specforge.spec`), else the directory itself;
-/// one that does not exist is `file_not_found`. A path while nothing is
-/// served is adopted: the server serves it, and the call acts on it as the
-/// served project. A path naming the served project (or a directory inside
-/// it) is the served project; any other is opened as a session for this call only.
+/// one that does not exist is `file_not_found`. A path to a project while
+/// nothing is served is adopted: the server serves it, and the call acts on
+/// it as the served project. A path naming the served project (or a
+/// directory inside it) is the served project; any other, a directory that
+/// holds no project included, is opened as a session for this call only
+/// and never served.
 /// `init`'s path is used as given (it creates it), and may not lie inside
 /// the served project.
 pub fn resolve(
@@ -636,9 +638,10 @@ pub fn resolve(
     };
     let root = project_at(Path::new(path))?;
     let served_root = state.project_root().map(absolute);
-    if served_root.is_none() && target.reach != Reach::Served {
+    if served_root.is_none() && target.reach != Reach::Served && is_project_root(&root) {
         // Nothing served: the call serves this project, as it is on disk
-        // now.
+        // now. A directory that is no project is never served; it is
+        // opened for this call below.
         state.serve(&root);
         return Ok(CallTarget::Served);
     }

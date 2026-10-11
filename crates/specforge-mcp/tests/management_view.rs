@@ -362,28 +362,23 @@ fn doctor_reports_a_corrupt_lock_as_an_error_finding() {
     assert_eq!(listed["lock_file_entries"], json!([]), "{listed}");
 }
 
-#[specforge_test(
-    behavior = "run_doctor_check",
-    verify = "doctor in a directory without specforge.json reports config_missing as a warning"
-)]
-fn doctor_over_a_served_directory_without_specforge_json_says_so() {
+/// A directory with no `specforge.json` is no project, so the server serves
+/// nothing there (plan 12 T8) and doctor, which acts on the served project,
+/// is refused as no project. The `config_missing` finding is the ops and CLI
+/// doctor's (`doctor in a directory without specforge.json ...`).
+#[test]
+fn doctor_over_a_directory_that_is_no_project_is_refused_as_no_project() {
     let dir = tempfile::TempDir::new().unwrap();
     std::fs::write(dir.path().join("main.spec"), "behavior b \"B\" {\n}\n").unwrap();
-    let mut server = McpServer::new();
-    let req = json!({"jsonrpc": "2.0", "id": 1, "method": "initialize",
-        "params": {"projectRoot": dir.path().to_str().unwrap()}});
+    let mut server = McpServer::with_project_root(dir.path().to_path_buf());
+    let req = json!({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}});
     server.handle_message(&req.to_string());
+    assert_eq!(server.state().project_root(), None);
 
-    let report = answer(&call_tool(&mut server, "specforge.doctor", json!({})));
+    let resp = call_tool(&mut server, "specforge.doctor", json!({}));
 
-    assert_eq!(
-        project_findings(&report)
-            .iter()
-            .map(|f| (f["code"].clone(), f["status"].clone()))
-            .collect::<Vec<_>>(),
-        [(json!("config_missing"), json!("warn"))],
-        "{report}"
-    );
+    let error = crate::tool_errors::mcp_error(&resp);
+    assert_eq!(error["code"], "precondition_failed", "{error}");
 }
 
 #[specforge_test(

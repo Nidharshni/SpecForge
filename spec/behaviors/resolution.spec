@@ -42,7 +42,9 @@ behavior resolve_use_imports "Resolve Use Imports" {
     surface (check, watch, the LSP and MCP). Entries are plain substrings,
     not globs: "drafts/" excludes drafts/a.spec, "drafts/**" matches no
     path. A file under a skipped directory (target, node_modules, .git,
-    .hg, dist, build) is not compiled either, on every surface.
+    .hg, dist, build) inside the spec root is not compiled either, on
+    every surface; the spec root itself is read whatever its own name.
+    Only files are sources: a directory named like a .spec file is none.
   """
   verify unit "resolve use path to file on disk"
   verify unit "missing import file produces E025"
@@ -55,6 +57,8 @@ behavior resolve_use_imports "Resolve Use Imports" {
   verify unit "symlink pointing outside spec_root is rejected"
   verify unit "files matching an exclude entry are not compiled"
   verify unit "a source that cannot be read produces E025 naming it"
+  verify unit "a spec root named like a skipped directory is compiled"
+  verify unit "a directory named like a .spec file is no source"
 }
 
 // No consumes — called inline during use import resolution

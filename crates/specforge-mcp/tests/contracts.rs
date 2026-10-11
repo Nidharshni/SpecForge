@@ -65,6 +65,10 @@ fn node_ids(payload: &Value) -> Vec<String> {
     ids
 }
 
+fn canonical_path(path: &Path) -> PathBuf {
+    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+}
+
 fn find<'a>(items: &'a Value, key: &str, value: &str) -> &'a Value {
     items
         .as_array()
@@ -164,9 +168,11 @@ fn contract_initialize() {
     );
 
     // compiler_api_available: the project root was located and used.
+    // The project at the given root is served as its canonical path
+    // (`find_project_root`).
     assert_eq!(
-        server.state().project_root(),
-        Some(dir.path()),
+        server.state().project_root().map(canonical_path),
+        Some(canonical_path(dir.path())),
         "initialize must adopt the projectRoot it was given"
     );
     assert_eq!(

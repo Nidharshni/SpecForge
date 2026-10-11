@@ -97,7 +97,10 @@ fn validate_on_another_project_keeps_serving_this_one() {
 
     // ...and the server still serves its own project.
     let state = server.state();
-    assert_eq!(state.project_root(), Some(served.path()));
+    assert_eq!(
+        state.project_root().map(|p| fs::canonicalize(p).unwrap()),
+        Some(fs::canonicalize(served.path()).unwrap())
+    );
     assert!(state.graph().node("login").is_some());
     assert!(state.graph().node("other").is_none());
     assert!(state.diagnostics().iter().all(|d| d.code != "E003"));
