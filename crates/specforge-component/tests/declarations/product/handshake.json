@@ -1,19 +1,7 @@
 {
-  "protocol_version": "1.1.0",
+  "protocol_version": "1.2.0",
   "name": "@specforge/product",
   "version": "1.0.0",
-  "contribution_flags": {
-    "entities": true,
-    "validators": true,
-    "renderers": false,
-    "providers": false,
-    "collectors": false,
-    "prompts": false,
-    "parsers": false,
-    "grammars": false,
-    "body_parsers": false,
-    "analyzers": false
-  },
   "peer_dependencies": [],
   "sandbox_policy": null,
   "starter_template": "// {project} — product specification\n//\n// Uses @specforge/product entity kinds: feature, journey, milestone, deliverable, etc.\n//\n// Try: specforge check\n\nspec \"{project}\" {\n  version \"{version}\"\n}\n\npersona developer \"Software developer\" {\n  description     \"Builds and ships the product from the command line\"\n  technical_level expert\n  status          active\n}\n\nchannel cli \"Command-line interface\" {\n  description \"The terminal the developer works in\"\n  status      active\n}\n\nfeature user_auth \"User authentication\" {\n  status   proposed\n  priority high\n  problem  \"Users need secure access to the system\"\n}\n\njourney onboarding \"New user onboarding\" {\n  persona  developer\n  channels [cli]\n  features [user_auth]\n  flow     \"\"\"\n    1. Developer installs the CLI\n    2. Developer signs in with their credentials\n  \"\"\"\n}\n\nmodule core \"Core module\" {\n  features [user_auth]\n}\n\nmilestone mvp \"Minimum Viable Product\" {\n  status        planned\n  features      [user_auth]\n  modules       [core]\n  exit_criteria [\"Core auth flow works end-to-end\"]\n}\n\ndeliverable app \"Application\" {\n  status        draft\n  artifact_type cli\n  journeys      [onboarding]\n  modules       [core]\n  milestones    [mvp]\n}\n",
