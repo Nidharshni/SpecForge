@@ -769,13 +769,15 @@ type McpAddExtensionPlanned "What a dry run would install or enable" {
 }
 
 type McpRemoveExtensionResult {
-  removed_extension string
-  /// Absent when the extension had no known version.
-  version           string  @optional
+  /// "planned" for a dry run, which changes nothing.
+  action    "removed" | "planned"
+  extension string @readonly
+  /// builtin, the lock entry's source (registry, local:<path>), file:<path> or unknown.
+  source    string
+  /// The locked version, or a builtin's loaded one; absent when neither is known.
+  version   string @optional
   /// The entities of the removed extension's kinds, which the project still holds.
-  stranded          McpStrandedEntity[]
-  /// Present (true) for a preview.
-  dry_run           boolean @optional
+  stranded  McpStrandedEntity[]
   verify unit "McpRemoveExtensionResult schema is valid"
 }
 

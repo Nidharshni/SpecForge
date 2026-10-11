@@ -419,8 +419,10 @@ fn a_preview_asked_for_with_a_string_writes_nothing() {
         );
         // It answered as the preview it was asked for.
         let result = tool_json(&reply);
-        let previewed =
-            result["check_only"] == true || result["dry_run"] == true || result["diffs"].is_array();
+        let previewed = result["check_only"] == true
+            || result["dry_run"] == true
+            || result["action"] == "planned"
+            || result["diffs"].is_array();
         assert!(previewed, "{tool} {arguments}: {result}");
     }
 }

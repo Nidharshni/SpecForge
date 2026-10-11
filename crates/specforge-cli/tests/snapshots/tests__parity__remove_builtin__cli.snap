@@ -27,11 +27,13 @@ expression: cli_snap
   },
   "ok": true,
   "payload": {
+    "action": "removed",
+    "extension": "@specforge/product",
     "files_written": [
       "specforge.json"
     ],
-    "removed": "@specforge/product",
     "source": "builtin",
-    "stranded": []
+    "stranded": [],
+    "version": "1.0.0"
   }
 }

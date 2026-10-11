@@ -405,8 +405,10 @@ behavior remove_extension "Remove Extension" {
     since the keyword is no longer in the KindRegistry. Reference list
     entries pointing to those entities MUST produce E003 (dangling
     reference). The user MUST either reinstall the extension or remove
-    the affected entity blocks. Its JSON output lists the files it wrote or
-    deleted as files_written.
+    the affected entity blocks. Its JSON output is the remove document
+    specforge.remove_extension answers (McpRemoveExtensionResult: the
+    extension, its source and version, the stranded entities), with the
+    files it wrote or deleted as files_written.
   """
   verify unit "delegates to uninstall_wasm_extension for lifecycle cleanup"
   verify unit "extension is removed from extensions list"
@@ -416,6 +418,7 @@ behavior remove_extension "Remove Extension" {
   verify unit "specforge remove for non-existent extension reports error"
   verify unit "an enabled entry that is not installed is removed from specforge.json by its name"
   verify integration "remove --format json lists the files it wrote in files_written"
+  verify unit "the remove document names the extension's source and version whatever its origin"
   verify unit "specforge remove with no lock file reports error"
   verify unit "a removal that fails changes nothing"
   verify integration "removing an installed extension drops its specforge.json entry"

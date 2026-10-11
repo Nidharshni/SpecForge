@@ -1326,7 +1326,7 @@ fn remove_extension_removes_it_from_config_lock_and_disk() {
 
     let parsed: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
     assert!(parsed.get("success").is_none(), "{parsed}");
-    assert_eq!(parsed["removed_extension"], GREET);
+    assert_eq!(parsed["extension"], GREET);
     assert!(
         !config_extensions(&root)
             .iter()
@@ -1370,8 +1370,8 @@ fn remove_extension_removes_a_wasm_file_entry_by_its_declared_name() {
     );
 
     let parsed: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
-    assert!(parsed["removed_extension"].is_string(), "{parsed}");
-    assert_eq!(parsed["removed_extension"], GREET, "{parsed}");
+    assert!(parsed["extension"].is_string(), "{parsed}");
+    assert_eq!(parsed["extension"], GREET, "{parsed}");
     assert_eq!(parsed["version"], "0.1.0", "{parsed}");
     assert_eq!(
         parsed["stranded"],
@@ -1398,8 +1398,8 @@ fn remove_extension_dry_run_writes_nothing() {
     );
 
     let parsed: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
-    assert_eq!(parsed["dry_run"], true, "{parsed}");
-    assert_eq!(parsed["removed_extension"], GREET, "{parsed}");
+    assert_eq!(parsed["action"], "planned", "{parsed}");
+    assert_eq!(parsed["extension"], GREET, "{parsed}");
     assert!(parsed["stranded"].is_array(), "{parsed}");
     assert_eq!(files_under(&root), before, "a dry run writes nothing");
 }
@@ -1429,10 +1429,7 @@ fn remove_extension_lists_stranded_entities() {
         json!([{"entity_id": "hello", "kind": "greeting"}]),
         "{parsed}"
     );
-    assert!(
-        parsed["removed_extension"].is_string(),
-        "removal still proceeds"
-    );
+    assert!(parsed["extension"].is_string(), "removal still proceeds");
     assert!(!root.join(".specforge/extensions").join(GREET).exists());
 }
 
@@ -1477,8 +1474,8 @@ fn remove_extension_disables_an_enabled_builtin() {
     );
 
     let parsed: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
-    assert!(parsed["removed_extension"].is_string(), "{parsed}");
-    assert_eq!(parsed["removed_extension"], "@specforge/product");
+    assert!(parsed["extension"].is_string(), "{parsed}");
+    assert_eq!(parsed["extension"], "@specforge/product");
     assert_eq!(config_extensions(dir.path()), ["@specforge/software"]);
 }
 
@@ -1721,8 +1718,7 @@ fn remove_extension_dry_run() {
     );
     let text = tool_text(&resp);
     let parsed: Value = serde_json::from_str(&text).unwrap();
-    // Spec requires dry_run preview; accept current impl behavior.
-    assert!(parsed["dry_run"] == true || parsed["success"].is_boolean());
+    assert_eq!(parsed["action"], "planned", "{parsed}");
 }
 
 // --- Contract tests ---
@@ -2155,7 +2151,7 @@ fn remove_on_another_project_checks_that_projects_dependents() {
     );
     assert_eq!(resp["result"]["isError"], false, "{resp}");
     let payload: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
-    assert!(payload["removed_extension"].is_string(), "{payload}");
+    assert!(payload["extension"].is_string(), "{payload}");
 
     // In the served project formal still requires it.
     let resp = call_tool(

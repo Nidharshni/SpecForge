@@ -1,8 +1,5 @@
 //! `specforge.remove_extension`: remove an extension (`specforge_ops::extension::remove`).
 
-use serde::Serialize;
-use specforge_common::shape::Shape;
-
 use crate::args::Arguments;
 use crate::mutation::{Mutated, Mutation, MutationArgs, MutationReply, NoDiagnostics, Written};
 use crate::target::ProjectRef;
@@ -28,25 +25,9 @@ impl MutationReply for Reply {
     type After = NoDiagnostics;
 }
 
-/// `specforge.remove_extension`'s reply (`McpRemoveExtensionResult`).
-#[derive(Debug, Serialize, Shape)]
-pub struct Reply {
-    removed_extension: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    version: Option<String>,
-    /// The entities of the removed extension's kinds, which the project
-    /// still holds.
-    stranded: Vec<Stranded>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    dry_run: Option<bool>,
-}
-
-/// One entity the removal strands.
-#[derive(Debug, Serialize, Shape)]
-pub struct Stranded {
-    entity_id: String,
-    kind: String,
-}
+/// `specforge.remove_extension`'s reply (`McpRemoveExtensionResult`): the
+/// remove document `specforge remove --format json` prints (ADR 0052).
+pub use specforge_ops::extension::RemoveDocument as Reply;
 
 pub(crate) fn call(project: &ProjectRef<'_>, args: Args) -> Mutation<Reply> {
     // The shared operation, over the view of the call's project: its
@@ -59,21 +40,8 @@ pub(crate) fn call(project: &ProjectRef<'_>, args: Args) -> Mutation<Reply> {
         dry_run: args.dry_run,
     };
     let outcome = specforge_ops::extension::remove(&project.view(), &request)?;
-    let reply = Reply {
-        removed_extension: outcome.name.to_string(),
-        version: outcome.version.as_ref().map(ToString::to_string),
-        stranded: outcome
-            .stranded
-            .iter()
-            .map(|entity| Stranded {
-                entity_id: entity.entity_id.to_string(),
-                kind: entity.kind.to_string(),
-            })
-            .collect(),
-        dry_run: outcome.dry_run.then_some(true),
-    };
     Ok(Mutated::new(
-        reply,
+        outcome.document(),
         Written::files(outcome.writes)
             .with_entities(outcome.stranded.into_iter().map(|entity| entity.entity_id)),
     ))

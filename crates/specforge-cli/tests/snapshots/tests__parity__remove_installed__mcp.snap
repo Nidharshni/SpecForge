@@ -28,12 +28,14 @@ expression: mcp_snap
   },
   "ok": true,
   "payload": {
+    "action": "removed",
+    "extension": "@sdk/greet",
     "files_written": [
       ".specforge/extensions/@sdk/greet/extension.wasm",
       "specforge.json",
       "specforge.lock"
     ],
-    "removed_extension": "@sdk/greet",
+    "source": "local:[BLOB]",
     "stranded": [],
     "version": "0.1.0"
   }

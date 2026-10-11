@@ -27,10 +27,12 @@ expression: mcp_snap
   },
   "ok": true,
   "payload": {
+    "action": "removed",
+    "extension": "@specforge/product",
     "files_written": [
       "specforge.json"
     ],
-    "removed_extension": "@specforge/product",
+    "source": "builtin",
     "stranded": [],
     "version": "1.0.0"
   }

@@ -4610,8 +4610,15 @@ expression: listing
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
-        "dry_run": {
-          "type": "boolean"
+        "action": {
+          "enum": [
+            "removed",
+            "planned"
+          ],
+          "type": "string"
+        },
+        "extension": {
+          "type": "string"
         },
         "files_written": {
           "items": {
@@ -4619,7 +4626,7 @@ expression: listing
           },
           "type": "array"
         },
-        "removed_extension": {
+        "source": {
           "type": "string"
         },
         "stranded": {
@@ -4646,7 +4653,9 @@ expression: listing
         }
       },
       "required": [
-        "removed_extension",
+        "action",
+        "extension",
+        "source",
         "stranded"
       ],
       "type": "object"

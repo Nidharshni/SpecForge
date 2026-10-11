@@ -769,7 +769,7 @@ fn a_wasm_file_entry_is_removed_by_its_declared_name_or_its_entry() {
 
         assert!(ok, "{entry} by {name}: {output}");
         assert_eq!(
-            output["removed"], "@sdk/greet",
+            output["extension"], "@sdk/greet",
             "{entry} by {name}: {output}"
         );
         assert_eq!(
@@ -796,7 +796,7 @@ fn a_wasm_file_entry_is_removed_by_its_declared_name_or_its_entry() {
     enable(dir.path(), json!(["@specforge/software", "missing.wasm"]));
     let (ok, output) = remove(dir.path(), "missing.wasm", &[]);
     assert!(ok, "{output}");
-    assert_eq!(output["removed"], "missing.wasm", "{output}");
+    assert_eq!(output["extension"], "missing.wasm", "{output}");
     assert_eq!(enabled(dir.path()), json!(["@specforge/software"]));
 }
 

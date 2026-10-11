@@ -303,6 +303,9 @@ behavior provide_mcp_remove_extension_tool "Provide MCP Remove Extension Tool" {
     entities (entities of kinds only that extension defines, E024 on the
     next compile), the tool MUST list them in the response (stranded:
     entity_id, kind, in id order) but still proceed.
+    Its reply is the remove document specforge remove --format json prints
+    (McpRemoveExtensionResult): action removed, or planned for a dry run,
+    the extension, its source and version, and the stranded entities.
     If the specified extension is not installed (not listed in specforge.json),
     the tool MUST return an isError result whose McpError code is
     "extension_not_found" and whose message names the unknown extension.
