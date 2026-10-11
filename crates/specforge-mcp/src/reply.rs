@@ -173,6 +173,10 @@ mod tests {
         };
         assert_eq!(error.code, ErrorCode::SchemaMismatch);
         assert_eq!(
+            error.message,
+            "core tool 'specforge.probe' answered a reply its output schema refuses: $.b: undeclared key"
+        );
+        assert_eq!(
             error.data,
             Some(json!({"violations": ["$.b: undeclared key"]}))
         );

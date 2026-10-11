@@ -879,6 +879,10 @@ fn extension_tool_output_is_checked_against_its_schema() {
     let error = crate::tool_errors::mcp_error(&resp);
     assert_eq!(error["code"], "schema_mismatch", "{error}");
     assert_eq!(
+        error["message"],
+        "extension tool 'specforge.cmds.check' returned output that does not match its output schema: $.checked: expected boolean, got string"
+    );
+    assert_eq!(
         error["data"]["violations"],
         json!(["$.checked: expected boolean, got string"]),
         "{error}"
@@ -1514,6 +1518,41 @@ fn a_resource_outside_specforge_ext_is_read_through_its_export() {
         json!({ "uri": "acme://other/1" }),
         "{resp}"
     );
+}
+
+/// Unlinked pin: an extension template names no URI whose placeholder is
+/// empty (core templates do; plan 02 T3 unifies the rule).
+#[test]
+fn an_extension_resource_empty_placeholder_is_unknown_today() {
+    let (mut server, ext, _dir) = fake_extension::initialized(
+        FakeExtension::new()
+            .with_resource(acme_resource())
+            .with_output(
+                "mcp__doc",
+                json!({"content": "doc", "mime_type": "text/plain"}),
+            ),
+    );
+    let resp = read_resource(&mut server, "acme://doc/");
+    assert_eq!(resp["error"]["code"], -32002, "{resp}");
+    assert_eq!(
+        resp["error"]["message"],
+        "Unknown resource URI: acme://doc/"
+    );
+    assert!(ext.calls().is_empty(), "{:?}", ext.calls());
+}
+
+/// Unlinked pin: an extension URI without a placeholder names itself only,
+/// not with a query (core ones do; plan 02 T3 unifies the rule).
+#[test]
+fn an_extension_resource_query_is_unknown_today() {
+    let (mut server, ext, _dir) = fake_extension::initialized(with_summary());
+    let resp = read_resource(&mut server, "specforge://ext/cmds/summary?x=1");
+    assert_eq!(resp["error"]["code"], -32002, "{resp}");
+    assert_eq!(
+        resp["error"]["message"],
+        "Unknown resource URI: specforge://ext/cmds/summary?x=1"
+    );
+    assert!(ext.calls().is_empty(), "{:?}", ext.calls());
 }
 
 #[specforge_test(
