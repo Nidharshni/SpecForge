@@ -104,6 +104,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   category — as the protocol types (`specforge_protocol_types::ExtensionDeclaration`). The SDK
   builds it, the guest serves it, the host loads it once, the Registry build reads it, a package
   registry stores it (ADR 0012).
+- **Guest wire**: what the host and an extension's guest both compile (`specforge-protocol-types`): the
+  extension declaration, the operation payloads, the extension vocabulary and the command-arg rule. Every
+  builtin blob is built from it, so it holds nothing only the host reads: the host's reading of package names,
+  version requirements and peer ranges is `specforge-package` (ADR 0050).
 - **Installed extension**: an extension placed in the project under
   `.specforge/extensions/<name>/extension.wasm` and pinned by its `specforge.lock` entry (version,
   source `registry` or `local:<path>`, the SHA-256 of the binary). It loads only while its binary is
@@ -260,7 +264,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Package name**: what an extension package is called, `@scope/name` (a registry holds only
   these) or `name` alone (a local module); each part `a-z 0-9 . _ -`, starting with a letter or
   digit, so it is always a relative path inside the directory it is joined to and one URL segment
-  (`specforge_protocol_types::PackageName`, ADR 0036). A declaration's `name` is checked as one where
+  (`specforge_package::PackageName`, ADR 0036, 0050). A declaration's `name` is checked as one where
   `add` installs and `publish` uploads it; a `specforge.json` entry and a lock entry are read as one.
 - **Version requirement**: which version of a package is asked for: `latest` (the highest release,
   a pre-release only when there is none), one full version, or a SemVer requirement read as Cargo
@@ -269,7 +273,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   resolve.
 - **Peer requirement**: what an extension declares it needs from another extension: the peer's name,
   a SemVer range read as Cargo reads one, and whether the peer may be absent
-  (`specforge_protocol_types::peers::PeerRequirement`). One rule judges it (`peers::verdict`): an
+  (`specforge_package::peers::PeerRequirement`, ADR 0050). One rule judges it (`peers::verdict`): an
   unreadable range satisfies nothing (E073); a required peer must be installed; an installed one must
   be at a version the range accepts (E027 otherwise). The registry build, `doctor` and the lock plan
   read that rule and nothing else (ADR 0041).

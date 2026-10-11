@@ -14,7 +14,7 @@ use crate::extension::Trust;
 use crate::options::{Choice, OptionTable};
 use crate::{OpError, OpErrorKind};
 use specforge_common::{Code, Diagnostic, codes};
-use specforge_protocol_types::package::{PackageName, Version};
+use specforge_package::{PackageName, Version};
 use specforge_protocol_types::{DeclaredCategory, ExtensionDeclaration};
 
 /// The diagnostic a registry operation reports when no registry is

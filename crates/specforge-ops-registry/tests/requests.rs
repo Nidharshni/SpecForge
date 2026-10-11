@@ -7,7 +7,7 @@ use sha2::{Digest, Sha256};
 use specforge_ops::extension::{Trust, resolve};
 use specforge_ops::registry::Registry;
 use specforge_ops_registry::{ConfiguredRegistry, User};
-use specforge_protocol_types::package::{PackageName, PackageRef, Version};
+use specforge_package::{PackageName, PackageRef, Version};
 use specforge_registry_server::testing::LocalRegistry;
 use specforge_registry_wire::PackageMetadata;
 use specforge_test_macros::test as specforge_test;

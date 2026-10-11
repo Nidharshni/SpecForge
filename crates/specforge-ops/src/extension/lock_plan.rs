@@ -14,9 +14,10 @@ use std::path::Path;
 
 use specforge_common::{Diagnostic, codes};
 use specforge_installed::{Change, Installed, LockFile, LockSource, Module, Pin};
-use specforge_protocol_types::package::Version;
-use specforge_protocol_types::peers::{Member, PeerRequirement, Peers, Verdict};
-use specforge_protocol_types::{ExtensionDeclaration, PackageName, PeerDependency};
+use specforge_package::PackageName;
+use specforge_package::Version;
+use specforge_package::peers::{Member, PeerRequirement, Peers, Verdict};
+use specforge_protocol_types::{ExtensionDeclaration, PeerDependency};
 use specforge_wasm::WasmRuntime;
 
 use super::Trust;

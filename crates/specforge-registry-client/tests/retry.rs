@@ -3,7 +3,7 @@
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use specforge_protocol_types::PackageName;
+use specforge_package::PackageName;
 use specforge_registry_client::Retrying;
 use specforge_registry_client::registry_client::{RegistryClient, RegistryError};
 use specforge_registry_client::registry_config::RegistryConfig;
@@ -124,7 +124,7 @@ fn a_retry_waits_what_the_registry_asks_when_longer() {
 fn every_call_is_retried_alike() {
     let (client, retrying, _) = retrying();
     let registry = registry();
-    let version = specforge_protocol_types::package::Version::parse("1.0.0").unwrap();
+    let version = specforge_package::Version::parse("1.0.0").unwrap();
 
     rate_limited(&client, CallKind::Metadata, 1, 0);
     let metadata = retrying

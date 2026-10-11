@@ -32,6 +32,7 @@ specforge-common = { workspace = true }
 specforge-diagnostics = { path = "../specforge-diagnostics" }
 specforge-formatter = { workspace = true }
 specforge-graph = { path = "../specforge-graph" }
+specforge-package = { path = "../specforge-package" }
 specforge-protocol-types = { path = "../specforge-protocol-types" }
 specforge-watch = { path = "../specforge-watch" }
 chrono = "0.4.41"

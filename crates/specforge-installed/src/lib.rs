@@ -19,7 +19,7 @@ pub mod testing;
 use std::path::{Path, PathBuf};
 
 use specforge_common::ExtensionEntry;
-use specforge_protocol_types::PackageName;
+use specforge_package::PackageName;
 
 pub use change::{Change, Committed, Failed, Pin};
 pub use declare::declaration_of;
@@ -187,7 +187,7 @@ mod tests {
     #[test]
     fn a_reinstall_command_is_the_one_the_lock_entry_calls_for() {
         let entry = |name: &str, version: &str, source: &str| LockFileEntry {
-            name: specforge_protocol_types::PackageName::parse(name).unwrap(),
+            name: specforge_package::PackageName::parse(name).unwrap(),
             version: version.to_string(),
             source: LockSource::parse(source),
             wasm_hash: "hash".to_string(),

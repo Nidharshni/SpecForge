@@ -10,8 +10,9 @@ use std::path::{Path, PathBuf};
 
 use specforge_common::{Diagnostic, codes};
 use specforge_installed::{Module, declaration_of};
-use specforge_protocol_types::peers::{Verdict, verdict};
-use specforge_protocol_types::{ExtensionDeclaration, PackageName, PeerDependency};
+use specforge_package::PackageName;
+use specforge_package::peers::{Verdict, verdict};
+use specforge_protocol_types::{ExtensionDeclaration, PeerDependency};
 use specforge_wasm::WasmRuntime;
 
 use super::{NOT_FOUND, builtin_name};
@@ -142,9 +143,7 @@ impl Installable {
     /// Its declared name as the package name it installs under: E072 when it
     /// is none, before anything is written (ADR 0036).
     pub fn package(&self) -> Result<PackageName, OpError> {
-        self.candidate
-            .declaration
-            .package_name()
+        PackageName::declared_by(&self.candidate.declaration)
             .map_err(|why| OpError::from(specforge_common::package::invalid(&why)))
     }
 }

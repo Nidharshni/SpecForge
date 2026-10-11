@@ -229,8 +229,8 @@ impl ErrorBody {
 mod tests {
     use super::*;
     use serde_json::json;
-    use specforge_protocol_types::PackageName;
-    use specforge_protocol_types::package::Version;
+    use specforge_package::PackageName;
+    use specforge_package::Version;
 
     /// `value` serializes to `expected` and `expected` reads back as `value`.
     fn is_this_json<T>(value: &T, expected: serde_json::Value)

@@ -3,8 +3,9 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use specforge_protocol_types::package::Version;
-use specforge_protocol_types::{ExtensionDeclaration, PackageName};
+use specforge_package::PackageName;
+use specforge_package::Version;
+use specforge_protocol_types::ExtensionDeclaration;
 use specforge_registry_wire::{PackageMetadata, SearchHit, SearchQuery};
 
 use crate::registry_client::{RegistryClient, RegistryError};

@@ -3,8 +3,8 @@
 //! gate build them here, so each message and suggestion is written once.
 
 use crate::{Diagnostic, codes};
+use specforge_package::peers::{UnreadableRange, Verdict};
 use specforge_protocol_types::PeerDependency;
-use specforge_protocol_types::peers::{UnreadableRange, Verdict};
 
 /// What `verdict` reports about `dependent`'s `declared` peer: `None` when it is satisfied.
 pub fn of(dependent: &str, declared: &PeerDependency, verdict: &Verdict) -> Option<Diagnostic> {
@@ -80,7 +80,7 @@ pub fn cycle(members: &[&str]) -> Diagnostic {
 mod tests {
     use super::*;
     use crate::Severity;
-    use specforge_protocol_types::peers::verdict;
+    use specforge_package::peers::verdict;
 
     fn declared(range: &str) -> PeerDependency {
         PeerDependency {

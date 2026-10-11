@@ -175,12 +175,6 @@ impl ExtensionDeclaration {
         &self.handshake.version
     }
 
-    /// The declared name as a package name: `add` and `publish` require
-    /// one (ADR 0036); the load does not, so a guest may declare any text.
-    pub fn package_name(&self) -> Result<crate::PackageName, crate::package::PackageNameError> {
-        crate::PackageName::parse(self.name())
-    }
-
     /// Declared `ext_short`, else the name's last segment
     /// (`@specforge/product` is `product`).
     pub fn short(&self) -> Cow<'_, str> {
@@ -560,37 +554,5 @@ impl<'de> de::Deserializer<'de> for &mut FieldNames {
         bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str string
         bytes byte_buf option unit unit_struct newtype_struct seq tuple
         tuple_struct map enum identifier ignored_any
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[specforge_test_macros::test(
-        behavior = "load_extension_declaration",
-        verify = "a declaration's default short name is its package name's base"
-    )]
-    fn the_default_short_name_is_the_base() {
-        for name in [
-            "@specforge/product",
-            "@acme/tool",
-            "@a/x",
-            "@specforge/cargo-test",
-            "greet",
-            "x.y",
-        ] {
-            let package = crate::PackageName::parse(name).unwrap();
-            assert_eq!(default_short(name), package.base(), "{name}");
-        }
-    }
-
-    #[test]
-    fn a_declaration_names_a_package_when_its_name_is_one() {
-        let mut declaration = ExtensionDeclaration::default();
-        declaration.handshake.name = "@acme/tool".to_string();
-        assert_eq!(declaration.package_name().unwrap().as_str(), "@acme/tool");
-        declaration.handshake.name = "../../../outside1".to_string();
-        assert!(declaration.package_name().is_err());
     }
 }

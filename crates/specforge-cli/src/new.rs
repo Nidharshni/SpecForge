@@ -10,7 +10,7 @@ use crate::OutputFormat;
 use crate::outcome::{Exit, Refusal};
 use serde_json::json;
 use specforge_common::codes;
-use specforge_protocol_types::PackageName;
+use specforge_package::PackageName;
 use std::path::{Path, PathBuf};
 
 pub fn run(name: &str, extension: bool, path: &Path, format: OutputFormat) -> Exit {

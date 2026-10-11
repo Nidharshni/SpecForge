@@ -316,6 +316,7 @@ dependencies = [
  "serde",
  "serde_json",
  "specforge-diagnostics",
+ "specforge-package",
  "specforge-protocol-types",
  "specforge-shape-macros",
  "strsim",
@@ -370,10 +371,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "specforge-protocol-types"
+name = "specforge-package"
 version = "0.1.0"
 dependencies = [
  "semver",
+ "serde",
+ "specforge-protocol-types",
+]
+
+[[package]]
+name = "specforge-protocol-types"
+version = "0.1.0"
+dependencies = [
  "serde",
  "serde_json",
 ]

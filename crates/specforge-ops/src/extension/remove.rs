@@ -8,8 +8,8 @@ use specforge_common::shape::Shape;
 use specforge_common::{ExtensionEntry, codes};
 use specforge_graph::Graph;
 use specforge_installed::{Installed, LockState};
+use specforge_package::PackageName;
 use specforge_project::EnabledExtension;
-use specforge_protocol_types::PackageName;
 use specforge_registry::KindRegistry;
 use std::path::Path;
 

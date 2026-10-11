@@ -282,7 +282,6 @@ dependencies = [
 name = "specforge-protocol-types"
 version = "0.1.0"
 dependencies = [
- "semver",
  "serde",
  "serde_json",
 ]

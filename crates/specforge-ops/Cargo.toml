@@ -27,6 +27,7 @@ specforge-graph = { path = "../specforge-graph" }
 specforge-migrate = { workspace = true }
 specforge-parser = { workspace = true }
 specforge-project = { workspace = true }
+specforge-package = { path = "../specforge-package" }
 specforge-protocol-types = { path = "../specforge-protocol-types" }
 specforge-registry = { workspace = true }
 specforge-wasm = { workspace = true }

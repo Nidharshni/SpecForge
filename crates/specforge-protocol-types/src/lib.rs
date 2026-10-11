@@ -20,6 +20,10 @@
 //!
 //! And one rule both sides run: [`command_args`], what a command's declared
 //! args admit and what its export receives (ADR 0017).
+//!
+//! What sits here is what both sides compile: every builtin blob is built from this crate, so an
+//! item only the host reads lives host-side (the package names and the peer rule are
+//! `specforge-package`, ADR 0050).
 
 use std::fmt;
 
@@ -28,14 +32,11 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 pub mod calls;
 pub mod command_args;
 mod declaration;
-pub mod package;
-pub mod peers;
 mod vocabulary;
 pub use calls::*;
 pub use declaration::{
     DECLARED_CATEGORIES, DeclaredCategory, ExtensionDeclaration, UnknownKey, is_valid_short,
 };
-pub use package::{PackageName, PackageRef, VersionRequirement};
 pub use vocabulary::{CheckKind, ConstraintKind, FieldType, ProofRole};
 
 /// Protocol version for the extension wire format (semver). The host loads

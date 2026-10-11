@@ -5,7 +5,7 @@ use std::sync::Mutex;
 
 use specforge_common::codes;
 use specforge_installed::hex_sha256;
-use specforge_protocol_types::package::{PackageName, Version};
+use specforge_package::{PackageName, Version};
 use specforge_protocol_types::{DeclaredCategory, ExtensionDeclaration};
 
 use super::{Found, Package, Published as Receipt, Publisher, Registry, Searched, Upload};
@@ -60,7 +60,7 @@ impl Published {
     }
 
     fn try_name(&self) -> Result<PackageName, String> {
-        self.declaration.package_name().map_err(|e| e.to_string())
+        PackageName::declared_by(&self.declaration).map_err(|e| e.to_string())
     }
 
     fn try_version(&self) -> Result<Version, String> {

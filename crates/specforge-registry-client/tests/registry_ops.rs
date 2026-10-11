@@ -1,6 +1,7 @@
 use specforge_common::Severity;
-use specforge_protocol_types::package::Version;
-use specforge_protocol_types::{ExtensionDeclaration, PackageName};
+use specforge_package::PackageName;
+use specforge_package::Version;
+use specforge_protocol_types::ExtensionDeclaration;
 use specforge_registry_client::registry_ops::{publish_to_registry, verify_registry_integrity};
 use specforge_registry_client::testing::{Call, CallKind, MemoryClient, package};
 use specforge_registry_client::{

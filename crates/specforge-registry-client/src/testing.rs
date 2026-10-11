@@ -5,8 +5,9 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 use sha2::{Digest, Sha256};
-use specforge_protocol_types::package::Version;
-use specforge_protocol_types::{DeclaredCategory, ExtensionDeclaration, PackageName};
+use specforge_package::PackageName;
+use specforge_package::Version;
+use specforge_protocol_types::{DeclaredCategory, ExtensionDeclaration};
 use specforge_registry_wire::{
     DEFAULT_SEARCH_LIMIT, PackageMetadata, SearchHit, SearchQuery, path,
 };
@@ -378,9 +379,8 @@ impl RegistryClient for MemoryClient {
         registry: &RegistryConfig,
         credential: Option<&RegistryCredential>,
     ) -> Result<String, RegistryError> {
-        let name = declaration
-            .package_name()
-            .map_err(|why| RegistryError::InvalidPackage {
+        let name =
+            PackageName::declared_by(declaration).map_err(|why| RegistryError::InvalidPackage {
                 message: why.to_string(),
             })?;
         let version =

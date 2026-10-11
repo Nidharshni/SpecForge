@@ -9,8 +9,8 @@ use sha2::{Digest, Sha256};
 use specforge_ops::extension::Trust;
 use specforge_ops::registry::{Publisher, Registry};
 use specforge_ops_registry::{ConfiguredRegistry, User};
-use specforge_protocol_types::PackageName;
-use specforge_protocol_types::package::Version;
+use specforge_package::PackageName;
+use specforge_package::Version;
 use specforge_registry_client::testing::MemoryClient;
 use specforge_registry_client::{
     KnownKeys, RegistryConfig, SigningKey, load_known_keys_at, save_known_keys_at,

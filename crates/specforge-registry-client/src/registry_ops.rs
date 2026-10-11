@@ -5,8 +5,8 @@ use specforge_common::{Diagnostic, codes};
 
 use super::registry_client::{RegistryClient, RegistryError};
 use super::registry_config::{RegistryConfig, RegistryCredential};
+use specforge_package::{PackageName, Version};
 use specforge_protocol_types::ExtensionDeclaration;
-use specforge_protocol_types::package::Version;
 use specforge_registry_wire::PackageMetadata;
 
 /// Compute the hex-encoded SHA256 digest of the given data.
@@ -36,9 +36,7 @@ pub fn publish_to_registry(
 ) -> Result<String, Diagnostic> {
     // What is published is a package: a name and a version (ADR 0036).
     let invalid = |message: String| RegistryError::InvalidPackage { message }.to_diagnostic();
-    declaration
-        .package_name()
-        .map_err(|why| invalid(why.to_string()))?;
+    PackageName::declared_by(declaration).map_err(|why| invalid(why.to_string()))?;
     Version::parse(declaration.version()).map_err(|why| {
         invalid(format!(
             "'{}' is not a SemVer version: {why}",

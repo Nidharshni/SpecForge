@@ -9,6 +9,7 @@ repository.workspace = true
 [dependencies]
 serde = { workspace = true }
 form_urlencoded = "1.2"
+specforge-package = { path = "../specforge-package" }
 specforge-protocol-types = { path = "../specforge-protocol-types" }
 
 [dev-dependencies]

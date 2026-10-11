@@ -37,6 +37,7 @@ specforge-component = { path = "../specforge-component", features = ["testing"] 
 # The pipeline tests render what they compile.
 specforge-emitter = { path = "../specforge-emitter" }
 insta = { workspace = true }
+specforge-package = { path = "../specforge-package" }
 # Extensions declared with the SDK, served in process.
 specforge-extension-sdk = { path = "../specforge-extension-sdk" }
 specforge-wasm = { workspace = true, features = ["testing"] }

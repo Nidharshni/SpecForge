@@ -61,8 +61,8 @@ fn publish_stores_the_declaration_the_binary_declares() {
     // The stored manifest is exactly greet's declaration.
     let served = HttpRegistryClient::new()
         .metadata(
-            &specforge_protocol_types::PackageName::parse("@sdk/greet").unwrap(),
-            &specforge_protocol_types::package::Version::new(0, 1, 0),
+            &specforge_package::PackageName::parse("@sdk/greet").unwrap(),
+            &specforge_package::Version::new(0, 1, 0),
             &config(&registry),
             None,
         )
@@ -165,8 +165,8 @@ fn publish_greet(project: &TempDir, home: &TempDir, token: Option<&str>) -> std:
 fn greet_is_published(registry: &LocalRegistry) -> bool {
     HttpRegistryClient::new()
         .metadata(
-            &specforge_protocol_types::PackageName::parse("@sdk/greet").unwrap(),
-            &specforge_protocol_types::package::Version::new(0, 1, 0),
+            &specforge_package::PackageName::parse("@sdk/greet").unwrap(),
+            &specforge_package::Version::new(0, 1, 0),
             &config(registry),
             None,
         )

@@ -25,6 +25,7 @@ CORE_DIRS=(
   crates/specforge-ops-registry/src
   crates/specforge-registry-wire/src
   crates/specforge-installed/src
+  crates/specforge-package/src
   crates/specforge-shape-macros/src
 )
 
