@@ -522,8 +522,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Tool reply**: the one typed definition of what a core tool answers (`Reply` beside its handler,
   or the outcome document both surfaces print, `pub use … as Reply`, with MCP's own extras
   flattened beside it), deriving `Serialize` and `Shape`
-  (`specforge_common::shape`, ADR 0048). Its outputSchema is derived from it (every object closed,
-  every array typed; content an extension defines is an open value), its structured result is it
+  (`specforge_common::shape`, ADR 0048). Its outputSchema is derived from it as one document, built
+  once per process (every object closed, every array typed, the root an object; a named shape it
+  holds defined once under `$defs`; content an extension defines is an open value), its structured
+  result is it
   serialized, and a result its schema refuses is never sent as one (`schema_mismatch`). An optional
   value is absent, never `null`. `spec/types/mcp.spec`'s `Mcp*` types state the same shapes, and a
   test holds them to the derived schemas. A tool answering a document in text (validate, export,
@@ -531,6 +533,12 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   A mutation's reply is sent as `WrittenReply`: its tool reply with what the mutation pipeline adds,
   declared beside it (`files_written`; `diagnostics` when its type says so, rename), never by the tool
   reply itself.
+- **Named shape**: a type whose JSON Schema a document defines once, under its root's `$defs`, and
+  refers to as `{"$ref": "#/$defs/<name>"}` wherever it appears (`#[shape(define)]`,
+  `specforge_common::shape`, ADR 0051): a domain type a reply embeds from another spec file
+  (`Diagnostic`, `MigrationResult`, ...) or one a reply holds more than once (`SourceSpan`,
+  `GraphProtocolSchema`, ...). Each MCP tool's schema is its own document, so a named shape is defined
+  once per tool, never once per listing.
 - **Surface call**: one MCP request that invokes a named tool, resource or prompt (`tools/call`,
   `resources/read`, `prompts/get`), run through one pipeline: read the request, find the entry (the
   core table, then, with the served project brought up to date, the extension surface table), record

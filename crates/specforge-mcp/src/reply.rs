@@ -70,9 +70,10 @@ impl From<String> for Text {
     }
 }
 
-/// The outputSchema of a tool whose reply is `R`.
-pub fn output_schema<R: Object>() -> Value {
-    specforge_common::shape::build::<R>()
+/// The outputSchema of a tool whose reply is `R`: `R`'s document, built once
+/// per process (ADR 0051).
+pub fn output_schema<R: Object + 'static>() -> &'static Value {
+    specforge_common::shape::document::<R>()
 }
 
 /// `answered` as the outcome the pipeline sends: the reply serialized as a

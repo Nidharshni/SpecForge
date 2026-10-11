@@ -114,6 +114,7 @@ pub fn truncate_diagnostics(diagnostics: &mut Vec<Diagnostic>) {
 
 /// One diagnostic as JSON: see [`diagnostics_json`].
 #[derive(Debug, Serialize, crate::shape::Shape)]
+#[shape(define = "Diagnostic")]
 pub struct DiagnosticJson<'a> {
     pub code: &'a str,
     /// The catalogue's title for the code, when the catalogue describes this

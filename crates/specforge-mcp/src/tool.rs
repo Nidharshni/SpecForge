@@ -250,7 +250,7 @@ pub trait Handled: Sized {
     /// The outputSchema `tools/list` lists and every structured reply is
     /// checked against: `None` for text. The one place a core tool's output
     /// schema is built.
-    fn output_schema() -> Option<Value>;
+    fn output_schema() -> Option<&'static Value>;
     /// A call refused before its handler ran (an undeclared name, arguments
     /// that do not read, a call target that refused): the refusal as it is
     /// for a read; for a mutation a failed mutation that wrote nothing
@@ -267,7 +267,7 @@ impl Handled for Answered<Text> {
     const MUTATES: bool = false;
     const TYPED: bool = false;
 
-    fn output_schema() -> Option<Value> {
+    fn output_schema() -> Option<&'static Value> {
         None
     }
 
@@ -280,11 +280,11 @@ impl Handled for Answered<Text> {
     }
 }
 
-impl<R: Object + Serialize> Handled for Answered<R> {
+impl<R: Object + Serialize + 'static> Handled for Answered<R> {
     const MUTATES: bool = false;
     const TYPED: bool = true;
 
-    fn output_schema() -> Option<Value> {
+    fn output_schema() -> Option<&'static Value> {
         Some(crate::reply::output_schema::<R>())
     }
 
@@ -297,7 +297,7 @@ impl<R: Object + Serialize> Handled for Answered<R> {
         Ran::of(crate::reply::conforming(
             tool,
             Source::Core,
-            &schema,
+            schema,
             crate::reply::structured(self),
         ))
     }
@@ -308,7 +308,7 @@ impl<R: MutationReply> Handled for Mutation<R> {
     const TYPED: bool = true;
 
     /// `WrittenReply<R, R::After>`'s schema ([`crate::mutation::output_schema`]).
-    fn output_schema() -> Option<Value> {
+    fn output_schema() -> Option<&'static Value> {
         Some(crate::mutation::output_schema::<R>())
     }
 
@@ -321,7 +321,7 @@ impl<R: MutationReply> Handled for Mutation<R> {
         // `complete` owns the order: refresh, send once, check against the
         // schema, record the events.
         let schema = Self::output_schema().expect("a mutation has an outputSchema");
-        let (outcome, events) = crate::mutation::complete::<R>(call, tool, &schema, preview, self);
+        let (outcome, events) = crate::mutation::complete::<R>(call, tool, schema, preview, self);
         Ran { outcome, events }
     }
 }
@@ -343,7 +343,7 @@ pub trait ToolSpec: Sync {
     /// Its call target: its input's ([`Input::TARGET`]).
     fn target(&self) -> TargetSpec;
     /// Its outputSchema ([`Handled::output_schema`]); `None` for text.
-    fn output_schema(&self) -> Option<Value>;
+    fn output_schema(&self) -> Option<&'static Value>;
     /// Whether it lists an outputSchema, without building it.
     fn is_typed(&self) -> bool;
     /// Run it on its resolved call: a name neither it nor its target
@@ -397,7 +397,7 @@ pub trait ToolSpec: Sync {
             name: self.name().into(),
             description: self.description().into(),
             input_schema: self.input_schema(),
-            output_schema: self.output_schema(),
+            output_schema: self.output_schema().cloned(),
             category: Some(self.category().as_str().into()),
             source: Some(CORE_SOURCE.into()),
             annotations: self.annotations(),
@@ -458,7 +458,7 @@ impl<T: CoreTool> ToolSpec for T {
         <T::Input as Input>::TARGET
     }
 
-    fn output_schema(&self) -> Option<Value> {
+    fn output_schema(&self) -> Option<&'static Value> {
         <T::Returns as Handled>::output_schema()
     }
 
