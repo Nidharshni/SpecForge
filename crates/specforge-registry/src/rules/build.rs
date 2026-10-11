@@ -424,16 +424,24 @@ fn resolve(mut rule: Rule, registries: Registries<'_>) -> Result<Option<Rule>, D
     rule.declared.edge_fields = writing.clone();
     match &mut rule.check {
         Check::NoIncomingEdges(scope) | Check::NoOutgoingEdges(scope) => {
-            let peer = if rule.check_kind == CheckKind::NoIncomingEdges {
-                edge.declared.source_kind.clone()
+            // The far end: its declared kind, else every kind that writes
+            // it without declaring it. Open: every edge counts.
+            let far_end = if rule.check_kind == CheckKind::NoIncomingEdges {
+                edge.source_kinds()
             } else {
-                edge.declared.target_kind.clone()
+                edge.target_kinds()
             };
-            if let Some(peer) = peer {
-                if !registries.kinds.contains(&peer) {
+            if !far_end.is_empty() {
+                let loaded: Vec<String> = far_end
+                    .into_iter()
+                    .filter(|kind| registries.kinds.contains(kind))
+                    .map(str::to_string)
+                    .collect();
+                // No loaded kind at its far end: the rule can't be met.
+                if loaded.is_empty() {
                     return Ok(None);
                 }
-                *scope = EdgeScope::Peer(peer);
+                *scope = EdgeScope::Peers(loaded);
             }
         }
         Check::Cycle { labels } => *labels = writing,

@@ -81,7 +81,9 @@ behavior execute_validation_pattern "Execute Validation Pattern" {
     The declarative validation engine MUST execute each registered pattern
     against the compiled graph. no_incoming_edges MUST check that every
     entity of the target kind has at least one incoming edge. no_outgoing_edges
-    MUST check outgoing edges. missing_field_when_flag_set MUST check that
+    MUST check outgoing edges. An edge rule with an edge type counts only
+    the edges to or from the kinds at that edge type's far end: its
+    declared kind, else every kind that writes it without declaring it. missing_field_when_flag_set MUST check that
     entities whose kind has the specified flag set to true have the specified field. field_value_constraint MUST
     check that a named field on entities of the target kind satisfies a
     value predicate (non-empty, matches regex, or is one of an allowed set).
@@ -98,6 +100,7 @@ behavior execute_validation_pattern "Execute Validation Pattern" {
   verify unit "no_incoming_edges detects unreferenced entities"
   verify unit "no_outgoing_edges detects entities with zero outgoing edges"
   verify unit "an edge rule counts only edges of its edge type and is dropped when no extension declares the kind at its far end"
+  verify unit "an edge rule over an edge type several kinds write without declaring it counts the edges of every writing kind"
   verify unit "missing_field_when_flag_set detects missing specified field on flagged entity"
   verify unit "field_value_constraint rejects invalid field value"
   verify unit "cycle_detection finds cycles in edge type"

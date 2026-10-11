@@ -179,7 +179,10 @@ behavior upgrade_wasm_extension "Upgrade Wasm Extension" {
     to the previous artifact. An upgrade that would leave an installed
     extension outside its declared peer range MUST be refused before
     anything is written, with an error naming the dependent; no flag
-    overrides it (remove alone takes --force). Updating every extension
+    overrides it (remove alone takes --force). An applied upgrade emits
+    extension_upgrade_completed (extensionName, previousVersion,
+    newVersion), which the update document carries under --format json.
+    Updating every extension
     at once, rollback and locally installed extensions are
     update_all_extensions, whose verifies prove this refusal and the
     lock hashes.

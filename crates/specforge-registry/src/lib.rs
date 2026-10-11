@@ -10,7 +10,7 @@ mod invariants;
 
 // --- Core registries ---
 pub use registries::{
-    EdgeRegistry, EdgeRegistryEntry, FieldRegistry, FieldRegistryEntry, KindRegistry,
+    EdgeRegistry, EdgeRegistryEntry, EdgeWriter, FieldRegistry, FieldRegistryEntry, KindRegistry,
     KindRegistryEntry, UnknownFieldType,
 };
 

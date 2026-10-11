@@ -889,8 +889,10 @@ behavior update_all_extensions "Update All Extensions" {
     order with its status (updated, with its publisher's acceptance and
     key id when signed; held_back when another extension failed;
     up_to_date; not_from_registry; failed, with the failure's code,
-    message and suggestion), and the batch_update_completed payload. A
-    failed update prints the same document and exits 1.
+    message and suggestion), an extension_upgrade_completed payload per
+    extension the update moved (none when it was not applied), and the
+    batch_update_completed payload. A failed update prints the same
+    document and exits 1.
   """
   produces   [batch_update_completed]
   verify unit "with no registry configured, update makes no network call and reports how to configure one"

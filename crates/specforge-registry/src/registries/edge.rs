@@ -2,13 +2,60 @@ use std::collections::HashMap;
 
 use specforge_protocol_types::EdgeTypeDescriptor;
 
-/// One registered edge type, as its extension declared it (an edge a
-/// field maps to without declaring it is registered with the field's kind
-/// as its source and its target kind, nothing else).
+/// One registered edge type, as its extension declared it. An edge label
+/// fields map to without any extension declaring it is registered with
+/// its label alone and every field that writes it ([`EdgeWriter`]), in
+/// load order: its ends are those writers'.
 #[derive(Debug, Clone, Default)]
 pub struct EdgeRegistryEntry {
+    /// The declaring extension; for an undeclared edge, its first writer's.
     pub source_extension: String,
     pub declared: EdgeTypeDescriptor,
+    /// Every field that writes the edge type without declaring it, in load
+    /// order; empty for a declared edge type.
+    pub writers: Vec<EdgeWriter>,
+}
+
+/// A field that writes an edge type no extension declares.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EdgeWriter {
+    pub extension: String,
+    /// The keyword of the kind the field is on.
+    pub kind: String,
+    pub field: String,
+    /// The kind the field declares it targets.
+    pub target_kind: Option<String>,
+}
+
+impl EdgeRegistryEntry {
+    /// The kinds at its source end: the declared source kind, else every
+    /// writer's kind, each once, in load order. Empty: any kind.
+    pub fn source_kinds(&self) -> Vec<&str> {
+        match &self.declared.source_kind {
+            Some(kind) => vec![kind.as_str()],
+            None => distinct(self.writers.iter().map(|w| w.kind.as_str())),
+        }
+    }
+
+    /// The kinds at its target end: the declared target kind, else every
+    /// writer's target kind, each once, in load order. Empty: any kind.
+    pub fn target_kinds(&self) -> Vec<&str> {
+        match &self.declared.target_kind {
+            Some(kind) => vec![kind.as_str()],
+            None => distinct(self.writers.iter().filter_map(|w| w.target_kind.as_deref())),
+        }
+    }
+}
+
+/// `kinds`, each once, in their first order.
+fn distinct<'a>(kinds: impl Iterator<Item = &'a str>) -> Vec<&'a str> {
+    let mut seen = Vec::new();
+    for kind in kinds {
+        if !seen.contains(&kind) {
+            seen.push(kind);
+        }
+    }
+    seen
 }
 
 #[derive(Debug, Default)]
@@ -41,6 +88,23 @@ impl EdgeRegistry {
 
     pub fn register(&mut self, entry: EdgeRegistryEntry) -> Option<EdgeRegistryEntry> {
         self.entries.insert(entry.declared.label.clone(), entry)
+    }
+
+    /// `writer` writes the edge type `label`, which no extension declares:
+    /// appended to its writers, the entry registered with its first.
+    pub(crate) fn record_writer(&mut self, label: &str, writer: EdgeWriter) {
+        let entry = self
+            .entries
+            .entry(label.to_string())
+            .or_insert_with(|| EdgeRegistryEntry {
+                source_extension: writer.extension.clone(),
+                declared: EdgeTypeDescriptor {
+                    label: label.to_string(),
+                    ..Default::default()
+                },
+                writers: Vec::new(),
+            });
+        entry.writers.push(writer);
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (&String, &EdgeRegistryEntry)> {
