@@ -424,6 +424,38 @@ fn update_json_lists_every_locked_extension() {
     );
 }
 
+#[specforge_test(
+    behavior = "extension_upgrade_completed",
+    verify = "emits extension_upgrade_completed with correct previousVersion and newVersion"
+)]
+fn an_applied_upgrade_reports_extension_upgrade_completed() {
+    let local = json!({"name": "@acme/local", "version": "1.0.0", "source": "local:local.wasm", "wasm_hash": "00"});
+    let (ok, document, _dir) = update_json(local);
+    assert!(ok, "{document}");
+    // One payload per extension the update moved; the local build it left
+    // alone has none.
+    assert_eq!(
+        document["extension_upgrade_completed"],
+        json!([{
+            "extensionName": "@sdk/greet",
+            "previousVersion": "0.0.9",
+            "newVersion": "0.1.0",
+        }]),
+        "{document}"
+    );
+
+    // An update that failed moved nothing, so nothing completed.
+    let gone =
+        json!({"name": "@acme/gone", "version": "1.0.0", "source": "registry", "wasm_hash": "00"});
+    let (ok, document, _dir) = update_json(gone);
+    assert!(!ok, "{document}");
+    assert_eq!(
+        document["extension_upgrade_completed"],
+        json!([]),
+        "{document}"
+    );
+}
+
 #[test]
 fn a_failed_update_prints_its_document() {
     let gone =
@@ -440,7 +472,12 @@ fn a_failed_update_prints_its_document() {
     keys.sort_unstable();
     assert_eq!(
         keys,
-        ["batch_update_completed", "extensions", "ok"],
+        [
+            "batch_update_completed",
+            "extension_upgrade_completed",
+            "extensions",
+            "ok"
+        ],
         "{document}"
     );
     assert_eq!(document["ok"], false, "{document}");

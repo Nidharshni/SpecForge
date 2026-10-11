@@ -28,7 +28,7 @@ pub use remove::{
 pub use resolve::{resolve, resolve_requirement};
 pub use update::{
     BatchUpdateCompleted, BatchUpdateEvent, ExtensionUpdate, NO_LOCK, UpdateDocument,
-    UpdateOutcome, UpdateRequest, UpdateRow, UpdateStatus, update,
+    UpdateOutcome, UpdateRequest, UpdateRow, UpdateStatus, UpgradeCompleted, update,
 };
 
 pub(crate) use candidate::required_builtins;

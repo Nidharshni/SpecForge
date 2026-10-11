@@ -148,6 +148,7 @@ impl UpdateOutcome {
                     }
                 })
                 .collect(),
+            extension_upgrade_completed: self.extension_upgrade_completed(),
             batch_update_completed: BatchUpdateEvent {
                 updated_count: counts.updated_count,
                 failed_count: counts.failed_count,
@@ -155,6 +156,22 @@ impl UpdateOutcome {
                 timestamp: ended_at.to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
             },
         }
+    }
+
+    /// One `extension_upgrade_completed` (`spec/events/wasm-lifecycle.spec`)
+    /// per extension the update moved, in lock order: none when it was not
+    /// applied, since nothing then changed.
+    pub fn extension_upgrade_completed(&self) -> Vec<UpgradeCompleted> {
+        if !self.applied() {
+            return Vec::new();
+        }
+        self.updated()
+            .map(|(name, from, to)| UpgradeCompleted {
+                extension_name: name.to_string(),
+                previous_version: from.to_string(),
+                new_version: to.to_string(),
+            })
+            .collect()
     }
 
     /// The `batch_update_completed` event's counts
@@ -178,7 +195,8 @@ impl UpdateOutcome {
 }
 
 /// What `specforge update --format json` prints: whether the update was
-/// written, what became of each locked extension, and the
+/// written, what became of each locked extension, an
+/// `extension_upgrade_completed` payload per extension it moved and the
 /// `batch_update_completed` event's payload.
 #[derive(Debug, Clone, PartialEq, Serialize, Shape)]
 pub struct UpdateDocument {
@@ -187,7 +205,20 @@ pub struct UpdateDocument {
     pub ok: bool,
     /// Every locked extension the update looked at, in lock order.
     pub extensions: Vec<UpdateRow>,
+    /// One per extension moved, in lock order; empty when nothing was
+    /// applied.
+    pub extension_upgrade_completed: Vec<UpgradeCompleted>,
     pub batch_update_completed: BatchUpdateEvent,
+}
+
+/// `extension_upgrade_completed` (`spec/events/wasm-lifecycle.spec`): one
+/// extension an applied update moved, from which version to which.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Shape)]
+#[serde(rename_all = "camelCase")]
+pub struct UpgradeCompleted {
+    pub extension_name: String,
+    pub previous_version: String,
+    pub new_version: String,
 }
 
 /// One locked extension and what became of it.

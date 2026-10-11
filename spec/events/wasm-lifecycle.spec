@@ -76,8 +76,12 @@ event extension_upgrade_completed "Extension Upgrade Completed" {
     extensionName   string
     previousVersion string
     newVersion      string
-    peerCheckPassed boolean
   }
+  // One per extension an applied `specforge update` moved: an upgrade whose
+  // peer check fails is refused and completes nothing, so the payload
+  // carries no peer verdict. `specforge update --format json` reports them
+  // under `extension_upgrade_completed`; an update that was not applied
+  // reports none.
   verify integration "emits extension_upgrade_completed with correct previousVersion and newVersion"
   verify integration "consumer load_wasm_module receives event after upgrade"
 }

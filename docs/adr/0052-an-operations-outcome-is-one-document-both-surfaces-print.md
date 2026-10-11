@@ -58,8 +58,9 @@ type, matched neither surface.
 - `extensions`: `extensions`, `count`, `lock_file_entries`, `entity_kinds_in_graph`.
 - `migrate`: one record (`pending`, `files_migrated`, …, `backups`) on both surfaces; MCP's
   `Current`/`Ran` union and the CLI's `MigrationSummary` output are gone.
-- `update --format json`: `{ok, extensions: [rows by status], batch_update_completed}`; a failed
-  update prints it and exits 1, instead of the first failure's error document.
+- `update --format json`: `{ok, extensions: [rows by status], extension_upgrade_completed: [one
+  per extension an applied update moved], batch_update_completed}`; a failed update prints it (no
+  upgrade completed) and exits 1, instead of the first failure's error document.
 - `specforge infer-guide --format json` and the infer prompt leave out a kind's missing
   `description` instead of writing `null`.
 - CLI JSON keys follow the document's field order rather than alphabetical order.
