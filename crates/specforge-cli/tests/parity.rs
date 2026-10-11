@@ -247,7 +247,7 @@ const SCENARIOS: &[Scenario] = &[
         mcp: |_| {
             (
                 "specforge.add_extension",
-                json!({"specifier": "@specforge/product"}),
+                json!({"specifiers": ["@specforge/product"]}),
             )
         },
         mcp_rooted: true,
@@ -268,7 +268,7 @@ const SCENARIOS: &[Scenario] = &[
         mcp: |_| {
             (
                 "specforge.add_extension",
-                json!({"specifier": s(&greet_blob())}),
+                json!({"specifiers": [s(&greet_blob())]}),
             )
         },
         mcp_rooted: true,
@@ -289,7 +289,7 @@ const SCENARIOS: &[Scenario] = &[
         mcp: |_| {
             (
                 "specforge.add_extension",
-                json!({"specifier": s(&greet_blob())}),
+                json!({"specifiers": [s(&greet_blob())]}),
             )
         },
         mcp_rooted: true,

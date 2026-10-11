@@ -420,7 +420,7 @@ fn path_tool_calls() -> Vec<(&'static str, Value)> {
         ),
         (
             "specforge.add_extension",
-            json!({"specifier": "@specforge/software", "dry_run": true}),
+            json!({"specifiers": ["@specforge/software"], "dry_run": true}),
         ),
         (
             "specforge.remove_extension",
@@ -518,7 +518,7 @@ fn a_mutation_on_another_project_does_not_reload_the_served_one() {
         ("specforge.format", json!({})),
         (
             "specforge.add_extension",
-            json!({"specifier": "@specforge/software"}),
+            json!({"specifiers": ["@specforge/software"]}),
         ),
         (
             "specforge.remove_extension",
@@ -754,7 +754,7 @@ fn an_extension_added_to_another_project_is_loaded_when_it_is_brought_up_to_date
     let resp = call_tool(
         &mut server,
         "specforge.add_extension",
-        json!({"path": path, "specifier": "@specforge/software"}),
+        json!({"path": path, "specifiers": ["@specforge/software"]}),
     );
     assert_eq!(resp["result"]["isError"], false, "{resp}");
     assert_eq!(server.state().session_generation(), generation);
@@ -1034,7 +1034,7 @@ const NOTHING_SERVED_PROBES: &[(Entry, &str, &str)] = &[
     (
         Entry::Tool,
         "specforge.add_extension",
-        r#"{"specifier":"@specforge/software","dry_run":true}"#,
+        r#"{"specifiers":["@specforge/software"],"dry_run":true}"#,
     ),
     (
         Entry::Tool,

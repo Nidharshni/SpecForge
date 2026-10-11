@@ -591,6 +591,8 @@ reply_type! {
     mcp_collect_result => "McpCollectResult", "McpCollectResult schema is valid",
     mcp_collect_runner => "McpCollectRunner", "McpCollectRunner schema is valid",
     mcp_render_result => "McpRenderResult", "McpRenderResult schema is valid",
+    mcp_add_extension_result => "McpAddExtensionResult", "McpAddExtensionResult schema is valid",
+    mcp_add_extension_duplicate => "McpAddExtensionDuplicate", "McpAddExtensionDuplicate schema is valid",
     mcp_add_extension_enabled => "McpAddExtensionEnabled", "McpAddExtensionEnabled schema is valid",
     mcp_add_extension_installed => "McpAddExtensionInstalled", "McpAddExtensionInstalled schema is valid",
     mcp_add_extension_present => "McpAddExtensionPresent", "McpAddExtensionPresent schema is valid",

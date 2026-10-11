@@ -32,7 +32,9 @@ places (`Call::wrote` in two handlers, a dispatcher fallback, `init`'s own `serv
   deleted, not the directory; an operation that fails after writing returns its writes on its
   `OpError` (`OpError::writes`).
 - **D5. Domain events carry the spec's payloads** (`extension_added { extensionSpecifier,
-  totalExtensions, wasDuplicate }`, emitted for a duplicate add too; `project_initialized
+  totalExtensions, wasDuplicate }`, emitted for a duplicate add too, and once per specifier of an
+  add of several, in order, a specifier repeating an earlier one a duplicate (amended 2026-10-11:
+  `Written` carries `events`, a list); `project_initialized
   { projectName, extensionCount, specFilePath }`).
 - **D6. The CLI reads `Writes`, not `Written`.** It has no session to refresh and no event sink;
   `specforge init` lists the files it wrote from its outcome, and `init`, `add`, `remove` and

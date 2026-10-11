@@ -262,6 +262,29 @@ impl Arg for Vec<String> {
     }
 }
 
+/// A list of strings that holds at least one: required, and refused empty.
+#[derive(Debug, Clone)]
+pub struct NonEmpty(pub Vec<String>);
+
+impl Arg for NonEmpty {
+    fn schema() -> Value {
+        json!({ "type": "array", "items": { "type": "string" }, "minItems": 1 })
+    }
+    fn absent() -> Option<Self> {
+        None
+    }
+    fn advertised(_: &Self) -> Option<Value> {
+        None
+    }
+    fn read(name: &str, value: &Value) -> Result<Self, String> {
+        let items = Vec::<String>::read(name, value)?;
+        if items.is_empty() {
+            return Err(format!("{name} must list at least one string, got []"));
+        }
+        Ok(NonEmpty(items))
+    }
+}
+
 impl Arg for Map<String, Value> {
     fn schema() -> Value {
         json!({ "type": "object", "additionalProperties": true })

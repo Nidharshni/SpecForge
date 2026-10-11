@@ -2387,7 +2387,7 @@ fn mcp_tool_add_extension_returns_installed() {
             "tools/call",
             serde_json::json!({
                 "name": "specforge.add_extension",
-                "arguments": { "specifier": blob.to_str().unwrap() }
+                "arguments": { "specifiers": [blob.to_str().unwrap()] }
             }),
         )],
     );
@@ -2395,8 +2395,8 @@ fn mcp_tool_add_extension_returns_installed() {
     let resp = find_response(&responses, 1).expect("should get response for id 1");
     assert!(resp["error"].is_null(), "should not be error: {}", resp);
     let content = parse_tool_content(resp);
-    assert_eq!(content["extension"], "@sdk/greet");
-    assert_eq!(content["action"], "installed");
+    assert_eq!(content["added"][0]["extension"], "@sdk/greet");
+    assert_eq!(content["added"][0]["action"], "installed");
 
     // The project's config now lists the extension (it listed none before)...
     let config: serde_json::Value =
@@ -2425,7 +2425,7 @@ fn mcp_tool_add_extension_invalid_specifier() {
             "tools/call",
             serde_json::json!({
                 "name": "specforge.add_extension",
-                "arguments": { "specifier": "bad" }
+                "arguments": { "specifiers": ["bad"] }
             }),
         )],
     );

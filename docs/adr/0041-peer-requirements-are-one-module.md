@@ -97,7 +97,9 @@ a registry unifies a diamond, and whether the gate ran before or after the binar
 - `init` judged its local files one change at a time while it wrote them.
 
 - **A1. One lock plan.** `specforge_ops::extension::lock_plan` is the only way an operation installs:
-  `add` stages one install, `update` every upgrade, `init` its local files. Staging writes the install's
+  `add` stages the install of each of its specifiers (amended 2026-10-11: an add takes several, and a
+  refusal names the specifier; among several failures it reports the first the peer rule refused before
+  any binary that did not load), `update` every upgrade, `init` its local files. Staging writes the install's
   entry into the lock as the operation leaves it, replacing the package's previous entry. The plan owns the
   change (ADR 0028 D4), the pin and the wording.
 - **A2. Judged once, after every install is staged.** The peer rule (`Peers::unsatisfied` over the staged

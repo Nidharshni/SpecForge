@@ -30,14 +30,19 @@ expression: mcp_snap
   },
   "ok": true,
   "payload": {
-    "action": "enabled",
-    "changed": true,
-    "extension": "@specforge/product",
+    "added": [
+      {
+        "action": "enabled",
+        "changed": true,
+        "extension": "@specforge/product",
+        "peers_enabled": [],
+        "source": "builtin",
+        "specifier": "@specforge/product"
+      }
+    ],
     "files_written": [
       "specforge.json"
     ],
-    "note": "the server serves it from the next call on",
-    "peers_enabled": [],
-    "source": "builtin"
+    "note": "the server serves the extensions added from the next call on"
   }
 }

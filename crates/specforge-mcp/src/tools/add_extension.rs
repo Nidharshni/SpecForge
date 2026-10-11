@@ -1,11 +1,11 @@
-//! `specforge.add_extension`: install an extension (`specforge_ops::extension::add`).
+//! `specforge.add_extension`: install extensions (`specforge_ops::extension::add`).
 
 use crate::target::{AnyProject, Project};
 use crate::tool::{CoreTool, Effect, ReplySpec, WriteHints};
 use serde::Serialize;
 use specforge_common::shape::Shape;
 
-use crate::args::Arguments;
+use crate::args::{Arguments, NonEmpty};
 use crate::mutation::{
     Failed, Mutated, Mutation, MutationArgs, MutationEvent, MutationReply, NoDiagnostics, Written,
 };
@@ -16,8 +16,8 @@ use specforge_ops::extension::AddDocument;
 /// `specforge.add_extension`'s arguments.
 #[derive(Debug, Arguments)]
 pub struct Args {
-    /// Extension specifier
-    specifier: String,
+    /// Extension specifiers (@scope/name[@version], a builtin's name or a .wasm path), added as one change
+    specifiers: NonEmpty,
     /// Preview the install without changing any file
     dry_run: bool,
     /// Accept a registry package with no publisher signature (publisher verification skipped)
@@ -36,7 +36,7 @@ impl MutationReply for Reply {
 
 /// `specforge.add_extension`'s reply: the add
 /// document `specforge add --format json` prints (ADR 0052), and whether the
-/// server serves the extension (absent for a preview).
+/// server serves the extensions (absent for a preview).
 #[derive(Debug, Serialize, Shape)]
 pub struct Reply {
     #[serde(flatten)]
@@ -45,20 +45,20 @@ pub struct Reply {
     note: Option<&'static str>,
 }
 
-/// What the server does with an extension once it is enabled in the
+/// What the server does with extensions once they are enabled in the
 /// project it serves.
-const SERVED: &str = "the server serves it from the next call on";
-/// What it does with one installed in another project the path names.
+const SERVED: &str = "the server serves the extensions added from the next call on";
+/// What it does with ones installed in another project the path names.
 const ELSEWHERE: &str = "installed in the project the path names; the server keeps serving its own";
 
 /// `specforge.add_extension`: the shared add, its reply, the files it
-/// wrote and `extension_added` (for an extension already there too,
-/// `wasDuplicate`).
+/// wrote and one `extension_added` per specifier (for an extension already
+/// there, or a specifier repeating an earlier one, `wasDuplicate`).
 pub(crate) struct Tool;
 
 impl CoreTool for Tool {
     const NAME: &'static str = "specforge.add_extension";
-    const DESCRIPTION: &'static str = "Install an extension";
+    const DESCRIPTION: &'static str = "Install extensions, as one change";
     const EFFECT: Effect = Effect::Mutates {
         hints: WriteHints {
             destructive: true,
@@ -72,14 +72,12 @@ impl CoreTool for Tool {
     type Returns = Mutation<Reply>;
 
     fn call(project: ProjectRef<'_>, args: Args) -> Mutation<Reply> {
-        use specforge_ops::extension::{self, AddOutcome, AddRequest, Trust};
-
-        let allow_unsigned = args.allow_unsigned;
+        use specforge_ops::extension::{self, AddRequest, Trust};
 
         // The project the call installs into: the served one, or the one
         // `path` names.
         let root = project.root.to_path_buf();
-        let source = extension::parse(&args.specifier)?;
+        let extensions = extension::specified(&args.specifiers.0)?;
 
         let registry =
             specforge_ops_registry::ConfiguredRegistry::for_project(&root, "add_extension");
@@ -87,8 +85,8 @@ impl CoreTool for Tool {
         // so a publisher key change is refused rather than re-pinned.
         let request = AddRequest {
             root: &root,
-            source,
-            allow_unsigned,
+            extensions,
+            allow_unsigned: args.allow_unsigned,
             trust: Trust::Refuse,
             dry_run: args.dry_run,
         };
@@ -101,29 +99,30 @@ impl CoreTool for Tool {
             Ok(added) => added,
             Err(error) => return Err(Failed::from(error).with_diagnostics(reported)),
         };
-        let preview = args.dry_run || matches!(added.outcome, AddOutcome::Planned { .. });
-        // Once it is enabled, the server serves it (the next request brings the
-        // project up to date); another project only has it on disk.
+        // Once they are enabled, the server serves them (the next request brings the
+        // project up to date); another project only has them on disk.
         let reply = Reply {
             added: added.document(),
-            note: (!preview).then_some(if project.is_served() {
+            note: (!args.dry_run).then_some(if project.is_served() {
                 SERVED
             } else {
                 ELSEWHERE
             }),
         };
         let answer = Answer::new(reply).with_diagnostics(reported);
-        if preview {
+        if args.dry_run {
             return Ok(Mutated::new(answer, Written::nothing()));
         }
-        let event = MutationEvent::ExtensionAdded {
-            specifier: args.specifier,
-            total_extensions: added.extensions_enabled,
-            was_duplicate: added.outcome.is_duplicate(),
-        };
-        Ok(Mutated::new(
-            answer,
-            Written::files(added.writes).with_event(event),
-        ))
+        let written = added.added.iter().fold(
+            Written::files(added.writes.clone()),
+            |written, extension| {
+                written.with_event(MutationEvent::ExtensionAdded {
+                    specifier: extension.specifier.clone(),
+                    total_extensions: added.extensions_enabled,
+                    was_duplicate: extension.outcome.is_duplicate(),
+                })
+            },
+        );
+        Ok(Mutated::new(answer, written))
     }
 }
