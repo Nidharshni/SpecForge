@@ -366,11 +366,15 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`specforge_ops::report`) — and never by a surface; its code is what the CLI prints. The CLI and MCP
   are adapters over it (`specforge-ops`); the CLI ends every core command through one renderer
   (`specforge_cli::outcome`: the refusal, the exit code) (ADR 0029).
-- **Mutation outcome**: what one MCP mutation call wrote: the files its operation changed, the
-  entities it changed and the domain event it produces (`specforge_mcp::mutation::Written`), or
-  nothing for a preview. The request pipeline's tools adapter alone turns it into the call target's
-  refresh, the domain event and `mcp_mutation_completed` (ADR 0022), and the reply's `files_written`, the one place a
-  client learns which files the call wrote.
+- **Mutation outcome**: what one MCP mutation call produced, typed: a run (`specforge_mcp::mutation::Mutated`:
+  its reply and what it wrote — the files its operation changed, the entities it changed and the domain
+  event it produces, `Written`) or a failure (`mutation::Failed`: its McpError and the files it left
+  written). Whether the call only previews is read from its tool arguments before it runs
+  (`MutationArgs::previews`); a preview is no mutation, whatever its operation answered. The request
+  pipeline's tools adapter alone (`mutation::complete`) turns it into the call target's refresh, the reply
+  sent once (`WrittenReply`: the tool reply, `files_written` — the one place a client learns which files
+  the call wrote — and what its reply type adds after the write, rename's fresh diagnostics), the domain
+  event and `mcp_mutation_completed` (ADR 0022).
 - **Project sources**: the `.spec` files under the spec root (`spec_root`, else the project root) that
   discovery keeps — no skipped directory, no `exclude` entry. What a compile reads, and what format
   and migrate rewrite (`specforge_common::ProjectConfig::spec_files`).
@@ -488,6 +492,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   value is absent, never `null`. `spec/types/mcp.spec`'s `Mcp*` types state the same shapes, and a
   test holds them to the derived schemas. A tool answering a document in text (validate, export,
   model, outline_extensions) has no outputSchema.
+  A mutation's reply is sent as `WrittenReply`: its tool reply with what the mutation pipeline adds,
+  declared beside it (`files_written`; `diagnostics` when its type says so, rename), never by the tool
+  reply itself.
 - **Surface call**: one MCP request that invokes a named tool, resource or prompt (`tools/call`,
   `resources/read`, `prompts/get`), run through one pipeline: read the request, find the entry (the
   core table, then, with the served project brought up to date, the extension surface table), record

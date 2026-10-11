@@ -1,6 +1,6 @@
 # A mutation reports what it wrote, typed
 
-**Status:** accepted (2026-10-06)
+**Status:** accepted (2026-10-06); amended 2026-10-11 (architecture round 6, plan 09, last section).
 
 What an MCP mutation did crossed the dispatcher seam as JSON. Each operation returned a typed
 outcome; the handler built a `json!` reply from it; a per-tool `effect` closure in the tool table
@@ -83,3 +83,67 @@ and paths were recorded as the agent spelled them, a file outside the project in
 Consequences: a manifest whose sessions do not parse is refused where it used to lose them; unknown
 keys survive a write; `specforge.infer_session`'s unknown `action`/`status` refusals use ADR 0027's
 wording; `infer_progress` and `specforge infer-status` list the sessions.
+
+## One mutation outcome, sent once (amendment, architecture round 6, plan 09)
+
+A handler stated three inputs (did it preview, its answer, what it wrote) through seven `Mutated`
+constructors, `Replied::refused` and `replied`; migrate and format rebuilt the preview × failure square by
+hand. A failure had two spellings (`Err` and `Ok(Mutated::failed(..))`), and converting an `OpError` any
+way but `refused_after` dropped its `writes`. The reply was serialized before the pipeline acted on it:
+`refresh` inserted rename's fresh diagnostics by key into a placeholder field the handler set to `None`,
+and `report` inserted `files_written` by key, so `WrittenReply`, the type declaring it, was never built.
+A second tool asking for fresh diagnostics would have failed only at run time, and format, whose reply has
+its own `diagnostics` (W141/W142), would have lost them silently. And each handler decided "preview" from
+its operation's answer, not its arguments: a dry run of an extension already installed from a registry was
+reported as a duplicate add (`files_written: []`, `extension_added`, `mcp_mutation_completed`), against
+"a dry run emits none".
+
+- **M1. A run or a failure.** A handler returns `Mutation<R> = Result<Mutated<R>, Failed>`.
+  `Mutated::new(answer, written)` is a run's one constructor; `Failed` is a failure's McpError and the files
+  it left written, from an `OpError` (its `writes`), an `McpError` (nothing written) or
+  `Failed::after(error, files)`; `?` keeps what an operation left written. A failure changes no entity and
+  produces no domain event. (Refines D2.)
+- **M2. The preview is the arguments'.** A mutation's arguments say whether the call only previews
+  (`MutationArgs::previews`: `dry_run`; format's `check` or `diff` without `write`); the pipeline reads it
+  before the handler runs. A preview is sent as it is and records nothing, whatever its operation answered.
+  (D2's "decided from its typed arguments", now by construction.)
+- **M3. The reply is sent once, typed.** It is a `WrittenReply<R, A>`: the tool's reply, `files_written`
+  and its after-write report `A = <R as MutationReply>::After`, either `NoDiagnostics` or
+  `FreshDiagnostics` (`diagnostics`: what `specforge check` reports for the target once a successful call
+  brought it up to date; rename's contract). Its derived schema is the outputSchema; nothing is inserted
+  into a reply by key; a tool reply may not declare a key the pipeline adds. (Amends D7: `mutation::report`
+  is no longer the writer; the `WrittenReply` field is.)
+- **M4. One function completes a mutation.** `mutation::complete` brings the call target up to date when
+  the call wrote a file or its report reads a successful call's diagnostics, sends the reply checked
+  against the tool's outputSchema (a reply it refuses still lists the files in `data`), then records the
+  domain event (when the reply sent succeeded) and `mcp_mutation_completed`, whose `success` is what the
+  client got. `mutation::refused` is a mutation refused before its handler ran. (Amends D3: `refresh` and
+  `report` are its steps, no longer separate functions.)
+
+Consequences:
+
+- User-visible over MCP: `specforge.add_extension` with `dry_run: true` on an extension already installed
+  from a registry is a preview: no `files_written`, no `extension_added`, no `mcp_mutation_completed`.
+  Every other reply, outputSchema and event is byte-identical.
+- `Mutated::{wrote, failed, preview, failed_preview, refused, refused_unless_preview, refused_after,
+  with_diagnostics}`, `Replied`, `replied`, `refresh`, `report`, `Written::fresh_diagnostics` and
+  `ToolOutcome::{with_field, set_field}` are gone. A new mutation tool states two impls beside its types
+  (`MutationArgs`, `MutationReply`) and returns `Mutated::new` or a failure.
+- The schema check now covers `files_written` and the after-write report too.
+
+Rejected:
+
+- **`Mutated::new(preview, answer, writes)`**: every handler restates a preview its arguments state; the
+  dry-run bug was a handler deciding it from the operation's answer.
+- **A `diagnostics` field on every mutation's `WrittenReply`**: format's reply has its own, and six
+  schemas would declare a key never sent; under another name, rename's key would change for nothing.
+- **Fresh diagnostics after every mutation that wrote**: the project's whole report after each format or
+  inference step; the key still collides with format's.
+- **A slot method on the reply** (`checked(&mut self)`): the handler still initializes the field, and a
+  reply can declare it without the slot.
+- **An erased deferred serializer** keeping `refresh`/`report` in the dispatcher: a `dyn` to carry a type
+  the caller already knows, and the step order left in a comment.
+
+What would reopen it: a mutation whose preview its arguments cannot decide; a second after-write report
+that is not one more `AfterWrite` adapter; an MCP revision that carries such reports outside
+`structuredContent`.

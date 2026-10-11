@@ -25,7 +25,8 @@ structure. `operations/mod.rs`, the most-changed file of the workspace, held 11 
 - **D2. One reply type per tool.** A core tool's handler answers its module's `Reply` (`Answered<R>`,
   a mutation `Mutation<R>`) or `Text`; the tool table names it once (`typed!(h, Args => Reply)`), and
   the outputSchema is derived from it. A mutation's reply is `WrittenReply<R>`: `files_written` is a
-  derived field. The documents both surfaces print (analyze, collect, providers, the extension
+  derived field (sent as that type, with rename's fresh diagnostics a derived field beside it: ADR 0022,
+  round-6 amendment). The documents both surfaces print (analyze, collect, providers, the extension
   entry, inference progress and gaps, trace, schema) are typed once in ops; query's schema is the
   emitter's derived document schemas plus the `coverage_status` ops adds.
 - **D3. A structured result its schema refuses is never sent.** Every core reply with an
