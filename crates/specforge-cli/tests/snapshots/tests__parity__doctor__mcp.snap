@@ -55,6 +55,7 @@ expression: mcp_snap
         "enhancement_count": 2,
         "name": "@specforge/software",
         "source": "builtin",
+        "status": "loaded",
         "version": "1.0.0"
       }
     ],

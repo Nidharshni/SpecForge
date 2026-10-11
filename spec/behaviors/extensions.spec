@@ -385,8 +385,11 @@ behavior remove_extension "Remove Extension" {
     the same dependents (E027) and stranded-entity checks as any extension. A name
     more than one specforge.json entry enables MUST be refused as
     ambiguous (extension_conflict), naming the entries and changing
-    nothing; a name no entry, lock entry or builtin matches is
-    extension_not_found. Every refusal MUST be decided before anything is
+    nothing. An entry that enables an extension neither builtin nor
+    installed (it does not load, E028) MUST be removable by its name,
+    dropping only its specforge.json entry; a name no entry or lock entry
+    has is extension_not_found (E072 when it is no package name). Every
+    refusal MUST be decided before anything is
     written, and a specforge.json the compile could not read refuses every
     removal (config_invalid), changing nothing. A removal is all or
     nothing: a failure at any step leaves specforge.json, specforge.lock
@@ -411,6 +414,7 @@ behavior remove_extension "Remove Extension" {
   verify unit ".spec files are not modified by removal"
   verify contract "Remove Extension: extension removal holds — extension_installed, filesystem_available, extension_entry_removed, spec_files_unchanged, extension_removed_emitted"
   verify unit "specforge remove for non-existent extension reports error"
+  verify unit "an enabled entry that is not installed is removed from specforge.json by its name"
   verify integration "remove --format json lists the files it wrote in files_written"
   verify unit "specforge remove with no lock file reports error"
   verify unit "a removal that fails changes nothing"
@@ -440,16 +444,22 @@ behavior list_installed_extensions "List Installed Extensions" {
     When specforge extensions is invoked, the system MUST list all installed
     extensions with their name, version, entity count, and registered entity types.
     The listing MUST query the KindRegistry to enumerate entity kinds per
-    extension. Each entry MUST carry its source (builtin, registry,
-    local:<path>, or file:<path> for a .wasm file entry of specforge.json,
-    listed under the name its component declares) and its status (loaded, not_loaded, not_configured). The
-    CLI and the MCP extensions tool MUST list the same entries.
+    extension. Each entry MUST carry its source, where the extension load
+    takes it from whatever order the entries are in: file:<path> when only
+    .wasm file entries of specforge.json enable it (listed under the name
+    its component declares), builtin for a builtin's name, else the lock
+    entry's source (registry, local:<path>), else unknown; its version: the
+    loaded one, else an installed extension's locked one, else the version
+    a legacy name@version entry writes; and its status (loaded, not_loaded,
+    not_configured). The CLI and the MCP extensions tool MUST list the same
+    entries.
     Output order MUST be deterministic (alphabetical by extension name).
   """
   verify unit "list shows all installed extensions"
   verify unit "list includes entity counts and entity types"
   verify unit "output order is deterministic"
   verify integration "a .wasm file entry is listed under the name it declares, loaded, with source file:<path>"
+  verify unit "an extension's source is where the extension load takes it from, whatever order its entries are in"
   verify integration "the CLI and the MCP extensions tool list the same entries"
   verify contract "List Installed Extensions: extension listing holds — kind_registry_ready, all_extensions_listed, entity_counts_included, output_deterministic"
 }
@@ -507,7 +517,13 @@ behavior management_operations_over_the_project_view "Management Operations over
     collect, and inference progress and gaps MUST each be one operation
     over the project view and a request, shared by the CLI and MCP; a
     surface builds the view from the project it holds, maps its arguments
-    and renders the outcome. An operation MUST read the project's config,
+    and renders the outcome.
+    The extensions listing, doctor and remove MUST read the project's
+    extensions from one inventory over the view, one row per name: every
+    extension a specforge.json entry enables, the lock pins or the compile
+    loaded, with its origin, status, entries, declaration and lock entry; so
+    they cannot disagree about which extensions the project has, where each
+    comes from or whether it loaded. An operation MUST read the project's config,
     what each specforge.json entry enabled, the specforge.lock the compile
     read (absent, read, or unreadable with its E033 problem), the loaded
     declarations and what the surface reports for the project from the
@@ -528,6 +544,7 @@ behavior management_operations_over_the_project_view "Management Operations over
   verify unit "the extensions listing reads the config entries from the view, never specforge.json again"
   verify unit "doctor reads the diagnostics its view reports"
   verify unit "list, doctor and remove read the lock the compile read, once"
+  verify unit "list, doctor and remove read one inventory of the project's extensions"
   verify integration "add, update and remove refuse an unusable specforge.json with one refusal, before they write"
   verify unit "collect maps test results to the entities of its view"
   verify contract "Management Operations over the Project View: management operations hold — project_compiled, one_project_read, root_for_disk"

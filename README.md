@@ -147,7 +147,7 @@ specforge infer-guide [<kind>]       # what to look for in code to write a kind'
 # Extensions & registry
 specforge extensions                 # list enabled builtins and installed extensions
 specforge add @specforge/product     # enable a builtin, or install @scope/name@version from a registry
-specforge remove <name>              # disable a builtin, or uninstall an extension
+specforge remove <name>              # disable a builtin, drop an entry, or uninstall an extension
 specforge search <query>             # search registries
 specforge publish                    # publish an extension to a registry
 # There is no built-in registry: list yours under "registries" in specforge.json

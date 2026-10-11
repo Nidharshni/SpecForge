@@ -179,6 +179,9 @@ mode, consent, announce })`, `infer::progress(&view)`, `infer::gaps(&view)`, `in
   parse refuses every removal with `config_invalid` and changes nothing.
 - **M6. One source rule** (`Origin::of`) names where an extension comes from in the listing and in
   doctor: `file:<path>` for a `.wasm` file entry, the lock entry's source, `builtin`, else `unknown`.
+  *(Amended by ADR 0028 "The project's extensions are one inventory": the rule is the inventory's,
+  `Origin::of` is gone, and it follows the load's order: a builtin before a lock entry, a named
+  entry before a `.wasm` file entry.)*
 - **M7. One presenter per listing** (`ExtensionEntry::to_json`, `ProviderListing::to_json`); doctor
   keeps two published shapes (ADR 0004 D1-c).
 - **M8. `add`, `update`, `init` and `migrate` are not view operations**: they run before or instead

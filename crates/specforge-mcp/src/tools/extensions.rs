@@ -30,7 +30,7 @@ pub(crate) fn call(project: &ProjectRef<'_>, _args: NoArgs) -> Answered<Reply> {
     // compiled, its lock and the kinds its graph uses.
     let listing = specforge_ops::extension::list(&project.view());
     Ok(Reply {
-        extensions: listing.extensions.iter().map(|e| e.info()).collect(),
+        extensions: listing.extensions,
         lock_file_entries: listing
             .locked
             .iter()

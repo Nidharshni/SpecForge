@@ -36,10 +36,12 @@ pub fn run(name: &str, path: &Path, force: bool, format: OutputFormat) -> Exit {
             });
             match &outcome.origin {
                 Origin::Builtin => output["source"] = json!("builtin"),
-                // `remove` refuses an unlocked non-builtin, so it never
-                // reports `Unknown`.
-                Origin::Installed { .. } | Origin::Unknown => {
-                    output["version"] = json!(outcome.version)
+                Origin::Installed { .. } => output["version"] = json!(outcome.version),
+                Origin::Unknown => {
+                    output["source"] = json!("unknown");
+                    if let Some(version) = &outcome.version {
+                        output["version"] = json!(version);
+                    }
                 }
                 Origin::File { .. } => {
                     output["version"] = json!(outcome.version);
@@ -58,10 +60,14 @@ pub fn run(name: &str, path: &Path, force: bool, format: OutputFormat) -> Exit {
                     "Disabled extension '{}' loaded from {path} (the file is left in place)",
                     outcome.name
                 ),
-                Origin::Installed { .. } | Origin::Unknown => println!(
+                Origin::Installed { .. } => println!(
                     "Removed extension '{}' (v{})",
                     outcome.name,
                     outcome.version.as_deref().unwrap_or("?")
+                ),
+                Origin::Unknown => println!(
+                    "Removed the specforge.json entry of '{}' (it was not installed)",
+                    outcome.name
                 ),
             }
             for entity in &outcome.stranded {

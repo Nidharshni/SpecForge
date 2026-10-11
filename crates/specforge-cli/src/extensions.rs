@@ -14,10 +14,9 @@ pub fn run(path: &Path, format: OutputFormat) -> Exit {
 
     match format {
         OutputFormat::Json => {
-            let items: Vec<_> = entries.iter().map(|e| e.info()).collect();
             let output = json!({
-                "extensions": items,
-                "count": items.len(),
+                "extensions": entries,
+                "count": entries.len(),
             });
             println!(
                 "{}",
@@ -54,8 +53,7 @@ pub fn run(path: &Path, format: OutputFormat) -> Exit {
                 };
                 println!(
                     "  {}{version} ({}){status}{provides}",
-                    entry.name,
-                    entry.origin.source()
+                    entry.name, entry.source
                 );
             }
             println!();

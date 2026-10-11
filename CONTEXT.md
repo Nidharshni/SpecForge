@@ -114,6 +114,14 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   entry from its file under the name it declares. Its declarations come in entry order; the registry
   build puts them in load order. What does not load is a typed `LoadFailure` on its
   entry with one diagnostic; the runtime keeps none.
+- **Extension inventory**: every extension a project has, one row per name: enabled by a
+  `specforge.json` entry, pinned in the `specforge.lock` the compile read, or loaded. Each row has its
+  origin (`file:<path>` when only `.wasm` file entries enable it, `builtin`, the lock entry's source,
+  else `unknown`: the order the extension load tries them), its status (loaded, not loaded, not
+  configured), the entries that enable it, its declaration, its lock entry and why it did not load
+  (`specforge_ops::extension::inventory`, over the project view). The extensions listing, doctor and
+  remove read it, so they cannot disagree about which extensions a project has, where one comes from
+  or whether it loaded (ADR 0028).
 - **Candidate**: an extension a project does not load yet — a builtin `add` or `init` enables, a
   binary `add`, `update` or `init` installs, a binary `publish` uploads — and the extension
   declaration read from its binary once, through the `WasmRuntime` the operation's caller passes (the

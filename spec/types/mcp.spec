@@ -312,7 +312,8 @@ type McpLockEntry {
 
 type McpExtensionInfo {
   name             string @readonly
-  /// The loaded version, else the locked one; absent when neither.
+  /// The loaded version; else an installed extension's locked one; else the
+  /// version a legacy name@version entry writes; absent otherwise.
   version          string @optional
   /// "builtin", the lock entry's source ("registry", "local:<path>"), or
   /// "file:<path>" for a .wasm file entry of specforge.json.
@@ -361,9 +362,13 @@ type McpDoctorFinding {
 
 type McpDoctorExtension {
   name              string @readonly
-  version           string
+  /// The version the extensions listing gives it; absent when it has none.
+  version           string @optional
   /// Where it comes from: builtin, the lock entry's source, file:<path>, or unknown.
   source            string
+  /// "loaded"; "not_loaded" (enabled, but not installed or it failed to
+  /// load); "not_configured" (installed, but not enabled).
+  status            "loaded" | "not_loaded" | "not_configured"
   enhancement_count integer
   verify unit "McpDoctorExtension schema is valid"
 }

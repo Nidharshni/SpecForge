@@ -677,9 +677,9 @@ behavior run_doctor_check "Run Doctor Check" {
     (E027, E073) MUST be an error finding with the remedy its diagnostic
     suggests: doctor and check judge peers by one rule over the loaded
     extensions (ADR 0041), so a peer a builtin or a .wasm file entry
-    satisfies is not reported. Each listed extension MUST carry the source the
-    extensions listing gives it: builtin, the lock entry's source, or
-    file:<path> for a .wasm file entry of specforge.json. Run in a
+    satisfies is not reported. Doctor MUST list the extensions the
+    extensions listing lists, in its order, each with the version, source
+    and status the listing gives it. Run in a
     directory without specforge.json, doctor MUST report a warning finding
     config_missing naming the directory; the run stays healthy. A
     specforge.lock that exists but cannot be read (E033) MUST be reported
@@ -701,7 +701,7 @@ behavior run_doctor_check "Run Doctor Check" {
   verify unit "doctor reports the peer requirements check reports, with the remedy each suggests"
   verify unit "a peer a builtin satisfies is not reported"
   verify unit "a finding without its own suggestion quotes the catalogued explanation"
-  verify unit "doctor gives each extension the source the extensions listing gives it"
+  verify unit "doctor lists the extensions the extensions listing lists, each with its version, source and status"
   verify unit "doctor in a directory without specforge.json reports config_missing as a warning"
   verify unit "a lock file that cannot be read is an error finding naming E033"
   verify unit "doctor states each finding once, saying what it is about, and its verdict; the CLI and MCP return one report"
