@@ -134,8 +134,9 @@ type McpPromptArgument {
 // Each core tool's reply as its structuredContent and outputSchema carry it
 // (ADR 0048): an optional field is absent, never null; a mutation's reply
 // also carries files_written (string[], absent from a preview), which the
-// mutation pipeline adds to every mutation tool. A test holds each type
-// below to the schema its tool's reply type derives.
+// mutation pipeline adds to every mutation tool, and rename's diagnostics,
+// which it adds after a successful rename (ADR 0022). A test holds each
+// type below to the schema its tool's reply type derives.
 
 type McpInspectResult {
   entity_id           string     @readonly
@@ -494,7 +495,8 @@ type McpRenameResult {
   edits          McpRenameEdit[]
   /// Present (true) for a preview.
   dry_run        boolean      @optional
-  /// What specforge check reports for the project once the edits are made.
+  /// What specforge check reports for the project once the edits are made;
+  /// absent from a preview.
   diagnostics    Diagnostic[] @optional
   verify unit "McpRenameResult schema is valid"
 }

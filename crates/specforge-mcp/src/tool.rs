@@ -2,16 +2,16 @@
 //! `tools/call` reply.
 //!
 //! Handlers return a [`ToolOutcome`] (a mutation's handler, a
-//! [`Replied`](crate::mutation::Replied) holding one); [`envelope`] alone
-//! builds `content`, `isError` and `_meta`. What a mutation wrote crosses
-//! to the dispatcher typed (ADR 0022), never read back from the reply.
+//! [`Mutation`](crate::mutation::Mutation) that [`crate::mutation::complete`]
+//! turns into one); [`envelope`] alone builds `content`, `isError` and
+//! `_meta`. What a mutation wrote crosses to the dispatcher typed (ADR 0022),
+//! never read back from the reply.
 
 use serde_json::{Value, json};
 use specforge_common::{Diagnostic, Severity};
 use specforge_graph::Graph;
 
 use crate::args::Argument;
-use crate::mutation::Replied;
 use crate::protocol::{JsonRpcError, JsonRpcResponse, error_codes};
 use crate::target::{Call, ProjectTarget, TargetSpec, WithoutProject};
 use crate::types::McpToolDescriptor;
@@ -232,7 +232,7 @@ pub enum MutationHandler {
         target: ProjectTarget,
         arguments: fn() -> Vec<Argument>,
         reply: fn() -> Value,
-        run: fn(&Call<'_>, Value) -> Replied,
+        run: MutationRun,
     },
     /// Creates the project its required `path` names (init); the target
     /// refuses a missing path and one inside the served project. Its handler
@@ -242,9 +242,17 @@ pub enum MutationHandler {
     New {
         arguments: fn() -> Vec<Argument>,
         reply: fn() -> Value,
-        run: fn(&Call<'_>, Value) -> Replied,
+        run: MutationRun,
     },
 }
+
+/// How a mutation runs once its target resolved: given the call, the tool's
+/// name and outputSchema and its arguments, its reply as sent and the events
+/// to record ([`crate::mutation::complete`]). The events spell out `(String,
+/// Value)`, not the crate-private `Event` alias, so the public
+/// `MutationHandler` names no crate-private type.
+pub type MutationRun =
+    fn(&mut Call<'_>, &'static str, &Value, Value) -> (ToolOutcome, Vec<(String, Value)>);
 
 impl MutationHandler {
     /// The call target this handler's input makes.
@@ -276,10 +284,16 @@ impl MutationHandler {
     }
 
     /// Run it on the resolved call.
-    pub(crate) fn run(&self, call: &Call<'_>, arguments: Value) -> Replied {
+    pub(crate) fn run(
+        &self,
+        call: &mut Call<'_>,
+        tool: &'static str,
+        schema: &Value,
+        arguments: Value,
+    ) -> (ToolOutcome, Vec<(String, Value)>) {
         match *self {
             MutationHandler::Project { run, .. } | MutationHandler::New { run, .. } => {
-                run(call, arguments)
+                run(call, tool, schema, arguments)
             }
         }
     }
@@ -565,7 +579,7 @@ impl McpError {
         self
     }
 
-    fn set_data_field(&mut self, key: &str, value: Value) {
+    pub(crate) fn set_data_field(&mut self, key: &str, value: Value) {
         if let Value::Object(data) = self.data.get_or_insert_with(|| json!({})) {
             data.insert(key.to_string(), value);
         }
@@ -755,28 +769,6 @@ impl ToolOutcome {
             meta.insert(key.into(), value);
         }
         self
-    }
-
-    /// The same outcome with `value` under `key`: in its payload when that
-    /// is a JSON object, in its `McpError`'s `data` when it refused. A
-    /// text payload is left as it is.
-    pub(crate) fn with_field(mut self, key: &str, value: Value) -> Self {
-        self.set_field(key, value);
-        self
-    }
-
-    /// [`Self::with_field`], in place.
-    pub(crate) fn set_field(&mut self, key: &str, value: Value) {
-        match self {
-            ToolOutcome::Done {
-                payload: Payload::Json(Value::Object(object)),
-                ..
-            } => {
-                object.insert(key.to_string(), value);
-            }
-            ToolOutcome::Done { .. } => {}
-            ToolOutcome::Refused(error) => error.set_data_field(key, value),
-        }
     }
 
     /// The same outcome, a failure naming `tool` unless it names one.

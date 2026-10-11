@@ -536,7 +536,7 @@ impl<'s> Call<'s> {
 
     /// The root the files a mutation wrote are named from: the directory
     /// `init` created, else the root of the project the call acts on
-    /// ([`crate::mutation::report`]).
+    /// ([`crate::mutation::complete`]).
     pub(crate) fn written_root(&self) -> Option<&Path> {
         match &self.target {
             CallTarget::New(dir) => Some(dir),
@@ -547,7 +547,7 @@ impl<'s> Call<'s> {
 
     /// The call wrote its target's files: bring the target up to date now
     /// and return what `specforge check` reports for it. Called only by
-    /// [`crate::mutation::refresh`] (ADR 0022). The served project is
+    /// [`crate::mutation::complete`] (ADR 0022). The served project is
     /// brought up to date with disk; another project's session is brought up
     /// to date the same way (the server keeps serving its own); the directory `init` created is
     /// served when nothing is (ADR 0014 D5).

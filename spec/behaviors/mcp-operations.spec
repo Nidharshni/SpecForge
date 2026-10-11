@@ -132,7 +132,8 @@ behavior provide_mcp_rename_tool "Provide MCP Rename Tool" {
     If new_name is not a legal entity ID (t_entity_id: 2-60 letters, digits
     and underscores, starting with a letter or underscore), the tool MUST
     return a validation error. After a successful rename, the tool MUST trigger
-    recompilation and return updated diagnostics in the response.
+    recompilation and return updated diagnostics in the response; a preview
+    and a failed rename return none.
   """
   verify unit "specforge.rename renames entity and all references"
   verify unit "non-existent entity returns error response"
@@ -141,6 +142,7 @@ behavior provide_mcp_rename_tool "Provide MCP Rename Tool" {
   verify contract "Provide MCP Rename Tool: MCP rename tool holds — graph_available, filesystem_available, references_updated, recompilation_triggered, dry_run_safe, mutation_completed_emitted, tool_invoked_emitted"
   verify unit "rename plans on the project as it is on disk, references added since the last call included"
   verify unit "rename edits exactly the declaration and the references find_references returns"
+  verify unit "rename's updated diagnostics follow a successful write only: a preview and a failure carry none"
 }
 
 // MCP init creates a project at a specified path, not the current project.
