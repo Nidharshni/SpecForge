@@ -94,7 +94,8 @@ testable and owing or declaring; it is **exempt** (the coverage view's word) whe
   6, plan 12. This bullet kept two formulas, pinned equal by a test, because sharing one re-vendors the
   builtin blobs that link `specforge-coverage`. That cost is paid once, and round 6 re-vendors every
   blob anyway; commit b6ac628e reverted the shared function for that cost alone.)*
-- The pass input's and the coverage rule's `exempt` is "owes none". It is not the coverage view's
+- The pass input's and the coverage rule's `owes_none` (named `exempt` until protocol 1.2.0, ADR 0050) says the entity
+  owes none. It is not the coverage view's
   *exempt* (`Counting::exempt`): an entity that owes none and declares obligations counts.
 - The verify stub is offered to an entity that declares none and either owes obligations or is of a
   testable kind nothing exempts. It fixes the rule that reports it, if any.

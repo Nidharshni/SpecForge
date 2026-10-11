@@ -387,7 +387,7 @@ fn an_untargeted_obligation_rule_obliges_every_kind_after_the_move() {
         .into_iter()
         .find(|e| e.id == "alpha")
         .unwrap();
-    assert!(!alpha.exempt);
+    assert!(!alpha.owes_none);
 }
 
 #[spec(

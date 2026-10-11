@@ -187,7 +187,7 @@ fn pass_analysis_available(input: &PassInput) -> Vec<PassDiagnostic> {
 /// 0004 D2-f) over the recorded test results and the entailed claims in the
 /// pass input, so W035 never disagrees with `specforge analyze coverage`.
 /// Whether an entity is exempt is the host's call, read from the snapshot
-/// (`PassEntity::exempt`).
+/// (`PassEntity::owes_none`).
 fn pass_coverage_tracking(input: &PassInput) -> Vec<PassDiagnostic> {
     let proved: std::collections::BTreeSet<&str> = input
         .proved_claims
@@ -1539,7 +1539,7 @@ mod coverage_tracking_tests {
                 {"id": "b1", "kind": "behavior", "testable": true,
                  "verify_kinds": ["unit"], "verify_texts": ["works"]},
                 // A union type: exempt, not an item.
-                {"id": "Status", "kind": "type", "testable": true, "exempt": true},
+                {"id": "Status", "kind": "type", "testable": true, "owes_none": true},
                 // A feature, linked by a test: not testable, not an item.
                 {"id": "feat1", "kind": "feature",
                  "fields": {"tests": "tests/x.rs"}}

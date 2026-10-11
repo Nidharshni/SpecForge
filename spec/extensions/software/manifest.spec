@@ -25,14 +25,14 @@ behavior se_declare_manifest "Declare @specforge/software Manifest" {
     nine_edge_types       "edgeTypes.length == 9"
     all_kinds_named       "entityKinds contains behavior, invariant, feature, event, type, port"
     all_edges_named       "edgeTypes contains References, Implements, Produces, Consumes, UsesType, UsesPort, Enforces, Imports, LinksTo"
-    contributes_declared  "contributes declares entities=true and validators=true"
+    declared_categories   "the declaration declares entities, edges, enhancements and validation_rules"
     optional_product_peer "peer_dependencies holds one optional peer, @specforge/product, whose kinds the feature/module/milestone links target"
   }
   verify unit "manifest name is @specforge/software"
   verify unit "manifest declares exactly 6 entity kinds"
   verify unit "manifest declares exactly 9 edge types"
   verify unit "the handshake's protocol major is the host's"
-  verify unit "contributes declares entities and validators"
+  verify unit "the declaration declares entities, edges, enhancements and validation_rules"
   verify unit "the only peer is @specforge/product, and it is optional"
 }
 

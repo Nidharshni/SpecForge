@@ -28,7 +28,6 @@ fn minimal_manifest() -> ExtensionDeclaration {
             "protocol_version": "1.0.0",
             "name": "@test/ext",
             "version": "1.0.0",
-            "contribution_flags": {},
             "peer_dependencies": [],
             "sandbox_policy": null
         }

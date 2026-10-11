@@ -89,7 +89,8 @@ pub(crate) struct OutlineExtension {
     pub entity_kinds: Vec<OutlineEntityKind>,
     pub edge_types: Vec<OutlineEdgeType>,
     pub validation_rules: Vec<OutlineValidationRule>,
-    pub contributes: OutlineContributes,
+    /// The describe categories it declares, then `providers` when its handshake says so.
+    pub contributes: Vec<String>,
     pub verify_kinds: Vec<String>,
     pub surface_counts: OutlineSurfaceCounts,
     pub shared_fields: Vec<OutlineSharedField>,
@@ -147,19 +148,6 @@ pub(crate) struct OutlineValidationRule {
     pub check: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub target_kind: Option<String>,
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub(crate) struct OutlineContributes {
-    pub entities: bool,
-    pub validators: bool,
-    pub renderers: bool,
-    pub providers: bool,
-    pub collectors: bool,
-    pub prompts: bool,
-    pub parsers: bool,
-    pub grammars: bool,
-    pub body_parsers: bool,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

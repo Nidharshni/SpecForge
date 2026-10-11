@@ -103,7 +103,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Extension declaration**: everything one extension declares — its handshake and every describe
   category — as the protocol types (`specforge_protocol_types::ExtensionDeclaration`). The SDK
   builds it, the guest serves it, the host loads it once, the Registry build reads it, a package
-  registry stores it (ADR 0012).
+  registry stores it (ADR 0012). What it contributes is what it declares (`ExtensionDeclaration::declares`
+  over the ten describe categories); its handshake's `providers` says it implements configured providers
+  (ADR 0050).
 - **Guest wire**: what the host and an extension's guest both compile (`specforge-protocol-types`): the
   extension declaration, the operation payloads, the extension vocabulary and the command-arg rule. Every
   builtin blob is built from it, so it holds nothing only the host reads: the host's reading of package names,
@@ -222,7 +224,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   when testable and owing or declaring, and is **exempt** when testable and neither: the coverage
   rule's one counting rule (`specforge_coverage::Counting`), read with the standing's facts
   (`Standing::counting`). W004, stats, plan validation and the verify-stub fix read it. The pass
-  input's `exempt` is not this word: it says the entity owes none, and such an entity still counts
+  input's `owes_none` is not this word: it says the entity owes none, and such an entity still counts
   when it declares obligations.
 - **Package registry client**: what talks to a package registry: search, versions, metadata, download and
   publish over HTTP, credentials in the OS keyring, publisher trust and package signing
@@ -343,7 +345,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   target.
 - **Configured providers**: the `providers` `specforge.json` lists (scheme, alias, extension,
   settings), registered once per environment against the loaded declarations, each with its
-  status (registered, extension not loaded, not a provider, scheme taken) and the W118/E057 the
+  status (registered, extension not loaded, not a provider (its handshake does not say `providers`), scheme taken) and the W118/E057 the
   registration reported (`specforge_project::providers::Providers`). The compile's I005 and the
   providers listing read this one registration.
 - **Management operation**: an operation about a project's setup and tooling rather than its

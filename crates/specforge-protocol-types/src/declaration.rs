@@ -14,8 +14,8 @@ use serde_json::Value;
 
 use crate::{
     AnalyzerDescriptor, AutoDetectConfig, CollectorDescriptor, CommandArgDescriptor,
-    CommandDescriptor, CompilerPassDescriptor, ContributionFlags, DescribeResponse,
-    EdgeTypeDescriptor, EntityEnhancementDescriptor, EntityKindDescriptor, FeatureFlagDescriptor,
+    CommandDescriptor, CompilerPassDescriptor, DescribeResponse, EdgeTypeDescriptor,
+    EntityEnhancementDescriptor, EntityKindDescriptor, FeatureFlagDescriptor,
     FieldConstraintDescriptor, FieldDescriptor, HandshakeResponse, McpResourceDescriptor,
     McpToolDescriptor, PeerDependency, ProtocolError, SurfaceDescriptor, ValidationRuleDescriptor,
 };
@@ -197,23 +197,6 @@ impl ExtensionDeclaration {
             }
         }
         kinds
-    }
-
-    /// What the declaration contributes. The flags of the declared
-    /// categories are derived from their content (never trusted to gate
-    /// what is read); the others (`providers`, and the reserved ones) are
-    /// the handshake's.
-    pub fn contribution_flags(&self) -> ContributionFlags {
-        ContributionFlags {
-            entities: !self.entities.is_empty()
-                || !self.edges.is_empty()
-                || !self.shared_fields.is_empty()
-                || !self.enhancements.is_empty(),
-            validators: !self.validation_rules.is_empty(),
-            collectors: !self.collectors.is_empty(),
-            analyzers: !self.analyzers.is_empty(),
-            ..self.handshake.contribution_flags.clone()
-        }
     }
 
     /// Whether it declares anything in `category`: a non-empty list, or for

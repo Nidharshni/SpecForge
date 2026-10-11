@@ -26,10 +26,10 @@ fn handshake_request_json_field_names() {
 
 #[test]
 fn protocol_version_constant() {
-    assert_eq!(PROTOCOL_VERSION, "1.1.0");
+    assert_eq!(PROTOCOL_VERSION, "1.2.0");
 }
 
-// ── Step 2: HandshakeResponse + ContributionFlags ──
+// ── Step 2: HandshakeResponse ──
 
 #[test]
 fn handshake_response_round_trip() {
@@ -37,18 +37,7 @@ fn handshake_response_round_trip() {
         protocol_version: "1.0".to_string(),
         name: "@specforge/software".to_string(),
         version: "1.0.0".to_string(),
-        contribution_flags: ContributionFlags {
-            entities: true,
-            validators: true,
-            renderers: false,
-            providers: false,
-            collectors: false,
-            prompts: false,
-            parsers: false,
-            grammars: false,
-            body_parsers: false,
-            analyzers: false,
-        },
+        providers: true,
         peer_dependencies: vec![PeerDependency {
             name: "@specforge/governance".to_string(),
             version: ">=1.0.0".to_string(),
@@ -72,14 +61,8 @@ fn handshake_response_round_trip() {
 fn handshake_response_rejects_missing_critical_fields() {
     // C7-07: the handshake's critical envelope fields are REQUIRED on the
     // wire. A truncated handshake must fail deserialization instead of
-    // silently yielding empty flags or an empty peer-dependency list.
-    for missing in [
-        "protocol_version",
-        "name",
-        "version",
-        "contribution_flags",
-        "peer_dependencies",
-    ] {
+    // silently yielding an empty peer-dependency list.
+    for missing in ["protocol_version", "name", "version", "peer_dependencies"] {
         let full = handshake_with_all_fields();
         let mut truncated = full.clone();
         truncated.as_object_mut().unwrap().remove(missing);
@@ -99,8 +82,8 @@ fn handshake_sandbox_policy_is_fail_safe_optional() {
     // substitutes its own deny-by-default policy). Pin that documented
     // semantic so it cannot silently change.
     for json in [
-        r#"{"protocol_version":"1.0.0","name":"@t/x","version":"0.1.0","contribution_flags":{},"peer_dependencies":[]}"#,
-        r#"{"protocol_version":"1.0.0","name":"@t/x","version":"0.1.0","contribution_flags":{},"peer_dependencies":[],"sandbox_policy":null}"#,
+        r#"{"protocol_version":"1.0.0","name":"@t/x","version":"0.1.0","peer_dependencies":[]}"#,
+        r#"{"protocol_version":"1.0.0","name":"@t/x","version":"0.1.0","peer_dependencies":[],"sandbox_policy":null}"#,
     ] {
         let resp: HandshakeResponse =
             serde_json::from_str(json).expect("no/absent sandbox_policy is valid");
@@ -114,25 +97,9 @@ fn handshake_with_all_fields() -> serde_json::Value {
         "protocol_version": "1.0.0",
         "name": "@specforge/test",
         "version": "0.1.0",
-        "contribution_flags": {},
         "peer_dependencies": [],
         "sandbox_policy": null,
     })
-}
-
-#[test]
-fn contribution_flags_default_all_false() {
-    let flags = ContributionFlags::default();
-    assert!(!flags.entities);
-    assert!(!flags.validators);
-    assert!(!flags.renderers);
-    assert!(!flags.providers);
-    assert!(!flags.collectors);
-    assert!(!flags.prompts);
-    assert!(!flags.parsers);
-    assert!(!flags.grammars);
-    assert!(!flags.body_parsers);
-    assert!(!flags.analyzers);
 }
 
 #[test]

@@ -35,10 +35,12 @@ fn sdk_greet_extension_passes_protocol() {
     let hs: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(hs["name"], "@sdk/greet");
     assert_eq!(hs["version"], "0.1.0");
-    assert_eq!(hs["protocol_version"], "1.1.0");
-    assert_eq!(hs["contribution_flags"]["entities"], true);
-    assert_eq!(hs["contribution_flags"]["validators"], true);
-    assert_eq!(hs["contribution_flags"]["renderers"], false);
+    assert_eq!(
+        hs["protocol_version"],
+        specforge_protocol_types::PROTOCOL_VERSION
+    );
+    assert!(hs.get("contribution_flags").is_none());
+    assert!(hs.get("providers").is_none());
 
     // __describe entities: the greeting kind with its style field.
     let de = runtime.call_export("@sdk/greet", "__describe", br#"{"category":"entities"}"#);

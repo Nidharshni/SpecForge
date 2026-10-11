@@ -13,7 +13,7 @@ use specforge_test_macros::test as specforge_test;
 fn make_declaration(name: &str, providers: bool) -> ExtensionDeclaration {
     let mut c = ContributionsBuilder::new(ExtensionMeta::new(name, "1.0.0"));
     if providers {
-        c.meta.providers = true;
+        c.providers();
     }
     c.declaration()
 }

@@ -108,7 +108,7 @@ behavior render_extension_outline "Render the Extension Outline" {
     declarations_loaded "the project's extension declarations are loaded"
   }
   ensures {
-    one_card_per_extension  "each loaded extension is one card naming its version and what it contributes"
+    one_card_per_extension  "each loaded extension is one card naming its version, the describe categories it declares, and providers when its handshake says so"
     declared_text_contained "text an extension declares stays inside the label, string or table cell it is written in, in every format"
     deps_selected           "the dependencies every format shows, json included, are the ones --deps selects"
   }
@@ -128,6 +128,7 @@ behavior render_extension_outline "Render the Extension Outline" {
   verify unit "declared text with a quote, markup or a line break stays inside its Mermaid label"
   verify unit "declared text with a pipe or a line break stays in its Markdown table cell"
   verify unit "the builtins' outline is unchanged in every format"
+  verify unit "each extension's card names the describe categories it declares, and providers when its handshake says so"
   verify unit "the dependencies every format shows, json included, are the ones --deps selects"
   verify contract "Render the Extension Outline: outline rendering holds — declarations_loaded, one_card_per_extension, declared_text_contained, deps_selected"
 }

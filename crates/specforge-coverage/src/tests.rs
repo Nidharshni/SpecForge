@@ -24,7 +24,7 @@ struct PassEntity {
     #[serde(default)]
     testable: bool,
     #[serde(default)]
-    exempt: bool,
+    owes_none: bool,
     #[serde(default)]
     verify_kinds: Vec<String>,
     #[serde(default)]
@@ -71,7 +71,7 @@ fn assess_graded(input: Value, grading: Option<&RiskGrading>) -> (Vec<Entity>, A
             id: e.id,
             kind: e.kind,
             testable: e.testable,
-            exempt: e.exempt,
+            owes_none: e.owes_none,
             verify_kinds: e.verify_kinds,
             verify_texts: e.verify_texts,
         })
@@ -270,12 +270,12 @@ fn exempt_entities_leave_a001_and_the_testable_count() {
     let (_, out) = assess_input(json!({
         "entities": [
             // A union type and an abstract behavior: exempt, nothing declared.
-            {"id": "Status", "kind": "type", "testable": true, "exempt": true},
-            {"id": "base_login", "kind": "behavior", "testable": true, "exempt": true},
+            {"id": "Status", "kind": "type", "testable": true, "owes_none": true},
+            {"id": "base_login", "kind": "behavior", "testable": true, "owes_none": true},
             // A governance kind no rule requires obligations of.
-            {"id": "lost_task", "kind": "failure_mode", "testable": true, "exempt": true},
+            {"id": "lost_task", "kind": "failure_mode", "testable": true, "owes_none": true},
             // ... unless it declares some: then it counts like any other.
-            {"id": "latency", "kind": "constraint", "testable": true, "exempt": true,
+            {"id": "latency", "kind": "constraint", "testable": true, "owes_none": true,
              "verify_kinds": ["load"], "verify_texts": ["p99 under 50ms"]},
             {"id": "logout", "kind": "behavior", "testable": true}
         ]
@@ -417,7 +417,7 @@ fn counting_is_testable_and_owing_or_declaring() {
     }
     let entity = Entity {
         testable: true,
-        exempt: true,
+        owes_none: true,
         verify_texts: vec!["a".into(), "b".into()],
         verify_kinds: vec!["unit".into(), "unit".into()],
         ..Entity::default()
@@ -442,7 +442,7 @@ fn a_pass_entity_is_read_as_the_host_decided_it() {
         id: "a".into(),
         kind: "invariant".into(),
         testable: true,
-        exempt: true,
+        owes_none: true,
         verify_kinds: vec!["unit".into(), "property".into()],
         verify_texts: vec!["one".into(), "two".into()],
         incoming_edge_count: 0,
@@ -452,7 +452,7 @@ fn a_pass_entity_is_read_as_the_host_decided_it() {
     let entity = Entity::from(&wire);
     assert_eq!(entity.id, "a");
     assert_eq!(entity.kind, "invariant");
-    assert!(entity.testable && entity.exempt);
+    assert!(entity.testable && entity.owes_none);
     assert_eq!(entity.verify_kinds, wire.verify_kinds);
     assert_eq!(entity.verify_texts, wire.verify_texts);
     assert_eq!(entity.risk, None);

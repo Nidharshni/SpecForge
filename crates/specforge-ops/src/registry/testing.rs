@@ -80,7 +80,6 @@ pub fn declaration(name: &str, version: &str, peers: &[(&str, &str)]) -> Extensi
             "protocol_version": "1.0.0",
             "name": name,
             "version": version,
-            "contribution_flags": {},
             "peer_dependencies": peers,
             "sandbox_policy": null,
         }

@@ -68,7 +68,7 @@ impl Counting {
 
     /// Testable, yet it owes none and declares none, so it does not count:
     /// the summary's `testable_exempt`, the coverage view's and inspect's
-    /// `exempt`. Not [`Entity::exempt`], which says only that it owes none.
+    /// `exempt`. Not [`Entity::owes_none`], which says only that it owes none.
     pub fn exempt(self) -> bool {
         self.testable && !self.counts()
     }
@@ -91,7 +91,7 @@ pub struct Entity {
     /// [`Counting::exempt`]: an entity that owes none and declares some
     /// still counts.
     #[serde(default)]
-    pub exempt: bool,
+    pub owes_none: bool,
     /// One entry per `verify` statement, in order: its kind, or `""` for a
     /// bare `verify "..."`.
     #[serde(default)]
@@ -119,7 +119,7 @@ impl Entity {
     pub fn counting(&self) -> Counting {
         Counting {
             testable: self.testable,
-            owes_obligations: !self.exempt,
+            owes_obligations: !self.owes_none,
             declared: self.obligations(),
         }
     }
@@ -133,7 +133,7 @@ impl Entity {
 impl From<&PassEntity> for Entity {
     /// A pass's entity as the rule reads it. The host's per-entity views and
     /// every extension's pass share this one reading:
-    /// - its testable flag, `exempt` (it owes none) and obligations, as the
+    /// - its testable flag, `owes_none` and obligations, as the
     ///   host decided them;
     /// - referenced when any edge comes in;
     /// - `risk` unset: a caller that grades a kind fills it ([`RiskGrading`]).
@@ -142,7 +142,7 @@ impl From<&PassEntity> for Entity {
             id: entity.id.clone(),
             kind: entity.kind.clone(),
             testable: entity.testable,
-            exempt: entity.exempt,
+            owes_none: entity.owes_none,
             verify_kinds: entity.verify_kinds.clone(),
             verify_texts: entity.verify_texts.clone(),
             risk: None,

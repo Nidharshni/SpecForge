@@ -527,7 +527,6 @@ fn contract_declaration(version: &str) -> ExtensionDeclaration {
             "version": version,
             "description": "Contract tool",
             "keywords": ["contract"],
-            "contribution_flags": {},
             "peer_dependencies": [],
             "sandbox_policy": null
         }

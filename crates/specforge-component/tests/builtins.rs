@@ -1,5 +1,7 @@
 use specforge_component::{ComponentRuntime, builtins};
+use specforge_protocol_types::DeclaredCategory;
 use specforge_test_macros::test as specforge_test;
+use specforge_wasm::protocol::load_declaration;
 use specforge_wasm::runtime::{WasmCallResult, WasmRuntime};
 
 #[test]
@@ -77,8 +79,11 @@ fn formal_handshake_from_sdk_authored_twin() {
     let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(value["name"], "@specforge/formal");
     assert_eq!(value["version"], "1.0.0");
-    assert_eq!(value["contribution_flags"]["entities"], true);
-    assert_eq!(value["contribution_flags"]["validators"], true);
+    let declaration = load_declaration(&runtime, "@specforge/formal")
+        .unwrap()
+        .declaration;
+    assert!(declaration.declares(DeclaredCategory::Entities));
+    assert!(declaration.declares(DeclaredCategory::ValidationRules));
     let peers = value["peer_dependencies"].as_array().unwrap();
     assert!(
         peers.iter().any(|p| p["name"] == "@specforge/software"),
@@ -114,13 +119,14 @@ fn builtin_handshakes_survive_sdk_migration() {
         };
         let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(value["name"], name, "handshake name for {name}");
-        assert_eq!(
-            value["contribution_flags"]["entities"], true,
-            "{name}: entities flag"
+        let declaration = load_declaration(&runtime, name).unwrap().declaration;
+        assert!(
+            declaration.declares(DeclaredCategory::Entities),
+            "{name}: entities"
         );
-        assert_eq!(
-            value["contribution_flags"]["validators"], true,
-            "{name}: validators flag"
+        assert!(
+            declaration.declares(DeclaredCategory::ValidationRules),
+            "{name}: validation rules"
         );
         let peer_deps = value["peer_dependencies"].as_array().unwrap();
         assert_eq!(

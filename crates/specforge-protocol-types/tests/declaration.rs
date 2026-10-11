@@ -274,23 +274,22 @@ fn an_absent_short_is_the_names_last_segment() {
     assert_eq!(declaration.short(), "solo");
 }
 
-/// Identity, peers and verify kinds read through the declaration; the
-/// content decides its contribution flags, the handshake only the others.
+/// Identity, peers and verify kinds read through the declaration; what it
+/// contributes is its content, the handshake says only `providers`.
 #[test]
-fn a_declaration_reads_its_identity_and_derives_its_flags() {
+fn a_declaration_reads_its_identity_and_its_providers() {
     let mut declaration = full();
     assert_eq!(declaration.name(), "@acme/reports");
     assert_eq!(declaration.version(), "0.1.0");
     assert_eq!(declaration.peers()[0].name, "@acme/base");
     assert_eq!(declaration.verify_kinds(), ["unit"]);
 
-    declaration.handshake.contribution_flags.entities = false;
-    declaration.handshake.contribution_flags.providers = true;
-    let flags = declaration.contribution_flags();
-    assert!(flags.entities && flags.validators && !flags.collectors && !flags.analyzers);
-    assert!(flags.providers);
-    declaration.handshake.contribution_flags.collectors = true;
-    assert!(!declaration.contribution_flags().collectors);
+    assert!(!declaration.handshake.providers);
+    let wire = serde_json::to_value(&declaration.handshake).unwrap();
+    assert!(wire.get("providers").is_none() && wire.get("contribution_flags").is_none());
+    declaration.handshake.providers = true;
+    let wire = serde_json::to_value(&declaration.handshake).unwrap();
+    assert_eq!(wire["providers"], json!(true));
 }
 
 /// Absent optional handshake fields are absent on the wire, so a
@@ -304,7 +303,7 @@ fn absent_handshake_metadata_is_not_serialized() {
         ..Default::default()
     };
     let wire = serde_json::to_value(&handshake).unwrap();
-    for key in ["ext_short", "description", "keywords"] {
+    for key in ["ext_short", "description", "keywords", "providers"] {
         assert!(wire.get(key).is_none(), "{key} in {wire}");
     }
     let parsed: HandshakeResponse = serde_json::from_value(wire).unwrap();

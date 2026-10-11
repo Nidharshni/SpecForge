@@ -30,7 +30,7 @@ fn retrying() -> (
     Arc<Mutex<Vec<Duration>>>,
 ) {
     let client = MemoryClient::new();
-    let manifest = r#"{"handshake":{"protocol_version":"1.0.0","name":"@acme/x","version":"1.0.0","contribution_flags":{},"peer_dependencies":[],"sandbox_policy":null}}"#;
+    let manifest = r#"{"handshake":{"protocol_version":"1.0.0","name":"@acme/x","version":"1.0.0","peer_dependencies":[],"sandbox_policy":null}}"#;
     client.store(
         &registry(),
         package("@acme/x", "1.0.0", b"\0asm", manifest, None),

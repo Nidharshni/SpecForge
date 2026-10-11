@@ -2772,7 +2772,7 @@ fn contract_providers() {
         .serve(&[
             extension(),
             TestExtension::named("@acme/github-provider").declaring(|c| {
-                c.meta.providers = true;
+                c.providers();
             }),
         ]);
 

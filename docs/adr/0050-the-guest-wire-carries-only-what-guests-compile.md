@@ -43,10 +43,29 @@ not compile. `ExtensionDeclaration::declares(category)` says whether a declarati
 category (an exhaustive match, so a new category cannot be forgotten); the package registry's search filter and
 its in-memory adapter read it, and `specforge_registry_wire::declares` is gone.
 
+## D4. What an extension contributes is what it declares; the handshake says `providers`
+
+`ContributionFlags` is gone. `ExtensionDeclaration::declared_categories()` lists the categories a declaration
+declares something in, in read order; the outline reads it. The one fact no category carries is the handshake's
+`providers` (omitted when false), set by the SDK's `ContributionsBuilder::providers()`; provider registration
+(W118) reads it. The protocol is 1.2.0: a 1.2 host loads every 1.x guest (it ignores an older guest's
+`contribution_flags`, ADR 0013 D5); a 1.1 host cannot read a 1.2 guest's handshake, which pre-release hosts and
+the SDK ship together to avoid. The same version renames the pass input's `exempt` to `owes_none` (it says the
+entity owes no obligations of its own, not that it is exempt in the coverage view's sense, ADR 0019): an older
+guest reading `owes_none` as absent would count unions toward coverage, so the rename rides in this version and
+every builtin is rebuilt with it.
+
+## D5. What stays though only the host calls it
+
+`ExtensionDeclaration::from_wire` and its unknown-key walk (W138) stay in the protocol types: they define what the
+wire accepts, and the SDK's raw categories and the host's load parse a category through the one function
+(`set_category`). Moving them would split the declaration's read from its write (ADR 0012 D1).
+
 ## Rejected
 
 - Deriving `SUPPORTED_CATEGORIES` from the declared ones plus a reserved list: it keeps three categories nothing
   reads.
+- Keeping `ContributionFlags` derived in one place: it keeps a second vocabulary for the categories.
 - A `host` cargo feature on the protocol types gating `package` and `peers`: a cfg-stripped module is not a blob
   input, but the guest/host split would be a build flag, the manifest would keep the optional `semver`, and one
   forgotten `#[cfg]` makes a host-only item a blob input again.
@@ -58,10 +77,18 @@ its in-memory adapter read it, and `specforge_registry_wire::declares` is gone.
 
 - An edit to the package names or the peer rule stales no builtin blob; protocol-types drops `semver`; each blob
   has two fewer recorded inputs.
+- `specforge outline` names the categories each extension declares, plus `providers`
+  (`"contributes": ["entities", "edges", ...]` in JSON, was an object of booleans): `@specforge/rust` shows
+  `analyzers`, product its `surfaces` and `passes`.
+- An extension written with an older SDK still loads; one that raised `contribution_flags.providers` must call
+  `providers()` and rebuild.
+- Every pinned handshake loses `contribution_flags`.
 - The pinned describe snapshots lose `describe_fields.json`, `describe_grammars.json` and
   `describe_body_parsers.json`.
 
 ## What would reopen it
 
+- A contribution that no describe category carries besides `providers`: a second handshake field, or a category,
+  not flags.
 - A guest that needs the package or peer rule (an SDK check of its own peers at build time): it would then link
   `specforge-package` knowingly, and that crate would join the guest crates.

@@ -14,7 +14,7 @@ use specforge_test_macros::test as specforge_test;
 use tempfile::TempDir;
 
 /// The declaration of `@acme/tool@1.0.0`, as `specforge publish` uploads it.
-const MANIFEST: &str = r#"{"handshake":{"protocol_version":"1.0.0","name":"@acme/tool","version":"1.0.0","contribution_flags":{},"peer_dependencies":[],"sandbox_policy":null}}"#;
+const MANIFEST: &str = r#"{"handshake":{"protocol_version":"1.0.0","name":"@acme/tool","version":"1.0.0","peer_dependencies":[],"sandbox_policy":null}}"#;
 
 /// A registry in process publishing `@acme/tool` at `versions`, unsigned.
 fn serving(versions: &[&str]) -> LocalRegistry {

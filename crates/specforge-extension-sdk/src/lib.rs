@@ -20,11 +20,11 @@ pub use specforge_extension_sdk_macros::extension;
 pub use specforge_protocol_types::{CheckKind, ConstraintKind, FieldType};
 
 pub use specforge_protocol_types::{
-    ContributionFlags, DeclaredCategory, EdgeTypeDescriptor, EntityEnhancementDescriptor,
-    EntityKindDescriptor, ExtensionDeclaration, FeatureFlagDescriptor, FieldConstraintDescriptor,
-    FieldDescriptor, HandshakeResponse, PeerDependency, ProtocolError, SandboxPolicy,
-    ValidationRuleDescriptor, ValidationSeverity, ValidatorContext, ValidatorEntity,
-    ValidatorField, ValidatorMethod, ValidatorParam, ValidatorRef, ValidatorVerdict,
+    DeclaredCategory, EdgeTypeDescriptor, EntityEnhancementDescriptor, EntityKindDescriptor,
+    ExtensionDeclaration, FeatureFlagDescriptor, FieldConstraintDescriptor, FieldDescriptor,
+    HandshakeResponse, PeerDependency, ProtocolError, SandboxPolicy, ValidationRuleDescriptor,
+    ValidationSeverity, ValidatorContext, ValidatorEntity, ValidatorField, ValidatorMethod,
+    ValidatorParam, ValidatorRef, ValidatorVerdict,
 };
 
 use specforge_protocol_types::{
@@ -100,8 +100,8 @@ pub trait Contributions {
 /// Accumulates everything an extension contributes: its
 /// [`ExtensionDeclaration`] ([`ContributionsBuilder::declaration`]), which
 /// the guest serves on the wire, plus the handlers of its declared
-/// surfaces. Contribution flags are **derived** from what was actually
-/// contributed, so they cannot drift from the content.
+/// surfaces. What it contributes is what it declares
+/// ([`ExtensionDeclaration::declares`]); no flag restates it.
 #[derive(Default)]
 pub struct ContributionsBuilder {
     pub meta: ExtensionMeta,
@@ -405,18 +405,16 @@ impl ContributionsBuilder {
         self
     }
 
-    /// The contribution flags the handshake carries: derived from the
-    /// declaration's content (raw categories are already applied to it), and
-    /// `providers` from [`ExtensionMeta::providers`].
-    fn flags(&self, declaration: &ExtensionDeclaration) -> ContributionFlags {
-        ContributionFlags {
-            providers: self.meta.providers,
-            ..declaration.contribution_flags()
-        }
+    /// It implements configured providers: a `specforge.json` `providers`
+    /// entry may name it. The handshake says so (`providers`); no describe
+    /// category carries it.
+    pub fn providers(&mut self) -> &mut Self {
+        self.meta.providers = true;
+        self
     }
 
     /// Everything this extension declares, as the guest serves it and the
-    /// host loads it: the handshake (from [`ExtensionMeta`], flags derived),
+    /// host loads it: the handshake (from [`ExtensionMeta`]),
     /// every category the builders contributed, the declared surfaces, and
     /// each raw category in place of its builders'.
     ///
@@ -446,7 +444,6 @@ impl ContributionsBuilder {
             protocol_version: specforge_protocol_types::PROTOCOL_VERSION.to_string(),
             name: self.meta.name.clone(),
             version: self.meta.version.clone(),
-            contribution_flags: ContributionFlags::default(),
             peer_dependencies: self.meta.peer_dependencies.clone(),
             sandbox_policy: self.meta.sandbox_policy.clone(),
             starter_template: self.meta.starter_template.clone(),
@@ -455,8 +452,8 @@ impl ContributionsBuilder {
             ext_short: self.meta.short.clone(),
             description: self.meta.description.clone(),
             keywords: self.meta.keywords.clone(),
+            providers: self.meta.providers,
         };
-        declaration.handshake.contribution_flags = self.flags(&declaration);
         declaration
     }
 
@@ -1138,14 +1135,14 @@ pub mod prelude {
 }
 
 #[cfg(test)]
-mod raw_category_flag_tests {
+mod raw_category_tests {
     use super::*;
 
     /// Formal's migration exposed this: an extension serving describes via
-    /// `raw_category` (static data) must still raise the corresponding
-    /// contribution flags, or the host never requests those categories.
+    /// `raw_category` (static data) is declared by them exactly as the
+    /// builders declare, and its handshake carries no flags.
     #[test]
-    fn raw_categories_raise_their_flags() {
+    fn raw_categories_are_declared() {
         let mut b = ContributionsBuilder::new(ExtensionMeta::new("@acme/formal", "1.0.0"));
         b.raw_category(
             DeclaredCategory::Entities,
@@ -1161,20 +1158,13 @@ mod raw_category_flag_tests {
             }]),
         );
 
-        let handshake = b.handshake_json();
-        let value: serde_json::Value = serde_json::from_str(&handshake).unwrap();
-        let flags = &value["contribution_flags"];
-        assert_eq!(
-            flags["entities"],
-            serde_json::json!(true),
-            "raw entities must raise entities flag"
-        );
-        assert_eq!(
-            flags["validators"],
-            serde_json::json!(true),
-            "raw validation_rules must raise validators flag"
-        );
-        assert_eq!(flags["grammars"], serde_json::json!(false));
+        let declaration = b.declaration();
+        assert!(declaration.declares(DeclaredCategory::Entities));
+        assert!(declaration.declares(DeclaredCategory::ValidationRules));
+        assert!(!declaration.declares(DeclaredCategory::Collectors));
+        let value: serde_json::Value = serde_json::from_str(&b.handshake_json()).unwrap();
+        assert!(value.get("contribution_flags").is_none());
+        assert!(value.get("providers").is_none());
     }
 
     #[test]

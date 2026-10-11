@@ -243,7 +243,7 @@ behavior snapshot_entities_once "Snapshot the Entities Once per Compile" {
     exempts it. It counts toward coverage when its
     kind is testable and it owes obligations or declares some: the
     coverage rule's one counting rule, read with the standing's facts.
-    The rules, the pass input's `exempt` (it owes none, and may still
+    The rules, the pass input's `owes_none` (it owes none, and may still
     count by declaring some), stats and the verify-stub fix all read this
     one standing.
   """

@@ -13,7 +13,7 @@ use std::sync::Arc;
 use tower::ServiceExt as _;
 
 /// A package's manifest: its declaration, as `specforge publish` uploads it.
-const VALID_MANIFEST: &str = r#"{"handshake":{"protocol_version":"1","name":"@test/signed-ext","version":"1.0.0","contribution_flags":{},"peer_dependencies":[],"sandbox_policy":null}}"#;
+const VALID_MANIFEST: &str = r#"{"handshake":{"protocol_version":"1","name":"@test/signed-ext","version":"1.0.0","peer_dependencies":[],"sandbox_policy":null}}"#;
 const WASM: &[u8] = b"\0asm-fake-extension-bytes";
 
 fn app_state(dir: &std::path::Path, publish_limit_per_token: u32) -> Arc<AppState> {
@@ -344,7 +344,7 @@ mod ownership {
 
     fn signed_for(name: &str, version: &str) -> axum::body::Body {
         let manifest = format!(
-            r#"{{"handshake":{{"protocol_version":"1","name":"{name}","version":"{version}","contribution_flags":{{}},"peer_dependencies":[],"sandbox_policy":null}}}}"#
+            r#"{{"handshake":{{"protocol_version":"1","name":"{name}","version":"{version}","peer_dependencies":[],"sandbox_policy":null}}}}"#
         );
         multipart_body(
             &manifest,
@@ -508,7 +508,7 @@ async fn description_and_keywords_come_from_the_declaration() {
     let state = app_state(dir.path(), 100);
     let raw = auth::create_token(&state.database, None, "pub", Some(90), false);
     let router = app_clone(&state);
-    let manifest = r#"{"handshake":{"protocol_version":"1","name":"@test/signed-ext","version":"1.0.0","contribution_flags":{},"peer_dependencies":[],"sandbox_policy":null,"description":"Reports over the graph","keywords":["reports","dashboards"]}}"#;
+    let manifest = r#"{"handshake":{"protocol_version":"1","name":"@test/signed-ext","version":"1.0.0","peer_dependencies":[],"sandbox_policy":null,"description":"Reports over the graph","keywords":["reports","dashboards"]}}"#;
     let response = router
         .clone()
         .oneshot(put_request(
@@ -834,7 +834,6 @@ fn stored(state: &AppState, name: &str, declares_entities: bool) {
             "protocol_version": "1.0.0",
             "name": name,
             "version": "1.0.0",
-            "contribution_flags": {},
             "peer_dependencies": [],
             "sandbox_policy": null
         },

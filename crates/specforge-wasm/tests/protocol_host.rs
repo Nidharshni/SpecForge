@@ -60,8 +60,13 @@ fn handshake_returns_parsed_response() {
     assert_eq!(resp.name, "@specforge/software");
     assert_eq!(resp.version, "1.0.0");
     assert_eq!(resp.protocol_version, PROTOCOL_VERSION);
-    assert!(resp.contribution_flags.entities);
-    assert!(resp.contribution_flags.validators);
+    assert!(loaded.declaration.declares(DeclaredCategory::Entities));
+    assert!(
+        loaded
+            .declaration
+            .declares(DeclaredCategory::ValidationRules)
+    );
+    assert!(!resp.providers);
 }
 
 // ── Handshake applies the extension's sandbox: its limits (C7-10, ADR 0037) ──

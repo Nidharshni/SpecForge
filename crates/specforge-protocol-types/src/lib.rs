@@ -44,8 +44,10 @@ pub use vocabulary::{CheckKind, ConstraintKind, FieldType, ProofRole};
 /// values change meaning or an optional field is added; the major moves
 /// only when an older guest could no longer be decoded or answered.
 /// `docs/extension-protocol.md` ("Protocol versions") lists what each
-/// version guarantees; 1.1.0 is the field-text rule of ADR 0019.
-pub const PROTOCOL_VERSION: &str = "1.1.0";
+/// version guarantees; 1.2.0 is ADR 0050's: the declared categories are the
+/// only describe categories, and the handshake says `providers` instead of
+/// carrying contribution flags.
+pub const PROTOCOL_VERSION: &str = "1.2.0";
 
 /// Errors that can occur during the extension protocol lifecycle.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -101,10 +103,9 @@ pub struct HandshakeRequest {
 
 /// Returned by the extension's `__handshake` export.
 ///
-/// `contribution_flags` and `peer_dependencies` are **required** on the wire:
-/// a truncated handshake fails deserialization instead of silently yielding
-/// empty flags (host skips every describe category) or an empty dependency
-/// list (peer checks pass vacuously) — audit C7-07.
+/// `peer_dependencies` is **required** on the wire: a truncated handshake
+/// fails deserialization instead of yielding an empty dependency list (peer
+/// checks pass vacuously) — audit C7-07.
 ///
 /// `sandbox_policy` is a documented exception: serde treats `Option<T>`
 /// fields as implicitly optional, so absence and explicit `null` both
@@ -130,12 +131,15 @@ pub struct HandshakeRequest {
 /// the name's last segment when absent), and what a package registry shows
 /// for it. Absent fields serialize nothing, so a handshake without them is
 /// byte-identical to one from before they existed.
+///
+/// What the extension contributes is not on the handshake: it is what its
+/// declaration declares (`ExtensionDeclaration::declares`). Only `providers`,
+/// which no describe category carries, is.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct HandshakeResponse {
     pub protocol_version: String,
     pub name: String,
     pub version: String,
-    pub contribution_flags: ContributionFlags,
     pub peer_dependencies: Vec<PeerDependency>,
     pub sandbox_policy: Option<SandboxPolicy>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -158,34 +162,11 @@ pub struct HandshakeResponse {
     /// Search keywords for package registries.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub keywords: Vec<String>,
-}
-
-/// Declares which contribution categories an extension provides. Derived
-/// from the declaration's content (`ExtensionDeclaration::contribution_flags`)
-/// and informational: a host reads every declared category whatever these
-/// say, and only `providers` (no describe category) is read from them.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
-pub struct ContributionFlags {
-    #[serde(default)]
-    pub entities: bool,
-    #[serde(default)]
-    pub validators: bool,
-    #[serde(default)]
-    pub renderers: bool,
-    #[serde(default)]
+    /// The extension implements configured providers: a `specforge.json`
+    /// `providers` entry may name it as its extension (W118 otherwise).
+    /// Omitted from the wire when false.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub providers: bool,
-    #[serde(default)]
-    pub collectors: bool,
-    #[serde(default)]
-    pub prompts: bool,
-    #[serde(default)]
-    pub parsers: bool,
-    #[serde(default)]
-    pub grammars: bool,
-    #[serde(default)]
-    pub body_parsers: bool,
-    #[serde(default)]
-    pub analyzers: bool,
 }
 
 /// Declares a dependency on another extension.

@@ -163,7 +163,7 @@ impl Contributions for Testing {
 /// The rule itself is `specforge-coverage` (ADR 0004, D2-f), which the host
 /// links too; this pass only adapts the pass input to it and its findings
 /// to pass diagnostics. Whether an entity is exempt is the host's call,
-/// read from the snapshot (`PassEntity::exempt`).
+/// read from the snapshot (`PassEntity::owes_none`).
 fn pass_coverage(input: &PassInput) -> PassOutput {
     // The one kind TESTABLE grades by risk.
     let graded = TESTABLE
@@ -326,7 +326,7 @@ mod tests {
     fn the_pass_reads_the_exemption_from_each_entity() {
         let input = |exempt: bool| -> PassInput {
             serde_json::from_value(json!({"entities": [
-                {"id": "u", "kind": "type", "testable": true, "exempt": exempt}
+                {"id": "u", "kind": "type", "testable": true, "owes_none": exempt}
             ]}))
             .unwrap()
         };

@@ -167,14 +167,11 @@ fn the_builders_declare_what_the_builtin_declares() {
 }
 
 #[test]
-fn flags_derive_from_contributions() {
-    let b = software_builder();
-    let f = serde_json::from_str::<serde_json::Value>(&b.handshake_json()).unwrap()["contribution_flags"]
-        .clone();
-    assert_eq!(f["entities"], true);
-    assert_eq!(f["validators"], true);
-    assert_eq!(f["renderers"], false);
-    assert_eq!(f["prompts"], false);
+fn contributions_are_read_from_the_declaration() {
+    let declaration = software_builder().declaration();
+    assert!(declaration.declares(DeclaredCategory::Entities));
+    assert!(declaration.declares(DeclaredCategory::ValidationRules));
+    assert!(!declaration.handshake.providers);
 }
 
 #[test]

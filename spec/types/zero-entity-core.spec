@@ -33,45 +33,27 @@ type ExtensionDeclaration {
 // The extension's answer to __handshake: who it is, what it needs, and how
 // the host shows it.
 type HandshakeResponse {
-  protocol_version   string           @readonly
-  name               string           @readonly
-  version            string           @readonly
-  contribution_flags ContributionFlags
-  peer_dependencies  PeerDependency[] @optional
+  protocol_version  string           @readonly
+  name              string           @readonly
+  version           string           @readonly
+  peer_dependencies PeerDependency[] @optional
   // Absent: the host's ceiling holds the extension (30000 ms, 512 MB)
-  sandbox_policy     SandboxPolicy    @optional
+  sandbox_policy    SandboxPolicy    @optional
   // Text of the starter .spec file scaffold_starter_spec_file writes; {project} stands for the project id and {version} for its version
-  starter_template   string           @optional
+  starter_template  string           @optional
   // Wasm function name to invoke during `specforge migrate` for this extension
-  migration_hook     string           @optional
+  migration_hook    string           @optional
   // The colour diagrams (model, outline) draw the extension in; grey when absent
-  theme_color        string           @optional
+  theme_color       string           @optional
   // The name its commands are routed by (specforge <ext_short> <command>,
   // specforge.<ext_short>.<id>); lowercase kebab case; absent, the name's last segment
-  ext_short          string           @optional
+  ext_short         string           @optional
   // What a package registry shows for the extension
-  description        string           @optional
-  keywords           string[]         @optional
+  description       string           @optional
+  keywords          string[]         @optional
+  // It implements configured providers: a specforge.json providers entry may name it (ADR 0050)
+  providers         boolean          @optional
   verify unit "HandshakeResponse schema is valid"
-}
-
-// What an extension contributes, on its handshake. Derived from what it
-// declares and informational: the host reads every declared category
-// whatever they say; only providers, which has no describe category, is
-// read from them.
-type ContributionFlags {
-  entities     boolean @optional
-  validators   boolean @optional
-  renderers    boolean @optional
-  providers    boolean @optional
-  collectors   boolean @optional
-  // Phase 2: extensions MAY contribute domain-specific prompts via Wasm exports (P7).
-  prompts      boolean @optional
-  parsers      boolean @optional
-  grammars     boolean @optional
-  body_parsers boolean @optional
-  analyzers    boolean @optional
-  verify unit "ContributionFlags schema is valid"
 }
 
 // What the registry build derives from the loaded declarations, before any

@@ -253,7 +253,7 @@ impl EntitySnapshot {
 /// One entity as a pass receives it:
 /// - its field texts by key (a key written twice keeps its last text);
 /// - its edge totals and span;
-/// - `testable`, and `exempt` = it owes no obligations of its own.
+/// - `testable`, and `owes_none` = it owes no obligations of its own.
 fn pass_entity(record: &EntityRecord, standing: &Standing) -> PassEntity {
     PassEntity {
         id: record.id.clone(),
@@ -273,7 +273,7 @@ fn pass_entity(record: &EntityRecord, standing: &Standing) -> PassEntity {
             end_col: record.span.end_col,
         }),
         testable: standing.testable,
-        exempt: !standing.owes_obligations(),
+        owes_none: !standing.owes_obligations(),
         verify_kinds: record.obligations.iter().map(|o| o.kind.clone()).collect(),
         verify_texts: record.obligations.iter().map(|o| o.text.clone()).collect(),
     }
@@ -320,7 +320,7 @@ impl Standing {
     }
 
     /// It owes obligations of its own: obligated, and nothing exempts it.
-    /// `PassEntity::exempt` and `specforge_coverage::Entity::exempt` are its
+    /// `PassEntity::owes_none` and `specforge_coverage::Entity::owes_none` are its
     /// negation.
     pub fn owes_obligations(&self) -> bool {
         self.rule.is_some() && self.exemption.is_none()
@@ -1102,7 +1102,7 @@ mod tests {
                         let entity =
                             specforge_coverage::Entity::from(&pass_entity(&record, &standing));
                         assert_eq!(standing.counting(), entity.counting(), "{standing:?}");
-                        assert_eq!(entity.exempt, !standing.owes_obligations());
+                        assert_eq!(entity.owes_none, !standing.owes_obligations());
                         assert_eq!(standing.exempt(), testable && !standing.counts());
                         combinations += 1;
                     }
@@ -1141,7 +1141,7 @@ mod tests {
             assert_eq!(entity.id, pass.id);
             assert_eq!(entity.kind, pass.kind);
             assert_eq!(entity.testable, pass.testable, "{}", pass.id);
-            assert_eq!(entity.exempt, pass.exempt, "{}", pass.id);
+            assert_eq!(entity.owes_none, pass.owes_none, "{}", pass.id);
             assert_eq!(entity.verify_kinds, pass.verify_kinds, "{}", pass.id);
             assert_eq!(entity.verify_texts, pass.verify_texts, "{}", pass.id);
             assert_eq!(entity.risk, None, "{}", pass.id);
@@ -1155,10 +1155,10 @@ mod tests {
         // The cases are all there: a testable entity that owes, one that is
         // exempt, one nothing refers to and one that something does.
         let by_id = |id: &str| covered.iter().find(|e| e.id == id).unwrap();
-        assert!(by_id("open").testable && !by_id("open").exempt);
-        assert!(by_id("base").exempt);
-        assert!(by_id("Status").exempt);
-        assert!(!by_id("note").testable && by_id("note").exempt);
+        assert!(by_id("open").testable && !by_id("open").owes_none);
+        assert!(by_id("base").owes_none);
+        assert!(by_id("Status").owes_none);
+        assert!(!by_id("note").testable && by_id("note").owes_none);
         assert!(by_id("base").referenced);
         assert!(!by_id("open").referenced);
     }

@@ -395,7 +395,7 @@ fn provider_extensions(
                 let mut b = specforge_extension_sdk::ContributionsBuilder::new(
                     specforge_extension_sdk::ExtensionMeta::new(name, "1.0.0"),
                 );
-                b.meta.providers = true;
+                b.providers();
                 b
             })
         },

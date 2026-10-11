@@ -104,7 +104,7 @@ fn the_guest_serves_its_declaration() {
     assert_eq!(loaded, declared);
     assert_eq!(declared.surfaces.commands[0].id, "list");
     assert_eq!(declared.passes[0].name, "audit");
-    assert!(declared.handshake.contribution_flags.entities);
+    assert!(declared.declares(DeclaredCategory::Entities));
     for category in DeclaredCategory::ALL {
         assert_eq!(
             b.describe_response_json(category.name()),
