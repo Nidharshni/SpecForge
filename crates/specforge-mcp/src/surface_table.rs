@@ -153,7 +153,7 @@ impl ExtensionSurfaceTable {
     /// serves; each with an I017 saying why.
     pub fn build(
         registries: &RegistryBuild,
-        core_tools: &[ToolSpec],
+        core_tools: &[&dyn ToolSpec],
         core_resources: &[ResourceSpec],
     ) -> Self {
         let mut table = ExtensionSurfaceTable::default();
@@ -297,8 +297,8 @@ impl ExtensionSurfaceTable {
 
     /// Why an explicit tool named `name` is not served: a core tool or an
     /// earlier extension tool has the name.
-    fn tool_name_taken(&self, name: &str, core_tools: &[ToolSpec]) -> Option<String> {
-        if core_tools.iter().any(|core| core.name == name) {
+    fn tool_name_taken(&self, name: &str, core_tools: &[&dyn ToolSpec]) -> Option<String> {
+        if core_tools.iter().any(|core| core.name() == name) {
             return Some("a core tool has that name".to_string());
         }
         self.tool(name)
@@ -307,8 +307,8 @@ impl ExtensionSurfaceTable {
 
     /// Why a command whose tool would be `name` is not served: the name is
     /// a core tool's, or an explicit tool's.
-    fn command_name_taken(&self, name: &str, core_tools: &[ToolSpec]) -> Option<String> {
-        if core_tools.iter().any(|core| core.name == name) {
+    fn command_name_taken(&self, name: &str, core_tools: &[&dyn ToolSpec]) -> Option<String> {
+        if core_tools.iter().any(|core| core.name() == name) {
             return Some(format!("core tool '{name}' already exists"));
         }
         self.tool(name)

@@ -8,6 +8,7 @@
 //! [`ProjectRef`] and cannot tell which adapter answered it; they never
 //! resolve a root, pick a freshness rule or reload anything themselves.
 
+use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 
 use serde_json::Value;
@@ -701,9 +702,158 @@ fn absolute(path: &Path) -> PathBuf {
     absolute
 }
 
+/// What a core tool's handler is given before its arguments, and so its
+/// call target (ADR 0024 A2: the handler's input is the target; ADR 0049).
+/// Four implementations: [`Unscoped`], [`View`], [`Project`], [`NewProject`].
+pub trait Input {
+    /// The value handed to the handler, borrowing the call.
+    type Given<'c>;
+    /// The call target this input makes.
+    const TARGET: TargetSpec;
+    /// The value, from the resolved call. A target that refuses a call with
+    /// no project never resolves to one, so a refusal here is unreachable.
+    fn given<'c>(call: &'c Call<'_>) -> Result<Self::Given<'c>, Box<McpError>>;
+}
+
+/// How a handler given a project reaches it: one of four marker types.
+pub trait Reaches {
+    const TARGET: ProjectTarget;
+}
+
+/// The served project, brought up to date ([`ProjectTarget::SERVED`]).
+pub struct Served;
+/// The served project, unless `use_cached` ([`ProjectTarget::SERVED_UNLESS_CACHED`]).
+pub struct ServedUnlessCached;
+/// The served project or the one `path` names, brought up to date
+/// ([`ProjectTarget::ANY`]).
+pub struct AnyProject;
+/// The same, unless `use_cached` ([`ProjectTarget::ANY_UNLESS_CACHED`]).
+pub struct AnyUnlessCached;
+
+impl Reaches for Served {
+    const TARGET: ProjectTarget = ProjectTarget::SERVED;
+}
+impl Reaches for ServedUnlessCached {
+    const TARGET: ProjectTarget = ProjectTarget::SERVED_UNLESS_CACHED;
+}
+impl Reaches for AnyProject {
+    const TARGET: ProjectTarget = ProjectTarget::ANY;
+}
+impl Reaches for AnyUnlessCached {
+    const TARGET: ProjectTarget = ProjectTarget::ANY_UNLESS_CACHED;
+}
+
+/// Given nothing: reads no project (explain). `TargetSpec::Unscoped`.
+pub struct Unscoped;
+
+/// Given the project view of the project `R` reaches; with nothing served,
+/// the empty session's (ADR 0025).
+/// `TargetSpec::Project { R::TARGET, EmptySession }`.
+pub struct View<R = Served>(PhantomData<R>);
+
+/// Given the project `R` reaches, on disk (its root, its runtime, its view):
+/// with nothing served and no project named, refused before it runs.
+/// `TargetSpec::Project { R::TARGET, Refused }`.
+pub struct Project<R = Served>(PhantomData<R>);
+
+/// Given the directory init creates and the runtime its extensions'
+/// declarations are read in (ADR 0028 D7). `TargetSpec::NewProject`.
+pub struct NewProject;
+
+/// What [`NewProject`] hands its handler.
+pub struct NewProjectDir<'c> {
+    /// The directory, as the call gave it (init creates it).
+    pub dir: &'c Path,
+    /// The runtime its extensions' declarations are read in: the call's.
+    pub runtime: SharedRuntime,
+}
+
+impl Input for Unscoped {
+    type Given<'c> = ();
+    const TARGET: TargetSpec = TargetSpec::Unscoped;
+
+    fn given(_: &Call<'_>) -> Result<(), Box<McpError>> {
+        Ok(())
+    }
+}
+
+impl<R: Reaches> Input for View<R> {
+    type Given<'c> = ProjectView<'c>;
+    const TARGET: TargetSpec = TargetSpec::Project {
+        target: R::TARGET,
+        without: WithoutProject::EmptySession,
+    };
+
+    fn given<'c>(call: &'c Call<'_>) -> Result<ProjectView<'c>, Box<McpError>> {
+        Ok(call.view())
+    }
+}
+
+impl<R: Reaches> Input for Project<R> {
+    type Given<'c> = ProjectRef<'c>;
+    const TARGET: TargetSpec = TargetSpec::Project {
+        target: R::TARGET,
+        without: WithoutProject::Refused,
+    };
+
+    fn given<'c>(call: &'c Call<'_>) -> Result<ProjectRef<'c>, Box<McpError>> {
+        call.project().map_err(Box::new)
+    }
+}
+
+impl Input for NewProject {
+    type Given<'c> = NewProjectDir<'c>;
+    const TARGET: TargetSpec = TargetSpec::NewProject;
+
+    fn given<'c>(call: &'c Call<'_>) -> Result<NewProjectDir<'c>, Box<McpError>> {
+        match call.new_project_dir() {
+            Some(dir) => Ok(NewProjectDir {
+                dir,
+                runtime: call.runtime(),
+            }),
+            // The call target refused a call without a path.
+            None => Err(Box::new(McpError::from(TargetError::PathRequired))),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[specforge_test_macros::test(
+        behavior = "list_mcp_tools",
+        verify = "a tool's path and use_cached are declared once, by its target"
+    )]
+    fn each_input_makes_its_target() {
+        let project = |target, without| TargetSpec::Project { target, without };
+        assert_eq!(Unscoped::TARGET, TargetSpec::Unscoped);
+        assert_eq!(NewProject::TARGET, TargetSpec::NewProject);
+        assert_eq!(
+            View::<Served>::TARGET,
+            project(ProjectTarget::SERVED, WithoutProject::EmptySession)
+        );
+        assert_eq!(
+            View::<AnyProject>::TARGET,
+            project(ProjectTarget::ANY, WithoutProject::EmptySession)
+        );
+        assert_eq!(
+            Project::<Served>::TARGET,
+            project(ProjectTarget::SERVED, WithoutProject::Refused)
+        );
+        assert_eq!(
+            Project::<ServedUnlessCached>::TARGET,
+            project(ProjectTarget::SERVED_UNLESS_CACHED, WithoutProject::Refused)
+        );
+        assert_eq!(
+            Project::<AnyProject>::TARGET,
+            project(ProjectTarget::ANY, WithoutProject::Refused)
+        );
+        assert_eq!(
+            Project::<AnyUnlessCached>::TARGET,
+            project(ProjectTarget::ANY_UNLESS_CACHED, WithoutProject::Refused)
+        );
+    }
 
     #[specforge_test_macros::test(
         behavior = "list_mcp_tools",

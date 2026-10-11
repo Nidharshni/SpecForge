@@ -1,3 +1,5 @@
+use crate::target::View;
+use crate::tool::{CoreTool, Effect, ToolGroup};
 use specforge_ops::OpError;
 use specforge_ops::model::{self, FieldLevel, GroupBy, ModelFormat, ModelOptions, ModelRoot};
 
@@ -32,17 +34,33 @@ pub struct Args {
 /// of `kinds` the project does not know rides in `_meta.diagnostics`
 /// (I020). An unknown `root` or `extension` is refused on that argument,
 /// and so is a `depth` without a `root`.
-pub fn call(view: ProjectView<'_>, args: Args) -> Answered<Text> {
-    let options = options(args)?;
-    match model::model(&view, &options) {
-        Ok(outcome) => Ok(Answer::new(Text(outcome.document)).with_diagnostics(outcome.notices)),
-        Err(error) => {
-            let argument = argument_of(&error);
-            let error = McpError::from(error);
-            Err(Box::new(match argument {
-                Some(argument) => error.with_argument(argument),
-                None => error,
-            }))
+pub(crate) struct Tool;
+
+impl CoreTool for Tool {
+    const NAME: &'static str = "specforge.model";
+    const DESCRIPTION: &'static str =
+        "Render the logical data model (entity kinds, fields, relationships)";
+    const EFFECT: Effect = Effect::Reads {
+        group: ToolGroup::Core,
+    };
+    type Args = Args;
+    type Input = View;
+    type Returns = Answered<Text>;
+
+    fn call(view: ProjectView<'_>, args: Args) -> Answered<Text> {
+        let options = options(args)?;
+        match model::model(&view, &options) {
+            Ok(outcome) => {
+                Ok(Answer::new(Text(outcome.document)).with_diagnostics(outcome.notices))
+            }
+            Err(error) => {
+                let argument = argument_of(&error);
+                let error = McpError::from(error);
+                Err(Box::new(match argument {
+                    Some(argument) => error.with_argument(argument),
+                    None => error,
+                }))
+            }
         }
     }
 }

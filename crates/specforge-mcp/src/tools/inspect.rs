@@ -2,6 +2,8 @@
 //! JSON. The tool renders the read view; it reads no edge, coverage row or
 //! attribution itself (ADR 0015, section "Inspect").
 
+use crate::target::View;
+use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
 use serde::Serialize;
 use serde_json::Value;
 use specforge_common::shape::Shape;
@@ -20,7 +22,7 @@ pub struct Args {
     entity_id: String,
 }
 
-/// `specforge.inspect`'s reply (`McpInspectResult`): the one presenter of
+/// `specforge.inspect`'s reply: the one presenter of
 /// an entity's facts as JSON.
 #[derive(Debug, Serialize, Shape)]
 pub struct Reply {
@@ -58,14 +60,30 @@ pub struct Reply {
     diagnostics: DiagnosticList,
 }
 
-pub fn call(view: ProjectView<'_>, args: Args) -> Answered<Reply> {
-    let facts = specforge_ops::inspect::inspect(&view, &args.entity_id).map_err(McpError::from)?;
-    // A recorded report that cannot be read fails the call (ADR 0004 D2-e).
-    let coverage = facts
-        .coverage
-        .as_ref()
-        .map_err(|e| McpError::from(e.clone()))?;
-    Ok(Reply::of(&facts, coverage).into())
+pub(crate) struct Tool;
+
+impl CoreTool for Tool {
+    const NAME: &'static str = "specforge.inspect";
+    const DESCRIPTION: &'static str = "Get full detail for a specific entity";
+    const EFFECT: Effect = Effect::Reads {
+        group: ToolGroup::Navigation,
+    };
+    const SPEC: ReplySpec = ReplySpec::Type("McpInspectResult");
+    const OPEN_VALUES: &'static [&'static str] = &["$.fields"];
+    type Args = Args;
+    type Input = View;
+    type Returns = Answered<Reply>;
+
+    fn call(view: ProjectView<'_>, args: Args) -> Answered<Reply> {
+        let facts =
+            specforge_ops::inspect::inspect(&view, &args.entity_id).map_err(McpError::from)?;
+        // A recorded report that cannot be read fails the call (ADR 0004 D2-e).
+        let coverage = facts
+            .coverage
+            .as_ref()
+            .map_err(|e| McpError::from(e.clone()))?;
+        Ok(Reply::of(&facts, coverage).into())
+    }
 }
 
 impl Reply {

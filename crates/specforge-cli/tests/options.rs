@@ -239,7 +239,7 @@ fn help_line(line: &[&str]) -> String {
 fn advertised(tool: &str, argument: &str) -> String {
     let spec = specforge_mcp::tools::CORE_TOOLS
         .iter()
-        .find(|spec| spec.name == tool)
+        .find(|spec| spec.name() == tool)
         .unwrap_or_else(|| panic!("no tool {tool}"));
     let property = spec.input_schema()["properties"][argument].clone();
     let required = spec.input_schema()["required"]

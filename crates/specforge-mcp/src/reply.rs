@@ -2,10 +2,10 @@
 //!
 //! A handler answers its module's `Reply` (a struct, or an untagged union
 //! of structs, deriving `Serialize` and `Shape`), or [`Text`] for a tool
-//! whose result is a document in text. The tool table names the type once
-//! (`view!(stats::call, NoArgs => stats::Reply, ProjectTarget::SERVED)`):
-//! the listed outputSchema is ``shape::build::<Reply>()``, the result is
-//! the value serialized, and [`conforming`] checks every structured result
+//! whose result is a document in text. A tool's module names the type once
+//! (`type Returns = Answered<Reply>`, ADR 0049): the listed
+//! outputSchema is ``shape::build::<Reply>()``, the result is the value
+//! serialized, and [`conforming`] checks every structured result
 //! against that schema before it is sent: a reply its schema refuses is a
 //! `schema_mismatch` failure, never structured content (the rule extension
 //! tools follow).

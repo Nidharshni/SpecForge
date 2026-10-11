@@ -172,6 +172,13 @@ behavior list_mcp_tools "List MCP Tools" {
     openWorldHint, since the host grants an extension no capability, and is
     listed in the group it declares, core when it declares none or another
     name: never as a mutation.
+    Each core tool is one module: its name, description, the declaration
+    of what it does, the spec type its reply is, its typed arguments, what
+    its handler is given (its call target) and its typed reply are stated
+    there once, and everything listed and dispatched for it is derived
+    from them; a declaration that contradicts its handler (a mutation whose
+    handler answers no mutation, a spec type for a text reply) does not
+    build.
   """
   verify unit "returns all registered tool descriptors after extension load"
   verify unit "returns core-provided descriptors when no extensions installed"
@@ -189,6 +196,7 @@ behavior list_mcp_tools "List MCP Tools" {
   verify unit "an extension tool is listed once across recompiles"
   verify unit "an extension tool's declared output_schema is listed as its outputSchema"
   verify unit "a tool's path and use_cached are declared once, by its target"
+  verify unit "a core tool's spec is derived from its one module: its name, description, effect, arguments, target and reply"
   verify unit "every listed extension tool is the one dispatched under its name, listed once"
 }
 

@@ -139,7 +139,7 @@ fn every_core_output_schema_is_closed() {
         let mut paths = BTreeSet::new();
         open_paths(&schema, "$", &mut paths);
         for path in paths {
-            found.insert((spec.name.to_string(), path));
+            found.insert((spec.name().to_string(), path));
         }
     }
     let listed: BTreeSet<(String, String)> = OPEN

@@ -527,7 +527,7 @@ fn every_core_tool_names_its_reply_in_the_spec() {
     assert_eq!(named.len(), REPLIES.len(), "a tool is named twice");
     let core: BTreeSet<&str> = specforge_mcp::tools::CORE_TOOLS
         .iter()
-        .map(|t| t.name)
+        .map(|t| t.name())
         .collect();
     assert_eq!(named, core, "REPLIES names exactly the core tools");
     for (tool, spec) in REPLIES {

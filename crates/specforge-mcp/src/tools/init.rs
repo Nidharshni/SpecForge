@@ -1,6 +1,7 @@
 //! `specforge.init`: create a project (`specforge_ops::init`).
 
-use std::path::Path;
+use crate::target::{NewProject, NewProjectDir};
+use crate::tool::{CoreTool, Effect, ReplySpec, WriteHints};
 
 use crate::args::Arguments;
 use crate::mutation::{
@@ -29,40 +30,55 @@ impl MutationReply for Reply {
     type After = NoDiagnostics;
 }
 
-/// `specforge.init`'s reply (`McpInitResult`): the init document `specforge
+/// `specforge.init`'s reply: the init document `specforge
 /// init --format json` prints (ADR 0052).
-pub use specforge_ops::init::InitDocument as Reply;
+type Reply = specforge_ops::init::InitDocument;
 
-pub(crate) fn call(
-    path: &Path,
-    runtime: &specforge_project::SharedRuntime,
-    args: Args,
-) -> Mutation<Reply> {
-    use specforge_ops::init;
+pub(crate) struct Tool;
 
-    // The directory the target names (as given: init creates it).
-    let extensions = &args.extensions;
-
-    // The scaffold `specforge init` writes. The call target refused a
-    // directory inside the served project before this ran.
-    let request = init::Request {
-        dir: path,
-        name: args.name.as_deref(),
-        version: &args.version,
-        extensions,
+impl CoreTool for Tool {
+    const NAME: &'static str = "specforge.init";
+    const DESCRIPTION: &'static str = "Initialize a new SpecForge project";
+    const EFFECT: Effect = Effect::Mutates {
+        hints: WriteHints {
+            destructive: false,
+            idempotent: true,
+            open_world: false,
+        },
     };
-    let outcome =
-        init::plan(&request, runtime.as_ref()).and_then(|plan| init::apply(path, plan))?;
-    let reply = outcome.document();
-    // With no project served, the server serves the one it created (ADR
-    // 0014 D5): `mutation::complete` does, once it wrote.
-    let event = MutationEvent::ProjectInitialized {
-        project_name: outcome.name.clone(),
-        extension_count: outcome.extensions.len(),
-        spec_file_path: init::STARTER_FILE.to_string(),
-    };
-    Ok(Mutated::new(
-        reply,
-        Written::files(outcome.writes).with_event(event),
-    ))
+    const SPEC: ReplySpec = ReplySpec::Type("McpInitResult");
+    type Args = Args;
+    type Input = NewProject;
+    type Returns = Mutation<Reply>;
+
+    fn call(new: NewProjectDir<'_>, args: Args) -> Mutation<Reply> {
+        let (path, runtime) = (new.dir, &new.runtime);
+        use specforge_ops::init;
+
+        // The directory the target names (as given: init creates it).
+        let extensions = &args.extensions;
+
+        // The scaffold `specforge init` writes. The call target refused a
+        // directory inside the served project before this ran.
+        let request = init::Request {
+            dir: path,
+            name: args.name.as_deref(),
+            version: &args.version,
+            extensions,
+        };
+        let outcome =
+            init::plan(&request, runtime.as_ref()).and_then(|plan| init::apply(path, plan))?;
+        let reply = outcome.document();
+        // With no project served, the server serves the one it created (ADR
+        // 0014 D5): `mutation::complete` does, once it wrote.
+        let event = MutationEvent::ProjectInitialized {
+            project_name: outcome.name.clone(),
+            extension_count: outcome.extensions.len(),
+            spec_file_path: init::STARTER_FILE.to_string(),
+        };
+        Ok(Mutated::new(
+            reply,
+            Written::files(outcome.writes).with_event(event),
+        ))
+    }
 }

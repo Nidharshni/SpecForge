@@ -76,12 +76,12 @@ fn dispatch_refusals_today() {
         lines.push(line(
             "served",
             &mut served,
-            tool.name,
+            tool.name(),
             json!({"specforge_bogus": 1}),
         ));
     }
     for tool in specforge_mcp::tools::CORE_TOOLS {
-        lines.push(line("nothing", &mut nothing, tool.name, json!({})));
+        lines.push(line("nothing", &mut nothing, tool.name(), json!({})));
     }
     insta::assert_snapshot!(lines.join("\n"));
 }

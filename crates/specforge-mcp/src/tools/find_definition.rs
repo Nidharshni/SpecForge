@@ -1,3 +1,5 @@
+use crate::target::View;
+use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
 use serde::Serialize;
 use specforge_common::SourceSpan;
 use specforge_common::shape::Shape;
@@ -15,7 +17,7 @@ pub struct Args {
     entity_id: String,
 }
 
-/// `specforge.find_definition`'s reply (`McpDefinitionResult`).
+/// `specforge.find_definition`'s reply.
 #[derive(Debug, Serialize, Shape)]
 pub struct Reply {
     entity_id: String,
@@ -36,18 +38,32 @@ pub struct Reply {
 /// `column` are its name's (where a cursor goes); `source_span` is its
 /// block, `name_span` its name (the block when the name could not be
 /// read: `precision` says which).
-pub fn call(view: ProjectView<'_>, args: Args) -> Answered<Reply> {
-    let definition = super::navigator(view)
-        .definition(&args.entity_id)
-        .map_err(McpError::from)?;
-    Ok(Reply {
-        entity_id: definition.id.to_string(),
-        file_path: definition.name.file.to_string(),
-        line: definition.name.start_line,
-        column: definition.name.start_col,
-        source_span: definition.block,
-        name_span: definition.name,
-        precision: definition.precision,
+pub(crate) struct Tool;
+
+impl CoreTool for Tool {
+    const NAME: &'static str = "specforge.find_definition";
+    const DESCRIPTION: &'static str = "Find the source location of an entity definition";
+    const EFFECT: Effect = Effect::Reads {
+        group: ToolGroup::Navigation,
+    };
+    const SPEC: ReplySpec = ReplySpec::Type("McpDefinitionResult");
+    type Args = Args;
+    type Input = View;
+    type Returns = Answered<Reply>;
+
+    fn call(view: ProjectView<'_>, args: Args) -> Answered<Reply> {
+        let definition = super::navigator(view)
+            .definition(&args.entity_id)
+            .map_err(McpError::from)?;
+        Ok(Reply {
+            entity_id: definition.id.to_string(),
+            file_path: definition.name.file.to_string(),
+            line: definition.name.start_line,
+            column: definition.name.start_col,
+            source_span: definition.block,
+            name_span: definition.name,
+            precision: definition.precision,
+        }
+        .into())
     }
-    .into())
 }

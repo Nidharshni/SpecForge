@@ -161,7 +161,7 @@ fn every_listed_tool_has_a_spec_category_and_a_source() {
     let (_server, tools) = tools_with_an_extension();
     let core: Vec<&str> = specforge_mcp::tools::CORE_TOOLS
         .iter()
-        .map(|t| t.name)
+        .map(|t| t.name())
         .collect();
     for tool in &tools {
         let category = tool["category"].as_str().unwrap_or_default();
@@ -198,11 +198,11 @@ fn core_tool_annotations_follow_what_each_tool_does() {
     use specforge_mcp::tool::{Category, Effect, read_only_annotations};
     let (_server, tools) = tools_with_an_extension();
     for spec in specforge_mcp::tools::CORE_TOOLS {
-        let listed = tools.iter().find(|t| t["name"] == spec.name).unwrap();
+        let listed = tools.iter().find(|t| t["name"] == spec.name()).unwrap();
         // One declaration: the listing is what the effect derives.
         assert_eq!(listed["category"], spec.category().as_str(), "{listed}");
         assert_eq!(listed["annotations"], spec.annotations(), "{listed}");
-        match spec.effect {
+        match spec.effect() {
             Effect::Reads { .. } => {
                 assert_eq!(spec.annotations(), read_only_annotations(), "{listed}");
             }
@@ -234,7 +234,7 @@ fn core_tool_annotations_follow_what_each_tool_does() {
 fn a_mutations_output_schema_lists_files_written() {
     for spec in specforge_mcp::tools::CORE_TOOLS {
         let Some(schema) = spec.output_schema() else {
-            assert!(!spec.is_mutation(), "{} declares no output", spec.name);
+            assert!(!spec.is_mutation(), "{} declares no output", spec.name());
             continue;
         };
         // A union reply (add_extension, migrate) states it in each branch.
@@ -247,7 +247,7 @@ fn a_mutations_output_schema_lists_files_written() {
                 branch["properties"].get("files_written").is_some(),
                 spec.is_mutation(),
                 "{}",
-                spec.name
+                spec.name()
             );
         }
     }

@@ -1,3 +1,5 @@
+use crate::target::Unscoped;
+use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
 use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_diagnostics::{CodeEntry, docs_href, lookup, retired};
@@ -13,7 +15,7 @@ pub struct Args {
     code: String,
 }
 
-/// `specforge.explain`'s reply (`McpExplainResult`): a catalogued code's
+/// `specforge.explain`'s reply: a catalogued code's
 /// entry, or a retired code and the entry that replaced it.
 #[derive(Debug, Serialize, Shape)]
 #[serde(untagged)]
@@ -67,29 +69,43 @@ impl Entry {
 /// `specforge.explain`: what `specforge explain <code>` prints, as data.
 /// A retired code names the entry that replaced it, if any; a code the
 /// catalogue doesn't have is invalid input.
-pub fn call(args: Args) -> Answered<Reply> {
-    let code = args.code.trim();
-    if let Some(replacement) = retired(code) {
-        return Ok(Reply::Retired(Retired {
-            code: code.to_uppercase(),
-            retired: true,
-            replaced_by: replacement.and_then(lookup).map(Entry::of),
-        })
-        .into());
-    }
-    match lookup(code) {
-        Some(entry) => Ok(Reply::Entry(Explained {
-            entry: Entry::of(entry),
-            retired: false,
-        })
-        .into()),
-        None => Err(Box::new(McpError::invalid_input(
-            "code",
-            format!(
-                "Unknown diagnostic code: {code}. Catalogued codes are E###, W###, I###, A###, \
+pub(crate) struct Tool;
+
+impl CoreTool for Tool {
+    const NAME: &'static str = "specforge.explain";
+    const DESCRIPTION: &'static str = "Explain a diagnostic code: its title, owner, level, what triggers it and how to fix it, and its docs link";
+    const EFFECT: Effect = Effect::Reads {
+        group: ToolGroup::Core,
+    };
+    const SPEC: ReplySpec = ReplySpec::Type("McpExplainResult");
+    type Args = Args;
+    type Input = Unscoped;
+    type Returns = Answered<Reply>;
+
+    fn call(_: (), args: Args) -> Answered<Reply> {
+        let code = args.code.trim();
+        if let Some(replacement) = retired(code) {
+            return Ok(Reply::Retired(Retired {
+                code: code.to_uppercase(),
+                retired: true,
+                replaced_by: replacement.and_then(lookup).map(Entry::of),
+            })
+            .into());
+        }
+        match lookup(code) {
+            Some(entry) => Ok(Reply::Entry(Explained {
+                entry: Entry::of(entry),
+                retired: false,
+            })
+            .into()),
+            None => Err(Box::new(McpError::invalid_input(
+                "code",
+                format!(
+                    "Unknown diagnostic code: {code}. Catalogued codes are E###, W###, I###, A###, \
                  R### and R-<AREA>-###; E900-E998, W900-W998 and I900-I998 belong to \
                  third-party extensions"
-            ),
-        ))),
+                ),
+            ))),
+        }
     }
 }

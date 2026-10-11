@@ -1,5 +1,7 @@
 //! `specforge.rename`: rename an entity across the project (`specforge_ops::rename`).
 
+use crate::target::{AnyProject, Project};
+use crate::tool::{CoreTool, Effect, ReplySpec, WriteHints};
 use serde::Serialize;
 use specforge_common::shape::Shape;
 
@@ -31,7 +33,7 @@ impl MutationReply for Reply {
     type After = FreshDiagnostics;
 }
 
-/// `specforge.rename`'s reply (`McpRenameResult`).
+/// `specforge.rename`'s reply.
 #[derive(Debug, Serialize, Shape)]
 pub struct Reply {
     old_name: String,
@@ -53,62 +55,80 @@ pub struct Edit {
     new_text: String,
 }
 
-pub(crate) fn call(project: &ProjectRef<'_>, args: Args) -> Mutation<Reply> {
-    use specforge_ops::rename;
+pub(crate) struct Tool;
 
-    // Planned on the call's project as it is on disk (the target brought
-    // the served project up to date, or compiled the project `path`
-    // names), whose spans are relative to its spec root.
-    let spec_root = project.spec_root().to_path_buf();
-    //
-    // The operation decided what kind of failure it is, and which entity it
-    // is about; an invalid new ID is the argument's fault.
-    let plan = rename::plan(
-        &crate::tools::navigator(project.view()),
-        &args.entity_id,
-        &args.new_name,
-    )
-    .map_err(|error| {
-        let argument = (error.kind == OpErrorKind::InvalidInput).then_some("new_name");
-        Failed::from(error).map_error(|e| match argument {
-            Some(argument) => e.with_argument(argument),
-            None => e,
-        })
-    })?;
-
-    let mut reply = Reply {
-        old_name: args.entity_id,
-        new_name: args.new_name.clone(),
-        affected_files: plan
-            .affected_files()
-            .into_iter()
-            .map(String::from)
-            .collect(),
-        edits: plan
-            .edits
-            .iter()
-            .map(|e| Edit {
-                file: e.file.to_string(),
-                line: e.line,
-                start_col: e.start_col,
-                end_col: e.end_col,
-                new_text: e.new_text.clone(),
-            })
-            .collect(),
-        dry_run: None,
+impl CoreTool for Tool {
+    const NAME: &'static str = "specforge.rename";
+    const DESCRIPTION: &'static str = "Rename an entity across all files";
+    const EFFECT: Effect = Effect::Mutates {
+        hints: WriteHints {
+            destructive: true,
+            idempotent: true,
+            open_world: false,
+        },
     };
-    if args.dry_run {
-        reply.dry_run = Some(true);
-        return Ok(Mutated::new(reply, Written::nothing()));
+    const SPEC: ReplySpec = ReplySpec::Type("McpRenameResult");
+    type Args = Args;
+    type Input = Project<AnyProject>;
+    type Returns = Mutation<Reply>;
+
+    fn call(project: ProjectRef<'_>, args: Args) -> Mutation<Reply> {
+        use specforge_ops::rename;
+
+        // Planned on the call's project as it is on disk (the target brought
+        // the served project up to date, or compiled the project `path`
+        // names), whose spans are relative to its spec root.
+        let spec_root = project.spec_root().to_path_buf();
+        //
+        // The operation decided what kind of failure it is, and which entity it
+        // is about; an invalid new ID is the argument's fault.
+        let plan = rename::plan(
+            &crate::tools::navigator(project.view()),
+            &args.entity_id,
+            &args.new_name,
+        )
+        .map_err(|error| {
+            let argument = (error.kind == OpErrorKind::InvalidInput).then_some("new_name");
+            Failed::from(error).map_error(|e| match argument {
+                Some(argument) => e.with_argument(argument),
+                None => e,
+            })
+        })?;
+
+        let mut reply = Reply {
+            old_name: args.entity_id,
+            new_name: args.new_name.clone(),
+            affected_files: plan
+                .affected_files()
+                .into_iter()
+                .map(String::from)
+                .collect(),
+            edits: plan
+                .edits
+                .iter()
+                .map(|e| Edit {
+                    file: e.file.to_string(),
+                    line: e.line,
+                    start_col: e.start_col,
+                    end_col: e.end_col,
+                    new_text: e.new_text.clone(),
+                })
+                .collect(),
+            dry_run: None,
+        };
+        if args.dry_run {
+            reply.dry_run = Some(true);
+            return Ok(Mutated::new(reply, Written::nothing()));
+        }
+        // A failed write restores what it wrote: nothing is left written.
+        let writes = rename::apply(&plan, &spec_root)?;
+        // The reply's `diagnostics` are what `specforge check` reports for the
+        // project as it is on disk now, edits made since the last call
+        // included (`FreshDiagnostics`, filled in once the target is brought up
+        // to date).
+        Ok(Mutated::new(
+            reply,
+            Written::files(writes).with_entities([args.new_name]),
+        ))
     }
-    // A failed write restores what it wrote: nothing is left written.
-    let writes = rename::apply(&plan, &spec_root)?;
-    // The reply's `diagnostics` are what `specforge check` reports for the
-    // project as it is on disk now, edits made since the last call
-    // included (`FreshDiagnostics`, filled in once the target is brought up
-    // to date).
-    Ok(Mutated::new(
-        reply,
-        Written::files(writes).with_entities([args.new_name]),
-    ))
 }

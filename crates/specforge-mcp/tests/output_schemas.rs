@@ -12,7 +12,7 @@ use specforge_test::prelude::*;
 fn documents() -> Vec<(&'static str, Value)> {
     specforge_mcp::tools::CORE_TOOLS
         .iter()
-        .filter_map(|tool| tool.output_schema().map(|schema| (tool.name, schema)))
+        .filter_map(|tool| tool.output_schema().map(|schema| (tool.name(), schema)))
         .collect()
 }
 
