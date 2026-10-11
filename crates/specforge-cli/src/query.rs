@@ -1,26 +1,70 @@
-use crate::terminal::{Terminal, errln, outln};
-use std::path::Path;
-
-use specforge_ops::query::{QueryRequest, query};
-use specforge_ops::view::ProjectView;
-
+use crate::options;
 use crate::outcome::{Exit, OutputFormat, Refusal};
 use crate::pipeline;
+use crate::terminal::{Terminal, errln, outln};
+use specforge_ops::export::Format;
+use specforge_ops::query::{QueryRequest, query};
+use specforge_ops::view::ProjectView;
+use std::path::PathBuf;
 
-/// `specforge query <entity>`: the query read view over the project
-/// compiled at `path`. The document on stdout; the notices (I020) on
-/// stderr; a refusal as `error[CODE]` with the closest entity as its hint
-/// (exit 1).
-pub fn run(path: &Path, request: &QueryRequest, terminal: &Terminal) -> Exit {
-    let project = pipeline::compile_project(path);
-    match query(&ProjectView::of(&project), request) {
-        Ok(outcome) => {
-            for notice in &outcome.notices {
-                errln!(terminal, "{}", specforge_common::render_plain(notice));
-            }
-            outln!(terminal, "{}", outcome.document);
-            Exit::Passed
+// `specforge query`'s command line.
+#[derive(clap::Args)]
+pub(crate) struct Args {
+    /// Entity ID to query
+    entity: String,
+
+    /// Path to the spec root directory
+    #[arg(long, default_value = ".")]
+    path: PathBuf,
+
+    /// Number of hops from the entity (0 = entity only)
+    #[arg(long, default_value_t = specforge_ops::query::DEFAULT_DEPTH)]
+    depth: usize,
+
+    /// Filter results to specific entity kinds (can be repeated)
+    #[arg(long)]
+    kind: Vec<String>,
+
+    /// Output detail level
+    #[arg(
+        long,
+        value_parser = options::choice(&specforge_ops::export::AGENT_FORMAT),
+        default_value = specforge_ops::export::AGENT_FORMAT.default_name()
+    )]
+    format: Format,
+
+    /// Give every entity its coverage status
+    #[arg(long)]
+    include_coverage: bool,
+}
+
+impl Args {
+    /// The query the flags ask for.
+    fn request(&self) -> QueryRequest<'_> {
+        QueryRequest {
+            entity_id: &self.entity,
+            depth: Some(self.depth),
+            kinds: self.kind.iter().map(String::as_str).collect(),
+            format: Some(self.format),
+            include_coverage: self.include_coverage,
         }
-        Err(error) => Refusal::of(OutputFormat::Human).report(terminal, &error),
+    }
+
+    /// `specforge query <entity>`: the query read view over the project
+    /// compiled at `path`. The document on stdout; the notices (I020) on
+    /// stderr; a refusal as `error[CODE]` with the closest entity as its
+    /// hint (exit 1).
+    pub(crate) fn run(self, terminal: &Terminal) -> Exit {
+        let project = pipeline::compile_project(&self.path);
+        match query(&ProjectView::of(&project), &self.request()) {
+            Ok(outcome) => {
+                for notice in &outcome.notices {
+                    errln!(terminal, "{}", specforge_common::render_plain(notice));
+                }
+                outln!(terminal, "{}", outcome.document);
+                Exit::Passed
+            }
+            Err(error) => Refusal::of(OutputFormat::Human).report(terminal, &error),
+        }
     }
 }

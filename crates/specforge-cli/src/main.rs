@@ -116,206 +116,17 @@ enum Commands {
         cache: bool,
     },
     /// Export spec graph to stdout in various formats
-    Export {
-        /// Path to the spec root directory
-        #[arg(default_value = ".")]
-        path: PathBuf,
-
-        /// Output format
-        #[arg(
-            long,
-            value_parser = options::choice(&specforge_ops::export::FORMAT),
-            default_value = specforge_ops::export::FORMAT.default_name()
-        )]
-        format: specforge_ops::export::Format,
-
-        /// Scope export to subgraph reachable from this entity ID
-        #[arg(long)]
-        scope: Option<String>,
-
-        /// With --scope, how many hops from the scoped entity to include
-        #[arg(long, requires = "scope")]
-        depth: Option<usize>,
-
-        /// Keep only entities of these kinds (comma-separated); the scoped
-        /// entity always stays
-        #[arg(long, value_delimiter = ',')]
-        kinds: Vec<String>,
-
-        /// Suppress schema embedding in `graph` exports (keeps format_version 1.0)
-        #[arg(long)]
-        no_schema: bool,
-
-        /// Embed the schema in `context` and `brief` exports, and in a
-        /// `graph` export under --max-tokens. They leave it out by default:
-        /// an agent reading the export needs the entities, and the schema is
-        /// most of the bytes. Under --max-tokens an embedded schema counts
-        /// toward the budget, and a budget it doesn't fit in fails (E062).
-        #[arg(long, conflicts_with = "no_schema")]
-        with_schema: bool,
-
-        /// Request a specific schema version for the export
-        #[arg(long)]
-        schema_version: Option<String>,
-
-        /// Token budget for the export: keeps the most central entities that
-        /// fit. The schema is left out unless --with-schema is given, and
-        /// then counts toward the budget. The export lists the dropped
-        /// entities under `token_budget`; below one entity it is the envelope
-        /// with no entities, and below even that it fails (E062). Ignored by
-        /// `dot`.
-        #[arg(long)]
-        max_tokens: Option<usize>,
-    },
+    Export(export::Args),
     /// Output the Graph Protocol schema
-    Schema {
-        /// Path to the spec root directory
-        #[arg(default_value = ".")]
-        path: PathBuf,
-
-        /// That entity kind and the edge types that can start or end at it
-        #[arg(long, conflicts_with = "publish")]
-        kind: Option<String>,
-
-        /// Leave the edge types out
-        #[arg(long, conflicts_with = "publish")]
-        no_edges: bool,
-
-        /// Add the validation rules the loaded extensions declare
-        #[arg(long, conflicts_with = "publish")]
-        validation_rules: bool,
-
-        /// Publish as standalone JSON Schema (draft 2020-12)
-        #[arg(long)]
-        publish: bool,
-
-        /// Export format the published schema describes
-        #[arg(
-            long,
-            requires = "publish",
-            value_parser = options::choice(&specforge_ops::export::AGENT_FORMAT),
-            default_value = specforge_ops::export::AGENT_FORMAT.default_name()
-        )]
-        format: specforge_ops::export::Format,
-    },
+    Schema(export::SchemaArgs),
     /// Render the logical data model (entity kinds, fields, relationships)
-    Model {
-        /// Path to the spec root directory
-        #[arg(default_value = ".")]
-        path: PathBuf,
-
-        /// Output format
-        #[arg(
-            long,
-            value_parser = options::choice(&specforge_ops::model::MODEL_FORMAT),
-            default_value = specforge_ops::model::MODEL_FORMAT.default_name()
-        )]
-        format: specforge_ops::model::ModelFormat,
-
-        /// How to group entities
-        #[arg(
-            long,
-            value_parser = options::choice(&specforge_ops::model::GROUP_BY),
-            default_value = specforge_ops::model::GROUP_BY.default_name()
-        )]
-        group_by: specforge_ops::model::GroupBy,
-
-        /// Field detail level
-        #[arg(
-            long,
-            value_parser = options::choice(&specforge_ops::model::MODEL_FIELDS),
-            default_value = specforge_ops::model::MODEL_FIELDS.default_name()
-        )]
-        fields: specforge_ops::model::FieldLevel,
-
-        /// Filter to a single extension
-        #[arg(long)]
-        extension: Option<String>,
-
-        /// Filter to specific entity kinds (comma-separated)
-        #[arg(long, value_delimiter = ',')]
-        kinds: Vec<String>,
-
-        /// Root entity kind for depth-scoped output
-        #[arg(long)]
-        root: Option<String>,
-
-        /// Maximum depth from root kind (requires --root)
-        #[arg(long, requires = "root")]
-        depth: Option<usize>,
-    },
+    Model(model::Args),
     /// Render the extension architecture (dependencies, enhancements, contributions)
-    Outline {
-        /// Path to the spec root directory
-        #[arg(default_value = ".")]
-        path: PathBuf,
-
-        /// Output format
-        #[arg(
-            long,
-            value_parser = options::choice(&specforge_ops::model::OUTLINE_FORMAT),
-            default_value = specforge_ops::model::OUTLINE_FORMAT.default_name()
-        )]
-        format: specforge_ops::model::OutlineFormat,
-
-        /// Detail level
-        #[arg(
-            long,
-            value_parser = options::choice(&specforge_ops::model::OUTLINE_FIELDS),
-            default_value = specforge_ops::model::OUTLINE_FIELDS.default_name()
-        )]
-        fields: specforge_ops::model::OutlineDetail,
-
-        /// Dependency visibility
-        #[arg(
-            long,
-            value_parser = options::choice(&specforge_ops::model::DEPS),
-            default_value = specforge_ops::model::DEPS.default_name()
-        )]
-        deps: specforge_ops::model::DependencyDepth,
-    },
+    Outline(outline::Args),
     /// Query the graph at multiple resolutions
-    Query {
-        /// Entity ID to query
-        entity: String,
-
-        /// Path to the spec root directory
-        #[arg(long, default_value = ".")]
-        path: PathBuf,
-
-        /// Number of hops from the entity (0 = entity only)
-        #[arg(long, default_value_t = specforge_ops::query::DEFAULT_DEPTH)]
-        depth: usize,
-
-        /// Filter results to specific entity kinds (can be repeated)
-        #[arg(long)]
-        kind: Vec<String>,
-
-        /// Output detail level
-        #[arg(
-            long,
-            value_parser = options::choice(&specforge_ops::export::AGENT_FORMAT),
-            default_value = specforge_ops::export::AGENT_FORMAT.default_name()
-        )]
-        format: specforge_ops::export::Format,
-
-        /// Give every entity its coverage status
-        #[arg(long)]
-        include_coverage: bool,
-    },
+    Query(query::Args),
     /// Show traceability chain for an entity, or for every entity
-    Trace {
-        /// Entity ID to trace (omit to trace every entity)
-        entity: Option<String>,
-
-        /// Path to the spec root directory
-        #[arg(long, default_value = ".")]
-        path: PathBuf,
-
-        /// Output format: json or human
-        #[arg(long, default_value = "json")]
-        format: OutputFormat,
-    },
+    Trace(trace::Args),
     /// Format .spec files
     Format {
         /// Explicit file or directory paths to format
@@ -339,66 +150,13 @@ enum Commands {
         stdin: bool,
     },
     /// Show project statistics
-    Stats {
-        /// Path to the spec root directory
-        #[arg(default_value = ".")]
-        path: PathBuf,
-
-        /// Output format: human or json
-        #[arg(long, default_value = "human")]
-        format: OutputFormat,
-    },
+    Stats(stats::Args),
     /// Where to start reading the graph: starting points, hubs and unconnected entities
-    Explore {
-        /// Entity ID to explore from (omit to explore the whole project)
-        entity: Option<String>,
-
-        /// Path to the spec root directory
-        #[arg(long, default_value = ".")]
-        path: PathBuf,
-
-        /// Only entities of this kind
-        #[arg(long)]
-        kind: Option<String>,
-
-        /// Hops from the entity (unbounded when omitted)
-        #[arg(long)]
-        depth: Option<usize>,
-
-        /// Output format: human or json
-        #[arg(long, default_value = "human")]
-        format: OutputFormat,
-    },
+    Explore(explore::Args),
     /// Coverage gaps around an entity, or of the whole project
-    Review {
-        /// Entity ID to review (omit to review the whole project)
-        entity: Option<String>,
-
-        /// Path to the spec root directory
-        #[arg(long, default_value = ".")]
-        path: PathBuf,
-
-        /// Hops around the entity
-        #[arg(long, default_value_t = specforge_ops::review::DEFAULT_DEPTH)]
-        depth: usize,
-
-        /// Output format: human or json
-        #[arg(long, default_value = "human")]
-        format: OutputFormat,
-    },
+    Review(review::Args),
     /// What to look for in code to write a kind's entities
-    InferGuide {
-        /// Entity kind (omit for every declared kind)
-        kind: Option<String>,
-
-        /// Path to the spec root directory
-        #[arg(long, default_value = ".")]
-        path: PathBuf,
-
-        /// Output format: human or json
-        #[arg(long, default_value = "human")]
-        format: OutputFormat,
-    },
+    InferGuide(infer_guide::Args),
     /// Install an extension
     Add {
         /// Extension specifier (e.g., @scope/name@1.0.0 or ./path)
@@ -821,110 +579,12 @@ fn run(command: Commands, terminal: &Terminal) -> Exit {
             severity,
             cache,
         } => check::run(&path, strict, format, &lint, severity, cache, terminal),
-        Commands::Export {
-            path,
-            format,
-            scope,
-            depth,
-            kinds,
-            no_schema,
-            with_schema,
-            schema_version,
-            max_tokens,
-        } => export::run(
-            &path,
-            &specforge_ops::export::Request {
-                format: Some(format),
-                scope: scope.as_deref(),
-                depth,
-                kinds: kinds.iter().map(String::as_str).collect(),
-                max_tokens,
-                // context, brief and a budgeted graph export leave the schema
-                // out unless asked for it (the policy lives in specforge-ops).
-                schema: match (no_schema, with_schema) {
-                    (true, _) => specforge_ops::export::Schema::Without,
-                    (_, true) => specforge_ops::export::Schema::With,
-                    _ => specforge_ops::export::Schema::Default,
-                },
-                schema_version: schema_version.as_deref(),
-            },
-            terminal,
-        ),
-        Commands::Schema {
-            path,
-            kind,
-            no_edges,
-            validation_rules,
-            publish,
-            format,
-        } => export::run_schema(
-            &path,
-            &specforge_ops::schema::SchemaRequest {
-                kind: kind.as_deref(),
-                edges: !no_edges,
-                validation_rules,
-            },
-            publish.then_some(format),
-            terminal,
-        ),
-        Commands::Model {
-            path,
-            format,
-            group_by,
-            fields,
-            extension,
-            kinds,
-            root,
-            depth,
-        } => model::run(
-            &path,
-            &specforge_ops::model::ModelOptions {
-                format,
-                group_by,
-                fields,
-                extension,
-                kinds,
-                root: root.map(|kind| specforge_ops::model::ModelRoot { kind, depth }),
-            },
-            terminal,
-        ),
-        Commands::Outline {
-            path,
-            format,
-            fields,
-            deps,
-        } => outline::run(
-            &path,
-            &specforge_ops::model::OutlineOptions {
-                format,
-                detail: fields,
-                deps,
-            },
-            terminal,
-        ),
-        Commands::Query {
-            entity,
-            path,
-            depth,
-            kind,
-            format,
-            include_coverage,
-        } => query::run(
-            &path,
-            &specforge_ops::query::QueryRequest {
-                entity_id: &entity,
-                depth: Some(depth),
-                kinds: kind.iter().map(String::as_str).collect(),
-                format: Some(format),
-                include_coverage,
-            },
-            terminal,
-        ),
-        Commands::Trace {
-            entity,
-            path,
-            format,
-        } => trace::run(&path, entity.as_deref(), format, terminal),
+        Commands::Export(args) => args.run(terminal),
+        Commands::Schema(args) => args.run(terminal),
+        Commands::Model(args) => args.run(terminal),
+        Commands::Outline(args) => args.run(terminal),
+        Commands::Query(args) => args.run(terminal),
+        Commands::Trace(args) => args.run(terminal),
         Commands::Format {
             paths,
             path,
@@ -932,40 +592,10 @@ fn run(command: Commands, terminal: &Terminal) -> Exit {
             diff,
             stdin,
         } => format::run(&path, check, diff, stdin, &paths, terminal),
-        Commands::Stats { path, format } => stats::run(&path, format, terminal),
-        Commands::Explore {
-            entity,
-            path,
-            kind,
-            depth,
-            format,
-        } => explore::run(
-            &path,
-            &specforge_ops::explore::ExplorationRequest {
-                entity_id: entity.as_deref(),
-                kind: kind.as_deref(),
-                depth,
-            },
-            format,
-            terminal,
-        ),
-        Commands::Review {
-            entity,
-            path,
-            depth,
-            format,
-        } => review::run(
-            &path,
-            &specforge_ops::review::ReviewRequest {
-                entity_id: entity.as_deref(),
-                depth,
-            },
-            format,
-            terminal,
-        ),
-        Commands::InferGuide { kind, path, format } => {
-            infer_guide::run(&path, kind.as_deref(), format, terminal)
-        }
+        Commands::Stats(args) => args.run(terminal),
+        Commands::Explore(args) => args.run(terminal),
+        Commands::Review(args) => args.run(terminal),
+        Commands::InferGuide(args) => args.run(terminal),
         Commands::Add {
             specifier,
             path,

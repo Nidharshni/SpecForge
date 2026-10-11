@@ -1,45 +1,55 @@
+use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
+use crate::pipeline;
 use crate::terminal::{Terminal, outln};
-use std::path::Path;
-
 use specforge_ops::infer::{InferenceGuide, KindGuide, guide, kind_guide};
 use specforge_ops::view::ProjectView;
+use std::path::PathBuf;
 
-use crate::outcome::{Exit, OutputFormat, Refusal};
-use crate::pipeline;
+// `specforge infer-guide`'s command line.
+#[derive(clap::Args)]
+pub(crate) struct Args {
+    /// Entity kind (omit for every declared kind)
+    kind: Option<String>,
 
-/// `specforge infer-guide [KIND]`: the inference guide read view over the
-/// project compiled at `path` (ADR 0015, "Prompt read views"): every
-/// declared kind's guide, or one kind's. The JSON is the infer prompt's
-/// overview or kind-scope data without the prompt's own `output_format` and
-/// `validation` text. An undeclared kind is `unknown_kind` naming the
-/// closest declared kind (exit 1).
-pub(crate) fn run(
-    path: &Path,
-    kind: Option<&str>,
-    format: OutputFormat,
-    terminal: &Terminal,
-) -> Exit {
-    let project = pipeline::compile_project(path);
-    let view = ProjectView::of(&project);
-    match kind {
-        None => {
-            let guide = guide(&view);
-            match format {
-                OutputFormat::Json => terminal.json(&guide.document()),
-                OutputFormat::Human => print_overview(&guide, terminal),
-            }
-            Exit::Passed
-        }
-        Some(kind) => match kind_guide(&view, kind) {
-            Ok(guide) => {
+    /// Path to the spec root directory
+    #[arg(long, default_value = ".")]
+    path: PathBuf,
+
+    #[command(flatten)]
+    output: OutputArg,
+}
+
+impl Args {
+    /// `specforge infer-guide [KIND]`: the inference guide read view over
+    /// the project compiled at `path` (ADR 0015, "Prompt read views"):
+    /// every declared kind's guide, or one kind's. The JSON is the infer
+    /// prompt's overview or kind-scope data without the prompt's own
+    /// `output_format` and `validation` text. An undeclared kind is
+    /// `unknown_kind` naming the closest declared kind (exit 1).
+    pub(crate) fn run(self, terminal: &Terminal) -> Exit {
+        let format = self.output.format;
+        let project = pipeline::compile_project(&self.path);
+        let view = ProjectView::of(&project);
+        match self.kind.as_deref() {
+            None => {
+                let guide = guide(&view);
                 match format {
                     OutputFormat::Json => terminal.json(&guide.document()),
-                    OutputFormat::Human => print_kind(&guide, terminal),
+                    OutputFormat::Human => print_overview(&guide, terminal),
                 }
                 Exit::Passed
             }
-            Err(error) => Refusal::of(format).report(terminal, &error),
-        },
+            Some(kind) => match kind_guide(&view, kind) {
+                Ok(guide) => {
+                    match format {
+                        OutputFormat::Json => terminal.json(&guide.document()),
+                        OutputFormat::Human => print_kind(&guide, terminal),
+                    }
+                    Exit::Passed
+                }
+                Err(error) => Refusal::of(format).report(terminal, &error),
+            },
+        }
     }
 }
 

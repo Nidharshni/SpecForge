@@ -78,6 +78,15 @@ impl OutputFormat {
     }
 }
 
+/// The `--format human|json` flag every core command with a JSON form takes
+/// (`#[command(flatten)]`; `trace` declares its own, json by default).
+#[derive(clap::Args, Clone, Copy, Debug)]
+pub(crate) struct OutputArg {
+    /// Output format: human or json
+    #[arg(long, default_value = "human")]
+    pub(crate) format: OutputFormat,
+}
+
 /// How one command reports its operation's refusal: the output format, the
 /// root the files a failed operation left written are named from, and the
 /// exit the refusal costs.

@@ -1,28 +1,41 @@
+use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
+use crate::pipeline;
 use crate::terminal::{Terminal, outln};
 use specforge_ops::stats::Stats;
 use specforge_ops::view::ProjectView;
-use std::path::Path;
+use std::path::PathBuf;
 
-use crate::outcome::{Exit, OutputFormat, Refusal};
-use crate::pipeline;
+// `specforge stats`'s command line.
+#[derive(clap::Args)]
+pub(crate) struct Args {
+    /// Path to the spec root directory
+    #[arg(default_value = ".")]
+    path: PathBuf,
 
-/// `specforge stats`: the stats operation over the project compiled at
-/// `path`, its proof percentage read from what `specforge collect` last
-/// recorded there; a report that is there but unusable is an error (exit
-/// 2), as in `analyze`.
-pub fn run(path: &Path, format: OutputFormat, terminal: &Terminal) -> Exit {
-    let project = pipeline::compile_project(path);
-    let stats = match specforge_ops::stats::stats(&ProjectView::of(&project)) {
-        Ok(stats) => stats,
-        Err(error) => return Refusal::measuring(format).report(terminal, &error),
-    };
+    #[command(flatten)]
+    output: OutputArg,
+}
 
-    match format {
-        OutputFormat::Json => terminal.json(&stats),
-        OutputFormat::Human => print_human(&stats, terminal),
+impl Args {
+    /// `specforge stats`: the stats operation over the project compiled at
+    /// `path`, its proof percentage read from what `specforge collect` last
+    /// recorded there; a report that is there but unusable is an error
+    /// (exit 2), as in `analyze`.
+    pub(crate) fn run(self, terminal: &Terminal) -> Exit {
+        let format = self.output.format;
+        let project = pipeline::compile_project(&self.path);
+        let stats = match specforge_ops::stats::stats(&ProjectView::of(&project)) {
+            Ok(stats) => stats,
+            Err(error) => return Refusal::measuring(format).report(terminal, &error),
+        };
+
+        match format {
+            OutputFormat::Json => terminal.json(&stats),
+            OutputFormat::Human => print_human(&stats, terminal),
+        }
+
+        Exit::Passed
     }
-
-    Exit::Passed
 }
 
 fn print_human(stats: &Stats, terminal: &Terminal) {
@@ -56,5 +69,43 @@ fn print_human(stats: &Stats, terminal: &Terminal) {
             found.warnings,
             found.infos
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::terminal::Facts;
+
+    #[test]
+    fn stats_writes_its_human_report_to_stdout() {
+        let dir = tempfile::TempDir::new().unwrap();
+        std::fs::write(
+            dir.path().join("specforge.json"),
+            r#"{"name":"t","version":"0.1.0","extensions":[]}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path().join("main.spec"),
+            "behavior parse_input \"Parse\" {\n  contract \"x\"\n}\n",
+        )
+        .unwrap();
+        let (terminal, capture) = Terminal::captured("", Facts::PIPED);
+
+        let exit = Args {
+            path: dir.path().to_path_buf(),
+            output: OutputArg {
+                format: OutputFormat::Human,
+            },
+        }
+        .run(&terminal);
+
+        assert_eq!(exit, Exit::Passed);
+        assert!(
+            capture.stdout().starts_with("Entities: 1\n  behavior: 1\n"),
+            "{}",
+            capture.stdout()
+        );
+        assert_eq!(capture.stderr(), "");
     }
 }
