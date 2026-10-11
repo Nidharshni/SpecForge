@@ -110,6 +110,49 @@ fn opening_a_workspace_watches_indexes_and_announces() {
     );
 }
 
+#[spec(
+    behavior = "lsp_initialize",
+    verify = "a workspace root inside a project opens the enclosing project"
+)]
+fn a_workspace_root_inside_a_project_opens_the_enclosing_project() {
+    let served = Served::new(&[
+        ("spec/a.spec", "behavior alpha \"Alpha\" {}\n"),
+        ("other/b.spec", "behavior beta \"Beta\" {}\n"),
+    ])
+    .open_in("spec", &[]);
+    let root = served.root().to_str().unwrap().to_string();
+    // The project's root, as the editor spells it, not the folder opened.
+    assert!(
+        logs(served.opening())
+            .contains(&format!("specforge-lsp: indexed 2 .spec files from {root}")),
+        "{:?}",
+        served.opening()
+    );
+    let mut found = names(&served, "");
+    found.sort();
+    assert_eq!(found, ["alpha", "beta"]);
+}
+
+#[test]
+fn a_workspace_root_in_no_project_is_opened_as_given() {
+    let dir = tempfile::TempDir::new().unwrap();
+    std::fs::create_dir_all(dir.path().join("loose")).unwrap();
+    std::fs::write(
+        dir.path().join("loose/a.spec"),
+        "behavior alpha \"Alpha\" {}\n",
+    )
+    .unwrap();
+    let served = Served::at(dir).open_in("loose", &[]);
+    let loose = served.root().join("loose").to_str().unwrap().to_string();
+    assert!(
+        logs(served.opening()).contains(&format!(
+            "specforge-lsp: indexed 1 .spec files from {loose}"
+        )),
+        "{:?}",
+        served.opening()
+    );
+}
+
 #[test]
 fn a_workspace_with_no_root_is_done_at_once() {
     let served = Served::detached();
