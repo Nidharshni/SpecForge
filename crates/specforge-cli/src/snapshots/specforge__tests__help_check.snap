@@ -1,0 +1,39 @@
+---
+source: crates/specforge-cli/src/main.rs
+expression: command.clone().render_long_help().to_string()
+---
+Validate .spec files and report diagnostics
+
+Usage: specforge check [OPTIONS] [PATH]
+
+Arguments:
+  [PATH]
+          Path to the spec root directory
+          
+          [default: .]
+
+Options:
+      --strict
+          Promote warnings to errors
+
+      --format <FORMAT>
+          Output format: human or json
+          
+          [default: human]
+          [possible values: human, json]
+
+      --lint <LINT>
+          Extra lint profiles: inferred (I200/I202 from specforge-infer.json); pedantic is the default and adds nothing
+          
+          [possible values: inferred, pedantic]
+
+      --severity <SEVERITY>
+          Show only diagnostics of this severity (after --strict); the exit code and --cache still judge everything reported
+          
+          [possible values: error, warning, info]
+
+      --cache
+          Record each entity's lifecycle state (e.g. a feature's status) in specforge-cache.json when the check passes (the build cache history rules compare against)
+
+  -h, --help
+          Print help

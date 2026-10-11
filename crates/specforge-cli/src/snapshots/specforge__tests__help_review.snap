@@ -1,0 +1,31 @@
+---
+source: crates/specforge-cli/src/main.rs
+expression: command.clone().render_long_help().to_string()
+---
+Coverage gaps around an entity, or of the whole project
+
+Usage: specforge review [OPTIONS] [ENTITY]
+
+Arguments:
+  [ENTITY]
+          Entity ID to review (omit to review the whole project)
+
+Options:
+      --path <PATH>
+          Path to the spec root directory
+          
+          [default: .]
+
+      --depth <DEPTH>
+          Hops around the entity
+          
+          [default: 1]
+
+      --format <FORMAT>
+          Output format: human or json
+          
+          [default: human]
+          [possible values: human, json]
+
+  -h, --help
+          Print help

@@ -1,0 +1,41 @@
+---
+source: crates/specforge-cli/src/main.rs
+expression: command.clone().render_long_help().to_string()
+---
+Query the graph at multiple resolutions
+
+Usage: specforge query [OPTIONS] <ENTITY>
+
+Arguments:
+  <ENTITY>
+          Entity ID to query
+
+Options:
+      --path <PATH>
+          Path to the spec root directory
+          
+          [default: .]
+
+      --depth <DEPTH>
+          Number of hops from the entity (0 = entity only)
+          
+          [default: 1]
+
+      --kind <KIND>
+          Filter results to specific entity kinds (can be repeated)
+
+      --format <FORMAT>
+          Output detail level
+
+          Possible values:
+          - graph:   every entity with its fields, file and line (Graph Protocol)
+          - context: headline and normative fields and verify, for an agent
+          - brief:   id, kind and title
+          
+          [default: graph]
+
+      --include-coverage
+          Give every entity its coverage status
+
+  -h, --help
+          Print help (see a summary with '-h')

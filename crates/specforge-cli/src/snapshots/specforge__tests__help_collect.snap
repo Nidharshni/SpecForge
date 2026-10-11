@@ -1,0 +1,34 @@
+---
+source: crates/specforge-cli/src/main.rs
+expression: command.clone().render_long_help().to_string()
+---
+Run the project's test runners and record which entities their tests prove
+
+Usage: specforge collect [OPTIONS]
+
+Options:
+      --path <PATH>
+          Path to the project root
+          
+          [default: .]
+
+      --runner <NAME>
+          Collector to use (e.g. cargo-test). Detected from project files if omitted
+
+      --no-run
+          Parse the runner's existing report instead of running it
+
+      --report <FILE>
+          Report files to parse instead of running the runner (implies --no-run)
+
+      --yes
+          Run the declared test command without asking (for CI)
+
+      --format <FORMAT>
+          Output format: human or json
+          
+          [default: human]
+          [possible values: human, json]
+
+  -h, --help
+          Print help

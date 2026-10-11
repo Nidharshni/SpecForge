@@ -1,0 +1,35 @@
+---
+source: crates/specforge-cli/src/main.rs
+expression: command.clone().render_long_help().to_string()
+---
+Update installed extensions to latest compatible versions
+
+Usage: specforge update [OPTIONS] [NAME]
+
+Arguments:
+  [NAME]
+          Extension name (updates all if omitted)
+
+Options:
+      --path <PATH>
+          Path to the project root
+          
+          [default: .]
+
+      --format <FORMAT>
+          Output format: human or json
+          
+          [default: human]
+          [possible values: human, json]
+
+      --major
+          Allow new major versions (otherwise each extension stays within its locked version's caret range)
+
+      --allow-unsigned
+          Accept unsigned packages (publisher verification skipped)
+
+      --yes
+          Accept key changes non-interactively (for CI)
+
+  -h, --help
+          Print help

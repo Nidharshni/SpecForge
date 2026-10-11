@@ -37,6 +37,23 @@ fn explain_points_a_retired_code_at_its_replacement() {
     assert!(plain.contains("Level: warning"), "stdout: {plain}");
 }
 
+/// Today the code is bolded even under `NO_COLOR` and into a pipe (the bug;
+/// plan 11 T8 flips this).
+#[test]
+fn explain_bolds_the_code_even_into_a_pipe() {
+    let out = specforge()
+        .env("NO_COLOR", "1")
+        .env_remove("CLICOLOR_FORCE")
+        .args(["explain", "E001"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert!(
+        stdout.starts_with("\x1b[1mE001\x1b[0m: Parse error"),
+        "stdout: {stdout:?}"
+    );
+}
+
 #[test]
 fn explain_rejects_an_unknown_code_with_format_hints() {
     let out = specforge().args(["explain", "Z999"]).output().unwrap();

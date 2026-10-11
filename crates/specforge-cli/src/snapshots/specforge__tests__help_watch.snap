@@ -1,0 +1,20 @@
+---
+source: crates/specforge-cli/src/main.rs
+expression: command.clone().render_long_help().to_string()
+---
+Watch a project and rebuild incrementally on changes
+
+Usage: specforge watch [OPTIONS]
+
+Options:
+      --path <PATH>
+          Project directory (defaults to current directory)
+
+      --json
+          Emit one JSON object per rebuild cycle
+
+      --verify-incremental
+          Check every incremental rebuild against a cold rebuild (slower)
+
+  -h, --help
+          Print help

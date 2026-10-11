@@ -1,0 +1,33 @@
+---
+source: crates/specforge-cli/src/main.rs
+expression: command.clone().render_long_help().to_string()
+---
+Run static analysis passes over the compiled project
+
+Usage: specforge analyze [OPTIONS] [PASS]
+
+Arguments:
+  [PASS]
+          Analysis pass to run: all (default), coverage, contracts, or a pass an extension declares (`<extension>:<pass>`)
+
+Options:
+      --path <PATH>
+          Project directory (defaults to current directory)
+
+      --json
+          Machine-readable output
+
+      --strict
+          Fail (exit 1) on warnings as well as errors
+
+      --test-results <TEST_RESULTS>
+          Test-results report for proof-level verdicts (default: the project's specforge-report.json, written by `specforge collect`)
+
+      --prove
+          Verify declared bounds and claims with an SMT solver (z3)
+
+      --min <MIN>
+          Fail with a non-zero exit when proof coverage falls below this percentage (needs test results)
+
+  -h, --help
+          Print help

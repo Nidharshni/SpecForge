@@ -1,0 +1,26 @@
+---
+source: crates/specforge-cli/src/main.rs
+expression: command.clone().render_long_help().to_string()
+---
+Show traceability chain for an entity, or for every entity
+
+Usage: specforge trace [OPTIONS] [ENTITY]
+
+Arguments:
+  [ENTITY]
+          Entity ID to trace (omit to trace every entity)
+
+Options:
+      --path <PATH>
+          Path to the spec root directory
+          
+          [default: .]
+
+      --format <FORMAT>
+          Output format: json or human
+          
+          [default: json]
+          [possible values: human, json]
+
+  -h, --help
+          Print help

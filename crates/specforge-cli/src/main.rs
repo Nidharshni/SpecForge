@@ -1157,6 +1157,50 @@ mod tests {
         assert_eq!(OutputFormat::Human.trust(false), Trust::Prompt);
     }
 
+    /// The plain long help of `command` and of each subcommand under it,
+    /// by the snapshot name `help_root` or `help_<path joined by _>`.
+    fn pin_help(command: &clap::Command, path: &[String]) {
+        let name = if path.is_empty() {
+            "help_root".to_string()
+        } else {
+            format!("help_{}", path.join("_"))
+        };
+        insta::assert_snapshot!(name, command.clone().render_long_help().to_string());
+        for sub in command.get_subcommands() {
+            // The generated `help` command and the external-subcommand
+            // placeholder have no help of their own to pin.
+            if sub.get_name() == "help" || sub.is_allow_external_subcommands_set() {
+                continue;
+            }
+            let mut below = path.to_vec();
+            below.push(sub.get_name().to_string());
+            pin_help(sub, &below);
+        }
+    }
+
+    /// Every core command's `--help` is pinned, so moving the arguments out
+    /// of this file cannot change a byte of it (plan 11).
+    #[test]
+    fn every_core_command_help_is_pinned() {
+        let mut root = Cli::command();
+        root.build();
+        pin_help(&root, &[]);
+    }
+
+    /// Today `analyze` and `watch` take `--json`, not `--format` (T6 flips
+    /// this).
+    #[test]
+    fn analyze_and_watch_take_json_today() {
+        use clap::error::ErrorKind;
+        for command in ["analyze", "watch"] {
+            assert!(Cli::try_parse_from(["specforge", command, "--json"]).is_ok());
+            let refused = Cli::try_parse_from(["specforge", command, "--format", "json"])
+                .err()
+                .expect("--format is refused");
+            assert_eq!(refused.kind(), ErrorKind::UnknownArgument);
+        }
+    }
+
     /// `specforge query --depth` defaults to the query operation's constant,
     /// the one `specforge.query`'s schema advertises (plan 08 T8).
     #[test]

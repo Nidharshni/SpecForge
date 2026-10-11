@@ -1,0 +1,48 @@
+---
+source: crates/specforge-cli/src/main.rs
+expression: command.clone().render_long_help().to_string()
+---
+Render the extension architecture (dependencies, enhancements, contributions)
+
+Usage: specforge outline [OPTIONS] [PATH]
+
+Arguments:
+  [PATH]
+          Path to the spec root directory
+          
+          [default: .]
+
+Options:
+      --format <FORMAT>
+          Output format
+
+          Possible values:
+          - markdown
+          - mermaid:  flowchart
+          - dot:      Graphviz
+          - json
+          
+          [default: markdown]
+
+      --fields <FIELDS>
+          Detail level
+
+          Possible values:
+          - none: counts only
+          - keys: names and rule codes
+          - all:  full field attribution
+          
+          [default: keys]
+
+      --deps <DEPS>
+          Dependency visibility
+
+          Possible values:
+          - direct:    declared only
+          - effective: direct and used transitive
+          - full:      all transitive
+          
+          [default: direct]
+
+  -h, --help
+          Print help (see a summary with '-h')
