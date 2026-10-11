@@ -30,7 +30,7 @@ impl Surface for Resources {
     type Outcome = ReadOutcome;
 
     fn core(uri: &str) -> Option<&'static ResourceSpec> {
-        CORE_RESOURCES.iter().find(|r| r.matches(uri))
+        CORE_RESOURCES.iter().find(|r| r.names(uri))
     }
 
     fn extension(state: &McpState, uri: &str) -> Option<ResourceEntry> {
@@ -55,7 +55,9 @@ impl Surface for Resources {
     ) -> Ran<ReadOutcome> {
         match found {
             Found::Core(spec) => Ran::of((spec.read)(call.view(), &invocation.name)),
-            Found::Extension(entry) => extension_resource(call, entry, &invocation.name),
+            Found::Extension(entry) => {
+                crate::extension_dispatch::read_resource(call, entry, &invocation.name)
+            }
         }
     }
 
@@ -199,20 +201,12 @@ impl ResourceSpec {
         }
     }
 
-    /// Whether `uri` names this resource: a template's prefix and what
-    /// stands for its placeholder (the reader refuses an empty one), or the
-    /// URI itself with an optional query string (which the reader reads, or
-    /// refuses: [`views::ViewQuery`]).
-    pub fn matches(&self, uri: &str) -> bool {
-        match self.uri.split_once('{') {
-            Some((prefix, _)) => uri.starts_with(prefix),
-            None => {
-                uri == self.uri
-                    || uri
-                        .strip_prefix(self.uri)
-                        .is_some_and(|rest| rest.starts_with('?'))
-            }
-        }
+    /// Whether `uri` names this resource, by the one rule extension
+    /// resources follow too ([`crate::uri_template::names`]): what stands
+    /// for a placeholder or follows as a query is the reader's to read or
+    /// refuse ([`views::ViewQuery`]).
+    pub fn names(&self, uri: &str) -> bool {
+        crate::uri_template::names(self.uri, uri)
     }
 }
 
@@ -283,48 +277,4 @@ pub static CORE_RESOURCES: &[ResourceSpec] = &[
 /// ([`crate::surface_call::find`]), so the freshness decision is its.
 pub(crate) fn is_served(state: &mut McpState, uri: &str) -> bool {
     crate::surface_call::find::<Resources>(state, uri).is_some()
-}
-
-/// The resource adapter: an extension resource read through its `mcp__`
-/// export, over the `WasmRuntime` seam the call's project was compiled in.
-/// A failed read (a trap, an answer that is not its content and MIME type,
-/// an export the guest does not route) is a server-side fault of the
-/// extension: an internal error (-32603) whose `data` is the `McpError`
-/// carrying the E028 diagnostic (D6, `mcp_structured_error_responses`).
-fn extension_resource(call: &Call<'_>, entry: &ResourceEntry, uri: &str) -> Ran<ReadOutcome> {
-    // The project the resource reads, in the runtime it was compiled in.
-    let project = match call.project() {
-        Ok(project) => project,
-        Err(refused) => return Ran::of(Err(Box::new(refused))),
-    };
-    let runtime = project.runtime;
-    let started = std::time::Instant::now();
-    match specforge_wasm::ExtensionCalls::new(runtime.as_ref()).read_mcp_resource(
-        &entry.extension,
-        &entry.export,
-        uri,
-    ) {
-        // A read whose export answered its content is a dispatched
-        // resource; a failed call (a trap, or an answer that is not the
-        // content and its MIME type) is the read's error, and no dispatch is
-        // recorded.
-        Ok(read) => Ran {
-            events: vec![(
-                "surface_mcp_resource_dispatched".to_string(),
-                json!({
-                    "extensionName": entry.extension,
-                    "uriTemplate": entry.uri_template,
-                    "mimeType": read.mime_type,
-                    "durationMs": u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
-                }),
-            )],
-            outcome: Ok(ResourceText {
-                text: read.content,
-                mime_type: read.mime_type,
-            }),
-        },
-        Err(error) => Ran::of(Err(Box::new(McpError::from_diagnostic(
-            &error.diagnostic(),
-        )))),
-    }
 }

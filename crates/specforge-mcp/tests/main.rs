@@ -28,6 +28,7 @@ mod support;
 mod surface_call;
 mod surface_wiring;
 mod tool_arguments;
+mod tool_dispatch;
 mod tool_errors;
 mod tool_replies;
 mod tools_core;

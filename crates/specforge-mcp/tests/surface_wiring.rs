@@ -879,6 +879,10 @@ fn extension_tool_output_is_checked_against_its_schema() {
     let error = crate::tool_errors::mcp_error(&resp);
     assert_eq!(error["code"], "schema_mismatch", "{error}");
     assert_eq!(
+        error["message"],
+        "tool 'specforge.cmds.check' of '@test/cmds' answered a reply its output schema refuses: $.checked: expected boolean, got string"
+    );
+    assert_eq!(
         error["data"]["violations"],
         json!(["$.checked: expected boolean, got string"]),
         "{error}"
@@ -921,6 +925,10 @@ fn extension_tool_output_with_an_undeclared_key_is_refused() {
     assert_eq!(resp["result"]["isError"], true, "{resp}");
     let error = crate::tool_errors::mcp_error(&resp);
     assert_eq!(error["code"], "schema_mismatch", "{error}");
+    assert_eq!(
+        error["message"],
+        "tool 'test.closed' of '@test/cmds' answered a reply its output schema refuses: $.extra: undeclared key"
+    );
     assert_eq!(
         error["data"]["violations"],
         json!(["$.extra: undeclared key"]),
@@ -1552,6 +1560,58 @@ fn a_resource_outside_specforge_ext_is_read_through_its_export() {
         json!({ "uri": "acme://other/1" }),
         "{resp}"
     );
+}
+
+#[specforge_test(
+    behavior = "dispatch_surface_mcp_resource",
+    verify = "a URI names a core or extension resource by one rule: a template's text before its first placeholder and anything after it, a plain URI alone or followed by a query"
+)]
+fn an_extension_resource_template_names_an_empty_placeholder() {
+    let (mut server, ext, _dir) = fake_extension::initialized(
+        FakeExtension::new()
+            .with_resource(acme_resource())
+            .with_output(
+                "mcp__doc",
+                json!({"content": "doc", "mime_type": "text/plain"}),
+            ),
+    );
+    let resp = read_resource(&mut server, "acme://doc/");
+    assert!(resp["error"].is_null(), "{resp}");
+    assert_eq!(resp["result"]["contents"][0]["text"], "doc", "{resp}");
+    assert_eq!(
+        ext.calls(),
+        [(
+            EXT.to_string(),
+            "mcp__doc".to_string(),
+            json!({"uri": "acme://doc/"})
+        )]
+    );
+    assert_eq!(
+        crate::support::events(&server, "surface_mcp_resource_dispatched").len(),
+        1
+    );
+}
+
+#[specforge_test(
+    behavior = "dispatch_surface_mcp_resource",
+    verify = "a URI names a core or extension resource by one rule: a template's text before its first placeholder and anything after it, a plain URI alone or followed by a query"
+)]
+fn an_extension_resource_names_its_uri_with_a_query() {
+    let uri = "specforge://ext/cmds/summary?x=1";
+    let (mut server, ext, _dir) = fake_extension::initialized(with_summary());
+    let resp = read_resource(&mut server, uri);
+    assert!(resp["error"].is_null(), "{resp}");
+    assert_eq!(
+        ext.calls(),
+        [(
+            EXT.to_string(),
+            "mcp__summary".to_string(),
+            json!({"uri": uri})
+        )]
+    );
+    // Subscribing to it is honoured too: the same lookup answers it.
+    let resp = call(&mut server, "resources/subscribe", json!({"uri": uri}));
+    assert!(resp["error"].is_null(), "{resp}");
 }
 
 #[specforge_test(

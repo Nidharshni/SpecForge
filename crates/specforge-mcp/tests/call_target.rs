@@ -1194,7 +1194,7 @@ fn every_core_entry_with_nothing_served_answers_or_refuses_as_its_target_declare
         assert!(
             probed(Entry::Resource)
                 .iter()
-                .any(|uri| resource.matches(uri)),
+                .any(|uri| resource.names(uri)),
             "{} is not probed",
             resource.uri
         );
