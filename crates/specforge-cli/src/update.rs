@@ -78,7 +78,7 @@ pub fn run(
                 if let Some(key_id) = publisher.key_id() {
                     entry["key_id"] = json!(key_id);
                 }
-                entry["publisher"] = json!(publisher.as_str());
+                entry["publisher"] = json!(publisher.acceptance());
                 Some(entry)
             }
             _ => None,

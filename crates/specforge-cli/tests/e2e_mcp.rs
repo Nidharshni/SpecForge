@@ -2393,7 +2393,7 @@ fn mcp_tool_add_extension_returns_installed() {
     assert!(resp["error"].is_null(), "should not be error: {}", resp);
     let content = parse_tool_content(resp);
     assert_eq!(content["extension"], "@sdk/greet");
-    assert_eq!(content["installed"], true);
+    assert_eq!(content["action"], "installed");
 
     // The project's config now lists the extension (it listed none before)...
     let config: serde_json::Value =

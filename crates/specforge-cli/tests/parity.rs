@@ -90,21 +90,6 @@ const EXPECTED_DIVERGENCES: &[(&str, Aspect, &str)] = &[
         "only `check --cache` writes the build cache (write_build_cache opt_in)",
     ),
     (
-        "add_builtin",
-        Aspect::Document,
-        "two JSON shapes today (plan 07 converges it)",
-    ),
-    (
-        "add_local",
-        Aspect::Document,
-        "two JSON shapes today (plan 07 converges it)",
-    ),
-    (
-        "add_local_again",
-        Aspect::Document,
-        "two JSON shapes today (plan 07 converges it)",
-    ),
-    (
         "remove_builtin",
         Aspect::Document,
         "two JSON shapes today (plan 07 converges it)",

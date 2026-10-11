@@ -125,6 +125,36 @@ pub(crate) fn print_json(value: &impl serde::Serialize) {
     );
 }
 
+/// A document and the files the command wrote (ADR 0022 D6): what `add`,
+/// `remove`, `init` and `migrate` print under `--format json`. A dry run
+/// lists none (`files_written` absent), as MCP's preview.
+#[derive(Debug, serde::Serialize)]
+pub(crate) struct Written<D> {
+    #[serde(flatten)]
+    pub(crate) document: D,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) files_written: Option<Vec<String>>,
+}
+
+impl<D> Written<D> {
+    /// `document` with the files a command wrote.
+    pub(crate) fn of(document: D, files_written: Vec<String>) -> Self {
+        Self {
+            document,
+            files_written: Some(files_written),
+        }
+    }
+
+    /// `document` of a preview: no `files_written`.
+    #[allow(dead_code)]
+    pub(crate) fn preview(document: D) -> Self {
+        Self {
+            document,
+            files_written: None,
+        }
+    }
+}
+
 /// `{"error", "code", "suggestion"}`, and `files_written` when the
 /// operation left files written ([`OpError::writes`], named from `root`
 /// when given).

@@ -3,9 +3,11 @@
 use super::candidate::LocalFile;
 use super::lock_plan::{Fetch, Install, LockPlan, Refused, Verb};
 use super::{Origin, builtin_name};
-use crate::registry::{Publisher, Registry};
+use crate::registry::{Acceptance, Publisher, Registry};
 use crate::{OpError, Writes};
+use serde::Serialize;
 use specforge_common::codes;
+use specforge_common::shape::Shape;
 use specforge_installed::{Installed, LockSource};
 use specforge_protocol_types::package::SpecifierError;
 use specforge_protocol_types::{PackageName, PackageRef};
@@ -133,6 +135,136 @@ pub enum AddOutcome {
     },
 }
 
+impl AddOutcome {
+    /// The document both surfaces print.
+    pub fn document(&self) -> AddDocument {
+        match self {
+            AddOutcome::Builtin {
+                name,
+                changed,
+                peers_enabled,
+            } => AddDocument::Enabled(EnabledBuiltin {
+                extension: (*name).to_string(),
+                source: BuiltinSource::Builtin,
+                changed: *changed,
+                peers_enabled: peers_enabled
+                    .iter()
+                    .map(|peer| (*peer).to_string())
+                    .collect(),
+            }),
+            AddOutcome::Installed {
+                name,
+                version,
+                sha256,
+                publisher,
+                origin,
+            } => AddDocument::Installed(InstalledPackage {
+                extension: name.clone(),
+                version: version.clone(),
+                sha256: sha256.clone(),
+                source: origin.source(),
+                key_id: publisher
+                    .as_ref()
+                    .and_then(Publisher::key_id)
+                    .map(str::to_string),
+                publisher: publisher.as_ref().map(Publisher::acceptance),
+            }),
+            AddOutcome::AlreadyPresent { name, version } => {
+                AddDocument::AlreadyPresent(PresentExtension {
+                    extension: name.clone(),
+                    version: version.clone(),
+                })
+            }
+            AddOutcome::Planned {
+                name,
+                version,
+                origin,
+            } => AddDocument::Planned(PlannedAdd {
+                extension: name.clone(),
+                version: version.clone(),
+                source: origin.source(),
+            }),
+        }
+    }
+
+    /// The add changed nothing: a builtin already enabled, or a package
+    /// already present (`extension_added`'s `wasDuplicate`, ADR 0022 D5).
+    pub fn is_duplicate(&self) -> bool {
+        match self {
+            AddOutcome::Builtin { changed, .. } => !changed,
+            AddOutcome::AlreadyPresent { .. } => true,
+            AddOutcome::Installed { .. } | AddOutcome::Planned { .. } => false,
+        }
+    }
+}
+
+/// What `specforge add --format json` and `specforge.add_extension` print
+/// (`McpAddExtensionResult`): what the add did, by `action`.
+#[derive(Debug, Clone, PartialEq, Serialize, Shape)]
+#[serde(tag = "action", rename_all = "snake_case")]
+pub enum AddDocument {
+    /// A builtin enabled in `specforge.json` (`changed: false` when it
+    /// already was), after the required builtin peers it lists.
+    Enabled(EnabledBuiltin),
+    /// A package installed under `.specforge/extensions/` and locked.
+    Installed(InstalledPackage),
+    /// Already installed at this version and enabled: nothing changed.
+    AlreadyPresent(PresentExtension),
+    /// A dry run: what would be installed or enabled.
+    Planned(PlannedAdd),
+}
+
+/// The one spelling of a builtin's `source`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Shape)]
+pub enum BuiltinSource {
+    #[serde(rename = "builtin")]
+    Builtin,
+}
+
+/// A builtin enabled.
+#[derive(Debug, Clone, PartialEq, Serialize, Shape)]
+pub struct EnabledBuiltin {
+    pub extension: String,
+    pub source: BuiltinSource,
+    pub changed: bool,
+    /// The required builtin peers enabled first.
+    pub peers_enabled: Vec<String>,
+}
+
+/// A package installed and locked.
+#[derive(Debug, Clone, PartialEq, Serialize, Shape)]
+pub struct InstalledPackage {
+    pub extension: String,
+    pub version: String,
+    pub sha256: String,
+    /// `registry`, or `local:<path>` for a local file ([`Origin::source`]).
+    pub source: String,
+    /// The publisher key id; absent for an unsigned package or a local file.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub key_id: Option<String>,
+    /// How the publisher was accepted; absent for a local file.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub publisher: Option<Acceptance>,
+}
+
+/// An extension already installed and enabled.
+#[derive(Debug, Clone, PartialEq, Serialize, Shape)]
+pub struct PresentExtension {
+    pub extension: String,
+    pub version: String,
+}
+
+/// What a dry run would install or enable.
+#[derive(Debug, Clone, PartialEq, Serialize, Shape)]
+pub struct PlannedAdd {
+    pub extension: String,
+    /// Absent for a builtin, which tracks the binary.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
+    /// `builtin`, `registry` or `local:<path>`.
+    pub source: String,
+}
+
 /// What an add did, and what it changed on disk.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Added {
@@ -145,6 +277,13 @@ pub struct Added {
     /// How many extensions `specforge.json` enables after the add (`0`
     /// without one): `extension_added`'s `totalExtensions`.
     pub extensions_enabled: usize,
+}
+
+impl Added {
+    /// [`AddOutcome::document`].
+    pub fn document(&self) -> AddDocument {
+        self.outcome.document()
+    }
 }
 
 /// Add an extension to the project at `req.root`.
@@ -1354,5 +1493,77 @@ mod tests {
         );
         assert!(added.writes.is_empty());
         assert_eq!(crate::config::testing::files_under(dir.path()), before);
+    }
+
+    #[specforge_test(
+        behavior = "add_extension_to_existing_project",
+        verify = "the add document says what the add did by action, with source always and key_id only for a signed package"
+    )]
+    fn add_document_names_what_the_add_did() {
+        use specforge_installed::LockSource;
+
+        let installed_from = |publisher, source| AddOutcome::Installed {
+            name: "@acme/x".into(),
+            version: "1.0.0".into(),
+            sha256: "ab".into(),
+            publisher,
+            origin: Origin::Installed { source },
+        };
+        let signed = Publisher::Signed {
+            key_id: "k1".into(),
+            first_use: true,
+        };
+        let cases = [
+            (
+                AddOutcome::Builtin {
+                    name: "@specforge/product",
+                    changed: true,
+                    peers_enabled: vec!["@specforge/software"],
+                },
+                serde_json::json!({"action": "enabled", "extension": "@specforge/product",
+                    "source": "builtin", "changed": true, "peers_enabled": ["@specforge/software"]}),
+            ),
+            (
+                installed_from(Some(Publisher::Unsigned), LockSource::Registry),
+                serde_json::json!({"action": "installed", "extension": "@acme/x", "version": "1.0.0",
+                    "sha256": "ab", "source": "registry", "publisher": "unsigned"}),
+            ),
+            (
+                installed_from(Some(signed), LockSource::Registry),
+                serde_json::json!({"action": "installed", "extension": "@acme/x", "version": "1.0.0",
+                    "sha256": "ab", "source": "registry", "key_id": "k1", "publisher": "pinned_now"}),
+            ),
+            (
+                installed_from(None, LockSource::Local("x.wasm".into())),
+                serde_json::json!({"action": "installed", "extension": "@acme/x", "version": "1.0.0",
+                    "sha256": "ab", "source": "local:x.wasm"}),
+            ),
+            (
+                AddOutcome::AlreadyPresent {
+                    name: "@acme/x".into(),
+                    version: "1.0.0".into(),
+                },
+                serde_json::json!({"action": "already_present", "extension": "@acme/x", "version": "1.0.0"}),
+            ),
+            (
+                AddOutcome::Planned {
+                    name: "@specforge/product".into(),
+                    version: None,
+                    origin: Origin::Builtin,
+                },
+                serde_json::json!({"action": "planned", "extension": "@specforge/product", "source": "builtin"}),
+            ),
+        ];
+        for (outcome, document) in cases {
+            assert_eq!(serde_json::to_value(outcome.document()).unwrap(), document);
+        }
+        assert!(
+            AddOutcome::AlreadyPresent {
+                name: "a".into(),
+                version: "1".into()
+            }
+            .is_duplicate()
+        );
+        assert!(!installed_from(None, LockSource::Registry).is_duplicate());
     }
 }

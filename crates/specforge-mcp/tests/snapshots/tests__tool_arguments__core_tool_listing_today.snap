@@ -4403,6 +4403,12 @@ expression: listing
         {
           "additionalProperties": false,
           "properties": {
+            "action": {
+              "enum": [
+                "enabled"
+              ],
+              "type": "string"
+            },
             "changed": {
               "type": "boolean"
             },
@@ -4414,9 +4420,6 @@ expression: listing
                 "type": "string"
               },
               "type": "array"
-            },
-            "installed": {
-              "type": "boolean"
             },
             "note": {
               "type": "string"
@@ -4435,18 +4438,23 @@ expression: listing
             }
           },
           "required": [
+            "action",
             "extension",
-            "installed",
             "source",
             "changed",
-            "peers_enabled",
-            "note"
+            "peers_enabled"
           ],
           "type": "object"
         },
         {
           "additionalProperties": false,
           "properties": {
+            "action": {
+              "enum": [
+                "installed"
+              ],
+              "type": "string"
+            },
             "extension": {
               "type": "string"
             },
@@ -4456,9 +4464,6 @@ expression: listing
               },
               "type": "array"
             },
-            "installed": {
-              "type": "boolean"
-            },
             "key_id": {
               "type": "string"
             },
@@ -4466,6 +4471,12 @@ expression: listing
               "type": "string"
             },
             "publisher": {
+              "enum": [
+                "unsigned",
+                "pinned",
+                "pinned_now",
+                "repinned"
+              ],
               "type": "string"
             },
             "sha256": {
@@ -4479,20 +4490,22 @@ expression: listing
             }
           },
           "required": [
+            "action",
             "extension",
-            "installed",
             "version",
             "sha256",
-            "source",
-            "note"
+            "source"
           ],
           "type": "object"
         },
         {
           "additionalProperties": false,
           "properties": {
-            "already_present": {
-              "type": "boolean"
+            "action": {
+              "enum": [
+                "already_present"
+              ],
+              "type": "string"
             },
             "extension": {
               "type": "string"
@@ -4503,10 +4516,7 @@ expression: listing
               },
               "type": "array"
             },
-            "installed": {
-              "type": "boolean"
-            },
-            "message": {
+            "note": {
               "type": "string"
             },
             "version": {
@@ -4514,19 +4524,20 @@ expression: listing
             }
           },
           "required": [
+            "action",
             "extension",
-            "installed",
-            "already_present",
-            "version",
-            "message"
+            "version"
           ],
           "type": "object"
         },
         {
           "additionalProperties": false,
           "properties": {
-            "dry_run": {
-              "type": "boolean"
+            "action": {
+              "enum": [
+                "planned"
+              ],
+              "type": "string"
             },
             "extension": {
               "type": "string"
@@ -4537,8 +4548,8 @@ expression: listing
               },
               "type": "array"
             },
-            "installed": {
-              "type": "boolean"
+            "note": {
+              "type": "string"
             },
             "source": {
               "type": "string"
@@ -4548,9 +4559,8 @@ expression: listing
             }
           },
           "required": [
+            "action",
             "extension",
-            "installed",
-            "dry_run",
             "source"
           ],
           "type": "object"

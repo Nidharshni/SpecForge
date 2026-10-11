@@ -704,51 +704,67 @@ type McpRenderResult {
   verify unit "McpRenderResult schema is valid"
 }
 
-type McpAddExtensionResult = McpAddExtensionBuiltin
-  | McpAddExtensionPackage
+type McpAddExtensionResult = McpAddExtensionEnabled
+  | McpAddExtensionInstalled
   | McpAddExtensionPresent
   | McpAddExtensionPlanned
 
-type McpAddExtensionBuiltin "A builtin extension enabled" {
+/// How a registry package's publisher was accepted: unsigned (allowed),
+/// pinned (its key matched the pin), pinned_now (pinned on first use) or
+/// repinned (a key change accepted with consent).
+type PublisherAcceptance = "unsigned" | "pinned" | "pinned_now" | "repinned"
+
+type McpAddExtensionEnabled "A builtin extension enabled" {
+  action        "enabled" @literal
   extension     string    @readonly
-  installed     boolean
   source        "builtin" @literal
+  /// False when the builtin was already enabled: nothing changed.
   changed       boolean
   /// The required builtin peers enabled first.
   peers_enabled string[]
-  note          string
-  verify unit "McpAddExtensionBuiltin schema is valid"
+  /// Whether the server serves the extension from the next call on;
+  /// absent for a preview (MCP only).
+  note          string    @optional
+  verify unit "McpAddExtensionEnabled schema is valid"
 }
 
-type McpAddExtensionPackage "A package installed and locked" {
-  extension string @readonly
-  installed boolean
+type McpAddExtensionInstalled "A package installed and locked" {
+  action    "installed"         @literal
+  extension string              @readonly
   version   string
   sha256    string
-  /// The publisher key id; absent for an unsigned package.
-  key_id    string @optional
-  /// How the publisher was accepted: unsigned, pinned, pinned_now or repinned; absent for a local file.
-  publisher string @optional
+  /// "registry", or "local:<path>" for a local file.
   source    string
-  note      string
-  verify unit "McpAddExtensionPackage schema is valid"
+  /// The publisher key id; absent for an unsigned package or a local file.
+  key_id    string              @optional
+  /// Absent for a local file.
+  publisher PublisherAcceptance @optional
+  /// Whether the server serves the extension from the next call on;
+  /// absent for a preview (MCP only).
+  note      string              @optional
+  verify unit "McpAddExtensionInstalled schema is valid"
 }
 
 type McpAddExtensionPresent "An extension already installed and enabled: nothing changed" {
-  extension       string @readonly
-  installed       boolean
-  already_present boolean
-  version         string
-  message         string
+  action    "already_present" @literal
+  extension string            @readonly
+  version   string
+  /// Whether the server serves the extension from the next call on;
+  /// absent for a preview (MCP only).
+  note      string            @optional
   verify unit "McpAddExtensionPresent schema is valid"
 }
 
 type McpAddExtensionPlanned "What a dry run would install or enable" {
-  extension string @readonly
-  installed boolean
-  dry_run   boolean
-  version   string @optional
+  action    "planned" @literal
+  extension string    @readonly
+  /// Absent for a builtin, which tracks the binary.
+  version   string    @optional
+  /// "builtin", "registry", or "local:<path>".
   source    string
+  /// Whether the server serves the extension from the next call on;
+  /// absent for a preview (MCP only).
+  note      string    @optional
   verify unit "McpAddExtensionPlanned schema is valid"
 }
 

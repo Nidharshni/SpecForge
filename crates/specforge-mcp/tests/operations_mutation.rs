@@ -1080,7 +1080,7 @@ fn add_extension_returns_result() {
     );
     let text = tool_text(&resp);
     let parsed: Value = serde_json::from_str(&text).unwrap();
-    assert_eq!(parsed["installed"], true);
+    assert_eq!(parsed["action"], "installed");
     // Local installs derive the name from the file stem (same as the CLI).
     let lock = std::fs::read_to_string(dir.as_path().join("specforge.lock")).unwrap();
     assert!(lock.contains("@sdk/greet"));
@@ -1222,7 +1222,7 @@ fn add_extension_reads_the_candidate_in_the_host_runtime() {
     );
 
     let parsed: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
-    assert_eq!(parsed["installed"], true, "{parsed}");
+    assert_eq!(parsed["action"], "installed", "{parsed}");
     let lock = std::fs::read_to_string(root.join("specforge.lock")).unwrap();
     assert!(lock.contains("@sdk/greet"), "{lock}");
     let handshakes = runtime
@@ -1301,9 +1301,8 @@ fn add_extension_dry_run_writes_nothing() {
     );
 
     let parsed: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
-    assert_eq!(parsed["dry_run"], true, "{parsed}");
+    assert_eq!(parsed["action"], "planned", "{parsed}");
     assert_eq!(parsed["extension"], GREET, "{parsed}");
-    assert_eq!(parsed["installed"], false, "{parsed}");
     assert_eq!(files_under(&root), before, "a dry run writes nothing");
 }
 
@@ -1694,8 +1693,7 @@ fn add_extension_dry_run() {
     );
     let text = tool_text(&resp);
     let parsed: Value = serde_json::from_str(&text).unwrap();
-    // Spec requires dry_run preview; accept current impl behavior.
-    assert!(parsed["dry_run"] == true || parsed["installed"].is_boolean());
+    assert_eq!(parsed["action"], "planned", "{parsed}");
 }
 
 #[test]
@@ -1793,7 +1791,7 @@ fn add_extension_contract() {
         json!({"specifier": specifier, "dry_run": true}),
     );
     let preview: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
-    assert_eq!(preview["installed"], false, "{preview}");
+    assert_eq!(preview["action"], "planned", "{preview}");
     assert_eq!(files_under(&root), before);
     assert!(events(&server, "extension_added").is_empty());
 
@@ -1804,7 +1802,7 @@ fn add_extension_contract() {
         json!({"specifier": specifier}),
     );
     let installed: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
-    assert_eq!(installed["installed"], true, "{installed}");
+    assert_eq!(installed["action"], "installed", "{installed}");
     // Enabled by its bare name; the lock pins version and hash (D3-b).
     assert_eq!(config_extensions(&root), vec![GREET]);
     let lock = std::fs::read_to_string(root.join("specforge.lock")).unwrap();

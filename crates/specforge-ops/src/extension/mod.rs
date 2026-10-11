@@ -12,7 +12,10 @@ mod remove;
 mod resolve;
 mod update;
 
-pub use add::{AddOutcome, AddRequest, Added, Source, Trust, add, parse};
+pub use add::{
+    AddDocument, AddOutcome, AddRequest, Added, BuiltinSource, EnabledBuiltin, InstalledPackage,
+    PlannedAdd, PresentExtension, Source, Trust, add, parse,
+};
 pub use candidate::{Candidate, Installable, LocalFile};
 pub use inventory::{Inventory, ProjectExtension, Selection, Status, inventory};
 pub use list::{

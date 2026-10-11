@@ -302,12 +302,16 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
     a diagnostic naming the unresolvable extension. A registry specifier
     with no registry configured in specforge.json MUST make no network call
     and MUST fail with E063, whose suggestion names the registries key.
-    Its JSON output lists the files it wrote as files_written (empty when
-    the extension was already enabled).
+    Its JSON output is the add document specforge.add_extension answers
+    (McpAddExtensionResult, its action enabled, installed, already_present
+    or planned; no note), with the files it wrote as files_written (empty
+    when the extension was already enabled). A registry package's source is
+    registry, and its key_id is present only when the package is signed.
   """
   verify unit "with no registry configured, add makes no network call and reports how to configure one"
   verify unit "add extension appends to extensions list"
   verify integration "add --format json lists the files it wrote in files_written"
+  verify unit "the add document says what the add did by action, with source always and key_id only for a signed package"
   verify unit "add enables a builtin's required peers but not its optional ones"
   verify unit "add enables the builtins a required builtin peer requires, dependencies first"
   verify unit "a builtin whose declaration cannot be read is refused before anything is written"

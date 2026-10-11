@@ -242,10 +242,12 @@ behavior provide_mcp_add_extension_tool "Provide MCP Add Extension Tool" {
     the extension to specforge.json, download the Wasm module if remote, and
     validate the extension manifest. If the manifest is invalid or the
     extension conflicts with an existing one, the tool MUST return an error.
-    If the extension is already installed, the tool MUST return an info
-    response indicating the extension is already present without modifying
-    specforge.json. That call still emits extension_added, with wasDuplicate
-    true; a dry run emits none. A registry specifier with no registry configured in
+    If the extension is already installed, the tool MUST answer action
+    already_present without modifying specforge.json. That call still emits
+    extension_added, with wasDuplicate true; a dry run emits none. Its reply
+    is the add document specforge add --format json prints
+    (McpAddExtensionResult), plus a note saying whether the server serves
+    the extension from the next call on, absent for a preview. A registry specifier with no registry configured in
     specforge.json MUST make no network call and MUST return an E063 error
     whose suggestion names the registries key. The tool MUST run the add
     specforge add runs: a builtin is enabled offline with its required

@@ -1,7 +1,6 @@
 use crate::OutputFormat;
-use crate::outcome::{Exit, Refusal};
-use serde_json::json;
-use specforge_ops::extension::{self, AddOutcome, AddRequest, Origin, Trust};
+use crate::outcome::{Exit, Refusal, Written, print_json};
+use specforge_ops::extension::{self, AddOutcome, AddRequest, Added, Origin, Trust};
 use specforge_ops_registry::ConfiguredRegistry;
 use std::path::Path;
 
@@ -34,7 +33,7 @@ pub fn run(
     format.eprint_diagnostics(&registry.reported());
     match added {
         Ok(added) => {
-            present(&added.outcome, &added.writes.names_under(path), format);
+            present(&added, added.writes.names_under(path), format);
             Exit::Passed
         }
         // An install that failed after placing its module names it.
@@ -42,33 +41,22 @@ pub fn run(
     }
 }
 
-/// The add's outcome; its JSON lists `files_written` (empty when the
-/// extension was already enabled).
-fn present(outcome: &AddOutcome, files_written: &[String], format: OutputFormat) {
-    match (outcome, format) {
-        (
-            AddOutcome::Builtin {
-                name,
-                changed,
-                peers_enabled,
-            },
-            OutputFormat::Json,
-        ) => print_json(json!({
-            "action": "add",
-            "name": name,
-            "source": "builtin",
-            "changed": changed,
-            "peers_enabled": peers_enabled,
-            "files_written": files_written,
-        })),
-        (
-            AddOutcome::Builtin {
-                name,
-                changed,
-                peers_enabled,
-            },
-            OutputFormat::Human,
-        ) => {
+/// The add's outcome; its JSON is the add document with `files_written`
+/// (empty when the extension was already enabled).
+fn present(added: &Added, files_written: Vec<String>, format: OutputFormat) {
+    match format {
+        OutputFormat::Json => print_json(&Written::of(added.document(), files_written)),
+        OutputFormat::Human => print_human(&added.outcome),
+    }
+}
+
+fn print_human(outcome: &AddOutcome) {
+    match outcome {
+        AddOutcome::Builtin {
+            name,
+            changed,
+            peers_enabled,
+        } => {
             for peer in peers_enabled {
                 println!("enabled builtin {peer} (required by {name})");
             }
@@ -78,46 +66,13 @@ fn present(outcome: &AddOutcome, files_written: &[String], format: OutputFormat)
                 println!("{} is already enabled", name);
             }
         }
-        (
-            AddOutcome::Installed {
-                name,
-                version,
-                sha256,
-                publisher,
-                origin,
-            },
-            OutputFormat::Json,
-        ) => {
-            let mut output = json!({
-                "action": "add",
-                "name": name,
-                "version": version,
-                "sha256": sha256,
-                "files_written": files_written,
-            });
-            match origin {
-                Origin::Installed { source } if !source.is_registry() => {
-                    output["source"] = json!(source.to_string());
-                }
-                _ => {
-                    output["key_id"] = json!(publisher.as_ref().and_then(|p| p.key_id()));
-                    if let Some(publisher) = publisher {
-                        output["publisher"] = json!(publisher.as_str());
-                    }
-                }
-            }
-            print_json(output);
-        }
-        (
-            AddOutcome::Installed {
-                name,
-                version,
-                publisher,
-                origin,
-                ..
-            },
-            OutputFormat::Human,
-        ) => match origin {
+        AddOutcome::Installed {
+            name,
+            version,
+            publisher,
+            origin,
+            ..
+        } => match origin {
             Origin::Installed { source } if !source.is_registry() => {
                 println!("installed {} from local path", name);
             }
@@ -128,23 +83,12 @@ fn present(outcome: &AddOutcome, files_written: &[String], format: OutputFormat)
                 }
             }
         },
-        (AddOutcome::AlreadyPresent { name, version }, OutputFormat::Json) => print_json(json!({
-            "action": "none",
-            "name": name,
-            "version": version,
-            "already_present": true,
-            "files_written": files_written,
-        })),
-        (AddOutcome::AlreadyPresent { name, version }, OutputFormat::Human) => {
+        AddOutcome::AlreadyPresent { name, version } => {
             println!("{name} {version} is already installed");
         }
         // `specforge add` has no dry run.
-        (AddOutcome::Planned { .. }, _) => {}
+        AddOutcome::Planned { .. } => {}
     }
-}
-
-fn print_json(value: serde_json::Value) {
-    println!("{}", serde_json::to_string_pretty(&value).unwrap());
 }
 
 /// How the install's publisher is told on the human surface.

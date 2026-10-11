@@ -150,10 +150,10 @@ fn a_registry_install_loads_through_check() {
     assert!(!codes(&found).contains(&"E024"), "{found:?}");
 }
 
-/// The JSON `specforge add` prints names a local source and no key, and a
-/// registry package's key and no source.
+/// The JSON `specforge add` always names its source, and a key only when the
+/// package is signed.
 #[test]
-fn add_json_names_a_local_source_and_a_registry_key() {
+fn add_json_names_its_source_and_a_key_only_when_signed() {
     let dir = greeting_project();
     std::fs::write(dir.path().join("greet.wasm"), greet_wasm()).unwrap();
     let out = specforge()
@@ -185,9 +185,9 @@ fn add_json_names_a_local_source_and_a_registry_key() {
         .unwrap();
     assert!(out.status.success(), "{out:?}");
     let remote: Value = serde_json::from_slice(&out.stdout).unwrap();
-    assert_eq!(remote["key_id"], Value::Null);
-    assert!(remote.get("key_id").is_some(), "{remote}");
-    assert!(remote.get("source").is_none(), "{remote}");
+    assert!(remote.get("key_id").is_none(), "{remote}");
+    assert_eq!(remote["source"], "registry", "{remote}");
+    assert_eq!(remote["publisher"], "unsigned", "{remote}");
 }
 
 #[specforge_test(

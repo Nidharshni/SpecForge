@@ -30,10 +30,9 @@ expression: cli_snap
   },
   "ok": true,
   "payload": {
-    "action": "none",
-    "already_present": true,
+    "action": "already_present",
+    "extension": "@sdk/greet",
     "files_written": [],
-    "name": "@sdk/greet",
     "version": "0.1.0"
   }
 }
