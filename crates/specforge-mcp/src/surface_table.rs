@@ -15,8 +15,8 @@
 //!
 //! Nothing here knows how a command's schema is derived or how its tool is
 //! named: that is `specforge_ops::command::ExtensionCommand`'s. Nothing
-//! here calls an extension either: dispatch is the tools' and resources'
-//! adapters, over the `WasmRuntime` seam.
+//! here calls an extension either: dispatch is `extension_dispatch`'s,
+//! over the `WasmRuntime` seam.
 
 use serde_json::Value;
 use specforge_common::{Code, Diagnostic, codes};
