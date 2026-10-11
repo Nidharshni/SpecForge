@@ -793,22 +793,15 @@ type McpStrandedEntity "An entity a removal strands" {
   verify unit "McpStrandedEntity schema is valid"
 }
 
-type McpMigrateResult = McpMigrateCurrent | McpMigrateRan
-
-type McpMigrateCurrent "A project already at the latest format version" {
-  ok           boolean
-  from_version string
-  to_version   string
-  migrated     boolean
-  dry_run      boolean
-  message      string
-  verify unit "McpMigrateCurrent schema is valid"
-}
-
-type McpMigrateRan "A migration that ran, or was previewed" {
+type McpMigrateResult "A migration: what it ran or previewed, or that nothing was pending" {
+  /// No file failed and nothing was rolled back: the verdict specforge migrate exits by.
   ok                       boolean
+  /// Some file was behind to_version; when false nothing else ran.
+  pending                  boolean
+  /// The oldest format version among the project's files.
   from_version             string
   to_version               string
+  /// The migrated files are on disk now.
   migrated                 boolean
   dry_run                  boolean
   files_migrated           integer
@@ -816,6 +809,8 @@ type McpMigrateRan "A migration that ran, or was previewed" {
   files_failed             integer
   results                  MigrationResult[]
   diffs                    MigrationDiff[]
+  /// The .bak copy of each migrated file (none with no_backup or a dry run).
+  backups                  MigrationBackup[]
   /// extension:hook for each migration hook that ran.
   hooks_invoked            string[]
   /// Why each failing hook failed.
@@ -830,7 +825,7 @@ type McpMigrateRan "A migration that ran, or was previewed" {
   post_migration_validated boolean
   /// What compiling the migrated project reported as errors.
   post_migration_errors    Diagnostic[]
-  verify unit "McpMigrateRan schema is valid"
+  verify unit "McpMigrateResult schema is valid"
 }
 
 type McpInferProgressResult {

@@ -349,6 +349,9 @@ behavior provide_mcp_migrate_tool "Provide MCP Migrate Tool" {
     detect and apply pending migrations to spec files. In dry_run mode, the
     tool MUST return the diff without modifying any files. After migration,
     the tool MUST validate the result and report any post-migration errors.
+    Its reply is the migration document specforge migrate --format json
+    prints (McpMigrateResult); a project with nothing pending answers it
+    with pending false and nothing migrated.
     The tool MUST run the same migration as specforge migrate: extension
     migration hooks run after the files are migrated, and a migration whose
     hooks fail or whose graph changes structure is rolled back. The result

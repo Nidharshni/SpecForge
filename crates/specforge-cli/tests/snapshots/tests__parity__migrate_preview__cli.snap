@@ -39,8 +39,18 @@ expression: cli_snap
         "unified_text": "--- a/spec/old.spec\n+++ b/spec/old.spec\n@@ -1,4 +1,4 @@\n-// specforge-format: 0.1\n+// specforge-format: 1.0\n behavior old_one \"Old\" {\n   category \"core\"\n   contract \"The system MUST work\"\n"
       }
     ],
-    "failed_count": 0,
-    "migrated_count": 1,
+    "dry_run": true,
+    "files_failed": 0,
+    "files_migrated": 1,
+    "files_skipped": 1,
+    "from_version": "0.1",
+    "hook_failures": [],
+    "hooks_invoked": [],
+    "migrated": false,
+    "ok": true,
+    "pending": true,
+    "post_migration_errors": [],
+    "post_migration_validated": false,
     "results": [
       {
         "file_path": "[ROOT]/spec/main.spec",
@@ -67,10 +77,9 @@ expression: cli_snap
         }
       }
     ],
-    "skipped_count": 1,
-    "target_version": {
-      "major": 1,
-      "minor": 0
-    }
+    "rolled_back": false,
+    "schema_warnings": [],
+    "structural_differences": [],
+    "to_version": "1.0"
   }
 }

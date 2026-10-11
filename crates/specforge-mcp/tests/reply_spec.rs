@@ -97,6 +97,7 @@ const SHARED: &[&str] = &[
     "Diagnostic",
     "MigrationResult",
     "MigrationDiff",
+    "MigrationBackup",
     "RollbackSummary",
 ];
 
@@ -648,8 +649,7 @@ reply_type! {
     mcp_add_extension_planned => "McpAddExtensionPlanned", "McpAddExtensionPlanned schema is valid",
     mcp_remove_extension_result => "McpRemoveExtensionResult", "McpRemoveExtensionResult schema is valid",
     mcp_stranded_entity => "McpStrandedEntity", "McpStrandedEntity schema is valid",
-    mcp_migrate_current => "McpMigrateCurrent", "McpMigrateCurrent schema is valid",
-    mcp_migrate_ran => "McpMigrateRan", "McpMigrateRan schema is valid",
+    mcp_migrate_result => "McpMigrateResult", "McpMigrateResult schema is valid",
     mcp_infer_progress_result => "McpInferProgressResult", "McpInferProgressResult schema is valid",
     mcp_infer_summary => "McpInferSummary", "McpInferSummary schema is valid",
     mcp_infer_session_row => "McpInferSessionRow", "McpInferSessionRow schema is valid",

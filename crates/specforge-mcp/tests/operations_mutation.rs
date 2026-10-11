@@ -1493,7 +1493,7 @@ fn migrate_returns_result() {
     let text = tool_text(&resp);
     let parsed: Value = serde_json::from_str(&text).unwrap();
     assert_eq!(parsed["migrated"], false);
-    assert!(parsed.get("message").is_some());
+    assert_eq!(parsed["pending"], false);
 }
 
 #[test]

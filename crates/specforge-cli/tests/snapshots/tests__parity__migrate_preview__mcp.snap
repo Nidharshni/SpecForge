@@ -30,6 +30,7 @@ expression: mcp_snap
   },
   "ok": true,
   "payload": {
+    "backups": [],
     "diffs": [
       {
         "after_hash": "[SHA256]",
@@ -47,6 +48,7 @@ expression: mcp_snap
     "hooks_invoked": [],
     "migrated": false,
     "ok": true,
+    "pending": true,
     "post_migration_errors": [],
     "post_migration_validated": false,
     "results": [

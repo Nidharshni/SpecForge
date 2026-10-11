@@ -90,21 +90,6 @@ const EXPECTED_DIVERGENCES: &[(&str, Aspect, &str)] = &[
         "only `check --cache` writes the build cache (write_build_cache opt_in)",
     ),
     (
-        "migrate",
-        Aspect::Document,
-        "two JSON shapes today (plan 07 converges it)",
-    ),
-    (
-        "migrate_failing",
-        Aspect::Document,
-        "two JSON shapes today (plan 07 converges it)",
-    ),
-    (
-        "migrate_preview",
-        Aspect::Document,
-        "two JSON shapes today (plan 07 converges it)",
-    ),
-    (
         "format",
         Aspect::Document,
         "specforge format prints no JSON document; specforge.format answers McpFormatResult",
@@ -897,6 +882,23 @@ fn verdicts_agree() {
         );
         assert_eq!(cli_obs.verdict, mcp_obs.verdict, "{name}");
     }
+}
+
+/// The CLI's `--format json` and MCP's reply are one outcome document for
+/// every operation both surfaces run: only `specforge format`, which prints
+/// no JSON, differs (each `parity_*` runs the aspect itself).
+#[specforge_test_macros::test(
+    behavior = "report_command_outcome",
+    verify = "the CLI's --format json and MCP's reply are one outcome document for every operation both surfaces run, format aside"
+)]
+fn documents_agree() {
+    let mut rows: Vec<&str> = EXPECTED_DIVERGENCES
+        .iter()
+        .filter(|(_, aspect, _)| *aspect == Aspect::Document)
+        .map(|(name, _, _)| *name)
+        .collect();
+    rows.sort_unstable();
+    assert_eq!(rows, ["format", "format_check", "format_preview"]);
 }
 
 #[test]

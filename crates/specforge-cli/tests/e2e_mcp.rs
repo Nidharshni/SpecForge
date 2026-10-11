@@ -2475,7 +2475,7 @@ fn mcp_tool_migrate_returns_result() {
     // from_version is the format version detected on disk.
     assert_eq!(content["from_version"], "1.0");
     assert_eq!(content["migrated"], false, "fixture is already current");
-    assert!(content["message"].is_string());
+    assert_eq!(content["pending"], false);
 }
 
 #[test]

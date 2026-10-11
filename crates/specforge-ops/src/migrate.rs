@@ -6,7 +6,9 @@
 //! hook fails, or the graph's structure changed, the migrated files are
 //! restored from their backups.
 
-use specforge_common::{Diagnostic, Severity, codes};
+use serde::Serialize;
+use specforge_common::shape::Shape;
+use specforge_common::{Diagnostic, DiagnosticList, Severity, codes};
 /// The migration crate's report types, as this operation's interface.
 pub use specforge_migrate::{
     MigrationBackup, MigrationDiff, MigrationRecord, MigrationResult, MigrationStatus,
@@ -64,6 +66,8 @@ pub struct Outcome {
     /// The oldest format version among the project's files.
     pub from: FormatVersion,
     pub to: FormatVersion,
+    /// The run was a preview: nothing was written.
+    pub dry_run: bool,
     /// Whether any file needed migrating. When not, nothing else ran.
     pub pending: bool,
     /// Whether files were rewritten (not a dry run, and not every file
@@ -92,7 +96,69 @@ pub struct Outcome {
     pub writes: Writes,
 }
 
+/// What `specforge migrate --format json` and `specforge.migrate` print
+/// (`McpMigrateResult`): one record whether anything was pending or not.
+#[derive(Debug, Clone, Serialize, Shape)]
+pub struct MigrateDocument {
+    /// No file failed and nothing was rolled back ([`Outcome::ok`]).
+    pub ok: bool,
+    /// Some file was behind `to_version`; when false nothing else ran.
+    pub pending: bool,
+    pub from_version: String,
+    pub to_version: String,
+    /// The migrated files are on disk now ([`Outcome::migrated`]).
+    pub migrated: bool,
+    pub dry_run: bool,
+    pub files_migrated: usize,
+    pub files_skipped: usize,
+    pub files_failed: usize,
+    pub results: Vec<MigrationResult>,
+    pub diffs: Vec<MigrationDiff>,
+    pub backups: Vec<MigrationBackup>,
+    /// `extension:hook` for each migration hook that ran.
+    pub hooks_invoked: Vec<String>,
+    /// Why each failing hook failed.
+    pub hook_failures: Vec<String>,
+    /// Breaking Graph Protocol schema changes (W053).
+    pub schema_warnings: DiagnosticList,
+    /// How the migrated graph differs from the one before (W054).
+    pub structural_differences: DiagnosticList,
+    pub rolled_back: bool,
+    /// The restore, when the migration was rolled back.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rollback: Option<RollbackSummary>,
+    pub post_migration_validated: bool,
+    /// The errors compiling the migrated project reported.
+    pub post_migration_errors: DiagnosticList,
+}
+
 impl Outcome {
+    /// The document both surfaces print.
+    pub fn document(&self) -> MigrateDocument {
+        MigrateDocument {
+            ok: self.ok(),
+            pending: self.pending,
+            from_version: self.from.to_string(),
+            to_version: self.to.to_string(),
+            migrated: self.migrated(),
+            dry_run: self.dry_run,
+            files_migrated: self.summary.migrated_count,
+            files_skipped: self.summary.skipped_count,
+            files_failed: self.summary.failed_count,
+            results: self.summary.results.clone(),
+            diffs: self.summary.diffs.clone(),
+            backups: self.summary.backups.clone(),
+            hooks_invoked: self.hooks_invoked.clone(),
+            hook_failures: self.hook_failures.clone(),
+            schema_warnings: DiagnosticList(self.schema_warnings.clone()),
+            structural_differences: DiagnosticList(self.structural_differences.clone()),
+            rolled_back: self.rollback.is_some(),
+            rollback: self.rollback.clone(),
+            post_migration_validated: self.validated,
+            post_migration_errors: DiagnosticList(self.post_errors().cloned().collect()),
+        }
+    }
+
     /// Whether the migrated files are on disk now.
     pub fn migrated(&self) -> bool {
         self.applied && self.summary.migrated_count > 0 && self.rollback.is_none()
@@ -162,6 +228,7 @@ pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Outcome {
     let mut outcome = Outcome {
         from,
         to: target.clone(),
+        dry_run: request.dry_run,
         pending,
         applied: false,
         summary: preview,

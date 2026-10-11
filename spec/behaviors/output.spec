@@ -547,6 +547,10 @@ behavior report_command_outcome "Report a Command's Outcome" {
     The verdict is the operation's: the CLI's exit code and the ok MCP
     returns for check, analyze, format, migrate and doctor MUST agree
     (doctor's credentials are the CLI's alone).
+    Under --format json a command prints its operation's outcome document,
+    the one the matching MCP tool answers, adding only what it alone knows
+    (the files it wrote, doctor's credentials, infer-status's --gaps and
+    --gaps-detail sections), never renaming or dropping a key.
   """
   verify unit "an operation's refusal is error[CODE]: message, its hint and the files it left written, on stderr"
   verify unit "under --format json a refusal is the error document on stdout and nothing on stderr"
@@ -554,6 +558,7 @@ behavior report_command_outcome "Report a Command's Outcome" {
   verify unit "stats, trace, analyze, migrate and init refuse with the error document under --format json"
   verify unit "a command run outside any project refuses with no_project"
   verify integration "the CLI's exit code and MCP's ok agree for check, analyze, format and migrate"
+  verify integration "the CLI's --format json and MCP's reply are one outcome document for every operation both surfaces run, format aside"
   verify contract "Report a Command's Outcome: command outcome holds — operation_ran, one_refusal_shape, one_exit_table, surfaces_agree"
 }
 
