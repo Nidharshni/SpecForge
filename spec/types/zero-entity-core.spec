@@ -79,24 +79,24 @@ type ContributionFlags {
 // by that build and read only through its methods. It is pure.
 type RegistryBuild {
   // The declarations it was built from, in load order
-  declarations            ExtensionDeclaration[] @readonly
-  kinds                   KindRegistryEntry[]
-  fields                  FieldRegistryEntry[]
-  edges                   EdgeRegistryEntry[]
+  declarations ExtensionDeclaration[] @readonly
+  kinds        KindRegistryEntry[]
+  fields       FieldRegistryEntry[]
+  edges        EdgeRegistryEntry[]
   // The extensions' rules plus the host-generated E006 rules
-  rules                   ValidationRulePattern[]
-  surfaces                SurfaceRegistryEntry[]
+  rules        ValidationRulePattern[]
+  surfaces     SurfaceRegistryEntry[]
   // Every declared pass, extension by extension in load order, each
   // extension's in its after/before order
-  passes                  CompilerPassDeclaration[]
+  passes       CompilerPassDeclaration[]
   // What every graph of the project is built with (registry_build_graph_inputs)
-  graph_inputs            GraphInputs @readonly
+  graph_inputs GraphInputs            @readonly
   // Every diagnostic it reports, in one order: the declarations' own (E030,
   // W021, E073 and E027, W145), the registries' (E026, W018, W019, W021,
   // I004, W017, the rule set's W150, W147 or W112, then W023), the custom
   // rules' probes (W112), then the surfaces' (E055, E039); each group
   // extension by extension in load order
-  diagnostics             Diagnostic[] @readonly
+  diagnostics  Diagnostic[]           @readonly
   verify unit "RegistryBuild schema is valid"
 }
 
