@@ -46,7 +46,6 @@ use specforge_common::{
 use specforge_graph::{Graph, GraphBuild, GraphConfig};
 use specforge_installed::{Builtins, Installed};
 use specforge_parser::SpecFile;
-use specforge_protocol_types::ExtensionDeclaration;
 use specforge_registry::{
     RegistryBuild, build_registries,
     rules::{CustomVerdicts, NoVerdicts},
@@ -65,7 +64,7 @@ pub use session::{CheckMode, OpeningProject, ProjectSession, RuntimeSource, Sour
 pub use specforge_graph::{
     EdgeChange, GraphDelta, ModifiedNodeChange, NodeChange, compute_graph_delta,
 };
-pub use specforge_installed::EnabledExtension;
+pub use specforge_installed::{EnabledExtension, Loaded};
 
 /// The runtime a project's extensions run in (every [`WasmRuntime`] is
 /// `Send + Sync`).
@@ -76,8 +75,24 @@ pub fn builtins() -> Builtins<'static> {
     Builtins(specforge_component::builtins::BUILTIN_EXTENSIONS)
 }
 
+/// What the extension load gave an environment (CONTEXT "Extension load"):
+/// nothing, when it ran without a runtime, or what it loaded into a
+/// runtime, which the environment then holds (ADR 0015 R1, R3).
+pub enum ExtensionLoad {
+    /// No runtime, so no extension loads: each `extensions` entry enables
+    /// what it names, unloaded ([`Loaded::unloaded`]).
+    NoRuntime,
+    /// What [`Installed::load`] loaded into `runtime`: each entry's
+    /// outcome, the declarations in entry order, the load's diagnostics.
+    In {
+        runtime: SharedRuntime,
+        loaded: Loaded,
+    },
+}
+
 /// Everything derived from `specforge.json` and the loaded extensions,
-/// before any `.spec` file is read.
+/// before any `.spec` file is read. Assembled from those parts
+/// ([`Self::assemble`]).
 pub struct Environment {
     /// The project root (where `specforge.json` lives).
     pub root: PathBuf,
@@ -87,9 +102,8 @@ pub struct Environment {
     /// [`loads_nothing`](ConfigProblem::loads_nothing), the compile loaded
     /// no extension.
     pub config_problems: Vec<ConfigProblem>,
-    /// `specforge.json` exists at the root. `false` for [`Self::empty`],
-    /// [`Self::from_declarations`] and [`Self::with_registries`] (no file
-    /// was read).
+    /// `specforge.json` exists at the root. `false` for [`Self::empty`]
+    /// and [`Self::with_registries`] (no file was read).
     pub config_found: bool,
     /// The project's installed extensions: what `specforge.lock` held when
     /// the environment was read (absent, read, or unreadable with its
@@ -115,13 +129,13 @@ pub struct Environment {
     /// runtime's load failures (E028/E033) in load order, then the
     /// declarations' unknown keys (W138).
     pub load_diagnostics: Vec<Diagnostic>,
-    /// After the registry build: I002 when no extension loaded.
-    pub setup_diagnostics: Vec<Diagnostic>,
+    /// I002, when no extension loaded.
+    structural_only: Option<Diagnostic>,
     /// The runtime the extensions were loaded in: every extension call an
     /// operation makes over this project runs there, a custom rule's
     /// verdict and a check pass included. None: the environment was loaded
-    /// without one, so no extension loaded ([`Self::empty`],
-    /// [`Self::from_declarations`] and [`Self::with_registries`] have none).
+    /// without one, so no extension loaded ([`Self::empty`] has none;
+    /// [`Self::with_registries`] has the one it is given).
     pub runtime: Option<SharedRuntime>,
 }
 
@@ -139,27 +153,18 @@ impl Environment {
             registries: RegistryBuild::default(),
             providers: Providers::default(),
             load_diagnostics: Vec::new(),
-            setup_diagnostics: Vec::new(),
+            structural_only: None,
             runtime: None,
         }
     }
 
-    /// An environment of `declarations` (in entry order; the registry build
-    /// puts them in load order) and no project: the default config, no spec
-    /// root, the registry build of exactly these declarations.
-    pub fn from_declarations(declarations: Vec<ExtensionDeclaration>) -> Self {
-        Environment {
-            registries: build_registries(declarations),
-            ..Environment::empty()
-        }
-    }
-
-    /// An environment of exactly `registries` and no project: the default
-    /// config, nothing enabled, no spec root (tests, a graph built in
-    /// memory).
-    pub fn with_registries(registries: RegistryBuild) -> Self {
+    /// No project, a registry build made in memory, and the runtime its
+    /// extension calls go to, if any: a bare build for a graph built in a
+    /// test (ADR 0015 "The view, completed"). Nothing reported, no I002.
+    pub fn with_registries(registries: RegistryBuild, runtime: Option<SharedRuntime>) -> Self {
         Environment {
             registries,
+            runtime,
             ..Environment::empty()
         }
     }
@@ -171,48 +176,54 @@ impl Environment {
         Self::from_read(root, read_project_config(root), runtime)
     }
 
-    /// The environment of the config `read` (the one read of
-    /// `specforge.json`), its extensions loaded into `runtime`.
-    pub fn from_read(root: &Path, read: ConfigRead, runtime: Option<SharedRuntime>) -> Self {
-        let config = read.config;
+    /// The environment of the config `read`, the installed extensions
+    /// `installed` and what the extension load gave, rooted where
+    /// `installed` is:
+    /// - one E069 per config problem, in file order, then the load's
+    ///   diagnostics;
+    /// - the registry build of the loaded declarations; in a runtime, each
+    ///   custom rule's `wasm_function` called once there on a probe entity
+    ///   (W112 for one that does not answer a verdict);
+    /// - the configured `providers` registered against the loaded
+    ///   declarations (W118, E057);
+    /// - I002 when no extension loaded, naming why (the config, nothing
+    ///   configured, or the load failures);
+    /// - the spec root: the config's `spec_root` under the root, else the
+    ///   root.
+    ///
+    /// Reads nothing from disk. Its one effect is the probe's calls in the
+    /// runtime it is given (the `WasmRuntime` port).
+    pub fn assemble(read: ConfigRead, installed: Installed, load: ExtensionLoad) -> Self {
         let mut load_diagnostics: Vec<Diagnostic> = read
             .problems
             .iter()
             .map(config_problem_diagnostic)
             .collect();
-        // The lock is read once, here; the extensions load through the
-        // production policy into whatever runtime this is given.
-        let installed = Installed::at(root);
-        let (enabled, declarations) = match runtime.as_deref() {
-            Some(runtime) => {
-                let loaded = installed.load(&config.extensions, &builtins(), runtime);
-                load_diagnostics.extend(loaded.diagnostics);
-                (loaded.enabled, loaded.declarations)
-            }
-            None => (
-                config
-                    .extensions
-                    .iter()
-                    .map(|entry| EnabledExtension::unloaded(entry))
-                    .collect(),
-                Vec::new(),
-            ),
+        let (loaded, runtime) = match load {
+            ExtensionLoad::NoRuntime => (Loaded::unloaded(&read.config.extensions), None),
+            ExtensionLoad::In { runtime, loaded } => (loaded, Some(runtime)),
         };
+        let Loaded {
+            enabled,
+            declarations,
+            diagnostics,
+        } = loaded;
+        load_diagnostics.extend(diagnostics);
         let mut registries = build_registries(declarations);
         // A custom rule's wasm_function is resolved against its extension
         // now, so a name it does not export is reported once (W112).
         if let Some(runtime) = runtime.as_deref() {
-            registries.probe(&verdicts::WasmVerdicts::probe_only(runtime));
+            registries.probe(&WasmVerdicts::probe_only(runtime));
         }
-        let providers = Providers::register(config.raw.as_ref(), registries.declarations());
-        let mut setup_diagnostics = Vec::new();
-        if registries.declarations().is_empty() {
-            setup_diagnostics.push(structural_only_notice(&config.extensions, &read.problems));
-        }
-        let spec_root = config.spec_root_in(root);
+        let providers = Providers::register(read.config.raw.as_ref(), registries.declarations());
+        let structural_only = registries
+            .declarations()
+            .is_empty()
+            .then(|| structural_only_notice(&read.config.extensions, &read.problems));
+        let spec_root = read.config.spec_root_in(installed.root());
         Environment {
-            root: root.to_path_buf(),
-            config,
+            root: installed.root().to_path_buf(),
+            config: read.config,
             config_problems: read.problems,
             config_found: read.found,
             installed,
@@ -221,9 +232,25 @@ impl Environment {
             registries,
             providers,
             load_diagnostics,
-            setup_diagnostics,
+            structural_only,
             runtime,
         }
+    }
+
+    /// The environment of the config `read` (the one read of
+    /// `specforge.json`): the lock read at `root` once, the extensions
+    /// loaded into `runtime` through the production policy, then
+    /// [`Self::assemble`]d. The disk adapter of the assembly.
+    pub fn from_read(root: &Path, read: ConfigRead, runtime: Option<SharedRuntime>) -> Self {
+        let installed = Installed::at(root);
+        let load = match runtime {
+            Some(runtime) => ExtensionLoad::In {
+                loaded: installed.load(&read.config.extensions, &builtins(), runtime.as_ref()),
+                runtime,
+            },
+            None => ExtensionLoad::NoRuntime,
+        };
+        Self::assemble(read, installed, load)
     }
 
     /// The inputs every graph of this project is built with: every surface
@@ -277,7 +304,7 @@ impl Environment {
         self.load_diagnostics
             .iter()
             .chain(self.providers.diagnostics())
-            .chain(&self.setup_diagnostics)
+            .chain(&self.structural_only)
             .chain(self.registries.diagnostics())
     }
 

@@ -712,14 +712,14 @@ mod tests {
 
     #[test]
     fn an_unreadable_lock_is_why_nothing_is_installed() {
-        let mut fixture = Fixture::new();
+        let fixture = Fixture::new();
         write_config(&fixture, r#"{"extensions": []}"#);
         std::fs::write(
             specforge_installed::lock_path(fixture.dir.path()),
             "not valid json {{{",
         )
         .unwrap();
-        fixture.env.installed = Installed::at(fixture.dir.path());
+        let fixture = fixture.read_lock();
 
         let refused = remove(&fixture.view(), &removing("@acme/x")).unwrap_err();
 

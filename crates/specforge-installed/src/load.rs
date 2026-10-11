@@ -61,6 +61,21 @@ pub struct Loaded {
     pub diagnostics: Vec<Diagnostic>,
 }
 
+impl Loaded {
+    /// What `entries` enable when nothing loads (no runtime): each entry
+    /// [`EnabledExtension::unloaded`], no declaration, no diagnostic.
+    pub fn unloaded(entries: &[String]) -> Loaded {
+        Loaded {
+            enabled: entries
+                .iter()
+                .map(|entry| EnabledExtension::unloaded(entry))
+                .collect(),
+            declarations: Vec::new(),
+            diagnostics: Vec::new(),
+        }
+    }
+}
+
 /// What one `specforge.json` `extensions` entry enables, as the load left it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct EnabledExtension {
@@ -333,10 +348,7 @@ impl Installed {
         builtins: &Builtins,
         runtime: &dyn WasmRuntime,
     ) -> Loaded {
-        let mut enabled: Vec<EnabledExtension> = entries
-            .iter()
-            .map(|entry| EnabledExtension::unloaded(entry))
-            .collect();
+        let mut enabled = Loaded::unloaded(entries).enabled;
         let mut slots: Vec<Slot> = entries.iter().map(|_| Slot::Skipped).collect();
 
         // Named entries first: a `.wasm` file that declares a name they
@@ -606,5 +618,22 @@ impl Installed {
             .iter()
             .find(|e| e.name.as_str() == name)?;
         self.check_module(entry).ok().map(|_| entry)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn nothing_loaded_enables_each_entry_as_written() {
+        let loaded = Loaded::unloaded(&["@acme/a".to_string(), "x=ext.wasm".to_string()]);
+        let names: Vec<&str> = loaded.enabled.iter().map(|e| e.name.as_str()).collect();
+        let files: Vec<Option<&str>> = loaded.enabled.iter().map(|e| e.file.as_deref()).collect();
+        assert_eq!(names, ["@acme/a", "x"]);
+        assert_eq!(files, [None, Some("ext.wasm")]);
+        assert!(loaded.enabled.iter().all(|e| e.failure.is_none()));
+        assert!(loaded.declarations.is_empty());
+        assert!(loaded.diagnostics.is_empty());
     }
 }

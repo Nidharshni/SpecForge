@@ -1001,7 +1001,7 @@ fn the_verify_stub_uses_the_kinds_first_allowed_verify_kind() {
             "invariant unique_ids \"U\" {\n  guarantee \"g\"\n}\nfeature untestable \"F\" {\n}\n",
         )],
     );
-    let env = Environment::with_registries(verifiable(&["invariant"], &["property", "unit"]));
+    let env = Environment::with_registries(verifiable(&["invariant"], &["property", "unit"]), None);
     let recorded = RecordedCoverage::over(p.project.graph(), &env);
     let fixes = with_registries(&p, &env, &recorded).fixes(&[], &FixQuery::default());
     assert_eq!(
@@ -1165,7 +1165,7 @@ fn invariants_field(target_kind: Option<&str>) -> RegistryBuild {
 fn no_stub_without_a_target_kind() {
     let p = compile(TESTING, &[("auth.spec", DANGLING)]);
     let diagnostics = p.project.diagnostics();
-    let env = Environment::with_registries(invariants_field(None));
+    let env = Environment::with_registries(invariants_field(None), None);
     let recorded = RecordedCoverage::over(p.project.graph(), &env);
     let fixes = with_registries(&p, &env, &recorded).fixes(&diagnostics, &FixQuery::default());
     assert!(
@@ -1173,7 +1173,7 @@ fn no_stub_without_a_target_kind() {
         "{:?}",
         titles(&fixes)
     );
-    let targeted = Environment::with_registries(invariants_field(Some("invariant")));
+    let targeted = Environment::with_registries(invariants_field(Some("invariant")), None);
     let fixes = with_registries(&p, &targeted, &recorded).fixes(&diagnostics, &FixQuery::default());
     assert!(fixes.iter().any(|f| f.source == FixSource::CreateStub));
 }

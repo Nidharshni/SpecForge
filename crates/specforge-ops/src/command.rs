@@ -907,9 +907,8 @@ mod tests {
 
     /// A fixture project whose graph is [`graph`].
     fn fixture(runtime: &std::sync::Arc<InProcessRuntime>) -> crate::view::testing::Fixture {
-        let mut fixture = crate::view::testing::Fixture::new();
+        let mut fixture = crate::view::testing::Fixture::new().runtime(runtime.clone());
         fixture.graph = graph();
-        fixture.env.runtime = Some(runtime.clone());
         fixture
     }
 
@@ -1081,9 +1080,9 @@ mod tests {
         std::os::unix::fs::symlink(dir.path().join("real"), dir.path().join("link")).unwrap();
         let fixture = fixture(&runtime);
         let recorded =
-            specforge_project::coverage::RecordedCoverage::over(&fixture.graph, &fixture.env);
+            specforge_project::coverage::RecordedCoverage::over(&fixture.graph, fixture.env());
         let linked = dir.path().join("link");
-        let view = ProjectView::new(&fixture.graph, &fixture.env, Some(&linked), &recorded);
+        let view = ProjectView::new(&fixture.graph, fixture.env(), Some(&linked), &recorded);
 
         run(&view, &routed("ok"), &Map::new(), CommandFormat::Json).unwrap();
 
@@ -1163,18 +1162,20 @@ mod tests {
         verify = "a command whose output is not a CommandOutput is an ExtensionError, not exit 0 with the raw bytes"
     )]
     fn a_command_whose_output_is_not_a_command_output_is_an_extension_error() {
-        let mut fixture = fixture(&std::sync::Arc::new(fake()));
         for raw in [
             &b"not json at all"[..],
             br#"{"exit_code":"3","stdout":"x"}"#,
             br#"{}"#,
             br#"[1,2]"#,
         ] {
-            fixture.env.runtime = Some(std::sync::Arc::new(fake().answer_raw(
-                EXT,
-                "cmd__ok",
-                WasmCallResult::Ok(raw.to_vec()),
-            )));
+            let fixture = {
+                let mut fixture =
+                    crate::view::testing::Fixture::new().runtime(std::sync::Arc::new(
+                        fake().answer_raw(EXT, "cmd__ok", WasmCallResult::Ok(raw.to_vec())),
+                    ));
+                fixture.graph = graph();
+                fixture
+            };
             let err = run(
                 &fixture.view(),
                 &routed("ok"),
@@ -1354,13 +1355,11 @@ mod tests {
     )]
     fn the_command_input_is_the_wire_golden() {
         let runtime = std::sync::Arc::new(fake());
-        let fixture = crate::view::testing::Fixture::new();
-        let mut env = fixture.env;
-        env.root = std::path::PathBuf::from("/p");
-        env.runtime = Some(runtime.clone());
+        let fixture = crate::view::testing::Fixture::new().runtime(runtime.clone());
+        let env = fixture.env();
         let graph = graph();
-        let recorded = specforge_project::coverage::RecordedCoverage::over(&graph, &env);
-        let view = ProjectView::new(&graph, &env, Some(Path::new("/p")), &recorded);
+        let recorded = specforge_project::coverage::RecordedCoverage::over(&graph, env);
+        let view = ProjectView::new(&graph, env, Some(Path::new("/p")), &recorded);
         let args = json!({"status": "done", "limit": 2, "all": true});
         run_on(
             &view,

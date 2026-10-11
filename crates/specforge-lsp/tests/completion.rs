@@ -134,7 +134,7 @@ fn registered_kinds_at_top_level() {
 )]
 fn use_is_suggested_and_define_never_is() {
     // With and without extensions.
-    let empty = specforge_project::Environment::with_registries(RegistryBuild::default());
+    let empty = specforge_project::Environment::with_registries(RegistryBuild::default(), None);
     let graph = Graph::new();
     let recorded = RecordedCoverage::over(&graph, &empty);
     let bare = ProjectView::new(&graph, &empty, None, &recorded);
@@ -311,7 +311,7 @@ impl Fixture {
                 methods: Vec::new(),
             });
         }
-        let env = specforge_project::Environment::with_registries(registries);
+        let env = specforge_project::Environment::with_registries(registries, None);
         let recorded = RecordedCoverage::over(&graph, &env);
         Fixture {
             env,

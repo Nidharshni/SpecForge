@@ -1,17 +1,24 @@
 //! The `inferred` lint profile and the inference sessions, through the
 //! operations the surfaces call (ADR 0015, "Management operations").
 
+use specforge_installed::Installed;
 use specforge_ops::check::{CheckOptions, check};
-use specforge_project::LintProfile;
-use specforge_registry::RegistryBuild;
+use specforge_project::{Environment, ExtensionLoad, LintProfile};
 use specforge_test::prelude::*;
 
-use crate::view_support::Project;
+use crate::view_support::{Project, config_read};
 
 /// A project with an `inferred` check over the manifest `manifest` (or no
-/// manifest) and the source file `src/tiny.rs` of two lines.
-fn project(manifest: Option<&str>) -> Project {
-    let project = Project::new("behavior a \"A\" {\n}\n", RegistryBuild::default());
+/// manifest) and the source file `src/tiny.rs` of two lines, whose compile
+/// read `config` as its `specforge.json`.
+fn project(manifest: Option<&str>, config: serde_json::Value) -> Project {
+    let project = Project::assembled("behavior a \"A\" {\n}\n", |root| {
+        Environment::assemble(
+            config_read(root, config),
+            Installed::unread(root),
+            ExtensionLoad::NoRuntime,
+        )
+    });
     let root = project.dir.path();
     std::fs::create_dir_all(root.join("src")).unwrap();
     std::fs::write(root.join("src/tiny.rs"), "pub fn a() {}\npub fn b() {}\n").unwrap();
@@ -52,7 +59,7 @@ fn inferred(project: &Project) -> Vec<String> {
 /// specforge-infer.json, no I200/I202.
 #[test]
 fn the_inferred_lint_adds_nothing_without_a_manifest() {
-    assert!(inferred(&project(None)).is_empty());
+    assert!(inferred(&project(None, serde_json::json!({}))).is_empty());
 }
 
 /// An unusable manifest is an error the check reports (and fails on), not
@@ -62,7 +69,7 @@ fn the_inferred_lint_adds_nothing_without_a_manifest() {
     verify = "the inferred profile reports a manifest it cannot use as E071"
 )]
 fn the_inferred_lint_reports_an_unusable_manifest() {
-    let project = project(Some("{ nope"));
+    let project = project(Some("{ nope"), serde_json::json!({}));
     let options = CheckOptions {
         lint_profiles: vec![LintProfile::Inferred],
         ..Default::default()
@@ -87,17 +94,22 @@ fn the_inferred_lint_reports_an_unusable_manifest() {
     verify = "I202 threshold is configurable via specforge.json"
 )]
 fn the_density_threshold_is_the_compiled_config() {
-    let mut dense = project(Some(&indexing(2)));
+    let dense = project(Some(&indexing(2)), serde_json::json!({}));
     assert!(
         inferred(&dense).contains(&"I202".to_string()),
         "over the default threshold"
     );
 
-    dense.env.config.inference.density_threshold = Some(1.0);
+    let dense = project(
+        Some(&indexing(2)),
+        serde_json::json!({"inference": {"density_threshold": 1.0}}),
+    );
     assert!(!inferred(&dense).contains(&"I202".to_string()));
 
-    let mut denser = project(Some(&indexing(3)));
-    denser.env.config.inference.density_threshold = Some(1.0);
+    let denser = project(
+        Some(&indexing(3)),
+        serde_json::json!({"inference": {"density_threshold": 1.0}}),
+    );
     assert!(inferred(&denser).contains(&"I202".to_string()));
 }
 
@@ -142,7 +154,7 @@ fn started(project: &Project, agent: Option<&str>) -> String {
     verify = "start creates session with active status"
 )]
 fn start_records_an_active_session() {
-    let project = project(None);
+    let project = project(None, serde_json::json!({}));
     let id = started(&project, Some("claude"));
     let sessions = recorded_sessions(&project);
     assert_eq!(sessions.len(), 1);
@@ -157,7 +169,7 @@ fn start_records_an_active_session() {
     verify = "start rejects when another session is active"
 )]
 fn a_second_start_is_session_active_and_writes_nothing() {
-    let project = project(None);
+    let project = project(None, serde_json::json!({}));
     started(&project, None);
     let before = std::fs::read(project.dir.path().join("specforge-infer.json")).unwrap();
 
@@ -184,7 +196,7 @@ fn a_second_start_is_session_active_and_writes_nothing() {
     verify = "end sets status to completed"
 )]
 fn end_completes_or_pauses_and_stamps_ended_at() {
-    let project = project(None);
+    let project = project(None, serde_json::json!({}));
     for (status, expected) in [
         (EndStatus::Completed, SessionStatus::Completed),
         (EndStatus::Paused, SessionStatus::Paused),
@@ -228,7 +240,7 @@ fn end_completes_or_pauses_and_stamps_ended_at() {
     verify = "end rejects unknown session_id"
 )]
 fn end_of_an_unknown_session_is_unknown_session() {
-    let project = project(None);
+    let project = project(None, serde_json::json!({}));
     let error = step(
         &project,
         SessionStep::End {
@@ -258,7 +270,7 @@ fn source_index(project: &Project) -> Vec<serde_json::Value> {
     verify = "mark updates existing entry on re-analysis"
 )]
 fn mark_records_and_replaces_an_entry() {
-    let project = project(None);
+    let project = project(None, serde_json::json!({}));
     let first = ["a".to_string()];
     let second = ["a".to_string(), "b".to_string()];
     for entities in [&first[..], &second[..]] {
@@ -290,7 +302,7 @@ fn mark_records_and_replaces_an_entry() {
 fn mark_hashes_the_file_with_sha256() {
     use sha2::{Digest, Sha256};
 
-    let project = project(None);
+    let project = project(None, serde_json::json!({}));
     step(
         &project,
         SessionStep::MarkAnalyzed {
@@ -322,7 +334,7 @@ fn mark_hashes_the_file_with_sha256() {
 
 #[test]
 fn a_rootless_view_is_no_project() {
-    let project = project(None);
+    let project = project(None, serde_json::json!({}));
     let recorded =
         specforge_project::coverage::RecordedCoverage::over(&project.graph, &project.env);
     let rootless =
@@ -343,7 +355,7 @@ fn a_rootless_view_is_no_project() {
     verify = "creates manifest on first write"
 )]
 fn every_step_reports_the_manifest_as_its_write() {
-    let project = project(None);
+    let project = project(None, serde_json::json!({}));
     let root = project.dir.path();
     let id = started(&project, None);
     let mut all = vec![
@@ -386,7 +398,7 @@ fn every_step_reports_the_manifest_as_its_write() {
     verify = "mark refuses a file outside the project root"
 )]
 fn a_source_root_outside_the_root_is_refused() {
-    let project = project(None);
+    let project = project(None, serde_json::json!({}));
     let error = step(
         &project,
         SessionStep::Start {

@@ -785,7 +785,7 @@ fn provide_semantic_tokens_contract() {
     let source = "behavior foo \"Foo\" {\n  contract \"\"\"\n    hello\n  \"\"\"\n}\n";
     let registries = verifiable(&["behavior"], &[]);
     let graph = Graph::new();
-    let env = specforge_project::Environment::with_registries(registries);
+    let env = specforge_project::Environment::with_registries(registries, None);
     let recorded = specforge_project::coverage::RecordedCoverage::over(&graph, &env);
     let view = specforge_ops::view::ProjectView::new(&graph, &env, None, &recorded);
     let tokens = specforge_lsp::Document::new("file:///t.spec".into(), source.into()).tokens(&view);
@@ -823,7 +823,8 @@ fn code_action_create_entity_stub_contract() {
     let state = buffers(&[("/p/auth.spec", text)]);
     let diagnostics = state.session().unwrap().project().diagnostics();
     let fixes_with = |target_kind: Option<&str>| {
-        let env = specforge_project::Environment::with_registries(invariants_field(target_kind));
+        let env =
+            specforge_project::Environment::with_registries(invariants_field(target_kind), None);
         let recorded = specforge_project::coverage::RecordedCoverage::over(state.graph(), &env);
         let view = specforge_ops::view::ProjectView::new(state.graph(), &env, None, &recorded);
         let nav = specforge_ops::navigate::Navigator::new(view, |_: &str| Some(text.to_string()));
@@ -897,7 +898,7 @@ fn code_actions_for_missing_verify_contract() {
     // Ensures: quickfix code action with verify stub targeting the .spec file
     let text = "\n\n\n\nbehavior my_behavior \"B\" {\n  contract \"c\"\n}\n";
     let state = buffers(&[("/p/a.spec", text)]);
-    let env = specforge_project::Environment::with_registries(verifiable(&["behavior"], &[]));
+    let env = specforge_project::Environment::with_registries(verifiable(&["behavior"], &[]), None);
     let recorded = specforge_project::coverage::RecordedCoverage::over(state.graph(), &env);
     let view = specforge_ops::view::ProjectView::new(state.graph(), &env, None, &recorded);
     let nav = specforge_ops::navigate::Navigator::new(view, |_: &str| Some(text.to_string()));

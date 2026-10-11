@@ -96,7 +96,7 @@ impl RegistryBuild {
     /// of its target kind that declares nothing (ADR 0020): a function that
     /// cannot answer is W112, reported after the registries' diagnostics; the
     /// rule stays registered. Probing again replaces the earlier result.
-    /// The environment probes when its extensions loaded in a runtime;
+    /// `Environment::assemble` probes when its extensions loaded in a runtime;
     /// `NoVerdicts` answers nothing, so probing with it reports nothing.
     pub fn probe(&mut self, verdicts: &dyn CustomVerdicts) {
         self.probe_diagnostics = self.rules.probe(verdicts);
