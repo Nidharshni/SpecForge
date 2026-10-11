@@ -100,13 +100,13 @@ fn a_fields_undeclared_edge_label_is_registered_as_an_edge() {
 
     let assigned = build.edges().get("assigned_to").expect("implicit edge");
     assert_eq!(assigned.declared.label, "assigned_to");
-    assert_eq!(assigned.declared.source_kind.as_deref(), Some("task"));
-    assert_eq!(assigned.declared.target_kind.as_deref(), Some("person"));
+    assert_eq!(assigned.source_kinds(), ["task"]);
+    assert_eq!(assigned.target_kinds(), ["person"]);
     assert_eq!(assigned.source_extension, "@test/ext");
     // A label whose field names no target kind: an edge to no kind.
     let owns = build.edges().get("owns").expect("implicit edge");
-    assert_eq!(owns.declared.source_kind.as_deref(), Some("task"));
-    assert_eq!(owns.declared.target_kind, None);
+    assert_eq!(owns.source_kinds(), ["task"]);
+    assert!(owns.target_kinds().is_empty());
     // A label an edge type declares keeps the declared one.
     let composes = build.edges().get("composes").unwrap();
     assert_eq!(composes.source_extension, "@specforge/product");
@@ -114,6 +114,95 @@ fn a_fields_undeclared_edge_label_is_registered_as_an_edge() {
     // The undeclared labels are the extension's authoring errors (W021),
     // not a reason to leave the edges out.
     assert_eq!(coded(&build, "W021").len(), 2, "{:?}", diagnostics(&build));
+}
+
+#[spec(
+    behavior = "registry_build_edges",
+    verify = "an edge label several kinds write without declaring it names every writer, in load order"
+)]
+fn an_undeclared_edge_label_several_kinds_write_names_every_writer() {
+    let first = || {
+        declare("@test/first", |c| {
+            c.kind("Task", |k| {
+                k.keyword("task");
+                k.field("assignee", |f| {
+                    f.field_type(FieldType::Reference)
+                        .edge("assigned_to")
+                        .target_kind("person");
+                });
+            });
+            c.kind("Person", |k| {
+                k.keyword("person");
+            });
+        })
+    };
+    let second = declare("@test/second", |c| {
+        c.kind("Ticket", |k| {
+            k.keyword("ticket");
+            k.field("owner", |f| {
+                f.field_type(FieldType::Reference).edge("assigned_to");
+            });
+            k.field("team", |f| {
+                f.field_type(FieldType::Reference)
+                    .edge("assigned_to")
+                    .target_kind("team");
+            });
+        });
+        c.kind("Team", |k| {
+            k.keyword("team");
+        });
+    });
+    let build = build([first(), second]);
+
+    let assigned = build.edges().get("assigned_to").expect("implicit edge");
+    let writers: Vec<(&str, &str, &str, Option<&str>)> = assigned
+        .writers
+        .iter()
+        .map(|w| {
+            (
+                w.extension.as_str(),
+                w.kind.as_str(),
+                w.field.as_str(),
+                w.target_kind.as_deref(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        writers,
+        [
+            ("@test/first", "task", "assignee", Some("person")),
+            ("@test/second", "ticket", "owner", None),
+            ("@test/second", "ticket", "team", Some("team")),
+        ]
+    );
+    // Its ends are every writer's, each once, in load order; the edge type
+    // itself declares neither.
+    assert_eq!(assigned.source_kinds(), ["task", "ticket"]);
+    assert_eq!(assigned.target_kinds(), ["person", "team"]);
+    assert_eq!(assigned.declared.source_kind, None);
+    assert_eq!(assigned.declared.target_kind, None);
+    // The first writer in load order owns it.
+    assert_eq!(assigned.source_extension, "@test/first");
+    assert!(
+        coded(&build, "W018").is_empty(),
+        "{:?}",
+        diagnostics(&build)
+    );
+
+    // A label a later extension declares is that declaration, whoever
+    // wrote it first without declaring it: no W018, no writers.
+    let declaring = declare("@test/declaring", |c| {
+        c.edge("assigned_to", |e| {
+            e.source_kind("person").target_kind("task");
+        });
+    });
+    let declared = crate::support::build([first(), declaring]);
+    let assigned = declared.edges().get("assigned_to").unwrap();
+    assert_eq!(assigned.source_extension, "@test/declaring");
+    assert!(assigned.writers.is_empty());
+    assert_eq!(assigned.source_kinds(), ["person"]);
+    assert_eq!(assigned.target_kinds(), ["task"]);
+    assert!(coded(&declared, "W018").is_empty());
 }
 
 #[spec(
@@ -160,7 +249,7 @@ fn an_edge_label_declared_twice_is_w018_and_the_first_keeps_it() {
 
 #[spec(
     behavior = "registry_build_edges",
-    verify = "Registry Build Registers Edge Types: edge type registration holds — declarations_in_load_order, edge_types_registered, first_wins"
+    verify = "Registry Build Registers Edge Types: edge type registration holds — declarations_in_load_order, edge_types_registered, every_writer_named, first_wins"
 )]
 fn edge_registration_holds() {
     // declarations_in_load_order: software, then product, which declares
@@ -175,6 +264,23 @@ fn edge_registration_holds() {
         build.edges().get("composes").unwrap().source_extension,
         "@specforge/product"
     );
+
+    // every_writer_named: an edge label two kinds write without declaring
+    // it names both, in load order.
+    let writes = |name: &str, kind: &str| {
+        let kind = kind.to_string();
+        declare(name, move |c| {
+            c.kind(&kind, |k| {
+                k.field("links", |f| {
+                    f.field_type(FieldType::ReferenceList).edge("linked");
+                });
+            });
+        })
+    };
+    let linked = crate::support::build([writes("@test/a", "alpha"), writes("@test/b", "beta")]);
+    let linked = linked.edges().get("linked").unwrap();
+    assert_eq!(linked.source_kinds(), ["alpha", "beta"]);
+    assert_eq!(linked.writers.len(), 2);
 
     // first_wins: W018, and the later constraints are discarded.
     assert_eq!(coded(&build, "W018").len(), 1);

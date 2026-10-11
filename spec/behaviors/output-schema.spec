@@ -77,6 +77,7 @@ behavior generate_schema_from_registries "Generate Schema From Registries" {
   verify unit "SchemaVersion Ord"
   verify unit "populated schema serde round-trip"
   verify unit "an edge type that declares no source or target kind names those of the fields that write it"
+  verify unit "an edge type several kinds write without declaring it names every writing kind"
 }
 
 behavior embed_schema_in_export "Embed Schema in Export" {

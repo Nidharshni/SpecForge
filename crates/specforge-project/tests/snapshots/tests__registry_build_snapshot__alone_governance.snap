@@ -1025,7 +1025,7 @@ expression: "digest(&load(&runtime, &[name]))"
           "superseded"
         ]
       },
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "status",
       "message_template": "decision '{id}' has invalid status '{value}' — expected one of: proposed, accepted, deprecated, superseded",
@@ -1047,7 +1047,7 @@ expression: "digest(&load(&runtime, &[name]))"
           "low"
         ]
       },
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "severity",
       "message_template": "failure_mode '{id}' has invalid severity '{value}' — expected one of: critical, high, medium, low",
@@ -1069,7 +1069,7 @@ expression: "digest(&load(&runtime, &[name]))"
           "low"
         ]
       },
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "post_severity",
       "message_template": "failure_mode '{id}' has invalid post_severity '{value}' — expected one of: critical, high, medium, low",
@@ -1092,7 +1092,7 @@ expression: "digest(&load(&runtime, &[name]))"
           "rare"
         ]
       },
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "occurrence",
       "message_template": "failure_mode '{id}' has invalid occurrence '{value}' — expected one of: certain, likely, occasional, unlikely, rare",
@@ -1115,7 +1115,7 @@ expression: "digest(&load(&runtime, &[name]))"
           "rare"
         ]
       },
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "post_occurrence",
       "message_template": "failure_mode '{id}' has invalid post_occurrence '{value}' — expected one of: certain, likely, occasional, unlikely, rare",
@@ -1138,7 +1138,7 @@ expression: "digest(&load(&runtime, &[name]))"
           "undetectable"
         ]
       },
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "detection",
       "message_template": "failure_mode '{id}' has invalid detection '{value}' — expected one of: certain, likely, moderate, unlikely, undetectable",
@@ -1161,7 +1161,7 @@ expression: "digest(&load(&runtime, &[name]))"
           "undetectable"
         ]
       },
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "post_detection",
       "message_template": "failure_mode '{id}' has invalid post_detection '{value}' — expected one of: certain, likely, moderate, unlikely, undetectable",
@@ -1174,7 +1174,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "E006",
       "constraint": null,
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "description",
       "message_template": "constraint '{id}' is missing required field 'description'",
@@ -1187,7 +1187,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "E006",
       "constraint": null,
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "context",
       "message_template": "decision '{id}' is missing required field 'context'",
@@ -1200,7 +1200,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "E006",
       "constraint": null,
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "decision",
       "message_template": "decision '{id}' is missing required field 'decision'",
@@ -1213,7 +1213,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "E006",
       "constraint": null,
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "status",
       "message_template": "decision '{id}' is missing required field 'status'",
@@ -1226,7 +1226,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "E006",
       "constraint": null,
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "cause",
       "message_template": "failure_mode '{id}' is missing required field 'cause'",
@@ -1239,7 +1239,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "E006",
       "constraint": null,
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "effect",
       "message_template": "failure_mode '{id}' is missing required field 'effect'",
@@ -1252,7 +1252,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "E006",
       "constraint": null,
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "severity",
       "message_template": "failure_mode '{id}' is missing required field 'severity'",

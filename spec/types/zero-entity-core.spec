@@ -368,7 +368,19 @@ type EdgeRegistryEntry {
   edge_style       string @optional
   edge_color       string @optional
   edge_arrowhead   string @optional
+  writers          EdgeWriter[]
   verify unit "EdgeRegistryEntry schema is valid"
+}
+
+// EdgeWriter is a field that writes an edge label no loaded extension
+// declares; an undeclared edge type's entry lists every writer in load
+// order, and its ends are theirs (registry_build_edges).
+type EdgeWriter {
+  extension   string @readonly
+  kind        string @readonly
+  field       string @readonly
+  target_kind string @optional
+  verify unit "EdgeWriter schema is valid"
 }
 
 type KeywordExtensionIndex {
