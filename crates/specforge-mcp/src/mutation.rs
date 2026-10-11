@@ -234,7 +234,7 @@ pub trait MutationArgs: crate::args::Arguments {
 
 /// A mutation tool's reply (its module's `Reply`, or the ops document it
 /// answers).
-pub trait MutationReply: Object + Serialize {
+pub trait MutationReply: Object + Serialize + 'static {
     /// What its reply carries after a successful write, beside
     /// `files_written`: [`NoDiagnostics`], or [`FreshDiagnostics`] (rename's
     /// contract).
@@ -243,7 +243,7 @@ pub trait MutationReply: Object + Serialize {
 
 /// What the pipeline adds to a mutation's reply after the call, beside
 /// `files_written`. Two adapters: [`NoDiagnostics`], [`FreshDiagnostics`].
-pub trait AfterWrite: Object + Serialize {
+pub trait AfterWrite: Object + Serialize + 'static {
     /// It reads the call target's diagnostics. After a successful call, the
     /// pipeline then brings the target up to date even when the call wrote
     /// no file.
@@ -301,20 +301,20 @@ pub struct WrittenReply<R, A> {
 }
 
 /// The outputSchema of a mutation whose reply is `R`: `WrittenReply<R,
-/// R::After>`'s. Debug builds assert that `R` declares neither
-/// `files_written` nor a key its report adds.
-pub fn output_schema<R: MutationReply>() -> Value {
+/// R::After>`'s document, built once per process. Debug builds assert that
+/// `R` declares neither `files_written` nor a key its report adds.
+pub fn output_schema<R: MutationReply>() -> &'static Value {
     #[cfg(debug_assertions)]
     {
-        let own = property_names(&specforge_common::shape::build::<R>());
-        let added = property_names(&specforge_common::shape::build::<R::After>());
+        let own = property_names(specforge_common::shape::document::<R>());
+        let added = property_names(specforge_common::shape::document::<R::After>());
         assert!(
             !own.contains(FILES_WRITTEN) && own.is_disjoint(&added),
             "a mutation reply declares a key the mutation pipeline adds: \
              {own:?} against {FILES_WRITTEN} and {added:?}"
         );
     }
-    specforge_common::shape::build::<WrittenReply<R, R::After>>()
+    specforge_common::shape::document::<WrittenReply<R, R::After>>()
 }
 
 /// The property names of `schema`, or of each branch of its `oneOf`/`anyOf`.
@@ -557,13 +557,13 @@ mod tests {
         let schema = output_schema::<Probe>();
         let outcome = previewed(
             "specforge.rename",
-            &schema,
+            schema,
             Ok(Mutated::new(probe("x"), Written::nothing())),
         );
         assert_eq!(payload(&outcome), json!({"name": "x"}));
 
         let failure = McpError::new(ErrorCode::Conflict, "no");
-        let outcome = previewed::<Probe>("specforge.rename", &schema, Err(failure.into()));
+        let outcome = previewed::<Probe>("specforge.rename", schema, Err(failure.into()));
         assert!(!outcome.succeeded());
         assert!(payload(&outcome).get("data").is_none());
     }
@@ -575,7 +575,7 @@ mod tests {
 
         let (outcome, events) = finished::<Probe>(
             "specforge.format",
-            &schema,
+            schema,
             Some(Path::new("/p")),
             Err(Failed::after(failure, Writes::from_iter(["/p/b.spec"]))),
             None,
@@ -601,7 +601,7 @@ mod tests {
 
         let (outcome, events) = finished(
             "specforge.add_extension",
-            &schema,
+            schema,
             Some(Path::new("/p")),
             Ok(Mutated::new(probe("x"), written)),
             None,
@@ -644,7 +644,7 @@ mod tests {
         let schema = output_schema::<Probe>();
         let (outcome, events) = finished(
             "specforge.migrate",
-            &schema,
+            schema,
             Some(Path::new("/p")),
             Ok(Mutated::new(probe("x"), Written::nothing())),
             None,
@@ -691,7 +691,7 @@ mod tests {
         let schema = output_schema::<FreshProbe>();
         let (outcome, _) = finished(
             "specforge.rename",
-            &schema,
+            schema,
             Some(Path::new("/p")),
             Ok(Mutated::new(
                 FreshProbe { name: "x".into() },
@@ -708,7 +708,7 @@ mod tests {
 
         let outcome = previewed(
             "specforge.rename",
-            &schema,
+            schema,
             Ok(Mutated::new(
                 FreshProbe { name: "x".into() },
                 Written::nothing(),
@@ -757,7 +757,7 @@ mod tests {
         let failed = Failed::from(error);
         assert_eq!(failed.files.len(), 1);
         let schema = output_schema::<Probe>();
-        let (_, events) = finished::<Probe>("specforge.rename", &schema, None, Err(failed), None);
+        let (_, events) = finished::<Probe>("specforge.rename", schema, None, Err(failed), None);
         assert_eq!(
             completed(&events),
             [

@@ -12,7 +12,10 @@ use specforge_test::prelude::*;
 fn documents() -> Vec<(&'static str, Value)> {
     specforge_mcp::tools::CORE_TOOLS
         .iter()
-        .filter_map(|tool| tool.output_schema().map(|schema| (tool.name(), schema)))
+        .filter_map(|tool| {
+            tool.output_schema()
+                .map(|schema| (tool.name(), schema.clone()))
+        })
         .collect()
 }
 
@@ -90,4 +93,28 @@ fn core_output_schema_sizes() {
     }
     lines.push(format!("total {total}"));
     insta::assert_snapshot!(lines.join("\n"));
+}
+
+#[test]
+fn a_tools_output_schema_is_built_once() {
+    let mut typed = 0;
+    for tool in specforge_mcp::tools::CORE_TOOLS {
+        let Some(first) = tool.output_schema() else {
+            continue;
+        };
+        typed += 1;
+        let again = tool.output_schema().expect("a typed tool lists a schema");
+        assert!(
+            std::ptr::eq(first, again),
+            "{}'s outputSchema was built twice",
+            tool.name()
+        );
+        assert_eq!(
+            tool.descriptor().output_schema.as_ref(),
+            Some(first),
+            "{}'s descriptor lists another schema",
+            tool.name()
+        );
+    }
+    assert!(typed > 0);
 }

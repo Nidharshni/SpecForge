@@ -436,9 +436,9 @@ fn report() -> &'static Report {
                 .output_schema()
                 .expect("a typed reply lists its outputSchema");
             let schema = if tool.is_mutation() {
-                without_files_written(schema)
+                without_files_written(schema.clone())
             } else {
-                schema
+                schema.clone()
             };
             check_type(name, &schema, &mut report);
         }
