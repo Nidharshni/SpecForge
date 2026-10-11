@@ -6,35 +6,44 @@
 //! component, with a `src/lib.rs` skeleton that builds and describes out of
 //! the box. `specforge extension init` writes the same project.
 
-use crate::OutputFormat;
-use crate::outcome::{Exit, Refusal};
+use crate::terminal::{Terminal, outln};
+
+use crate::outcome::{Exit, OutputFormat, Refusal};
 use serde_json::json;
 use specforge_common::codes;
 use specforge_protocol_types::PackageName;
 use std::path::{Path, PathBuf};
 
-pub fn run(name: &str, extension: bool, path: &Path, format: OutputFormat) -> Exit {
+pub fn run(
+    name: &str,
+    extension: bool,
+    path: &Path,
+    format: OutputFormat,
+    terminal: &Terminal,
+) -> Exit {
     if !extension {
         return Refusal::of(format).coded(
+            terminal,
             codes::E065,
             "only `--extension` scaffolding is supported right now",
         );
     }
 
     if let Err(why) = PackageName::parse(name) {
-        return Refusal::of(format).coded(codes::E065, why.to_string());
+        return Refusal::of(format).coded(terminal, codes::E065, why.to_string());
     }
 
     let dir = target_dir(path, name);
     if dir.exists() {
         return Refusal::of(format).coded(
+            terminal,
             codes::E065,
             format!("destination '{}' already exists", dir.display()),
         );
     }
 
     if let Err(message) = scaffold(&dir, name) {
-        return Refusal::of(format).coded(codes::E066, message);
+        return Refusal::of(format).coded(terminal, codes::E066, message);
     }
 
     match format {
@@ -45,19 +54,27 @@ pub fn run(name: &str, extension: bool, path: &Path, format: OutputFormat) -> Ex
                 "name": name,
                 "path": dir.display().to_string(),
             });
-            println!("{}", serde_json::to_string_pretty(&output).unwrap());
+            terminal.json(&output);
         }
         OutputFormat::Human => {
-            println!("scaffolded extension '{}' in {}", name, dir.display());
-            println!();
-            println!("next steps:");
-            println!("  cd {}", dir.display());
-            println!("  cargo build --release --target wasm32-wasip2");
+            outln!(
+                terminal,
+                "scaffolded extension '{}' in {}",
+                name,
+                dir.display()
+            );
+            outln!(terminal);
+            outln!(terminal, "next steps:");
+            outln!(terminal, "  cd {}", dir.display());
+            outln!(terminal, "  cargo build --release --target wasm32-wasip2");
             let wasm = format!(
                 "./target/wasm32-wasip2/release/{}.wasm",
                 crate_name(name).replace('-', "_")
             );
-            println!("  specforge add {wasm}   # local-path install once built");
+            outln!(
+                terminal,
+                "  specforge add {wasm}   # local-path install once built"
+            );
         }
     }
     Exit::Passed

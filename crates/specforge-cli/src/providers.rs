@@ -1,5 +1,6 @@
-use crate::OutputFormat;
 use crate::outcome::Exit;
+use crate::outcome::OutputFormat;
+use crate::terminal::{Terminal, errln, outln};
 use specforge_ops::extension;
 use specforge_ops::view::ProjectView;
 use std::path::Path;
@@ -7,17 +8,14 @@ use std::path::Path;
 /// `specforge providers`: the providers `specforge.json` configures, in
 /// declaration order, each with the status the scheme registry built from
 /// the loaded extensions gives it.
-pub fn run(path: &Path, format: OutputFormat) -> Exit {
+pub fn run(path: &Path, format: OutputFormat, terminal: &Terminal) -> Exit {
     let project = crate::pipeline::compile_project(path);
     let listing = extension::providers(&ProjectView::of(&project));
     let (providers, diagnostics) = (&listing.providers, &listing.diagnostics);
 
     match format {
         OutputFormat::Json => {
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&listing.document()).expect("serialize JSON output")
-            );
+            terminal.json(&listing.document());
         }
         OutputFormat::Human => {
             for diagnostic in diagnostics {
@@ -26,24 +24,35 @@ pub fn run(path: &Path, format: OutputFormat) -> Exit {
                     specforge_common::Severity::Warning => "warning",
                     specforge_common::Severity::Info => "info",
                 };
-                eprintln!("{severity}[{}]: {}", diagnostic.code, diagnostic.message);
+                errln!(
+                    terminal,
+                    "{severity}[{}]: {}",
+                    diagnostic.code,
+                    diagnostic.message
+                );
             }
             if providers.is_empty() {
-                println!("No providers configured.");
+                outln!(terminal, "No providers configured.");
                 return Exit::Passed;
             }
-            println!("Configured providers:");
-            println!();
+            outln!(terminal, "Configured providers:");
+            outln!(terminal);
             for provider in providers {
-                println!("  {} (extension: {})", provider.alias, provider.extension);
-                println!(
+                outln!(
+                    terminal,
+                    "  {} (extension: {})",
+                    provider.alias,
+                    provider.extension
+                );
+                outln!(
+                    terminal,
                     "    scheme: {} [{}]",
                     provider.scheme,
                     provider.status.as_str()
                 );
             }
-            println!();
-            println!("{} provider(s) configured.", providers.len());
+            outln!(terminal);
+            outln!(terminal, "{} provider(s) configured.", providers.len());
         }
     }
 

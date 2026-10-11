@@ -1,5 +1,5 @@
-use crate::OutputFormat;
-use crate::outcome::{Exit, print_json};
+use crate::outcome::{Exit, OutputFormat};
+use crate::terminal::{Terminal, outln};
 use specforge_ops::extension;
 use specforge_ops::view::ProjectView;
 use std::path::Path;
@@ -7,22 +7,22 @@ use std::path::Path;
 /// `specforge extensions`: every extension the project enables, has
 /// installed or loaded, alphabetically, with the entity kinds each
 /// registered and how many of the project's entities use them.
-pub fn run(path: &Path, format: OutputFormat) -> Exit {
+pub fn run(path: &Path, format: OutputFormat, terminal: &Terminal) -> Exit {
     let project = crate::pipeline::compile_project(path);
     let listing = extension::list(&ProjectView::of(&project));
     let entries = &listing.extensions;
 
     match format {
-        OutputFormat::Json => print_json(&listing.document()),
+        OutputFormat::Json => terminal.json(&listing.document()),
         OutputFormat::Human => {
             if entries.is_empty() {
-                println!("No extensions installed.");
-                println!();
-                println!("Install one with: specforge add <extension>");
+                outln!(terminal, "No extensions installed.");
+                outln!(terminal);
+                outln!(terminal, "Install one with: specforge add <extension>");
                 return Exit::Passed;
             }
-            println!("Installed extensions:");
-            println!();
+            outln!(terminal, "Installed extensions:");
+            outln!(terminal);
             for entry in entries {
                 let version = entry
                     .version
@@ -42,13 +42,15 @@ pub fn run(path: &Path, format: OutputFormat) -> Exit {
                     extension::Status::Loaded => String::new(),
                     other => format!(" [{}]", other.as_str()),
                 };
-                println!(
+                outln!(
+                    terminal,
                     "  {}{version} ({}){status}{provides}",
-                    entry.name, entry.source
+                    entry.name,
+                    entry.source
                 );
             }
-            println!();
-            println!("{} extension(s) installed.", entries.len());
+            outln!(terminal);
+            outln!(terminal, "{} extension(s) installed.", entries.len());
         }
     }
 

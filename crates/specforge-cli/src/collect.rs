@@ -11,8 +11,9 @@
 //! adapter only chooses the consent (a terminal prompt, `--yes`, or what
 //! was approved before) and presents the outcome.
 
-use crate::OutputFormat;
-use crate::outcome::{Exit, Refusal};
+use crate::terminal::{Terminal, errln, outln};
+
+use crate::outcome::{Exit, OutputFormat, Refusal};
 use specforge_ops::collect::{self, Collector, Consent, Mode, Request, RunnerOutput};
 use specforge_ops::view::ProjectView;
 use std::io::{BufRead, IsTerminal, Write};
@@ -25,7 +26,7 @@ pub struct Options<'a> {
     pub yes: bool,
 }
 
-pub fn run(path: &Path, options: &Options, format: OutputFormat) -> Exit {
+pub fn run(path: &Path, options: &Options, format: OutputFormat, terminal: &Terminal) -> Exit {
     // The project the path is in (ADR 0029 D6); collect refuses one that is none.
     let root = specforge_common::project_root_of(path);
 
@@ -52,7 +53,8 @@ pub fn run(path: &Path, options: &Options, format: OutputFormat) -> Exit {
     };
     let mut announce = |collector: &Collector, argv: &[String]| {
         if format != OutputFormat::Json {
-            eprintln!(
+            errln!(
+                terminal,
                 "running {} ({}): {}",
                 collector.name,
                 collector.extension,
@@ -71,18 +73,15 @@ pub fn run(path: &Path, options: &Options, format: OutputFormat) -> Exit {
     let outcome = match collect::collect(&ProjectView::of(&project), request) {
         Ok(outcome) => outcome,
         Err(e) => {
-            return Refusal::of(format).report(&e);
+            return Refusal::of(format).report(terminal, &e);
         }
     };
     for why in &outcome.unsaved_approvals {
-        eprintln!("warning: could not remember the approval: {why}");
+        errln!(terminal, "warning: could not remember the approval: {why}");
     }
 
     if format == OutputFormat::Json {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&outcome.document()).expect("serialize JSON output")
-        );
+        terminal.json(&outcome.document());
     } else {
         for r in &outcome.runners {
             let s = &r.stats;
@@ -90,23 +89,30 @@ pub fn run(path: &Path, options: &Options, format: OutputFormat) -> Exit {
                 0 => String::new(),
                 n => format!(", {n} linked by naming convention"),
             };
-            println!(
+            outln!(
+                terminal,
                 "{}: {} entities, {} passed, {} failed, {} skipped ({} report file(s){by_convention})",
-                r.name, s.entities, s.passed, s.failed, s.skipped, r.files
+                r.name,
+                s.entities,
+                s.passed,
+                s.failed,
+                s.skipped,
+                r.files
             );
             if let Some(code) = r.exit_code.filter(|c| *c != 0) {
-                println!(
+                outln!(
+                    terminal,
                     "  the runner exited with status {code}; results of the tests that ran are recorded"
                 );
             }
         }
         for d in &outcome.diagnostics {
-            println!("{}: {}", d.code, d.message);
+            outln!(terminal, "{}: {}", d.code, d.message);
             if let Some(hint) = &d.suggestion {
-                println!("  hint: {hint}");
+                outln!(terminal, "  hint: {hint}");
             }
         }
-        println!("report written: {}", outcome.report.display());
+        outln!(terminal, "report written: {}", outcome.report.display());
     }
     Exit::Passed
 }

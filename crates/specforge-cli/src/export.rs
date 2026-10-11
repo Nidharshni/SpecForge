@@ -1,10 +1,10 @@
+use crate::terminal::{Terminal, errln, outln};
 use specforge_ops::export;
 use specforge_ops::schema::SchemaRequest;
 use specforge_ops::view::ProjectView;
 use std::path::Path;
 
-use crate::OutputFormat;
-use crate::outcome::{Exit, Refusal};
+use crate::outcome::{Exit, OutputFormat, Refusal};
 use crate::pipeline;
 
 /// Export the project compiled at `path` to stdout. Before it writes, the
@@ -15,7 +15,7 @@ use crate::pipeline;
 /// the version the export carries. After a successful export that schema
 /// replaces the cache, so the next export compares against it. The export
 /// is written whatever the comparison finds.
-pub fn run(path: &Path, request: &export::Request) -> Exit {
+pub fn run(path: &Path, request: &export::Request, terminal: &Terminal) -> Exit {
     let project = pipeline::compile_project(path);
     let view = ProjectView::of(&project);
 
@@ -24,16 +24,17 @@ pub fn run(path: &Path, request: &export::Request) -> Exit {
     // snapshot too, so nothing here shows the project was exported before.
     let recorded = export::export_recorded(&view, request);
     for diagnostic in &recorded.breaking {
-        eprintln!("{}", specforge_common::render_plain(diagnostic));
+        errln!(terminal, "{}", specforge_common::render_plain(diagnostic));
     }
     let output = match recorded.export {
         Ok(output) => output,
-        Err(error) => return Refusal::of(OutputFormat::Human).report(&error),
+        Err(error) => return Refusal::of(OutputFormat::Human).report(terminal, &error),
     };
-    println!("{}", output);
+    outln!(terminal, "{}", output);
 
     if let export::CacheWrite::WriteFailed { dir, error } = &recorded.cache {
-        eprintln!(
+        errln!(
+            terminal,
             "warning: could not write the schema cache in {}: {error}",
             dir.display()
         );
@@ -46,7 +47,12 @@ pub fn run(path: &Path, request: &export::Request) -> Exit {
 /// the document `specforge.schema` returns for the same request, pretty
 /// printed. With `publish`, the JSON Schema an export of that format
 /// conforms to. An unknown kind is refused with the closest one (exit 1).
-pub fn run_schema(path: &Path, request: &SchemaRequest, publish: Option<export::Format>) -> Exit {
+pub fn run_schema(
+    path: &Path,
+    request: &SchemaRequest,
+    publish: Option<export::Format>,
+    terminal: &Terminal,
+) -> Exit {
     let project = pipeline::compile_project(path);
     let view = ProjectView::of(&project);
     let output = match publish {
@@ -56,9 +62,9 @@ pub fn run_schema(path: &Path, request: &SchemaRequest, publish: Option<export::
     };
     match output {
         Ok(text) => {
-            println!("{text}");
+            outln!(terminal, "{text}");
             Exit::Passed
         }
-        Err(error) => Refusal::of(OutputFormat::Human).report(&error),
+        Err(error) => Refusal::of(OutputFormat::Human).report(terminal, &error),
     }
 }

@@ -1,10 +1,10 @@
+use crate::terminal::{Terminal, outln};
 use std::path::Path;
 
 use specforge_ops::infer::{InferenceGuide, KindGuide, guide, kind_guide};
 use specforge_ops::view::ProjectView;
 
-use crate::OutputFormat;
-use crate::outcome::{Exit, Refusal, print_json};
+use crate::outcome::{Exit, OutputFormat, Refusal};
 use crate::pipeline;
 
 /// `specforge infer-guide [KIND]`: the inference guide read view over the
@@ -13,27 +13,32 @@ use crate::pipeline;
 /// overview or kind-scope data without the prompt's own `output_format` and
 /// `validation` text. An undeclared kind is `unknown_kind` naming the
 /// closest declared kind (exit 1).
-pub(crate) fn run(path: &Path, kind: Option<&str>, format: OutputFormat) -> Exit {
+pub(crate) fn run(
+    path: &Path,
+    kind: Option<&str>,
+    format: OutputFormat,
+    terminal: &Terminal,
+) -> Exit {
     let project = pipeline::compile_project(path);
     let view = ProjectView::of(&project);
     match kind {
         None => {
             let guide = guide(&view);
             match format {
-                OutputFormat::Json => print_json(&guide.document()),
-                OutputFormat::Human => print_overview(&guide),
+                OutputFormat::Json => terminal.json(&guide.document()),
+                OutputFormat::Human => print_overview(&guide, terminal),
             }
             Exit::Passed
         }
         Some(kind) => match kind_guide(&view, kind) {
             Ok(guide) => {
                 match format {
-                    OutputFormat::Json => print_json(&guide.document()),
-                    OutputFormat::Human => print_kind(&guide),
+                    OutputFormat::Json => terminal.json(&guide.document()),
+                    OutputFormat::Human => print_kind(&guide, terminal),
                 }
                 Exit::Passed
             }
-            Err(error) => Refusal::of(format).report(&error),
+            Err(error) => Refusal::of(format).report(terminal, &error),
         },
     }
 }
@@ -52,11 +57,16 @@ fn indented(text: &str, indent: &str) -> String {
         .join("\n")
 }
 
-fn print_overview(guide: &InferenceGuide) {
+fn print_overview(guide: &InferenceGuide, terminal: &Terminal) {
     for kind in &guide.kinds {
         match kind.description {
-            Some(description) => println!("{} ({}): {description}", kind.keyword, kind.extension),
-            None => println!("{} ({})", kind.keyword, kind.extension),
+            Some(description) => outln!(
+                terminal,
+                "{} ({}): {description}",
+                kind.keyword,
+                kind.extension
+            ),
+            None => outln!(terminal, "{} ({})", kind.keyword, kind.extension),
         }
         let fields: Vec<String> = kind
             .fields
@@ -69,28 +79,34 @@ fn print_overview(guide: &InferenceGuide) {
                 }
             })
             .collect();
-        println!("  fields: {}", fields.join(", "));
+        outln!(terminal, "  fields: {}", fields.join(", "));
         if !kind.guide.is_empty() {
-            println!("{}", indented(&kind.guide, "  "));
+            outln!(terminal, "{}", indented(&kind.guide, "  "));
         }
     }
-    println!();
-    println!("Spec directory: {}", guide.spec_directory);
+    outln!(terminal);
+    outln!(terminal, "Spec directory: {}", guide.spec_directory);
     if let Some(conventions) = guide.conventions {
-        println!("Conventions: {conventions}");
+        outln!(terminal, "Conventions: {conventions}");
     }
 }
 
-fn print_kind(guide: &KindGuide) {
+fn print_kind(guide: &KindGuide, terminal: &Terminal) {
     match guide.description {
-        Some(description) => println!("{} ({}): {description}", guide.keyword, guide.extension),
-        None => println!("{} ({})", guide.keyword, guide.extension),
+        Some(description) => outln!(
+            terminal,
+            "{} ({}): {description}",
+            guide.keyword,
+            guide.extension
+        ),
+        None => outln!(terminal, "{} ({})", guide.keyword, guide.extension),
     }
-    println!();
-    println!("Fields:");
+    outln!(terminal);
+    outln!(terminal, "Fields:");
     for field in &guide.fields {
         let declared = field.declared();
-        println!(
+        outln!(
+            terminal,
             "  {}  {}  {}  {}",
             field.name(),
             field.type_label(),
@@ -99,12 +115,12 @@ fn print_kind(guide: &KindGuide) {
         );
     }
     if guide.existing.is_empty() {
-        println!("Existing: none");
+        outln!(terminal, "Existing: none");
     } else {
-        println!("Existing: {}", guide.existing.join(", "));
+        outln!(terminal, "Existing: {}", guide.existing.join(", "));
     }
-    println!("Guide:");
-    println!("{}", indented(&guide.guide, "  "));
-    println!("Example:");
-    println!("{}", indented(&guide.example(), "  "));
+    outln!(terminal, "Guide:");
+    outln!(terminal, "{}", indented(&guide.guide, "  "));
+    outln!(terminal, "Example:");
+    outln!(terminal, "{}", indented(&guide.example(), "  "));
 }

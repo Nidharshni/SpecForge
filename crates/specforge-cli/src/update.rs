@@ -1,5 +1,5 @@
-use crate::OutputFormat;
-use crate::outcome::{Exit, Refusal, print_json};
+use crate::outcome::{Exit, OutputFormat, Refusal};
+use crate::terminal::{Terminal, errln, outln};
 use specforge_ops::extension::{self, Trust, UpdateRequest};
 use specforge_ops_registry::ConfiguredRegistry;
 use std::path::Path;
@@ -14,6 +14,7 @@ pub fn run(
     major: bool,
     allow_unsigned: bool,
     trust: Trust,
+    terminal: &Terminal,
 ) -> Exit {
     let registry =
         ConfiguredRegistry::for_project(path, "update").asking(crate::trust::ask_key_change);
@@ -26,37 +27,41 @@ pub fn run(
         trust,
     };
     let updated = extension::update(&request, &registry, &runtime);
-    format.eprint_diagnostics(&registry.reported());
+    terminal.diagnostics(&registry.reported());
     let outcome = match updated {
         Ok(outcome) => outcome,
         Err(error) => {
-            return Refusal::of(format).report(&error);
+            return Refusal::of(format).report(terminal, &error);
         }
     };
     // The update ran to the end (applied or rolled back): it emits
     // `batch_update_completed`, which JSON output carries in its document.
     if let OutputFormat::Json = format {
-        print_json(&outcome.document(chrono::Utc::now()));
+        terminal.json(&outcome.document(chrono::Utc::now()));
         return Exit::of_verdict(outcome.applied());
     }
 
     if outcome.failures().next().is_some() {
         for (name, e) in outcome.failures() {
-            eprintln!("error[{}]: {name}: {}", e.code, e.message);
+            errln!(terminal, "error[{}]: {name}: {}", e.code, e.message);
             if let Some(hint) = &e.suggestion {
-                eprintln!("  hint: {hint}");
+                errln!(terminal, "  hint: {hint}");
             }
         }
-        eprintln!("no extension was updated");
+        errln!(terminal, "no extension was updated");
         return Exit::Failed;
     }
 
     if outcome.extensions.is_empty() {
-        println!("no extensions to update");
+        outln!(terminal, "no extensions to update");
     } else if outcome.updated().next().is_none() {
-        println!("all extensions are up to date");
+        outln!(terminal, "all extensions are up to date");
     } else {
-        println!("updated {} extension(s):", outcome.updated().count());
+        outln!(
+            terminal,
+            "updated {} extension(s):",
+            outcome.updated().count()
+        );
         for e in &outcome.extensions {
             if let extension::UpdateStatus::Updated {
                 from,
@@ -65,8 +70,8 @@ pub fn run(
                 ..
             } = &e.status
             {
-                println!("  {} {from} -> {to}", e.name);
-                println!("    {}", crate::add::publisher_line(publisher));
+                outln!(terminal, "  {} {from} -> {to}", e.name);
+                outln!(terminal, "    {}", crate::add::publisher_line(publisher));
             }
         }
     }

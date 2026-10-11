@@ -1,5 +1,5 @@
-use crate::OutputFormat;
-use crate::outcome::{Exit, Refusal, Written, print_json};
+use crate::outcome::{Exit, OutputFormat, Refusal, Written};
+use crate::terminal::{Terminal, errln, outln};
 use specforge_ops::migrate::{self, MigrateDocument, MigrationStatus, Request, RollbackSummary};
 use std::path::Path;
 
@@ -10,17 +10,23 @@ pub fn run(
     rollback: bool,
     target_version: Option<&str>,
     format: OutputFormat,
+    terminal: &Terminal,
 ) -> Exit {
     // Handle rollback mode
     if rollback {
         let outcome = migrate::rollback(path);
-        print_rollback(&outcome.summary, &outcome.writes.names_under(path), format);
+        print_rollback(
+            &outcome.summary,
+            &outcome.writes.names_under(path),
+            format,
+            terminal,
+        );
         return Exit::of_verdict(outcome.ok());
     }
 
     let target = match migrate::parse_target(target_version) {
         Ok(target) => target,
-        Err(error) => return Refusal::of(format).report(&error),
+        Err(error) => return Refusal::of(format).report(terminal, &error),
     };
 
     // The shared migration: migrate, run the extensions' hooks, then check
@@ -36,26 +42,29 @@ pub fn run(
     let outcome = migrate::run(&request, Some(runtime));
     // Each migrated file and each backup (none for a dry run).
     let written = (!dry_run).then(|| outcome.writes.names_under(path));
-    print_migration(&outcome.document(), written, format);
+    print_migration(&outcome.document(), written, format, terminal);
 
     if outcome.summary.failed_count != 0 {
         return Exit::of_verdict(outcome.ok());
     }
     for failure in &outcome.hook_failures {
-        eprintln!("migration hook failure: {failure}");
+        errln!(terminal, "migration hook failure: {failure}");
     }
     // Graph Protocol compatibility: breaking schema changes warn W053.
     for warning in &outcome.schema_warnings {
-        eprintln!("warning[{}]: {}", warning.code, warning.message);
+        errln!(terminal, "warning[{}]: {}", warning.code, warning.message);
     }
     for d in &outcome.structural_differences {
-        eprintln!("{}: {}", d.code, d.message);
+        errln!(terminal, "{}: {}", d.code, d.message);
     }
     if outcome.rollback.is_some() {
         if outcome.hook_failures.is_empty() {
-            eprintln!("migration changed the graph structure; files restored from backups");
+            errln!(
+                terminal,
+                "migration changed the graph structure; files restored from backups"
+            );
         } else {
-            eprintln!("files restored from backups");
+            errln!(terminal, "files restored from backups");
         }
     }
 
@@ -63,21 +72,27 @@ pub fn run(
 }
 
 /// The restore; its JSON lists each file restored in `files_written`.
-fn print_rollback(summary: &RollbackSummary, files_written: &[String], format: OutputFormat) {
+fn print_rollback(
+    summary: &RollbackSummary,
+    files_written: &[String],
+    format: OutputFormat,
+    terminal: &Terminal,
+) {
     match format {
         OutputFormat::Json => {
-            print_json(&Written::of(summary, files_written.to_vec()));
+            terminal.json(&Written::of(summary, files_written.to_vec()));
         }
         OutputFormat::Human => {
             for w in &summary.warnings {
-                eprintln!("warning: {w}");
+                errln!(terminal, "warning: {w}");
             }
             for r in &summary.results {
                 match r.status {
-                    MigrationStatus::Restored => eprintln!("  restored: {}", r.file_path),
+                    MigrationStatus::Restored => errln!(terminal, "  restored: {}", r.file_path),
                     MigrationStatus::Skipped => {}
                     MigrationStatus::Failed => {
-                        eprintln!(
+                        errln!(
+                            terminal,
                             "  failed: {} ({})",
                             r.file_path,
                             r.error.as_deref().unwrap_or("unknown")
@@ -86,9 +101,12 @@ fn print_rollback(summary: &RollbackSummary, files_written: &[String], format: O
                     _ => {}
                 }
             }
-            eprintln!(
+            errln!(
+                terminal,
                 "{} restored, {} skipped, {} failed",
-                summary.restored_count, summary.skipped_count, summary.failed_count
+                summary.restored_count,
+                summary.skipped_count,
+                summary.failed_count
             );
         }
     }
@@ -100,22 +118,26 @@ fn print_migration(
     document: &MigrateDocument,
     files_written: Option<Vec<String>>,
     format: OutputFormat,
+    terminal: &Terminal,
 ) {
     match format {
-        OutputFormat::Json => print_json(&Written {
+        OutputFormat::Json => terminal.json(&Written {
             document,
             files_written,
         }),
         OutputFormat::Human => {
             if document.dry_run {
                 for d in &document.diffs {
-                    println!("{}", d.unified_text);
+                    outln!(terminal, "{}", d.unified_text);
                 }
             }
 
-            eprintln!(
+            errln!(
+                terminal,
                 "{} migrated, {} skipped, {} failed",
-                document.files_migrated, document.files_skipped, document.files_failed
+                document.files_migrated,
+                document.files_skipped,
+                document.files_failed
             );
         }
     }

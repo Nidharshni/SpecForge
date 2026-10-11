@@ -3,8 +3,9 @@
 //! `specforge.infer_progress` answer; `--gaps` adds the unanalyzed files
 //! by directory and `--gaps-detail` the `specforge.infer_gaps` report.
 
-use crate::OutputFormat;
-use crate::outcome::{Exit, Refusal, print_json};
+use crate::terminal::{Terminal, out, outln};
+
+use crate::outcome::{Exit, OutputFormat, Refusal};
 use serde::Serialize;
 use specforge_ops::infer::{
     self, Gaps, GapsDocument, MANIFEST_FILENAME, Progress, ProgressDocument, UnanalyzedDirectory,
@@ -33,20 +34,21 @@ pub fn run(
     show_gaps: bool,
     show_stale: bool,
     show_gaps_detail: bool,
+    terminal: &Terminal,
 ) -> Exit {
     let project = crate::pipeline::compile_project(path);
     let view = ProjectView::of(&project);
     let progress = match infer::progress(&view) {
         Ok(progress) => progress,
         Err(error) => {
-            return Refusal::of(format).report(&error);
+            return Refusal::of(format).report(terminal, &error);
         }
     };
     let gaps = if show_gaps_detail {
         match infer::gaps(&view) {
             Ok(gaps) => Some(gaps),
             Err(error) => {
-                return Refusal::of(format).report(&error);
+                return Refusal::of(format).report(terminal, &error);
             }
         }
     } else {
@@ -55,20 +57,22 @@ pub fn run(
 
     match format {
         OutputFormat::Json => {
-            print_json(&Printed {
+            terminal.json(&Printed {
                 progress: progress.document(),
                 unanalyzed_by_directory: show_gaps.then(|| progress.unanalyzed_by_directory()),
                 gap_analysis: gaps.as_ref().map(Gaps::document),
             });
         }
         OutputFormat::Human => {
-            print!(
+            out!(
+                terminal,
                 "{}",
                 render_human(&progress, show_gaps, show_stale, gaps.as_ref())
             );
             if !progress.recorded {
-                println!();
-                println!(
+                outln!(terminal);
+                outln!(
+                    terminal,
                     "No {MANIFEST_FILENAME} yet: start an inference with the MCP infer prompt \
                      (specforge://prompts/infer), which records progress here."
                 );

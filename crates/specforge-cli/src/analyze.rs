@@ -4,6 +4,8 @@
 //! tool. This module is the CLI half: arguments in, rendering and exit
 //! codes out.
 
+use crate::terminal::{Terminal, err, errln, outln};
+
 use std::path::Path;
 
 use specforge_common::{codes, diagnostic_summary, render_diagnostics, truncate_diagnostics};
@@ -11,10 +13,10 @@ use specforge_ops::OpError;
 use specforge_ops::analyze::{AnalyzeOptions, ProveOptions, ReportSource, analyze};
 use specforge_ops::view::ProjectView;
 
-use crate::OutputFormat;
-use crate::outcome::{Exit, Refusal};
+use crate::outcome::{Exit, OutputFormat, Refusal};
 use crate::pipeline;
 
+#[allow(clippy::too_many_arguments)] // T3 replaces the argument list with `Args`
 pub fn run(
     path: &Path,
     pass: Option<String>,
@@ -23,6 +25,7 @@ pub fn run(
     test_results: Option<&Path>,
     min: Option<f64>,
     prove: bool,
+    terminal: &Terminal,
 ) -> Exit {
     let project = pipeline::compile_project(path);
     // Without --test-results, the operation uses what `specforge collect`
@@ -49,19 +52,21 @@ pub fn run(
     };
     let outcome = match analyze(&ProjectView::of(&project), &options) {
         Ok(outcome) => outcome,
-        Err(error) => return Refusal::measuring(format).report(&OpError::from(error)),
+        Err(error) => return Refusal::measuring(format).report(terminal, &OpError::from(error)),
     };
     // D3: stray test records, on stderr before the reports. Exact
     // matching is preserved; the warning only surfaces what was silently
     // dropped before.
     for stray in &outcome.stray_records {
         match &stray.near {
-            Some(near) => eprintln!(
+            Some(near) => errln!(
+                terminal,
                 "{}: test record references unknown entity '{}' (did you mean '{near}'?)",
                 codes::W097,
                 stray.entity_id
             ),
-            None => eprintln!(
+            None => errln!(
+                terminal,
                 "{}: test record references unknown entity '{}'",
                 codes::W097,
                 stray.entity_id
@@ -72,40 +77,41 @@ pub fn run(
 
     if json {
         let doc = outcome.document();
-        println!("{}", serde_json::to_string_pretty(&doc).unwrap_or_default());
+        terminal.json(&doc);
     } else {
         // Human output is capped at the codebase-wide diagnostic limit so a
         // noisy first run stays readable; JSON output is never truncated.
-        let color = crate::color::stdout();
+        let color = terminal.facts().color_out;
         // The text each file was compiled from, to quote in snippets.
         let sources = project.source_texts();
         for report in reports {
-            println!("analyze/{} — {}", report.name, report.description);
+            outln!(terminal, "analyze/{} — {}", report.name, report.description);
             if report.findings.is_empty() {
-                println!("  no findings");
+                outln!(terminal, "  no findings");
             } else {
                 let mut rendered_findings = report.findings.clone();
                 truncate_diagnostics(&mut rendered_findings);
                 let rendered = render_diagnostics(&rendered_findings, &sources, color);
                 if !rendered.is_empty() {
-                    println!("{rendered}");
+                    outln!(terminal, "{rendered}");
                 } else {
                     for d in &rendered_findings {
-                        println!("  [{d}]");
+                        outln!(terminal, "  [{d}]");
                     }
                 }
             }
             let mut lines = Vec::new();
             summary_lines(&report.summary, "", &mut lines);
             if !lines.is_empty() {
-                println!("  summary:");
+                outln!(terminal, "  summary:");
                 for line in lines {
-                    println!("    {line}");
+                    outln!(terminal, "    {line}");
                 }
             }
-            println!();
+            outln!(terminal);
         }
-        println!(
+        outln!(
+            terminal,
             "{}",
             diagnostic_summary(
                 &reports
@@ -121,7 +127,7 @@ pub fn run(
     // full analysis. Under `--json` the document carries where it landed and
     // nothing goes to stderr.
     if let (OutputFormat::Human, Some(failure)) = (format, outcome.gate_failure()) {
-        eprint!("{}", crate::outcome::error_lines(&failure, None));
+        err!(terminal, "{}", crate::outcome::error_lines(&failure, None));
     }
     Exit::of(outcome.verdict())
 }

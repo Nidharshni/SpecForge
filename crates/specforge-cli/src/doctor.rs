@@ -1,5 +1,5 @@
-use crate::OutputFormat;
-use crate::outcome::{Exit, print_json};
+use crate::outcome::{Exit, OutputFormat};
+use crate::terminal::{Terminal, out};
 use serde::Serialize;
 use specforge_common::codes;
 use specforge_ops::doctor::{
@@ -26,20 +26,20 @@ struct Printed<'a> {
 /// their enhancements, conflicts, shadowed keywords, installed binaries)
 /// plus registry credential health. Exit 1 on any error-level finding or
 /// credential failure.
-pub fn run(path: &Path, format: OutputFormat) -> Exit {
+pub fn run(path: &Path, format: OutputFormat, terminal: &Terminal) -> Exit {
     let project = crate::pipeline::compile_project(path);
     let report = diagnose(&ProjectView::of(&project));
     let credentials = user_credential_health();
 
     match format {
         OutputFormat::Json => {
-            print_json(&Printed {
+            terminal.json(&Printed {
                 report: report.document(),
                 credentials: &credentials.lines,
                 credentials_failures: credentials.failures,
             });
         }
-        OutputFormat::Human => print!("{}", render_human(&report, &credentials)),
+        OutputFormat::Human => out!(terminal, "{}", render_human(&report, &credentials)),
     }
 
     // Doctor checks the project and the user's credentials: both must pass.

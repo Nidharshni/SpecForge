@@ -2,7 +2,7 @@ mod add;
 mod analyze;
 mod check;
 mod collect;
-mod color;
+
 mod doctor;
 mod explain;
 mod explore;
@@ -30,16 +30,18 @@ mod remove;
 mod review;
 mod search;
 mod stats;
+mod terminal;
 mod trace;
 mod trust;
 mod update;
 mod watch;
 
 use clap::builder::{PossibleValuesParser, TypedValueParser};
-use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
+use clap::{CommandFactory, Parser, Subcommand};
 use clap_complete::Shell;
-use outcome::Exit;
+use outcome::{Exit, OutputFormat};
 use std::path::{Path, PathBuf};
+use terminal::Terminal;
 
 #[derive(Parser)]
 #[command(
@@ -51,36 +53,6 @@ use std::path::{Path, PathBuf};
 struct Cli {
     #[command(subcommand)]
     command: Commands,
-}
-
-/// Human-readable vs machine-readable output for registry-style commands.
-#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
-enum OutputFormat {
-    Human,
-    Json,
-}
-
-impl OutputFormat {
-    /// Report diagnostics that don't stop the command (the registry
-    /// configuration's E067/W140/I003): `severity[CODE]: message` on
-    /// stderr in either format, so JSON stdout stays one document.
-    fn eprint_diagnostics(self, diagnostics: &[specforge_common::Diagnostic]) {
-        for diagnostic in diagnostics {
-            eprintln!("{}", specforge_common::render_plain(diagnostic));
-        }
-    }
-
-    /// How a publisher key change is decided for this output: `--yes`
-    /// accepts it; JSON output can't ask anyone, so it refuses; a terminal
-    /// is asked.
-    fn trust(self, assume_yes: bool) -> specforge_ops::extension::Trust {
-        use specforge_ops::extension::Trust;
-        match (assume_yes, self) {
-            (true, _) => Trust::AssumeYes,
-            (false, OutputFormat::Json) => Trust::Refuse,
-            (false, OutputFormat::Human) => Trust::Prompt,
-        }
-    }
 }
 
 #[derive(Subcommand)]
@@ -805,6 +777,7 @@ enum ExtensionAction {
 
 fn main() {
     let cli = Cli::parse();
+    let terminal = Terminal::process();
 
     let exit_code = match cli.command {
         // An extension command's exit code is its own (ADR 0011).
@@ -815,13 +788,14 @@ fn main() {
                 .collect();
             extension_command::run(&argv, &builtins)
         }
-        command => run(command).code(),
+        command => run(command, &terminal).code(),
     };
+    terminal.flush();
     std::process::exit(exit_code);
 }
 
-/// Run one core command.
-fn run(command: Commands) -> Exit {
+/// Run one core command at `terminal`.
+fn run(command: Commands, terminal: &Terminal) -> Exit {
     match command {
         Commands::Init {
             name,
@@ -830,7 +804,14 @@ fn run(command: Commands) -> Exit {
             format,
         } => {
             let path = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-            init::run(&path, name.as_deref(), &version, &extensions, format)
+            init::run(
+                &path,
+                name.as_deref(),
+                &version,
+                &extensions,
+                format,
+                terminal,
+            )
         }
         Commands::Check {
             path,
@@ -839,7 +820,7 @@ fn run(command: Commands) -> Exit {
             lint,
             severity,
             cache,
-        } => check::run(&path, strict, format, &lint, severity, cache),
+        } => check::run(&path, strict, format, &lint, severity, cache, terminal),
         Commands::Export {
             path,
             format,
@@ -867,6 +848,7 @@ fn run(command: Commands) -> Exit {
                 },
                 schema_version: schema_version.as_deref(),
             },
+            terminal,
         ),
         Commands::Schema {
             path,
@@ -883,6 +865,7 @@ fn run(command: Commands) -> Exit {
                 validation_rules,
             },
             publish.then_some(format),
+            terminal,
         ),
         Commands::Model {
             path,
@@ -903,6 +886,7 @@ fn run(command: Commands) -> Exit {
                 kinds,
                 root: root.map(|kind| specforge_ops::model::ModelRoot { kind, depth }),
             },
+            terminal,
         ),
         Commands::Outline {
             path,
@@ -916,6 +900,7 @@ fn run(command: Commands) -> Exit {
                 detail: fields,
                 deps,
             },
+            terminal,
         ),
         Commands::Query {
             entity,
@@ -933,20 +918,21 @@ fn run(command: Commands) -> Exit {
                 format: Some(format),
                 include_coverage,
             },
+            terminal,
         ),
         Commands::Trace {
             entity,
             path,
             format,
-        } => trace::run(&path, entity.as_deref(), format),
+        } => trace::run(&path, entity.as_deref(), format, terminal),
         Commands::Format {
             paths,
             path,
             check,
             diff,
             stdin,
-        } => format::run(&path, check, diff, stdin, &paths),
-        Commands::Stats { path, format } => stats::run(&path, format),
+        } => format::run(&path, check, diff, stdin, &paths, terminal),
+        Commands::Stats { path, format } => stats::run(&path, format, terminal),
         Commands::Explore {
             entity,
             path,
@@ -961,6 +947,7 @@ fn run(command: Commands) -> Exit {
                 depth,
             },
             format,
+            terminal,
         ),
         Commands::Review {
             entity,
@@ -974,9 +961,10 @@ fn run(command: Commands) -> Exit {
                 depth,
             },
             format,
+            terminal,
         ),
         Commands::InferGuide { kind, path, format } => {
-            infer_guide::run(&path, kind.as_deref(), format)
+            infer_guide::run(&path, kind.as_deref(), format, terminal)
         }
         Commands::Add {
             specifier,
@@ -984,7 +972,14 @@ fn run(command: Commands) -> Exit {
             format,
             allow_unsigned,
             yes,
-        } => add::run(&specifier, &path, format, allow_unsigned, format.trust(yes)),
+        } => add::run(
+            &specifier,
+            &path,
+            format,
+            allow_unsigned,
+            format.trust(yes),
+            terminal,
+        ),
         Commands::Analyze {
             pass,
             path,
@@ -1005,6 +1000,7 @@ fn run(command: Commands) -> Exit {
                 test_results.as_deref().map(Path::new),
                 min,
                 prove,
+                terminal,
             )
         }
         Commands::Watch {
@@ -1015,32 +1011,37 @@ fn run(command: Commands) -> Exit {
             let project = path
                 .map(PathBuf::from)
                 .unwrap_or_else(|| PathBuf::from("."));
-            watch::run(&project, json, verify_incremental)
+            watch::run(&project, json, verify_incremental, terminal)
         }
         Commands::New {
             name,
             extension,
             path,
             format,
-        } => new::run(&name, extension, &path, format),
+        } => new::run(&name, extension, &path, format, terminal),
         Commands::Remove {
             name,
             path,
             force,
             format,
-        } => remove::run(&name, &path, force, format),
-        Commands::Extensions { path, format } => extensions::run(&path, format),
+        } => remove::run(&name, &path, force, format, terminal),
+        Commands::Extensions { path, format } => extensions::run(&path, format, terminal),
         Commands::Publish {
             extension,
             path,
             format,
-        } => publish::run(extension.as_deref().unwrap_or(&path), &path, format),
+        } => publish::run(
+            extension.as_deref().unwrap_or(&path),
+            &path,
+            format,
+            terminal,
+        ),
         Commands::Search {
             query,
             contributes,
             path,
             format,
-        } => search::run(&query, contributes, &path, format),
+        } => search::run(&query, contributes, &path, format, terminal),
         Commands::Update {
             name,
             path,
@@ -1055,6 +1056,7 @@ fn run(command: Commands) -> Exit {
             major,
             allow_unsigned,
             format.trust(yes),
+            terminal,
         ),
         Commands::Login {
             registry,
@@ -1072,13 +1074,14 @@ fn run(command: Commands) -> Exit {
             },
             &path,
             format,
+            terminal,
         ),
         Commands::Logout {
             registry,
             path,
             format,
-        } => login::run_logout(registry.as_deref(), &path, format),
-        Commands::Providers { path, format } => providers::run(&path, format),
+        } => login::run_logout(registry.as_deref(), &path, format, terminal),
+        Commands::Providers { path, format } => providers::run(&path, format, terminal),
         Commands::Collect {
             path,
             runner,
@@ -1095,8 +1098,9 @@ fn run(command: Commands) -> Exit {
                 yes,
             },
             format,
+            terminal,
         ),
-        Commands::Doctor { path, format } => doctor::run(&path, format),
+        Commands::Doctor { path, format } => doctor::run(&path, format, terminal),
         Commands::Mcp { path } => mcp::run(&path),
         Commands::Completions { shell } => {
             // The built-ins, and the commands the extensions of the project
@@ -1106,7 +1110,7 @@ fn run(command: Commands) -> Exit {
             clap_complete::generate(shell, &mut cmd, "specforge", &mut std::io::stdout());
             Exit::Passed
         }
-        Commands::Explain { code } => explain::run(&code),
+        Commands::Explain { code } => explain::run(&code, terminal),
         Commands::Migrate {
             path,
             dry_run,
@@ -1121,6 +1125,7 @@ fn run(command: Commands) -> Exit {
             rollback,
             target_version.as_deref(),
             format,
+            terminal,
         ),
         Commands::InferStatus {
             path,
@@ -1128,17 +1133,17 @@ fn run(command: Commands) -> Exit {
             gaps,
             stale,
             gaps_detail,
-        } => infer_status::run(&path, format, gaps, stale, gaps_detail),
+        } => infer_status::run(&path, format, gaps, stale, gaps_detail, terminal),
         Commands::External(_) => unreachable!("main runs an extension command itself"),
         Commands::Extension { action } => match action {
             ExtensionAction::Init { name, path, format } => {
-                extension_authoring::run_init(&path, name.as_deref(), format)
+                extension_authoring::run_init(&path, name.as_deref(), format, terminal)
             }
             ExtensionAction::Build { path, format } => {
-                extension_authoring::run_build(&path, format)
+                extension_authoring::run_build(&path, format, terminal)
             }
             ExtensionAction::Validate { path, format } => {
-                extension_authoring::run_validate(&path, format)
+                extension_authoring::run_validate(&path, format, terminal)
             }
         },
     }
