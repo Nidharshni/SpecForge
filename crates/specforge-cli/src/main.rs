@@ -1,8 +1,9 @@
+#![deny(clippy::print_stdout, clippy::print_stderr)]
+
 mod add;
 mod analyze;
 mod check;
 mod collect;
-
 mod doctor;
 mod explain;
 mod explore;
@@ -39,8 +40,8 @@ mod watch;
 use clap::{CommandFactory, Parser, Subcommand};
 use clap_complete::Shell;
 use outcome::Exit;
-use std::path::{Path, PathBuf};
-use terminal::Terminal;
+use std::path::Path;
+use terminal::{Stream, Terminal};
 
 #[derive(Parser)]
 #[command(
@@ -112,13 +113,7 @@ enum Commands {
     /// Run health checks on installed extensions
     Doctor(doctor::Args),
     /// Start MCP server (JSON-RPC over stdio)
-    Mcp {
-        /// Where to find the project to serve: the nearest directory at or above it holding
-        /// specforge.json or specforge.spec (none: nothing is served until a call names a
-        /// project or init creates one)
-        #[arg(default_value = ".")]
-        path: PathBuf,
-    },
+    Mcp(mcp::Args),
     /// Migrate .spec files between format versions
     Migrate(migrate::Args),
     /// Generate shell completions: the built-in commands, and the commands
@@ -129,10 +124,7 @@ enum Commands {
         shell: Shell,
     },
     /// Explain a diagnostic code
-    Explain {
-        /// Diagnostic code (e.g., E001, W010)
-        code: String,
-    },
+    Explain(explain::Args),
     /// Show inference progress (analyzed files, gaps, stale entries)
     InferStatus(infer_status::Args),
     /// Extension authoring commands
@@ -157,12 +149,26 @@ fn main() {
                 .get_subcommands()
                 .map(|c| c.get_name().to_string())
                 .collect();
-            extension_command::run(&argv, &builtins)
+            extension_command::run(&argv, &builtins, &terminal)
         }
         command => run(command, &terminal).code(),
     };
     terminal.flush();
     std::process::exit(exit_code);
+}
+
+/// `specforge completions`: the built-ins, and the commands the extensions
+/// of the project in the current directory contribute (`specforge product
+/// ...`).
+fn completions(shell: Shell, terminal: &Terminal) -> Exit {
+    let mut cmd = extension_command::with_extension_commands(Cli::command(), Path::new("."));
+    clap_complete::generate(
+        shell,
+        &mut cmd,
+        "specforge",
+        &mut terminal.writer(Stream::Out),
+    );
+    Exit::Passed
 }
 
 /// Run one core command at `terminal`.
@@ -195,16 +201,9 @@ fn run(command: Commands, terminal: &Terminal) -> Exit {
         Commands::Providers(args) => args.run(terminal),
         Commands::Collect(args) => args.run(terminal),
         Commands::Doctor(args) => args.run(terminal),
-        Commands::Mcp { path } => mcp::run(&path),
-        Commands::Completions { shell } => {
-            // The built-ins, and the commands the extensions of the project
-            // in the current directory contribute (`specforge product ...`).
-            let mut cmd =
-                extension_command::with_extension_commands(Cli::command(), Path::new("."));
-            clap_complete::generate(shell, &mut cmd, "specforge", &mut std::io::stdout());
-            Exit::Passed
-        }
-        Commands::Explain { code } => explain::run(&code, terminal),
+        Commands::Mcp(args) => args.run(terminal),
+        Commands::Completions { shell } => completions(shell, terminal),
+        Commands::Explain(args) => args.run(terminal),
         Commands::Migrate(args) => args.run(terminal),
         Commands::InferStatus(args) => args.run(terminal),
         Commands::External(_) => unreachable!("main runs an extension command itself"),

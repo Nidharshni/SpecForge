@@ -18,6 +18,7 @@
 //! as they are, and its exit code is the CLI's.
 
 use crate::outcome::Exit;
+use crate::terminal::{Stream, Terminal, err, errln, out};
 use clap::builder::PossibleValuesParser;
 use clap::parser::ValueSource;
 use clap::{Arg, ArgAction, ArgMatches, Command};
@@ -29,7 +30,6 @@ use specforge_ops::view::ProjectView;
 use specforge_project::{CompiledProject, Environment};
 use specforge_protocol_types::command_args::{ArgError, normalize_arg};
 use specforge_protocol_types::{CommandError, CommandOutput};
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -47,7 +47,7 @@ const FORMAT: &str = "format";
 /// surfaces) is loaded to route the command; the project is compiled from it
 /// (its sources read, its graph built and checked) only once a declared
 /// command is matched.
-pub fn run(argv: &[String], builtins: &[String]) -> i32 {
+pub fn run(argv: &[String], builtins: &[String], terminal: &Terminal) -> i32 {
     let Some((first, rest)) = argv.split_first() else {
         return INVALID_INPUT_EXIT;
     };
@@ -71,16 +71,17 @@ pub fn run(argv: &[String], builtins: &[String]) -> i32 {
     let routed = ExtensionCommands::build(env.registries());
     let commands: Vec<&ExtensionCommand> = routed.of(&ext).collect();
     if commands.is_empty() {
-        eprintln!(
+        errln!(
+            terminal,
             "error: unrecognized subcommand '{ext}': no built-in command, and no extension of the project at {} with that name contributes commands",
             root.display()
         );
         let mut names: Vec<&str> = builtins.iter().map(String::as_str).collect();
         names.extend(routed.shorts());
         if let Some(close) = specforge_common::find_close_match(&ext, names) {
-            eprintln!("\n  tip: a similar subcommand exists: '{close}'");
+            errln!(terminal, "\n  tip: a similar subcommand exists: '{close}'");
         }
-        eprintln!("\nFor more information, try 'specforge --help'.");
+        errln!(terminal, "\nFor more information, try 'specforge --help'.");
         return INVALID_INPUT_EXIT;
     }
     let requested = rest.first().and_then(|requested| {
@@ -91,7 +92,8 @@ pub fn run(argv: &[String], builtins: &[String]) -> i32 {
     });
     if let Some(command) = requested {
         if let Some(why) = command.refusal() {
-            eprintln!(
+            errln!(
+                terminal,
                 "error: {}'s command '{}' cannot run on the command line: {why}",
                 command.extension(),
                 command.cli_name()
@@ -105,7 +107,8 @@ pub fn run(argv: &[String], builtins: &[String]) -> i32 {
             .iter()
             .filter(|s| s.short() == ext && s.cli_name() == command.cli_name())
         {
-            eprintln!(
+            errln!(
+                terminal,
                 "note: {}'s command '{}' is not routed: {}'s command of that name came first",
                 shadowed.extension(),
                 shadowed.cli_name(),
@@ -122,11 +125,22 @@ pub fn run(argv: &[String], builtins: &[String]) -> i32 {
     let matches = match command_line(&ext, &commands).try_get_matches_from(rest) {
         Ok(matches) => matches,
         Err(e) if json && !is_display(&e) => {
-            eprintln!("{}", usage_error(&e, requested));
+            errln!(terminal, "{}", usage_error(&e, requested));
             return INVALID_INPUT_EXIT;
         }
         Err(e) => {
-            let _ = e.print();
+            // Clap's own error, coloured as the stream it goes to is.
+            let (stream, color) = if e.use_stderr() {
+                (Stream::Err, terminal.facts().color_err)
+            } else {
+                (Stream::Out, terminal.facts().color_out)
+            };
+            let rendered = e.render();
+            if color {
+                terminal.write(stream, format_args!("{}", rendered.ansi()));
+            } else {
+                terminal.write(stream, format_args!("{rendered}"));
+            }
             return e.exit_code();
         }
     };
@@ -146,12 +160,7 @@ pub fn run(argv: &[String], builtins: &[String]) -> i32 {
     // operation runs a command", O3).
     let project = CompiledProject::of(env);
     let outcome = specforge_ops::command::run(&ProjectView::of(&project), command, &given, format);
-    ended(
-        outcome,
-        format,
-        &mut std::io::stdout(),
-        &mut std::io::stderr(),
-    )
+    ended(outcome, format, terminal)
 }
 
 /// What a command's run writes, and the exit code: the output's stdout and
@@ -161,17 +170,16 @@ pub fn run(argv: &[String], builtins: &[String]) -> i32 {
 fn ended(
     outcome: Result<CommandOutput, RunError>,
     format: CommandFormat,
-    stdout: &mut dyn Write,
-    stderr: &mut dyn Write,
+    terminal: &Terminal,
 ) -> i32 {
     match outcome {
         Ok(output) => {
-            let _ = stdout.write_all(output.stdout.as_bytes());
-            let _ = stderr.write_all(output.stderr.as_bytes());
+            out!(terminal, "{}", output.stdout);
+            err!(terminal, "{}", output.stderr);
             output.exit_code
         }
         Err(error) => {
-            let _ = stderr.write_all(written(&error, format).as_bytes());
+            err!(terminal, "{}", written(&error, format));
             match error {
                 RunError::Args(_) => Exit::Unjudged.code(),
                 RunError::NoProject(_) | RunError::Call(_) => Exit::Failed.code(),
@@ -472,6 +480,7 @@ fn arg_values(command: &ExtensionCommand, matches: &ArgMatches) -> Map<String, V
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::terminal::Facts;
     use specforge_protocol_types::{CommandArgDescriptor, CommandArgType, CommandDescriptor};
     use specforge_test_macros::test as specforge_test;
     use specforge_wasm::{CallError, CallFailure, Operation};
@@ -660,20 +669,20 @@ mod tests {
                 },
             ))
         };
-        let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
-        let code = ended(refused(), CommandFormat::Json, &mut stdout, &mut stderr);
+        let (terminal, capture) = Terminal::captured("", Facts::PIPED);
+        let code = ended(refused(), CommandFormat::Json, &terminal);
         assert_eq!(code, 2);
-        assert!(stdout.is_empty());
+        assert!(capture.stdout().is_empty());
         assert_eq!(
-            String::from_utf8(stderr).unwrap(),
+            capture.stderr(),
             "{\"code\":\"INVALID_INPUT\",\"message\":\"missing required arg 'milestone'\"}\n"
         );
 
-        let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
-        let code = ended(refused(), CommandFormat::Human, &mut stdout, &mut stderr);
+        let (terminal, capture) = Terminal::captured("", Facts::PIPED);
+        let code = ended(refused(), CommandFormat::Human, &terminal);
         assert_eq!(code, 2);
         assert_eq!(
-            String::from_utf8(stderr).unwrap(),
+            capture.stderr(),
             "error: missing required arg 'milestone'\n"
         );
     }
@@ -694,16 +703,11 @@ mod tests {
                     reason: "expected value at line 1 column 1".into(),
                 },
             );
-            let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
-            let code = ended(
-                Err(RunError::Call(answered)),
-                format,
-                &mut stdout,
-                &mut stderr,
-            );
+            let (terminal, capture) = Terminal::captured("", Facts::PIPED);
+            let code = ended(Err(RunError::Call(answered)), format, &terminal);
             assert_eq!(code, 1, "{format:?}");
-            assert!(stdout.is_empty(), "the raw bytes are not printed");
-            let stderr = String::from_utf8(stderr).unwrap();
+            assert!(capture.stdout().is_empty(), "the raw bytes are not printed");
+            let stderr = capture.stderr();
             let message = "command cmd__x_milestone_completion() of '@acme/x' answered output \
                            that is not a CommandOutput: ";
             match format {

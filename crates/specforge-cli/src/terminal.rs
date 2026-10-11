@@ -228,6 +228,30 @@ impl Terminal {
         }
     }
 
+    /// The next line of input without its line ending, or `None` at the end
+    /// of input or on a read error (`specforge mcp`'s stdio loop).
+    pub(crate) fn read_line(&self) -> Option<String> {
+        let mut line = String::new();
+        match locked(&self.0.input).read_line(&mut line) {
+            Ok(0) | Err(_) => None,
+            Ok(_) => {
+                let trimmed = line.trim_end_matches(['\n', '\r']).len();
+                line.truncate(trimmed);
+                Some(line)
+            }
+        }
+    }
+
+    /// A writer onto `stream` for code that wants `&mut dyn Write`
+    /// (`clap_complete::generate`). It locks the stream per write call,
+    /// never across calls.
+    pub(crate) fn writer(&self, stream: Stream) -> StreamWriter<'_> {
+        StreamWriter {
+            terminal: self,
+            stream,
+        }
+    }
+
     /// The rest of the input (`specforge format --stdin`).
     pub(crate) fn read_to_string(&self) -> io::Result<String> {
         let mut text = String::new();
@@ -242,6 +266,30 @@ impl Terminal {
             if let Err(error) = sink.writer.flush() {
                 sink.failed(&error);
             }
+        }
+    }
+}
+
+/// What [`Terminal::writer`] gives.
+pub(crate) struct StreamWriter<'t> {
+    terminal: &'t Terminal,
+    stream: Stream,
+}
+
+impl Write for StreamWriter<'_> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        let mut sink = locked(self.terminal.sink(self.stream));
+        match sink.writer.write(buf) {
+            Ok(written) => Ok(written),
+            Err(error) => sink.failed(&error),
+        }
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        let mut sink = locked(self.terminal.sink(self.stream));
+        match sink.writer.flush() {
+            Ok(()) => Ok(()),
+            Err(error) => sink.failed(&error),
         }
     }
 }

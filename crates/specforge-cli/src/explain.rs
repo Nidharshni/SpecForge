@@ -1,14 +1,26 @@
 //! `specforge explain <CODE>`: print a catalogued diagnostic code
 //! ([`specforge_diagnostics`]).
 
-use crate::terminal::{Terminal, outln};
-
 use crate::outcome::{Exit, OutputFormat, Refusal};
+use crate::terminal::{Terminal, outln};
 use specforge_diagnostics::{CodeEntry, WRAP_WIDTH, lookup, retired, wrap};
 use specforge_ops::{OpError, OpErrorKind};
 
-/// Print the explanation of a diagnostic code.
-pub fn run(code: &str, terminal: &Terminal) -> Exit {
+// `specforge explain`'s command line.
+#[derive(clap::Args)]
+pub(crate) struct Args {
+    /// Diagnostic code (e.g., E001, W010)
+    code: String,
+}
+
+impl Args {
+    /// Print the explanation of a diagnostic code.
+    pub(crate) fn run(self, terminal: &Terminal) -> Exit {
+        explain(&self.code, terminal)
+    }
+}
+
+fn explain(code: &str, terminal: &Terminal) -> Exit {
     if let Some(replacement) = retired(code) {
         let old = code.to_uppercase();
         match replacement.and_then(lookup) {
