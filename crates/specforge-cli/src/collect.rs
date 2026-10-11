@@ -11,29 +11,54 @@
 //! adapter only chooses the consent (a terminal prompt, `--yes`, or what
 //! was approved before) and presents the outcome.
 
+use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use crate::terminal::{Terminal, errln, outln};
-
-use crate::outcome::{Exit, OutputFormat, Refusal};
 use specforge_ops::collect::{self, Collector, Consent, Mode, Request, RunnerOutput};
 use specforge_ops::view::ProjectView;
-use std::io::{BufRead, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 
-pub struct Options<'a> {
-    pub runner: Option<&'a str>,
-    pub no_run: bool,
-    pub reports: &'a [PathBuf],
-    pub yes: bool,
+// `specforge collect`'s command line.
+#[derive(clap::Args)]
+pub(crate) struct Args {
+    /// Path to the project root
+    #[arg(long, default_value = ".")]
+    path: PathBuf,
+
+    /// Collector to use (e.g. cargo-test). Detected from project files if omitted.
+    #[arg(long, alias = "collector", value_name = "NAME")]
+    runner: Option<String>,
+
+    /// Parse the runner's existing report instead of running it
+    #[arg(long)]
+    no_run: bool,
+
+    /// Report files to parse instead of running the runner (implies --no-run)
+    #[arg(long = "report", value_name = "FILE")]
+    reports: Vec<PathBuf>,
+
+    /// Run the declared test command without asking (for CI)
+    #[arg(long)]
+    yes: bool,
+
+    #[command(flatten)]
+    output: OutputArg,
 }
 
-pub fn run(path: &Path, options: &Options, format: OutputFormat, terminal: &Terminal) -> Exit {
+impl Args {
+    pub(crate) fn run(self, terminal: &Terminal) -> Exit {
+        collect_at(&self, terminal)
+    }
+}
+
+fn collect_at(options: &Args, terminal: &Terminal) -> Exit {
+    let format = options.output.format;
     // The project the path is in (ADR 0029 D6); collect refuses one that is none.
-    let root = specforge_common::project_root_of(path);
+    let root = specforge_common::project_root_of(&options.path);
 
     let project = crate::pipeline::compile_project(&root);
 
     let mode = if !options.reports.is_empty() {
-        Mode::Reports(options.reports)
+        Mode::Reports(&options.reports)
     } else if options.no_run {
         Mode::NoRun
     } else if format == OutputFormat::Json {
@@ -42,10 +67,10 @@ pub fn run(path: &Path, options: &Options, format: OutputFormat, terminal: &Term
     } else {
         Mode::Run(RunnerOutput::Inherit)
     };
-    let mut prompt = |collector: &Collector, argv: &[String]| ask(collector, argv, &root);
+    let mut prompt = |collector: &Collector, argv: &[String]| ask(collector, argv, &root, terminal);
     let consent = if options.yes {
         Consent::Yes
-    } else if format == OutputFormat::Json || !std::io::stdin().is_terminal() {
+    } else if format == OutputFormat::Json || !terminal.facts().interactive {
         // Nobody to ask: only what was approved before runs.
         Consent::Approved
     } else {
@@ -63,7 +88,7 @@ pub fn run(path: &Path, options: &Options, format: OutputFormat, terminal: &Term
         }
     };
     let request = Request {
-        runner: options.runner,
+        runner: options.runner.as_deref(),
         mode,
         consent,
         announce: &mut announce,
@@ -118,20 +143,15 @@ pub fn run(path: &Path, options: &Options, format: OutputFormat, terminal: &Term
 }
 
 /// Ask on the terminal whether the collector's command may run here.
-fn ask(collector: &Collector, argv: &[String], root: &Path) -> bool {
-    let mut err = std::io::stderr();
-    let _ = writeln!(
-        err,
-        "{} wants to run this command in {}:\n  {}",
+fn ask(collector: &Collector, argv: &[String], root: &Path, terminal: &Terminal) -> bool {
+    let question = format!(
+        "{} wants to run this command in {}:\n  {}\nAllow it for this project? [y/N] ",
         collector.extension,
         root.display(),
         argv.join(" ")
     );
-    let _ = write!(err, "Allow it for this project? [y/N] ");
-    let _ = err.flush();
-    let mut answer = String::new();
-    if std::io::stdin().lock().read_line(&mut answer).is_err() {
-        return false;
+    match terminal.prompt(&question) {
+        Some(answer) => matches!(answer.trim(), "y" | "Y" | "yes"),
+        None => false,
     }
-    matches!(answer.trim(), "y" | "Y" | "yes")
 }

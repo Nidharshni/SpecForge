@@ -208,6 +208,26 @@ impl Terminal {
         }
     }
 
+    /// Ask `question` (written to stderr as it is, then flushed) and read one
+    /// line of the answer, with its line ending; `None` when nobody can
+    /// answer (`!facts().interactive`, and nothing is written or read) or at
+    /// the end of input.
+    pub(crate) fn prompt(&self, question: &str) -> Option<String> {
+        if !self.facts().interactive {
+            return None;
+        }
+        self.write(Stream::Err, format_args!("{question}"));
+        let mut err = locked(&self.0.err);
+        // A prompt must reach the person before they are asked to answer it.
+        let _ = err.writer.flush();
+        drop(err);
+        let mut answer = String::new();
+        match locked(&self.0.input).read_line(&mut answer) {
+            Ok(0) | Err(_) => None,
+            Ok(_) => Some(answer),
+        }
+    }
+
     /// The rest of the input (`specforge format --stdin`).
     pub(crate) fn read_to_string(&self) -> io::Result<String> {
         let mut text = String::new();

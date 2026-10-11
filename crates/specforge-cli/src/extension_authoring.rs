@@ -5,23 +5,81 @@
 //! it. No manifest file is written or read: the binary declares the
 //! extension.
 
+use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use crate::terminal::{Terminal, err, errln, outln};
-
-use crate::outcome::{Exit, OutputFormat, Refusal};
 use serde_json::json;
 use specforge_common::{Code, Diagnostic, Severity, codes};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// The diagnostic for an extension project that isn't there or isn't
 /// built.
 const NOT_BUILT: Code = codes::E040;
 
-pub fn run_init(
-    path: &Path,
-    name: Option<&str>,
-    format: OutputFormat,
-    terminal: &Terminal,
-) -> Exit {
+// `specforge extension`'s subcommands.
+#[derive(clap::Subcommand)]
+pub(crate) enum Action {
+    /// Scaffold an extension crate written with the SDK
+    Init(InitArgs),
+    /// Build the extension's component (cargo build --release --target
+    /// wasm32-wasip2)
+    Build(BuildArgs),
+    /// Load the built component and report its declaration's diagnostics
+    Validate(ValidateArgs),
+}
+
+// `specforge extension init`'s command line.
+#[derive(clap::Args)]
+pub(crate) struct InitArgs {
+    /// Extension name
+    #[arg(long)]
+    name: Option<String>,
+
+    /// Path for the new extension
+    #[arg(long, default_value = ".")]
+    path: PathBuf,
+
+    #[command(flatten)]
+    output: OutputArg,
+}
+
+// `specforge extension build`'s command line.
+#[derive(clap::Args)]
+pub(crate) struct BuildArgs {
+    /// Path to the extension project
+    #[arg(long, default_value = ".")]
+    path: PathBuf,
+
+    #[command(flatten)]
+    output: OutputArg,
+}
+
+// `specforge extension validate`'s command line.
+#[derive(clap::Args)]
+pub(crate) struct ValidateArgs {
+    /// Path to the extension project
+    #[arg(long, default_value = ".")]
+    path: PathBuf,
+
+    #[command(flatten)]
+    output: OutputArg,
+}
+
+impl Action {
+    pub(crate) fn run(self, terminal: &Terminal) -> Exit {
+        match self {
+            Self::Init(args) => run_init(
+                &args.path,
+                args.name.as_deref(),
+                args.output.format,
+                terminal,
+            ),
+            Self::Build(args) => run_build(&args.path, args.output.format, terminal),
+            Self::Validate(args) => run_validate(&args.path, args.output.format, terminal),
+        }
+    }
+}
+
+fn run_init(path: &Path, name: Option<&str>, format: OutputFormat, terminal: &Terminal) -> Exit {
     let ext_name = name.unwrap_or("my-extension");
     let ext_dir = path.join(ext_name.rsplit('/').next().unwrap_or(ext_name));
     let declared = if ext_name.starts_with('@') {
@@ -79,7 +137,7 @@ pub fn run_init(
     Exit::Passed
 }
 
-pub fn run_build(path: &Path, format: OutputFormat, terminal: &Terminal) -> Exit {
+fn run_build(path: &Path, format: OutputFormat, terminal: &Terminal) -> Exit {
     if !path.join("Cargo.toml").exists() {
         return Refusal::of(format).coded(
             terminal,
@@ -144,7 +202,7 @@ pub fn run_build(path: &Path, format: OutputFormat, terminal: &Terminal) -> Exit
     Exit::Passed
 }
 
-pub fn run_validate(path: &Path, format: OutputFormat, terminal: &Terminal) -> Exit {
+fn run_validate(path: &Path, format: OutputFormat, terminal: &Terminal) -> Exit {
     let binary = match specforge_ops::publish::binary_at(path) {
         Ok(binary) => binary,
         Err(error) => {

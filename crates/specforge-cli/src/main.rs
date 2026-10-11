@@ -38,7 +38,7 @@ mod watch;
 
 use clap::{CommandFactory, Parser, Subcommand};
 use clap_complete::Shell;
-use outcome::{Exit, OutputFormat};
+use outcome::Exit;
 use std::path::{Path, PathBuf};
 use terminal::Terminal;
 
@@ -57,23 +57,7 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Initialize a new SpecForge project
-    Init {
-        /// Project name (defaults to directory name)
-        #[arg(long)]
-        name: Option<String>,
-
-        /// Project version
-        #[arg(long, default_value = specforge_ops::init::DEFAULT_VERSION)]
-        version: String,
-
-        /// Extensions to install
-        #[arg(long)]
-        extensions: Vec<String>,
-
-        /// Output format: human or json
-        #[arg(long, default_value = "human")]
-        format: OutputFormat,
-    },
+    Init(init::Args),
     /// Validate .spec files and report diagnostics
     Check(check::Args),
     /// Export spec graph to stdout in various formats
@@ -99,221 +83,34 @@ enum Commands {
     /// What to look for in code to write a kind's entities
     InferGuide(infer_guide::Args),
     /// Install an extension
-    Add {
-        /// Extension specifier (e.g., @scope/name@1.0.0 or ./path)
-        specifier: String,
-
-        /// Path to the project root
-        #[arg(long, default_value = ".")]
-        path: PathBuf,
-
-        /// Output format: human or json
-        #[arg(long, default_value = "human")]
-        format: OutputFormat,
-
-        /// Accept unsigned packages (publisher verification skipped)
-        #[arg(long, default_value_t = false)]
-        allow_unsigned: bool,
-
-        /// Accept key changes non-interactively (for CI)
-        #[arg(long, default_value_t = false)]
-        yes: bool,
-    },
+    Add(add::Args),
     /// Remove an installed extension
-    Remove {
-        /// Extension name
-        name: String,
-
-        /// Path to the project root
-        #[arg(long, default_value = ".")]
-        path: PathBuf,
-
-        /// Force removal even if other extensions depend on it
-        #[arg(long)]
-        force: bool,
-
-        /// Output format: human or json
-        #[arg(long, default_value = "human")]
-        format: OutputFormat,
-    },
+    Remove(remove::Args),
     /// List installed extensions
-    Extensions {
-        /// Path to the project root
-        #[arg(long, default_value = ".")]
-        path: PathBuf,
-
-        /// Output format: human or json
-        #[arg(long, default_value = "human")]
-        format: OutputFormat,
-    },
+    Extensions(extensions::Args),
     /// Publish an extension to the registry that serves its name: its binary,
     /// and the declaration read from it as the package's manifest
-    Publish {
-        /// The extension to publish: a .wasm component, or the extension's
-        /// crate directory (its target/wasm32-wasip2/release component).
-        /// Defaults to the --path directory
-        extension: Option<PathBuf>,
-
-        /// The project whose specforge.json configures the registries
-        #[arg(long, default_value = ".")]
-        path: PathBuf,
-
-        /// Output format: human or json
-        #[arg(long, default_value = "human")]
-        format: OutputFormat,
-    },
+    Publish(publish::Args),
     /// Search for extensions in registries
-    Search {
-        /// Search query
-        query: String,
-
-        /// Only extensions that declare this category of contribution
-        #[arg(long, value_parser = options::choice(&specforge_ops::registry::CONTRIBUTES))]
-        contributes: Option<specforge_protocol_types::DeclaredCategory>,
-
-        /// Path to the project root (for registry config)
-        #[arg(long, default_value = ".")]
-        path: PathBuf,
-
-        /// Output format: human or json
-        #[arg(long, default_value = "human")]
-        format: OutputFormat,
-    },
+    Search(search::Args),
     /// Run static analysis passes over the compiled project
     Analyze(analyze::Args),
     /// Watch a project and rebuild incrementally on changes
     Watch(watch::Args),
     /// Scaffold a new extension project
-    New {
-        /// Extension name (e.g. @you/my-ext)
-        name: String,
-
-        /// Scaffold an extension project (SDK-authored wasm)
-        #[arg(long, default_value_t = false)]
-        extension: bool,
-
-        /// Directory to scaffold into
-        #[arg(long, default_value = ".")]
-        path: PathBuf,
-
-        /// Output format: human or json
-        #[arg(long, default_value = "human")]
-        format: OutputFormat,
-    },
+    New(new::Args),
     /// Update installed extensions to latest compatible versions
-    Update {
-        /// Extension name (updates all if omitted)
-        name: Option<String>,
-
-        /// Path to the project root
-        #[arg(long, default_value = ".")]
-        path: PathBuf,
-
-        /// Output format: human or json
-        #[arg(long, default_value = "human")]
-        format: OutputFormat,
-
-        /// Allow new major versions (otherwise each extension stays within
-        /// its locked version's caret range)
-        #[arg(long, default_value_t = false)]
-        major: bool,
-
-        /// Accept unsigned packages (publisher verification skipped)
-        #[arg(long, default_value_t = false)]
-        allow_unsigned: bool,
-
-        /// Accept key changes non-interactively (for CI)
-        #[arg(long, default_value_t = false)]
-        yes: bool,
-    },
+    Update(update::Args),
     /// Authenticate with a registry
-    Login {
-        /// Registry alias (defaults to the default registry)
-        #[arg(long)]
-        registry: Option<String>,
-
-        /// Authentication token, kept as a secret (OS keyring, else a 0600 file).
-        /// Exactly one of --token, --token-env, --token-file
-        #[arg(long)]
-        token: Option<String>,
-
-        /// Environment variable that holds the token; the variable's name is kept, not the token
-        #[arg(long)]
-        token_env: Option<String>,
-
-        /// File that holds the token; the file's path is kept, not the token
-        #[arg(long)]
-        token_file: Option<PathBuf>,
-
-        /// Path to the project root (for registry config)
-        #[arg(long, default_value = ".")]
-        path: PathBuf,
-
-        /// Output format: human or json
-        #[arg(long, default_value = "human")]
-        format: OutputFormat,
-    },
+    Login(login::Args),
     /// Remove registry credentials
-    Logout {
-        /// Registry alias (defaults to the default registry)
-        #[arg(long)]
-        registry: Option<String>,
-
-        /// The project whose specforge.json names the default registry (when
-        /// --registry is not given)
-        #[arg(long, default_value = ".")]
-        path: PathBuf,
-
-        /// Output format: human or json
-        #[arg(long, default_value = "human")]
-        format: OutputFormat,
-    },
+    Logout(login::LogoutArgs),
     /// List configured providers
-    Providers {
-        /// Path to the project root
-        #[arg(long, default_value = ".")]
-        path: PathBuf,
-
-        /// Output format: human or json
-        #[arg(long, default_value = "human")]
-        format: OutputFormat,
-    },
+    Providers(providers::Args),
     /// Run the project's test runners and record which entities their tests prove
-    Collect {
-        /// Path to the project root
-        #[arg(long, default_value = ".")]
-        path: PathBuf,
-
-        /// Collector to use (e.g. cargo-test). Detected from project files if omitted.
-        #[arg(long, alias = "collector", value_name = "NAME")]
-        runner: Option<String>,
-
-        /// Parse the runner's existing report instead of running it
-        #[arg(long)]
-        no_run: bool,
-
-        /// Report files to parse instead of running the runner (implies --no-run)
-        #[arg(long = "report", value_name = "FILE")]
-        reports: Vec<PathBuf>,
-
-        /// Run the declared test command without asking (for CI)
-        #[arg(long)]
-        yes: bool,
-
-        /// Output format: human or json
-        #[arg(long, default_value = "human")]
-        format: OutputFormat,
-    },
+    Collect(collect::Args),
     /// Run health checks on installed extensions
-    Doctor {
-        /// Path to the project root
-        #[arg(long, default_value = ".")]
-        path: PathBuf,
-
-        /// Output format: human or json
-        #[arg(long, default_value = "human")]
-        format: OutputFormat,
-    },
+    Doctor(doctor::Args),
     /// Start MCP server (JSON-RPC over stdio)
     Mcp {
         /// Where to find the project to serve: the nearest directory at or above it holding
@@ -337,75 +134,16 @@ enum Commands {
         code: String,
     },
     /// Show inference progress (analyzed files, gaps, stale entries)
-    InferStatus {
-        /// Path to the project root
-        #[arg(long, default_value = ".")]
-        path: PathBuf,
-
-        /// Output format: human or json
-        #[arg(long, default_value = "human")]
-        format: OutputFormat,
-
-        /// Show unanalyzed files grouped by directory
-        #[arg(long)]
-        gaps: bool,
-
-        /// Show stale and deleted files
-        #[arg(long)]
-        stale: bool,
-
-        /// Show detailed gap analysis (pub Rust items without spec entities)
-        #[arg(long)]
-        gaps_detail: bool,
-    },
+    InferStatus(infer_status::Args),
     /// Extension authoring commands
     Extension {
         #[command(subcommand)]
-        action: ExtensionAction,
+        action: extension_authoring::Action,
     },
     /// An extension's command: `specforge <extension> <command>`, e.g.
     /// `specforge product features` (the project's extensions declare them)
     #[command(external_subcommand)]
     External(Vec<String>),
-}
-
-#[derive(Subcommand)]
-enum ExtensionAction {
-    /// Scaffold an extension crate written with the SDK
-    Init {
-        /// Extension name
-        #[arg(long)]
-        name: Option<String>,
-
-        /// Path for the new extension
-        #[arg(long, default_value = ".")]
-        path: PathBuf,
-
-        /// Output format: human or json
-        #[arg(long, default_value = "human")]
-        format: OutputFormat,
-    },
-    /// Build the extension's component (cargo build --release --target
-    /// wasm32-wasip2)
-    Build {
-        /// Path to the extension project
-        #[arg(long, default_value = ".")]
-        path: PathBuf,
-
-        /// Output format: human or json
-        #[arg(long, default_value = "human")]
-        format: OutputFormat,
-    },
-    /// Load the built component and report its declaration's diagnostics
-    Validate {
-        /// Path to the extension project
-        #[arg(long, default_value = ".")]
-        path: PathBuf,
-
-        /// Output format: human or json
-        #[arg(long, default_value = "human")]
-        format: OutputFormat,
-    },
 }
 
 fn main() {
@@ -430,22 +168,7 @@ fn main() {
 /// Run one core command at `terminal`.
 fn run(command: Commands, terminal: &Terminal) -> Exit {
     match command {
-        Commands::Init {
-            name,
-            version,
-            extensions,
-            format,
-        } => {
-            let path = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-            init::run(
-                &path,
-                name.as_deref(),
-                &version,
-                &extensions,
-                format,
-                terminal,
-            )
-        }
+        Commands::Init(args) => args.run(terminal),
         Commands::Check(args) => args.run(terminal),
         Commands::Export(args) => args.run(terminal),
         Commands::Schema(args) => args.run(terminal),
@@ -458,110 +181,20 @@ fn run(command: Commands, terminal: &Terminal) -> Exit {
         Commands::Explore(args) => args.run(terminal),
         Commands::Review(args) => args.run(terminal),
         Commands::InferGuide(args) => args.run(terminal),
-        Commands::Add {
-            specifier,
-            path,
-            format,
-            allow_unsigned,
-            yes,
-        } => add::run(
-            &specifier,
-            &path,
-            format,
-            allow_unsigned,
-            format.trust(yes),
-            terminal,
-        ),
+        Commands::Add(args) => args.run(terminal),
         Commands::Analyze(args) => args.run(terminal),
         Commands::Watch(args) => args.run(terminal),
-        Commands::New {
-            name,
-            extension,
-            path,
-            format,
-        } => new::run(&name, extension, &path, format, terminal),
-        Commands::Remove {
-            name,
-            path,
-            force,
-            format,
-        } => remove::run(&name, &path, force, format, terminal),
-        Commands::Extensions { path, format } => extensions::run(&path, format, terminal),
-        Commands::Publish {
-            extension,
-            path,
-            format,
-        } => publish::run(
-            extension.as_deref().unwrap_or(&path),
-            &path,
-            format,
-            terminal,
-        ),
-        Commands::Search {
-            query,
-            contributes,
-            path,
-            format,
-        } => search::run(&query, contributes, &path, format, terminal),
-        Commands::Update {
-            name,
-            path,
-            format,
-            major,
-            allow_unsigned,
-            yes,
-        } => update::run(
-            name.as_deref(),
-            &path,
-            format,
-            major,
-            allow_unsigned,
-            format.trust(yes),
-            terminal,
-        ),
-        Commands::Login {
-            registry,
-            token,
-            token_env,
-            token_file,
-            path,
-            format,
-        } => login::run(
-            registry.as_deref(),
-            &login::TokenSource {
-                token: token.as_deref(),
-                token_env: token_env.as_deref(),
-                token_file: token_file.as_deref(),
-            },
-            &path,
-            format,
-            terminal,
-        ),
-        Commands::Logout {
-            registry,
-            path,
-            format,
-        } => login::run_logout(registry.as_deref(), &path, format, terminal),
-        Commands::Providers { path, format } => providers::run(&path, format, terminal),
-        Commands::Collect {
-            path,
-            runner,
-            no_run,
-            reports,
-            yes,
-            format,
-        } => collect::run(
-            &path,
-            &collect::Options {
-                runner: runner.as_deref(),
-                no_run,
-                reports: &reports,
-                yes,
-            },
-            format,
-            terminal,
-        ),
-        Commands::Doctor { path, format } => doctor::run(&path, format, terminal),
+        Commands::New(args) => args.run(terminal),
+        Commands::Remove(args) => args.run(terminal),
+        Commands::Extensions(args) => args.run(terminal),
+        Commands::Publish(args) => args.run(terminal),
+        Commands::Search(args) => args.run(terminal),
+        Commands::Update(args) => args.run(terminal),
+        Commands::Login(args) => args.run(terminal),
+        Commands::Logout(args) => args.run(terminal),
+        Commands::Providers(args) => args.run(terminal),
+        Commands::Collect(args) => args.run(terminal),
+        Commands::Doctor(args) => args.run(terminal),
         Commands::Mcp { path } => mcp::run(&path),
         Commands::Completions { shell } => {
             // The built-ins, and the commands the extensions of the project
@@ -573,40 +206,15 @@ fn run(command: Commands, terminal: &Terminal) -> Exit {
         }
         Commands::Explain { code } => explain::run(&code, terminal),
         Commands::Migrate(args) => args.run(terminal),
-        Commands::InferStatus {
-            path,
-            format,
-            gaps,
-            stale,
-            gaps_detail,
-        } => infer_status::run(&path, format, gaps, stale, gaps_detail, terminal),
+        Commands::InferStatus(args) => args.run(terminal),
         Commands::External(_) => unreachable!("main runs an extension command itself"),
-        Commands::Extension { action } => match action {
-            ExtensionAction::Init { name, path, format } => {
-                extension_authoring::run_init(&path, name.as_deref(), format, terminal)
-            }
-            ExtensionAction::Build { path, format } => {
-                extension_authoring::run_build(&path, format, terminal)
-            }
-            ExtensionAction::Validate { path, format } => {
-                extension_authoring::run_validate(&path, format, terminal)
-            }
-        },
+        Commands::Extension { action } => action.run(terminal),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn trust_is_yes_then_what_the_output_can_ask() {
-        use specforge_ops::extension::Trust;
-        assert_eq!(OutputFormat::Human.trust(true), Trust::AssumeYes);
-        assert_eq!(OutputFormat::Json.trust(true), Trust::AssumeYes);
-        assert_eq!(OutputFormat::Json.trust(false), Trust::Refuse);
-        assert_eq!(OutputFormat::Human.trust(false), Trust::Prompt);
-    }
 
     /// The plain long help of `command` and of each subcommand under it,
     /// by the snapshot name `help_root` or `help_<path joined by _>`.

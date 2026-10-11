@@ -1,44 +1,64 @@
-use crate::outcome::{Exit, OutputFormat, Refusal, Written};
+use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal, Written};
 use crate::terminal::{Terminal, outln};
-use specforge_ops::extension::{self, AddOutcome, AddRequest, Added, Origin, Trust};
+use specforge_ops::extension::{self, AddOutcome, AddRequest, Added, Origin};
 use specforge_ops_registry::ConfiguredRegistry;
-use std::path::Path;
+use std::path::PathBuf;
 
-/// `specforge add`: the shared add operation, presented.
-pub fn run(
-    specifier: &str,
-    path: &Path,
-    format: OutputFormat,
+// `specforge add`'s command line.
+#[derive(clap::Args)]
+pub(crate) struct Args {
+    /// Extension specifier (e.g., @scope/name@1.0.0 or ./path)
+    specifier: String,
+
+    /// Path to the project root
+    #[arg(long, default_value = ".")]
+    path: PathBuf,
+
+    #[command(flatten)]
+    output: OutputArg,
+
+    /// Accept unsigned packages (publisher verification skipped)
+    #[arg(long, default_value_t = false)]
     allow_unsigned: bool,
-    trust: Trust,
-    terminal: &Terminal,
-) -> Exit {
-    let source = match extension::parse(specifier) {
-        Ok(source) => source,
-        Err(error) => {
-            return Refusal::of(format).report(terminal, &error);
+
+    /// Accept key changes non-interactively (for CI)
+    #[arg(long, default_value_t = false)]
+    yes: bool,
+}
+
+impl Args {
+    /// `specforge add`: the shared add operation, presented.
+    pub(crate) fn run(self, terminal: &Terminal) -> Exit {
+        let format = self.output.format;
+        let path = self.path.as_path();
+        let source = match extension::parse(&self.specifier) {
+            Ok(source) => source,
+            Err(error) => {
+                return Refusal::of(format).report(terminal, &error);
+            }
+        };
+        let registry =
+            ConfiguredRegistry::for_project(path, "add").asking(crate::trust::asker(terminal));
+        let runtime = specforge_component::ComponentRuntime::with_user_cache();
+        let request = AddRequest {
+            root: path,
+            source,
+            allow_unsigned: self.allow_unsigned,
+            trust: format.trust(self.yes),
+            dry_run: false,
+        };
+        let added = extension::add(&request, &registry, &runtime);
+        // What reading the registry configuration reported, once the add
+        // asked a registry.
+        terminal.diagnostics(&registry.reported());
+        match added {
+            Ok(added) => {
+                present(&added, added.writes.names_under(path), format, terminal);
+                Exit::Passed
+            }
+            // An install that failed after placing its module names it.
+            Err(error) => Refusal::of(format).at(path).report(terminal, &error),
         }
-    };
-    let registry =
-        ConfiguredRegistry::for_project(path, "add").asking(crate::trust::ask_key_change);
-    let runtime = specforge_component::ComponentRuntime::with_user_cache();
-    let request = AddRequest {
-        root: path,
-        source,
-        allow_unsigned,
-        trust,
-        dry_run: false,
-    };
-    let added = extension::add(&request, &registry, &runtime);
-    // What reading the registry configuration reported, once the add asked a registry.
-    terminal.diagnostics(&registry.reported());
-    match added {
-        Ok(added) => {
-            present(&added, added.writes.names_under(path), format, terminal);
-            Exit::Passed
-        }
-        // An install that failed after placing its module names it.
-        Err(error) => Refusal::of(format).at(path).report(terminal, &error),
     }
 }
 

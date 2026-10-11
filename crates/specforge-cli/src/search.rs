@@ -1,37 +1,58 @@
-use crate::outcome::{Exit, OutputFormat, Refusal};
+use crate::options;
+use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use crate::terminal::{Terminal, outln};
 use serde_json::json;
 use specforge_ops::registry::{Found, Registry};
 use specforge_ops_registry::ConfiguredRegistry;
 use specforge_protocol_types::DeclaredCategory;
-use std::path::Path;
+use std::path::PathBuf;
 
-pub fn run(
-    query: &str,
+// `specforge search`'s command line.
+#[derive(clap::Args)]
+pub(crate) struct Args {
+    /// Search query
+    query: String,
+
+    /// Only extensions that declare this category of contribution
+    #[arg(long, value_parser = options::choice(&specforge_ops::registry::CONTRIBUTES))]
     contributes: Option<DeclaredCategory>,
-    path: &Path,
-    format: OutputFormat,
-    terminal: &Terminal,
-) -> Exit {
-    // No registry configured: fail before any network call (ADR 0004 N1).
-    let registry = ConfiguredRegistry::for_project(path, "search");
-    let searched = registry.search(query, contributes);
-    terminal.diagnostics(&registry.reported());
-    let searched = match searched {
-        Ok(searched) => searched,
-        Err(error) => return Refusal::of(format).report(terminal, &error),
-    };
-    // Each registry that failed, once.
-    terminal.diagnostics(&searched.failures);
-    print_found(
-        query,
-        contributes,
-        &searched.found,
-        &searched.failures,
-        format,
-        terminal,
-    );
-    Exit::of_verdict(!searched.failed())
+
+    /// Path to the project root (for registry config)
+    #[arg(long, default_value = ".")]
+    path: PathBuf,
+
+    #[command(flatten)]
+    output: OutputArg,
+}
+
+impl Args {
+    pub(crate) fn run(self, terminal: &Terminal) -> Exit {
+        let (query, contributes, path, format) = (
+            self.query.as_str(),
+            self.contributes,
+            self.path.as_path(),
+            self.output.format,
+        );
+        // No registry configured: fail before any network call (ADR 0004 N1).
+        let registry = ConfiguredRegistry::for_project(path, "search");
+        let searched = registry.search(query, contributes);
+        terminal.diagnostics(&registry.reported());
+        let searched = match searched {
+            Ok(searched) => searched,
+            Err(error) => return Refusal::of(format).report(terminal, &error),
+        };
+        // Each registry that failed, once.
+        terminal.diagnostics(&searched.failures);
+        print_found(
+            query,
+            contributes,
+            &searched.found,
+            &searched.failures,
+            format,
+            terminal,
+        );
+        Exit::of_verdict(!searched.failed())
+    }
 }
 
 fn print_found(

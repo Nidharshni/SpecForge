@@ -219,6 +219,15 @@ mod tests {
     use specforge_common::codes;
     use specforge_ops::RunVerdict;
 
+    #[test]
+    fn trust_is_yes_then_what_the_output_can_ask() {
+        use specforge_ops::extension::Trust;
+        assert_eq!(OutputFormat::Human.trust(true), Trust::AssumeYes);
+        assert_eq!(OutputFormat::Json.trust(true), Trust::AssumeYes);
+        assert_eq!(OutputFormat::Json.trust(false), Trust::Refuse);
+        assert_eq!(OutputFormat::Human.trust(false), Trust::Prompt);
+    }
+
     #[specforge_test_macros::test(
         behavior = "report_command_outcome",
         verify = "under --format json a refusal is the error document on stdout and nothing on stderr"

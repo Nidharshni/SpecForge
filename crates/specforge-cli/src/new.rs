@@ -8,13 +8,43 @@
 
 use crate::terminal::{Terminal, outln};
 
-use crate::outcome::{Exit, OutputFormat, Refusal};
+use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use serde_json::json;
 use specforge_common::codes;
 use specforge_protocol_types::PackageName;
 use std::path::{Path, PathBuf};
 
-pub fn run(
+// `specforge new`'s command line.
+#[derive(clap::Args)]
+pub(crate) struct Args {
+    /// Extension name (e.g. @you/my-ext)
+    name: String,
+
+    /// Scaffold an extension project (SDK-authored wasm)
+    #[arg(long, default_value_t = false)]
+    extension: bool,
+
+    /// Directory to scaffold into
+    #[arg(long, default_value = ".")]
+    path: PathBuf,
+
+    #[command(flatten)]
+    output: OutputArg,
+}
+
+impl Args {
+    pub(crate) fn run(self, terminal: &Terminal) -> Exit {
+        new(
+            &self.name,
+            self.extension,
+            &self.path,
+            self.output.format,
+            terminal,
+        )
+    }
+}
+
+fn new(
     name: &str,
     extension: bool,
     path: &Path,

@@ -1,12 +1,46 @@
-use crate::outcome::{Exit, OutputFormat, Refusal, Written};
+use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal, Written};
 use crate::terminal::{Terminal, errln, outln};
 use specforge_common::find_project_root;
 use specforge_ops::init;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+
+// `specforge init`'s command line.
+#[derive(clap::Args)]
+pub(crate) struct Args {
+    /// Project name (defaults to directory name)
+    #[arg(long)]
+    name: Option<String>,
+
+    /// Project version
+    #[arg(long, default_value = specforge_ops::init::DEFAULT_VERSION)]
+    version: String,
+
+    /// Extensions to install
+    #[arg(long)]
+    extensions: Vec<String>,
+
+    #[command(flatten)]
+    output: OutputArg,
+}
+
+impl Args {
+    /// `specforge init` in the current directory.
+    pub(crate) fn run(self, terminal: &Terminal) -> Exit {
+        let path = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        init_at(
+            &path,
+            self.name.as_deref(),
+            &self.version,
+            &self.extensions,
+            self.output.format,
+            terminal,
+        )
+    }
+}
 
 /// `specforge init`: the shared scaffold (`specforge_ops::init`), planned
 /// and validated before anything is written, then presented.
-pub fn run(
+fn init_at(
     path: &Path,
     name: Option<&str>,
     version: &str,
