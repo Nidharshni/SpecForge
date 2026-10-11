@@ -108,32 +108,6 @@ impl LockFile {
     pub fn new() -> Self {
         Self::default()
     }
-
-    /// Every requirer (name, range) declaring a peer dependency on
-    /// `peer_name` across all locked entries, plus one optional extra
-    /// requirer: the package currently being installed, which may not be in
-    /// the lock yet. Used to unify a version diamond (C8-07) before it is
-    /// silently locked.
-    pub fn requirers_of(
-        &self,
-        peer_name: &str,
-        extra: Option<(&str, &specforge_protocol_types::PeerDependency)>,
-    ) -> Vec<(String, specforge_protocol_types::PeerDependency)> {
-        let mut requirers: Vec<(String, specforge_protocol_types::PeerDependency)> = self
-            .entries
-            .iter()
-            .flat_map(|e| {
-                e.peer_dependencies
-                    .iter()
-                    .filter(|p| p.name == peer_name)
-                    .map(move |p| (e.name.to_string(), p.clone()))
-            })
-            .collect();
-        if let Some((name, declared)) = extra {
-            requirers.push((name.to_string(), declared.clone()));
-        }
-        requirers
-    }
 }
 
 /// Write a lock file to disk as JSON.
@@ -468,58 +442,5 @@ mod tests {
             lock_path(Path::new("/p")),
             Path::new("/p").join("specforge.lock")
         );
-    }
-
-    // C8-07: a diamond is unified over every requirer of a peer.
-
-    fn entry(name: &str, peers: Vec<specforge_protocol_types::PeerDependency>) -> LockFileEntry {
-        LockFileEntry {
-            name: specforge_protocol_types::PackageName::parse(name).unwrap(),
-            version: "1.0.0".to_string(),
-            source: crate::LockSource::parse("registry"),
-            wasm_hash: "hash".to_string(),
-            key_id: None,
-            peer_dependencies: peers,
-        }
-    }
-
-    fn peer(name: &str, req: &str) -> specforge_protocol_types::PeerDependency {
-        specforge_protocol_types::PeerDependency {
-            name: name.to_string(),
-            version: req.to_string(),
-            optional: false,
-        }
-    }
-
-    #[test]
-    fn requirers_of_gathers_every_locked_entry_wanting_the_peer() {
-        let lock = LockFile {
-            entries: vec![
-                entry("@a/ext", vec![peer("@shared/lib", "^1.0.0")]),
-                entry("@b/ext", vec![peer("@shared/lib", "^2.0.0")]),
-                entry("@shared/lib", vec![]),
-            ],
-            ..Default::default()
-        };
-
-        let requirers = lock.requirers_of("@shared/lib", None);
-        assert_eq!(requirers.len(), 2);
-        assert!(requirers.contains(&("@a/ext".to_string(), peer("@shared/lib", "^1.0.0"))));
-        assert!(requirers.contains(&("@b/ext".to_string(), peer("@shared/lib", "^2.0.0"))));
-    }
-
-    #[test]
-    fn requirers_of_includes_the_extra_in_flight_requirer() {
-        let lock = LockFile {
-            entries: vec![entry("@a/ext", vec![peer("@shared/lib", "^1.0.0")])],
-            ..Default::default()
-        };
-
-        let requirers = lock.requirers_of(
-            "@shared/lib",
-            Some(("@c/ext", &peer("@shared/lib", "^3.0.0"))),
-        );
-        assert_eq!(requirers.len(), 2);
-        assert!(requirers.contains(&("@c/ext".to_string(), peer("@shared/lib", "^3.0.0"))));
     }
 }

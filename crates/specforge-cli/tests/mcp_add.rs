@@ -222,8 +222,9 @@ fn mcp_add_refuses_an_install_a_locked_extension_does_not_accept() {
         message.contains("installing '@sdk/greet' 0.1.0 breaks '@acme/app': "),
         "{message}"
     );
-    assert!(
-        message.contains("@acme/app wants @sdk/greet ^2.0"),
+    assert_eq!(
+        message.matches("@acme/app wants @sdk/greet ^2.0").count(),
+        1,
         "{message}"
     );
     assert_eq!(

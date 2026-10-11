@@ -3,17 +3,16 @@
 
 mod add;
 mod candidate;
-mod diamond;
 #[cfg(test)]
 mod fixtures;
 mod list;
+mod lock_plan;
 mod remove;
 mod resolve;
 mod update;
 
 pub use add::{AddOutcome, AddRequest, Added, Source, Trust, add, parse};
 pub use candidate::{Candidate, Installable, LocalFile};
-pub use diamond::check_diamonds;
 pub use list::{
     ExtensionEntry, ExtensionInfo, ExtensionListing, LockedExtension, ProviderEntry,
     ProviderListing, ProviderRow, ProviderStatus, ProvidersDocument, Status, list, providers,
@@ -28,28 +27,8 @@ pub use update::{
 pub(crate) use add::install_local;
 pub(crate) use candidate::required_builtins;
 
-use crate::OpError;
-use crate::registry::Registry;
 use specforge_installed::{LockFile, LockSource};
 use specforge_project::EnabledExtension;
-use specforge_protocol_types::PackageName;
-use specforge_protocol_types::package::Version;
-
-/// The versions a registry publishes of a peer, as the diamond gate asks
-/// for them: a peer that is not a package name is E072.
-pub(crate) fn published_versions(
-    registry: &dyn Registry,
-) -> impl Fn(&str) -> Result<Vec<String>, OpError> + '_ {
-    move |peer| {
-        let name = PackageName::parse(peer)
-            .map_err(|why| OpError::from(specforge_common::package::invalid(&why)))?;
-        Ok(registry
-            .versions(&name)?
-            .iter()
-            .map(Version::to_string)
-            .collect())
-    }
-}
 
 /// The code an operation reports for an extension the project doesn't
 /// have.

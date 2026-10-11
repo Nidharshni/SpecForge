@@ -1,14 +1,14 @@
 //! `specforge add` and `specforge.add_extension`.
 
-use super::candidate::{Installable, LocalFile};
-use super::diamond::{Published, broken_requirers};
-use super::{Origin, builtin_name, check_diamonds};
+use super::candidate::LocalFile;
+use super::lock_plan::{Fetch, Install, LockPlan, Refused, Verb};
+use super::{Origin, builtin_name};
 use crate::registry::{Publisher, Registry};
-use crate::{OpError, OpErrorKind, Writes};
+use crate::{OpError, Writes};
 use specforge_common::codes;
-use specforge_installed::{Change, Installed, LockSource, Module, Pin};
-use specforge_protocol_types::package::{SpecifierError, Version};
-use specforge_protocol_types::{ExtensionDeclaration, PackageName, PackageRef};
+use specforge_installed::{Installed, LockSource};
+use specforge_protocol_types::package::SpecifierError;
+use specforge_protocol_types::{PackageName, PackageRef};
 use specforge_wasm::WasmRuntime;
 use std::path::{Path, PathBuf};
 
@@ -177,9 +177,9 @@ pub fn add(
         Source::Local(path) => {
             // A specforge.lock that can't be read refuses before anything is read.
             let installed = Installed::at(req.root);
-            let change = installed.change()?;
+            let plan = LockPlan::new(&installed, Verb::Install)?;
             let local = LocalFile::read(runtime, path)?;
-            add_local(req, &config, &installed, change, local)
+            add_local(req, &config, &installed, plan, local)
         }
         Source::Registry(package) => add_from_registry(req, &config, registry, runtime, package),
         Source::Git { url } => Err(OpError::diagnostic(
@@ -254,32 +254,28 @@ fn add_local(
     req: &AddRequest,
     config: &specforge_common::ProjectConfig,
     installed: &Installed,
-    change: Change<'_>,
+    plan: LockPlan<'_>,
     local: LocalFile,
 ) -> Result<Added, OpError> {
-    let package = local.binary.package()?;
-    let source = LockSource::Local(shown_path(req.root, &local.path));
-    let candidate = local.binary.candidate();
+    let install = Install::local(req.root, local)?;
     if req.dry_run {
         return Ok(unchanged(
             AddOutcome::Planned {
-                name: candidate.name().to_string(),
-                version: Some(candidate.version().to_string()),
-                origin: Origin::Installed { source },
+                name: install.name().to_string(),
+                version: Some(install.version().to_string()),
+                origin: Origin::Installed {
+                    source: install.source().clone(),
+                },
             },
             config,
         ));
     }
-    let digest = local.binary.module().digest().to_string();
-    if let Some(present) = already_present(installed, config, &package, |e| {
-        e.wasm_hash == digest && e.source.local_path().is_some()
+    if let Some(present) = already_present(installed, config, install.name(), |e| {
+        e.wasm_hash == install.sha256() && e.source.local_path().is_some()
     }) {
         return Ok(unchanged(present, config));
     }
-    // No registry to unify a diamond against: a locked peer outside the
-    // range is E027 (ADR 0041).
-    check_diamonds(change.lock(), candidate.name(), candidate.peers(), None)?;
-    install(req.root, change, local.binary, None, source, None)
+    commit(req.root, plan, install)
 }
 
 /// Install `local`, read once by `init`'s plan, into the project at `root`
@@ -287,7 +283,7 @@ fn add_local(
 pub(crate) fn install_local(root: &Path, local: LocalFile) -> Result<Added, OpError> {
     let config = crate::config::required(root)?.config;
     let installed = Installed::at(root);
-    let change = installed.change()?;
+    let plan = LockPlan::new(&installed, Verb::Install)?;
     let request = AddRequest {
         root,
         source: Source::Local(local.path.clone()),
@@ -295,7 +291,7 @@ pub(crate) fn install_local(root: &Path, local: LocalFile) -> Result<Added, OpEr
         trust: Trust::Refuse,
         dry_run: false,
     };
-    add_local(&request, &config, &installed, change, local)
+    add_local(&request, &config, &installed, plan, local)
 }
 
 fn add_from_registry(
@@ -307,7 +303,7 @@ fn add_from_registry(
 ) -> Result<Added, OpError> {
     // A specforge.lock that can't be read refuses before a registry is asked.
     let installed = Installed::at(req.root);
-    let change = installed.change()?;
+    let plan = LockPlan::new(&installed, Verb::Install)?;
     let name = package.name.as_str();
     let version = super::resolve(registry, package)?;
     if let Some(present) = already_present(&installed, config, &package.name, |e| {
@@ -327,100 +323,13 @@ fn add_from_registry(
             config,
         ));
     }
-    let checked = fetch_checked(
+    let fetch = Fetch {
         registry,
         runtime,
-        change.lock(),
-        &package.name,
-        &version,
-        req.allow_unsigned,
-        req.trust,
-    )?;
-    install(
-        req.root,
-        change,
-        checked.binary,
-        Some(checked.package.publisher),
-        LockSource::Registry,
-        Some(&super::published_versions(registry)),
-    )
-}
-
-/// A registry package downloaded and checked as `add` checks it: its
-/// integrity, its publisher signature under the TOFU pin policy, the
-/// ADR-0001 diamond gate against `lock`, and that the binary is the
-/// package it claims to be. Nothing is written but a trust pin.
-pub(super) struct Checked {
-    pub(super) package: crate::registry::Package,
-    pub(super) binary: Installable,
-}
-
-pub(super) fn fetch_checked(
-    registry: &dyn Registry,
-    runtime: &dyn WasmRuntime,
-    lock: &specforge_installed::LockFile,
-    name: &PackageName,
-    version: &Version,
-    allow_unsigned: bool,
-    trust: Trust,
-) -> Result<Checked, OpError> {
-    // Integrity, then the publisher signature under the TOFU pin policy:
-    // the registry adapter's (one implementation, shared with every surface).
-    let mut package = registry.fetch(name, version, allow_unsigned, trust)?;
-
-    // The peers the published declaration declares decide the diamond gate
-    // before anything is loaded (ADR 0001); the binary must then be the
-    // package it claims to be, and declare exactly what was published
-    // (ADR 0012).
-    check_diamonds(
-        lock,
-        package.name.as_str(),
-        package.declaration.peers(),
-        Some(&super::published_versions(registry)),
-    )?;
-    let binary = Installable::read(runtime, Module::new(std::mem::take(&mut package.wasm)))?;
-    let declared = binary.candidate();
-    if declared.name() != package.name.as_str() || declared.version() != package.version.to_string()
-    {
-        return Err(OpError::diagnostic(
-            codes::E028,
-            format!(
-                "registry package {}@{} declares itself {}@{}",
-                package.name,
-                package.version,
-                declared.name(),
-                declared.version()
-            ),
-        ));
-    }
-    if let Some(category) = first_difference(&package.declaration, declared.declaration()) {
-        return Err(OpError::coded(
-            OpErrorKind::SchemaMismatch,
-            crate::registry::METADATA_MISMATCH,
-            format!(
-                "registry package {}@{} declares another {category} than the binary it serves",
-                package.name, package.version
-            ),
-        )
-        .with_suggestion("don't install the package, and check the registry"));
-    }
-    Ok(Checked { package, binary })
-}
-
-/// The first part of a declaration that differs between `served` and
-/// `binary` (`handshake`, or a describe category), or `None` when they are
-/// equal.
-fn first_difference(
-    served: &ExtensionDeclaration,
-    binary: &ExtensionDeclaration,
-) -> Option<&'static str> {
-    if served.handshake != binary.handshake {
-        return Some("handshake");
-    }
-    specforge_protocol_types::DECLARED_CATEGORIES
-        .iter()
-        .copied()
-        .find(|category| served.describe_items(category) != binary.describe_items(category))
+        allow_unsigned: req.allow_unsigned,
+        trust: req.trust,
+    };
+    commit(req.root, plan, fetch.install(&package.name, &version)?)
 }
 
 /// `AlreadyPresent` when the lock holds `name` as `same` accepts, its
@@ -444,89 +353,46 @@ fn already_present(
     })
 }
 
-/// Install `binary`: its module, its lock entry (as `origin`,
-/// with its declared version and peers) and its `specforge.json` entry (its
-/// bare name), as one change that puts everything back when a step fails.
-/// A locked extension the new version leaves with an unsatisfied peer
-/// refuses the install before anything is written (ADR 0041); `published` is
-/// what unifies that diamond, `None` for a local install.
-fn install(
-    root: &Path,
-    mut change: Change<'_>,
-    binary: Installable,
-    publisher: Option<Publisher>,
-    source: LockSource,
-    published: Published<'_>,
-) -> Result<Added, OpError> {
-    let package = binary.package()?;
-    let declared = binary.candidate().clone();
-    let module = binary.into_module();
-    let sha256 = module.digest().to_string();
-    change.install(
-        module,
-        Pin {
-            name: package,
-            version: declared.version().to_string(),
-            source: source.clone(),
-            key_id: publisher
-                .as_ref()
-                .and_then(|p| p.key_id())
-                .map(str::to_string),
-            peers: declared.peers().to_vec(),
+/// Stage `install`, check the plan, and commit it with its `specforge.json` entry (its bare
+/// name): one change that puts everything back when a step fails. A locked extension the new
+/// version leaves with an unsatisfied peer refuses the install before anything is written
+/// (ADR 0041).
+fn commit<'a>(root: &Path, mut plan: LockPlan<'a>, install: Install<'a>) -> Result<Added, OpError> {
+    let name = install.name().to_string();
+    let outcome = AddOutcome::Installed {
+        name: name.clone(),
+        version: install.version().to_string(),
+        sha256: install.sha256().to_string(),
+        publisher: install.publisher().cloned(),
+        origin: Origin::Installed {
+            source: install.source().clone(),
         },
-    );
-    let name = declared.name();
-    if let Some((dependent, error)) = broken_requirers(change.lock(), name, &[name], published)
-        .into_iter()
-        .next()
-    {
-        return Err(error.prefixed(format!(
-            "installing '{name}' {} breaks '{dependent}': ",
-            declared.version()
-        )));
-    }
+    };
+    plan.stage(install);
     let mut total = 0;
-    let committed = change
-        .commit_with(&root.join(crate::config::CONFIG_FILE), || {
-            let enabled = crate::config::enable(root, &[declared.name()])?;
+    let writes = plan.check().map_err(Refused::first)?.commit_with(
+        &root.join(crate::config::CONFIG_FILE),
+        || {
+            let enabled = crate::config::enable(root, &[name.as_str()])?;
             total = enabled.total;
-            Ok::<bool, OpError>(!enabled.appended.is_empty())
-        })
-        .map_err(|failed| failed.error.with_writes(Writes::of(failed.left)))?;
-    Ok(Added {
-        outcome: AddOutcome::Installed {
-            name: declared.name().to_string(),
-            version: declared.version().to_string(),
-            sha256,
-            publisher,
-            origin: Origin::Installed { source },
+            Ok(!enabled.appended.is_empty())
         },
-        writes: Writes::of(committed.changed),
+    )?;
+    Ok(Added {
+        outcome,
+        writes,
         extensions_enabled: total,
     })
-}
-
-/// `path` as the lock records it: relative to the project root when it
-/// is under it, absolute otherwise.
-fn shown_path(root: &Path, path: &Path) -> String {
-    let absolute = |p: &Path| {
-        std::path::absolute(p)
-            .map(|p| p.canonicalize().unwrap_or(p))
-            .unwrap_or_else(|_| p.to_path_buf())
-    };
-    let (root, path) = (absolute(root), absolute(path));
-    path.strip_prefix(&root)
-        .unwrap_or(&path)
-        .display()
-        .to_string()
 }
 
 #[cfg(test)]
 mod tests {
     use super::super::fixtures::{declaration_of, entry, greet, installed, project};
     use super::*;
+    use crate::OpErrorKind;
     use crate::registry::testing::{MemoryRegistry, Published, declaration};
     use specforge_installed::LockFileEntry;
+    use specforge_protocol_types::ExtensionDeclaration;
     use specforge_registry::PeerDependency;
     use specforge_test_macros::test as specforge_test;
 
@@ -1339,10 +1205,11 @@ mod tests {
         );
     }
 
-    /// Pin (plan 01 T0): `add` of a new version of a locked package judges its peers with
-    /// the package's previous lock entry still counted as a requirer. T1 flips it.
-    #[test]
-    fn pin_an_add_that_upgrades_a_locked_package_counts_its_previous_entry() {
+    #[specforge_test(
+        behavior = "add_extension_to_existing_project",
+        verify = "an add that upgrades a locked package judges its peers against the lock as the add leaves it"
+    )]
+    fn an_add_that_upgrades_a_locked_package_judges_its_peers_without_its_previous_entry() {
         let dir = add_project(vec![
             entry("@x/b", "1.0.0", "registry", &[]),
             entry("@x/a", "1.0.0", "registry", &[("@x/b", "^1")]),
@@ -1375,23 +1242,32 @@ mod tests {
         )
         .unwrap_err();
 
-        assert_eq!(error.code, "R-RES-005", "{error:?}");
-        assert!(
-            error
-                .message
-                .contains("(@x/a wants @x/b ^1; @x/a wants @x/b ^2)"),
-            "{error:?}"
+        assert_eq!(error.code, "R-RES-006", "{error:?}");
+        assert_eq!(
+            error.message,
+            "version diamond: '@x/a' requires peer '@x/b' ^2 but 1.0.0 is locked; @x/b 2.0.0 would satisfy every requirer"
         );
         assert_eq!(
             std::fs::read(dir.path().join("specforge.lock")).unwrap(),
             lock_before
         );
+        assert_eq!(
+            registry.asked(),
+            [
+                crate::registry::testing::Asked::Fetch(
+                    PackageName::parse("@x/a").unwrap(),
+                    specforge_protocol_types::package::Version::new(2, 0, 0)
+                ),
+                crate::registry::testing::Asked::Versions(PackageName::parse("@x/b").unwrap()),
+            ]
+        );
     }
 
-    /// Pin (plan 01 T0): a locked extension an install breaks is named twice among the
-    /// requirers. T1 flips it.
-    #[test]
-    fn pin_a_locked_requirer_is_named_twice_when_an_install_breaks_it() {
+    #[specforge_test(
+        behavior = "add_extension_to_existing_project",
+        verify = "a version diamond names each requirer once"
+    )]
+    fn a_version_diamond_names_each_requirer_once() {
         let dir = add_project(vec![entry(
             "@acme/app",
             "1.0.0",
@@ -1410,13 +1286,18 @@ mod tests {
                 .starts_with("installing '@sdk/greet' 0.1.0 breaks '@acme/app': "),
             "{error:?}"
         );
-        assert!(
+        assert_eq!(
             error
                 .message
-                .contains("(@acme/app wants @sdk/greet ^2.0; @acme/app wants @sdk/greet ^2.0)"),
+                .matches("@acme/app wants @sdk/greet ^2.0")
+                .count(),
+            1,
             "{error:?}"
         );
-        assert!(!installed(dir.path(), "@sdk/greet").exists());
+        assert!(
+            !installed(dir.path(), "@sdk/greet").exists(),
+            "nothing is installed"
+        );
     }
 
     /// Pin (plan 01 T0): whether a dry run of an extension that is already present previews it

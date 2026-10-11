@@ -279,8 +279,12 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
     no published version does; a local install, with no registry to
     consult, MUST be rejected with E027. Installing a package at a version
     a locked extension's peer range does not accept MUST be rejected the
-    same way, its message naming the extension it would break. A peer that
-    is not installed is not refused: specforge check reports it (E027).
+    same way, its message naming the extension it would break. The peers
+    are judged against the lock as the add leaves it: a package already
+    locked at another version is judged by its new declaration alone, its
+    previous lock entry replaced rather than counted as another requirer,
+    and a version diamond names each requirer once. A peer that is not
+    installed is not refused: specforge check reports it (E027).
     A builtin is enabled after the builtins it requires (its non-optional
     peers that are builtins, and theirs), dependencies first; a builtin
     whose declaration cannot be read refuses the operation (E028) before
@@ -313,6 +317,8 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
   verify integration "an install that leaves a locked extension's peer unsatisfied is refused before anything is written, local or from a registry"
   verify unit "a peer locked outside the new extension's range fails R-RES-006 naming a version that satisfies every requirer"
   verify unit "a peer no single version satisfies for every requirer fails R-RES-005"
+  verify unit "an add that upgrades a locked package judges its peers against the lock as the add leaves it"
+  verify unit "a version diamond names each requirer once"
   verify integration "a local .wasm install is locked at its declared version with source local:<path> and enabled by its bare name"
   verify integration "add extension preserves all other config fields"
   verify contract "Add Extension to Existing Project: adding extension to existing project holds — existing_project_found, extension_resolvable, extension_appended, no_duplicate_added, other_fields_preserved, peer_deps_satisfied, extension_added_emitted"
