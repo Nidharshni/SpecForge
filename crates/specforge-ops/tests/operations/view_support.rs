@@ -2,16 +2,21 @@
 //! registries declaring what made-up extensions declare, and a root
 //! directory to record a test report in.
 
-use specforge_common::Diagnostic;
+use std::path::Path;
+use std::sync::Arc;
+
+use specforge_common::{ConfigRead, Diagnostic};
 use specforge_extension_sdk::prelude::*;
 use specforge_graph::Graph;
 use specforge_ops::plan::{PlanGapKind, PlanOutcome};
 use specforge_ops::stats::Stats;
 use specforge_ops::trace::{Target, TraceChain};
 use specforge_ops::view::ProjectView;
-use specforge_project::Environment;
 use specforge_project::coverage::RecordedCoverage;
+use specforge_project::{Environment, ExtensionLoad, Loaded, SharedRuntime};
+use specforge_protocol_types::ExtensionDeclaration;
 use specforge_registry::{RegistryBuild, build_registries};
+use specforge_wasm::testing::InProcessRuntime;
 use tempfile::TempDir;
 
 /// A project of five kinds of connectedness (plan 04): `hub` is referenced
@@ -117,6 +122,34 @@ impl Project {
         }
     }
 
+    /// The project whose one file is `source`, in the environment
+    /// `assemble` makes at its root (a temp directory).
+    pub fn assembled(source: &str, assemble: impl FnOnce(&Path) -> Environment) -> Self {
+        let (graph, _) =
+            specforge_graph::build_graph(&[specforge_parser::parse(source, "main.spec")]);
+        let dir = TempDir::new().unwrap();
+        let env = assemble(dir.path());
+        Project {
+            dir,
+            graph,
+            env,
+            recorded: std::sync::OnceLock::new(),
+        }
+    }
+
+    /// The project whose one file is `source`, over `registries`, whose
+    /// extension calls go to `runtime`.
+    pub fn in_runtime(source: &str, registries: RegistryBuild, runtime: SharedRuntime) -> Self {
+        let (graph, _) =
+            specforge_graph::build_graph(&[specforge_parser::parse(source, "main.spec")]);
+        Project {
+            dir: TempDir::new().unwrap(),
+            graph,
+            env: Environment::with_registries(registries, Some(runtime)),
+            recorded: std::sync::OnceLock::new(),
+        }
+    }
+
     pub fn view(&self) -> ProjectView<'_> {
         ProjectView::new(
             &self.graph,
@@ -144,6 +177,24 @@ impl Project {
             serde_json::json!({"runner": "fixture", "results": results}).to_string(),
         )
         .unwrap();
+    }
+}
+
+/// `config` read as the `specforge.json` at `root` (not written to disk).
+pub fn config_read(root: &Path, config: serde_json::Value) -> ConfigRead {
+    specforge_common::parse_project_config(&root.join("specforge.json"), &config.to_string())
+}
+
+/// What a load in an in-process runtime serving nothing gave:
+/// `declarations`, nothing enabled.
+pub fn loaded(declarations: Vec<ExtensionDeclaration>) -> ExtensionLoad {
+    ExtensionLoad::In {
+        runtime: Arc::new(InProcessRuntime::new()),
+        loaded: Loaded {
+            enabled: Vec::new(),
+            declarations,
+            diagnostics: Vec::new(),
+        },
     }
 }
 

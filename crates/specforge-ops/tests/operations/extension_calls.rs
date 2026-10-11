@@ -206,10 +206,9 @@ mod evidence {
     use specforge_wasm::WasmCallResult;
     use specforge_wasm::testing::InProcessRuntime;
 
-    /// The evidence `project`'s command run sends the export: the `evidence`
-    /// of the input it received (`None`: the input carries none).
-    fn sent(project: &mut Project) -> CommandEvidence {
-        let runtime = std::sync::Arc::new(
+    /// A runtime answering the probe command.
+    fn probe_runtime() -> std::sync::Arc<InProcessRuntime> {
+        std::sync::Arc::new(
             InProcessRuntime::new().answer_raw(
                 "@pin/ext",
                 "cmd__probe",
@@ -222,8 +221,12 @@ mod evidence {
                     .to_bytes(),
                 ),
             ),
-        );
-        project.env.runtime = Some(runtime.clone());
+        )
+    }
+
+    /// The evidence `project`'s command run sends the export: the `evidence`
+    /// of the input it received (`None`: the input carries none).
+    fn sent(project: &Project, runtime: &InProcessRuntime) -> CommandEvidence {
         let command = ExtensionCommand::new(
             "@pin/ext",
             "pin",
@@ -238,7 +241,12 @@ mod evidence {
         );
         run(&project.view(), &command, &Map::new(), CommandFormat::Json)
             .expect("the export answers");
-        let input = runtime.calls()[0].input.clone();
+        let input = runtime
+            .calls()
+            .last()
+            .expect("the export was called")
+            .input
+            .clone();
         match input.get("evidence") {
             // Absent, not null (ADR 0013 D7).
             None => CommandEvidence::None,
@@ -254,7 +262,8 @@ mod evidence {
         verify = "the CommandInput carries what the recorded tests prove, per entity that counts toward coverage"
     )]
     fn the_input_carries_each_counted_entitys_proof() {
-        let mut project = Project::new(SOURCE, registries(&["behavior"], &[]));
+        let runtime = probe_runtime();
+        let project = Project::in_runtime(SOURCE, registries(&["behavior"], &[]), runtime.clone());
         let pass = |verify: &str| serde_json::json!({"status": "pass", "verify": verify});
         std::fs::write(
             project.dir.path().join("specforge-report.json"),
@@ -265,7 +274,7 @@ mod evidence {
             .to_string(),
         )
         .unwrap();
-        let CommandEvidence::Recorded { entities } = sent(&mut project) else {
+        let CommandEvidence::Recorded { entities } = sent(&project, &runtime) else {
             panic!("a recorded report is evidence");
         };
         assert_eq!(
@@ -294,14 +303,15 @@ mod evidence {
         verify = "a command's input says when the recorded test report cannot be read, and carries no evidence without one"
     )]
     fn no_report_is_no_evidence_and_a_broken_one_says_why() {
-        let mut project = Project::new(SOURCE, registries(&["behavior"], &[]));
-        assert_eq!(sent(&mut project), CommandEvidence::None);
+        let runtime = probe_runtime();
+        let project = Project::in_runtime(SOURCE, registries(&["behavior"], &[]), runtime.clone());
+        assert_eq!(sent(&project, &runtime), CommandEvidence::None);
         std::fs::write(
             project.dir.path().join("specforge-report.json"),
             "{not json",
         )
         .unwrap();
-        let CommandEvidence::Unreadable { reason } = sent(&mut project) else {
+        let CommandEvidence::Unreadable { reason } = sent(&project, &runtime) else {
             panic!("a broken report is unreadable evidence");
         };
         assert!(reason.contains("invalid test results"), "{reason}");
