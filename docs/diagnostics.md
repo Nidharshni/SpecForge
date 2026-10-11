@@ -1714,10 +1714,12 @@ Level: error
 ```
 R-RES-006: Locked peer breaks a version diamond
 
-The extension being added requires a peer at a version the lock file doesn't
-have, and the message names a version that would satisfy every requirer. No
-command pins peer versions yet: reinstall the peer at that version by hand, then
-run `specforge add` again.
+An extension being installed or updated requires a peer at a version the lock
+does not have, or a locked extension requires a version of the package being
+installed or updated that it would not have. The message names a version of the
+peer that would satisfy every requirer. Install the peer at that version
+(`specforge add @scope/peer@<version>`) and retry; when a locked extension holds
+the peer back, `specforge update --major` moves them together.
 
 Owner: core
 Level: error

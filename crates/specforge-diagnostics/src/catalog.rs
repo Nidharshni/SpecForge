@@ -438,7 +438,7 @@ catalog! {
         "Several extensions require this package in ranges that no single published version satisfies (see ADR 0001). Upgrade the requirer with the narrowest range, or pin a compatible version manually.";
     R_RES_006 = "R-RES-006": Error core,
         "Locked peer breaks a version diamond",
-        "The extension being added requires a peer at a version the lock file doesn't have, and the message names a version that would satisfy every requirer. No command pins peer versions yet: reinstall the peer at that version by hand, then run `specforge add` again.";
+        "An extension being installed or updated requires a peer at a version the lock does not have, or a locked extension requires a version of the package being installed or updated that it would not have. The message names a version of the peer that would satisfy every requirer. Install the peer at that version (`specforge add @scope/peer@<version>`) and retry; when a locked extension holds the peer back, `specforge update --major` moves them together.";
     R_TRUST_001 = "R-TRUST-001": Error core,
         "Unsigned package",
         "The registry package carries no publisher signature, so where it came from can't be verified. Install it anyway only if you trust the source, with `--allow-unsigned`.";

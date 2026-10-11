@@ -459,7 +459,7 @@ fn diamond(registry: &dyn Registry, lock: &LockFile, edge: &Edge, locked: &str) 
             ),
         )
         .with_suggestion(format!(
-            "no command pins peer versions yet; manually reinstall '{peer}' at {unified} (or a version satisfying every requirer), then retry add"
+            "install '{peer}' at {unified} (specforge add {peer}@{unified}), or at another version every requirer accepts, then retry; when a locked extension must move with it, specforge update --major moves them together"
         )),
         Err(diagnostic) => OpError::from(diagnostic),
     }
@@ -747,7 +747,12 @@ mod tests {
             err.message,
             "version diamond: '@acme/app' requires peer '@acme/base' ^2.0 but 1.0.0 is locked; @acme/base 2.0.0 would satisfy every requirer"
         );
-        assert!(err.suggestion.unwrap().contains("2.0.0"));
+        assert_eq!(
+            err.suggestion.as_deref(),
+            Some(
+                "install '@acme/base' at 2.0.0 (specforge add @acme/base@2.0.0), or at another version every requirer accepts, then retry; when a locked extension must move with it, specforge update --major moves them together"
+            )
+        );
     }
 
     #[specforge_test(
