@@ -169,8 +169,10 @@ behavior upgrade_wasm_extension "Upgrade Wasm Extension" {
   }
   contract   """
     When specforge update is invoked with an extension's name, the system
-    MUST pick the version its requirement asks for from the registry that
-    serves it (within the locked version's caret range unless --major),
+    MUST move it to its upgrade target among the versions the registry that
+    serves it publishes: the newest one above the locked version, within
+    the locked version's caret range unless --major, never the locked
+    version or below (update_all_extensions states the rule),
     check the new version's peers against the other installed extensions
     and every installed extension's peers against the new version, and
     replace the .wasm binary. The lock entry MUST record the new hash,
@@ -189,6 +191,7 @@ behavior upgrade_wasm_extension "Upgrade Wasm Extension" {
   """
   produces   [extension_upgrade_completed]
   verify unit "one rule picks the version a requirement asks for"
+  verify unit "one rule picks the version an update moves to, never the locked version or below"
   verify contract "Upgrade Wasm Extension: Wasm extension upgrade holds — extension_installed, source_available, extension_upgrade_completed_emitted, binary_replaced, peer_compatibility_enforced"
 }
 
