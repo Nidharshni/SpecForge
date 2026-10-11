@@ -42,7 +42,10 @@ behavior mcp_initialize "MCP Initialize" {
     mcp_initialized_emitted      "mcp_initialized event emitted on success, mcp_initialization_failed on failure"
   }
   contract   """
-    The MCP server MUST compile the current project graph, load all
+    The MCP server MUST serve the project at or above its root (the
+    client's projectRoot, else the path it was started with: the nearest
+    directory holding specforge.json or specforge.spec), or nothing when
+    there is none. It MUST compile that project's graph, load all
     extension manifests, register all tools/resources/prompts from
     installed extensions (including surface-contributed MCP tools and
     resources from extension manifests), and return McpCapabilities.

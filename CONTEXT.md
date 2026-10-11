@@ -70,7 +70,11 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   entry's target before the handler runs: the served session (brought up to date unless `use_cached`),
   another project opened as a session for that call only and brought up to date after the call writes, as the served one is, the directory `init` creates, or, with nothing served and
   no project named, the empty session for an entry that reads only the project view
-  (`specforge_mcp::target::CallTarget`). An entry's target is derived from what its handler is given
+  (`specforge_mcp::target::CallTarget`).
+  Only a project (a directory holding `specforge.json` or `specforge.spec`) is ever served: the server
+  serves the nearest one at or above its root, else nothing, and a `path` to a directory that is no
+  project is read for its call only (ADR 0014 D6 as amended).
+  An entry's target is derived from what its handler is given
   (nothing, the project view, the project, the new directory), never declared beside it: an entry
   whose handler acts on the project is refused as no project before it runs (ADR 0014, ADR 0024).
 - **Update**: one change applied to a project session. It re-reads and re-parses exactly the changed files (an

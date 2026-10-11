@@ -1243,15 +1243,16 @@ fn loose_directory() -> TempDir {
     dir
 }
 
-/// Pins a defect of the time; plan 12 T8 flips it to
-/// `a_root_in_no_project_serves_nothing_and_init_serves_what_it_creates`.
-#[test]
-fn a_root_that_is_no_project_is_served_today() {
+#[specforge_test(
+    invariant = "mcp_served_project_consistency",
+    verify = "a server whose root lies in no project serves nothing, and init then serves the project it creates"
+)]
+fn a_root_in_no_project_serves_nothing_and_init_serves_what_it_creates() {
     let loose = loose_directory();
     let mut server = McpServer::with_project_root(loose.path().to_path_buf());
     let resp = call(&mut server, "initialize", json!({}));
     assert!(resp["error"].is_null(), "{resp}");
-    assert_eq!(served_root(&server), Some(canonical(loose.path())));
+    assert_eq!(served_root(&server), None);
 
     let nested = loose.path().join("sub");
     let resp = call_tool(
@@ -1259,36 +1260,36 @@ fn a_root_that_is_no_project_is_served_today() {
         "specforge.init",
         json!({"path": nested.to_str().unwrap()}),
     );
-    let error = crate::tool_errors::mcp_error(&resp);
-    assert_eq!(error["code"], "conflict", "{error}");
-    assert_eq!(error["argument"], "path", "{error}");
-    assert!(!nested.exists());
+    assert_eq!(resp["result"]["isError"], false, "{resp}");
+    assert!(nested.join("specforge.json").exists());
+    assert_eq!(served_root(&server), Some(canonical(&nested)));
 }
 
-/// Pins a defect of the time; plan 12 T8 flips it to
-/// `a_root_inside_a_project_serves_that_project`.
-#[test]
-fn a_root_inside_a_project_is_served_as_its_own_today() {
+#[specforge_test(
+    invariant = "mcp_served_project_consistency",
+    verify = "a server started inside a project serves that project"
+)]
+fn a_root_inside_a_project_serves_that_project() {
     let p = project(&[], "behavior ok \"Ok\" {\n}\n");
     let docs = p.path().join("docs");
     fs::create_dir(&docs).unwrap();
     let mut server = McpServer::new();
     initialize(&mut server, &docs);
-    assert_eq!(served_root(&server), Some(canonical(&docs)));
+    assert_eq!(served_root(&server), Some(canonical(p.path())));
 
     let resp = call_tool(
         &mut server,
         "specforge.stats",
         json!({"path": p.path().to_str().unwrap()}),
     );
-    let error = crate::tool_errors::mcp_error(&resp);
-    assert_eq!(error["code"], "invalid_input", "{error}");
+    assert_eq!(resp["result"]["isError"], false, "{resp}");
 }
 
-/// Pins a defect of the time; plan 12 T8 flips it to
-/// `a_loose_path_is_opened_for_its_call_and_never_served`.
-#[test]
-fn a_loose_path_while_nothing_is_served_is_adopted_today() {
+#[specforge_test(
+    invariant = "mcp_served_project_consistency",
+    verify = "a path to a directory that is no project is read for that call and never served"
+)]
+fn a_loose_path_is_opened_for_its_call_and_never_served() {
     let loose = loose_directory();
     let mut server = serving_nothing();
 
@@ -1298,5 +1299,25 @@ fn a_loose_path_while_nothing_is_served_is_adopted_today() {
         json!({"path": loose.path().to_str().unwrap()}),
     );
     assert_eq!(resp["result"]["isError"], false, "{resp}");
-    assert_eq!(served_root(&server), Some(canonical(loose.path())));
+    // The loose directory has no extensions installed, so its sources are
+    // read with default configuration (I002).
+    let diagnostics: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
+    assert!(
+        diagnostics
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|d| d["code"] == "I002"),
+        "{diagnostics}"
+    );
+    assert_eq!(served_root(&server), None);
+
+    let nested = loose.path().join("sub");
+    let resp = call_tool(
+        &mut server,
+        "specforge.init",
+        json!({"path": nested.to_str().unwrap()}),
+    );
+    assert_eq!(resp["result"]["isError"], false, "{resp}");
+    assert_eq!(served_root(&server), Some(canonical(&nested)));
 }
