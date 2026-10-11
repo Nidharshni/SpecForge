@@ -504,8 +504,14 @@ mod tests {
 
         // A memo is made with its snapshot and hands that one out: its
         // coverage scores it, not one taken later from other inputs.
-        let mut env = Environment::empty();
-        env.spec_root = dir.path().join("spec");
+        let env = Environment::assemble(
+            specforge_common::parse_project_config(
+                &dir.path().join("specforge.json"),
+                r#"{"spec_root": "spec"}"#,
+            ),
+            specforge_installed::Installed::unread(dir.path()),
+            crate::ExtensionLoad::NoRuntime,
+        );
         let over = RecordedCoverage::over(&project.graph, &env);
         assert_eq!(over.entities().spec_root(), env.spec_root);
         assert!(std::ptr::eq(
