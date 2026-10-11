@@ -434,7 +434,7 @@ behavior list_installed_extensions "List Installed Extensions" {
   features   [extension_management]
   invariants [diagnostic_determinism, zero_domain_knowledge_core]
   category   query
-  types      [ExtensionDeclaration, KindRegistryEntry]
+  types      [ExtensionDeclaration, KindRegistryEntry, McpExtensionsResult]
   requires {
     kind_registry_ready "KindRegistry is populated with entity kinds from loaded extensions"
   }
@@ -454,8 +454,9 @@ behavior list_installed_extensions "List Installed Extensions" {
     entry's source (registry, local:<path>), else unknown; its version: the
     loaded one, else an installed extension's locked one, else the version
     a legacy name@version entry writes; and its status (loaded, not_loaded,
-    not_configured). The CLI and the MCP extensions tool MUST list the same
-    entries.
+    not_configured). The CLI and the MCP extensions tool MUST answer the same
+    document (McpExtensionsResult: the entries, their count, the lock's
+    entries and the kinds the graph uses).
     Output order MUST be deterministic (alphabetical by extension name).
   """
   verify unit "list shows all installed extensions"
@@ -463,7 +464,7 @@ behavior list_installed_extensions "List Installed Extensions" {
   verify unit "output order is deterministic"
   verify integration "a .wasm file entry is listed under the name it declares, loaded, with source file:<path>"
   verify unit "an extension's source is where the extension load takes it from, whatever order its entries are in"
-  verify integration "the CLI and the MCP extensions tool list the same entries"
+  verify integration "the CLI and the MCP extensions tool answer the same document"
   verify contract "List Installed Extensions: extension listing holds — kind_registry_ready, all_extensions_listed, entity_counts_included, output_deterministic"
 }
 

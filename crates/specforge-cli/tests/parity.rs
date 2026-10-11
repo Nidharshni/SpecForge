@@ -90,11 +90,6 @@ const EXPECTED_DIVERGENCES: &[(&str, Aspect, &str)] = &[
         "only `check --cache` writes the build cache (write_build_cache opt_in)",
     ),
     (
-        "extensions",
-        Aspect::Document,
-        "two JSON shapes today (plan 07 converges it)",
-    ),
-    (
         "migrate",
         Aspect::Document,
         "two JSON shapes today (plan 07 converges it)",
@@ -1129,7 +1124,7 @@ fn both_listings(root: &Path, command: &str, tool: &str) -> (Value, Value) {
 
 #[specforge_test_macros::test(
     behavior = "list_installed_extensions",
-    verify = "the CLI and the MCP extensions tool list the same entries"
+    verify = "the CLI and the MCP extensions tool answer the same document"
 )]
 fn extensions_listings_match() {
     let dir = tempfile::tempdir().unwrap();
@@ -1142,7 +1137,7 @@ fn extensions_listings_match() {
 
     let (cli, mcp) = both_listings(dir.path(), "extensions", "specforge.extensions");
 
-    assert_eq!(cli["extensions"], mcp["extensions"]);
+    assert_eq!(normalized(&cli, dir.path()), normalized(&mcp, dir.path()));
     let greet = &cli["extensions"][0];
     assert_eq!(greet["name"], GREET, "{cli}");
     assert_eq!(greet["status"], "loaded", "{cli}");

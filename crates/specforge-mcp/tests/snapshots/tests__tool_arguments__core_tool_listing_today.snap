@@ -5825,6 +5825,10 @@ expression: listing
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "count": {
+          "minimum": 0,
+          "type": "integer"
+        },
         "entity_kinds_in_graph": {
           "items": {
             "type": "string"
@@ -5901,6 +5905,7 @@ expression: listing
       },
       "required": [
         "extensions",
+        "count",
         "lock_file_entries",
         "entity_kinds_in_graph"
       ],

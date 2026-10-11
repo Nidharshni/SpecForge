@@ -19,8 +19,8 @@ pub use add::{
 pub use candidate::{Candidate, Installable, LocalFile};
 pub use inventory::{Inventory, ProjectExtension, Selection, Status, inventory};
 pub use list::{
-    ExtensionInfo, ExtensionListing, LockedExtension, ProviderEntry, ProviderListing, ProviderRow,
-    ProviderStatus, ProvidersDocument, list, providers,
+    ExtensionInfo, ExtensionListing, ExtensionsDocument, LockedExtension, ProviderEntry,
+    ProviderListing, ProviderRow, ProviderStatus, ProvidersDocument, list, providers,
 };
 pub use remove::{
     RemoveAction, RemoveDocument, RemoveOutcome, RemoveRequest, StrandedEntity, remove,

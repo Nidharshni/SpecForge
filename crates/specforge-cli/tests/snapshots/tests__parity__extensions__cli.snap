@@ -31,6 +31,9 @@ expression: cli_snap
   "ok": true,
   "payload": {
     "count": 2,
+    "entity_kinds_in_graph": [
+      "behavior"
+    ],
     "extensions": [
       {
         "entity_count": 0,
@@ -57,6 +60,12 @@ expression: cli_snap
         "status": "loaded",
         "validation_rules": 11,
         "version": "1.0.0"
+      }
+    ],
+    "lock_file_entries": [
+      {
+        "name": "@sdk/greet",
+        "version": "0.1.0"
       }
     ]
   }

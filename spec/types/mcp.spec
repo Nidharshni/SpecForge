@@ -315,6 +315,8 @@ type McpListedEntity {
 
 type McpExtensionsResult {
   extensions            McpExtensionInfo[]
+  /// How many extensions are listed.
+  count                 integer
   lock_file_entries     McpLockEntry[]
   entity_kinds_in_graph string[]
   verify unit "McpExtensionsResult schema is valid"
