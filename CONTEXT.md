@@ -640,9 +640,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Form start**: a line whose first lexemes open a top-level form of the grammar (an import, a spec,
   ref, define, union or entity block), indented no deeper than the top-level line before it
   (`specforge_parser::lex::starts_top_level_form`). The parser's recovery ends an unclosed string before
-  one, and the lexer an unclosed `"""…"""` (ADR 0038 D7); the LSP's document closes every body, block and list left open at one, so a block being typed
-  never takes the forms after it. A test holds it to the grammar's top-level nodes on the repository's
-  spec, both ways (ADR 0038 D6).
+  one, and the lexer an unclosed `"""…"""` (ADR 0038 D7); the LSP's document closes every body, block and list left open at one, and the grammar's scanner
+  ends an unclosed body there (its MISSING `}`), so a block being typed never takes the forms after it.
+  A test holds it to the grammar's top-level nodes on the repository's spec, both ways, and another holds
+  the scanner's copy to it (ADR 0038 D6, D8).
 - **Cursor**: what the LSP knows about a position in an open document, read from the document's lexemes
   (`specforge_parser::lex`) and their block structure, never from the graph: the word under it, whether
   it is in code, a string or a comment, the entity block, field and reference list around it, and the

@@ -16,11 +16,30 @@ module.exports = grammar({
 
   extras: ($) => [/\s/, $.comment],
 
+  // src/scanner.c: where an unclosed body ends (ADR 0038 D7). All three
+  // tokens are zero-width and hidden.
+  //   _form_start  before a line that starts a top-level form, by the
+  //                lexer's form-start rule (`lex::starts_top_level_form`).
+  //                Valid only between top-level forms; inside a top-level
+  //                form's body it is an unexpected token, and tree-sitter
+  //                recovers by inserting the body's MISSING "}" before it.
+  //   _in_body     never produced: valid wherever such a body may hold a
+  //                member or close, so the scanner runs there.
+  //   _close       ends a nested block, list or expression group left open
+  //                inside that body, at the same line (tree-sitter inserts
+  //                one MISSING token per error; the body's reports it).
+  externals: ($) => [$._form_start, $._in_body, $._close],
+
   word: ($) => $.identifier,
 
   rules: {
     source_file: ($) =>
-      repeat(choice($.use_import, $.pub_use_import, $._block)),
+      repeat(
+        seq(
+          optional($._form_start),
+          choice($.use_import, $.pub_use_import, $._block),
+        ),
+      ),
 
     // --- Comments ----------------------------------------------------
     comment: (_) => token(seq("//", /.*/)),
@@ -81,7 +100,7 @@ module.exports = grammar({
         field("name", $.identifier),
         optional(field("title", $.string)),
         "{",
-        repeat(choice($.field, $.verify_statement, $.method_statement)),
+        repeat(choice($.field, $.verify_statement, $.method_statement, $._in_body)),
         "}",
       ),
 
@@ -91,7 +110,7 @@ module.exports = grammar({
         "spec",
         field("name", $.string),
         "{",
-        repeat(choice($.field, $.verify_statement, $.method_statement)),
+        repeat(choice($.field, $.verify_statement, $.method_statement, $._in_body)),
         "}",
       ),
 
@@ -112,7 +131,7 @@ module.exports = grammar({
         field("id", $.scheme_ref_id),
         field("title", $.string),
         "{",
-        repeat($.field),
+        repeat(choice($.field, $._in_body)),
         "}",
       ),
 
@@ -131,7 +150,7 @@ module.exports = grammar({
         "define",
         field("name", $.identifier),
         "{",
-        repeat(choice($.field, $.verify_statement, $.method_statement)),
+        repeat(choice($.field, $.verify_statement, $.method_statement, $._in_body)),
         "}",
       ),
 
@@ -275,7 +294,7 @@ module.exports = grammar({
         "[",
         optional(commaSep1($._list_item)),
         optional(","),
-        "]",
+        choice("]", $._close),
       ),
 
     _list_item: ($) =>
@@ -283,7 +302,7 @@ module.exports = grammar({
 
     // Nested block: { key value ... }
     nested_block: ($) =>
-      seq("{", repeat($.field), "}"),
+      seq("{", repeat($.field), choice("}", $._close)),
     // Formal expression group: expr { a < 10ms and b > 5 }
     // A generic value form — no domain knowledge; validation is semantic.
     expr_group: ($) =>
@@ -293,7 +312,7 @@ module.exports = grammar({
         $._expression,
         repeat(seq(optional(","), $._expression)),
         optional(","),
-        "}",
+        choice("}", $._close),
       ),
 
     _expression: ($) => $.expr_or,

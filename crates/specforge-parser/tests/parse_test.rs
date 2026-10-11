@@ -2482,6 +2482,22 @@ fn a_block_after_an_unclosed_string_survives_in_every_top_level_form() {
 
 #[specforge_test(
     behavior = "recover_from_syntax_errors",
+    verify = "the blocks after an unclosed body are parsed, and its missing closing brace is reported"
+)]
+fn the_blocks_after_an_unclosed_body_are_parsed() {
+    let source = "behavior a \"A\" {\n  status done\n\ntype status = open | closed\n\nbehavior b \"B\" {\n  status done\n}\n";
+    let result = parse(source, "test.spec");
+    let ids: Vec<&str> = result.entities.iter().map(|e| e.id.raw.as_str()).collect();
+    assert_eq!(ids, ["a", "status", "b"], "errors: {:?}", result.errors);
+    assert!(result.entities[0].fields.get("status").is_some());
+    assert_eq!(result.errors.len(), 1, "errors: {:?}", result.errors);
+    let error = &result.errors[0];
+    assert!(error.message.contains("missing '}'"), "{}", error.message);
+    assert_eq!((error.span.start_line, error.span.start_col), (2, 14));
+}
+
+#[specforge_test(
+    behavior = "recover_from_syntax_errors",
     verify = "a backslash before a line break leaves a string unclosed, as the grammar reads it"
 )]
 fn a_backslash_before_a_line_break_leaves_the_string_unclosed() {

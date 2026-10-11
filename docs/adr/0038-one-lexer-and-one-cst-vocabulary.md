@@ -159,3 +159,44 @@ outside every brace), else at the text's end. Recovery ends every unclosed strin
   ends, which D1 and D3 rule out.
 - **End the unclosed `"""` at its first line's end, like a `"…"`**: the lines after `"""` are the string's
   text being typed, and would be read as fields.
+
+## Amendment: the grammar ends an unclosed body at a form start (2026-10-11, round 6 follow-ups)
+
+The parser has no recovery of its own for an unclosed body: tree-sitter's error recovery decided, and it read
+every line after the body as its fields. A file with one body left open lost every block after it from the
+graph (a union after it became a field, W020), while the LSP's document (D6) resumed at each form.
+
+**D8. The grammar's external scanner reads D6's rule.** `crates/tree-sitter-specforge/src/scanner.c`
+produces a zero-width `_form_start` after the token before a line that starts a top-level form: first on its
+line, indented no deeper than the line the current top-level form started on, and reading one of D2's shapes
+(`lex::starts_top_level_form`, over the line's characters). Between top-level forms the token is optional and
+records that indentation. Inside a top-level form's body it is not valid (a never-produced `_in_body` makes
+the scanner run there), and tree-sitter recovers by inserting the body's MISSING `}` before it, so the tree
+keeps the error and every form after it, and the parser reports `missing '}'` at the body's last member. A
+nested block, list or expression group left open in that body is ended first by a zero-width `_close`, valid
+as the alternative to its closing bracket (tree-sitter inserts one MISSING token per error; the body's reports
+it). The tokens are hidden: no node kind or field changes.
+
+The rule is now written twice, in Rust and in C. Tree-sitter's scanner cannot call the lexer: the grammar
+crate sits below the parser, and every other host of the grammar (an editor, the tree-sitter CLI) compiles
+only its C. So a test in the parser
+(`the_grammars_scanner_reads_form_starts_as_the_lexer_does`) holds the two equal on every line of the
+repository's spec, its integrations and examples, and on the shapes they do not write; a corpus test in the
+grammar crate leaves each top-level body of those files unclosed and requires every top-level form to stay.
+
+### Consequences
+
+- The graph keeps the blocks after a body left open; the file still has its syntax error.
+- A valid file is read as before unless a line inside a body, indented no deeper than its form, reads as a
+  form start (`guard expr { … }` at column 0 inside a block at column 0): that body now ends there, as the
+  LSP's document already read it. No file of the repository's spec does; the corpus test of D6 checks it.
+- Unclosed strings are still ended by D2's recovery.
+
+### Rejected
+
+- **The scanner in Rust, linked into the grammar crate**: it could not call the parser's lexer either (a
+  dependency cycle), and the grammar would then work in no other tree-sitter host.
+- **A zero-width token that silently closes every body**: the tree would hold no error, and an unclosed body
+  would compile clean.
+- **A recovery pass in the parser** (end the body before the next form line and reparse the pieces, as D2 does
+  for strings): the formatter and every other reader of the CST would still see tree-sitter's reading.
