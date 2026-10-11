@@ -4,11 +4,28 @@
 //! by directory and `--gaps-detail` the `specforge.infer_gaps` report.
 
 use crate::OutputFormat;
-use crate::outcome::{Exit, Refusal};
-use serde_json::json;
-use specforge_ops::infer::{self, Gaps, MANIFEST_FILENAME, Progress};
+use crate::outcome::{Exit, Refusal, print_json};
+use serde::Serialize;
+use specforge_ops::infer::{
+    self, Gaps, GapsDocument, MANIFEST_FILENAME, Progress, ProgressDocument, UnanalyzedDirectory,
+};
 use specforge_ops::view::ProjectView;
 use std::path::Path;
+
+/// What `specforge infer-status --format json` prints: the progress document
+/// `specforge.infer_progress` answers, and the sections only the CLI's flags
+/// ask for.
+#[derive(Serialize)]
+struct Printed {
+    #[serde(flatten)]
+    progress: ProgressDocument,
+    /// `--gaps`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    unanalyzed_by_directory: Option<Vec<UnanalyzedDirectory>>,
+    /// `--gaps-detail`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    gap_analysis: Option<GapsDocument>,
+}
 
 pub fn run(
     path: &Path,
@@ -38,24 +55,11 @@ pub fn run(
 
     match format {
         OutputFormat::Json => {
-            let mut doc = serde_json::to_value(progress.document()).expect("a document serializes");
-            if show_gaps {
-                doc["unanalyzed_by_directory"] = progress
-                    .unanalyzed_by_directory()
-                    .iter()
-                    .map(|(dir, files)| {
-                        json!({"directory": dir, "count": files.len(), "files": files})
-                    })
-                    .collect();
-            }
-            if let Some(gaps) = &gaps {
-                doc["gap_analysis"] =
-                    serde_json::to_value(gaps.document()).expect("a document serializes");
-            }
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&doc).expect("serialize JSON output")
-            );
+            print_json(&Printed {
+                progress: progress.document(),
+                unanalyzed_by_directory: show_gaps.then(|| progress.unanalyzed_by_directory()),
+                gap_analysis: gaps.as_ref().map(Gaps::document),
+            });
         }
         OutputFormat::Human => {
             print!(
@@ -117,9 +121,9 @@ fn render_human(progress: &Progress, gaps: bool, stale: bool, detail: Option<&Ga
     if gaps && !progress.unanalyzed.is_empty() {
         line!();
         line!("Unanalyzed files:");
-        for (dir, files) in progress.unanalyzed_by_directory() {
-            line!("  {} ({} files)", dir, files.len());
-            for f in files {
+        for row in progress.unanalyzed_by_directory() {
+            line!("  {} ({} files)", row.directory, row.count);
+            for f in &row.files {
                 line!("    {f}");
             }
         }

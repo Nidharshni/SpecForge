@@ -1,14 +1,26 @@
 use crate::OutputFormat;
-use crate::outcome::Exit;
-use serde_json::json;
+use crate::outcome::{Exit, print_json};
+use serde::Serialize;
 use specforge_common::codes;
-use specforge_ops::doctor::{About, BinaryIssue, DoctorReport, FindingStatus, Part, diagnose};
+use specforge_ops::doctor::{
+    About, BinaryIssue, DoctorDocument, DoctorReport, FindingStatus, Part, diagnose,
+};
 use specforge_ops::extension::Status;
 use specforge_ops::view::ProjectView;
 use specforge_registry_client::credential_health::{
-    CredentialHealth, CredentialLevel, user_credential_health,
+    CredentialHealth, CredentialLevel, CredentialLine, user_credential_health,
 };
 use std::path::Path;
+
+/// What `specforge doctor --format json` prints: the project's report and
+/// the user's registry credentials, which only the CLI shows (ADR 0029 D3a).
+#[derive(Serialize)]
+struct Printed<'a> {
+    #[serde(flatten)]
+    report: DoctorDocument,
+    credentials: &'a [CredentialLine],
+    credentials_failures: usize,
+}
 
 /// `specforge doctor`: the shared project health report (extensions and
 /// their enhancements, conflicts, shadowed keywords, installed binaries)
@@ -21,14 +33,11 @@ pub fn run(path: &Path, format: OutputFormat) -> Exit {
 
     match format {
         OutputFormat::Json => {
-            let mut output =
-                serde_json::to_value(report.document()).expect("a document serializes");
-            output["credentials"] = json!(credentials.lines);
-            output["credentials_failures"] = json!(credentials.failures);
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&output).expect("serialize JSON output")
-            );
+            print_json(&Printed {
+                report: report.document(),
+                credentials: &credentials.lines,
+                credentials_failures: credentials.failures,
+            });
         }
         OutputFormat::Human => print!("{}", render_human(&report, &credentials)),
     }
