@@ -569,6 +569,45 @@ fn shown_path(root: &Path, path: &Path) -> String {
         .to_string()
 }
 
+/// `locals` staged over the lock at `root`.
+fn staged_locals<'a>(
+    installed: &'a Installed,
+    root: &Path,
+    locals: Vec<LocalFile>,
+) -> Result<LockPlan<'a>, OpError> {
+    let mut plan = LockPlan::new(installed, Verb::Install)?;
+    for local in locals {
+        plan.stage(Install::local(root, local)?);
+    }
+    Ok(plan)
+}
+
+/// Install `locals`, read once by `init`'s plan, into the project at `root` as one change,
+/// without reading them again. No writes when `locals` is empty.
+pub(crate) fn install_local(root: &Path, locals: Vec<LocalFile>) -> Result<Writes, OpError> {
+    if locals.is_empty() {
+        return Ok(Writes::none());
+    }
+    let installed = Installed::at(root);
+    staged_locals(&installed, root, locals)?
+        .check()
+        .map_err(Refused::first)?
+        .commit()
+}
+
+/// Whether [`install_local`] would accept `locals` over the lock at `root`. `init`'s plan asks
+/// this before anything is written (E033, E072, E073, E027).
+pub(crate) fn check_local(root: &Path, locals: &[LocalFile]) -> Result<(), OpError> {
+    if locals.is_empty() {
+        return Ok(());
+    }
+    let installed = Installed::at(root);
+    staged_locals(&installed, root, locals.to_vec())?
+        .check()
+        .map(drop)
+        .map_err(Refused::first)
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::fixtures::entry;

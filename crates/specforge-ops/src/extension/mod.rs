@@ -24,8 +24,8 @@ pub use update::{
     update,
 };
 
-pub(crate) use add::install_local;
 pub(crate) use candidate::required_builtins;
+pub(crate) use lock_plan::{check_local, install_local};
 
 use specforge_installed::{LockFile, LockSource};
 use specforge_project::EnabledExtension;

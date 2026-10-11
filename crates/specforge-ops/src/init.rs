@@ -2,10 +2,11 @@
 //!
 //! [`plan`] validates everything and builds the files in memory; only
 //! [`apply`] writes. `init` enables builtins, and installs local `.wasm`
-//! extensions through the shared add operation (ADR 0004 D3-e): it never
-//! writes an entry `specforge check` can't load. A registry extension needs
-//! a configured registry, which a project that doesn't exist yet can't
-//! have, so it is added afterwards with `specforge add`.
+//! extensions through the lock plan `add` uses, as one change (ADR 0004
+//! D3-e, ADR 0041): it never writes an entry `specforge check` can't load.
+//! A registry extension needs a configured registry, which a project that
+//! doesn't exist yet can't have, so it is added afterwards with `specforge
+//! add`.
 
 use crate::extension::{self, Candidate, LocalFile, Source};
 use crate::{OpError, OpErrorKind, Writes};
@@ -63,8 +64,8 @@ pub struct Plan {
     pub extensions: Vec<String>,
     pub config: Value,
     pub starter: String,
-    /// Local `.wasm` files installed through `add`, each read once by the
-    /// plan.
+    /// Local `.wasm` files installed through the lock plan, as one change,
+    /// each read once by the plan.
     pub installs: Vec<LocalFile>,
 }
 
@@ -121,6 +122,8 @@ pub fn plan(req: &Request, runtime: &dyn WasmRuntime) -> Result<Plan, OpError> {
     let version = req.version.to_string();
 
     let (extensions, installs) = extensions_of(req.extensions, runtime)?;
+    // The lock plan the installs will be: refused here, before anything is written.
+    extension::check_local(req.dir, &installs)?;
     // A builtin is enabled after the builtins it requires, as `add` does.
     let mut extensions = with_required_builtins(extensions, runtime)?;
     // Test obligations (`verify`) on software kinds come from
@@ -166,8 +169,8 @@ pub fn plan(req: &Request, runtime: &dyn WasmRuntime) -> Result<Plan, OpError> {
 }
 
 /// Write `plan` into `dir`: `specforge.json`, the starter file, the
-/// `.gitignore` entries, and each local install, without reading the files
-/// again. Init only adds: the starter is created, never overwritten, and a
+/// `.gitignore` entries, and the local installs as one change, without
+/// reading the files again. Init only adds: the starter is created, never overwritten, and a
 /// failed init puts back what was there before it ran (the lock's bytes, a
 /// pre-existing `.specforge/`) and removes only what it wrote. Its error
 /// reports nothing written.
@@ -205,10 +208,7 @@ pub fn apply(dir: &Path, plan: Plan) -> Result<Outcome, OpError> {
             _ => write_error(STARTER_FILE, e),
         })?;
         writes.record(dir.join(STARTER_FILE));
-        for local in plan.installs {
-            let added = extension::install_local(dir, local)?;
-            writes.merge(added.writes);
-        }
+        writes.merge(extension::install_local(dir, plan.installs)?);
         Ok(())
     })();
 
@@ -232,9 +232,9 @@ pub fn apply(dir: &Path, plan: Plan) -> Result<Outcome, OpError> {
         if specforge_dir_existed {
             // What the failed install placed in the directory that was
             // already there, and its now-empty parents.
-            let placed: Vec<PathBuf> = writes
+            let placed: Vec<PathBuf> = error
+                .writes
                 .paths()
-                .chain(error.writes.paths())
                 .filter(|path| path.starts_with(&specforge_dir))
                 .map(Path::to_path_buf)
                 .collect();
@@ -544,22 +544,20 @@ mod tests {
         }
     }
 
-    /// Pin (plan 01 T0): init judges its local installs' peers only once it writes, one
-    /// change per file. T2 flips it.
-    #[test]
-    fn pin_init_judges_its_local_installs_only_when_it_applies() {
+    #[specforge_test_macros::test(
+        behavior = "scaffold_starter_spec_file",
+        verify = "init refuses local extensions the lock plan refuses before it writes anything"
+    )]
+    fn init_refuses_local_extensions_the_lock_plan_refuses_before_writing() {
         let (_scratch, extensions, dir) = files();
 
-        let plan = plan(&request(&dir, &extensions), &runtime()).unwrap();
-        let error = apply(&dir, plan).unwrap_err();
+        let error = plan(&request(&dir, &extensions), &runtime()).unwrap_err();
 
         assert_eq!(error.code, "E027", "{error:?}");
-        assert!(
-            error
-                .message
-                .starts_with("installing '@x/b' 1.0.0 breaks '@x/a': "),
-            "{error:?}"
+        assert_eq!(
+            error.message,
+            "extension '@x/a' requires peer dependency '@x/b' ^2 but version 1.0.0 is installed"
         );
-        assert!(!dir.exists(), "the failed init removed what it wrote");
+        assert!(!dir.exists(), "nothing was written");
     }
 }

@@ -203,10 +203,11 @@ behavior non_interactive_init "Non-Interactive Init" {
     --extensions takes builtins and local .wasm files, several to a flag
     separated by commas: init enables a builtin after the builtins it
     requires (its non-optional peers that are builtins, and theirs), as
-    add does, and installs a local file through the add operation (ADR
-    0004 D3-e) without reading it again, so it never writes an entry
-    specforge check cannot load or whose required builtin peer is
-    missing. Any other extension (a registry package,
+    add does, and installs its local files through the lock plan add
+    uses (ADR 0004 D3-e, ADR 0041), as one change and without reading
+    them again, so it never writes an entry specforge check cannot load
+    or whose required builtin peer is missing; their peers are judged
+    before any file is written. Any other extension (a registry package,
     which needs a registry a new project has not configured yet) MUST be
     rejected with a diagnostic naming it and exit code 1. A project name
     whose starter spec ID would break the identifier contract (2-60
@@ -217,6 +218,7 @@ behavior non_interactive_init "Non-Interactive Init" {
   verify unit "non-interactive init skips all prompts"
   verify unit "non-interactive init with --extensions populates extensions list"
   verify unit "init enables a builtin after the builtins it requires, as add does"
+  verify unit "init refuses local extensions the lock plan refuses before it writes anything"
   verify integration "init with a builtin that requires another passes check"
   verify unit "non-interactive init with unknown extension rejects with diagnostic and exit code 1"
   verify unit "invalid project name is rejected with InitError::invalid_name"
