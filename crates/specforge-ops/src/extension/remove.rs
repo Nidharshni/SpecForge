@@ -646,7 +646,7 @@ mod tests {
             "not valid json {{{",
         )
         .unwrap();
-        fixture.env.installed = Installed::at(fixture.dir.path());
+        fixture = fixture.read_lock();
         let before = files_under(fixture.dir.path());
 
         let refused = remove(&fixture.view(), &removing("@acme/x")).unwrap_err();

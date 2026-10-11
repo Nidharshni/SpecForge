@@ -504,12 +504,9 @@ mod tests {
         let mut fixture = Fixture::new()
             .declarations(vec![dep, opt, Fixture::declaration("@a/base", "1.0.0")])
             .lock(&[("@a/locked", "1.0.0", "registry")]);
-        let mut lock = fixture.env.installed.lock().file().unwrap().clone();
+        let mut lock = fixture.env().installed.lock().file().unwrap().clone();
         lock.entries[0].peer_dependencies = vec![peer(false)];
-        fixture.env.installed = specforge_installed::Installed::with_lock(
-            fixture.dir.path(),
-            specforge_installed::LockState::Read(lock),
-        );
+        fixture = fixture.with_lock_file(lock);
         let view = fixture.view();
         let inventory = inventory(&view);
 
