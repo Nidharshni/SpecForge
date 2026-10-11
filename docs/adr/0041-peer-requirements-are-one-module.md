@@ -81,3 +81,46 @@ they install, as update checks the dependents of what it updates.
 **What would reopen it:** a need for user-chosen precedence that contradicts the peers (load order
 overrides), or a dependency resolver for `add` (a new ADR, superseding D6's "missing peers are
 check's").
+
+## Amendment (2026-10-11): one lock plan applies the rule to every install
+
+D6 put the peer rule in one module but left applying it to five call sites in `add`, `update` and `init`.
+Each chose which lock to judge against (the lock as read, as staged, or minus the package itself), whether
+a registry unifies a diamond, and whether the gate ran before or after the binary loaded. They disagreed:
+
+- `add` of a new version of a locked package counted the package's previous lock entry as another
+  requirer: R-RES-005 naming the package against itself, where `update` gave R-RES-006.
+- A locked extension an install breaks was named twice among the requirers.
+- `update` judged each upgrade against the lock as the upgrades before it in lock order left it, and
+  skipped every pair of extensions it moved: one lock order refused a coupled upgrade the other accepted,
+  and it could write a lock whose upgraded extension's peer was unsatisfied.
+- `init` judged its local files one change at a time while it wrote them.
+
+- **A1. One lock plan.** `specforge_ops::extension::lock_plan` is the only way an operation installs:
+  `add` stages one install, `update` every upgrade, `init` its local files. Staging writes the install's
+  entry into the lock as the operation leaves it, replacing the package's previous entry. The plan owns the
+  change (ADR 0028 D4), the pin and the wording.
+- **A2. Judged once, after every install is staged.** The peer rule (`Peers::unsatisfied` over the staged
+  lock) judges every declared peer that touches a staged package: a staged extension's own, and every
+  locked extension's on a staged one. A peer that is not locked stays `check`'s. An unsatisfied one is
+  unified against the registry the staged install came from (R-RES-006/005, ADR 0001), or, for a local
+  file, refused with E027. A version diamond names each requirer once. Lock order decides nothing.
+- **A3. Before anything fetched is loaded.** A registry install's binary is loaded only once the plan has
+  passed, both directions included, and must then declare what was published (ADR 0012). Only a checked
+  plan can be committed.
+- **A4. One wording.** A locked extension an install breaks: "installing '<package>' <version> breaks
+  '<dependent>': ..." (`updating` for `update`). R-RES-006 for a peer the same plan moves says "but this
+  update locks <version>".
+- **A5. Init validates before it writes.** `init`'s plan judges the lock plan of its local files before any
+  file is written; `apply` installs them as one change.
+
+Rejected: gating each install as it is staged (it is what made `update` order-dependent); a
+caller-chosen unification source (the install's own provenance decides it); a dependency resolver for
+coupled upgrades (ADR 0001 still holds: the plan refuses and names the version that unifies, and
+`update --major` moves locked registry extensions together).
+
+ADR 0001's `check_diamonds` and ADR 0010's `diamond` module are now `lock_plan`; `LockFile::requirers_of`
+is gone (its one use is the plan's).
+
+**What would reopen it:** an install that must be judged against something other than the lock (a
+builtin's or a `.wasm` file entry's version, today `check`'s), or a resolver for `add`.

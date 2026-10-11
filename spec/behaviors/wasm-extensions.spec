@@ -867,7 +867,12 @@ behavior update_all_extensions "Update All Extensions" {
     --major is specified. After upgrading, the system MUST refresh the lock
     file with the new binary hashes. Peer dependency
     conflicts introduced by upgrades MUST be detected and reported before
-    applying changes. If any upgrade fails, the system MUST roll back all
+    applying changes. Every upgrade is judged against the lock as the
+    whole update leaves it, whatever order the lock lists the extensions
+    in: an upgraded extension's peer ranges against the versions its peers
+    are left at, those this update moves included, and every locked
+    extension's ranges against the versions this update locks. If any
+    upgrade fails, the system MUST roll back all
     changes and report the failure. A write that fails while the checked
     upgrades are applied is the update's own failure, naming the file it
     could not write (E032) or the lock (E033); every file is put back, and no
@@ -885,6 +890,7 @@ behavior update_all_extensions "Update All Extensions" {
   verify unit "major version skipped without --major flag"
   verify unit "lock file records new binary hashes after update"
   verify unit "peer dependency conflicts detected before applying"
+  verify unit "every upgrade is judged against the lock as the whole update leaves it, whatever order the lock lists them in"
   verify unit "failed upgrade rolls back all changes"
   verify unit "a write that fails while applying fails the update, naming what it could not write, and nothing is applied"
   verify integration "update never replaces a locally installed extension from a registry"

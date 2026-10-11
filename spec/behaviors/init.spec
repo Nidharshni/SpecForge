@@ -203,10 +203,11 @@ behavior non_interactive_init "Non-Interactive Init" {
     --extensions takes builtins and local .wasm files, several to a flag
     separated by commas: init enables a builtin after the builtins it
     requires (its non-optional peers that are builtins, and theirs), as
-    add does, and installs a local file through the add operation (ADR
-    0004 D3-e) without reading it again, so it never writes an entry
-    specforge check cannot load or whose required builtin peer is
-    missing. Any other extension (a registry package,
+    add does, and installs its local files through the lock plan add
+    uses (ADR 0004 D3-e, ADR 0041), as one change and without reading
+    them again, so it never writes an entry specforge check cannot load
+    or whose required builtin peer is missing; their peers are judged
+    before any file is written. Any other extension (a registry package,
     which needs a registry a new project has not configured yet) MUST be
     rejected with a diagnostic naming it and exit code 1. A project name
     whose starter spec ID would break the identifier contract (2-60
@@ -217,6 +218,7 @@ behavior non_interactive_init "Non-Interactive Init" {
   verify unit "non-interactive init skips all prompts"
   verify unit "non-interactive init with --extensions populates extensions list"
   verify unit "init enables a builtin after the builtins it requires, as add does"
+  verify unit "init refuses local extensions the lock plan refuses before it writes anything"
   verify integration "init with a builtin that requires another passes check"
   verify unit "non-interactive init with unknown extension rejects with diagnostic and exit code 1"
   verify unit "invalid project name is rejected with InitError::invalid_name"
@@ -269,6 +271,9 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
     and diamond checks compare real versions and update never replaces a
     local build from a registry.
     The system MUST NOT duplicate an already-installed extension.
+    A dry run reports what the add would do and writes nothing; an
+    extension already present answers as the add would, whatever its
+    source.
     The system MUST NOT modify any other field in specforge.json.
     When adding an extension, the system MUST judge its peers by the one
     peer rule (ADR 0041) before anything is installed: a peer range that is
@@ -279,8 +284,12 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
     no published version does; a local install, with no registry to
     consult, MUST be rejected with E027. Installing a package at a version
     a locked extension's peer range does not accept MUST be rejected the
-    same way, its message naming the extension it would break. A peer that
-    is not installed is not refused: specforge check reports it (E027).
+    same way, its message naming the extension it would break. The peers
+    are judged against the lock as the add leaves it: a package already
+    locked at another version is judged by its new declaration alone, its
+    previous lock entry replaced rather than counted as another requirer,
+    and a version diamond names each requirer once. A peer that is not
+    installed is not refused: specforge check reports it (E027).
     A builtin is enabled after the builtins it requires (its non-optional
     peers that are builtins, and theirs), dependencies first; a builtin
     whose declaration cannot be read refuses the operation (E028) before
@@ -304,6 +313,7 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
   verify unit "a builtin whose declaration cannot be read is refused before anything is written"
   verify unit "a required builtin peer the embedded builtin does not satisfy is refused before anything is written"
   verify unit "add duplicate extension is a no-op with info message"
+  verify unit "a dry run of an extension already present answers as the add would, whatever its source"
   verify unit "add extension with no specforge.json rejects with error and exit code 1"
   verify unit "add unresolvable extension rejects with diagnostic"
   verify unit "add extension with @scope/name@version resolves version via parse_extension_specifier"
@@ -313,6 +323,8 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
   verify integration "an install that leaves a locked extension's peer unsatisfied is refused before anything is written, local or from a registry"
   verify unit "a peer locked outside the new extension's range fails R-RES-006 naming a version that satisfies every requirer"
   verify unit "a peer no single version satisfies for every requirer fails R-RES-005"
+  verify unit "an add that upgrades a locked package judges its peers against the lock as the add leaves it"
+  verify unit "a version diamond names each requirer once"
   verify integration "a local .wasm install is locked at its declared version with source local:<path> and enabled by its bare name"
   verify integration "add extension preserves all other config fields"
   verify contract "Add Extension to Existing Project: adding extension to existing project holds — existing_project_found, extension_resolvable, extension_appended, no_duplicate_added, other_fields_preserved, peer_deps_satisfied, extension_added_emitted"

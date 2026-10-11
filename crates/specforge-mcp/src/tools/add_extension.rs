@@ -209,6 +209,13 @@ pub(crate) fn call(project: &ProjectRef<'_>, args: Args) -> Mutation<Reply> {
             ));
         }
     };
+    // A dry run of an extension already present answers as the add would (`AlreadyPresent`, or a
+    // builtin left as it was): a preview, which writes and records nothing.
+    if dry_run {
+        return Ok(Mutated::preview(
+            Answer::new(reply).with_diagnostics(reported),
+        ));
+    }
     let event = MutationEvent::ExtensionAdded {
         specifier: args.specifier,
         total_extensions: added.extensions_enabled,

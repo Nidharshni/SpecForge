@@ -1714,10 +1714,12 @@ Level: error
 ```
 R-RES-006: Locked peer breaks a version diamond
 
-The extension being added requires a peer at a version the lock file doesn't
-have, and the message names a version that would satisfy every requirer. No
-command pins peer versions yet: reinstall the peer at that version by hand, then
-run `specforge add` again.
+An extension being installed or updated requires a peer at a version the lock
+does not have, or a locked extension requires a version of the package being
+installed or updated that it would not have. The message names a version of the
+peer that would satisfy every requirer. Install the peer at that version
+(`specforge add @scope/peer@<version>`) and retry; when a locked extension holds
+the peer back, `specforge update --major` moves them together.
 
 Owner: core
 Level: error
@@ -3180,13 +3182,14 @@ Level: warning
 ## W155
 
 ```
-W155: Unsigned package installed
+W155: Unsigned package accepted
 
-`specforge add` or `specforge update` installed a registry package that carries
-no publisher signature, because `--allow-unsigned` was given. Where it came from
-can't be verified, and no publisher key is pinned for it, so a later signed
-version is pinned on first use. Install signed packages where you can; ask the
-publisher to sign with `specforge publish`.
+`specforge add` or `specforge update` accepted a registry package that carries
+no publisher signature, because `--allow-unsigned` was given; it is reported
+when the package is fetched, whether or not the install then goes ahead. Where
+it came from can't be verified, and no publisher key is pinned for it, so a
+later signed version is pinned on first use. Install signed packages where you
+can; ask the publisher to sign with `specforge publish`.
 
 Owner: core
 Level: warning
