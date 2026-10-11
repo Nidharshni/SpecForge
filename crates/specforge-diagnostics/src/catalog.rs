@@ -761,8 +761,8 @@ catalog! {
         "Completed milestone delivers an unfinished feature",
         "A `milestone` has `status: completed` but a feature its `features` names is neither `done` nor `deprecated`, so the milestone's completion claims what its features do not. Reported once per such feature, by the `lifecycle` pass of @specforge/product. Mark the feature done if it was delivered; otherwise move it out of the milestone or set the milestone back to `in_progress`.";
     W155: Warning core,
-        "Unsigned package installed",
-        "`specforge add` or `specforge update` installed a registry package that carries no publisher signature, because `--allow-unsigned` was given. Where it came from can't be verified, and no publisher key is pinned for it, so a later signed version is pinned on first use. Install signed packages where you can; ask the publisher to sign with `specforge publish`.";
+        "Unsigned package accepted",
+        "`specforge add` or `specforge update` accepted a registry package that carries no publisher signature, because `--allow-unsigned` was given; it is reported when the package is fetched, whether or not the install then goes ahead. Where it came from can't be verified, and no publisher key is pinned for it, so a later signed version is pinned on first use. Install signed packages where you can; ask the publisher to sign with `specforge publish`.";
     W156: Warning core,
         "Publisher key re-pinned",
         "A registry package is signed with a different key than the one pinned for it, and the change was accepted (`--yes`, a yes at the prompt, or the new key on `trusted_keys`), so the new key is now pinned. That is what a key rotation looks like, and also what a compromised publisher looks like: confirm the change with the publisher if you did not expect it. The message names both key ids.";

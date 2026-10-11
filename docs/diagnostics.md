@@ -3182,13 +3182,14 @@ Level: warning
 ## W155
 
 ```
-W155: Unsigned package installed
+W155: Unsigned package accepted
 
-`specforge add` or `specforge update` installed a registry package that carries
-no publisher signature, because `--allow-unsigned` was given. Where it came from
-can't be verified, and no publisher key is pinned for it, so a later signed
-version is pinned on first use. Install signed packages where you can; ask the
-publisher to sign with `specforge publish`.
+`specforge add` or `specforge update` accepted a registry package that carries
+no publisher signature, because `--allow-unsigned` was given; it is reported
+when the package is fetched, whether or not the install then goes ahead. Where
+it came from can't be verified, and no publisher key is pinned for it, so a
+later signed version is pinned on first use. Install signed packages where you
+can; ask the publisher to sign with `specforge publish`.
 
 Owner: core
 Level: warning
