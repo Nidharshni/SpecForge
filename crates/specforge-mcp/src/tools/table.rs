@@ -102,26 +102,24 @@ macro_rules! project {
 /// A mutation handler given the project it writes and its typed arguments:
 /// a failed mutation when they don't parse (arguments that do not parse
 /// cannot say they asked for a preview). The handler answers a typed
-/// `Mutation<Reply>`.
+/// `Mutation<Reply>`; `mutation::complete` does the rest.
 macro_rules! mutation {
     ($handler:path, $args:ty => $reply:ty, $target:expr) => {
         MutationHandler::Project {
             target: $target,
             arguments: <$args as crate::args::Arguments>::declared,
             reply: crate::mutation::output_schema::<$reply>,
-            run: |call, arguments| match crate::args::read::<$args>(&arguments) {
+            run: |call, tool, schema, arguments| match crate::args::read::<$args>(&arguments) {
                 Ok(args) => {
                     let preview = crate::mutation::MutationArgs::previews(&args);
-                    match call.project() {
-                        Ok(project) => {
-                            crate::mutation::replied::<$reply>(preview, $handler(&project, args))
-                        }
-                        Err(refused) => crate::mutation::Replied::refused(refused),
-                    }
+                    // The handler's input borrows the call; its outcome does not.
+                    let mutation = match call.project() {
+                        Ok(project) => $handler(&project, args),
+                        Err(refused) => return crate::mutation::refused(tool, refused),
+                    };
+                    crate::mutation::complete::<$reply>(call, tool, schema, preview, mutation)
                 }
-                Err(refused) => {
-                    crate::mutation::Replied::refused(crate::tool::ToolOutcome::Refused(refused))
-                }
+                Err(refused) => crate::mutation::refused(tool, refused),
             },
         }
     };
@@ -135,23 +133,24 @@ macro_rules! create {
         MutationHandler::New {
             arguments: <$args as crate::args::Arguments>::declared,
             reply: crate::mutation::output_schema::<$reply>,
-            run: |call, arguments| match crate::args::read::<$args>(&arguments) {
+            run: |call, tool, schema, arguments| match crate::args::read::<$args>(&arguments) {
                 Ok(args) => {
                     let preview = crate::mutation::MutationArgs::previews(&args);
-                    match call.new_project_dir() {
-                        Some(dir) => crate::mutation::replied::<$reply>(
-                            preview,
-                            $handler(dir, &call.runtime(), args),
-                        ),
+                    let mutation = match call.new_project_dir() {
+                        Some(dir) => $handler(dir, &call.runtime(), args),
                         // The call target refused a call without a path.
-                        None => crate::mutation::Replied::refused(crate::tool::McpError::from(
-                            crate::target::TargetError::PathRequired,
-                        )),
-                    }
+                        None => {
+                            return crate::mutation::refused(
+                                tool,
+                                crate::tool::McpError::from(
+                                    crate::target::TargetError::PathRequired,
+                                ),
+                            );
+                        }
+                    };
+                    crate::mutation::complete::<$reply>(call, tool, schema, preview, mutation)
                 }
-                Err(refused) => {
-                    crate::mutation::Replied::refused(crate::tool::ToolOutcome::Refused(refused))
-                }
+                Err(refused) => crate::mutation::refused(tool, refused),
             },
         }
     };

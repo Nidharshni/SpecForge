@@ -7,7 +7,9 @@ use specforge_common::shape::Shape;
 use specforge_common::{DiagnosticList, project_root_of};
 
 use crate::args::Arguments;
-use crate::mutation::{Failed, Mutated, Mutation, MutationArgs, Written};
+use crate::mutation::{
+    Failed, Mutated, Mutation, MutationArgs, MutationReply, NoDiagnostics, Written,
+};
 use crate::target::ProjectRef;
 use crate::tool::{ErrorCode, McpError};
 use specforge_ops::OpErrorKind;
@@ -30,6 +32,10 @@ impl MutationArgs for Args {
     fn previews(&self) -> bool {
         !self.mode().writes()
     }
+}
+
+impl MutationReply for Reply {
+    type After = NoDiagnostics;
 }
 
 impl Args {

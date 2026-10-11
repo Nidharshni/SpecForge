@@ -1016,7 +1016,10 @@ fn a_refused_preview_lists_nothing_and_a_refused_mutation_lists_no_file() {
 }
 
 // P3
-#[test]
+#[specforge_test(
+    behavior = "provide_mcp_rename_tool",
+    verify = "rename's updated diagnostics follow a successful write only: a preview and a failure carry none"
+)]
 fn rename_returns_diagnostics_after_a_successful_write_only() {
     let mut server = rename_server();
     let tool = "specforge.rename";

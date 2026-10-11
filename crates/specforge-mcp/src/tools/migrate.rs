@@ -6,7 +6,9 @@ use specforge_common::shape::Shape;
 use specforge_ops::migrate::{MigrationDiff, MigrationResult, RollbackSummary};
 
 use crate::args::Arguments;
-use crate::mutation::{Failed, Mutated, Mutation, MutationArgs, Written};
+use crate::mutation::{
+    Failed, Mutated, Mutation, MutationArgs, MutationReply, NoDiagnostics, Written,
+};
 use crate::target::ProjectRef;
 use crate::tool::McpError;
 
@@ -25,6 +27,10 @@ impl MutationArgs for Args {
     fn previews(&self) -> bool {
         self.dry_run
     }
+}
+
+impl MutationReply for Reply {
+    type After = NoDiagnostics;
 }
 
 /// `specforge.migrate`'s reply (`McpMigrateResult`): a project already at

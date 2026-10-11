@@ -6,7 +6,9 @@ use serde::Serialize;
 use specforge_common::shape::Shape;
 
 use crate::args::Arguments;
-use crate::mutation::{Mutated, Mutation, MutationArgs, MutationEvent, Written};
+use crate::mutation::{
+    Mutated, Mutation, MutationArgs, MutationEvent, MutationReply, NoDiagnostics, Written,
+};
 
 /// `specforge.init`'s arguments.
 #[derive(Debug, Arguments)]
@@ -24,6 +26,10 @@ impl MutationArgs for Args {
     fn previews(&self) -> bool {
         false
     }
+}
+
+impl MutationReply for Reply {
+    type After = NoDiagnostics;
 }
 
 /// `specforge.init`'s reply (`McpInitResult`).
@@ -66,7 +72,7 @@ pub(crate) fn call(
         version: outcome.version.clone(),
     };
     // With no project served, the server serves the one it created (ADR
-    // 0014 D5): `mutation::refresh` does, once it wrote.
+    // 0014 D5): `mutation::complete` does, once it wrote.
     let event = MutationEvent::ProjectInitialized {
         project_name: outcome.name.clone(),
         extension_count: outcome.extensions.len(),

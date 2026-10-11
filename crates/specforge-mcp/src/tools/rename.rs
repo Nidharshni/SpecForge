@@ -1,11 +1,12 @@
 //! `specforge.rename`: rename an entity across the project (`specforge_ops::rename`).
 
 use serde::Serialize;
-use specforge_common::DiagnosticList;
 use specforge_common::shape::Shape;
 
 use crate::args::Arguments;
-use crate::mutation::{Failed, Mutated, Mutation, MutationArgs, Written};
+use crate::mutation::{
+    Failed, FreshDiagnostics, Mutated, Mutation, MutationArgs, MutationReply, Written,
+};
 use crate::target::ProjectRef;
 use specforge_ops::OpErrorKind;
 
@@ -26,6 +27,10 @@ impl MutationArgs for Args {
     }
 }
 
+impl MutationReply for Reply {
+    type After = FreshDiagnostics;
+}
+
 /// `specforge.rename`'s reply (`McpRenameResult`).
 #[derive(Debug, Serialize, Shape)]
 pub struct Reply {
@@ -36,10 +41,6 @@ pub struct Reply {
     /// Present (true) for a preview.
     #[serde(skip_serializing_if = "Option::is_none")]
     dry_run: Option<bool>,
-    /// What `specforge check` reports for the project once the edits are
-    /// made; filled in when the target is brought up to date.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    diagnostics: Option<DiagnosticList>,
 }
 
 /// One text edit (`McpRenameEdit`).
@@ -95,7 +96,6 @@ pub(crate) fn call(project: &ProjectRef<'_>, args: Args) -> Mutation<Reply> {
             })
             .collect(),
         dry_run: None,
-        diagnostics: None,
     };
     if args.dry_run {
         reply.dry_run = Some(true);
@@ -105,11 +105,10 @@ pub(crate) fn call(project: &ProjectRef<'_>, args: Args) -> Mutation<Reply> {
     let writes = rename::apply(&plan, &spec_root)?;
     // The reply's `diagnostics` are what `specforge check` reports for the
     // project as it is on disk now, edits made since the last call
-    // included (filled in once the target is brought up to date).
+    // included (`FreshDiagnostics`, filled in once the target is brought up
+    // to date).
     Ok(Mutated::new(
         reply,
-        Written::files(writes)
-            .with_entities([args.new_name])
-            .with_fresh_diagnostics(),
+        Written::files(writes).with_entities([args.new_name]),
     ))
 }

@@ -4,7 +4,9 @@ use serde::Serialize;
 use specforge_common::shape::Shape;
 
 use crate::args::Arguments;
-use crate::mutation::{Failed, Mutated, Mutation, MutationArgs, MutationEvent, Written};
+use crate::mutation::{
+    Failed, Mutated, Mutation, MutationArgs, MutationEvent, MutationReply, NoDiagnostics, Written,
+};
 use crate::reply::Answer;
 use crate::target::ProjectRef;
 
@@ -23,6 +25,10 @@ impl MutationArgs for Args {
     fn previews(&self) -> bool {
         self.dry_run
     }
+}
+
+impl MutationReply for Reply {
+    type After = NoDiagnostics;
 }
 
 /// `specforge.add_extension`'s reply (`McpAddExtensionResult`): a builtin

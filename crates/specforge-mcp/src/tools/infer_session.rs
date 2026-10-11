@@ -6,7 +6,9 @@ use specforge_ops::infer::{
 };
 
 use crate::args::Arguments;
-use crate::mutation::{Failed, Mutated, Mutation, MutationArgs, Written};
+use crate::mutation::{
+    Failed, Mutated, Mutation, MutationArgs, MutationReply, NoDiagnostics, Written,
+};
 use crate::target::ProjectRef;
 use crate::tool::{ErrorCode, McpError};
 
@@ -35,6 +37,10 @@ impl MutationArgs for Args {
     fn previews(&self) -> bool {
         false
     }
+}
+
+impl MutationReply for Reply {
+    type After = NoDiagnostics;
 }
 
 /// `specforge.infer_session`'s reply (`McpInferSessionResult`): one step's

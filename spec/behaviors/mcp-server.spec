@@ -161,7 +161,9 @@ behavior list_mcp_tools "List MCP Tools" {
     is listed in its group (core, navigation or management); a tool that
     writes output artifacts is listed in its group, and a tool that writes
     its target's project files is a mutation whose outputSchema declares
-    files_written; both say whether they are destructive (they may
+    files_written (and, for rename, the diagnostics it returns after the
+    write): fields the mutation pipeline fills, which no tool reply
+    declares itself; both say whether they are destructive (they may
     overwrite or remove), idempotent (a repeat changes nothing) and open
     world. An extension tool is annotated readOnlyHint and not
     openWorldHint, since the host grants an extension no capability, and is
@@ -178,6 +180,7 @@ behavior list_mcp_tools "List MCP Tools" {
   verify unit "every listed tool has a spec category and a source"
   verify unit "core tools are annotated: read-only tools readOnlyHint, writing tools how they write"
   verify unit "a mutation's outputSchema declares files_written, derived from its effect"
+  verify unit "what the pipeline adds to a mutation's reply is declared once, beside its reply: files_written, and rename's diagnostics"
   verify unit "a writing tool's hints say what it does: one that overwrites is destructive, one whose repeat changes nothing is idempotent"
   verify unit "an extension tool is annotated read-only and is never listed as a mutation"
   verify unit "an extension tool is listed once across recompiles"

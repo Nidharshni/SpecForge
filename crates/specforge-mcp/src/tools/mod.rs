@@ -37,7 +37,7 @@ mod validate;
 use serde_json::{Value, json};
 
 use crate::lifecycle::Revision;
-use crate::mutation::{self, Replied};
+use crate::mutation;
 use crate::protocol::JsonRpcResponse;
 use crate::state::McpState;
 use crate::surface_call::{Event, Found, Invocation, Ran, Surface};
@@ -188,23 +188,16 @@ impl Surface for Tools {
         }
         let arguments = invocation.arguments.clone();
         match found {
-            // A mutation says what it wrote; `mutation::refresh` brings the
-            // target up to date with it (inside the call), `mutation::report`
-            // names its events and the files in its reply.
-            // The reply is checked against its outputSchema after the refresh
-            // (which may add `diagnostics`) and before the report (so
-            // `mcp_mutation_completed.success` says what the client gets).
-            Found::Core(
-                spec @ ToolSpec {
-                    effect: Effect::Mutates { handler, .. },
-                    ..
-                },
-            ) => {
-                let mut replied = handler.run(call, arguments);
-                let root = mutation::refresh(call, &mut replied);
-                replied.outcome = conforming(spec, replied.outcome);
-                let (outcome, events) =
-                    mutation::report(&invocation.name, root.as_deref(), replied);
+            // A mutation's handler and `mutation::complete` do the rest: the
+            // refresh, the reply sent once and checked against its
+            // outputSchema, the events (ADR 0022).
+            Found::Core(ToolSpec {
+                effect: Effect::Mutates { handler, .. },
+                name,
+                ..
+            }) => {
+                let schema = handler.reply()();
+                let (outcome, events) = handler.run(call, name, &schema, arguments);
                 Ran { outcome, events }
             }
             Found::Core(
@@ -230,7 +223,7 @@ impl Surface for Tools {
         match found {
             // A refused mutation is a failed one: it wrote nothing, and says so.
             Found::Core(spec) if spec.is_mutation() => {
-                let (outcome, events) = mutation::report(spec.name, None, Replied::refused(error));
+                let (outcome, events) = mutation::refused(spec.name, error);
                 Ran { outcome, events }
             }
             _ => Ran::of(error.into()),

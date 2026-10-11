@@ -4,7 +4,7 @@ use serde::Serialize;
 use specforge_common::shape::Shape;
 
 use crate::args::Arguments;
-use crate::mutation::{Mutated, Mutation, MutationArgs, Written};
+use crate::mutation::{Mutated, Mutation, MutationArgs, MutationReply, NoDiagnostics, Written};
 use crate::target::ProjectRef;
 
 /// `specforge.remove_extension`'s arguments.
@@ -22,6 +22,10 @@ impl MutationArgs for Args {
     fn previews(&self) -> bool {
         self.dry_run
     }
+}
+
+impl MutationReply for Reply {
+    type After = NoDiagnostics;
 }
 
 /// `specforge.remove_extension`'s reply (`McpRemoveExtensionResult`).
