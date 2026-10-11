@@ -662,6 +662,91 @@ mod tests {
     }
 
     #[test]
+    fn pin_major_moves_a_pre_release_lock_to_a_lower_release() {
+        // Today --major asks for `latest`, which skips pre-releases, and any version other than the
+        // locked one counts as an update. T2 flips this: up to date.
+        let dir = project(vec![entry("@sdk/greet", "0.2.0-beta.1", "registry", &[])]);
+        let registry = MemoryRegistry::new()
+            .serving(greet_published())
+            .serving(old("@sdk/greet", "0.2.0-beta.1"));
+
+        let outcome = update(&request(dir.path(), true), &registry, &runtime()).unwrap();
+
+        assert!(outcome.applied(), "{outcome:?}");
+        assert_eq!(
+            outcome.updated().collect::<Vec<_>>(),
+            [("@sdk/greet", "0.2.0-beta.1", "0.1.0")]
+        );
+        let lock = specforge_installed::read_lock_file(&lock_path(dir.path())).unwrap();
+        assert_eq!(lock.entries[0].version, "0.1.0");
+    }
+
+    #[test]
+    fn pin_major_moves_a_vanished_lock_to_a_lower_release() {
+        // 0.3.0 is no longer published; only 0.1.0 is. Today --major moves down to it. T2 flips
+        // this: up to date.
+        let dir = project(vec![entry("@sdk/greet", "0.3.0", "registry", &[])]);
+        let registry = MemoryRegistry::new().serving(greet_published());
+
+        let outcome = update(&request(dir.path(), true), &registry, &runtime()).unwrap();
+
+        assert!(outcome.applied(), "{outcome:?}");
+        assert_eq!(
+            outcome.updated().collect::<Vec<_>>(),
+            [("@sdk/greet", "0.3.0", "0.1.0")]
+        );
+    }
+
+    #[test]
+    fn pin_a_vanished_lock_fails_the_whole_update() {
+        // @x/gone 1.2.0 is no longer published; only 1.0.0 is. ^1.2.0 matches nothing: R-RES-004,
+        // and greet's upgrade (0.1.0-alpha.1 -> 0.1.0, inside ^0.1.0-alpha.1) is held back.
+        let dir = project(vec![
+            entry("@sdk/greet", "0.1.0-alpha.1", "registry", &[]),
+            entry("@x/gone", "1.2.0", "registry", &[]),
+        ]);
+        let lock_before = std::fs::read(lock_path(dir.path())).unwrap();
+        let registry = MemoryRegistry::new()
+            .serving(greet_published())
+            .serving(old("@x/gone", "1.0.0"));
+
+        let outcome = update(&request(dir.path(), false), &registry, &runtime()).unwrap();
+
+        assert!(!outcome.applied());
+        assert_eq!(
+            outcome.updated().collect::<Vec<_>>(),
+            [("@sdk/greet", "0.1.0-alpha.1", "0.1.0")]
+        );
+        let failures: Vec<(&str, &str)> = outcome
+            .failures()
+            .map(|(n, e)| (n, e.code.as_ref()))
+            .collect();
+        assert_eq!(failures, [("@x/gone", "R-RES-004")]);
+        assert_eq!(std::fs::read(lock_path(dir.path())).unwrap(), lock_before);
+    }
+
+    #[test]
+    fn an_unreadable_locked_version_moves_to_what_add_installs() {
+        // A lock edited by hand to a version that is no SemVer: either reach moves it to what
+        // `latest` picks (the highest release), which is what `specforge add <name>` installs.
+        for major in [false, true] {
+            let dir = project(vec![entry("@sdk/greet", "not-semver", "registry", &[])]);
+            let registry = MemoryRegistry::new()
+                .serving(greet_published())
+                .serving(old("@sdk/greet", "0.2.0-beta.1"));
+
+            let outcome = update(&request(dir.path(), major), &registry, &runtime()).unwrap();
+
+            assert!(outcome.applied(), "major: {major}: {outcome:?}");
+            assert_eq!(
+                outcome.updated().collect::<Vec<_>>(),
+                [("@sdk/greet", "not-semver", "0.1.0")],
+                "major: {major}"
+            );
+        }
+    }
+
+    #[test]
     fn a_local_install_is_never_asked_about() {
         let dir = project(vec![entry("@sdk/greet", "0.0.9", "local:greet.wasm", &[])]);
         let registry = MemoryRegistry::new().serving(old("@sdk/greet", "9.9.9"));

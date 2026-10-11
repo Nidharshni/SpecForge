@@ -602,6 +602,28 @@ mod tests {
     }
 
     #[test]
+    fn pin_a_search_lists_the_highest_version_pre_release_included() {
+        // Today a search lists a package at its highest version, a pre-release included, where
+        // `add` installs the highest release. T3 flips this.
+        let registry = MemoryRegistry::new()
+            .serving(Published::new(
+                b"\0asm".to_vec(),
+                declaration("@acme/tool", "1.4.0", &[]),
+            ))
+            .serving(Published::new(
+                b"\0asm".to_vec(),
+                declaration("@acme/tool", "2.0.0-beta.1", &[]),
+            ));
+        let searched = registry.search("tool", None).unwrap();
+        let found: Vec<(&str, &str)> = searched
+            .found
+            .iter()
+            .map(|f| (f.name.as_str(), f.version.as_str()))
+            .collect();
+        assert_eq!(found, [("@acme/tool", "2.0.0-beta.1")]);
+    }
+
+    #[test]
     fn publishing_twice_is_r007() {
         let registry = MemoryRegistry::new();
         let name = PackageName::parse("@acme/tool").unwrap();

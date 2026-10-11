@@ -188,6 +188,20 @@ fn a_search_by_category_keeps_only_packages_declaring_it() {
 }
 
 #[test]
+fn pin_a_search_lists_the_highest_version_pre_release_included() {
+    // Today `MemoryClient` lists a package at its highest version, a pre-release included, where
+    // `add` installs the highest release. T3 flips this.
+    let world = World::with(&["main"]);
+    world.store("main", "@acme/tool", "1.4.0", "t", false);
+    world.store("main", "@acme/tool", "2.0.0-beta.1", "t", false);
+
+    let searched = world.registry().search("tool", None).unwrap();
+
+    assert_eq!(searched.found.len(), 1, "{searched:?}");
+    assert_eq!(searched.found[0].version, "2.0.0-beta.1");
+}
+
+#[test]
 fn each_registry_is_asked_with_its_own_credential() {
     let world = World::with(&["a", "b"]);
     std::fs::write(

@@ -478,4 +478,15 @@ mod tests {
         let hits = db.search("pkg", 10, None).unwrap();
         assert_eq!(hits[0].version, "2.0.0");
     }
+
+    #[test]
+    fn pin_search_ranks_pre_release_identifiers_as_text() {
+        // Today pre-release identifiers compare as text: beta.9 outranks beta.10. T3 flips this.
+        let dir = tempfile::tempdir().unwrap();
+        let db = Database::open(&dir.path().join("t.db")).unwrap();
+        db.insert_package(&pv("pkg", "2.0.0-beta.9")).unwrap();
+        db.insert_package(&pv("pkg", "2.0.0-beta.10")).unwrap();
+        let hits = db.search("pkg", 10, None).unwrap();
+        assert_eq!(hits[0].version, "2.0.0-beta.9");
+    }
 }
