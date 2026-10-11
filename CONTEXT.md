@@ -384,7 +384,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   outcome (`specforge_ops::Writes`), recorded where it wrote. It fails with an `OpError` whose kind
   (`OpErrorKind`: invalid input, not found, conflict, schema mismatch, compilation failed, …) is
   decided in ops where it is raised — a recorded test report that cannot be used included
-  (`specforge_ops::report`) — and never by a surface; its code is what the CLI prints. The CLI and MCP
+  (`specforge_ops::report`) — and never by a surface; its code is what the CLI prints. Its outcome prints as one outcome document on
+  every surface (ADR 0052). The CLI and MCP
   are adapters over it (`specforge-ops`); the CLI ends every core command through one renderer
   (`specforge_cli::outcome`: the refusal, the exit code) (ADR 0029).
 - **Mutation outcome**: what one MCP mutation call produced, typed: a run (`specforge_mcp::mutation::Mutated`:
@@ -396,6 +397,14 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   sent once (`WrittenReply`: the tool reply, `files_written` — the one place a client learns which files
   the call wrote — and what its reply type adds after the write, rename's fresh diagnostics), the domain
   event and `mcp_mutation_completed` (ADR 0022).
+- **Outcome document**: the one typed JSON document of an operation's outcome, defined in ops beside
+  the operation and deriving `Serialize` and `Shape`: the outcome itself when it is plain data
+  (`stats::Stats`), else its `document()` (`AddDocument`, `RemoveDocument`, `UpdateDocument`,
+  `InitDocument`, `ExtensionsDocument`, `MigrateDocument`, `AnalyzeDocument`, `DoctorDocument`, …).
+  The CLI prints it under `--format json` and MCP answers it as the tool reply; a surface adds only
+  what it alone knows, typed and flattened beside it (MCP's `note` on an add, a mutation's
+  `files_written`, the CLI's credential health on doctor), and never renames, drops or re-derives a
+  key. It carries no `null`. Its spec type is the tool's `Mcp*` reply type (ADR 0052).
 - **Project sources**: the `.spec` files under the spec root (`spec_root`, else the project root) that
   discovery keeps — no skipped directory, no `exclude` entry. What a compile reads, and what format
   and migrate rewrite (`specforge_common::ProjectConfig::spec_files`).
@@ -509,7 +518,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   extension commands follow (a boolean or a count may come as a string), and an argument neither it
   nor the call target declares is refused.
 - **Tool reply**: the one typed definition of what a core tool answers (`Reply` beside its handler,
-  or the ops document both surfaces print), deriving `Serialize` and `Shape`
+  or the outcome document both surfaces print, `pub use … as Reply`, with MCP's own extras
+  flattened beside it), deriving `Serialize` and `Shape`
   (`specforge_common::shape`, ADR 0048). Its outputSchema is derived from it (every object closed,
   every array typed; content an extension defines is an open value), its structured result is it
   serialized, and a result its schema refuses is never sent as one (`schema_mismatch`). An optional

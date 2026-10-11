@@ -2350,6 +2350,10 @@ expression: listing
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "declared_count": {
+          "minimum": 0,
+          "type": "integer"
+        },
         "declared_pct": {
           "type": "number"
         },
@@ -2380,6 +2384,10 @@ expression: listing
           "minimum": 0,
           "type": "integer"
         },
+        "entity_count": {
+          "minimum": 0,
+          "type": "integer"
+        },
         "entity_counts": {
           "items": {
             "additionalProperties": false,
@@ -2403,16 +2411,28 @@ expression: listing
         "proof_pct": {
           "type": "number"
         },
+        "testable_count": {
+          "minimum": 0,
+          "type": "integer"
+        },
         "unconnected_count": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "verified_count": {
           "minimum": 0,
           "type": "integer"
         }
       },
       "required": [
+        "entity_count",
         "entity_counts",
-        "declared_pct",
         "edge_count",
         "unconnected_count",
+        "testable_count",
+        "declared_count",
+        "verified_count",
+        "declared_pct",
         "diagnostic_summary"
       ],
       "type": "object"

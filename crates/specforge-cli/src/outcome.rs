@@ -117,6 +117,14 @@ impl<'a> Refusal<'a> {
     }
 }
 
+/// `value` as pretty JSON on stdout: every `--format json` document.
+pub(crate) fn print_json(value: &impl serde::Serialize) {
+    println!(
+        "{}",
+        serde_json::to_string_pretty(value).expect("serialize JSON output")
+    );
+}
+
 /// `{"error", "code", "suggestion"}`, and `files_written` when the
 /// operation left files written ([`OpError::writes`], named from `root`
 /// when given).

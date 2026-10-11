@@ -9,7 +9,7 @@ specforge.search 481
 specforge.explain 786
 specforge.schema 1765
 specforge.coverage 696
-specforge.stats 757
+specforge.stats 1013
 specforge.list 290
 specforge.inspect 3432
 specforge.find_definition 1018
@@ -32,4 +32,4 @@ specforge.infer_gaps 1101
 specforge.infer_session 295
 specforge.find_implementation 502
 specforge.find_spec_for_source 642
-total 61122
+total 61378

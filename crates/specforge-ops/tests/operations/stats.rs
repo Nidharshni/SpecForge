@@ -59,9 +59,16 @@ fn stats_reports_correct_entity_counts() {
     graph.add_node(node("c", "feature"));
 
     let stats = crate::view_support::stats_of(&graph, &[], &[]);
-    assert_eq!(stats.total_entities, 3);
-    assert_eq!(stats.entities_by_kind["behavior"], 2);
-    assert_eq!(stats.entities_by_kind["feature"], 1);
+    assert_eq!(stats.entity_count, 3);
+    let count_of = |kind: &str| {
+        stats
+            .entity_counts
+            .iter()
+            .find(|row| row.kind == kind)
+            .map(|row| row.count)
+    };
+    assert_eq!(count_of("behavior"), Some(2));
+    assert_eq!(count_of("feature"), Some(1));
 }
 
 // B:compute_project_statistics — verify unit "stats reports correct entity counts"
@@ -78,7 +85,7 @@ fn stats_reports_edge_count() {
     });
 
     let stats = crate::view_support::stats_of(&graph, &[], &[]);
-    assert_eq!(stats.total_edges, 1);
+    assert_eq!(stats.edge_count, 1);
 }
 
 // B:compute_project_statistics — verify unit "stats reports the unconnected entity count"
@@ -125,8 +132,8 @@ fn stats_reports_verified_count() {
 fn stats_on_empty_graph() {
     let graph = Graph::new();
     let stats = crate::view_support::stats_of(&graph, &[], &[]);
-    assert_eq!(stats.total_entities, 0);
-    assert_eq!(stats.total_edges, 0);
+    assert_eq!(stats.entity_count, 0);
+    assert_eq!(stats.edge_count, 0);
     assert_eq!(stats.unconnected_count, 0);
     assert_eq!(stats.verified_count, 0);
 }
@@ -177,9 +184,9 @@ fn stats_includes_diagnostic_summary() {
         specforge_common::Diagnostic::new(specforge_common::codes::W012, "orphan".to_string()),
     ];
     let stats = crate::view_support::stats_of(&graph, &[], &diagnostics);
-    assert_eq!(stats.error_count, 1);
-    assert_eq!(stats.warning_count, 1);
-    assert_eq!(stats.info_count, 0);
+    assert_eq!(stats.diagnostic_summary.errors, 1);
+    assert_eq!(stats.diagnostic_summary.warnings, 1);
+    assert_eq!(stats.diagnostic_summary.infos, 0);
 }
 
 // A type may declare a struct member named `verify`; the entity's
@@ -258,20 +265,28 @@ fn registries_graph() -> Graph {
 
 /// `{:#?}` of the stats, less the type's name.
 const STATS_TODAY: &str = r#"{
-    total_entities: 5,
-    total_edges: 2,
+    entity_count: 5,
+    entity_counts: [
+        KindCount {
+            kind: "behavior",
+            count: 3,
+        },
+        KindCount {
+            kind: "feature",
+            count: 2,
+        },
+    ],
+    edge_count: 2,
     unconnected_count: 2,
-    verified_count: 3,
     testable_count: 3,
     declared_count: 2,
+    verified_count: 3,
     declared_pct: 66.66666666666666,
     proof_pct: None,
-    error_count: 1,
-    warning_count: 1,
-    info_count: 0,
-    entities_by_kind: {
-        "behavior": 3,
-        "feature": 2,
+    diagnostic_summary: Counts {
+        errors: 1,
+        warnings: 1,
+        infos: 0,
     },
 }"#;
 
@@ -296,4 +311,28 @@ fn stats_today_through_the_registries() {
     ];
     let stats = specforge_ops::stats::stats(&project.view().reporting(&diagnostics)).unwrap();
     assert_eq!(debug_body(&stats), STATS_TODAY);
+}
+
+// B:compute_project_statistics — verify unit "the stats document has no proof_pct without recorded test results"
+#[specforge_test(
+    behavior = "compute_project_statistics",
+    verify = "the stats document has no proof_pct without recorded test results"
+)]
+fn stats_document_leaves_proof_pct_out_without_results() {
+    let mut graph = Graph::new();
+    graph.add_node(node("a", "behavior"));
+    graph.add_node(node("b", "behavior"));
+
+    let stats = crate::view_support::stats_of(&graph, &["behavior"], &[]);
+    let document = serde_json::to_value(&stats).unwrap();
+
+    assert!(document.get("proof_pct").is_none(), "{document}");
+    assert_eq!(
+        document["entity_counts"],
+        serde_json::json!([{"kind": "behavior", "count": 2}])
+    );
+    assert_eq!(
+        document["diagnostic_summary"],
+        serde_json::json!({"errors": 0, "warnings": 0, "infos": 0})
+    );
 }

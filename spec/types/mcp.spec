@@ -136,7 +136,13 @@ type McpPromptArgument {
 // also carries files_written (string[], absent from a preview), which the
 // mutation pipeline adds to every mutation tool, and rename's diagnostics,
 // which it adds after a successful rename (ADR 0022). A test holds each
-// type below to the schema its tool's reply type derives.
+// type below to the schema its tool's reply type derives. Where the CLI
+// prints the same operation's outcome under --format json, it prints the same
+// document, with only its own keys added (ADR 0052): McpStatsResult,
+// McpAddExtensionResult, McpRemoveExtensionResult, McpInitResult,
+// McpExtensionsResult, McpMigrateResult, McpAnalyzeResult, McpCollectResult,
+// McpProvidersResult, McpDoctorReport, McpInferProgressResult,
+// McpInferGapsResult and McpTraceChainResult.
 
 type McpInspectResult {
   entity_id           string     @readonly
@@ -259,13 +265,23 @@ type McpFixSuggestion {
 }
 
 type McpStatsResult {
+  /// Every entity of the graph.
+  entity_count       integer
+  /// The entities of each kind, by kind.
   entity_counts      McpEntityCount[]
-  /// Testable entities with at least one verify statement, in percent.
+  edge_count         integer
+  /// Entities no edge links to another entity.
+  unconnected_count  integer
+  /// The entities that count toward coverage.
+  testable_count     integer
+  /// Testable entities with at least one verify statement.
+  declared_count     integer
+  /// Entities of any kind with at least one verify statement.
+  verified_count     integer
+  /// declared_count over testable_count, in percent (0 when nothing is testable).
   declared_pct       float
   /// Testable entities proven, in percent; absent without recorded test results.
   proof_pct          float @optional
-  edge_count         integer
-  unconnected_count  integer
   diagnostic_summary McpDiagnosticSummary
   verify unit "McpStatsResult schema is valid"
 }

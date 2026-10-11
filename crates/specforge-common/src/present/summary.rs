@@ -5,8 +5,9 @@ use serde::Serialize;
 use std::collections::BTreeMap;
 
 /// Error, warning and info counts of a diagnostic list: the one tally the
-/// summary line, the exit code, `check`, stats and watch all read.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+/// summary line, the exit code, `check`, stats and watch all read; stats'
+/// `diagnostic_summary`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, crate::shape::Shape)]
 pub struct Counts {
     pub errors: usize,
     pub warnings: usize,

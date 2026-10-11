@@ -3,7 +3,7 @@ use specforge_ops::view::ProjectView;
 use std::path::Path;
 
 use crate::OutputFormat;
-use crate::outcome::{Exit, Refusal};
+use crate::outcome::{Exit, Refusal, print_json};
 use crate::pipeline;
 
 /// `specforge stats`: the stats operation over the project compiled at
@@ -26,11 +26,11 @@ pub fn run(path: &Path, format: OutputFormat) -> Exit {
 }
 
 fn print_human(stats: &Stats) {
-    println!("Entities: {}", stats.total_entities);
-    for (kind, count) in &stats.entities_by_kind {
-        println!("  {}: {}", kind, count);
+    println!("Entities: {}", stats.entity_count);
+    for row in &stats.entity_counts {
+        println!("  {}: {}", row.kind, row.count);
     }
-    println!("Edges:    {}", stats.total_edges);
+    println!("Edges:    {}", stats.edge_count);
     println!("Unconnected: {}", stats.unconnected_count);
     println!("Verified: {}", stats.verified_count);
     println!(
@@ -45,31 +45,11 @@ fn print_human(stats: &Stats) {
             stats.testable_count
         );
     }
-    if stats.error_count > 0 || stats.warning_count > 0 || stats.info_count > 0 {
+    let found = stats.diagnostic_summary;
+    if found.errors > 0 || found.warnings > 0 || found.infos > 0 {
         println!(
             "Diagnostics: {} errors, {} warnings, {} info",
-            stats.error_count, stats.warning_count, stats.info_count
+            found.errors, found.warnings, found.infos
         );
     }
-}
-
-fn print_json(stats: &Stats) {
-    let json = serde_json::json!({
-        "total_entities": stats.total_entities,
-        "total_edges": stats.total_edges,
-        "unconnected_count": stats.unconnected_count,
-        "verified_count": stats.verified_count,
-        "testable_count": stats.testable_count,
-        "declared_count": stats.declared_count,
-        "declared_pct": stats.declared_pct,
-        "proof_pct": stats.proof_pct,
-        "error_count": stats.error_count,
-        "warning_count": stats.warning_count,
-        "info_count": stats.info_count,
-        "entities_by_kind": stats.entities_by_kind,
-    });
-    println!(
-        "{}",
-        serde_json::to_string_pretty(&json).expect("serialize JSON output")
-    );
 }
