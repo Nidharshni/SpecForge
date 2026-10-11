@@ -7,8 +7,9 @@
 //! scalar such as [`Sym`](crate::Sym)) or a value whose type is defined
 //! elsewhere (`FieldType`'s names). The schemas are the subset
 //! [`violations`] checks: `type`, `enum`, `properties`, `required`,
-//! `additionalProperties`, `items`, `oneOf`, `anyOf`, `minimum`. They carry
-//! no `description`, `title`, `$schema` or `$ref`: every subschema is inline.
+//! `additionalProperties`, `items`, `oneOf`, `anyOf`, `minimum`, and, for the
+//! documents it checks, `$ref` to a definition of the same document. They
+//! carry no `description`, `title` or `$schema`.
 
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -280,15 +281,39 @@ impl Shape for specforge_protocol_types::FieldType {
 
 // ── the check ───────────────────────────────────────────────────────────────
 
-/// Where `value` breaks `schema`, one message per violation, each naming
-/// its path (`$.format`, `$.paths[0]`). Empty when it conforms.
-pub fn violations(schema: &Value, value: &Value) -> Vec<String> {
+/// Where `value` breaks `document`, one message per violation, each naming
+/// its path (`$.format`, `$.paths[0]`). Empty when it conforms. `document` is
+/// the root a `$ref` resolves against: a same-document JSON Pointer
+/// (`#/$defs/Diagnostic`, `#/definitions/X`, `#`) is followed; any other
+/// reference (a URI) is never fetched and is a violation, as is one naming
+/// nothing or a chain of references that never reaches a schema.
+pub fn violations(document: &Value, value: &Value) -> Vec<String> {
     let mut found = Vec::new();
-    check(schema, value, "$", &mut found);
+    check(document, value, "$", document, 0, &mut found);
     found
 }
 
-fn check(schema: &Value, value: &Value, path: &str, found: &mut Vec<String>) {
+/// The most references followed at one value before the chain is circular.
+const MAX_HOPS: u8 = 32;
+
+fn check(
+    schema: &Value,
+    value: &Value,
+    path: &str,
+    root: &Value,
+    hops: u8,
+    found: &mut Vec<String>,
+) {
+    if let Some(Value::String(reference)) = schema.get("$ref") {
+        match reference
+            .strip_prefix('#')
+            .and_then(|pointer| root.pointer(pointer))
+        {
+            _ if hops >= MAX_HOPS => found.push(format!("{path}: circular $ref {reference}")),
+            Some(target) => check(target, value, path, root, hops + 1, found),
+            None => found.push(format!("{path}: unresolvable $ref {reference}")),
+        }
+    }
     let types: Vec<&str> = match schema.get("type") {
         Some(Value::String(name)) => vec![name.as_str()],
         Some(Value::Array(names)) => names.iter().filter_map(Value::as_str).collect(),
@@ -310,7 +335,7 @@ fn check(schema: &Value, value: &Value, path: &str, found: &mut Vec<String>) {
             .iter()
             .filter(|branch| {
                 let mut branch_found = Vec::new();
-                check(branch, value, path, &mut branch_found);
+                check(branch, value, path, root, hops, &mut branch_found);
                 branch_found.is_empty()
             })
             .count();
@@ -346,7 +371,7 @@ fn check(schema: &Value, value: &Value, path: &str, found: &mut Vec<String>) {
         if let Some(properties) = properties {
             for (name, property) in properties {
                 if let Some(member) = object.get(name) {
-                    check(property, member, &format!("{path}.{name}"), found);
+                    check(property, member, &format!("{path}.{name}"), root, 0, found);
                 }
             }
         }
@@ -363,7 +388,7 @@ fn check(schema: &Value, value: &Value, path: &str, found: &mut Vec<String>) {
             Some(values @ Value::Object(_)) => {
                 for (name, member) in object {
                     if !properties.is_some_and(|properties| properties.contains_key(name)) {
-                        check(values, member, &format!("{path}.{name}"), found);
+                        check(values, member, &format!("{path}.{name}"), root, 0, found);
                     }
                 }
             }
@@ -382,7 +407,7 @@ fn check(schema: &Value, value: &Value, path: &str, found: &mut Vec<String>) {
     }
     if let (Value::Array(items), Some(item)) = (value, schema.get("items")) {
         for (i, element) in items.iter().enumerate() {
-            check(item, element, &format!("{path}[{i}]"), found);
+            check(item, element, &format!("{path}[{i}]"), root, 0, found);
         }
     }
 }
@@ -420,9 +445,72 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn a_ref_is_not_followed_today() {
+    fn a_ref_is_resolved_within_the_document() {
         let schema = json!({"$defs": {"A": {"type": "string"}}, "$ref": "#/$defs/A"});
-        assert!(violations(&schema, &json!(1)).is_empty());
+        assert_eq!(
+            violations(&schema, &json!(1)),
+            ["$: expected string, got integer"]
+        );
+        assert!(violations(&schema, &json!("x")).is_empty());
+    }
+
+    #[test]
+    fn a_nested_ref_and_its_siblings_are_checked() {
+        let schema = json!({
+            "$defs": {
+                "A": {"type": "object", "properties": {"b": {"$ref": "#/$defs/B"}}, "additionalProperties": false},
+                "B": {"type": "string"}
+            },
+            "$ref": "#/$defs/A"
+        });
+        assert_eq!(
+            violations(&schema, &json!({"b": 1})),
+            ["$.b: expected string, got integer"]
+        );
+        assert_eq!(
+            violations(&schema, &json!({"c": 1})),
+            ["$.c: undeclared key"]
+        );
+        let sibling =
+            json!({"$defs": {"A": {"type": "object"}}, "$ref": "#/$defs/A", "required": ["x"]});
+        assert_eq!(violations(&sibling, &json!({})), ["$: missing required x"]);
+    }
+
+    #[test]
+    fn an_unresolvable_ref_is_a_violation() {
+        let schema = json!({"$ref": "#/$defs/Nope"});
+        assert_eq!(
+            violations(&schema, &json!(1)),
+            ["$: unresolvable $ref #/$defs/Nope"]
+        );
+    }
+
+    #[test]
+    fn an_external_ref_is_never_fetched() {
+        let schema = json!({"$ref": "https://example.com/s.json"});
+        assert_eq!(
+            violations(&schema, &json!(1)),
+            ["$: unresolvable $ref https://example.com/s.json"]
+        );
+    }
+
+    #[test]
+    fn a_circular_ref_is_a_violation() {
+        let schema = json!({"$defs": {"A": {"$ref": "#/$defs/A"}}, "$ref": "#/$defs/A"});
+        let found = violations(&schema, &json!(1));
+        assert_eq!(found.len(), 1);
+        assert!(found[0].contains("circular $ref"), "{found:?}");
+    }
+
+    #[test]
+    fn draft_07_definitions_resolve() {
+        let schema = json!({"definitions": {"X": {"type": "string"}}, "$ref": "#/definitions/X"});
+        assert_eq!(
+            violations(&schema, &json!(1)),
+            ["$: expected string, got integer"]
+        );
+        let root = json!({"type": "object", "properties": {"a": {"$ref": "#"}}, "additionalProperties": false});
+        assert!(violations(&root, &json!({"a": {"a": {}}})).is_empty());
     }
 
     #[test]
