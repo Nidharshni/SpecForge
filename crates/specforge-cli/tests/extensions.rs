@@ -63,14 +63,14 @@ fn remove_delegates_to_uninstall() {
     let dir = TempDir::new().unwrap();
 
     // Create a lock file with one extension
-    write_lock_file(dir.path(), &[("@specforge/software", "1.0.0", "registry")]);
+    write_lock_file(dir.path(), &[("@acme/software", "1.0.0", "registry")]);
 
     // Create the extension directory so uninstall can remove it
     let ext_dir = dir
         .path()
         .join(".specforge")
         .join("extensions")
-        .join("@specforge/software");
+        .join("@acme/software");
     fs::create_dir_all(&ext_dir).unwrap();
     fs::write(ext_dir.join("extension.wasm"), b"fake wasm").unwrap();
     // Another extension's files must survive.
@@ -83,12 +83,12 @@ fn remove_delegates_to_uninstall() {
     fs::write(other_dir.join("extension.wasm"), b"other wasm").unwrap();
 
     specforge_cmd()
-        .args(["remove", "@specforge/software", "--path"])
+        .args(["remove", "@acme/software", "--path"])
         .arg(dir.path())
         .assert()
         .success()
         .stdout(predicates::str::contains(
-            "Removed extension '@specforge/software' (v1.0.0)",
+            "Removed extension '@acme/software' (v1.0.0)",
         ));
 
     // Lock file should now have empty entries

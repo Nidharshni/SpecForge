@@ -385,8 +385,11 @@ behavior remove_extension "Remove Extension" {
     the same dependents (E027) and stranded-entity checks as any extension. A name
     more than one specforge.json entry enables MUST be refused as
     ambiguous (extension_conflict), naming the entries and changing
-    nothing; a name no entry, lock entry or builtin matches is
-    extension_not_found. Every refusal MUST be decided before anything is
+    nothing. An entry that enables an extension neither builtin nor
+    installed (it does not load, E028) MUST be removable by its name,
+    dropping only its specforge.json entry; a name no entry or lock entry
+    has is extension_not_found (E072 when it is no package name). Every
+    refusal MUST be decided before anything is
     written, and a specforge.json the compile could not read refuses every
     removal (config_invalid), changing nothing. A removal is all or
     nothing: a failure at any step leaves specforge.json, specforge.lock
@@ -411,6 +414,7 @@ behavior remove_extension "Remove Extension" {
   verify unit ".spec files are not modified by removal"
   verify contract "Remove Extension: extension removal holds — extension_installed, filesystem_available, extension_entry_removed, spec_files_unchanged, extension_removed_emitted"
   verify unit "specforge remove for non-existent extension reports error"
+  verify unit "an enabled entry that is not installed is removed from specforge.json by its name"
   verify integration "remove --format json lists the files it wrote in files_written"
   verify unit "specforge remove with no lock file reports error"
   verify unit "a removal that fails changes nothing"
