@@ -227,4 +227,5 @@ invariant extensions_run_in_their_loading_runtime "Extensions Run in Their Loadi
   risk      medium
   verify unit "an environment holds the runtime it loaded its extensions in, and its session and compiled project read it there"
   verify unit "an operation over a project view calls its extensions in the runtime the view's environment loaded them in"
+  verify unit "an environment assembled from its loaded parts holds the runtime they were loaded in and probes its custom rules there; one assembled without a runtime holds no extension and enables each entry as written"
 }
