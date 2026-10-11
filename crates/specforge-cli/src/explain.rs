@@ -57,9 +57,56 @@ fn explain(code: &str, terminal: &Terminal) -> Exit {
     }
 }
 
+/// The entry, its code bold only where stdout is coloured.
 fn print_entry(entry: &CodeEntry, terminal: &Terminal) {
-    outln!(terminal, "\x1b[1m{}\x1b[0m: {}\n", entry.code, entry.title);
+    if terminal.facts().color_out {
+        outln!(terminal, "\x1b[1m{}\x1b[0m: {}\n", entry.code, entry.title);
+    } else {
+        outln!(terminal, "{}: {}\n", entry.code, entry.title);
+    }
     outln!(terminal, "{}", wrap(entry.explanation, WRAP_WIDTH));
     outln!(terminal, "\nOwner: {}", entry.owner);
     outln!(terminal, "Level: {}", entry.level.describe());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::terminal::Facts;
+
+    #[specforge_test_macros::test(
+        behavior = "print_diagnostics_structured",
+        verify = "specforge explain bolds the code only where its output is coloured"
+    )]
+    fn explain_bolds_the_code_only_where_stdout_is_coloured() {
+        let coloured = Facts {
+            color_out: true,
+            ..Facts::PIPED
+        };
+        let (terminal, capture) = Terminal::captured("", coloured);
+        let exit = Args {
+            code: "e001".into(),
+        }
+        .run(&terminal);
+        assert_eq!(exit, Exit::Passed);
+        assert!(
+            capture
+                .stdout()
+                .starts_with("\x1b[1mE001\x1b[0m: Parse error\n"),
+            "{:?}",
+            capture.stdout()
+        );
+
+        let (terminal, capture) = Terminal::captured("", Facts::PIPED);
+        let exit = Args {
+            code: "e001".into(),
+        }
+        .run(&terminal);
+        assert_eq!(exit, Exit::Passed);
+        assert!(
+            capture.stdout().starts_with("E001: Parse error\n"),
+            "{:?}",
+            capture.stdout()
+        );
+    }
 }

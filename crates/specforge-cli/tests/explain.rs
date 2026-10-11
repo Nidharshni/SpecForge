@@ -37,10 +37,10 @@ fn explain_points_a_retired_code_at_its_replacement() {
     assert!(plain.contains("Level: warning"), "stdout: {plain}");
 }
 
-/// Today the code is bolded even under `NO_COLOR` and into a pipe (the bug;
-/// plan 11 T8 flips this).
+/// Colour follows the one rule: a pipe and `NO_COLOR` are plain, and
+/// `CLICOLOR_FORCE` bolds the code even into a pipe.
 #[test]
-fn explain_bolds_the_code_even_into_a_pipe() {
+fn explain_is_plain_into_a_pipe_and_bold_when_forced() {
     let out = specforge()
         .env("NO_COLOR", "1")
         .env_remove("CLICOLOR_FORCE")
@@ -49,9 +49,19 @@ fn explain_bolds_the_code_even_into_a_pipe() {
         .unwrap();
     let stdout = String::from_utf8(out.stdout).unwrap();
     assert!(
-        stdout.starts_with("\x1b[1mE001\x1b[0m: Parse error"),
+        stdout.starts_with("E001: Parse error"),
         "stdout: {stdout:?}"
     );
+    assert!(!stdout.contains('\x1b'), "stdout: {stdout:?}");
+
+    let out = specforge()
+        .env_remove("NO_COLOR")
+        .env("CLICOLOR_FORCE", "1")
+        .args(["explain", "E001"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert!(stdout.starts_with("\x1b[1mE001"), "stdout: {stdout:?}");
 }
 
 #[test]

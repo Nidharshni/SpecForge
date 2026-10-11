@@ -471,6 +471,10 @@ behavior print_diagnostics_structured "Print Diagnostics Structured" {
     number, column, source context snippet, suggestion, and color-coded
     severity. Errors MUST be red, warnings yellow, info blue. The format
     MUST be consistent across all output modes.
+    Colour follows one rule wherever the CLI writes: NO_COLOR set turns
+    it off, CLICOLOR_FORCE set (and not 0) turns it on, otherwise only a
+    terminal is coloured; specforge explain bolds the code it explains by
+    the same rule.
   """
   verify unit "error diagnostic is formatted with file:line:col"
   verify unit "diagnostic includes context snippet"
@@ -480,6 +484,7 @@ behavior print_diagnostics_structured "Print Diagnostics Structured" {
   verify unit "spanless error diagnostic also uses code"
   verify unit "diagnostics are plain when output is not a terminal"
   verify unit "NO_COLOR disables diagnostic colour"
+  verify unit "specforge explain bolds the code only where its output is coloured"
 }
 
 behavior exit_code_reflects_diagnostic_severity "Exit Code Reflects Diagnostic Severity" {
