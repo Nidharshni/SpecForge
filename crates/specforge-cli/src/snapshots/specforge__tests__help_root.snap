@@ -1,0 +1,53 @@
+---
+source: crates/specforge-cli/src/main.rs
+expression: command.clone().render_long_help().to_string()
+---
+SpecForge compiler
+
+Usage: specforge <COMMAND>
+
+Commands:
+  init          Initialize a new SpecForge project
+  check         Validate .spec files and report diagnostics
+  export        Export spec graph to stdout in various formats
+  schema        Output the Graph Protocol schema
+  model         Render the logical data model (entity kinds, fields, relationships)
+  outline       Render the extension architecture (dependencies, enhancements, contributions)
+  query         Query the graph at multiple resolutions
+  trace         Show traceability chain for an entity, or for every entity
+  format        Format .spec files
+  stats         Show project statistics
+  explore       Where to start reading the graph: starting points, hubs and unconnected entities
+  review        Coverage gaps around an entity, or of the whole project
+  infer-guide   What to look for in code to write a kind's entities
+  add           Install an extension
+  remove        Remove an installed extension
+  extensions    List installed extensions
+  publish       Publish an extension to the registry that serves its name: its binary, and the declaration read from it as the package's manifest
+  search        Search for extensions in registries
+  analyze       Run static analysis passes over the compiled project
+  watch         Watch a project and rebuild incrementally on changes
+  new           Scaffold a new extension project
+  update        Update installed extensions to latest compatible versions
+  login         Authenticate with a registry
+  logout        Remove registry credentials
+  providers     List configured providers
+  collect       Run the project's test runners and record which entities their tests prove
+  doctor        Run health checks on installed extensions
+  mcp           Start MCP server (JSON-RPC over stdio)
+  migrate       Migrate .spec files between format versions
+  completions   Generate shell completions: the built-in commands, and the commands of the extensions the project in the current directory enables
+  explain       Explain a diagnostic code
+  infer-status  Show inference progress (analyzed files, gaps, stale entries)
+  extension     Extension authoring commands
+  help          Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help
+          Print help
+
+  -V, --version
+          Print version
+
+Extensions add commands: specforge <extension> <command>, e.g. `specforge product features`.
+`specforge <extension> --help` lists an extension's commands.

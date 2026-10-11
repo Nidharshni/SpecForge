@@ -76,7 +76,13 @@ fn check(dir: &TempDir) -> Vec<Finding> {
 /// What formal's analyze pass `pass` reports under `specforge analyze`.
 fn analyze(dir: &TempDir, pass: &str, extra: &[&str]) -> Vec<Finding> {
     let output = specforge_cmd()
-        .args(["analyze", "--path", dir.path().to_str().unwrap(), "--json"])
+        .args([
+            "analyze",
+            "--path",
+            dir.path().to_str().unwrap(),
+            "--format",
+            "json",
+        ])
         .args(extra)
         .output()
         .unwrap();

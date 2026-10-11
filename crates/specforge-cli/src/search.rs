@@ -1,35 +1,58 @@
-use crate::OutputFormat;
-use crate::outcome::{Exit, Refusal};
+use crate::options;
+use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
+use crate::terminal::{Terminal, outln};
 use serde_json::json;
 use specforge_ops::registry::{Found, Registry};
 use specforge_ops_registry::ConfiguredRegistry;
 use specforge_protocol_types::DeclaredCategory;
-use std::path::Path;
+use std::path::PathBuf;
 
-pub fn run(
-    query: &str,
+// `specforge search`'s command line.
+#[derive(clap::Args)]
+pub(crate) struct Args {
+    /// Search query
+    query: String,
+
+    /// Only extensions that declare this category of contribution
+    #[arg(long, value_parser = options::choice(&specforge_ops::registry::CONTRIBUTES))]
     contributes: Option<DeclaredCategory>,
-    path: &Path,
-    format: OutputFormat,
-) -> Exit {
-    // No registry configured: fail before any network call (ADR 0004 N1).
-    let registry = ConfiguredRegistry::for_project(path, "search");
-    let searched = registry.search(query, contributes);
-    format.eprint_diagnostics(&registry.reported());
-    let searched = match searched {
-        Ok(searched) => searched,
-        Err(error) => return Refusal::of(format).report(&error),
-    };
-    // Each registry that failed, once.
-    format.eprint_diagnostics(&searched.failures);
-    print_found(
-        query,
-        contributes,
-        &searched.found,
-        &searched.failures,
-        format,
-    );
-    Exit::of_verdict(!searched.failed())
+
+    /// Path to the project root (for registry config)
+    #[arg(long, default_value = ".")]
+    path: PathBuf,
+
+    #[command(flatten)]
+    output: OutputArg,
+}
+
+impl Args {
+    pub(crate) fn run(self, terminal: &Terminal) -> Exit {
+        let (query, contributes, path, format) = (
+            self.query.as_str(),
+            self.contributes,
+            self.path.as_path(),
+            self.output.format,
+        );
+        // No registry configured: fail before any network call (ADR 0004 N1).
+        let registry = ConfiguredRegistry::for_project(path, "search");
+        let searched = registry.search(query, contributes);
+        terminal.diagnostics(&registry.reported());
+        let searched = match searched {
+            Ok(searched) => searched,
+            Err(error) => return Refusal::of(format).report(terminal, &error),
+        };
+        // Each registry that failed, once.
+        terminal.diagnostics(&searched.failures);
+        print_found(
+            query,
+            contributes,
+            &searched.found,
+            &searched.failures,
+            format,
+            terminal,
+        );
+        Exit::of_verdict(!searched.failed())
+    }
 }
 
 fn print_found(
@@ -38,6 +61,7 @@ fn print_found(
     found: &[Found],
     failures: &[specforge_common::Diagnostic],
     format: OutputFormat,
+    terminal: &Terminal,
 ) {
     match format {
         OutputFormat::Json => {
@@ -52,28 +76,32 @@ fn print_found(
                 })).collect::<Vec<_>>(),
                 "diagnostics": failures,
             });
-            println!("{}", serde_json::to_string_pretty(&output).unwrap());
+            terminal.json(&output);
         }
         OutputFormat::Human => {
             let clause = contributes
                 .map(|c| format!(" that declare {}", c.name()))
                 .unwrap_or_default();
             if found.is_empty() {
-                println!("no extensions found matching '{query}'{clause}");
+                outln!(terminal, "no extensions found matching '{query}'{clause}");
                 return;
             }
-            println!(
+            outln!(
+                terminal,
                 "found {} extension(s) matching '{query}'{clause}:",
                 found.len()
             );
-            println!();
+            outln!(terminal);
             for result in found {
-                println!(
+                outln!(
+                    terminal,
                     "  {} v{}  ({})",
-                    result.name, result.version, result.registry
+                    result.name,
+                    result.version,
+                    result.registry
                 );
                 if !result.description.is_empty() {
-                    println!("    {}", result.description);
+                    outln!(terminal, "    {}", result.description);
                 }
             }
         }

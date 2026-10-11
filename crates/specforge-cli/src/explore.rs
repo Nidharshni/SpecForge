@@ -1,32 +1,64 @@
-use std::path::Path;
-
+use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
+use crate::pipeline;
+use crate::terminal::{Terminal, errln, outln};
 use specforge_ops::explore::{Exploration, ExplorationRequest, explore};
 use specforge_ops::view::ProjectView;
+use std::path::PathBuf;
 
-use crate::OutputFormat;
-use crate::outcome::{Exit, Refusal, print_json};
-use crate::pipeline;
+// `specforge explore`'s command line.
+#[derive(clap::Args)]
+pub(crate) struct Args {
+    /// Entity ID to explore from (omit to explore the whole project)
+    entity: Option<String>,
 
-/// `specforge explore [ENTITY]`: the exploration read view over the project
-/// compiled at `path` (ADR 0015, "Prompt read views"), the document the
-/// explore prompt renders. The notices (I020) go to stderr; a refusal (an
-/// unknown entity, E003) is `error[CODE]` with the closest entity as its
-/// hint (exit 1).
-pub(crate) fn run(path: &Path, request: &ExplorationRequest, format: OutputFormat) -> Exit {
-    let project = pipeline::compile_project(path);
-    let view = ProjectView::of(&project);
-    match explore(&view, request) {
-        Ok(exploration) => {
-            for notice in &exploration.notices {
-                eprintln!("{}", specforge_common::render_plain(notice));
-            }
-            match format {
-                OutputFormat::Json => print_json(&exploration.document()),
-                OutputFormat::Human => print_human(&exploration, &view),
-            }
-            Exit::Passed
+    /// Path to the spec root directory
+    #[arg(long, default_value = ".")]
+    path: PathBuf,
+
+    /// Only entities of this kind
+    #[arg(long)]
+    kind: Option<String>,
+
+    /// Hops from the entity (unbounded when omitted)
+    #[arg(long)]
+    depth: Option<usize>,
+
+    #[command(flatten)]
+    output: OutputArg,
+}
+
+impl Args {
+    /// The exploration the flags ask for.
+    fn request(&self) -> ExplorationRequest<'_> {
+        ExplorationRequest {
+            entity_id: self.entity.as_deref(),
+            kind: self.kind.as_deref(),
+            depth: self.depth,
         }
-        Err(error) => Refusal::of(format).report(&error),
+    }
+
+    /// `specforge explore [ENTITY]`: the exploration read view over the
+    /// project compiled at `path` (ADR 0015, "Prompt read views"), the
+    /// document the explore prompt renders. The notices (I020) go to
+    /// stderr; a refusal (an unknown entity, E003) is `error[CODE]` with
+    /// the closest entity as its hint (exit 1).
+    pub(crate) fn run(self, terminal: &Terminal) -> Exit {
+        let format = self.output.format;
+        let project = pipeline::compile_project(&self.path);
+        let view = ProjectView::of(&project);
+        match explore(&view, &self.request()) {
+            Ok(exploration) => {
+                for notice in &exploration.notices {
+                    errln!(terminal, "{}", specforge_common::render_plain(notice));
+                }
+                match format {
+                    OutputFormat::Json => terminal.json(&exploration.document()),
+                    OutputFormat::Human => print_human(&exploration, &view, terminal),
+                }
+                Exit::Passed
+            }
+            Err(error) => Refusal::of(format).report(terminal, &error),
+        }
     }
 }
 
@@ -40,19 +72,21 @@ fn list(items: impl IntoIterator<Item = String>) -> String {
     }
 }
 
-fn print_human(exploration: &Exploration, view: &ProjectView) {
+fn print_human(exploration: &Exploration, view: &ProjectView, terminal: &Terminal) {
     let connectivity = view.connectivity();
     let count = exploration.selected.len();
     let noun = if count == 1 { "entity" } else { "entities" };
     match &exploration.from {
-        Some(from) => println!("Selected: {count} {noun} reached from {from}"),
-        None => println!("Selected: {count} {noun}"),
+        Some(from) => outln!(terminal, "Selected: {count} {noun} reached from {from}"),
+        None => outln!(terminal, "Selected: {count} {noun}"),
     }
-    println!(
+    outln!(
+        terminal,
         "Starting points: {}",
         list(exploration.starting_points.iter().cloned())
     );
-    println!(
+    outln!(
+        terminal,
         "Most connected:  {}",
         list(
             exploration
@@ -61,14 +95,15 @@ fn print_human(exploration: &Exploration, view: &ProjectView) {
                 .map(|id| format!("{id} ({})", connectivity.degree(id).total()))
         )
     );
-    println!(
+    outln!(
+        terminal,
         "Unconnected:     {}",
         list(exploration.unconnected.iter().cloned())
     );
     if let Some(from) = &exploration.from {
-        println!("Paths from {from}:");
+        outln!(terminal, "Paths from {from}:");
         for path in &exploration.paths {
-            println!("  {}  {}", path.to, path.labels.join(", "));
+            outln!(terminal, "  {}  {}", path.to, path.labels.join(", "));
         }
     }
 }

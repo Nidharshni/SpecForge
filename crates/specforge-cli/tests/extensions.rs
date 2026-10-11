@@ -931,7 +931,7 @@ fn doctor_reports_a_keyword_shadowing_an_extension_entity_kind() {
 
 #[specforge_test(
     behavior = "run_doctor_check",
-    verify = "doctor --json produces valid JSON output"
+    verify = "doctor --format json produces valid JSON output"
 )]
 fn doctor_json_carries_every_report_section() {
     let dir = builtin_project(Some(SHADOWING_ID));

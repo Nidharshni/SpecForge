@@ -295,7 +295,7 @@ c.pass("condition_check", |p| {
 Then run it:
 
 ```console
-$ specforge analyze --json
+$ specforge analyze --format json
 ```
 
 Design notes, so your passes age well:

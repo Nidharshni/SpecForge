@@ -402,7 +402,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`specforge_ops::report`) — and never by a surface; its code is what the CLI prints. Its outcome prints as one outcome document on
   every surface (ADR 0052). The CLI and MCP
   are adapters over it (`specforge-ops`); the CLI ends every core command through one renderer
-  (`specforge_cli::outcome`: the refusal, the exit code) (ADR 0029).
+  (`specforge_cli::outcome`: the refusal, the exit code) and writes it through its **Terminal**
+  (ADR 0029).
 - **Mutation outcome**: what one MCP mutation call produced, typed: a run (`specforge_mcp::mutation::Mutated`:
   its reply and what it wrote — the files its operation changed, the entities it changed and the domain
   event it produces, `Written`) or a failure (`mutation::Failed`: its McpError and the files it left
@@ -452,6 +453,12 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`specforge.validate`: `_meta["specforge/check"].ok`) and keeps `isError` for refusals (ADR 0004
   D4-a). A refusal (`OpError`) is not a verdict; a measuring command's refusal exits 2. Not to be
   confused with an entity's coverage **Verdict** (ADR 0029).
+- **Terminal**: where a core CLI command writes and whom it asks: its stdout, its stderr, the input a
+  prompt reads, whether each stream is coloured (`NO_COLOR`, then `CLICOLOR_FORCE`, then whether it is
+  a terminal) and whether anyone can answer, fixed when `main` makes it from the process
+  (`specforge_cli::terminal::Terminal`); a test captures one. A publisher key change and a collector's
+  command are asked of it, nobody to ask being no; a reader that leaves stdout ends the output
+  quietly (ADR 0029 D4b).
 - **Diagnostic policy**: lint profiles (a closed set: `inferred`, `pedantic`) and strict promotion
   (`specforge_project::DiagnosticPolicy`). It is the only thing that changes a diagnostic's severity
   after the diagnostic is built. A profile's diagnostics come from the check that applies it

@@ -430,7 +430,7 @@ const SCENARIOS: &[Scenario] = &[
     Scenario {
         name: "analyze",
         setup: project,
-        cli: |root| args(&["analyze", "--path", &s(root), "--json"]),
+        cli: |root| args(&["analyze", "--path", &s(root), "--format", "json"]),
         mcp: |root| ("specforge.analyze", json!({"path": s(root)})),
         mcp_rooted: true,
     },
@@ -443,7 +443,8 @@ const SCENARIOS: &[Scenario] = &[
                 "coverage",
                 "--min",
                 "50",
-                "--json",
+                "--format",
+                "json",
                 "--path",
                 &s(root),
             ])
@@ -1266,7 +1267,7 @@ fn analyze_report(root: &Path, orphan: Option<&str>) -> String {
 /// What `specforge analyze --json` printed, its exit code and its stderr.
 fn cli_analyze(root: &Path, extra: &[&str]) -> (Option<i32>, Value, String) {
     let out = cli()
-        .args(["analyze", "--path", &s(root), "--json"])
+        .args(["analyze", "--path", &s(root), "--format", "json"])
         .args(extra)
         .current_dir(root)
         .output()

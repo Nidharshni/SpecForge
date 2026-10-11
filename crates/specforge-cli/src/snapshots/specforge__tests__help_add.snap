@@ -1,0 +1,32 @@
+---
+source: crates/specforge-cli/src/main.rs
+expression: command.clone().render_long_help().to_string()
+---
+Install an extension
+
+Usage: specforge add [OPTIONS] <SPECIFIER>
+
+Arguments:
+  <SPECIFIER>
+          Extension specifier (e.g., @scope/name@1.0.0 or ./path)
+
+Options:
+      --path <PATH>
+          Path to the project root
+          
+          [default: .]
+
+      --format <FORMAT>
+          Output format: human or json
+          
+          [default: human]
+          [possible values: human, json]
+
+      --allow-unsigned
+          Accept unsigned packages (publisher verification skipped)
+
+      --yes
+          Accept key changes non-interactively (for CI)
+
+  -h, --help
+          Print help

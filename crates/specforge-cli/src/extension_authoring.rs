@@ -5,17 +5,81 @@
 //! it. No manifest file is written or read: the binary declares the
 //! extension.
 
-use crate::OutputFormat;
-use crate::outcome::{Exit, Refusal};
+use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
+use crate::terminal::{Terminal, err, errln, outln};
 use serde_json::json;
 use specforge_common::{Code, Diagnostic, Severity, codes};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// The diagnostic for an extension project that isn't there or isn't
 /// built.
 const NOT_BUILT: Code = codes::E040;
 
-pub fn run_init(path: &Path, name: Option<&str>, format: OutputFormat) -> Exit {
+// `specforge extension`'s subcommands.
+#[derive(clap::Subcommand)]
+pub(crate) enum Action {
+    /// Scaffold an extension crate written with the SDK
+    Init(InitArgs),
+    /// Build the extension's component (cargo build --release --target
+    /// wasm32-wasip2)
+    Build(BuildArgs),
+    /// Load the built component and report its declaration's diagnostics
+    Validate(ValidateArgs),
+}
+
+// `specforge extension init`'s command line.
+#[derive(clap::Args)]
+pub(crate) struct InitArgs {
+    /// Extension name
+    #[arg(long)]
+    name: Option<String>,
+
+    /// Path for the new extension
+    #[arg(long, default_value = ".")]
+    path: PathBuf,
+
+    #[command(flatten)]
+    output: OutputArg,
+}
+
+// `specforge extension build`'s command line.
+#[derive(clap::Args)]
+pub(crate) struct BuildArgs {
+    /// Path to the extension project
+    #[arg(long, default_value = ".")]
+    path: PathBuf,
+
+    #[command(flatten)]
+    output: OutputArg,
+}
+
+// `specforge extension validate`'s command line.
+#[derive(clap::Args)]
+pub(crate) struct ValidateArgs {
+    /// Path to the extension project
+    #[arg(long, default_value = ".")]
+    path: PathBuf,
+
+    #[command(flatten)]
+    output: OutputArg,
+}
+
+impl Action {
+    pub(crate) fn run(self, terminal: &Terminal) -> Exit {
+        match self {
+            Self::Init(args) => run_init(
+                &args.path,
+                args.name.as_deref(),
+                args.output.format,
+                terminal,
+            ),
+            Self::Build(args) => run_build(&args.path, args.output.format, terminal),
+            Self::Validate(args) => run_validate(&args.path, args.output.format, terminal),
+        }
+    }
+}
+
+fn run_init(path: &Path, name: Option<&str>, format: OutputFormat, terminal: &Terminal) -> Exit {
     let ext_name = name.unwrap_or("my-extension");
     let ext_dir = path.join(ext_name.rsplit('/').next().unwrap_or(ext_name));
     let declared = if ext_name.starts_with('@') {
@@ -26,12 +90,13 @@ pub fn run_init(path: &Path, name: Option<&str>, format: OutputFormat) -> Exit {
 
     if ext_dir.exists() {
         return Refusal::of(format).coded(
+            terminal,
             codes::E065,
             format!("directory '{}' already exists", ext_dir.display()),
         );
     }
     if let Err(message) = crate::new::scaffold(&ext_dir, &declared) {
-        return Refusal::of(format).coded(codes::E066, message);
+        return Refusal::of(format).coded(terminal, codes::E066, message);
     }
 
     match format {
@@ -43,20 +108,27 @@ pub fn run_init(path: &Path, name: Option<&str>, format: OutputFormat) -> Exit {
                 "path": ext_dir.display().to_string(),
                 "files": crate::new::SCAFFOLDED,
             });
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&output).expect("serialize JSON output")
-            );
+            terminal.json(&output);
         }
         OutputFormat::Human => {
-            println!("Created extension {} at {}", declared, ext_dir.display());
+            outln!(
+                terminal,
+                "Created extension {} at {}",
+                declared,
+                ext_dir.display()
+            );
             for file in crate::new::SCAFFOLDED {
-                println!("  {file}");
+                outln!(terminal, "  {file}");
             }
-            println!();
-            println!("next steps:");
-            println!("  specforge extension build --path {}", ext_dir.display());
-            println!(
+            outln!(terminal);
+            outln!(terminal, "next steps:");
+            outln!(
+                terminal,
+                "  specforge extension build --path {}",
+                ext_dir.display()
+            );
+            outln!(
+                terminal,
                 "  specforge extension validate --path {}",
                 ext_dir.display()
             );
@@ -65,9 +137,10 @@ pub fn run_init(path: &Path, name: Option<&str>, format: OutputFormat) -> Exit {
     Exit::Passed
 }
 
-pub fn run_build(path: &Path, format: OutputFormat) -> Exit {
+fn run_build(path: &Path, format: OutputFormat, terminal: &Terminal) -> Exit {
     if !path.join("Cargo.toml").exists() {
         return Refusal::of(format).coded(
+            terminal,
             NOT_BUILT,
             format!("no Cargo.toml found at {}", path.display()),
         );
@@ -91,7 +164,11 @@ pub fn run_build(path: &Path, format: OutputFormat) -> Exit {
     {
         Ok(output) => output,
         Err(e) => {
-            return Refusal::of(format).coded(NOT_BUILT, format!("cannot run cargo: {e}"));
+            return Refusal::of(format).coded(
+                terminal,
+                NOT_BUILT,
+                format!("cannot run cargo: {e}"),
+            );
         }
     };
     if !output.status.success() {
@@ -103,51 +180,50 @@ pub fn run_build(path: &Path, format: OutputFormat) -> Exit {
             first_error.map(|l| format!(": {l}")).unwrap_or_default()
         );
         if format == OutputFormat::Human {
-            eprint!("{stderr}");
+            err!(terminal, "{stderr}");
         }
-        return Refusal::of(format).coded(NOT_BUILT, message);
+        return Refusal::of(format).coded(terminal, NOT_BUILT, message);
     }
     let binary = match specforge_ops::publish::binary_at(path) {
         Ok(binary) => binary,
         Err(error) => {
-            return Refusal::of(format).report(&error);
+            return Refusal::of(format).report(terminal, &error);
         }
     };
 
     match format {
-        OutputFormat::Json => println!(
-            "{}",
-            serde_json::to_string_pretty(&json!({
-                "status": "built",
-                "path": path.display().to_string(),
-                "component": binary.display().to_string(),
-            }))
-            .expect("serialize JSON output")
-        ),
-        OutputFormat::Human => println!("Built {}", binary.display()),
+        OutputFormat::Json => terminal.json(&json!({
+            "status": "built",
+            "path": path.display().to_string(),
+            "component": binary.display().to_string(),
+        })),
+        OutputFormat::Human => outln!(terminal, "Built {}", binary.display()),
     }
     Exit::Passed
 }
 
-pub fn run_validate(path: &Path, format: OutputFormat) -> Exit {
+fn run_validate(path: &Path, format: OutputFormat, terminal: &Terminal) -> Exit {
     let binary = match specforge_ops::publish::binary_at(path) {
         Ok(binary) => binary,
         Err(error) => {
-            return Refusal::of(format).report(&error);
+            return Refusal::of(format).report(terminal, &error);
         }
     };
     let wasm = match std::fs::read(&binary) {
         Ok(wasm) => wasm,
         Err(e) => {
-            return Refusal::of(format)
-                .coded(NOT_BUILT, format!("cannot read {}: {e}", binary.display()));
+            return Refusal::of(format).coded(
+                terminal,
+                NOT_BUILT,
+                format!("cannot read {}: {e}", binary.display()),
+            );
         }
     };
     let runtime = specforge_component::ComponentRuntime::with_user_cache();
     let (declaration, diagnostics) = match specforge_ops::publish::declare(&runtime, &wasm) {
         Ok(declared) => declared,
         Err(error) => {
-            return Refusal::of(format).report(&error);
+            return Refusal::of(format).report(terminal, &error);
         }
     };
     let valid = !diagnostics.iter().any(|d| d.severity == Severity::Error);
@@ -163,24 +239,23 @@ pub fn run_validate(path: &Path, format: OutputFormat) -> Exit {
                 "diagnostics": diagnostics.iter().map(diagnostic_json).collect::<Vec<_>>(),
                 "declaration": declaration,
             });
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&output).expect("serialize JSON output")
-            );
+            terminal.json(&output);
         }
         OutputFormat::Human => {
             for d in &diagnostics {
-                eprintln!("{}[{}]: {}", level(d), d.code, d.message);
+                errln!(terminal, "{}[{}]: {}", level(d), d.code, d.message);
             }
             if valid {
-                println!(
+                outln!(
+                    terminal,
                     "{} v{} declares a valid extension ({})",
                     declaration.name(),
                     declaration.version(),
                     binary.display()
                 );
             } else {
-                eprintln!(
+                errln!(
+                    terminal,
                     "{} v{}: the declaration has errors",
                     declaration.name(),
                     declaration.version()

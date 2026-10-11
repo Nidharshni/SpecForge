@@ -36,7 +36,13 @@ fn coverage(doc: &serde_json::Value) -> &serde_json::Value {
 
 fn json_body(dir: &TempDir, extra_args: &[&str]) -> (serde_json::Value, i32) {
     let output = specforge_cmd()
-        .args(["analyze", "--path", dir.path().to_str().unwrap(), "--json"])
+        .args([
+            "analyze",
+            "--path",
+            dir.path().to_str().unwrap(),
+            "--format",
+            "json",
+        ])
         .args(extra_args)
         .output()
         .unwrap();
@@ -156,7 +162,8 @@ fn analyze_single_pass_selection() {
             "coverage",
             "--path",
             dir.path().to_str().unwrap(),
-            "--json",
+            "--format",
+            "json",
         ])
         .output()
         .unwrap();
@@ -288,7 +295,8 @@ fn analyze_discharge_intent_and_proof() {
                 "coverage",
                 "--path",
                 dir.path().to_str().unwrap(),
-                "--json",
+                "--format",
+                "json",
                 "--test-results",
                 dir.path().join("report.json").to_str().unwrap(),
             ])
@@ -385,7 +393,13 @@ fn analyze_dispatches_extension_compiler_pass() {
     .unwrap();
 
     let output = specforge_cmd()
-        .args(["analyze", "--path", dir.path().to_str().unwrap(), "--json"])
+        .args([
+            "analyze",
+            "--path",
+            dir.path().to_str().unwrap(),
+            "--format",
+            "json",
+        ])
         .output()
         .unwrap();
     let doc: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
@@ -433,7 +447,13 @@ fn analyze_event_graph_flags_unconsumed_events() {
     .unwrap();
 
     let output = specforge_cmd()
-        .args(["analyze", "--path", dir.path().to_str().unwrap(), "--json"])
+        .args([
+            "analyze",
+            "--path",
+            dir.path().to_str().unwrap(),
+            "--format",
+            "json",
+        ])
         .output()
         .unwrap();
     let doc: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
@@ -643,7 +663,13 @@ fn analyze_orders_extension_passes_by_constraints() {
     fs::write(dir.path().join("main.spec"), "").unwrap();
 
     let output = specforge_cmd()
-        .args(["analyze", "--path", dir.path().to_str().unwrap(), "--json"])
+        .args([
+            "analyze",
+            "--path",
+            dir.path().to_str().unwrap(),
+            "--format",
+            "json",
+        ])
         .output()
         .unwrap();
     let doc: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
@@ -706,7 +732,8 @@ fn analyze_prove_flags_unsatisfiable_constraint() {
             "--prove",
             "--path",
             dir.path().to_str().unwrap(),
-            "--json",
+            "--format",
+            "json",
         ])
         .output()
         .unwrap();
@@ -760,7 +787,8 @@ fn analyze_prove_satisfiable_constraint_exits_zero() {
             "--prove",
             "--path",
             dir.path().to_str().unwrap(),
-            "--json",
+            "--format",
+            "json",
         ])
         .output()
         .unwrap();
@@ -828,7 +856,8 @@ invariant responsive "System Stays Responsive" {
             "--prove",
             "--path",
             dir.path().to_str().unwrap(),
-            "--json",
+            "--format",
+            "json",
         ])
         .output()
         .unwrap();
@@ -915,7 +944,8 @@ invariant responsive "System Stays Responsive" {
             "--prove",
             "--path",
             dir.path().to_str().unwrap(),
-            "--json",
+            "--format",
+            "json",
         ])
         .output()
         .unwrap();
@@ -990,7 +1020,8 @@ fn the_cli_runs_a_pass_an_extension_declares() {
             "@specforge/testing:coverage",
             "--path",
             root,
-            "--json",
+            "--format",
+            "json",
         ])
         .output()
         .unwrap();
@@ -1065,7 +1096,13 @@ fn an_event_in_a_process_is_used_and_not_w029() {
     )
     .unwrap();
     let output = specforge_cmd()
-        .args(["analyze", "--path", dir.path().to_str().unwrap(), "--json"])
+        .args([
+            "analyze",
+            "--path",
+            dir.path().to_str().unwrap(),
+            "--format",
+            "json",
+        ])
         .output()
         .unwrap();
     let doc: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();

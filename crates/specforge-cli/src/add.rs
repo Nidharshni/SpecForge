@@ -1,56 +1,77 @@
-use crate::OutputFormat;
-use crate::outcome::{Exit, Refusal, Written, print_json};
-use specforge_ops::extension::{self, AddOutcome, AddRequest, Added, Origin, Trust};
+use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal, Written};
+use crate::terminal::{Terminal, outln};
+use specforge_ops::extension::{self, AddOutcome, AddRequest, Added, Origin};
 use specforge_ops_registry::ConfiguredRegistry;
-use std::path::Path;
+use std::path::PathBuf;
 
-/// `specforge add`: the shared add operation, presented.
-pub fn run(
-    specifier: &str,
-    path: &Path,
-    format: OutputFormat,
+// `specforge add`'s command line.
+#[derive(clap::Args)]
+pub(crate) struct Args {
+    /// Extension specifier (e.g., @scope/name@1.0.0 or ./path)
+    specifier: String,
+
+    /// Path to the project root
+    #[arg(long, default_value = ".")]
+    path: PathBuf,
+
+    #[command(flatten)]
+    output: OutputArg,
+
+    /// Accept unsigned packages (publisher verification skipped)
+    #[arg(long, default_value_t = false)]
     allow_unsigned: bool,
-    trust: Trust,
-) -> Exit {
-    let source = match extension::parse(specifier) {
-        Ok(source) => source,
-        Err(error) => {
-            return Refusal::of(format).report(&error);
+
+    /// Accept key changes non-interactively (for CI)
+    #[arg(long, default_value_t = false)]
+    yes: bool,
+}
+
+impl Args {
+    /// `specforge add`: the shared add operation, presented.
+    pub(crate) fn run(self, terminal: &Terminal) -> Exit {
+        let format = self.output.format;
+        let path = self.path.as_path();
+        let source = match extension::parse(&self.specifier) {
+            Ok(source) => source,
+            Err(error) => {
+                return Refusal::of(format).report(terminal, &error);
+            }
+        };
+        let registry =
+            ConfiguredRegistry::for_project(path, "add").asking(crate::trust::asker(terminal));
+        let runtime = specforge_component::ComponentRuntime::with_user_cache();
+        let request = AddRequest {
+            root: path,
+            source,
+            allow_unsigned: self.allow_unsigned,
+            trust: format.trust(self.yes),
+            dry_run: false,
+        };
+        let added = extension::add(&request, &registry, &runtime);
+        // What reading the registry configuration reported, once the add
+        // asked a registry.
+        terminal.diagnostics(&registry.reported());
+        match added {
+            Ok(added) => {
+                present(&added, added.writes.names_under(path), format, terminal);
+                Exit::Passed
+            }
+            // An install that failed after placing its module names it.
+            Err(error) => Refusal::of(format).at(path).report(terminal, &error),
         }
-    };
-    let registry =
-        ConfiguredRegistry::for_project(path, "add").asking(crate::trust::ask_key_change);
-    let runtime = specforge_component::ComponentRuntime::with_user_cache();
-    let request = AddRequest {
-        root: path,
-        source,
-        allow_unsigned,
-        trust,
-        dry_run: false,
-    };
-    let added = extension::add(&request, &registry, &runtime);
-    // What reading the registry configuration reported, once the add asked a registry.
-    format.eprint_diagnostics(&registry.reported());
-    match added {
-        Ok(added) => {
-            present(&added, added.writes.names_under(path), format);
-            Exit::Passed
-        }
-        // An install that failed after placing its module names it.
-        Err(error) => Refusal::of(format).at(path).report(&error),
     }
 }
 
 /// The add's outcome; its JSON is the add document with `files_written`
 /// (empty when the extension was already enabled).
-fn present(added: &Added, files_written: Vec<String>, format: OutputFormat) {
+fn present(added: &Added, files_written: Vec<String>, format: OutputFormat, terminal: &Terminal) {
     match format {
-        OutputFormat::Json => print_json(&Written::of(added.document(), files_written)),
-        OutputFormat::Human => print_human(&added.outcome),
+        OutputFormat::Json => terminal.json(&Written::of(added.document(), files_written)),
+        OutputFormat::Human => print_human(&added.outcome, terminal),
     }
 }
 
-fn print_human(outcome: &AddOutcome) {
+fn print_human(outcome: &AddOutcome, terminal: &Terminal) {
     match outcome {
         AddOutcome::Builtin {
             name,
@@ -58,12 +79,12 @@ fn print_human(outcome: &AddOutcome) {
             peers_enabled,
         } => {
             for peer in peers_enabled {
-                println!("enabled builtin {peer} (required by {name})");
+                outln!(terminal, "enabled builtin {peer} (required by {name})");
             }
             if *changed {
-                println!("enabled builtin {}", name);
+                outln!(terminal, "enabled builtin {}", name);
             } else {
-                println!("{} is already enabled", name);
+                outln!(terminal, "{} is already enabled", name);
             }
         }
         AddOutcome::Installed {
@@ -74,17 +95,17 @@ fn print_human(outcome: &AddOutcome) {
             ..
         } => match origin {
             Origin::Installed { source } if !source.is_registry() => {
-                println!("installed {} from local path", name);
+                outln!(terminal, "installed {} from local path", name);
             }
             _ => {
-                println!("installed {} v{}", name, version);
+                outln!(terminal, "installed {} v{}", name, version);
                 if let Some(publisher) = publisher {
-                    println!("  {}", publisher_line(publisher));
+                    outln!(terminal, "  {}", publisher_line(publisher));
                 }
             }
         },
         AddOutcome::AlreadyPresent { name, version } => {
-            println!("{name} {version} is already installed");
+            outln!(terminal, "{name} {version} is already installed");
         }
         // `specforge add` has no dry run.
         AddOutcome::Planned { .. } => {}

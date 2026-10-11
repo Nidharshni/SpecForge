@@ -1,0 +1,32 @@
+---
+source: crates/specforge-cli/src/main.rs
+expression: command.clone().render_long_help().to_string()
+---
+Where to start reading the graph: starting points, hubs and unconnected entities
+
+Usage: specforge explore [OPTIONS] [ENTITY]
+
+Arguments:
+  [ENTITY]
+          Entity ID to explore from (omit to explore the whole project)
+
+Options:
+      --path <PATH>
+          Path to the spec root directory
+          
+          [default: .]
+
+      --kind <KIND>
+          Only entities of this kind
+
+      --depth <DEPTH>
+          Hops from the entity (unbounded when omitted)
+
+      --format <FORMAT>
+          Output format: human or json
+          
+          [default: human]
+          [possible values: human, json]
+
+  -h, --help
+          Print help

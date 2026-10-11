@@ -1110,3 +1110,45 @@ fn infer_status_prints_the_session_history() {
     );
     assert!(!stdout.contains("No specforge-infer.json yet"), "{stdout}");
 }
+
+/// A reader that closes stdout early (`specforge stats | head`) ends the
+/// output quietly: no panic, nothing on stderr, and the command's own exit.
+#[cfg(unix)]
+#[specforge_test(
+    behavior = "report_command_outcome",
+    verify = "a closed stdout ends the output quietly and keeps the command's exit"
+)]
+fn a_closed_stdout_ends_the_output_quietly_in_the_binary() {
+    use std::io::Read;
+    use std::process::Stdio;
+
+    let dir = setup_project(&[
+        (
+            "specforge.json",
+            r#"{"name":"t","version":"0.1.0","extensions":[]}"#,
+        ),
+        (
+            "main.spec",
+            "behavior parse_input \"Parse\" {\n  contract \"x\"\n}\n",
+        ),
+    ]);
+    let mut child = std::process::Command::new(assert_cmd::cargo::cargo_bin!("specforge"))
+        .arg("stats")
+        .current_dir(dir.path())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    // The child compiles before it writes, so the read end is closed first.
+    drop(child.stdout.take());
+    let mut stderr = String::new();
+    child
+        .stderr
+        .take()
+        .unwrap()
+        .read_to_string(&mut stderr)
+        .unwrap();
+    let status = child.wait().unwrap();
+    assert_eq!(status.code(), Some(0));
+    assert_eq!(stderr, "");
+}

@@ -7,7 +7,7 @@ use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
 use specforge_ops::OpError;
 use specforge_ops::analyze::{AnalyzeError, AnalyzeOptions, ReportSource, analyze};
 
-/// `specforge.analyze`'s reply: the document `specforge analyze --json`
+/// `specforge.analyze`'s reply: the document `specforge analyze --format json`
 /// prints (`McpAnalyzeResult`).
 type Reply = specforge_ops::analyze::AnalyzeDocument;
 

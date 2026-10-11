@@ -471,6 +471,10 @@ behavior print_diagnostics_structured "Print Diagnostics Structured" {
     number, column, source context snippet, suggestion, and color-coded
     severity. Errors MUST be red, warnings yellow, info blue. The format
     MUST be consistent across all output modes.
+    Colour follows one rule wherever the CLI writes: NO_COLOR set turns
+    it off, CLICOLOR_FORCE set (and not 0) turns it on, otherwise only a
+    terminal is coloured; specforge explain bolds the code it explains by
+    the same rule.
   """
   verify unit "error diagnostic is formatted with file:line:col"
   verify unit "diagnostic includes context snippet"
@@ -480,6 +484,7 @@ behavior print_diagnostics_structured "Print Diagnostics Structured" {
   verify unit "spanless error diagnostic also uses code"
   verify unit "diagnostics are plain when output is not a terminal"
   verify unit "NO_COLOR disables diagnostic colour"
+  verify unit "specforge explain bolds the code only where its output is coloured"
 }
 
 behavior exit_code_reflects_diagnostic_severity "Exit Code Reflects Diagnostic Severity" {
@@ -540,10 +545,17 @@ behavior report_command_outcome "Report a Command's Outcome" {
     exit 2. A refusal MUST be printed on stderr
     as error[CODE]: message, then "  hint: " and the suggestion when there
     is one, then "  wrote: " and each file the failed operation left
-    written; under --format json (analyze: --json) it MUST instead be the
+    written; under --format json it MUST instead be the
     error document {error, code, suggestion} (and files_written when files
     were left written) on stdout, with nothing on stderr. A command run
     outside any project where it needs one MUST refuse with no_project.
+    Every core command whose output has a human and a JSON form MUST take
+    --format human|json (human by default; trace's is json); no core
+    command takes --json.
+    A reader that closes stdout before the command has written
+    everything (specforge export | head) MUST end the output quietly:
+    no panic and nothing more on stderr, and the exit code stays the
+    command's.
     The verdict is the operation's: the CLI's exit code and the ok MCP
     returns for check, analyze, format, migrate and doctor MUST agree
     (doctor's credentials are the CLI's alone).
@@ -557,6 +569,8 @@ behavior report_command_outcome "Report a Command's Outcome" {
   verify unit "a passed run exits 0, a failed verdict or a refusal 1, a refusal of a measuring command 2"
   verify unit "stats, trace, analyze, migrate and init refuse with the error document under --format json"
   verify unit "a command run outside any project refuses with no_project"
+  verify unit "every core command with a JSON form takes --format human|json, and none takes --json"
+  verify unit "a closed stdout ends the output quietly and keeps the command's exit"
   verify integration "the CLI's exit code and MCP's ok agree for check, analyze, format and migrate"
   verify integration "the CLI's --format json and MCP's reply are one outcome document for every operation both surfaces run, format aside"
   verify contract "Report a Command's Outcome: command outcome holds — operation_ran, one_refusal_shape, one_exit_table, surfaces_agree"
@@ -810,8 +824,8 @@ behavior present_diagnostics_as_json "Present Diagnostics as JSON" {
   }
   contract   """
     Wherever SpecForge prints diagnostics as JSON (specforge check
-    --format json, specforge collect and specforge watch --json, the MCP
-    specforge.validate tool, the specforge://diagnostics resource and the
+    --format json, specforge collect and specforge watch --format json,
+    the MCP specforge.validate tool, the specforge://diagnostics resource and the
     diagnostics in a tool result's _meta), it MUST present them in one
     shape: an array of
     entries with code, severity, message and suggestion (null when there

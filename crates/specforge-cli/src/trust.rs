@@ -1,23 +1,60 @@
 //! The terminal's answer to a publisher key change (`add` and `update` without `--yes`).
 
+use crate::terminal::Terminal;
 use specforge_registry_client::KeyChange;
-use std::io::{IsTerminal, Write};
 
-/// Ask the human to accept `change`. Refusal is the default, and the answer
-/// when there is no terminal: blocking on a pipe nobody answers would hang.
-pub(crate) fn ask_key_change(change: &KeyChange) -> bool {
-    if !std::io::stdin().is_terminal() {
-        return false;
-    }
-    eprintln!(
-        "KEY CHANGE for '{}': pinned '{}' but new package is signed '{}'",
+/// Ask `terminal` about each key change: the pinned and offered keys, then
+/// `[y/N]`; nobody to ask is no (blocking on a pipe nobody answers would
+/// hang).
+pub(crate) fn asker(terminal: &Terminal) -> impl Fn(&KeyChange) -> bool + Send + Sync + 'static {
+    let terminal = terminal.clone();
+    move |change| terminal.ask(&question(change))
+}
+
+/// The question as the terminal shows it (today's bytes).
+fn question(change: &KeyChange) -> String {
+    format!(
+        "KEY CHANGE for '{}': pinned '{}' but new package is signed '{}'\ntrust the new key and re-pin? [y/N] ",
         change.package, change.pinned, change.offered
-    );
-    eprint!("trust the new key and re-pin? [y/N] ");
-    let _ = std::io::stderr().flush();
-    let mut answer = String::new();
-    if std::io::stdin().read_line(&mut answer).is_err() {
-        return false;
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::terminal::Facts;
+
+    const INTERACTIVE: Facts = Facts {
+        color_out: false,
+        color_err: false,
+        interactive: true,
+    };
+
+    fn change() -> KeyChange {
+        KeyChange {
+            package: "@x/a".into(),
+            pinned: "k1".into(),
+            offered: "k2".into(),
+        }
     }
-    matches!(answer.trim().to_ascii_lowercase().as_str(), "y" | "yes")
+
+    #[specforge_test_macros::test(
+        behavior = "pin_publisher_key",
+        verify = "the CLI asks its terminal about a key change: yes at the prompt consents, and with nobody to ask nothing is asked"
+    )]
+    fn a_key_change_is_asked_of_the_terminal() {
+        let (terminal, capture) = Terminal::captured("y\n", INTERACTIVE);
+        assert!(asker(&terminal)(&change()));
+        assert_eq!(
+            capture.stderr(),
+            "KEY CHANGE for '@x/a': pinned 'k1' but new package is signed 'k2'\ntrust the new key and re-pin? [y/N] "
+        );
+
+        let (terminal, _) = Terminal::captured("n\n", INTERACTIVE);
+        assert!(!asker(&terminal)(&change()));
+
+        let (terminal, capture) = Terminal::captured("y\n", Facts::PIPED);
+        assert!(!asker(&terminal)(&change()));
+        assert_eq!(capture.stderr(), "", "nobody to ask: nothing is asked");
+    }
 }

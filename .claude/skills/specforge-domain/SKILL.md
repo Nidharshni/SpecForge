@@ -475,7 +475,7 @@ specforge analyze layering             # run layering_verify pass
 specforge analyze event-graph          # run event_graph_analyze pass
 specforge analyze all                  # run all analysis passes, unified report
 specforge analyze all --strict         # exit non-zero on any violation (for CI)
-specforge analyze all --json           # machine-readable JSON output
+specforge analyze all --format json   # machine-readable JSON output
 
 specforge coverage                          # merge specforge-report.json files + report
 specforge coverage --min=95                 # CI gate: fail if below threshold

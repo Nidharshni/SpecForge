@@ -1,0 +1,17 @@
+---
+source: crates/specforge-cli/src/main.rs
+expression: command.clone().render_long_help().to_string()
+---
+Generate shell completions: the built-in commands, and the commands of the extensions the project in the current directory enables
+
+Usage: specforge completions <SHELL>
+
+Arguments:
+  <SHELL>
+          Target shell
+          
+          [possible values: bash, elvish, fish, powershell, zsh]
+
+Options:
+  -h, --help
+          Print help

@@ -1,0 +1,39 @@
+---
+source: crates/specforge-cli/src/main.rs
+expression: command.clone().render_long_help().to_string()
+---
+Output the Graph Protocol schema
+
+Usage: specforge schema [OPTIONS] [PATH]
+
+Arguments:
+  [PATH]
+          Path to the spec root directory
+          
+          [default: .]
+
+Options:
+      --kind <KIND>
+          That entity kind and the edge types that can start or end at it
+
+      --no-edges
+          Leave the edge types out
+
+      --validation-rules
+          Add the validation rules the loaded extensions declare
+
+      --publish
+          Publish as standalone JSON Schema (draft 2020-12)
+
+      --format <FORMAT>
+          Export format the published schema describes
+
+          Possible values:
+          - graph:   every entity with its fields, file and line (Graph Protocol)
+          - context: headline and normative fields and verify, for an agent
+          - brief:   id, kind and title
+          
+          [default: graph]
+
+  -h, --help
+          Print help (see a summary with '-h')

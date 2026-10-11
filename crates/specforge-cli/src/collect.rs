@@ -11,28 +11,54 @@
 //! adapter only chooses the consent (a terminal prompt, `--yes`, or what
 //! was approved before) and presents the outcome.
 
-use crate::OutputFormat;
-use crate::outcome::{Exit, Refusal};
+use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
+use crate::terminal::{Facts, Terminal, errln, outln};
 use specforge_ops::collect::{self, Collector, Consent, Mode, Request, RunnerOutput};
 use specforge_ops::view::ProjectView;
-use std::io::{BufRead, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 
-pub struct Options<'a> {
-    pub runner: Option<&'a str>,
-    pub no_run: bool,
-    pub reports: &'a [PathBuf],
-    pub yes: bool,
+// `specforge collect`'s command line.
+#[derive(clap::Args)]
+pub(crate) struct Args {
+    /// Path to the project root
+    #[arg(long, default_value = ".")]
+    path: PathBuf,
+
+    /// Collector to use (e.g. cargo-test). Detected from project files if omitted.
+    #[arg(long, alias = "collector", value_name = "NAME")]
+    runner: Option<String>,
+
+    /// Parse the runner's existing report instead of running it
+    #[arg(long)]
+    no_run: bool,
+
+    /// Report files to parse instead of running the runner (implies --no-run)
+    #[arg(long = "report", value_name = "FILE")]
+    reports: Vec<PathBuf>,
+
+    /// Run the declared test command without asking (for CI)
+    #[arg(long)]
+    yes: bool,
+
+    #[command(flatten)]
+    output: OutputArg,
 }
 
-pub fn run(path: &Path, options: &Options, format: OutputFormat) -> Exit {
+impl Args {
+    pub(crate) fn run(self, terminal: &Terminal) -> Exit {
+        collect_at(&self, terminal)
+    }
+}
+
+fn collect_at(options: &Args, terminal: &Terminal) -> Exit {
+    let format = options.output.format;
     // The project the path is in (ADR 0029 D6); collect refuses one that is none.
-    let root = specforge_common::project_root_of(path);
+    let root = specforge_common::project_root_of(&options.path);
 
     let project = crate::pipeline::compile_project(&root);
 
     let mode = if !options.reports.is_empty() {
-        Mode::Reports(options.reports)
+        Mode::Reports(&options.reports)
     } else if options.no_run {
         Mode::NoRun
     } else if format == OutputFormat::Json {
@@ -41,18 +67,17 @@ pub fn run(path: &Path, options: &Options, format: OutputFormat) -> Exit {
     } else {
         Mode::Run(RunnerOutput::Inherit)
     };
-    let mut prompt = |collector: &Collector, argv: &[String]| ask(collector, argv, &root);
-    let consent = if options.yes {
-        Consent::Yes
-    } else if format == OutputFormat::Json || !std::io::stdin().is_terminal() {
-        // Nobody to ask: only what was approved before runs.
-        Consent::Approved
-    } else {
-        Consent::Prompt(&mut prompt)
+    let mut prompt =
+        |collector: &Collector, argv: &[String]| terminal.ask(&question(collector, argv, &root));
+    let consent = match asks(options.yes, format, terminal.facts()) {
+        Asks::Nobody => Consent::Yes,
+        Asks::ApprovedOnly => Consent::Approved,
+        Asks::Terminal => Consent::Prompt(&mut prompt),
     };
     let mut announce = |collector: &Collector, argv: &[String]| {
         if format != OutputFormat::Json {
-            eprintln!(
+            errln!(
+                terminal,
                 "running {} ({}): {}",
                 collector.name,
                 collector.extension,
@@ -61,7 +86,7 @@ pub fn run(path: &Path, options: &Options, format: OutputFormat) -> Exit {
         }
     };
     let request = Request {
-        runner: options.runner,
+        runner: options.runner.as_deref(),
         mode,
         consent,
         announce: &mut announce,
@@ -71,18 +96,15 @@ pub fn run(path: &Path, options: &Options, format: OutputFormat) -> Exit {
     let outcome = match collect::collect(&ProjectView::of(&project), request) {
         Ok(outcome) => outcome,
         Err(e) => {
-            return Refusal::of(format).report(&e);
+            return Refusal::of(format).report(terminal, &e);
         }
     };
     for why in &outcome.unsaved_approvals {
-        eprintln!("warning: could not remember the approval: {why}");
+        errln!(terminal, "warning: could not remember the approval: {why}");
     }
 
     if format == OutputFormat::Json {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&outcome.document()).expect("serialize JSON output")
-        );
+        terminal.json(&outcome.document());
     } else {
         for r in &outcome.runners {
             let s = &r.stats;
@@ -90,42 +112,96 @@ pub fn run(path: &Path, options: &Options, format: OutputFormat) -> Exit {
                 0 => String::new(),
                 n => format!(", {n} linked by naming convention"),
             };
-            println!(
+            outln!(
+                terminal,
                 "{}: {} entities, {} passed, {} failed, {} skipped ({} report file(s){by_convention})",
-                r.name, s.entities, s.passed, s.failed, s.skipped, r.files
+                r.name,
+                s.entities,
+                s.passed,
+                s.failed,
+                s.skipped,
+                r.files
             );
             if let Some(code) = r.exit_code.filter(|c| *c != 0) {
-                println!(
+                outln!(
+                    terminal,
                     "  the runner exited with status {code}; results of the tests that ran are recorded"
                 );
             }
         }
         for d in &outcome.diagnostics {
-            println!("{}: {}", d.code, d.message);
+            outln!(terminal, "{}: {}", d.code, d.message);
             if let Some(hint) = &d.suggestion {
-                println!("  hint: {hint}");
+                outln!(terminal, "  hint: {hint}");
             }
         }
-        println!("report written: {}", outcome.report.display());
+        outln!(terminal, "report written: {}", outcome.report.display());
     }
     Exit::Passed
 }
 
-/// Ask on the terminal whether the collector's command may run here.
-fn ask(collector: &Collector, argv: &[String], root: &Path) -> bool {
-    let mut err = std::io::stderr();
-    let _ = writeln!(
-        err,
-        "{} wants to run this command in {}:\n  {}",
+/// Who is asked whether a collector's command may run.
+#[derive(Debug, PartialEq, Eq)]
+enum Asks {
+    /// `--yes`: nobody; everything runs.
+    Nobody,
+    /// Nobody can be asked: only what was approved before runs.
+    ApprovedOnly,
+    /// The terminal is asked.
+    Terminal,
+}
+
+/// `--yes` runs everything; JSON output, or nobody to ask, runs only what
+/// was approved before; a terminal that can answer is asked.
+fn asks(yes: bool, format: OutputFormat, facts: Facts) -> Asks {
+    if yes {
+        Asks::Nobody
+    } else if format == OutputFormat::Json || !facts.interactive {
+        Asks::ApprovedOnly
+    } else {
+        Asks::Terminal
+    }
+}
+
+/// The question the terminal is asked about the collector's command.
+fn question(collector: &Collector, argv: &[String], root: &Path) -> String {
+    format!(
+        "{} wants to run this command in {}:\n  {}\nAllow it for this project? [y/N] ",
         collector.extension,
         root.display(),
         argv.join(" ")
-    );
-    let _ = write!(err, "Allow it for this project? [y/N] ");
-    let _ = err.flush();
-    let mut answer = String::new();
-    if std::io::stdin().lock().read_line(&mut answer).is_err() {
-        return false;
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const INTERACTIVE: Facts = Facts {
+        color_out: false,
+        color_err: false,
+        interactive: true,
+    };
+
+    #[specforge_test_macros::test(
+        behavior = "approve_collector_command",
+        verify = "a terminal that can answer is asked; with nobody to ask, or under --format json, only an approved command runs"
+    )]
+    fn consent_asks_only_a_terminal_that_can_answer() {
+        for format in [OutputFormat::Human, OutputFormat::Json] {
+            assert_eq!(asks(true, format, Facts::PIPED), Asks::Nobody);
+        }
+        assert_eq!(
+            asks(false, OutputFormat::Json, INTERACTIVE),
+            Asks::ApprovedOnly
+        );
+        assert_eq!(
+            asks(false, OutputFormat::Human, Facts::PIPED),
+            Asks::ApprovedOnly
+        );
+        assert_eq!(
+            asks(false, OutputFormat::Human, INTERACTIVE),
+            Asks::Terminal
+        );
     }
-    matches!(answer.trim(), "y" | "Y" | "yes")
 }

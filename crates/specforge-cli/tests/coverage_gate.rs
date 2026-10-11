@@ -253,7 +253,8 @@ fn analyze_json(path: &Path, strict: bool) -> (Option<i32>, serde_json::Value) {
         "--path",
         path.to_str().unwrap(),
         "coverage",
-        "--json",
+        "--format",
+        "json",
     ];
     if strict {
         args.push("--strict");
@@ -417,7 +418,8 @@ fn analyze_min_json(path: &Path, pass: &str) -> std::process::Output {
             path.join("specforge-report.json").to_str().unwrap(),
             "--min",
             "50",
-            "--json",
+            "--format",
+            "json",
         ])
         .output()
         .unwrap()

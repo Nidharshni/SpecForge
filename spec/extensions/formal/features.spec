@@ -133,7 +133,7 @@ feature fa_analyze_commands "Formal Analysis CLI Commands" {
   solution """
     The specforge analyze subcommands (conditions, layering,
     event-graph, all) run individual or combined analysis passes.
-    Each supports --json for machine-readable output and --strict
+    Each supports --format json for machine-readable output and --strict
     for CI gate integration (non-zero exit on any violation).
   """
 }

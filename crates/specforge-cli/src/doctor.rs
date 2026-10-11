@@ -1,5 +1,5 @@
-use crate::OutputFormat;
-use crate::outcome::{Exit, print_json};
+use crate::outcome::{Exit, OutputArg, OutputFormat};
+use crate::terminal::{Terminal, out};
 use serde::Serialize;
 use specforge_common::codes;
 use specforge_ops::doctor::{
@@ -10,7 +10,18 @@ use specforge_ops::view::ProjectView;
 use specforge_registry_client::credential_health::{
     CredentialHealth, CredentialLevel, CredentialLine, user_credential_health,
 };
-use std::path::Path;
+use std::path::PathBuf;
+
+// `specforge doctor`'s command line.
+#[derive(clap::Args)]
+pub(crate) struct Args {
+    /// Path to the project root
+    #[arg(long, default_value = ".")]
+    path: PathBuf,
+
+    #[command(flatten)]
+    output: OutputArg,
+}
 
 /// What `specforge doctor --format json` prints: the project's report and
 /// the user's registry credentials, which only the CLI shows (ADR 0029 D3a).
@@ -22,28 +33,31 @@ struct Printed<'a> {
     credentials_failures: usize,
 }
 
-/// `specforge doctor`: the shared project health report (extensions and
-/// their enhancements, conflicts, shadowed keywords, installed binaries)
-/// plus registry credential health. Exit 1 on any error-level finding or
-/// credential failure.
-pub fn run(path: &Path, format: OutputFormat) -> Exit {
-    let project = crate::pipeline::compile_project(path);
-    let report = diagnose(&ProjectView::of(&project));
-    let credentials = user_credential_health();
+impl Args {
+    /// `specforge doctor`: the shared project health report (extensions and
+    /// their enhancements, conflicts, shadowed keywords, installed
+    /// binaries) plus registry credential health. Exit 1 on any
+    /// error-level finding or credential failure.
+    pub(crate) fn run(self, terminal: &Terminal) -> Exit {
+        let project = crate::pipeline::compile_project(&self.path);
+        let report = diagnose(&ProjectView::of(&project));
+        let credentials = user_credential_health();
 
-    match format {
-        OutputFormat::Json => {
-            print_json(&Printed {
-                report: report.document(),
-                credentials: &credentials.lines,
-                credentials_failures: credentials.failures,
-            });
+        match self.output.format {
+            OutputFormat::Json => {
+                terminal.json(&Printed {
+                    report: report.document(),
+                    credentials: &credentials.lines,
+                    credentials_failures: credentials.failures,
+                });
+            }
+            OutputFormat::Human => out!(terminal, "{}", render_human(&report, &credentials)),
         }
-        OutputFormat::Human => print!("{}", render_human(&report, &credentials)),
-    }
 
-    // Doctor checks the project and the user's credentials: both must pass.
-    Exit::of_verdict(report.ok() && credentials.failures == 0)
+        // Doctor checks the project and the user's credentials: both must
+        // pass.
+        Exit::of_verdict(report.ok() && credentials.failures == 0)
+    }
 }
 
 /// The human report: one section per report part, then credentials.

@@ -650,7 +650,9 @@ fn event_keys(event: &Value) -> Keys {
 /// entry file is rewritten with the same entities.
 fn watch(project: &Project) -> (Keys, Keys) {
     let mut watch = Command::new(binary());
-    watch.args(["watch", "--json", "--path"]).arg(&project.root);
+    watch
+        .args(["watch", "--format", "json", "--path"])
+        .arg(&project.root);
     let mut child = crate::child_guard::ChildGuard::spawn(
         crate::child_guard::guarded_command(&watch)
             .stdout(Stdio::piped())

@@ -1067,7 +1067,8 @@ fn delivery_evidence(dir: &TempDir) -> serde_json::Value {
         .args([
             "analyze",
             "@specforge/product:delivery_evidence",
-            "--json",
+            "--format",
+            "json",
             "--path",
             dir.path().to_str().unwrap(),
         ])

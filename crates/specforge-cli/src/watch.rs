@@ -8,16 +8,39 @@
 //! does, is the session's (`classify_project_changes`); following the
 //! session's inputs and catching up is the watch crate's loop (ADR 0035).
 
+use crate::terminal::{Terminal, errln, outln};
+
 use std::path::{Path, PathBuf};
 
-use crate::OutputFormat;
-use crate::outcome::{Exit, Refusal};
+use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use specforge_ops::check::Counts;
 use specforge_ops::{OpError, OpErrorKind};
 use specforge_project::{ProjectSession, UpdateKind};
 use specforge_watch::{Applied, DEFAULT_DEBOUNCE_WINDOW, Notify, SessionWatch, WatchEvent};
 
-pub fn run(path: &Path, json: bool, verify_incremental: bool) -> Exit {
+// `specforge watch`'s command line.
+#[derive(clap::Args)]
+pub(crate) struct Args {
+    /// Project directory
+    #[arg(long, default_value = ".")]
+    path: PathBuf,
+
+    #[command(flatten)]
+    output: OutputArg,
+
+    /// Check every incremental rebuild against a cold rebuild (slower)
+    #[arg(long, default_value_t = false)]
+    verify_incremental: bool,
+}
+
+impl Args {
+    pub(crate) fn run(self, terminal: &Terminal) -> Exit {
+        let json = self.output.format == OutputFormat::Json;
+        watch_project(&self.path, json, self.verify_incremental, terminal)
+    }
+}
+
+fn watch_project(path: &Path, json: bool, verify_incremental: bool, terminal: &Terminal) -> Exit {
     // A debug build checks every rebuild (ProjectSession); a release build
     // only when asked (the check costs a cold rebuild per change).
     let mut session = ProjectSession::open(path);
@@ -36,11 +59,10 @@ pub fn run(path: &Path, json: bool, verify_incremental: bool) -> Exit {
             } else {
                 OutputFormat::Human
             };
-            return Refusal::of(format).report(&OpError::new(
-                OpErrorKind::Internal,
-                "watch_failed",
-                e,
-            ));
+            return Refusal::of(format).report(
+                terminal,
+                &OpError::new(OpErrorKind::Internal, "watch_failed", e),
+            );
         }
     };
 
@@ -49,10 +71,10 @@ pub fn run(path: &Path, json: bool, verify_incremental: bool) -> Exit {
     // the watchers were armed.
     for event in watch.catch_up() {
         if let WatchEvent::Unwatched(e) = event {
-            eprintln!("warning: {e}");
+            errln!(terminal, "warning: {e}");
         }
     }
-    print_ready(watch.session(), json);
+    print_ready(watch.session(), json, terminal);
 
     // Debounced batches of changed paths. The session says what they are
     // and applies them: sources take the incremental path (tree-sitter
@@ -63,18 +85,23 @@ pub fn run(path: &Path, json: bool, verify_incremental: bool) -> Exit {
     for batch in &batches {
         if debug {
             let roles: Vec<_> = batch.iter().map(|path| watch.classify(path)).collect();
-            eprintln!("[watch] batch: {batch:?} -> {roles:?}");
+            errln!(terminal, "[watch] batch: {batch:?} -> {roles:?}");
         }
         for event in watch.changed(&batch) {
             match event {
                 WatchEvent::Applied(applied) => {
                     let rendered = render(&applied, json, unix_seconds());
-                    println!("{}", rendered.line);
+                    outln!(terminal, "{}", rendered.line);
                     if let Some(warning) = rendered.warning {
-                        eprintln!("{warning}");
+                        errln!(terminal, "{warning}");
                     }
                 }
-                WatchEvent::Unwatched(e) => eprintln!("warning: {e}"),
+                WatchEvent::Unwatched(e) => errln!(terminal, "warning: {e}"),
+            }
+            // The reader has gone (`| head`): nobody sees what a watch
+            // would write next.
+            if terminal.closed() {
+                return Exit::Passed;
             }
         }
     }
@@ -90,7 +117,7 @@ fn unix_seconds() -> u64 {
 }
 
 /// The `ready` event: the session as opened, and caught up with disk.
-fn print_ready(session: &ProjectSession, json: bool) {
+fn print_ready(session: &ProjectSession, json: bool, terminal: &Terminal) {
     let spec_root: PathBuf = std::fs::canonicalize(session.project().environment().spec_root())
         .unwrap_or_else(|_| session.project().environment().spec_root().to_path_buf());
     let diagnostics = session.project().diagnostics();
@@ -98,7 +125,8 @@ fn print_ready(session: &ProjectSession, json: bool) {
         errors, warnings, ..
     } = Counts::of(&diagnostics);
     if json {
-        println!(
+        outln!(
+            terminal,
             "{}",
             serde_json::json!({
                 "event": "ready",
@@ -112,7 +140,8 @@ fn print_ready(session: &ProjectSession, json: bool) {
             })
         );
     } else {
-        println!(
+        outln!(
+            terminal,
             "specforge watch: {} ({} files, {} nodes, {} edges, {} errors, {} warnings)",
             spec_root.display(),
             session.project().file_count(),
@@ -121,7 +150,7 @@ fn print_ready(session: &ProjectSession, json: bool) {
             errors,
             warnings
         );
-        println!("watching for changes (Ctrl-C to stop)");
+        outln!(terminal, "watching for changes (Ctrl-C to stop)");
     }
 }
 

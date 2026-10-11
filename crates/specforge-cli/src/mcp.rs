@@ -1,41 +1,50 @@
 use crate::outcome::Exit;
+use crate::terminal::{Terminal, outln};
 use specforge_mcp::McpServer;
-use std::io::{self, BufRead, Write};
-use std::path::Path;
+use std::path::PathBuf;
 
-pub fn run(path: &Path) -> Exit {
-    // The client drives the handshake; its `initialize` serves the project at
-    // or above `path` unless it names a `projectRoot` of its own.
-    let mut server = McpServer::with_project_root(path.to_path_buf());
+// `specforge mcp`'s command line.
+#[derive(clap::Args)]
+pub(crate) struct Args {
+    /// Where to find the project to serve: the nearest directory at or above it holding
+    /// specforge.json or specforge.spec (none: nothing is served until a call names a
+    /// project or init creates one)
+    #[arg(default_value = ".")]
+    path: PathBuf,
+}
 
-    // Stdio loop: read JSON-RPC from stdin, write responses to stdout
-    let stdin = io::stdin();
-    let stdout = io::stdout();
+impl Args {
+    pub(crate) fn run(self, terminal: &Terminal) -> Exit {
+        // The client drives the handshake; its `initialize` serves the
+        // project at or above `path` unless it names a `projectRoot` of its
+        // own.
+        let mut server = McpServer::with_project_root(self.path);
 
-    for line in stdin.lock().lines() {
-        let line = match line {
-            Ok(l) => l,
-            Err(_) => break,
-        };
+        // Stdio loop: read JSON-RPC from the terminal's input, write
+        // responses to its output.
+        while let Some(line) = terminal.read_line() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
 
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
+            if let Some(response) = server.handle_message(trimmed) {
+                outln!(terminal, "{}", response);
+            }
+            // What this request queued for its subscriptions follows its
+            // response.
+            for notification in server.take_notifications() {
+                outln!(terminal, "{}", notification);
+            }
+            terminal.flush();
+            // The client is gone: nobody reads what it would be sent.
+            if terminal.closed() {
+                break;
+            }
         }
 
-        let response = server.handle_message(trimmed);
-        let mut out = stdout.lock();
-        if let Some(response) = response {
-            let _ = writeln!(out, "{}", response);
-        }
-        // What this request queued for its subscriptions follows its response.
-        for notification in server.take_notifications() {
-            let _ = writeln!(out, "{}", notification);
-        }
-        let _ = out.flush();
+        // End of input: the stdio client is gone.
+        server.disconnect();
+        Exit::Passed
     }
-
-    // End of input: the stdio client is gone.
-    server.disconnect();
-    Exit::Passed
 }

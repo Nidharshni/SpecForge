@@ -106,7 +106,7 @@ specforge format --check         # verify formatting (exit 1 if unformatted)
 
 **Colour.** `check` and `analyze` colour-code diagnostics by severity (errors red,
 warnings yellow, info blue) only when their output goes to a terminal. Piped or
-redirected output, and `--format=json` / `--json`, is always plain. `NO_COLOR` set to
+redirected output, and `--format json`, is always plain. `NO_COLOR` set to
 any non-empty value turns colour off. `CLICOLOR_FORCE` set to a non-empty value other
 than `0` turns it on even when the output is not a terminal. When both are set,
 `NO_COLOR` wins.

@@ -1,0 +1,25 @@
+---
+source: crates/specforge-cli/src/main.rs
+expression: command.clone().render_long_help().to_string()
+---
+Remove registry credentials
+
+Usage: specforge logout [OPTIONS]
+
+Options:
+      --registry <REGISTRY>
+          Registry alias (defaults to the default registry)
+
+      --path <PATH>
+          The project whose specforge.json names the default registry (when --registry is not given)
+          
+          [default: .]
+
+      --format <FORMAT>
+          Output format: human or json
+          
+          [default: human]
+          [possible values: human, json]
+
+  -h, --help
+          Print help

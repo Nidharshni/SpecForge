@@ -927,7 +927,8 @@ behavior pin_publisher_key "Pin Publisher Key" {
     refused with R-TRUST-005 whatever the consent. A refused package
     leaves the pin as it was. A re-pin is reported as W156; a first-use
     pin is part of the outcome. The decision on a key change belongs to
-    the surface: the CLI asks on its terminal, and a surface nobody can be
+    the surface: the CLI asks on its terminal (y or yes, in any case,
+    consents; any other answer refuses), and a surface nobody can be
     asked on refuses.
   """
   verify integration "the key of the first verified install is pinned and accepted again"
@@ -936,6 +937,7 @@ behavior pin_publisher_key "Pin Publisher Key" {
   verify integration "a denied key is refused even with consent"
   verify integration "consent to a key change is reported as W156"
   verify integration "a key change is decided by the surface that can ask"
+  verify unit "the CLI asks its terminal about a key change: yes at the prompt consents, and with nobody to ask nothing is asked"
 }
 
 behavior configure_registries "Configure Registries" {
