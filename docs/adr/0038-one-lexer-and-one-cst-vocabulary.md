@@ -23,7 +23,8 @@ a `\` before a line break (no escape, as the grammar's `seq("\\", /./)`), or, fo
 closing quote that runs straight into text, the pairing an unclosed quote shifts (`lex::runs_into_text`:
 anything but whitespace, a bracket, `,`, `|`, `/` or the text's end). Such a string ends at its first
 line's end, so an unclosed quote still never swallows a document being typed. A `"""…"""` is closed by
-the first `"""`; with none, it runs to the end of the text. A test checks the lexer against the grammar
+the first `"""`; with none, it runs to the end of the text (amended by D7: it ends before the next form
+line). A test checks the lexer against the grammar
 over the repository's spec, its integrations and examples, and a fixture of the forms they do not write.
 
 **D2. The parser's recovery reads through the lexer.** The culprit is the first string the lexer marks
@@ -112,7 +113,7 @@ typed, and where a top-level form starts.
 - A grammar change that adds a top-level form fails one test, and both readers follow when the rule does.
 - Unchanged: the LSP reads an unclosed `"""` to the end of the text (D1), where recovery ends it before the
   next form line, so the editor shows the rest of such a document as a string while the graph keeps its
-  blocks.
+  blocks. (Superseded by D7 below: the lexer ends it there too.)
 
 ### Rejected
 
@@ -128,3 +129,33 @@ typed, and where a top-level form starts.
 
 D2's trigger: a grammar whose top-level form spans lines before the token that decides it (a title
 spanning lines is already no form start).
+
+## Amendment: an unclosed `"""` ends where recovery resumes (2026-10-11, round 6 follow-ups)
+
+D1 let an unclosed `"""…"""` run to the end of the text, and D6's consequences kept that for the editor:
+recovery ended such a string before the next form line while the LSP's document read the rest of the text
+as one string, greying out every block the graph kept. Recovery also blamed a second shape the lexer read as
+closed: a `"""…"""` spanning lines whose closing quotes run straight into text, the pairing an unclosed `"""`
+shifts.
+
+**D7. The lexer ends an unclosed `"""` where recovery resumes.** A `"""…"""` the grammar would not close (no
+closing `"""`, or, spanning lines, closing quotes that run straight into text, `lex::runs_into_text`) is
+`Str { closed: false }` and ends at the end of the line before the next line that starts a top-level form
+(`lex::next_form_line`: D6's rule over each line lexed alone, indented no deeper than the last line begun
+outside every brace), else at the text's end. Recovery ends every unclosed string at that same line
+(`lex::next_form_line`), and its culprit is simply the first string the lexer marks unclosed. D1's sentence
+"with none, it runs to the end of the text" now holds only when no form line follows.
+
+### Consequences
+
+- In the editor, the blocks after an unclosed `"""` are highlighted and completed as blocks, as the parser
+  reads them; the string ends at the line before the first of them.
+- A `"""` left open in the last block of a document still reads to the end of the text.
+- Recovery no longer detects the shifted `"""` pairing itself; the lexer's `closed` says it.
+
+### Rejected
+
+- **The LSP finds the form line itself after an unclosed string lexeme**: a second reader of where a string
+  ends, which D1 and D3 rule out.
+- **End the unclosed `"""` at its first line's end, like a `"…"`**: the lines after `"""` are the string's
+  text being typed, and would be read as fields.

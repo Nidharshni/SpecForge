@@ -9,12 +9,12 @@
 //! The text is read through the language's one lexer (`crate::lex`), whose
 //! strings are the grammar's: the culprit is the first string it reads as
 //! unclosed (no closing quote, a `\` before a line break, or a multi-line
-//! pairing whose closing quote runs into text), or a multi-line `"""…"""`
-//! whose closing quotes run into text. The scan runs only on files the
-//! grammar already rejected; a properly closed multi-line string whose
-//! content looks like a block start is never split. The resume lines are
-//! `lex::starts_top_level_form`'s, which the LSP's document shares (ADR 0038
-//! D6).
+//! pairing whose closing quotes run into text). The scan runs only on files
+//! the grammar already rejected; a properly closed multi-line string whose
+//! content looks like a block start is never split. The resume line is
+//! `lex::next_form_line`'s, where the lexer itself ends an unclosed
+//! `"""…"""`, so the LSP's document resumes where the parser does (ADR 0038
+//! D1, D6).
 
 use crate::lex::{self, LexemeKind, TRIPLE, lex};
 
@@ -37,7 +37,8 @@ pub(crate) fn unclosed_strings(source: &str) -> Vec<UnclosedString> {
     let mut found = Vec::new();
     let mut pos = 0;
     while let Some((open, delim, top_indent)) = culprit(source, pos) {
-        let end = next_form_start(source, open + delim.len(), top_indent).unwrap_or(source.len());
+        let end =
+            lex::next_form_line(source, open + delim.len(), top_indent).unwrap_or(source.len());
         found.push(UnclosedString { open, delim, end });
         if end == source.len() {
             break;
@@ -66,49 +67,17 @@ fn culprit(source: &str, from: usize) -> Option<(usize, &'static str, usize)> {
         match lexeme.kind {
             LexemeKind::Punct('{') => depth += 1,
             LexemeKind::Punct('}') => depth = depth.saturating_sub(1),
-            LexemeKind::Str { closed } => {
-                let string = lexeme.text(text);
-                let delim = if string.starts_with(TRIPLE) {
+            LexemeKind::Str { closed: false } => {
+                let delim = if lexeme.text(text).starts_with(TRIPLE) {
                     TRIPLE
                 } else {
                     "\""
                 };
-                // An unclosed `"""` pairs with the next one's opening quotes:
-                // the multi-line "string" whose closing quotes run straight
-                // into text is the one never closed.
-                let shifted = closed
-                    && delim == TRIPLE
-                    && string.contains('\n')
-                    && lex::runs_into_text(text, lexeme.end);
-                if !closed || shifted {
-                    return Some((from + lexeme.start, delim, top_indent));
-                }
+                return Some((from + lexeme.start, delim, top_indent));
             }
             _ => {}
         }
         previous_end = Some(lexeme.end);
-    }
-    None
-}
-
-/// The first line after `from` that starts a top-level form at indentation
-/// no deeper than `max_indent` (`lex::starts_top_level_form`, each line
-/// lexed alone: the text after an unclosed string cannot be lexed whole).
-fn next_form_start(source: &str, from: usize, max_indent: usize) -> Option<usize> {
-    let mut at = from;
-    while let Some(nl) = source[at..].find('\n') {
-        let line = at + nl + 1;
-        if line >= source.len() {
-            return None;
-        }
-        let line_end = source[line..]
-            .find('\n')
-            .map_or(source.len(), |nl| line + nl);
-        let text = &source[line..line_end];
-        if lex::starts_top_level_form(text, &lex(text), max_indent) {
-            return Some(line);
-        }
-        at = line;
     }
     None
 }

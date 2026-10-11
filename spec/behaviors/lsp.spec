@@ -692,7 +692,9 @@ behavior provide_semantic_tokens "Provide Semantic Tokens" {
     (define blocks register nothing, ADR 0005). A line that starts a
     top-level form of the grammar (lex_spec_text) closes every body, block
     and list left open before it, so a union or an inline ref after a body
-    being typed is classified as its own form. A reference is classified
+    being typed is classified as its own form; a triple-quoted string left
+    unclosed ends before such a line, where the parser resumes, so the
+    blocks after it are classified as blocks, not as the string. A reference is classified
     as the token type of the kind of the entity it names (an unresolved one
     as variable), with the reference modifier; an enum field's value is an
     enumMember and a boolean field's value a keyword.
@@ -724,6 +726,7 @@ behavior provide_semantic_tokens "Provide Semantic Tokens" {
   verify unit "a reference is classified as the kind of the entity it names"
   verify unit "an enum field's value is an enumMember and a boolean field's value a keyword"
   verify unit "a union and an inline ref after an unclosed body are classified as top-level forms"
+  verify unit "the forms after an unclosed triple-quoted string are classified as the parser reads them"
   verify unit "the document resumes at every top-level form of the repository's spec after an unclosed body"
 }
 
