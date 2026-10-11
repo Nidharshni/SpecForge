@@ -35,12 +35,21 @@ pub(crate) struct Args {
 
 impl Args {
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
-        let json = self.output.format == OutputFormat::Json;
-        watch_project(&self.path, json, self.verify_incremental, terminal)
+        watch_project(
+            &self.path,
+            self.output.format,
+            self.verify_incremental,
+            terminal,
+        )
     }
 }
 
-fn watch_project(path: &Path, json: bool, verify_incremental: bool, terminal: &Terminal) -> Exit {
+fn watch_project(
+    path: &Path,
+    format: OutputFormat,
+    verify_incremental: bool,
+    terminal: &Terminal,
+) -> Exit {
     // A debug build checks every rebuild (ProjectSession); a release build
     // only when asked (the check costs a cold rebuild per change).
     let mut session = ProjectSession::open(path);
@@ -54,11 +63,6 @@ fn watch_project(path: &Path, json: bool, verify_incremental: bool, terminal: &T
     let mut watch = match SessionWatch::start(session, watchers) {
         Ok(watch) => watch,
         Err(e) => {
-            let format = if json {
-                OutputFormat::Json
-            } else {
-                OutputFormat::Human
-            };
             return Refusal::of(format).report(
                 terminal,
                 &OpError::new(OpErrorKind::Internal, "watch_failed", e),
@@ -74,7 +78,7 @@ fn watch_project(path: &Path, json: bool, verify_incremental: bool, terminal: &T
             errln!(terminal, "warning: {e}");
         }
     }
-    print_ready(watch.session(), json, terminal);
+    print_ready(watch.session(), format, terminal);
 
     // Debounced batches of changed paths. The session says what they are
     // and applies them: sources take the incremental path (tree-sitter
@@ -90,7 +94,7 @@ fn watch_project(path: &Path, json: bool, verify_incremental: bool, terminal: &T
         for event in watch.changed(&batch) {
             match event {
                 WatchEvent::Applied(applied) => {
-                    let rendered = render(&applied, json, unix_seconds());
+                    let rendered = render(&applied, format, unix_seconds());
                     outln!(terminal, "{}", rendered.line);
                     if let Some(warning) = rendered.warning {
                         errln!(terminal, "{warning}");
@@ -117,14 +121,14 @@ fn unix_seconds() -> u64 {
 }
 
 /// The `ready` event: the session as opened, and caught up with disk.
-fn print_ready(session: &ProjectSession, json: bool, terminal: &Terminal) {
+fn print_ready(session: &ProjectSession, format: OutputFormat, terminal: &Terminal) {
     let spec_root: PathBuf = std::fs::canonicalize(session.project().environment().spec_root())
         .unwrap_or_else(|_| session.project().environment().spec_root().to_path_buf());
     let diagnostics = session.project().diagnostics();
     let Counts {
         errors, warnings, ..
     } = Counts::of(&diagnostics);
-    if json {
+    if format == OutputFormat::Json {
         outln!(
             terminal,
             "{}",
@@ -165,13 +169,13 @@ struct Rendered {
 /// `rechecked` for check inputs (with the same fields as `rebuilt`),
 /// `rebuilt` for sources. `stamp` (seconds since the epoch) heads a text
 /// line.
-fn render(applied: &Applied, json: bool, stamp: u64) -> Rendered {
+fn render(applied: &Applied, format: OutputFormat, stamp: u64) -> Rendered {
     let update = &applied.update;
     let Counts {
         errors, warnings, ..
     } = Counts::of(&update.diagnostics);
     if update.kind == UpdateKind::Environment {
-        let line = if json {
+        let line = if format == OutputFormat::Json {
             serde_json::json!({
                 "event": "extensions_reloaded",
                 "extensions": applied.extensions,
@@ -201,7 +205,7 @@ fn render(applied: &Applied, json: bool, stamp: u64) -> Rendered {
         UpdateKind::Checks => "rechecked",
         _ => "rebuilt",
     };
-    if json {
+    if format == OutputFormat::Json {
         let line = serde_json::json!({
             "event": event,
             "changed": applied.changed,
@@ -280,7 +284,11 @@ mod tests {
 
     #[test]
     fn a_rebuild_renders_todays_json_fields() {
-        let rendered = render(&applied(UpdateKind::Sources, Some(Ok(()))), true, 0);
+        let rendered = render(
+            &applied(UpdateKind::Sources, Some(Ok(()))),
+            OutputFormat::Json,
+            0,
+        );
         assert_eq!(
             keys(&rendered.line),
             [
@@ -309,11 +317,11 @@ mod tests {
 
     #[test]
     fn a_check_input_renders_rechecked() {
-        let rendered = render(&applied(UpdateKind::Checks, None), true, 0);
+        let rendered = render(&applied(UpdateKind::Checks, None), OutputFormat::Json, 0);
         let value: serde_json::Value = serde_json::from_str(&rendered.line).unwrap();
         assert_eq!(value["event"], "rechecked");
         assert_eq!(value["verification"], serde_json::Value::Null);
-        let text = render(&applied(UpdateKind::Checks, None), false, 12);
+        let text = render(&applied(UpdateKind::Checks, None), OutputFormat::Human, 12);
         assert!(
             text.line.starts_with("[12] rechecked 1 file(s)"),
             "{}",
@@ -323,7 +331,11 @@ mod tests {
 
     #[test]
     fn a_reload_renders_extensions_reloaded() {
-        let rendered = render(&applied(UpdateKind::Environment, None), true, 0);
+        let rendered = render(
+            &applied(UpdateKind::Environment, None),
+            OutputFormat::Json,
+            0,
+        );
         let value: serde_json::Value = serde_json::from_str(&rendered.line).unwrap();
         assert_eq!(value["event"], "extensions_reloaded");
         assert_eq!(
@@ -332,7 +344,11 @@ mod tests {
         );
         assert_eq!(value["files"], 3);
         assert_eq!(value["nodes"], 7);
-        let text = render(&applied(UpdateKind::Environment, None), false, 0);
+        let text = render(
+            &applied(UpdateKind::Environment, None),
+            OutputFormat::Human,
+            0,
+        );
         assert_eq!(
             text.line,
             "[reload] extension environment changed: 1 extension(s), 3 file(s) | 0 errors, 0 warnings"
@@ -342,12 +358,12 @@ mod tests {
     #[test]
     fn a_divergence_adds_the_stderr_line_in_text_mode() {
         let diverged = applied(UpdateKind::Sources, Some(Err("nodes differ".to_string())));
-        let text = render(&diverged, false, 0);
+        let text = render(&diverged, OutputFormat::Human, 0);
         assert_eq!(
             text.warning.as_deref(),
             Some("verification FAILED: nodes differ")
         );
-        let json = render(&diverged, true, 0);
+        let json = render(&diverged, OutputFormat::Json, 0);
         assert_eq!(json.warning, None);
         let value: serde_json::Value = serde_json::from_str(&json.line).unwrap();
         assert_eq!(value["verification_failed"], true);
