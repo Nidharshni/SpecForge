@@ -928,6 +928,44 @@ fn extension_tool_output_with_an_undeclared_key_is_refused() {
     );
 }
 
+#[specforge_test(
+    behavior = "dispatch_surface_mcp_tool",
+    verify = "an output that breaks a definition its declared output_schema refers to by $ref is a schema_mismatch error"
+)]
+fn extension_tool_output_breaking_a_referenced_definition_is_refused() {
+    let referencing = FakeExtension::declaring(json!({
+        "mcp_tools": [{
+            "name": "test.referencing",
+            "description": "A tool whose output schema refers to a definition",
+            "export": "mcp__referencing",
+            "input_schema": {"type": "object"},
+            "output_schema": {
+                "type": "object",
+                "properties": {"span": {"$ref": "#/$defs/Span"}},
+                "additionalProperties": false,
+                "$defs": {"Span": {
+                    "type": "object",
+                    "properties": {"line": {"type": "integer"}},
+                    "required": ["line"],
+                    "additionalProperties": false
+                }}
+            }
+        }]
+    }));
+    let (mut server, _ext, _dir) = fake_extension::initialized(
+        referencing.with_output("mcp__referencing", json!({"span": {"line": "x"}})),
+    );
+    let resp = call_tool(&mut server, "test.referencing", json!({}));
+    assert_eq!(resp["result"]["isError"], true, "{resp}");
+    let error = crate::tool_errors::mcp_error(&resp);
+    assert_eq!(error["code"], "schema_mismatch", "{error}");
+    assert_eq!(
+        error["data"]["violations"],
+        json!(["$.span.line: expected integer, got string"]),
+        "{error}"
+    );
+}
+
 #[test]
 fn the_schema_check_finds_type_enum_and_required_violations() {
     let schema = json!({

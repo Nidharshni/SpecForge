@@ -93,12 +93,12 @@ pub fn query(view: &ProjectView, request: &QueryRequest) -> Result<QueryOutcome,
 /// its nodes given the `coverage_status` this operation adds
 /// ([`with_coverage`]). A brief document is also a valid context document, so
 /// the formats are alternatives, not exclusive.
-pub fn document_schema() -> Value {
+pub fn document_schema(defs: &mut specforge_common::shape::Definitions) -> Value {
     let status = specforge_common::shape::names(STATUS.names());
     let branches: Vec<Value> = [Format::Graph, Format::Context, Format::Brief]
         .into_iter()
         .filter(|format| AGENT_FORMAT.admits(*format))
-        .filter_map(|format| specforge_emitter::document_schema(format.emit_format()))
+        .filter_map(|format| specforge_emitter::document_schema(format.emit_format(), defs))
         .map(|mut schema| {
             schema["properties"]["nodes"]["items"]["properties"]["coverage_status"] =
                 status.clone();

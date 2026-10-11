@@ -152,8 +152,8 @@ impl Serialize for DiagnosticList {
 }
 
 impl crate::shape::Shape for DiagnosticList {
-    fn schema() -> serde_json::Value {
-        <Vec<DiagnosticJson<'static>> as crate::shape::Shape>::schema()
+    fn body(defs: &mut crate::shape::Definitions) -> serde_json::Value {
+        <Vec<DiagnosticJson<'static>> as crate::shape::Shape>::schema(defs)
     }
 }
 

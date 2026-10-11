@@ -306,15 +306,15 @@ pub struct WrittenReply<R, A> {
 pub fn output_schema<R: MutationReply>() -> Value {
     #[cfg(debug_assertions)]
     {
-        let own = property_names(&R::schema());
-        let added = property_names(&<R::After as Shape>::schema());
+        let own = property_names(&specforge_common::shape::build::<R>());
+        let added = property_names(&specforge_common::shape::build::<R::After>());
         assert!(
             !own.contains(FILES_WRITTEN) && own.is_disjoint(&added),
             "a mutation reply declares a key the mutation pipeline adds: \
              {own:?} against {FILES_WRITTEN} and {added:?}"
         );
     }
-    WrittenReply::<R, R::After>::schema()
+    specforge_common::shape::build::<WrittenReply<R, R::After>>()
 }
 
 /// The property names of `schema`, or of each branch of its `oneOf`/`anyOf`.
@@ -675,7 +675,7 @@ mod tests {
         let fresh = output_schema::<FreshProbe>();
         assert_eq!(
             fresh["properties"]["diagnostics"],
-            <DiagnosticList as Shape>::schema()
+            specforge_common::shape::build::<DiagnosticList>()
         );
         assert!(fresh["properties"][FILES_WRITTEN].is_object());
         assert_eq!(fresh["required"], json!(["name"]));
