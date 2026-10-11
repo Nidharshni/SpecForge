@@ -9,6 +9,7 @@ mod derived_references;
 mod dual_mode;
 mod e2e_pipeline;
 mod entity_snapshot;
+mod environment;
 mod extension_calls;
 mod field_types;
 mod policy;
