@@ -43,7 +43,10 @@ nearest project, else the directory itself" on their own.
   refuses with `no_project`.
 - **D6. One rule for the project a path is in** (`specforge_common::project_root_of`): format and
   migrate act on it on both surfaces, a directory that is no project included; migrate compiles the
-  root it migrates, so a migration started from a sub-path runs the project's hooks.
+  root it migrates, so a migration started from a sub-path runs the project's hooks. The LSP opens
+  the project its workspace folder is in by the same rule, spelled as the editor spells the folder
+  (`specforge_common::enclosing_project_root`, which `find_project_root` runs over the canonical path),
+  so a folder inside a project is never its own config-less project (round 6 follow-ups, 2026-10-11).
 - **D7.** Export's schema-cache protocol is `ops::export::export_recorded` (as ADR 0018 D1 for check);
   MCP still never records (ADR 0015 D10). An extension command's date is read by the operation that runs it (`specforge_ops::command::run`, ADR 0011 O1). MCP's
   no-project refusal reads `McpError::file`, never its message; `Reach::takes_path` is the one predicate

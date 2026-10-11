@@ -23,7 +23,8 @@ pub struct Backend {
     /// Formatting publishes and logs on the request path (ADR 0043 D8).
     client: Client,
     state: Arc<RwLock<LspState>>,
-    /// The project root: rootUri, else the first workspace folder.
+    /// The workspace root: rootUri, else the first workspace folder (the project it is in opens,
+    /// `Reaction::open`).
     root_dir: Arc<Mutex<Option<String>>>,
     /// Latest-wins reparse requests (C4-03): keystrokes send here; one
     /// serialized worker coalesces and processes, so at most one
@@ -75,7 +76,7 @@ impl Backend {
     }
 }
 
-/// The project root: rootUri, else the first workspace folder.
+/// The workspace root: rootUri, else the first workspace folder.
 fn workspace_root(params: &InitializeParams) -> Option<String> {
     params
         .root_uri

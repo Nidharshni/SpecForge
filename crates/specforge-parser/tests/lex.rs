@@ -270,6 +270,52 @@ fn a_string_spanning_lines_is_one_lexeme() {
     );
 }
 
+#[specforge_test(
+    behavior = "lex_spec_text",
+    verify = "an unclosed triple-quoted string ends before the next line that starts a top-level form"
+)]
+fn an_unclosed_triple_quoted_string_ends_before_the_next_form() {
+    let unclosed = LexemeKind::Str { closed: false };
+    let closed = LexemeKind::Str { closed: true };
+    let after = [
+        (LexemeKind::Ident, "behavior"),
+        (LexemeKind::Ident, "b"),
+        (closed, "\"B\""),
+        (LexemeKind::Punct('{'), "{"),
+        (LexemeKind::Punct('}'), "}"),
+    ];
+    let text = "behavior a \"A\" {\n  contract \"\"\"\n  text\n}\n\nbehavior b \"B\" {\n}\n";
+    let read = lexemes(text);
+    assert_eq!(
+        read[5],
+        (unclosed, "\"\"\"\n  text\n}\n"),
+        "it ends at the end of the line before the form"
+    );
+    assert_eq!(read[6..], after);
+
+    // A form indented no deeper than the top-level line the string is under.
+    let text =
+        "  behavior a \"A\" {\n    c \"\"\"\n    behavior x \"X\" {\n  behavior b \"B\" {\n}";
+    let read = lexemes(text);
+    assert_eq!(read[5], (unclosed, "\"\"\"\n    behavior x \"X\" {"));
+    assert_eq!(read[6..], after);
+
+    // The pairing it shifts: its closing quotes are the next string's
+    // opening ones, running straight into text.
+    let text = "a x \"X\" {\n  c \"\"\"\n  text\n}\nbehavior b \"B\" {\n  c \"\"\"y\"\"\"\n}";
+    let read = lexemes(text);
+    assert_eq!(read[5], (unclosed, "\"\"\"\n  text\n}"));
+    assert_eq!(read[6..10], after[..4]);
+    assert_eq!(
+        read[10..],
+        [
+            (LexemeKind::Ident, "c"),
+            (closed, "\"\"\"y\"\"\""),
+            (LexemeKind::Punct('}'), "}"),
+        ]
+    );
+}
+
 #[specforge_test(behavior = "lex_spec_text", verify = "a scheme ref ID is one lexeme")]
 fn a_ref_id_cut_short_is_a_ref_id_prefix() {
     for text in [
