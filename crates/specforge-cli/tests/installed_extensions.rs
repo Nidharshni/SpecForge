@@ -350,6 +350,104 @@ fn a_bulk_update_reports_batch_update_completed() {
     );
 }
 
+/// `specforge update --major --allow-unsigned --format json` over a lock
+/// with greet one version behind a registry serving 0.1.0, and `second` as
+/// the lock's other entry: the exit status and the document, with the clock
+/// and the hashes redacted.
+fn update_json(second: Value) -> (bool, Value, TempDir) {
+    let registry = serve(vec![Package::new("@sdk/greet", "0.1.0", greet_wasm())]);
+    let dir = project_on(&registry);
+    let lock = json!({
+        "lockfile_version": 1,
+        "entries": [
+            {"name": "@sdk/greet", "version": "0.0.9", "source": "registry", "wasm_hash": "00"},
+            second,
+        ],
+    });
+    std::fs::write(dir.path().join("specforge.lock"), lock.to_string()).unwrap();
+    let home = TempDir::new().unwrap();
+    let out = specforge()
+        .args(["update", "--major", "--allow-unsigned", "--format", "json"])
+        .args(["--path"])
+        .arg(dir.path())
+        .env("HOME", home.path())
+        .output()
+        .unwrap();
+    let mut document: Value = serde_json::from_slice(&out.stdout)
+        .unwrap_or_else(|e| panic!("update is not JSON ({e}): {out:?}"));
+    document["batch_update_completed"]["timestamp"] = json!("[TIME]");
+    let text = redact_hashes(&serde_json::to_string_pretty(&document).unwrap());
+    (
+        out.status.success(),
+        serde_json::from_str(&text).unwrap(),
+        dir,
+    )
+}
+
+/// `text` with every 64-digit hex run replaced by `[SHA256]`.
+fn redact_hashes(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut run = String::new();
+    for c in text.chars().chain(std::iter::once(' ')) {
+        if c.is_ascii_hexdigit() {
+            run.push(c);
+            continue;
+        }
+        out.push_str(if run.len() == 64 { "[SHA256]" } else { &run });
+        run.clear();
+        out.push(c);
+    }
+    out.pop();
+    out
+}
+
+/// Pins today's update document; plan 07 T4 flips it.
+#[test]
+fn update_json_today() {
+    let local = json!({"name": "@acme/local", "version": "1.0.0", "source": "local:local.wasm", "wasm_hash": "00"});
+    let (ok, document, dir) = update_json(local);
+    assert!(ok, "{document}");
+    assert_eq!(lock_entry(dir.path(), "@sdk/greet")["version"], "0.1.0");
+    insta::assert_snapshot!(
+        "update_json_today",
+        serde_json::to_string_pretty(&document).unwrap()
+    );
+}
+
+/// Pins today's failed-update document (the first failure's error document
+/// merged with the batch); plan 07 T4 flips it.
+#[test]
+fn failed_update_json_today() {
+    let gone =
+        json!({"name": "@acme/gone", "version": "1.0.0", "source": "registry", "wasm_hash": "00"});
+    let (ok, document, dir) = update_json(gone);
+    assert!(!ok, "{document}");
+    assert_eq!(lock_entry(dir.path(), "@sdk/greet")["version"], "0.0.9");
+    let mut keys: Vec<&str> = document
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(String::as_str)
+        .filter(|k| *k != "suggestion")
+        .collect();
+    keys.sort_unstable();
+    assert_eq!(
+        keys,
+        [
+            "batch_update_completed",
+            "code",
+            "error",
+            "failed",
+            "updated"
+        ],
+        "{document}"
+    );
+    insta::assert_snapshot!(
+        "failed_update_json_today",
+        serde_json::to_string_pretty(&document).unwrap()
+    );
+}
+
 /// `specforge doctor --format json` on `root`: whether it passed, and the
 /// report.
 fn doctor(root: &Path) -> (bool, Value) {

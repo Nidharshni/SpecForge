@@ -2,8 +2,8 @@
 //!
 //! Each scenario runs one user-level operation twice on identical fixture
 //! projects: once through the `specforge` binary, once through an in-process
-//! MCP server. It then compares what the operation *did*, not the JSON it
-//! answered with (the spec gives each surface its own result types):
+//! MCP server. It then compares what the operation did, and whether both
+//! surfaces printed one outcome document (ADR 0052):
 //!
 //! - `Outcome`: whether the operation succeeded;
 //! - `Files`:   every file under the project after the operation, except
@@ -13,6 +13,9 @@
 //! - `Verdict`: whether the run passed: the CLI's exit code against the
 //!   `ok` MCP returns (in the payload, or `_meta["specforge/check"]` for
 //!   validate). Skipped where MCP returns none (ADR 0029).
+//! - `Document`: the outcome document each surface printed, without its own
+//!   extras (MCP's `note`, the CLI's credentials): the payload, or a failed
+//!   MCP call's `data`. Only `specforge format`, which prints no JSON, differs.
 //!
 //! Today's differences are listed in [`EXPECTED_DIVERGENCES`]. A scenario
 //! fails when an aspect differs without a row, and also when a row's aspect
@@ -33,14 +36,16 @@ enum Aspect {
     Config,
     Check,
     Verdict,
+    Document,
 }
 
-const ASPECTS: [Aspect; 5] = [
+const ASPECTS: [Aspect; 6] = [
     Aspect::Outcome,
     Aspect::Files,
     Aspect::Config,
     Aspect::Check,
     Aspect::Verdict,
+    Aspect::Document,
 ];
 
 /// Where the CLI and MCP behave differently today, and why. Later steps of
@@ -83,6 +88,71 @@ const EXPECTED_DIVERGENCES: &[(&str, Aspect, &str)] = &[
         "check_cache",
         Aspect::Files,
         "only `check --cache` writes the build cache (write_build_cache opt_in)",
+    ),
+    (
+        "add_builtin",
+        Aspect::Document,
+        "two JSON shapes today (plan 07 converges it)",
+    ),
+    (
+        "add_local",
+        Aspect::Document,
+        "two JSON shapes today (plan 07 converges it)",
+    ),
+    (
+        "add_local_again",
+        Aspect::Document,
+        "two JSON shapes today (plan 07 converges it)",
+    ),
+    (
+        "remove_builtin",
+        Aspect::Document,
+        "two JSON shapes today (plan 07 converges it)",
+    ),
+    (
+        "remove_installed",
+        Aspect::Document,
+        "two JSON shapes today (plan 07 converges it)",
+    ),
+    (
+        "extensions",
+        Aspect::Document,
+        "two JSON shapes today (plan 07 converges it)",
+    ),
+    (
+        "init",
+        Aspect::Document,
+        "two JSON shapes today (plan 07 converges it)",
+    ),
+    (
+        "migrate",
+        Aspect::Document,
+        "two JSON shapes today (plan 07 converges it)",
+    ),
+    (
+        "migrate_failing",
+        Aspect::Document,
+        "two JSON shapes today (plan 07 converges it)",
+    ),
+    (
+        "migrate_preview",
+        Aspect::Document,
+        "two JSON shapes today (plan 07 converges it)",
+    ),
+    (
+        "format",
+        Aspect::Document,
+        "specforge format prints no JSON document; specforge.format answers McpFormatResult",
+    ),
+    (
+        "format_check",
+        Aspect::Document,
+        "specforge format prints no JSON document; specforge.format answers McpFormatResult",
+    ),
+    (
+        "format_preview",
+        Aspect::Document,
+        "specforge format prints no JSON document; specforge.format answers McpFormatResult",
     ),
 ];
 
@@ -254,6 +324,27 @@ const SCENARIOS: &[Scenario] = &[
         mcp_rooted: true,
     },
     Scenario {
+        name: "add_local_again",
+        setup: project_with_greet_installed,
+        cli: |root| {
+            args(&[
+                "add",
+                &s(&greet_blob()),
+                "--path",
+                &s(root),
+                "--format",
+                "json",
+            ])
+        },
+        mcp: |_| {
+            (
+                "specforge.add_extension",
+                json!({"specifier": s(&greet_blob())}),
+            )
+        },
+        mcp_rooted: true,
+    },
+    Scenario {
         name: "remove_builtin",
         setup: project_with_product_enabled,
         cli: |root| {
@@ -328,6 +419,27 @@ const SCENARIOS: &[Scenario] = &[
         setup: project_at_old_format,
         cli: |root| args(&["migrate", "--path", &s(root), "--format", "json"]),
         mcp: |root| ("specforge.migrate", json!({"path": s(root)})),
+        mcp_rooted: true,
+    },
+    Scenario {
+        name: "migrate_preview",
+        setup: project_at_old_format,
+        cli: |root| {
+            args(&[
+                "migrate",
+                "--dry-run",
+                "--path",
+                &s(root),
+                "--format",
+                "json",
+            ])
+        },
+        mcp: |root| {
+            (
+                "specforge.migrate",
+                json!({"path": s(root), "dry_run": true}),
+            )
+        },
         mcp_rooted: true,
     },
     Scenario {
@@ -408,7 +520,15 @@ struct Observed {
     files: BTreeMap<String, String>,
     config: Value,
     check: Value,
+    /// The outcome document: the payload (a failed call's `data`) without
+    /// the surface's own extras.
+    document: String,
 }
+
+/// The CLI's own keys beside an outcome document.
+const CLI_EXTRAS: &[&str] = &["credentials", "credentials_failures"];
+/// MCP's own keys beside an outcome document.
+const MCP_EXTRAS: &[&str] = &["note"];
 
 fn cli() -> Command {
     let mut cmd = Command::new(assert_cmd::cargo_bin!("specforge"));
@@ -529,12 +649,33 @@ fn check(root: &Path) -> Value {
     json!({"ok": out.status.success(), "diagnostics": codes})
 }
 
-fn observe(scenario: &Scenario, root: &Path, run: fn(&Scenario, &Path) -> Run) -> Observed {
+/// The outcome document of `payload`: a failed call's `data` when it has
+/// one, without the top-level keys in `extras`.
+fn document_of(payload: &Value, ok: bool, extras: &[&str]) -> Value {
+    let mut document = match payload.get("data") {
+        Some(data) if !ok && payload.is_object() => data.clone(),
+        _ => payload.clone(),
+    };
+    if let Value::Object(map) = &mut document {
+        for key in extras {
+            map.remove(*key);
+        }
+    }
+    document
+}
+
+fn observe(
+    scenario: &Scenario,
+    root: &Path,
+    run: fn(&Scenario, &Path) -> Run,
+    extras: &[&str],
+) -> Observed {
     (scenario.setup)(root);
     let (ok, payload, verdict) = run(scenario, root);
     let files = files_under(root);
     let config = read_config(root);
     let check = check(root);
+    let document = normalized(&document_of(&payload, ok, extras), root);
     Observed {
         ok,
         verdict,
@@ -542,6 +683,7 @@ fn observe(scenario: &Scenario, root: &Path, run: fn(&Scenario, &Path) -> Run) -
         files,
         config,
         check,
+        document,
     }
 }
 
@@ -634,6 +776,7 @@ fn differs(aspect: Aspect, cli: &Observed, mcp: &Observed) -> bool {
         Aspect::Check => cli.check != mcp.check,
         // Only where both surfaces say.
         Aspect::Verdict => matches!((cli.verdict, mcp.verdict), (Some(c), Some(m)) if c != m),
+        Aspect::Document => cli.document != mcp.document,
     }
 }
 
@@ -644,8 +787,8 @@ fn parity(name: &str) {
         .unwrap_or_else(|| panic!("no scenario {name}"));
     let cli_dir = tempfile::tempdir().unwrap();
     let mcp_dir = tempfile::tempdir().unwrap();
-    let cli_obs = observe(scenario, cli_dir.path(), run_cli);
-    let mcp_obs = observe(scenario, mcp_dir.path(), run_mcp);
+    let cli_obs = observe(scenario, cli_dir.path(), run_cli, CLI_EXTRAS);
+    let mcp_obs = observe(scenario, mcp_dir.path(), run_mcp, MCP_EXTRAS);
 
     let cli_snap = snapshot_of(&cli_obs, cli_dir.path());
     let mcp_snap = snapshot_of(&mcp_obs, mcp_dir.path());
@@ -699,6 +842,11 @@ fn parity_add_builtin() {
 #[test]
 fn parity_add_local() {
     parity("add_local");
+}
+
+#[test]
+fn parity_add_local_again() {
+    parity("add_local_again");
 }
 
 #[test]
@@ -769,12 +917,13 @@ fn verdicts_agree() {
         "format_check",
         "format_preview",
         "migrate",
+        "migrate_preview",
         "migrate_failing",
     ] {
         let scenario = SCENARIOS.iter().find(|s| s.name == name).unwrap();
         let (cli_dir, mcp_dir) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
-        let cli_obs = observe(scenario, cli_dir.path(), run_cli);
-        let mcp_obs = observe(scenario, mcp_dir.path(), run_mcp);
+        let cli_obs = observe(scenario, cli_dir.path(), run_cli, CLI_EXTRAS);
+        let mcp_obs = observe(scenario, mcp_dir.path(), run_mcp, MCP_EXTRAS);
         assert!(
             cli_obs.verdict.is_some() && mcp_obs.verdict.is_some(),
             "{name}: both surfaces say whether the run passed (cli {:?}, mcp {:?})",
@@ -788,6 +937,11 @@ fn verdicts_agree() {
 #[test]
 fn parity_migrate() {
     parity("migrate");
+}
+
+#[test]
+fn parity_migrate_preview() {
+    parity("migrate_preview");
 }
 
 #[test]
