@@ -1,31 +1,77 @@
+use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use crate::terminal::{Terminal, err, errln};
+use clap::builder::{PossibleValuesParser, TypedValueParser};
 use specforge_common::{Diagnostic, Severity, diagnostic_summary, render_diagnostics};
 use specforge_ops::check::{CacheRecord, CheckOptions, check};
 use specforge_ops::view::ProjectView;
 use specforge_ops::{OpError, OpErrorKind};
 use specforge_project::{CompiledProject, LintProfile, SharedRuntime};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use crate::outcome::{Exit, OutputFormat, Refusal};
+// `specforge check`'s command line.
+#[derive(clap::Args)]
+pub(crate) struct Args {
+    /// Path to the spec root directory
+    #[arg(default_value = ".")]
+    path: PathBuf,
 
-pub fn run(
-    path: &Path,
+    /// Promote warnings to errors
+    #[arg(long)]
     strict: bool,
-    format: OutputFormat,
-    lint_profiles: &[LintProfile],
+
+    #[command(flatten)]
+    output: OutputArg,
+
+    /// Extra lint profiles: inferred (I200/I202 from specforge-infer.json);
+    /// pedantic is the default and adds nothing
+    #[arg(
+        long,
+        value_delimiter = ',',
+        value_parser = PossibleValuesParser::new(specforge_project::LINT_PROFILE_NAMES)
+            .try_map(|name| name.parse::<specforge_project::LintProfile>())
+    )]
+    lint: Vec<LintProfile>,
+
+    /// Show only diagnostics of this severity (after --strict); the exit
+    /// code and --cache still judge everything reported
+    #[arg(
+        long,
+        ignore_case = true,
+        value_parser = PossibleValuesParser::new(specforge_ops::check::SEVERITY_NAMES)
+            .try_map(|name| specforge_ops::check::parse_severity(&name))
+    )]
     severity: Option<Severity>,
+
+    /// Record each entity's lifecycle state (e.g. a feature's status) in
+    /// specforge-cache.json when the check passes (the build cache history
+    /// rules compare against)
+    #[arg(long)]
     cache: bool,
-    terminal: &Terminal,
-) -> Exit {
-    let runtime: SharedRuntime = Arc::new(specforge_component::ComponentRuntime::with_user_cache());
-    let options = CheckOptions {
-        strict,
-        lint_profiles: lint_profiles.to_vec(),
-        severity,
-        record_cache: cache,
-    };
-    run_in(path, runtime, format, &options, terminal)
+}
+
+impl Args {
+    /// The check the flags ask for.
+    fn options(&self) -> CheckOptions {
+        CheckOptions {
+            strict: self.strict,
+            lint_profiles: self.lint.clone(),
+            severity: self.severity,
+            record_cache: self.cache,
+        }
+    }
+
+    pub(crate) fn run(self, terminal: &Terminal) -> Exit {
+        let runtime: SharedRuntime =
+            Arc::new(specforge_component::ComponentRuntime::with_user_cache());
+        run_in(
+            &self.path,
+            runtime,
+            self.output.format,
+            &self.options(),
+            terminal,
+        )
+    }
 }
 
 /// `specforge check` with the project's extensions running in `runtime`:

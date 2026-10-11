@@ -18,7 +18,33 @@ use specforge_ops::{OpError, OpErrorKind};
 use specforge_project::{ProjectSession, UpdateKind};
 use specforge_watch::{Applied, DEFAULT_DEBOUNCE_WINDOW, Notify, SessionWatch, WatchEvent};
 
-pub fn run(path: &Path, json: bool, verify_incremental: bool, terminal: &Terminal) -> Exit {
+// `specforge watch`'s command line.
+#[derive(clap::Args)]
+pub(crate) struct Args {
+    /// Project directory (defaults to current directory)
+    #[arg(long)]
+    path: Option<String>,
+
+    /// Emit one JSON object per rebuild cycle
+    #[arg(long, default_value_t = false)]
+    json: bool,
+
+    /// Check every incremental rebuild against a cold rebuild (slower)
+    #[arg(long, default_value_t = false)]
+    verify_incremental: bool,
+}
+
+impl Args {
+    pub(crate) fn run(self, terminal: &Terminal) -> Exit {
+        let project = self
+            .path
+            .as_deref()
+            .map_or_else(|| PathBuf::from("."), PathBuf::from);
+        watch_project(&project, self.json, self.verify_incremental, terminal)
+    }
+}
+
+fn watch_project(path: &Path, json: bool, verify_incremental: bool, terminal: &Terminal) -> Exit {
     // A debug build checks every rebuild (ProjectSession); a release build
     // only when asked (the check costs a cold rebuild per change).
     let mut session = ProjectSession::open(path);

@@ -10,7 +10,7 @@ use serde::Serialize;
 use specforge_common::Diagnostic;
 use std::ffi::OsStr;
 use std::fmt;
-use std::io::{self, BufRead, BufReader, IsTerminal, Write};
+use std::io::{self, BufRead, BufReader, IsTerminal, Read, Write};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 /// One of a terminal's two output streams.
@@ -84,7 +84,6 @@ pub(crate) struct Terminal(Arc<Streams>);
 struct Streams {
     out: Mutex<Sink>,
     err: Mutex<Sink>,
-    #[allow(dead_code)] // read by `format --stdin` (T3)
     input: Mutex<Box<dyn BufRead + Send>>,
     facts: Facts,
 }
@@ -207,6 +206,13 @@ impl Terminal {
                 format_args!("{}", specforge_common::render_plain(diagnostic)),
             );
         }
+    }
+
+    /// The rest of the input (`specforge format --stdin`).
+    pub(crate) fn read_to_string(&self) -> io::Result<String> {
+        let mut text = String::new();
+        locked(&self.0.input).read_to_string(&mut text)?;
+        Ok(text)
     }
 
     /// Flush both streams; `main` calls it before it exits.

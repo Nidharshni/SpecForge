@@ -36,7 +36,6 @@ mod trust;
 mod update;
 mod watch;
 
-use clap::builder::{PossibleValuesParser, TypedValueParser};
 use clap::{CommandFactory, Parser, Subcommand};
 use clap_complete::Shell;
 use outcome::{Exit, OutputFormat};
@@ -76,45 +75,7 @@ enum Commands {
         format: OutputFormat,
     },
     /// Validate .spec files and report diagnostics
-    Check {
-        /// Path to the spec root directory
-        #[arg(default_value = ".")]
-        path: PathBuf,
-
-        /// Promote warnings to errors
-        #[arg(long)]
-        strict: bool,
-
-        /// Output format: human or json
-        #[arg(long, default_value = "human")]
-        format: OutputFormat,
-
-        /// Extra lint profiles: inferred (I200/I202 from specforge-infer.json);
-        /// pedantic is the default and adds nothing
-        #[arg(
-            long,
-            value_delimiter = ',',
-            value_parser = PossibleValuesParser::new(specforge_project::LINT_PROFILE_NAMES)
-                .try_map(|name| name.parse::<specforge_project::LintProfile>())
-        )]
-        lint: Vec<specforge_project::LintProfile>,
-
-        /// Show only diagnostics of this severity (after --strict); the exit
-        /// code and --cache still judge everything reported
-        #[arg(
-            long,
-            ignore_case = true,
-            value_parser = PossibleValuesParser::new(specforge_ops::check::SEVERITY_NAMES)
-                .try_map(|name| specforge_ops::check::parse_severity(&name))
-        )]
-        severity: Option<specforge_common::Severity>,
-
-        /// Record each entity's lifecycle state (e.g. a feature's status) in
-        /// specforge-cache.json when the check passes (the build cache history
-        /// rules compare against)
-        #[arg(long)]
-        cache: bool,
-    },
+    Check(check::Args),
     /// Export spec graph to stdout in various formats
     Export(export::Args),
     /// Output the Graph Protocol schema
@@ -128,27 +89,7 @@ enum Commands {
     /// Show traceability chain for an entity, or for every entity
     Trace(trace::Args),
     /// Format .spec files
-    Format {
-        /// Explicit file or directory paths to format
-        #[arg()]
-        paths: Vec<String>,
-
-        /// Path to the spec root directory
-        #[arg(long, default_value = ".")]
-        path: PathBuf,
-
-        /// Check formatting without modifying files (exit 1 if unformatted)
-        #[arg(long)]
-        check: bool,
-
-        /// Show unified diff of formatting changes
-        #[arg(long)]
-        diff: bool,
-
-        /// Read from stdin, write to stdout
-        #[arg(long)]
-        stdin: bool,
-    },
+    Format(format::Args),
     /// Show project statistics
     Stats(stats::Args),
     /// Where to start reading the graph: starting points, hubs and unconnected entities
@@ -239,51 +180,9 @@ enum Commands {
         format: OutputFormat,
     },
     /// Run static analysis passes over the compiled project
-    Analyze {
-        /// Analysis pass to run: all (default), coverage, contracts, or a pass
-        /// an extension declares (`<extension>:<pass>`)
-        pass: Option<String>,
-
-        /// Project directory (defaults to current directory)
-        #[arg(long)]
-        path: Option<String>,
-
-        /// Machine-readable output
-        #[arg(long, default_value_t = false)]
-        json: bool,
-
-        /// Fail (exit 1) on warnings as well as errors
-        #[arg(long, default_value_t = false)]
-        strict: bool,
-
-        /// Test-results report for proof-level verdicts (default: the project's
-        /// specforge-report.json, written by `specforge collect`)
-        #[arg(long)]
-        test_results: Option<String>,
-
-        /// Verify declared bounds and claims with an SMT solver (z3)
-        #[arg(long, default_value_t = false)]
-        prove: bool,
-
-        /// Fail with a non-zero exit when proof coverage falls below this
-        /// percentage (needs test results)
-        #[arg(long)]
-        min: Option<f64>,
-    },
+    Analyze(analyze::Args),
     /// Watch a project and rebuild incrementally on changes
-    Watch {
-        /// Project directory (defaults to current directory)
-        #[arg(long)]
-        path: Option<String>,
-
-        /// Emit one JSON object per rebuild cycle
-        #[arg(long, default_value_t = false)]
-        json: bool,
-
-        /// Check every incremental rebuild against a cold rebuild (slower)
-        #[arg(long, default_value_t = false)]
-        verify_incremental: bool,
-    },
+    Watch(watch::Args),
     /// Scaffold a new extension project
     New {
         /// Extension name (e.g. @you/my-ext)
@@ -424,31 +323,7 @@ enum Commands {
         path: PathBuf,
     },
     /// Migrate .spec files between format versions
-    Migrate {
-        /// Path to the spec root directory
-        #[arg(long, default_value = ".")]
-        path: PathBuf,
-
-        /// Show unified diff without modifying files
-        #[arg(long)]
-        dry_run: bool,
-
-        /// Skip creating .spec.bak backup files
-        #[arg(long)]
-        no_backup: bool,
-
-        /// Restore files from .spec.bak backups
-        #[arg(long)]
-        rollback: bool,
-
-        /// Target format version (defaults to current)
-        #[arg(long)]
-        target_version: Option<String>,
-
-        /// Output format: human or json
-        #[arg(long, default_value = "human")]
-        format: OutputFormat,
-    },
+    Migrate(migrate::Args),
     /// Generate shell completions: the built-in commands, and the commands
     /// of the extensions the project in the current directory enables
     Completions {
@@ -571,27 +446,14 @@ fn run(command: Commands, terminal: &Terminal) -> Exit {
                 terminal,
             )
         }
-        Commands::Check {
-            path,
-            strict,
-            format,
-            lint,
-            severity,
-            cache,
-        } => check::run(&path, strict, format, &lint, severity, cache, terminal),
+        Commands::Check(args) => args.run(terminal),
         Commands::Export(args) => args.run(terminal),
         Commands::Schema(args) => args.run(terminal),
         Commands::Model(args) => args.run(terminal),
         Commands::Outline(args) => args.run(terminal),
         Commands::Query(args) => args.run(terminal),
         Commands::Trace(args) => args.run(terminal),
-        Commands::Format {
-            paths,
-            path,
-            check,
-            diff,
-            stdin,
-        } => format::run(&path, check, diff, stdin, &paths, terminal),
+        Commands::Format(args) => args.run(terminal),
         Commands::Stats(args) => args.run(terminal),
         Commands::Explore(args) => args.run(terminal),
         Commands::Review(args) => args.run(terminal),
@@ -610,39 +472,8 @@ fn run(command: Commands, terminal: &Terminal) -> Exit {
             format.trust(yes),
             terminal,
         ),
-        Commands::Analyze {
-            pass,
-            path,
-            json,
-            strict,
-            test_results,
-            min,
-            prove,
-        } => {
-            let project = path
-                .map(PathBuf::from)
-                .unwrap_or_else(|| PathBuf::from("."));
-            analyze::run(
-                &project,
-                pass,
-                json,
-                strict,
-                test_results.as_deref().map(Path::new),
-                min,
-                prove,
-                terminal,
-            )
-        }
-        Commands::Watch {
-            path,
-            json,
-            verify_incremental,
-        } => {
-            let project = path
-                .map(PathBuf::from)
-                .unwrap_or_else(|| PathBuf::from("."));
-            watch::run(&project, json, verify_incremental, terminal)
-        }
+        Commands::Analyze(args) => args.run(terminal),
+        Commands::Watch(args) => args.run(terminal),
         Commands::New {
             name,
             extension,
@@ -741,22 +572,7 @@ fn run(command: Commands, terminal: &Terminal) -> Exit {
             Exit::Passed
         }
         Commands::Explain { code } => explain::run(&code, terminal),
-        Commands::Migrate {
-            path,
-            dry_run,
-            no_backup,
-            rollback,
-            target_version,
-            format,
-        } => migrate::run(
-            &path,
-            dry_run,
-            no_backup,
-            rollback,
-            target_version.as_deref(),
-            format,
-            terminal,
-        ),
+        Commands::Migrate(args) => args.run(terminal),
         Commands::InferStatus {
             path,
             format,
