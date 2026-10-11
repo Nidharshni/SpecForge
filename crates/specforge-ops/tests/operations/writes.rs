@@ -118,7 +118,7 @@ fn add(root: &Path, source: Source) -> Result<extension::Added, specforge_ops::O
     extension::add(
         &AddRequest {
             root,
-            source,
+            extensions: vec![source.into()],
             allow_unsigned: false,
             trust: Trust::Refuse,
             dry_run: false,
@@ -452,7 +452,7 @@ fn enabling_a_builtin_writes_the_config_only() {
     let added = add(root, Source::Builtin("@specforge/product")).unwrap();
 
     assert!(matches!(
-        added.outcome,
+        added.added[0].outcome,
         AddOutcome::Builtin { changed: true, .. }
     ));
     assert_eq!(listed(&added.writes, root), ["specforge.json"]);
@@ -473,7 +473,7 @@ fn enabling_an_enabled_builtin_writes_nothing() {
     let added = add(root, Source::Builtin("@specforge/product")).unwrap();
 
     assert!(matches!(
-        added.outcome,
+        added.added[0].outcome,
         AddOutcome::Builtin { changed: false, .. }
     ));
     assert!(added.writes.is_empty());
@@ -490,7 +490,10 @@ fn installing_a_local_extension_writes_module_lock_and_config() {
 
     let added = add(root, Source::Local(blobs.greet())).unwrap();
 
-    assert!(matches!(added.outcome, AddOutcome::Installed { .. }));
+    assert!(matches!(
+        added.added[0].outcome,
+        AddOutcome::Installed { .. }
+    ));
     let three = [MODULE, "specforge.json", "specforge.lock"];
     assert_eq!(listed(&added.writes, root), three);
     assert_eq!(changed_since(root, &before), three);
@@ -499,7 +502,10 @@ fn installing_a_local_extension_writes_module_lock_and_config() {
     // The same blob again: already present, nothing written.
     let before = files_under(root);
     let again = add(root, Source::Local(blobs.greet())).unwrap();
-    assert!(matches!(again.outcome, AddOutcome::AlreadyPresent { .. }));
+    assert!(matches!(
+        again.added[0].outcome,
+        AddOutcome::AlreadyPresent { .. }
+    ));
     assert!(again.writes.is_empty());
     assert_eq!(changed_since(root, &before), Vec::<String>::new());
 }

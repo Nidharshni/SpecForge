@@ -274,27 +274,28 @@ impl<'a> LockPlan<'a> {
         } = self;
         let lock = change.lock();
         let changing: Vec<&str> = staged.iter().map(|s| s.name.as_str()).collect();
-        let mut failed: Vec<Option<OpError>> = staged.iter().map(|_| None).collect();
+        let mut failed: Vec<Option<(OpError, bool)>> = staged.iter().map(|_| None).collect();
         for edge in unsatisfied(lock, &changing) {
             let owner = edge.owner(&changing);
             if failed[owner].is_none() {
-                failed[owner] = Some(refusal(lock, &staged, &changing, owner, &edge, verb));
+                let error = refusal(lock, &staged, &changing, owner, &edge, verb);
+                failed[owner] = Some((error, true));
             }
         }
         for (i, s) in staged.iter().enumerate() {
             if failed[i].is_none() {
-                failed[i] = s.load().err();
+                failed[i] = s.load().err().map(|error| (error, false));
             }
         }
-        let failures: Vec<(PackageName, OpError)> = staged
+        let (failures, judged): (Vec<(PackageName, OpError)>, Vec<bool>) = staged
             .iter()
             .zip(failed)
-            .filter_map(|(s, f)| f.map(|e| (s.name.clone(), e)))
-            .collect();
+            .filter_map(|(s, f)| f.map(|(e, judged)| ((s.name.clone(), e), judged)))
+            .unzip();
         if failures.is_empty() {
             Ok(Checked { change })
         } else {
-            Err(Refused { failures })
+            Err(Refused { failures, judged })
         }
     }
 }
@@ -334,9 +335,26 @@ impl Checked<'_> {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Refused {
     pub(crate) failures: Vec<(PackageName, OpError)>,
+    /// For each failure, whether the peer rule refused it (else its binary did not load).
+    judged: Vec<bool>,
 }
 
 impl Refused {
+    /// What an operation installing a set all or nothing reports (`add` of several): the first
+    /// install the peer rule refused, else the first whose binary did not load. A refusal the set
+    /// earns is not hidden by a binary the plan would never have loaded.
+    pub(crate) fn decisive(self) -> (PackageName, OpError) {
+        let at = self
+            .judged
+            .iter()
+            .position(|judged| *judged)
+            .unwrap_or_default();
+        self.failures
+            .into_iter()
+            .nth(at)
+            .expect("a refused plan has a failure")
+    }
+
     /// The first failure: what an operation that stages one install reports.
     pub(crate) fn first(self) -> OpError {
         self.failures

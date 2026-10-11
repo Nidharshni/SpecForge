@@ -713,10 +713,20 @@ type McpRenderResult {
   verify unit "McpRenderResult schema is valid"
 }
 
-type McpAddExtensionResult = McpAddExtensionEnabled
+type McpAddExtensionResult "What an add did for each of its specifiers" {
+  /// One entry per specifier, in the order given.
+  added McpAddedExtension[]
+  /// Whether the server serves the extensions from the next call on;
+  /// absent for a preview (MCP only).
+  note  string @optional
+  verify unit "McpAddExtensionResult schema is valid"
+}
+
+type McpAddedExtension = McpAddExtensionEnabled
   | McpAddExtensionInstalled
   | McpAddExtensionPresent
   | McpAddExtensionPlanned
+  | McpAddExtensionDuplicate
 
 /// How a registry package's publisher was accepted: unsigned (allowed),
 /// pinned (its key matched the pin), pinned_now (pinned on first use) or
@@ -725,20 +735,21 @@ type PublisherAcceptance = "unsigned" | "pinned" | "pinned_now" | "repinned"
 
 type McpAddExtensionEnabled "A builtin extension enabled" {
   action        "enabled" @literal
+  /// The specifier as the call gave it.
+  specifier     string
   extension     string    @readonly
   source        "builtin" @literal
   /// False when the builtin was already enabled: nothing changed.
   changed       boolean
   /// The required builtin peers enabled first.
   peers_enabled string[]
-  /// Whether the server serves the extension from the next call on;
-  /// absent for a preview (MCP only).
-  note          string    @optional
   verify unit "McpAddExtensionEnabled schema is valid"
 }
 
 type McpAddExtensionInstalled "A package installed and locked" {
   action    "installed"         @literal
+  /// The specifier as the call gave it.
+  specifier string
   extension string              @readonly
   version   string
   sha256    string
@@ -748,33 +759,38 @@ type McpAddExtensionInstalled "A package installed and locked" {
   key_id    string              @optional
   /// Absent for a local file.
   publisher PublisherAcceptance @optional
-  /// Whether the server serves the extension from the next call on;
-  /// absent for a preview (MCP only).
-  note      string              @optional
   verify unit "McpAddExtensionInstalled schema is valid"
 }
 
 type McpAddExtensionPresent "An extension already installed and enabled: nothing changed" {
   action    "already_present" @literal
+  /// The specifier as the call gave it.
+  specifier string
   extension string            @readonly
   version   string
-  /// Whether the server serves the extension from the next call on;
-  /// absent for a preview (MCP only).
-  note      string            @optional
   verify unit "McpAddExtensionPresent schema is valid"
 }
 
 type McpAddExtensionPlanned "What a dry run would install or enable" {
   action    "planned" @literal
+  /// The specifier as the call gave it.
+  specifier string
   extension string    @readonly
   /// Absent for a builtin, which tracks the binary.
   version   string    @optional
   /// "builtin", "registry", or "local:<path>".
   source    string
-  /// Whether the server serves the extension from the next call on;
-  /// absent for a preview (MCP only).
-  note      string    @optional
   verify unit "McpAddExtensionPlanned schema is valid"
+}
+
+type McpAddExtensionDuplicate "A specifier naming an extension an earlier specifier of the same call adds, the same way: added once" {
+  action       "duplicate" @literal
+  /// The specifier as the call gave it.
+  specifier    string
+  extension    string      @readonly
+  /// The earlier specifier that adds it.
+  duplicate_of string
+  verify unit "McpAddExtensionDuplicate schema is valid"
 }
 
 type McpRemoveExtensionResult {

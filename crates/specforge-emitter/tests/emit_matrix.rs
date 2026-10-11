@@ -57,6 +57,7 @@ fn schema(fields: &FieldRegistry) -> GraphProtocolSchema {
             target_kind: Some("behavior".to_string()),
             ..Default::default()
         },
+        writers: Vec::new(),
     });
     generate_schema(
         &kinds,

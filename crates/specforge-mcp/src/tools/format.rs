@@ -4,9 +4,7 @@ use crate::target::{AnyProject, Project};
 use crate::tool::{CoreTool, Effect, ReplySpec, WriteHints};
 use std::path::PathBuf;
 
-use serde::Serialize;
-use specforge_common::shape::Shape;
-use specforge_common::{DiagnosticList, project_root_of};
+use specforge_common::project_root_of;
 
 use crate::args::Arguments;
 use crate::mutation::{
@@ -15,7 +13,7 @@ use crate::mutation::{
 use crate::target::ProjectRef;
 use crate::tool::{ErrorCode, McpError};
 use specforge_ops::OpErrorKind;
-use specforge_ops::format::{self, Outcome, Request};
+use specforge_ops::format::{self, Request};
 
 /// `specforge.format`'s arguments.
 #[derive(Debug, Arguments)]
@@ -48,103 +46,10 @@ impl Args {
     }
 }
 
-/// `specforge.format`'s reply.
-#[derive(Debug, Serialize, Shape)]
-pub struct Reply {
-    changed_files: Vec<String>,
-    total_checked: usize,
-    ok: bool,
-    all_clean: bool,
-    check_only: bool,
-    diagnostics: DiagnosticList,
-    /// Each file that would change, before and after (with `diff`).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    diffs: Option<Vec<Diff>>,
-    /// Why the call failed (a failed call's `data` holds the reply).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    message: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    failed_files: Option<Vec<String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    failures: Option<Vec<FileFailure>>,
-}
-
-/// One file's before and after text.
-#[derive(Debug, Serialize, Shape)]
-pub struct Diff {
-    file_path: String,
-    before: String,
-    after: String,
-    insertions: usize,
-    deletions: usize,
-}
-
-/// One file that could not be read or written.
-#[derive(Debug, Serialize, Shape)]
-pub struct FileFailure {
-    file: String,
-    operation: String,
-    /// The `McpErrorCode` of the file's failure.
-    code: String,
-    message: String,
-}
-
-fn shown(path: &std::path::Path) -> String {
-    path.display().to_string()
-}
-
-impl Reply {
-    fn of(outcome: &Outcome, mode: format::Mode, with_diffs: bool) -> Self {
-        Reply {
-            changed_files: outcome.changes.iter().map(|c| shown(&c.path)).collect(),
-            total_checked: outcome.checked,
-            ok: outcome.ok(),
-            all_clean: outcome.clean(),
-            check_only: !mode.writes(),
-            diagnostics: DiagnosticList(outcome.diagnostics.clone()),
-            diffs: with_diffs.then(|| {
-                outcome
-                    .changes
-                    .iter()
-                    .map(|c| {
-                        let file_path = shown(&c.path);
-                        let stats =
-                            specforge_formatter::unified_diff(&file_path, &c.before, &c.after);
-                        Diff {
-                            file_path,
-                            before: c.before.clone(),
-                            after: c.after.clone(),
-                            insertions: stats.insertions,
-                            deletions: stats.deletions,
-                        }
-                    })
-                    .collect()
-            }),
-            message: None,
-            failed_files: None,
-            failures: None,
-        }
-    }
-
-    /// The reply of a call that failed for these files (read or write).
-    fn fail_with(&mut self, outcome: &Outcome) {
-        let reasons: Vec<String> = outcome.failures.iter().map(ToString::to_string).collect();
-        self.message = Some(reasons.join("; "));
-        self.failed_files = Some(outcome.failures.iter().map(|f| shown(f.path())).collect());
-        self.failures = Some(
-            outcome
-                .failures
-                .iter()
-                .map(|f| FileFailure {
-                    file: shown(f.path()),
-                    operation: f.verb().to_string(),
-                    code: ErrorCode::from(f.kind()).as_str().to_string(),
-                    message: f.to_string(),
-                })
-                .collect(),
-        );
-    }
-}
+/// `specforge.format`'s reply: the format document
+/// `specforge format --format json` prints (a failed call carries it in its
+/// error's `data`; ADR 0052).
+type Reply = format::FormatDocument;
 
 pub(crate) struct Tool;
 
@@ -182,7 +87,7 @@ impl CoreTool for Tool {
             mode,
         });
 
-        let mut reply = Reply::of(&outcome, mode, args.diff);
+        let reply = outcome.document(args.diff);
         if outcome.succeeded() {
             return Ok(Mutated::new(reply, Written::files(outcome.writes())));
         }
@@ -192,7 +97,6 @@ impl CoreTool for Tool {
         // the files share (permission denied for locked files, not found for
         // missing ones), else an internal failure. The failed call's `data`
         // is the reply.
-        reply.fail_with(&outcome);
         let code = ErrorCode::from(outcome.failure_kind().unwrap_or(OpErrorKind::Internal));
         let error = McpError::new(code, reply.message.clone().unwrap_or_default())
             .with_data(serde_json::to_value(&reply).expect("a reply serializes"));

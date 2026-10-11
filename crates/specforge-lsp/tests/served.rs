@@ -159,7 +159,13 @@ impl Served {
     /// Open the workspace at the project's root as `initialized` does (`Reaction::open`), then
     /// `files` as documents with their disk text (one `Change::Edited`, as a debounced burst).
     /// What that sent is [`Self::opening`]; [`Self::sent`] starts empty after it.
-    pub fn open(mut self, files: &[&str]) -> Served {
+    pub fn open(self, files: &[&str]) -> Served {
+        self.open_in("", files)
+    }
+
+    /// [`Self::open`] with the workspace opened at `subdir` of the project, as an editor opened
+    /// on a directory inside it.
+    pub fn open_in(mut self, subdir: &str, files: &[&str]) -> Served {
         if let Runtime::InProcess = self.runtime {
             let names: Vec<&str> = self.extensions.iter().map(|(n, _)| n.as_str()).collect();
             let config = serde_json::json!({"name": "t", "version": "0.1.0", "extensions": names});
@@ -167,7 +173,10 @@ impl Served {
             // What the in-process runtime serves, the project has installed.
             specforge_installed::testing::install(self.dir.path(), &names);
         }
-        let root = self.dir.path().to_path_buf();
+        let root = match subdir {
+            "" => self.dir.path().to_path_buf(),
+            subdir => self.dir.path().join(subdir),
+        };
         self.reaction().open(Some(root));
         let uris: Vec<Url> = files
             .iter()

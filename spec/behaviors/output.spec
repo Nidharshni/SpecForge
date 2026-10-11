@@ -573,7 +573,7 @@ behavior report_command_outcome "Report a Command's Outcome" {
   verify unit "every core command with a JSON form takes --format human|json, and none takes --json"
   verify unit "a closed stdout ends the output quietly and keeps the command's exit"
   verify integration "the CLI's exit code and MCP's ok agree for check, analyze, format and migrate"
-  verify integration "the CLI's --format json and MCP's reply are one outcome document for every operation both surfaces run, format aside"
+  verify integration "the CLI's --format json and MCP's reply are one outcome document for every operation both surfaces run"
   verify contract "Report a Command's Outcome: command outcome holds — operation_ran, one_refusal_shape, one_exit_table, surfaces_agree"
 }
 

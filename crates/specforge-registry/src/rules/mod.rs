@@ -131,14 +131,14 @@ impl Rule {
 
     /// The rule as the registry build snapshot lists it: the descriptor's
     /// keys (`code`, `severity`, `message_template`, `check`, `target_kind`,
-    /// `edge_type`, `edge_peer_kind`, `field`, `constraint`,
+    /// `edge_type`, `edge_peer_kinds`, `field`, `constraint`,
     /// `wasm_function`), plus `edge_fields` for an edge or cycle rule with
     /// an edge type (the fields that write it) and `target_extension` when
     /// the rule declares one.
     pub fn describe(&self) -> serde_json::Value {
-        let edge_peer_kind = match &self.check {
-            Check::NoIncomingEdges(EdgeScope::Peer(kind))
-            | Check::NoOutgoingEdges(EdgeScope::Peer(kind)) => Some(kind.as_str()),
+        let edge_peer_kinds = match &self.check {
+            Check::NoIncomingEdges(EdgeScope::Peers(kinds))
+            | Check::NoOutgoingEdges(EdgeScope::Peers(kinds)) => Some(kinds),
             _ => None,
         };
         let mut described = serde_json::json!({
@@ -148,7 +148,7 @@ impl Rule {
             "check": self.check_kind.as_str(),
             "target_kind": self.target,
             "edge_type": self.declared.edge_type,
-            "edge_peer_kind": edge_peer_kind,
+            "edge_peer_kinds": edge_peer_kinds,
             "field": self.message_field,
             "constraint": self.declared.constraint.as_ref().map(|c| serde_json::json!({
                 "kind": c.kind.map(ConstraintKind::as_str),

@@ -91,8 +91,8 @@ fn an_edge_rule_counts_only_its_edge_type() {
     let b2 = entity("b2", "behavior", 0, 0).with_edges(Direction::Outgoing, "feature", 1);
     let built = implementing(declared.clone(), true);
     assert_eq!(
-        built.rules.iter().next().unwrap().describe()["edge_peer_kind"],
-        "feature"
+        built.rules.iter().next().unwrap().describe()["edge_peer_kinds"],
+        serde_json::json!(["feature"])
     );
     let diagnostics = check(&built, &[b1, b2]);
     assert_eq!(
@@ -104,6 +104,52 @@ fn an_edge_rule_counts_only_its_edge_type() {
     let built = implementing(declared, false);
     assert!(built.rules.is_empty());
     assert!(built.diagnostics.is_empty(), "{:?}", built.diagnostics);
+}
+
+#[spec(
+    behavior = "execute_validation_pattern",
+    verify = "an edge rule over an edge type several kinds write without declaring it counts the edges of every writing kind"
+)]
+fn an_edge_rule_over_an_undeclared_edge_counts_every_writing_kind() {
+    // `person` is assigned by `task` (from `@test`) and `ticket` (from
+    // `@test/more`), through the `assigned_to` edge neither declares.
+    let mut declared = rule("W001", "no_incoming_edges");
+    declared.target_kind = Some("person".to_string());
+    declared.edge_type = Some("assigned_to".to_string());
+    declared.message_template = "person '{id}' is assigned nothing".to_string();
+    let mut first = declare("@test", |c| {
+        c.kind("task", |k| {
+            k.field("assignee", |f| {
+                f.field_type(FieldType::Reference)
+                    .edge("assigned_to")
+                    .target_kind("person");
+            });
+        });
+        c.kind("person", |k| {
+            k.description("p");
+        });
+    });
+    first.validation_rules = vec![declared];
+    let second = declare("@test/more", |c| {
+        c.kind("ticket", |k| {
+            k.field("owner", |f| {
+                f.field_type(FieldType::Reference)
+                    .edge("assigned_to")
+                    .target_kind("person");
+            });
+        });
+    });
+    let built = rules_of(vec![first, second]);
+    assert_eq!(
+        built.rules.iter().next().unwrap().describe()["edge_peer_kinds"],
+        serde_json::json!(["task", "ticket"])
+    );
+
+    let by_task = entity("p1", "person", 0, 0).with_edges(Direction::Incoming, "task", 1);
+    let by_ticket = entity("p2", "person", 0, 0).with_edges(Direction::Incoming, "ticket", 1);
+    let by_event = entity("p3", "person", 0, 0).with_edges(Direction::Incoming, "event", 1);
+    let diagnostics = check(&built, &[by_task, by_ticket, by_event]);
+    assert_eq!(messages(&diagnostics), ["person 'p3' is assigned nothing"]);
 }
 
 #[spec(

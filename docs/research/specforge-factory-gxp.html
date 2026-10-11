@@ -1,0 +1,520 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SpecForge Factory GxP Review</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+/* Layout: one reading column with wide diagram figures; a review document, so restrained, with severity colour used only for findings. */
+:root {
+  --paper: #F2F4F8; --panel: #FFFFFF; --ink: #14203A; --muted: #5B6784; --rule: #D4DAE6; --code: #E8ECF4;
+  --accent: #2C4FD6; --accent-soft: #DCE3FB; --ok: #0F7F68; --ok-soft: #D5EFE8; --warn: #A96300; --warn-soft: #F7E8CF;
+  --err: #BE3329; --err-soft: #F7DCD9; --today: #8A93A8; --cat-reg: #6A4BC9; --cat-tech: #0E7C86; --cat-org: #A3367E;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif; --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif; --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --paper: #0D1320; --panel: #141C2D; --ink: #E3E8F2; --muted: #95A2BC; --rule: #273249; --code: #19233A;
+  --accent: #87A2FF; --accent-soft: #1E2A52; --ok: #3FC9A5; --ok-soft: #12342E; --warn: #F0AA3E; --warn-soft: #3A2C14;
+  --err: #FF6E63; --err-soft: #3D1C1C; --today: #6F7A92; --cat-reg: #A894FF; --cat-tech: #43C3CC; --cat-org: #E77CC0; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --paper: #0D1320; --panel: #141C2D; --ink: #E3E8F2; --muted: #95A2BC; --rule: #273249; --code: #19233A;
+  --accent: #87A2FF; --accent-soft: #1E2A52; --ok: #3FC9A5; --ok-soft: #12342E; --warn: #F0AA3E; --warn-soft: #3A2C14;
+  --err: #FF6E63; --err-soft: #3D1C1C; --today: #6F7A92; --cat-reg: #A894FF; --cat-tech: #43C3CC; --cat-org: #E77CC0; color-scheme: dark; }
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.6; padding: 0 20px; }
+.wrap { max-width: 1060px; margin: 0 auto; padding-block: 56px 80px; display: grid; gap: 64px; }
+.col { max-width: 700px; }
+a { color: var(--accent); text-underline-offset: 3px; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+h1 { font-size: clamp(2.2rem, 5.6vw, 3.7rem); font-weight: 820; font-variation-settings: "wdth" 116; line-height: 1.03; }
+h2 { font-size: clamp(1.5rem, 3.4vw, 2.1rem); font-weight: 780; font-variation-settings: "wdth" 112; line-height: 1.12; }
+h3 { font-size: 1.12rem; font-weight: 700; font-variation-settings: "wdth" 104; }
+p { margin: 0; }
+code { font-family: var(--mono); font-size: 0.86em; background: var(--code); padding: 1px 5px; border-radius: 3px; }
+.stack { display: grid; gap: 16px; } .stack-lg { display: grid; gap: 26px; }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.lede { font-size: 1.18rem; line-height: 1.55; max-width: 680px; }
+.muted { color: var(--muted); } .small { font-size: 13.5px; }
+.sec-head { display: grid; gap: 10px; border-top: 2px solid var(--ink); padding-top: 18px; }
+.fig { background: var(--panel); border: 1px solid var(--rule); border-radius: 8px; padding: 18px; overflow-x: auto; }
+.fig svg { display: block; width: 100%; height: auto; min-width: 640px; }
+figure { margin: 0; } figcaption { font-size: 13.5px; color: var(--muted); margin-top: 10px; max-width: 720px; }
+svg text { font-family: var(--body); }
+.s-ink { fill: var(--ink); } .s-muted { fill: var(--muted); } .s-accent { fill: var(--accent); } .s-ok { fill: var(--ok); } .s-warn { fill: var(--warn); } .s-err { fill: var(--err); }
+.s-panel { fill: var(--panel); } .s-paper { fill: var(--paper); } .s-code { fill: var(--code); } .s-today { fill: var(--today); }
+.s-accent-soft { fill: var(--accent-soft); } .s-ok-soft { fill: var(--ok-soft); } .s-warn-soft { fill: var(--warn-soft); } .s-err-soft { fill: var(--err-soft); }
+.st-rule { stroke: var(--rule); } .st-muted { stroke: var(--muted); } .st-accent { stroke: var(--accent); } .st-ok { stroke: var(--ok); } .st-err { stroke: var(--err); } .st-ink { stroke: var(--ink); } .st-warn { stroke: var(--warn); } .st-today { stroke: var(--today); }
+.c-reg { fill: var(--cat-reg); } .c-tech { fill: var(--cat-tech); } .c-org { fill: var(--cat-org); }
+.t-mono { font-family: var(--mono) !important; } .t-disp { font-family: var(--display) !important; font-variation-settings: "wdth" 110; }
+.verdict-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; }
+.verdict-grid > div { background: var(--panel); padding: 18px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+.verdict-grid b { font-family: var(--display); font-variation-settings: "wdth" 108; font-size: 1.12rem; line-height: 1.3; }
+.tag { justify-self: start; font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: 0.04em; padding: 2px 9px; border-radius: 4px; }
+.t-ok { color: var(--ok); background: var(--ok-soft); } .t-warn { color: var(--warn); background: var(--warn-soft); } .t-err { color: var(--err); background: var(--err-soft); } .t-acc { color: var(--accent); background: var(--accent-soft); }
+.tbl { overflow-x: auto; border: 1px solid var(--rule); border-radius: 8px; background: var(--panel); }
+table { border-collapse: collapse; width: 100%; min-width: 620px; font-size: 14.5px; }
+th, td { text-align: left; padding: 10px 13px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+th { font-family: var(--mono); font-size: 11.5px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.pill { display: inline-block; font-family: var(--mono); font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 99px; white-space: nowrap; }
+.p-ok { color: var(--ok); background: var(--ok-soft); } .p-warn { color: var(--warn); background: var(--warn-soft); } .p-err { color: var(--err); background: var(--err-soft); } .p-acc { color: var(--accent); background: var(--accent-soft); }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+.tile { background: var(--panel); border: 1px solid var(--rule); border-radius: 8px; padding: 14px 16px; display: grid; gap: 6px; align-content: start; min-width: 0; }
+.tiles.alcoa { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 760px) { .tiles.alcoa { grid-template-columns: 1fr; } }
+.tile .big { font-family: var(--display); font-variation-settings: "wdth" 112; font-size: 1.5rem; font-weight: 800; line-height: 1; }
+.tile p { font-size: 14px; }
+.blockers { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
+.blk { background: var(--panel); border: 1px solid var(--rule); border-left: 4px solid var(--rule); border-radius: 8px; padding: 16px 18px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+.blk.reg { border-left-color: var(--cat-reg); } .blk.tech { border-left-color: var(--cat-tech); } .blk.org { border-left-color: var(--cat-org); }
+.blk h3 { font-size: 1.02rem; } .blk dl { margin: 0; display: grid; gap: 6px; } .blk dt { font-family: var(--mono); font-size: 10.5px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); } .blk dd { margin: 0; font-size: 14px; }
+.blk .top { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; } .legend i { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+.gate { background: var(--panel); border: 2px solid var(--ink); border-radius: 10px; padding: 18px 20px; display: grid; gap: 10px; }
+.gate ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; font-family: var(--mono); font-size: 13.5px; }
+.gate li::before { content: "▸ "; color: var(--accent); }
+.final { background: var(--ink); color: var(--paper); border-radius: 12px; padding: 28px; display: grid; gap: 14px; }
+.final h2, .final p { color: var(--paper); } .final p { max-width: 720px; opacity: .92; }
+footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule); padding-top: 16px; display: grid; gap: 6px; }
+@media (max-width: 760px) { .verdict-grid { grid-template-columns: 1fr; } .wrap { padding-block: 32px 56px; gap: 48px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="stack-lg">
+  <div class="stack">
+    <span class="eyebrow">Design review · SpecForge Software Factory · GxP · 9 Oct 2026</span>
+    <h1>It can make compliance continuous. It cannot make software compliant on its own.</h1>
+    <p class="lede">This review judges the factory as designed, assuming every piece gets built. As a design it is strong. It turns validation from documents written after the fact into evidence the build produces on every change. Whether regulated companies and inspectors accept it depends on six blocking points, and none of them is a coding task.</p>
+  </div>
+  <div class="verdict-grid">
+    <div><span class="tag t-ok">What it changes</span><b>Validation becomes a property of every commit.</b><p class="small muted">Trace matrix, risk links, executed evidence, change impact and the validation report are generated and re-checked continuously, not assembled before an audit.</p></div>
+    <div><span class="tag t-warn">What it cannot do</span><b>Prove that content is true or adequate.</b><p class="small muted">Rules prove that links exist and records are complete. Whether a risk assessment is right, or a test is meaningful, stays a human judgement, and the regulated company stays accountable.</p></div>
+    <div><span class="tag t-err">What blocks it</span><b>Trust, not code.</b><p class="small muted">Validating the rules themselves, structure being mistaken for truth, trusted identity and time, AI changing under you, regulator acceptance, and data integrity at the boundaries.</p></div>
+  </div>
+</header>
+
+<!-- ───────── SCORECARD ───────── -->
+<section class="stack-lg">
+  <div class="sec-head"><span class="eyebrow">1 · Scorecard</span><h2>Where the design is strong and where it is not</h2></div>
+  <p class="col">Ten GxP capabilities, each scored 0 to 5 for the factory as designed, against today's typical practice of validated documents plus an ALM or eQMS. The factory wins clearly on traceability, change impact and AI governance. It is roughly even on signatures. It is weaker on long-term records, where paper-equivalent PDFs in a validated document system are hard to beat.</p>
+  <figure>
+    <div class="fig" style="display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:18px;align-items:center">
+      <svg id="radar" viewBox="0 0 640 560" role="img" aria-label="Radar chart of ten GxP capabilities: factory as designed versus typical practice today" style="min-width:420px"></svg>
+      <div class="stack" style="min-width:0">
+        <div class="legend"><span><i style="background:var(--accent)"></i>Factory as designed</span><span><i style="background:var(--today)"></i>Typical practice today</span></div>
+        <div class="tbl"><table style="min-width:0"><thead><tr><th>Capability</th><th>Today</th><th>Factory</th></tr></thead><tbody id="radar-rows"></tbody></table></div>
+      </div>
+    </div>
+    <figcaption>Scores are my assessment of the design, not measurements. "Today" means a validated document set with an ALM such as Polarion or an eQMS, run by a competent team.</figcaption>
+  </figure>
+</section>
+
+<!-- ───────── V-MODEL ───────── -->
+<section class="stack-lg">
+  <div class="sec-head"><span class="eyebrow">2 · How it ensures compliance</span><h2>The GAMP 5 V-model, built by the factory</h2></div>
+  <p class="col">GAMP 5 describes validation as a V. Specifications go down the left side, each verified by a matching test level on the right. Risk decides how much rigour each step needs, and change control wraps around everything. The factory maps each part of the V to a hard skill and keeps the horizontal links checked on every commit. The validation report at the top is generated from the graph, never written by hand.</p>
+  <figure>
+    <div class="fig">
+      <svg viewBox="0 0 1100 520" role="img" aria-label="V-model with factory hard skills on each level, horizontal verification links, risk band and change control band">
+        <defs>
+          <marker id="v-arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" class="s-muted"/></marker>
+          <marker id="v-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" class="s-accent"/></marker>
+        </defs>
+        <rect x="380" y="8" width="340" height="48" rx="8" class="s-ok-soft st-ok" stroke-width="1.6"/>
+        <text x="550" y="29" text-anchor="middle" font-size="13" font-weight="700" class="s-ok">Validation report · trace matrix · evidence pack</text>
+        <text x="550" y="47" text-anchor="middle" font-size="11.5" class="s-muted t-mono">generated by @factory/certify on every commit</text>
+        <g font-size="12">
+          <rect x="30" y="72" width="190" height="62" rx="7" class="s-panel st-ink" stroke-width="1.6"/>
+          <text x="44" y="96" font-weight="700" class="s-ink" font-size="13.5">User requirements (URS)</text>
+          <text x="44" y="118" class="s-muted t-mono">intent · regulatory</text>
+          <rect x="120" y="162" width="190" height="62" rx="7" class="s-panel st-ink" stroke-width="1.6"/>
+          <text x="134" y="186" font-weight="700" class="s-ink" font-size="13.5">Functional spec</text>
+          <text x="134" y="208" class="s-muted t-mono">requirements · behavior</text>
+          <rect x="210" y="252" width="190" height="62" rx="7" class="s-panel st-ink" stroke-width="1.6"/>
+          <text x="224" y="276" font-weight="700" class="s-ink" font-size="13.5">Design spec</text>
+          <text x="224" y="298" class="s-muted t-mono">architecture · decisions</text>
+          <rect x="455" y="342" width="190" height="62" rx="7" class="s-accent-soft st-accent" stroke-width="1.6"/>
+          <text x="469" y="366" font-weight="700" class="s-accent" font-size="13.5">Build and configure</text>
+          <text x="469" y="388" class="s-muted t-mono">code · agents · tools</text>
+          <rect x="700" y="252" width="190" height="62" rx="7" class="s-panel st-ink" stroke-width="1.6"/>
+          <text x="714" y="276" font-weight="700" class="s-ink" font-size="13.5">Unit and integration tests</text>
+          <text x="714" y="298" class="s-muted t-mono">verification · evidence</text>
+          <rect x="790" y="162" width="190" height="62" rx="7" class="s-panel st-ink" stroke-width="1.6"/>
+          <text x="804" y="186" font-weight="700" class="s-ink" font-size="13.5">System tests (OQ)</text>
+          <text x="804" y="208" class="s-muted t-mono">verification · gxp</text>
+          <rect x="880" y="72" width="190" height="62" rx="7" class="s-panel st-ink" stroke-width="1.6"/>
+          <text x="894" y="96" font-weight="700" class="s-ink" font-size="13.5">User acceptance (PQ)</text>
+          <text x="894" y="118" class="s-muted t-mono">acceptance · review</text>
+        </g>
+        <g class="st-muted" stroke-width="1.6" fill="none">
+          <path d="M125 134 L190 160" marker-end="url(#v-arr)"/><path d="M215 224 L280 250" marker-end="url(#v-arr)"/><path d="M305 314 L470 340" marker-end="url(#v-arr)"/>
+          <path d="M630 340 L790 316" marker-end="url(#v-arr)"/><path d="M820 250 L870 226" marker-end="url(#v-arr)"/><path d="M910 160 L960 136" marker-end="url(#v-arr)"/>
+        </g>
+        <g class="st-accent" stroke-width="1.6" stroke-dasharray="6 5" fill="none">
+          <line x1="222" y1="103" x2="876" y2="103" marker-end="url(#v-acc)" marker-start="url(#v-acc)"/>
+          <line x1="312" y1="193" x2="786" y2="193" marker-end="url(#v-acc)" marker-start="url(#v-acc)"/>
+          <line x1="402" y1="283" x2="696" y2="283" marker-end="url(#v-acc)" marker-start="url(#v-acc)"/>
+        </g>
+        <g font-size="11.5" class="t-mono">
+          <rect x="460" y="93" width="180" height="20" rx="10" class="s-panel st-rule"/><text x="550" y="107" text-anchor="middle" class="s-accent t-mono">acceptance verified by</text>
+          <rect x="460" y="183" width="180" height="20" rx="10" class="s-panel st-rule"/><text x="550" y="197" text-anchor="middle" class="s-accent t-mono">function verified by</text>
+          <rect x="460" y="273" width="180" height="20" rx="10" class="s-panel st-rule"/><text x="550" y="287" text-anchor="middle" class="s-accent t-mono">design verified by</text>
+        </g>
+        <g font-size="11" font-weight="700" class="t-mono">
+          <rect x="164" y="64" width="60" height="18" rx="9" class="s-ok"/><text x="194" y="77" text-anchor="middle" class="s-paper t-mono">signed</text>
+          <rect x="344" y="244" width="60" height="18" rx="9" class="s-ok"/><text x="374" y="257" text-anchor="middle" class="s-paper t-mono">signed</text>
+          <rect x="1014" y="64" width="60" height="18" rx="9" class="s-ok"/><text x="1044" y="77" text-anchor="middle" class="s-paper t-mono">signed</text>
+        </g>
+        <rect x="30" y="428" width="1040" height="36" rx="7" class="s-warn-soft st-warn" stroke-width="1.4"/>
+        <text x="46" y="451" font-size="12.5" class="s-ink"><tspan font-weight="700" class="s-warn">Risk sets the rigour</tspan> · safety · gxp · profile · CSA: high risk gets scripted, mutation-tested evidence; low risk gets unscripted testing with a session record</text>
+        <rect x="30" y="472" width="1040" height="36" rx="7" class="s-accent-soft st-accent" stroke-width="1.4"/>
+        <text x="46" y="495" font-size="12.5" class="s-ink"><tspan font-weight="700" class="s-accent">Change control wraps everything</tspan> · change · configuration · documents · signatures: every edit marks dependents suspect until re-verified and re-signed</text>
+      </svg>
+    </div>
+    <figcaption>Dashed lines are verification links the compiler checks on every commit. Green badges are approval points that need a real electronic signature.</figcaption>
+  </figure>
+
+  <div class="stack">
+    <h3>ALCOA+: how each data-integrity principle is met</h3>
+    <p class="col small muted">ALCOA+ is the data-integrity standard inspectors apply to GxP records. Each tile names the mechanism in the factory design and how complete it is.</p>
+    <div class="tiles alcoa">
+      <div class="tile"><span class="pill p-ok">strong</span><h3>Attributable</h3><p>Every edit records its actor, and every agent edit its model and skill version. Signatures come from real identities.</p></div>
+      <div class="tile"><span class="pill p-ok">strong</span><h3>Legible</h3><p>Prose stored verbatim and rendered to Markdown byte for byte, with drift caught by <code>render --check</code>.</p></div>
+      <div class="tile"><span class="pill p-warn">needs service</span><h3>Contemporaneous</h3><p>Trusted time comes from the signing service, never from the client's clock. Git dates alone do not qualify.</p></div>
+      <div class="tile"><span class="pill p-ok">strong</span><h3>Original</h3><p>Evidence records keep the raw log, versions, environment and lockfile hash of the executed run.</p></div>
+      <div class="tile"><span class="pill p-warn">partial</span><h3>Accurate</h3><p>Rules check structure and values. Whether the content is correct still needs a qualified reviewer.</p></div>
+      <div class="tile"><span class="pill p-ok">strong</span><h3>Complete</h3><p>A sealed, contiguous trail. Deletions are trail entries; nothing disappears silently.</p></div>
+      <div class="tile"><span class="pill p-ok">strong</span><h3>Consistent</h3><p>One compiler applies one versioned rule set to every record, every time.</p></div>
+      <div class="tile"><span class="pill p-warn">open</span><h3>Enduring</h3><p>Records must stay readable for their retention period, often many years. Format stability and hash agility are open questions.</p></div>
+      <div class="tile"><span class="pill p-ok">strong</span><h3>Available</h3><p>Any baseline can be exported as a complete, human-readable evidence pack for an inspection.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ───────── ASSURANCE STACK ───────── -->
+<section class="stack-lg">
+  <div class="sec-head"><span class="eyebrow">3 · The central risk</span><h2>Structure is not truth</h2></div>
+  <p class="col">The factory gives confidence in layers, and each layer proves less than it appears to. The danger is automation bias: a green check gets read as "compliant" when it only means "linked". SpecForge's own repository already showed this. In its September 2026 audit, <strong>584 of 1,562 linked tests (37%) were weak, mismatched or checked nothing</strong>, although every link was valid.</p>
+  <figure>
+    <div class="fig">
+      <svg viewBox="0 0 1100 440" role="img" aria-label="Five layers of assurance, each with what it proves and what it cannot prove">
+        <g id="stack-layers"></g>
+      </svg>
+    </div>
+    <figcaption>The factory strengthens the bottom three layers and frees people to spend their time on the top two. It cannot remove the top two.</figcaption>
+  </figure>
+</section>
+
+<!-- ───────── RESPONSIBILITY ───────── -->
+<section class="stack-lg">
+  <div class="sec-head"><span class="eyebrow">4 · Who is accountable</span><h2>The factory supports compliance; the regulated company satisfies it</h2></div>
+  <p class="col">Bridger's spec put it well: a library supports a regulation, and only the regulated system satisfies it. The same holds for the factory. GAMP 5 leaves categorisation and risk acceptance to the regulated user, and Part 11 places signature certification on the company. The factory provider can make all of this easy. It cannot own it.</p>
+  <div class="tbl">
+    <table>
+      <thead><tr><th>Activity</th><th>Factory provider</th><th>Regulated company (QA, system owner)</th><th>Regulator or notified body</th></tr></thead>
+      <tbody>
+        <tr><td>Intended use, URS, GAMP category, GxP impact</td><td>Templates and checks</td><td><span class="pill p-acc">decides and owns</span></td><td>Inspects</td></tr>
+        <tr><td>Rule sets that encode the standards</td><td><span class="pill p-acc">builds, tests, versions</span></td><td>Verifies fitness for its use, owns local rules</td><td>May review</td></tr>
+        <tr><td>Validating the factory itself</td><td>Supplies a validation package</td><td><span class="pill p-acc">validates for its use</span></td><td>Inspects</td></tr>
+        <tr><td>Risk assessment and residual-risk acceptance</td><td>Structure and calculations</td><td><span class="pill p-acc">judges and accepts</span></td><td>Inspects</td></tr>
+        <tr><td>Electronic signatures as legally binding</td><td>Signing service and controls</td><td><span class="pill p-acc">certifies to the FDA (§11.100(c)), writes SOPs</span></td><td>Receives certification</td></tr>
+        <tr><td>Review of agent-written work</td><td>Provenance and routing</td><td><span class="pill p-acc">qualified people review</span></td><td>Inspects</td></tr>
+        <tr><td>Release decision</td><td>Gates and evidence pack</td><td><span class="pill p-acc">signs</span></td><td>Approves or certifies, where required</td></tr>
+        <tr><td>Periodic review, CAPA, revalidation</td><td>Triggers and metrics</td><td><span class="pill p-acc">runs and decides</span></td><td>Inspects</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ───────── BLOCKERS ───────── -->
+<section class="stack-lg">
+  <div class="sec-head"><span class="eyebrow">5 · Blocking points</span><h2>Eleven blockers, six of them critical</h2></div>
+  <p class="col">These are design, regulatory and organisational blockers. None of them is about code maturity, and none goes away by writing more code. Each is placed by how hard it is to resolve and how much it affects acceptance by QA and inspectors. Start in the top-right corner.</p>
+  <figure>
+    <div class="fig"><svg id="bubbles" viewBox="0 0 1000 560" role="img" aria-label="Blocking points by difficulty and impact"></svg></div>
+    <div class="legend" style="margin-top:10px"><span><i style="background:var(--cat-reg)"></i>Regulatory</span><span><i style="background:var(--cat-tech)"></i>Design</span><span><i style="background:var(--cat-org)"></i>Organisational</span><span><i style="background:var(--err)"></i>Ring: critical</span></div>
+    <figcaption>Positions are my assessment.</figcaption>
+  </figure>
+  <div class="blockers" id="blockers"></div>
+</section>
+
+<!-- ───────── KPIs ───────── -->
+<section class="stack-lg">
+  <div class="sec-head"><span class="eyebrow">6 · KPIs and metrics</span><h2>One north star, five drivers, fourteen metrics</h2></div>
+  <p class="col">For GxP, the most useful single measure is how fast the company can show an inspector complete, trustworthy evidence for any release. Everything else drives that. Every metric below is computed from the graph by a hard skill, so none needs a manual report.</p>
+  <figure>
+    <div class="fig"><svg id="kpitree" viewBox="0 0 1100 430" role="img" aria-label="KPI tree: north star metric, five drivers and their metrics"></svg></div>
+  </figure>
+  <div class="tbl">
+    <table>
+      <thead><tr><th>Metric</th><th>How it is computed</th><th>Proposed target</th><th>Alert when</th><th>Computed by</th></tr></thead>
+      <tbody id="kpi-rows"></tbody>
+    </table>
+  </div>
+  <p class="small muted col">Targets are proposals for a pilot, not measured results. The 80% mutation threshold follows the qadi project's merge gate.</p>
+
+  <div class="gate">
+    <span class="eyebrow">Proposed GxP release gate</span>
+    <h3>A release can be signed only when all of these hold</h3>
+    <ul>
+      <li>trace completeness on GxP-critical requirements = 100%</li>
+      <li>executed-evidence ratio = 100% (no hand-written evidence)</li>
+      <li>proof strength on GxP-critical requirements ≥ 80% mutation score</li>
+      <li>signature validity = 100% and trail integrity = 100%</li>
+      <li>independent review on high-risk changes = 100%</li>
+      <li>no expired waivers; every active waiver signed by QA</li>
+      <li>no open suspect items older than the release candidate</li>
+    </ul>
+  </div>
+
+  <div class="stack">
+    <h3>What a pilot should prove</h3>
+    <div class="tiles">
+      <div class="tile"><span class="eyebrow">Hypothesis 1</span><span class="big">weeks → hours</span><p>Time to an inspection-ready evidence pack for a release drops from weeks of document work to hours, because the pack is generated.</p></div>
+      <div class="tile"><span class="eyebrow">Hypothesis 2</span><span class="big">80 / 20 flips</span><p>CSA discussions often describe validation effort as mostly documentation and a little testing. The factory should flip that ratio toward testing and critical thinking.</p></div>
+      <div class="tile"><span class="eyebrow">Hypothesis 3</span><span class="big">0 late finds</span><p>Traceability and change-control gaps are found at the edit that causes them, never at QA review or inspection.</p></div>
+      <div class="tile"><span class="eyebrow">Guardrail</span><span class="big">≥ 80%</span><p>Rule precision stays high enough that people keep reading the flags. If it falls, the rules are tuned before scope grows.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ───────── UNBLOCK ───────── -->
+<section class="stack-lg">
+  <div class="sec-head"><span class="eyebrow">7 · Recommendations</span><h2>Unblock in this order</h2></div>
+  <div class="tbl">
+    <table>
+      <thead><tr><th>Step</th><th>Do</th><th>Unblocks</th><th>Done when</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>Define the rule-set lifecycle: requirements per rule, a negative-test harness, versioned releases, QA ownership and change control</td><td>B1, B9</td><td>A rule set ships with its own executed validation evidence, produced by the factory</td></tr>
+        <tr><td>2</td><td>Design the hybrid trust architecture: local compiler, central signing service, trail store, trusted time and external anchors</td><td>B3, B7</td><td>An inspector can verify any signature and the trail without trusting a developer laptop</td></tr>
+        <tr><td>3</td><td>Make honesty structural: "evidence of intent" labels, rule precision tracking, mutation gates and sampled human reviews</td><td>B2</td><td>No green check can be mistaken for a compliance claim</td></tr>
+        <tr><td>4</td><td>Treat AI models and skills as configuration items with revalidation triggers and risk-based review routing</td><td>B4, B10</td><td>A model update produces a scoped impact analysis, not a full revalidation</td></tr>
+        <tr><td>5</td><td>Engage QA and an auditor early with one pilot product and the inspector's view of the evidence pack</td><td>B5, B8</td><td>A mock inspection passes on factory-generated evidence alone</td></tr>
+        <tr><td>6</td><td>Validate every import boundary: source of truth, reconciliation and interface tests</td><td>B6</td><td>Imported records reconcile with their source on every run</td></tr>
+        <tr><td>7</td><td>Write the responsibility model into quality agreements, SOPs and the Part 11 certification</td><td>B8, B11</td><td>Every row of the responsibility table has a named owner and a procedure</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="final">
+  <span class="eyebrow" style="color:var(--paper);opacity:.7">Verdict</span>
+  <h2>The right design for GxP. The work that remains is earning trust.</h2>
+  <p>The factory's core idea is sound: put the standards in hard skills, let agents draft, let the compiler prove structure on every change, and route only judgement to people. That matches where GAMP 5's second edition and FDA's Computer Software Assurance are heading, with risk-based rigour, critical thinking and less paperwork. What decides success is whether a QA head and an inspector will rely on it. That needs validated rules, trusted signatures, honest labels and a pilot that passes a mock inspection. Solve B1, B2, B3 and B5 first. Everything else follows.</p>
+</section>
+
+<footer>
+  <span>Based on the factory design in <code>specforge-review.html</code> (P303, P304), Bridger's SpecForge assessment (SFG-ASSESS-01) and its GxP references, the qadi spec's process rules, and research on GitHub Spec Kit, GSD, Agent OS and Polarion ALM.</span>
+  <span>Regulatory statements (21 CFR Part 11, EU GMP Annex 11, GAMP 5 second edition, FDA Computer Software Assurance, ALCOA+) are summarised from memory. Check them against the source texts before external use.</span>
+</footer>
+
+</div>
+
+<script>
+(function () {
+  var NS = "http://www.w3.org/2000/svg";
+  function el(tag, attrs, text) { var n = document.createElementNS(NS, tag); for (var k in attrs) n.setAttribute(k, attrs[k]); if (text != null) n.textContent = text; return n; }
+  function h(tag, cls, text) { var n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; }
+
+  // ── Radar ──
+  var DIMS = [
+    ["Traceability", 2, 5], ["Risk management", 3, 4], ["Validation evidence", 2, 4], ["Change control and impact", 2, 5], ["Data integrity (ALCOA+)", 3, 4],
+    ["Signatures and audit trail", 4, 4], ["Supplier and user split", 2, 4], ["AI governance", 1, 4], ["Long-term records", 4, 3], ["Periodic review", 2, 4]
+  ];
+  var r = document.getElementById("radar"), CX = 320, CY = 285, R = 190, n = DIMS.length;
+  function pt(i, v) { var a = (-90 + i * 360 / n) * Math.PI / 180; return [CX + R * v / 5 * Math.cos(a), CY + R * v / 5 * Math.sin(a)]; }
+  for (var ring = 1; ring <= 5; ring++) {
+    var ps = []; for (var i = 0; i < n; i++) ps.push(pt(i, ring).join(","));
+    r.appendChild(el("polygon", { points: ps.join(" "), fill: "none", "class": "st-rule", "stroke-width": 1 }));
+    var lp = pt(0, ring); r.appendChild(el("text", { x: lp[0] + 6, y: lp[1] + 4, "font-size": 10.5, "class": "s-muted t-mono" }, String(ring)));
+  }
+  DIMS.forEach(function (d, i) {
+    var e = pt(i, 5); r.appendChild(el("line", { x1: CX, y1: CY, x2: e[0], y2: e[1], "class": "st-rule", "stroke-width": 1 }));
+    var a = (-90 + i * 360 / n) * Math.PI / 180, lx = CX + (R + 22) * Math.cos(a), ly = CY + (R + 22) * Math.sin(a);
+    var anchor = Math.abs(Math.cos(a)) < 0.2 ? "middle" : (Math.cos(a) > 0 ? "start" : "end");
+    var words = d[0].split(" "), l1 = d[0], l2 = "";
+    if (d[0].length > 16) { var mid = Math.ceil(words.length / 2); l1 = words.slice(0, mid).join(" "); l2 = words.slice(mid).join(" "); }
+    var dy = Math.sin(a) < -0.5 ? -6 : (Math.sin(a) > 0.5 ? 12 : 4);
+    r.appendChild(el("text", { x: lx, y: ly + dy - (l2 ? 7 : 0), "text-anchor": anchor, "font-size": 12.5, "font-weight": 600, "class": "s-ink" }, l1));
+    if (l2) r.appendChild(el("text", { x: lx, y: ly + dy + 8, "text-anchor": anchor, "font-size": 12.5, "font-weight": 600, "class": "s-ink" }, l2));
+  });
+  [[1, "s-today", "st-today", 0.18], [2, "s-accent", "st-accent", 0.22]].forEach(function (s) {
+    var ps = DIMS.map(function (d, i) { return pt(i, d[s[0]]).join(","); });
+    r.appendChild(el("polygon", { points: ps.join(" "), "class": s[1] + " " + s[2], "fill-opacity": s[3], "stroke-width": 2.4 }));
+    DIMS.forEach(function (d, i) { var p = pt(i, d[s[0]]); r.appendChild(el("circle", { cx: p[0], cy: p[1], r: 3.6, "class": s[1] })); });
+  });
+  var rows = document.getElementById("radar-rows");
+  DIMS.forEach(function (d) {
+    var tr = h("tr"); tr.appendChild(h("td", null, d[0]));
+    var t = h("td"); t.appendChild(h("span", "pill", String(d[1]))); t.firstChild.style.color = "var(--today)"; tr.appendChild(t);
+    var f = h("td"); f.appendChild(h("span", "pill " + (d[2] > d[1] ? "p-ok" : d[2] < d[1] ? "p-err" : "p-acc"), String(d[2]))); tr.appendChild(f);
+    rows.appendChild(tr);
+  });
+
+  // ── Assurance stack ──
+  var LAYERS = [
+    ["5", "QA release and inspection", "Accountable acceptance by the regulated company; external confirmation", "Inspectors sample. A pass is not a guarantee.", "s-panel st-ink"],
+    ["4", "Human review and signatures", "Judgement on adequacy; accountability with a real identity and meaning", "Reviewers tire and trust green checks too much.", "s-panel st-ink"],
+    ["3", "Test strength", "Mutation score and coverage show tests would fail if behaviour regressed", "Cannot prove the requirement itself is right.", "s-accent-soft st-accent"],
+    ["2", "Executed evidence", "collect runs tests and records which obligations really passed", "A passing test may check nothing (the 37% audit finding).", "s-accent-soft st-accent"],
+    ["1", "Compiler rules", "Every link exists, every field is filled, every rule in the profile holds", "Proves structure only. Cannot judge whether content is true.", "s-accent-soft st-accent"]
+  ];
+  var g = document.getElementById("stack-layers");
+  LAYERS.forEach(function (L, i) {
+    var y = 14 + i * 84, w = 470 + i * 25, x = 20 + (595 - w) / 2;
+    g.appendChild(el("rect", { x: 20, y: y, width: 560, height: 70, rx: 8, "class": L[4], "stroke-width": 1.6 }));
+    g.appendChild(el("text", { x: 40, y: y + 27, "font-size": 15, "font-weight": 700, "class": i < 2 ? "s-ink" : "s-accent" }, L[0] + ". " + L[1]));
+    g.appendChild(el("text", { x: 40, y: y + 50, "font-size": 12.5, "class": "s-ink" }, L[2]));
+    g.appendChild(el("rect", { x: 600, y: y, width: 480, height: 70, rx: 8, "class": "s-err-soft st-err", "stroke-width": 1.2, "stroke-dasharray": "5 4" }));
+    g.appendChild(el("text", { x: 616, y: y + 27, "font-size": 11.5, "font-weight": 700, "class": "s-err t-mono" }, "CANNOT PROVE"));
+    g.appendChild(el("text", { x: 616, y: y + 50, "font-size": 13, "class": "s-ink" }, L[3]));
+    void x; void w;
+  });
+  g.appendChild(el("text", { x: 20, y: 436, "font-size": 12, "class": "s-muted" }, "Layers 1–3: the factory makes them automatic and continuous. Layers 4–5: people, helped by the factory to focus on what was flagged."));
+
+  // ── Blockers ──
+  var B = [
+    ["B1", "Validating the validator", "tech", 4, 5, true,
+      "Every rule set is GxP software. A wrong rule produces false assurance across every product that uses it.",
+      "Requirements per rule, a negative-test harness (\"this bad spec must give exactly these errors\"), versioned signed releases, QA ownership, change control.",
+      "Factory provider builds; regulated company verifies for its use."],
+    ["B2", "Structure is mistaken for truth", "org", 5, 5, true,
+      "Rules prove links and completeness, not adequacy. Automation bias turns \"linked\" into \"compliant\" in people's heads.",
+      "Label approvals as evidence of intent until signed, gate on mutation strength, track rule precision, sample human reviews of green items.",
+      "QA, with metrics from the factory."],
+    ["B3", "Trusted identity, time and audit trail", "tech", 3, 5, true,
+      "Part 11 needs identity, trusted time and tamper evidence. A local compiler over Git cannot provide them alone.",
+      "A hybrid design: local compiler, central signing service with SSO and a second factor, sealed trail store, external timestamp anchors. Validate the service.",
+      "Factory provider builds; company validates and operates."],
+    ["B4", "AI that changes under you", "tech", 4, 4, true,
+      "Models are non-deterministic and are updated by vendors. Agent output used as GxP evidence must be reproducible enough to defend.",
+      "Pin model and skill versions as configuration items, record provenance on every edit, route agent work to human review by risk, never let agents sign.",
+      "Factory provider designs; company sets risk thresholds."],
+    ["B5", "Regulator and QA acceptance", "reg", 3, 5, true,
+      "Inspectors and notified bodies have not seen compiler-generated validation evidence. Unfamiliar evidence invites deeper inspection.",
+      "Align explicitly with GAMP 5 second edition and FDA CSA, run a mock inspection on one pilot product, publish the inspector's view of the evidence pack.",
+      "Regulated company leads; factory provider supports."],
+    ["B6", "Data integrity at the boundaries", "tech", 3, 4, true,
+      "Rules only see what is imported. If an import from the LIMS, MES or QMS drops or alters data, every downstream check is wrong.",
+      "Name a source of truth per record type, validate each interface, reconcile counts and hashes against the source on every run.",
+      "Shared: provider builds connectors, company validates interfaces."],
+    ["B7", "Records that must last for years", "tech", 3, 3, false,
+      "GxP records must stay complete and readable for their retention period. Formats, hash algorithms and tooling will change in that time.",
+      "Archive each baseline as a self-contained human-readable pack, keep hash agility in the seal design, test re-verification of old baselines.",
+      "Factory provider designs; company archives."],
+    ["B8", "Who is accountable", "reg", 2, 4, false,
+      "Teams may assume the tool makes them compliant. GAMP 5 leaves categorisation and risk acceptance to the regulated user.",
+      "Write the responsibility split into quality agreements and SOPs; use \"supports\" and \"satisfies\" consistently in every output.",
+      "Regulated company, with the provider's supplier documentation."],
+    ["B9", "Experts who can write rules", "org", 3, 4, false,
+      "The people who understand Part 11 or IEC 62304 are QA and regulatory experts, not compiler engineers.",
+      "A rule language experts can use without Rust, rule templates per standard, and a review path where engineers check the experts' rules.",
+      "Factory provider builds; QA authors."],
+    ["B10", "Change velocity versus revalidation", "reg", 4, 3, false,
+      "Continuous change can trigger continuous revalidation, which can cost more than the factory saves.",
+      "Scope revalidation by impact analysis on the graph: only items reachable from a change are re-verified. Document this rationale in the validation plan.",
+      "Company decides the policy; factory computes the scope."],
+    ["B11", "Legal and procedural groundwork", "reg", 1, 3, false,
+      "Electronic signatures need the company's certification to the FDA, SOPs and training before they count.",
+      "Send the Part 11 §11.100(c) certification, write signing and review SOPs, train signers.",
+      "Regulated company."]
+  ];
+  var bs = document.getElementById("bubbles");
+  var X0 = 150, X1 = 860, Y0 = 70, Y1 = 470;
+  function bx(v) { return X0 + (v - 1) * (X1 - X0) / 4; }
+  function by(v) { return Y1 - (v - 1) * (Y1 - Y0) / 4; }
+  bs.appendChild(el("rect", { x: bx(3), y: Y0 - 10, width: X1 - bx(3) + 20, height: by(4) - Y0 + 20, rx: 8, "class": "s-err-soft", opacity: 0.55 }));
+  bs.appendChild(el("text", { x: bx(3), y: Y0 - 22, "font-size": 12, "font-weight": 700, "class": "s-err t-mono" }, "HARD AND CRITICAL · START HERE"));
+  for (var v = 1; v <= 5; v++) {
+    bs.appendChild(el("line", { x1: bx(v), x2: bx(v), y1: Y0 - 10, y2: Y1 + 10, "class": "st-rule", "stroke-width": 1 }));
+    bs.appendChild(el("line", { x1: X0 - 10, x2: X1 + 10, y1: by(v), y2: by(v), "class": "st-rule", "stroke-width": 1 }));
+    bs.appendChild(el("text", { x: bx(v), y: Y1 + 30, "text-anchor": "middle", "font-size": 12, "class": "s-muted t-mono" }, String(v)));
+    bs.appendChild(el("text", { x: X0 - 22, y: by(v) + 4, "text-anchor": "end", "font-size": 12, "class": "s-muted t-mono" }, String(v)));
+  }
+  bs.appendChild(el("text", { x: (X0 + X1) / 2, y: Y1 + 56, "text-anchor": "middle", "font-size": 13, "font-weight": 600, "class": "s-ink" }, "Difficulty to resolve →"));
+  bs.appendChild(el("text", { x: 24, y: (Y0 + Y1) / 2, "text-anchor": "middle", "font-size": 13, "font-weight": 600, "class": "s-ink", transform: "rotate(-90 24 " + (Y0 + Y1) / 2 + ")" }, "Impact on GxP acceptance →"));
+  var JIT = { B5: [0.4, -0.18], B6: [0.4, -0.14], B9: [-0.38, 0.1], B3: [-0.12, 0.06], B1: [-0.1, 0], B4: [-0.1, 0] };
+  B.forEach(function (b) {
+    var j = JIT[b[0]] || [0, 0], x = bx(b[3] + j[0]), y = by(b[4] + j[1]);
+    if (b[5]) bs.appendChild(el("circle", { cx: x, cy: y, r: 31, fill: "none", "class": "st-err", "stroke-width": 2.5 }));
+    bs.appendChild(el("circle", { cx: x, cy: y, r: 25, "class": "c-" + b[2] }));
+    bs.appendChild(el("text", { x: x, y: y + 4.5, "text-anchor": "middle", "font-size": 13, "font-weight": 700, "class": "s-paper t-mono" }, b[0]));
+    var ws = b[1].split(" "), l1 = "", l2 = "";
+    ws.forEach(function (w) { if (!l2 && (l1 + " " + w).trim().length <= 20) l1 = (l1 + " " + w).trim(); else l2 = (l2 + " " + w).trim(); });
+    bs.appendChild(el("text", { x: x, y: y + 44, "text-anchor": "middle", "font-size": 11.5, "class": "s-ink" }, l1));
+    if (l2) bs.appendChild(el("text", { x: x, y: y + 58, "text-anchor": "middle", "font-size": 11.5, "class": "s-ink" }, l2));
+  });
+  var box = document.getElementById("blockers"), CAT = { reg: "Regulatory", tech: "Design", org: "Organisational" };
+  B.slice().sort(function (a, b) { return (b[5] - a[5]) || (b[4] * 10 + b[3]) - (a[4] * 10 + a[3]); }).forEach(function (b) {
+    var c = h("article", "blk " + b[2]), top = h("div", "top");
+    top.appendChild(h("code", null, b[0])); top.appendChild(h("span", "pill " + (b[5] ? "p-err" : "p-warn"), b[5] ? "critical" : "important"));
+    c.appendChild(top); c.appendChild(h("span", "small muted", CAT[b[2]] + " · difficulty " + b[3] + " · impact " + b[4])); c.appendChild(h("h3", null, b[1]));
+    var dl = h("dl");
+    [["Why it blocks", b[6]], ["How to unblock", b[7]], ["Owner", b[8]]].forEach(function (p) { var d = h("div"); d.appendChild(h("dt", null, p[0])); d.appendChild(h("dd", null, p[1])); dl.appendChild(d); });
+    c.appendChild(dl); box.appendChild(c);
+  });
+
+  // ── KPI tree ──
+  var K = document.getElementById("kpitree");
+  var marker = el("defs", {}), mk = el("marker", { id: "k-arr", viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto" });
+  mk.appendChild(el("path", { d: "M0 0 L10 5 L0 10 Z", "class": "s-muted" })); marker.appendChild(mk); K.appendChild(marker);
+  K.appendChild(el("rect", { x: 330, y: 12, width: 440, height: 72, rx: 10, "class": "s-ink" }));
+  K.appendChild(el("text", { x: 550, y: 40, "text-anchor": "middle", "font-size": 12, "font-weight": 700, "class": "s-paper t-mono" }, "NORTH STAR"));
+  K.appendChild(el("text", { x: 550, y: 66, "text-anchor": "middle", "font-size": 17, "font-weight": 750, "class": "s-paper t-disp" }, "Time to inspection-ready evidence"));
+  var DRV = [
+    ["Completeness", ["Trace completeness", "Executed-evidence ratio", "ALCOA+ field coverage"]],
+    ["Strength", ["Proof strength (mutation)", "Rule precision", "Independent review rate"]],
+    ["Integrity", ["Signature validity", "Trail integrity", "Import reconciliation"]],
+    ["Timeliness", ["Suspect age", "Revalidation lead time", "CAPA on-time closure"]],
+    ["Focus", ["Human review share", "Waiver exposure"]]
+  ];
+  var W = 196, G = 15, x0 = (1100 - (5 * W + 4 * G)) / 2;
+  DRV.forEach(function (d, i) {
+    var x = x0 + i * (W + G);
+    K.appendChild(el("path", { d: "M550 84 C550 110, " + (x + W / 2) + " 104, " + (x + W / 2) + " 128", fill: "none", "class": "st-muted", "stroke-width": 1.4, "marker-end": "url(#k-arr)" }));
+    K.appendChild(el("rect", { x: x, y: 132, width: W, height: 46, rx: 8, "class": "s-accent-soft st-accent", "stroke-width": 1.6 }));
+    K.appendChild(el("text", { x: x + W / 2, y: 161, "text-anchor": "middle", "font-size": 14.5, "font-weight": 700, "class": "s-accent" }, d[0]));
+    d[1].forEach(function (m, j) {
+      var y = 210 + j * 62;
+      K.appendChild(el("line", { x1: x + W / 2, y1: j ? y - 18 : 178, x2: x + W / 2, y2: y, "class": "st-rule", "stroke-width": 1.2 }));
+      K.appendChild(el("rect", { x: x + 8, y: y, width: W - 16, height: 44, rx: 7, "class": "s-panel st-rule", "stroke-width": 1.3 }));
+      K.appendChild(el("text", { x: x + W / 2, y: y + 27, "text-anchor": "middle", "font-size": 12.5, "class": "s-ink" }, m));
+    });
+  });
+  var KPI = [
+    ["Time to inspection-ready evidence", "Hours from release candidate to a complete, signed evidence pack", "≤ 8 hours", "> 2 days", "certify"],
+    ["Trace completeness", "GxP-critical requirements with a full verified chain ÷ GxP-critical requirements", "100%", "< 100%", "requirements · verification"],
+    ["Executed-evidence ratio", "Evidence records from executed runs ÷ all evidence claims", "100%", "< 100%", "evidence"],
+    ["ALCOA+ field coverage", "Records with actor, trusted time and original reference ÷ records", "100%", "< 100%", "gxp · signatures"],
+    ["Proof strength", "Mutation score of tests linked to GxP-critical requirements", "≥ 80%", "< 70%", "verification"],
+    ["Rule precision", "Flags confirmed as real problems ÷ all flags raised", "≥ 80%", "< 60%", "evidence"],
+    ["Independent review rate", "High-risk approvals where signer ≠ author ÷ high-risk approvals", "100%", "< 100%", "review · signatures"],
+    ["Signature validity", "Required signatures whose hash matches the current revision ÷ required signatures", "100%", "< 100%", "signatures"],
+    ["Trail integrity", "Seal verifications passed ÷ seal verifications", "100%", "any failure", "signatures"],
+    ["Import reconciliation", "Imported records matching their source by count and hash ÷ imported records", "100%", "< 100%", "evidence · configuration"],
+    ["Suspect age", "Median hours an item stays suspect after an upstream change", "≤ 48 h", "> 5 days", "change"],
+    ["Revalidation lead time", "Days from a change to the factory, a rule set or a model to revalidated status", "≤ 5 days", "> 15 days", "tools · change"],
+    ["CAPA on-time closure", "CAPAs closed by their due date ÷ CAPAs due", "≥ 95%", "< 85%", "change"],
+    ["Human review share", "Items routed to a person ÷ items in the graph, tracked per release", "trend down, stable precision", "rising with falling precision", "review"],
+    ["Waiver exposure", "Active waivers on GxP-critical rules; expired waivers", "< 5 active, 0 expired", "any expired", "profile"]
+  ];
+  var kr = document.getElementById("kpi-rows");
+  KPI.forEach(function (k, i) {
+    var tr = h("tr"); var c0 = h("td"); c0.appendChild(h(i === 0 ? "strong" : "span", null, k[0])); tr.appendChild(c0);
+    tr.appendChild(h("td", null, k[1]));
+    var c2 = h("td"); c2.appendChild(h("span", "pill p-ok", k[2])); tr.appendChild(c2);
+    var c3 = h("td"); c3.appendChild(h("span", "pill p-err", k[3])); tr.appendChild(c3);
+    var c4 = h("td"); c4.appendChild(h("code", null, k[4])); tr.appendChild(c4);
+    kr.appendChild(tr);
+  });
+})();
+</script>
+</body>
+</html>

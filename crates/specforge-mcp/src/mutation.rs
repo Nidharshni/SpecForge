@@ -47,8 +47,9 @@ pub struct Written {
     /// new ID), the entities a removal strands, the entities an inference
     /// step produced.
     pub entities: BTreeSet<String>,
-    /// The domain event the call produces; recorded only when it succeeded.
-    pub event: Option<MutationEvent>,
+    /// The domain events the call produces, in order (add_extension's one per
+    /// specifier); recorded only when it succeeded.
+    pub events: Vec<MutationEvent>,
 }
 
 impl Written {
@@ -76,9 +77,9 @@ impl Written {
         self
     }
 
-    /// The call produces `event` when it succeeds.
+    /// The call also produces `event` when it succeeds, after those before.
     pub fn with_event(mut self, event: MutationEvent) -> Self {
-        self.event = Some(event);
+        self.events.push(event);
         self
     }
 }
@@ -88,7 +89,8 @@ impl Written {
 /// its payload the one `spec/events/compilation.spec` declares.
 #[derive(Debug, Clone, PartialEq)]
 pub enum MutationEvent {
-    /// `extension_added`: an add that succeeded, a duplicate included.
+    /// `extension_added`: one specifier of an add that succeeded, a duplicate
+    /// included.
     ExtensionAdded {
         /// The specifier as the call gave it.
         specifier: String,
@@ -347,7 +349,7 @@ fn property_names(schema: &Value) -> std::collections::BTreeSet<String> {
 ///   after }`, checked against `schema` (a reply it refuses is
 ///   `schema_mismatch`, still listing the files in `data`); a failure as its
 ///   McpError with `data.files_written`;
-/// - the domain event is recorded when the reply sent succeeded, then
+/// - the domain events are recorded when the reply sent succeeded, then
 ///   `mcp_mutation_completed` (`files_changed`, `entities_affected`,
 ///   `success` = what the client got).
 ///
@@ -464,13 +466,18 @@ fn sent<R: Object + Serialize, A: AfterWrite>(
     }
 }
 
-/// The domain event when `success`, then `mcp_mutation_completed`
+/// The domain events when `success`, then `mcp_mutation_completed`
 /// (`files_changed` = the files written, `entities_affected` = the entities
 /// changed, `success`).
 fn events(tool: &str, success: bool, written: &Written) -> Vec<Event> {
-    let mut events = Vec::new();
-    if success && let Some(event) = &written.event {
-        events.push((event.name().to_string(), event.params()));
+    let mut events: Vec<Event> = Vec::new();
+    if success {
+        events.extend(
+            written
+                .events
+                .iter()
+                .map(|event| (event.name().to_string(), event.params())),
+        );
     }
     events.push((
         "mcp_mutation_completed".to_string(),

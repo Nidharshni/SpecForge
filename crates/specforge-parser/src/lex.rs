@@ -5,8 +5,9 @@
 //! `lexer_agrees_with_the_grammar` checks it over the repository's spec and
 //! a fixture of the forms the spec does not write. A string is read the
 //! grammar's way, across lines. One the grammar would not close is marked
-//! (`Str { closed: false }`); a `"…"` one ends at its first line's end, so
-//! an unclosed quote never swallows the rest of a document being typed.
+//! (`Str { closed: false }`); a `"…"` one ends at its first line's end and a
+//! `"""…"""` one before the next line that starts a top-level form, so an
+//! unclosed quote never swallows the rest of a document being typed.
 //! The parser's recovery from unclosed strings, the LSP's document, navigation
 //! and the formatter read text through this module and scan none themselves
 //! (ADR 0023, ADR 0038). Where a top-level form starts is this module's too
@@ -50,7 +51,10 @@ pub enum LexemeKind {
     /// `"…"` (no closing quote; a `\` before a line break, which is no
     /// escape; or, spanning lines, a closing quote that runs straight into
     /// text, the pairing an unclosed quote shifts) ends at its first line's
-    /// end. Such a `"""…"""` (no closing `"""`) runs to the end of the text.
+    /// end. Such a `"""…"""` (no closing `"""`, or, spanning lines, closing
+    /// quotes that run straight into text) ends at the end of the line
+    /// before the next line that starts a top-level form, where the parser's
+    /// recovery resumes, else at the text's end.
     Str { closed: bool },
     /// `//` to the end of its line, the newline excluded.
     Comment,
@@ -156,6 +160,29 @@ pub fn starts_top_level_form(text: &str, lexemes: &[Lexeme], max_indent: usize) 
         Some(_) if word(1).is_some() => punct(if title(2) { 3 } else { 2 }, '{') || punct(2, '='),
         _ => false,
     }
+}
+
+/// The start of the first line after the one holding byte `from` of `text`
+/// that starts a top-level form indented by no more than `max_indent` bytes
+/// (`starts_top_level_form`, each line lexed alone: the text after a string
+/// the grammar would not close cannot be lexed whole). Where such a string
+/// ends: the lexer ends an unclosed `"""…"""` at the end of the line before
+/// it, and the parser's recovery ends any unclosed string at it (ADR 0038).
+pub(crate) fn next_form_line(text: &str, from: usize, max_indent: usize) -> Option<usize> {
+    let mut at = from;
+    while let Some(nl) = text[at..].find('\n') {
+        let line = at + nl + 1;
+        if line >= text.len() {
+            return None;
+        }
+        let line_end = text[line..].find('\n').map_or(text.len(), |nl| line + nl);
+        let line_text = &text[line..line_end];
+        if starts_top_level_form(line_text, &lex(line_text), max_indent) {
+            return Some(line);
+        }
+        at = line;
+    }
+    None
 }
 
 /// A byte that continues an identifier: what the grammar's identifiers are
@@ -282,10 +309,32 @@ fn regular_string(bytes: &[u8], open: usize) -> (usize, bool) {
     }
 }
 
+/// The end of the `"""…"""` string opening at `open`, and whether the
+/// grammar closes it: after the first `"""` that follows, unless the string
+/// spans lines and that `"""` runs straight into text (the pairing an
+/// unclosed `"""` shifts). One the grammar would not close ends at the end
+/// of the line before the next line that starts a top-level form
+/// (`next_form_line`, indented no deeper than `top_indent`, the top-level
+/// line it sits under), else at the text's end.
+fn triple_string(text: &str, open: usize, top_indent: usize) -> (usize, bool) {
+    let body = open + TRIPLE.len();
+    let close = text[body..].find(TRIPLE).map(|at| body + at + TRIPLE.len());
+    match close {
+        Some(end) if !text[open..end].contains('\n') || !follows_text(text.as_bytes(), end) => {
+            (end, true)
+        }
+        _ => (
+            next_form_line(text, body, top_indent).map_or(text.len(), |line| line - 1),
+            false,
+        ),
+    }
+}
+
 /// The lexemes of `text`, in order, whitespace skipped. Text that starts
 /// inside a string is read as code: callers lex from a statement's start.
 /// A string the grammar would not close is marked `Str { closed: false }`:
-/// a `"…"` ends at its first line's end, a `"""…"""` at the text's end.
+/// a `"…"` ends at its first line's end, a `"""…"""` at the end of the line
+/// before the next line that starts a top-level form, else at the text's end.
 pub fn lex(text: &str) -> Vec<Lexeme> {
     let bytes = text.as_bytes();
     let find = |from: usize, needle: &[u8]| {
@@ -295,19 +344,28 @@ pub fn lex(text: &str) -> Vec<Lexeme> {
             .map(|at| from + at)
     };
     let mut lexemes = Vec::new();
+    // The brace depth, and the indentation of the last line begun at depth
+    // 0: a top-level form after an unclosed `"""` is indented no deeper.
+    let mut depth = 0usize;
+    let mut top_indent = 0usize;
     let mut i = 0;
     while i < bytes.len() {
         let byte = bytes[i];
         let start = i;
-        let kind = if byte.is_ascii_whitespace() {
+        if byte.is_ascii_whitespace() {
             i += 1;
             continue;
-        } else if bytes[i..].starts_with(b"\"\"\"") {
-            let close = find(i + 3, b"\"\"\"");
-            i = close.map_or(bytes.len(), |end| end + 3);
-            LexemeKind::Str {
-                closed: close.is_some(),
-            }
+        }
+        if depth == 0
+            && !bytes[i..].starts_with(b"//")
+            && let Some(indent) = line_indent(text, i)
+        {
+            top_indent = indent;
+        }
+        let kind = if bytes[i..].starts_with(b"\"\"\"") {
+            let (end, closed) = triple_string(text, i, top_indent);
+            i = end;
+            LexemeKind::Str { closed }
         } else if byte == b'"' {
             let (end, closed) = regular_string(bytes, i);
             i = end;
@@ -340,6 +398,11 @@ pub fn lex(text: &str) -> Vec<Lexeme> {
         } else {
             // Every non-ASCII byte is a word byte: punctuation is ASCII.
             i += 1;
+            match byte {
+                b'{' => depth += 1,
+                b'}' => depth = depth.saturating_sub(1),
+                _ => {}
+            }
             LexemeKind::Punct(char::from(byte))
         };
         lexemes.push(Lexeme {

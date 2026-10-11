@@ -4,11 +4,11 @@ expression: command.clone().render_long_help().to_string()
 ---
 Install an extension
 
-Usage: specforge add [OPTIONS] <SPECIFIER>
+Usage: specforge add [OPTIONS] <SPECIFIERS>...
 
 Arguments:
-  <SPECIFIER>
-          Extension specifier (e.g., @scope/name@1.0.0 or ./path)
+  <SPECIFIERS>...
+          Extension specifiers (e.g., @scope/name@1.0.0 or ./path), added as one change
 
 Options:
       --path <PATH>

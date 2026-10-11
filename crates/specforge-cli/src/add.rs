@@ -1,14 +1,15 @@
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal, Written};
 use crate::terminal::{Terminal, outln};
-use specforge_ops::extension::{self, AddOutcome, AddRequest, Added, Origin};
+use specforge_ops::extension::{self, AddOutcome, AddRequest, Added, AddedExtension, Origin};
 use specforge_ops_registry::ConfiguredRegistry;
 use std::path::PathBuf;
 
 // `specforge add`'s command line.
 #[derive(clap::Args)]
 pub(crate) struct Args {
-    /// Extension specifier (e.g., @scope/name@1.0.0 or ./path)
-    specifier: String,
+    /// Extension specifiers (e.g., @scope/name@1.0.0 or ./path), added as one change
+    #[arg(required = true, num_args = 1..)]
+    specifiers: Vec<String>,
 
     /// Path to the project root
     #[arg(long, default_value = ".")]
@@ -31,8 +32,8 @@ impl Args {
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         let format = self.output.format;
         let path = self.path.as_path();
-        let source = match extension::parse(&self.specifier) {
-            Ok(source) => source,
+        let extensions = match extension::specified(&self.specifiers) {
+            Ok(extensions) => extensions,
             Err(error) => {
                 return Refusal::of(format).report(terminal, &error);
             }
@@ -42,7 +43,7 @@ impl Args {
         let runtime = specforge_component::ComponentRuntime::with_user_cache();
         let request = AddRequest {
             root: path,
-            source,
+            extensions,
             allow_unsigned: self.allow_unsigned,
             trust: format.trust(self.yes),
             dry_run: false,
@@ -63,16 +64,20 @@ impl Args {
 }
 
 /// The add's outcome; its JSON is the add document with `files_written`
-/// (empty when the extension was already enabled).
+/// (empty when every extension was already enabled).
 fn present(added: &Added, files_written: Vec<String>, format: OutputFormat, terminal: &Terminal) {
     match format {
         OutputFormat::Json => terminal.json(&Written::of(added.document(), files_written)),
-        OutputFormat::Human => print_human(&added.outcome, terminal),
+        OutputFormat::Human => {
+            for extension in &added.added {
+                print_human(extension, terminal);
+            }
+        }
     }
 }
 
-fn print_human(outcome: &AddOutcome, terminal: &Terminal) {
-    match outcome {
+fn print_human(added: &AddedExtension, terminal: &Terminal) {
+    match &added.outcome {
         AddOutcome::Builtin {
             name,
             changed,
@@ -106,6 +111,13 @@ fn print_human(outcome: &AddOutcome, terminal: &Terminal) {
         },
         AddOutcome::AlreadyPresent { name, version } => {
             outln!(terminal, "{name} {version} is already installed");
+        }
+        AddOutcome::Duplicate { name, first } => {
+            outln!(
+                terminal,
+                "{} names {name}, which {first} adds",
+                added.specifier
+            );
         }
         // `specforge add` has no dry run.
         AddOutcome::Planned { .. } => {}

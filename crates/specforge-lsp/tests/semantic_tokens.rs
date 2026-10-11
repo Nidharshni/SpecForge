@@ -56,6 +56,42 @@ fn token<'a>(tokens: &'a [SemanticToken], text: &str) -> &'a SemanticToken {
 
 #[spec(
     behavior = "provide_semantic_tokens",
+    verify = "the forms after an unclosed triple-quoted string are classified as the parser reads them"
+)]
+fn the_forms_after_an_unclosed_triple_quoted_string_are_classified() {
+    let text = concat!(
+        "behavior login \"Log in\" {\n",
+        "  contract \"\"\"\n",
+        "    Logs in.\n",
+        "}\n",
+        "\n",
+        "behavior logout \"Log out\" {\n",
+        "  contract \"Logs out.\"\n",
+        "}\n",
+    );
+    // The parser keeps the block after the string...
+    let parsed = specforge_parser::parse_incremental(text, "test.spec", None).0;
+    let ids: Vec<&str> = parsed.entities.iter().map(|e| e.id.raw.as_str()).collect();
+    assert_eq!(ids, ["login", "logout"]);
+    // ...and the editor reads it as a block too, not as the string's text.
+    let tokens = tokens_of(text, kinds(&[("behavior", None)]));
+    for line in ["\"\"\"", "    Logs in.", "}"] {
+        assert_eq!(token(&tokens, line).token_type, "string", "{line:?}");
+    }
+    let logout = token(&tokens, "logout");
+    assert_eq!(logout.token_type, "function");
+    assert_ne!(logout.modifiers & MOD_DECLARATION, 0);
+    assert_eq!(token(&tokens, "\"Logs out.\"").token_type, "string");
+    let keywords: Vec<&str> = tokens
+        .iter()
+        .filter(|t| t.text == "behavior")
+        .map(|t| t.token_type)
+        .collect();
+    assert_eq!(keywords, ["type", "type"]);
+}
+
+#[spec(
+    behavior = "provide_semantic_tokens",
     verify = "a union and an inline ref after an unclosed body are classified as top-level forms"
 )]
 fn a_union_and_an_inline_ref_after_an_unclosed_body_are_classified_as_forms() {
