@@ -61,7 +61,10 @@ behavior recover_from_syntax_errors "Recover From Syntax Errors" {
     entity block), as the lexer's form-start rule reads it; the text is read
     through the lexer (lex_spec_text), so a
     backslash before a line break leaves a string unclosed, as the grammar
-    reads it.
+    reads it. A body left unclosed ends, missing its closing brace, where
+    the next line starts a top-level form indented no deeper than the form
+    the body opened (the same form-start rule, read by the grammar's
+    scanner), so the blocks after it are parsed.
   """
   requires {
     error_recovery_enabled "SourceParser is initialized with error-recovery mode enabled"
@@ -76,6 +79,10 @@ behavior recover_from_syntax_errors "Recover From Syntax Errors" {
   verify unit "a closed multi-line string that contains a block-like line stays whole"
   verify unit "recovery resumes at every top-level form the grammar reads, a union block included"
   verify unit "a backslash before a line break leaves a string unclosed, as the grammar reads it"
+  verify unit "the blocks after an unclosed body are parsed, and its missing closing brace is reported"
+  verify unit "an unclosed body ends where the next top-level form starts, missing its closing brace"
+  verify unit "an unclosed body ends at a form indented no deeper than the form it opened"
+  verify unit "the grammar resumes at every top-level form of the repository's spec after an unclosed body"
   verify unit "completely invalid syntax produces error with location"
   verify unit "missing opening brace produces a parse error"
   verify contract "Recover From Syntax Errors: syntax error recovery holds — error_recovery_enabled, valid_utf8_input, valid_blocks_preserved, errors_collected"
