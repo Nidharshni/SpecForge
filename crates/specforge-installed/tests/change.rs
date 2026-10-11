@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use specforge_common::{Diagnostic, codes};
 use specforge_installed::{Change, Installed, Module, Pin};
-use specforge_protocol_types::PackageName;
+use specforge_package::PackageName;
 use tempfile::TempDir;
 
 type Snapshot = BTreeMap<PathBuf, Vec<u8>>;

@@ -8,7 +8,7 @@
   ],
   "entities": [
     {
-      "exempt": false,
+      "owes_none": false,
       "fields": {
         "needs": "b",
         "status": "active",
@@ -34,7 +34,7 @@
       ]
     },
     {
-      "exempt": false,
+      "owes_none": false,
       "fields": {
         "status": "retired"
       },
@@ -54,7 +54,7 @@
       "verify_texts": []
     },
     {
-      "exempt": true,
+      "owes_none": true,
       "fields": {
         "abstract": "true"
       },

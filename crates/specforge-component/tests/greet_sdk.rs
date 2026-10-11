@@ -35,10 +35,12 @@ fn sdk_greet_extension_passes_protocol() {
     let hs: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(hs["name"], "@sdk/greet");
     assert_eq!(hs["version"], "0.1.0");
-    assert_eq!(hs["protocol_version"], "1.1.0");
-    assert_eq!(hs["contribution_flags"]["entities"], true);
-    assert_eq!(hs["contribution_flags"]["validators"], true);
-    assert_eq!(hs["contribution_flags"]["renderers"], false);
+    assert_eq!(
+        hs["protocol_version"],
+        specforge_protocol_types::PROTOCOL_VERSION
+    );
+    assert!(hs.get("contribution_flags").is_none());
+    assert!(hs.get("providers").is_none());
 
     // __describe entities: the greeting kind with its style field.
     let de = runtime.call_export("@sdk/greet", "__describe", br#"{"category":"entities"}"#);
@@ -89,10 +91,10 @@ mod greet;
 fn every_call(
     declaration: &specforge_protocol_types::ExtensionDeclaration,
 ) -> Vec<(String, Vec<u8>)> {
-    use specforge_protocol_types::SUPPORTED_CATEGORIES;
+    use specforge_protocol_types::DECLARED_CATEGORIES;
     let request = |category: &str| format!(r#"{{"category":"{category}"}}"#).into_bytes();
     let mut calls = vec![("__handshake".to_string(), b"{}".to_vec())];
-    for category in SUPPORTED_CATEGORIES.iter().copied().chain(["nope"]) {
+    for category in DECLARED_CATEGORIES.iter().copied().chain(["nope"]) {
         calls.push(("__describe".to_string(), request(category)));
     }
     let surfaces = &declaration.surfaces;
@@ -180,4 +182,4 @@ fn greet_answers_alike_through_both_runtimes() {
     }
 }
 
-const SUPPORTED_CATEGORY_COUNT: usize = specforge_protocol_types::SUPPORTED_CATEGORIES.len();
+const SUPPORTED_CATEGORY_COUNT: usize = specforge_protocol_types::DECLARED_CATEGORIES.len();

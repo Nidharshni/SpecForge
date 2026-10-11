@@ -9,7 +9,7 @@ use specforge_installed::testing::{install, placeholder_module};
 use specforge_installed::{
     Builtins, Installed, LoadProblem, LockState, hex_sha256, write_lock_file,
 };
-use specforge_protocol_types::PackageName;
+use specforge_package::PackageName;
 use specforge_wasm::testing::InProcessRuntime;
 use specforge_wasm::{WasmCallResult, WasmRuntime};
 use tempfile::TempDir;

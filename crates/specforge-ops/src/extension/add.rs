@@ -9,8 +9,8 @@ use serde::Serialize;
 use specforge_common::codes;
 use specforge_common::shape::Shape;
 use specforge_installed::{Installed, LockSource};
-use specforge_protocol_types::package::SpecifierError;
-use specforge_protocol_types::{PackageName, PackageRef};
+use specforge_package::SpecifierError;
+use specforge_package::{PackageName, PackageRef};
 use specforge_wasm::WasmRuntime;
 use std::path::{Path, PathBuf};
 
@@ -1381,7 +1381,7 @@ mod tests {
             [
                 crate::registry::testing::Asked::Fetch(
                     PackageName::parse("@x/a").unwrap(),
-                    specforge_protocol_types::package::Version::new(2, 0, 0)
+                    specforge_package::Version::new(2, 0, 0)
                 ),
                 crate::registry::testing::Asked::Versions(PackageName::parse("@x/b").unwrap()),
             ]

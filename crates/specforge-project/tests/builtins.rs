@@ -1,5 +1,5 @@
 use specforge_common::Diagnostic;
-use specforge_protocol_types::{EntityKindDescriptor, ExtensionDeclaration};
+use specforge_protocol_types::{DeclaredCategory, EntityKindDescriptor, ExtensionDeclaration};
 use specforge_wasm::WasmRuntime;
 use specforge_wasm::protocol::load_declaration;
 use std::sync::Arc;
@@ -46,8 +46,8 @@ fn product_extension_loads_via_protocol() {
     assert_eq!(manifest.edges.len(), 20);
     assert_eq!(manifest.validation_rules.len(), 61);
     assert_eq!(manifest.shared_fields.len(), 1, "shared fields (tags)");
-    assert!(manifest.contribution_flags().entities);
-    assert!(manifest.contribution_flags().validators);
+    assert!(manifest.declares(DeclaredCategory::Entities));
+    assert!(manifest.declares(DeclaredCategory::ValidationRules));
 
     let diags = declaration_diagnostics(&manifest);
     assert!(diags.is_empty(), "declaration errors: {:?}", diags);
@@ -96,8 +96,8 @@ fn governance_extension_loads_via_protocol() {
         dep_names.contains(&"@specforge/product"),
         "must depend on product (declares edges to feature)"
     );
-    assert!(manifest.contribution_flags().entities);
-    assert!(manifest.contribution_flags().validators);
+    assert!(manifest.declares(DeclaredCategory::Entities));
+    assert!(manifest.declares(DeclaredCategory::ValidationRules));
 
     let diags = declaration_diagnostics(&manifest);
     assert!(diags.is_empty(), "declaration errors: {:?}", diags);
@@ -160,8 +160,8 @@ fn software_extension_loads_via_protocol() {
         "product is an optional peer: software works without it"
     );
     assert!(manifest.handshake.sandbox_policy.is_some());
-    assert!(manifest.contribution_flags().entities);
-    assert!(manifest.contribution_flags().validators);
+    assert!(manifest.declares(DeclaredCategory::Entities));
+    assert!(manifest.declares(DeclaredCategory::ValidationRules));
 
     let diags = declaration_diagnostics(&manifest);
     assert!(diags.is_empty(), "declaration errors: {:?}", diags);
@@ -182,8 +182,8 @@ fn formal_extension_loads_via_protocol() {
     // behavior, event, and invariant (its `expression` claim, ADR 0009).
     assert_eq!(manifest.enhancements.len(), 3);
     assert_eq!(manifest.peers().len(), 1);
-    assert!(manifest.contribution_flags().entities);
-    assert!(manifest.contribution_flags().validators);
+    assert!(manifest.declares(DeclaredCategory::Entities));
+    assert!(manifest.declares(DeclaredCategory::ValidationRules));
 
     let property = manifest
         .entities
@@ -239,8 +239,8 @@ fn rust_extension_loads_via_protocol() {
     let manifest = load_via_protocol("@specforge/rust");
     assert_eq!(manifest.name(), "@specforge/rust");
     assert_eq!(manifest.version(), "1.0.0");
-    assert!(manifest.contribution_flags().analyzers);
-    assert!(!manifest.contribution_flags().entities);
+    assert!(manifest.declares(DeclaredCategory::Analyzers));
+    assert!(!manifest.declares(DeclaredCategory::Entities));
     assert_eq!(manifest.analyzers.len(), 1);
     let ac = &manifest.analyzers[0];
     assert_eq!(ac.language, "rust");
@@ -301,8 +301,8 @@ fn typescript_extension_loads_via_protocol() {
     let manifest = load_via_protocol("@specforge/typescript");
     assert_eq!(manifest.name(), "@specforge/typescript");
     assert_eq!(manifest.version(), "1.0.0");
-    assert!(manifest.contribution_flags().analyzers);
-    assert!(!manifest.contribution_flags().entities);
+    assert!(manifest.declares(DeclaredCategory::Analyzers));
+    assert!(!manifest.declares(DeclaredCategory::Entities));
     assert_eq!(manifest.analyzers.len(), 1);
     let ac = &manifest.analyzers[0];
     assert_eq!(ac.language, "typescript");

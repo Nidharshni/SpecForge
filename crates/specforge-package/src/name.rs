@@ -10,9 +10,9 @@ use std::fmt;
 use std::path::PathBuf;
 use std::str::FromStr;
 
+use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
-
-pub use semver::{Version, VersionReq};
+use specforge_protocol_types::ExtensionDeclaration;
 
 /// The longest package name, in bytes (npm's limit).
 pub const MAX_NAME_LEN: usize = 214;
@@ -32,6 +32,12 @@ pub struct PackageName {
 }
 
 impl PackageName {
+    /// The name `declaration` declares, read as a package name: `add` and `publish` require one
+    /// (ADR 0036); the load does not, so a guest may declare any text.
+    pub fn declared_by(declaration: &ExtensionDeclaration) -> Result<Self, PackageNameError> {
+        Self::parse(declaration.name())
+    }
+
     /// Read `text` (no trimming: callers trim what users type).
     pub fn parse(text: &str) -> Result<Self, PackageNameError> {
         if text.is_empty() {
@@ -722,5 +728,40 @@ mod tests {
             PackageRef::parse("@acme/tool").unwrap().to_string(),
             "@acme/tool"
         );
+    }
+
+    #[specforge_test(
+        behavior = "load_extension_declaration",
+        verify = "a declaration's default short name is its package name's base"
+    )]
+    fn a_declarations_default_short_name_is_its_package_names_base() {
+        for name in [
+            "@specforge/product",
+            "@acme/tool",
+            "@a/x",
+            "@specforge/cargo-test",
+            "greet",
+            "x.y",
+        ] {
+            let mut declaration = ExtensionDeclaration::default();
+            declaration.handshake.name = name.to_string();
+            assert_eq!(
+                declaration.short(),
+                PackageName::parse(name).unwrap().base(),
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_declaration_names_a_package_when_its_name_is_one() {
+        let mut declaration = ExtensionDeclaration::default();
+        declaration.handshake.name = "@acme/tool".to_string();
+        assert_eq!(
+            PackageName::declared_by(&declaration).unwrap().as_str(),
+            "@acme/tool"
+        );
+        declaration.handshake.name = "../../../outside1".to_string();
+        assert!(PackageName::declared_by(&declaration).is_err());
     }
 }

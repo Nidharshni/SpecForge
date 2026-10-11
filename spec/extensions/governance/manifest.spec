@@ -19,19 +19,19 @@ behavior ge_declare_manifest "Declare @specforge/governance Manifest" {
     valid_extension_name "name == '@specforge/governance'"
   }
   ensures {
-    three_entity_kinds   "entityKinds.length == 3"
-    four_edge_types      "edgeTypes.length == 4"
-    all_kinds_named      "entityKinds contains decision, constraint, failure_mode"
-    all_edges_named      "edgeTypes contains DecisionInvariant, ConstrainsBehavior, ProtectsInvariant, FailureModeInvariant"
-    contributes_declared "contributes declares entities=true and validators=true"
-    optional_peer_dep    "peer_dependencies contains @specforge/software ^1.0 (optional, for ConstrainsBehavior cross-extension edge targeting behavior kind)"
-    no_sandbox_policy    "sandbox_policy is null — governance declares no sandbox policy and runs under the host's ceiling"
+    three_entity_kinds  "entityKinds.length == 3"
+    four_edge_types     "edgeTypes.length == 4"
+    all_kinds_named     "entityKinds contains decision, constraint, failure_mode"
+    all_edges_named     "edgeTypes contains DecisionInvariant, ConstrainsBehavior, ProtectsInvariant, FailureModeInvariant"
+    declared_categories "the declaration declares entities, edges and validation_rules"
+    optional_peer_dep   "peer_dependencies contains @specforge/software ^1.0 (optional, for ConstrainsBehavior cross-extension edge targeting behavior kind)"
+    no_sandbox_policy   "sandbox_policy is null — governance declares no sandbox policy and runs under the host's ceiling"
   }
   verify unit "manifest name is @specforge/governance"
   verify unit "manifest declares exactly 3 entity kinds"
   verify unit "manifest declares exactly 4 edge types"
   verify unit "the handshake's protocol major is the host's"
-  verify unit "contributes declares entities and validators"
+  verify unit "the declaration declares entities, edges and validation_rules"
   verify unit "peer_dependencies includes optional @specforge/software"
   verify unit "sandbox_policy is null"
 }

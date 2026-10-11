@@ -124,3 +124,6 @@ is gone (its one use is the plan's).
 
 **What would reopen it:** an install that must be judged against something other than the lock (a
 builtin's or a `.wasm` file entry's version, today `check`'s), or a resolver for `add`.
+
+**Amended by ADR 0050 (2026-10-11):** D1's module is `specforge_package::peers`, beside the package types in the
+host-side crate `specforge-package`; `PeerDependency`, the wire's text, stays in the protocol types.

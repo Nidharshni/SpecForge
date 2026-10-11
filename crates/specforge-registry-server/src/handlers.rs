@@ -6,8 +6,8 @@ use axum::{
     routing::{delete, get, post, put},
 };
 use sha2::{Digest, Sha256};
-use specforge_protocol_types::PackageName;
-use specforge_protocol_types::package::Version;
+use specforge_package::PackageName;
+use specforge_package::Version;
 use specforge_registry_wire::path::route;
 use specforge_registry_wire::{
     ErrorBody, PackageMetadata, PublishReceipt, SearchHit, SearchQuery, SearchResults, TokenIssued,

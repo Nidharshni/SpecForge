@@ -28,7 +28,9 @@ compile (`CompiledProject`) and per session check (`ProjectSession`) *(ADR 0047:
 build reads it:
 
 - the registry checks and the rules read its records;
-- the pass input, a custom validator's context and the coverage rule's entities are adapters over it;
+- the pass input and a custom validator's context are adapters over it; the coverage rule reads the pass
+  input's entities (`specforge_coverage::Entity::from(&PassEntity)`), on the host as in every extension
+  pass *(amended, round 6 plan 12)*;
 - the coverage view, plan validation, stats and the verify-stub fix read its standings.
 
 Operations reach it through the project view (`ProjectView::entities`), seeded into the per-compile memo
@@ -85,13 +87,16 @@ beside it (`FieldRecord::items`, never on the wire).
 It **owes** obligations when a rule applies and nothing exempts it; it **counts** toward coverage when
 testable and owing or declaring; it is **exempt** (the coverage view's word) when testable and neither.
 
-- The counting formula is `Standing::counts`, the host's one statement of it. The pass's entity (the
-  `coverage` extension's input, which that crate scores without the host) has its own,
-  `Entity::counts_toward_coverage`; a test pins them equal over every combination. Every other
-  reader (inspect included) borrows the snapshot's `Standing`; none re-derives it. They are not one
-  function because `specforge-coverage` is an input of two builtin blobs, so sharing one would
-  re-vendor them.
-- The pass input's and the coverage rule's `exempt` is "owes none".
+- The counting formula is stated once, in the coverage rule: `specforge_coverage::Counting` (testable,
+  owes, declared) answers `counts` and `exempt`. `Standing::counts`/`Standing::exempt` (through
+  `Standing::counting`) and the pass entity's `Entity::counts_toward_coverage` read it. Every other
+  reader (inspect included) borrows the snapshot's `Standing`; none re-derives it. *(Amended in round
+  6, plan 12. This bullet kept two formulas, pinned equal by a test, because sharing one re-vendors the
+  builtin blobs that link `specforge-coverage`. That cost is paid once, and round 6 re-vendors every
+  blob anyway; commit b6ac628e reverted the shared function for that cost alone.)*
+- The pass input's and the coverage rule's `owes_none` (named `exempt` until protocol 1.2.0, ADR 0050) says the entity
+  owes none. It is not the coverage view's
+  *exempt* (`Counting::exempt`): an entity that owes none and declares obligations counts.
 - The verify stub is offered to an entity that declares none and either owes obligations or is of a
   testable kind nothing exempts. It fixes the rule that reports it, if any.
 

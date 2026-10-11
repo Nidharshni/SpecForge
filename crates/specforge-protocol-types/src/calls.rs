@@ -391,7 +391,7 @@ pub struct PassEntity {
     /// a field that exempts it does. Decided by the host's one obligation
     /// rule (ADR 0019).
     #[serde(default)]
-    pub exempt: bool,
+    pub owes_none: bool,
     /// One entry per `verify` statement, in order: its kind, or `""` for a
     /// bare `verify "..."`. Empty when the entity declares no obligations.
     #[serde(default)]

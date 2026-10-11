@@ -25,7 +25,7 @@ feature extension_management "Extension Management" {
     compiler must gracefully handle references to uninstalled extensions.
   """
   solution """
-    Contribution-based extension model with nine contribution types (entities, validators, renderers, providers, parsers, collectors, grammars, body_parsers, verify_kinds — with prompts deferred to Phase 2):
+    Contribution-based extension model: an extension declares entities, edges, shared fields, enhancements, validation rules, surfaces, collectors, analyzers, passes and feature flags (ADR 0012, 0050):
     specforge remove manages
     extension removal from specforge.json (specforge add is part of
     the project initialization feature). specforge extensions lists

@@ -10,10 +10,12 @@ repository.workspace = true
 # Linked into the MCP server, whose stdout is the JSON-RPC stream.
 print_stdout = "deny"
 
-# Pure: serde only, so it builds for wasm32-wasip2 inside the testing
-# extension. Keep it out of the SDK and protocol-types (every blob reads those).
+# Pure: serde and the guest wire's `PassEntity`, so it builds for wasm32-wasip2
+# inside the testing, formal and product extensions. Keep it out of the SDK and
+# protocol-types (every blob reads those): it reads them, they never read it.
 [dependencies]
 serde = { workspace = true }
+specforge-protocol-types = { path = "../specforge-protocol-types" }
 
 [dev-dependencies]
 serde_json = { workspace = true }

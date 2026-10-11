@@ -5,7 +5,7 @@
 use specforge_common::codes;
 use specforge_ops::registry::Registry;
 use specforge_ops_registry::{ConfiguredRegistry, configured};
-use specforge_protocol_types::PackageName;
+use specforge_package::PackageName;
 use specforge_registry_client::testing::MemoryClient;
 use specforge_test_macros::test as specforge_test;
 use tempfile::TempDir;
@@ -68,8 +68,8 @@ fn configured_with(registries: &str) -> specforge_ops_registry::Configured {
     configured(dir.path(), "add").unwrap()
 }
 
-fn name(text: &str) -> specforge_protocol_types::PackageName {
-    specforge_protocol_types::PackageName::parse(text).unwrap()
+fn name(text: &str) -> specforge_package::PackageName {
+    specforge_package::PackageName::parse(text).unwrap()
 }
 
 const ACME_AND_MAIN: &str = r#"[

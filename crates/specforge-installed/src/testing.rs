@@ -4,7 +4,7 @@
 
 use std::path::Path;
 
-use specforge_protocol_types::PackageName;
+use specforge_package::PackageName;
 
 use crate::Installed;
 use crate::layout::lock_path;

@@ -6,8 +6,8 @@ use specforge_protocol_types::{
     CommandArgDescriptor, CommandArgType, CommandDescriptor, CompilerPassDescriptor,
     DECLARED_CATEGORIES, DeclaredCategory, DescribeResponse, EdgeTypeDescriptor,
     EntityEnhancementDescriptor, EntityKindDescriptor, ExtensionDeclaration, FeatureFlagDescriptor,
-    FieldDescriptor, HandshakeResponse, PeerDependency, ProtocolError, SUPPORTED_CATEGORIES,
-    SurfaceDescriptor, UnknownKey, ValidationRuleDescriptor, ValidationSeverity,
+    FieldDescriptor, HandshakeResponse, PeerDependency, ProtocolError, SurfaceDescriptor,
+    UnknownKey, ValidationRuleDescriptor, ValidationSeverity,
 };
 
 fn field(name: &str) -> FieldDescriptor {
@@ -106,15 +106,12 @@ fn full() -> ExtensionDeclaration {
 /// The wire answer `declaration` gives for `category`, as a guest serves it.
 fn answer(
     declaration: &ExtensionDeclaration,
-    category: &str,
+    category: DeclaredCategory,
 ) -> Result<DescribeResponse, ProtocolError> {
-    let items = declaration
-        .describe_items(category)
-        .ok_or_else(|| ProtocolError::UnsupportedCategory(category.to_string()))?;
     // Through the bytes, as the host receives them.
     let bytes = serde_json::to_vec(&DescribeResponse {
-        category: category.to_string(),
-        items,
+        category: category.name().to_string(),
+        items: declaration.describe_items(category),
     })
     .unwrap();
     Ok(serde_json::from_slice(&bytes).unwrap())
@@ -130,7 +127,7 @@ fn a_declaration_round_trips_through_its_wire_answers() {
     let loaded = ExtensionDeclaration::from_wire(
         declared.handshake.clone(),
         |category| {
-            asked.push(category.to_string());
+            asked.push(category.name().to_string());
             answer(&declared, category)
         },
         |key| panic!("unexpected unknown key {key:?}"),
@@ -138,15 +135,9 @@ fn a_declaration_round_trips_through_its_wire_answers() {
     .unwrap();
     assert_eq!(loaded, declared);
     assert_eq!(asked, DECLARED_CATEGORIES);
-    // Every supported category has an answer, the reserved ones empty.
-    for category in SUPPORTED_CATEGORIES {
-        assert!(declared.describe_items(category).is_some(), "{category}");
-    }
-    assert_eq!(declared.describe_items("grammars"), Some(json!([])));
-    assert_eq!(declared.describe_items("nope"), None);
-    // So does an empty one: no surfaces is no item at all.
+    // An empty declaration answers too: no surfaces is no item at all.
     let empty = ExtensionDeclaration::default();
-    assert_eq!(empty.describe_items("surfaces"), Some(json!([])));
+    assert_eq!(empty.describe_items(DeclaredCategory::Surfaces), json!([]));
     let loaded = ExtensionDeclaration::from_wire(
         empty.handshake.clone(),
         |category| answer(&empty, category),
@@ -165,8 +156,8 @@ fn a_category_that_does_not_parse_fails_naming_it() {
     let error = ExtensionDeclaration::from_wire(
         declared.handshake.clone(),
         |category| match category {
-            "passes" => Ok(DescribeResponse {
-                category: category.to_string(),
+            DeclaredCategory::Passes => Ok(DescribeResponse {
+                category: category.name().to_string(),
                 items: json!([{ "nam": "x" }]),
             }),
             other => answer(&declared, other),
@@ -190,8 +181,8 @@ fn a_category_that_does_not_parse_fails_naming_it() {
     let error = ExtensionDeclaration::from_wire(
         declared.handshake.clone(),
         |category| match category {
-            "surfaces" => Err(ProtocolError::DescribeFailed {
-                category: category.to_string(),
+            DeclaredCategory::Surfaces => Err(ProtocolError::DescribeFailed {
+                category: category.name().to_string(),
                 reason: "guest_error: boom".to_string(),
             }),
             other => answer(&declared, other),
@@ -215,8 +206,8 @@ fn an_unknown_item_key_is_reported() {
     let loaded = ExtensionDeclaration::from_wire(
         declared.handshake.clone(),
         |category| match category {
-            "entities" => Ok(DescribeResponse {
-                category: category.to_string(),
+            DeclaredCategory::Entities => Ok(DescribeResponse {
+                category: category.name().to_string(),
                 items: json!([{
                     "name": "x",
                     "testabel": true,
@@ -224,8 +215,8 @@ fn an_unknown_item_key_is_reported() {
                     "fields": [{ "name": "f", "field_type": "string", "requird": true }],
                 }]),
             }),
-            "surfaces" => Ok(DescribeResponse {
-                category: category.to_string(),
+            DeclaredCategory::Surfaces => Ok(DescribeResponse {
+                category: category.name().to_string(),
                 items: json!([{
                     "commands": [{
                         "id": "list", "title": "List", "description": "d", "export": "cmd__list",
@@ -270,25 +261,6 @@ fn an_unknown_item_key_is_reported() {
 
 #[specforge_test_macros::test(
     behavior = "load_extension_declaration",
-    verify = "the fields category is every kind's fields, concatenated"
-)]
-fn the_fields_category_is_every_kinds_fields() {
-    let declared = full();
-    let fields = declared.describe_items("fields").unwrap();
-    let names: Vec<&str> = fields
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|f| f["name"].as_str().unwrap())
-        .collect();
-    assert_eq!(names, ["title", "owner", "axis"]);
-    // Shared fields are their own category, never part of `fields`.
-    assert!(!names.contains(&"tags"));
-    assert!(!DECLARED_CATEGORIES.contains(&"fields"));
-}
-
-#[specforge_test_macros::test(
-    behavior = "load_extension_declaration",
     verify = "an absent short is the name's last segment"
 )]
 fn an_absent_short_is_the_names_last_segment() {
@@ -302,23 +274,22 @@ fn an_absent_short_is_the_names_last_segment() {
     assert_eq!(declaration.short(), "solo");
 }
 
-/// Identity, peers and verify kinds read through the declaration; the
-/// content decides its contribution flags, the handshake only the others.
+/// Identity, peers and verify kinds read through the declaration; what it
+/// contributes is its content, the handshake says only `providers`.
 #[test]
-fn a_declaration_reads_its_identity_and_derives_its_flags() {
+fn a_declaration_reads_its_identity_and_its_providers() {
     let mut declaration = full();
     assert_eq!(declaration.name(), "@acme/reports");
     assert_eq!(declaration.version(), "0.1.0");
     assert_eq!(declaration.peers()[0].name, "@acme/base");
     assert_eq!(declaration.verify_kinds(), ["unit"]);
 
-    declaration.handshake.contribution_flags.entities = false;
-    declaration.handshake.contribution_flags.providers = true;
-    let flags = declaration.contribution_flags();
-    assert!(flags.entities && flags.validators && !flags.collectors && !flags.analyzers);
-    assert!(flags.providers);
-    declaration.handshake.contribution_flags.collectors = true;
-    assert!(!declaration.contribution_flags().collectors);
+    assert!(!declaration.handshake.providers);
+    let wire = serde_json::to_value(&declaration.handshake).unwrap();
+    assert!(wire.get("providers").is_none() && wire.get("contribution_flags").is_none());
+    declaration.handshake.providers = true;
+    let wire = serde_json::to_value(&declaration.handshake).unwrap();
+    assert_eq!(wire["providers"], json!(true));
 }
 
 /// Absent optional handshake fields are absent on the wire, so a
@@ -332,7 +303,7 @@ fn absent_handshake_metadata_is_not_serialized() {
         ..Default::default()
     };
     let wire = serde_json::to_value(&handshake).unwrap();
-    for key in ["ext_short", "description", "keywords"] {
+    for key in ["ext_short", "description", "keywords", "providers"] {
         assert!(wire.get(key).is_none(), "{key} in {wire}");
     }
     let parsed: HandshakeResponse = serde_json::from_value(wire).unwrap();
@@ -341,25 +312,56 @@ fn absent_handshake_metadata_is_not_serialized() {
 
 #[specforge_test_macros::test(
     behavior = "load_extension_declaration",
-    verify = "the loader reads the handshake and every describe category once"
+    verify = "the declared categories are the protocol's only describe categories"
 )]
-fn every_declared_category_is_a_supported_one() {
+fn the_declared_categories_are_the_only_describe_categories() {
     let names: Vec<&str> = DeclaredCategory::ALL.iter().map(|c| c.name()).collect();
     assert_eq!(DECLARED_CATEGORIES, names.as_slice());
     for category in DeclaredCategory::ALL {
         assert_eq!(DeclaredCategory::from_name(category.name()), Some(category));
     }
-    // The wire list holds every declared name, and only the categories the
-    // host never reads besides.
-    let mut others: Vec<&str> = SUPPORTED_CATEGORIES
-        .iter()
-        .copied()
-        .filter(|name| !names.contains(name))
-        .collect();
-    others.sort_unstable();
-    assert_eq!(others, ["body_parsers", "fields", "grammars"]);
-    for other in others {
-        assert_eq!(DeclaredCategory::from_name(other), None);
+    for other in ["fields", "grammars", "body_parsers", "nope"] {
+        assert_eq!(DeclaredCategory::from_name(other), None, "{other}");
     }
-    assert_eq!(DeclaredCategory::from_name("nope"), None);
+}
+
+#[test]
+fn declares_reads_the_content() {
+    let declared = full();
+    // `full()` declares nothing in collectors or analyzers.
+    let all: Vec<DeclaredCategory> = declared.declared_categories().collect();
+    let expected: Vec<DeclaredCategory> = DeclaredCategory::ALL
+        .into_iter()
+        .filter(|c| {
+            !matches!(
+                c,
+                DeclaredCategory::Collectors | DeclaredCategory::Analyzers
+            )
+        })
+        .collect();
+    assert_eq!(all, expected);
+    for category in DeclaredCategory::ALL {
+        let items = declared.describe_items(category);
+        assert_eq!(
+            declared.declares(category),
+            !items.as_array().unwrap().is_empty(),
+            "{category:?}"
+        );
+    }
+    let empty = ExtensionDeclaration::default();
+    assert_eq!(empty.declared_categories().count(), 0);
+    assert!(!empty.declares(DeclaredCategory::Surfaces));
+    let mut surfaced = ExtensionDeclaration::default();
+    surfaced.surfaces.commands.push(CommandDescriptor {
+        id: "list".to_string(),
+        title: "List".to_string(),
+        description: "d".to_string(),
+        export: "cmd__list".to_string(),
+        ..Default::default()
+    });
+    assert!(surfaced.declares(DeclaredCategory::Surfaces));
+    assert_eq!(
+        surfaced.declared_categories().collect::<Vec<_>>(),
+        [DeclaredCategory::Surfaces]
+    );
 }

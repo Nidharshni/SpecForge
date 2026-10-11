@@ -2,7 +2,7 @@
 //! (__handshake / __describe) through a WasmRuntime implementation.
 
 use specforge_extension_sdk::{ContributionsBuilder, ExtensionMeta, no_other_exports};
-use specforge_protocol_types::{ContributionFlags, HandshakeResponse};
+use specforge_protocol_types::HandshakeResponse;
 use specforge_test::prelude::*;
 use specforge_wasm::testing::InProcessRuntime;
 use specforge_wasm::{WasmCallResult, WasmTrapInfo};
@@ -156,7 +156,6 @@ fn protocol_version_mismatch_produces_e028() {
         protocol_version: "99.0".to_string(),
         name: "@test/badver".to_string(),
         version: "1.0.0".to_string(),
-        contribution_flags: ContributionFlags::default(),
         peer_dependencies: vec![],
         sandbox_policy: None,
         starter_template: None,

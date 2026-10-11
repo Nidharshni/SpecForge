@@ -141,9 +141,8 @@ pub(super) fn render_markdown(outline: &OutlineIntermediate, options: &OutlineOp
         }
 
         // Contributes
-        let flags = contributes_list(&ext.contributes);
-        if !flags.is_empty() {
-            writeln!(out, "**Contributes**: {}", flags.join(", ")).unwrap();
+        if !ext.contributes.is_empty() {
+            writeln!(out, "**Contributes**: {}", ext.contributes.join(", ")).unwrap();
             writeln!(out).unwrap();
         }
 
@@ -342,36 +341,4 @@ fn summarize_enhancements(outline: &OutlineIntermediate, ext_name: &str) -> Stri
         .map(|e| format!("{} (+{})", e.target_kind, e.field_count))
         .collect::<Vec<_>>()
         .join(", ")
-}
-
-fn contributes_list(c: &super::OutlineContributes) -> Vec<&'static str> {
-    let mut flags = Vec::new();
-    if c.entities {
-        flags.push("entities");
-    }
-    if c.validators {
-        flags.push("validators");
-    }
-    if c.renderers {
-        flags.push("renderers");
-    }
-    if c.providers {
-        flags.push("providers");
-    }
-    if c.collectors {
-        flags.push("collectors");
-    }
-    if c.prompts {
-        flags.push("prompts");
-    }
-    if c.parsers {
-        flags.push("parsers");
-    }
-    if c.grammars {
-        flags.push("grammars");
-    }
-    if c.body_parsers {
-        flags.push("body_parsers");
-    }
-    flags
 }

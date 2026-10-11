@@ -76,7 +76,7 @@ impl<'a> ExtensionEntry<'a> {
         }
         // The one rule that splits `name@requirement`: the requirement of
         // a legacy entry is not read here.
-        ExtensionEntry::Named(specforge_protocol_types::package::split_requirement(entry).0)
+        ExtensionEntry::Named(specforge_package::split_requirement(entry).0)
     }
 
     /// The package a named entry names, or why its name is none (a name
@@ -84,14 +84,9 @@ impl<'a> ExtensionEntry<'a> {
     /// for a `.wasm` file entry, which names a file.
     pub fn package_name(
         &self,
-    ) -> Option<
-        Result<
-            specforge_protocol_types::PackageName,
-            specforge_protocol_types::package::PackageNameError,
-        >,
-    > {
+    ) -> Option<Result<specforge_package::PackageName, specforge_package::PackageNameError>> {
         match *self {
-            ExtensionEntry::Named(name) => Some(specforge_protocol_types::PackageName::parse(name)),
+            ExtensionEntry::Named(name) => Some(specforge_package::PackageName::parse(name)),
             ExtensionEntry::File { .. } => None,
         }
     }

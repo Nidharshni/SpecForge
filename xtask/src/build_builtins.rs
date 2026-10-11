@@ -749,4 +749,22 @@ mod tests {
         );
         assert_ne!(inherited_tables(a), inherited_tables(&c));
     }
+
+    /// Pin (flipped by 04-T4): every builtin blob compiles the package and peer rules, which no
+    /// guest calls (ADR 0050).
+    #[test]
+    fn pin_every_builtin_compiles_the_package_and_peer_rules() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        for &(name, _) in EXTENSIONS {
+            let path = root.join(format!("extensions/{name}/wasm/{INPUTS_FILE}"));
+            let record: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+            let inputs = record["inputs"].as_object().unwrap();
+            for file in [
+                "crates/specforge-protocol-types/src/package.rs",
+                "crates/specforge-protocol-types/src/peers.rs",
+            ] {
+                assert!(inputs.contains_key(file), "{name}: {file}");
+            }
+        }
+    }
 }

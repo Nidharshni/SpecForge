@@ -9,8 +9,8 @@ use sha2::{Digest, Sha256};
 use specforge_ops::extension::Trust;
 use specforge_ops::registry::{Publisher, Registry};
 use specforge_ops_registry::{ConfiguredRegistry, User};
-use specforge_protocol_types::PackageName;
-use specforge_protocol_types::package::Version;
+use specforge_package::PackageName;
+use specforge_package::Version;
 use specforge_registry_client::testing::MemoryClient;
 use specforge_registry_client::{
     KnownKeys, RegistryConfig, SigningKey, load_known_keys_at, save_known_keys_at,
@@ -24,7 +24,7 @@ const NAME: &str = "@acme/tool";
 const VERSION: &str = "1.0.0";
 const WASM: &[u8] = b"\0asm-acme-tool";
 /// The package's declaration, as `specforge publish` uploads it.
-const MANIFEST: &str = r#"{"handshake":{"protocol_version":"1.0.0","name":"@acme/tool","version":"1.0.0","contribution_flags":{},"peer_dependencies":[],"sandbox_policy":null}}"#;
+const MANIFEST: &str = r#"{"handshake":{"protocol_version":"1.0.0","name":"@acme/tool","version":"1.0.0","peer_dependencies":[],"sandbox_policy":null}}"#;
 
 fn sha256(bytes: &[u8]) -> String {
     Sha256::digest(bytes)
@@ -432,7 +432,7 @@ fn a_registry_answering_with_another_package_is_refused() {
 )]
 fn a_correctly_signed_package_carries_the_peers_its_manifest_declares() {
     let key = SigningKey::generate();
-    let manifest = r#"{"handshake":{"protocol_version":"1.0.0","name":"@acme/tool","version":"1.0.0","contribution_flags":{},"peer_dependencies":[{"name":"@acme/base","version":"^1.0"}],"sandbox_policy":null}}"#;
+    let manifest = r#"{"handshake":{"protocol_version":"1.0.0","name":"@acme/tool","version":"1.0.0","peer_dependencies":[{"name":"@acme/base","version":"^1.0"}],"sandbox_policy":null}}"#;
     let project = Project::on(Reply::signed_over(&key, NAME, WASM, manifest));
 
     let package = project.fetch(false, Trust::Refuse).unwrap();
@@ -480,7 +480,7 @@ fn a_package_served_without_a_manifest_is_refused() {
 )]
 fn a_manifest_describing_another_package_is_refused() {
     let key = SigningKey::generate();
-    let manifest = r#"{"handshake":{"protocol_version":"1.0.0","name":"@evil/tool","version":"1.0.0","contribution_flags":{},"peer_dependencies":[],"sandbox_policy":null}}"#;
+    let manifest = r#"{"handshake":{"protocol_version":"1.0.0","name":"@evil/tool","version":"1.0.0","peer_dependencies":[],"sandbox_policy":null}}"#;
     let project = Project::on(Reply::signed_over(&key, NAME, WASM, manifest));
 
     let error = project.fetch(true, Trust::AssumeYes).unwrap_err();

@@ -13,7 +13,7 @@ use std::fmt;
 
 use semver::{Version, VersionReq};
 
-use crate::{ExtensionDeclaration, PeerDependency};
+use specforge_protocol_types::{ExtensionDeclaration, PeerDependency};
 
 /// A declared peer, read: the peer's name, the versions of it the declaring extension accepts,
 /// and whether the peer may be absent.

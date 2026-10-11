@@ -9,7 +9,7 @@ use specforge_ops::publish::{PublishReport, publish};
 use specforge_ops::registry::testing::{Asked, MemoryRegistry};
 use specforge_ops::registry::{Registry, Unconfigured};
 use specforge_ops::testing::declaring;
-use specforge_protocol_types::package::{PackageName, Version};
+use specforge_package::{PackageName, Version};
 use specforge_test_macros::test as specforge_test;
 use specforge_wasm::testing::InProcessRuntime;
 

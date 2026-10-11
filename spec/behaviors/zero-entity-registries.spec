@@ -658,7 +658,7 @@ behavior registry_build_peer_dependencies "Registry Build Checks Peer Dependenci
   }
   contract   """
     The registry build MUST judge every declaration's peer dependencies by
-    the one peer rule (specforge_protocol_types::peers, ADR 0041) against
+    the one peer rule (specforge_package::peers, ADR 0041) against
     the loaded declarations. The range is read first, as Cargo reads a
     SemVer requirement (caret, tilde, comparisons, wildcards, and a bare
     version as a caret): a range that is not one is E073, whether the peer

@@ -516,7 +516,7 @@ fn the_pass_input_carries_each_entitys_exemption() {
                         input
                             .entities
                             .iter()
-                            .map(|e| (e.id.clone(), e.testable, e.exempt)),
+                            .map(|e| (e.id.clone(), e.testable, e.owes_none)),
                     )
                 });
                 Vec::<PassDiagnostic>::new()

@@ -103,7 +103,13 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Extension declaration**: everything one extension declares — its handshake and every describe
   category — as the protocol types (`specforge_protocol_types::ExtensionDeclaration`). The SDK
   builds it, the guest serves it, the host loads it once, the Registry build reads it, a package
-  registry stores it (ADR 0012).
+  registry stores it (ADR 0012). What it contributes is what it declares (`ExtensionDeclaration::declares`
+  over the ten describe categories); its handshake's `providers` says it implements configured providers
+  (ADR 0050).
+- **Guest wire**: what the host and an extension's guest both compile (`specforge-protocol-types`): the
+  extension declaration, the operation payloads, the extension vocabulary and the command-arg rule. Every
+  builtin blob is built from it, so it holds nothing only the host reads: the host's reading of package names,
+  version requirements and peer ranges is `specforge-package` (ADR 0050).
 - **Installed extension**: an extension placed in the project under
   `.specforge/extensions/<name>/extension.wasm` and pinned by its `specforge.lock` entry (version,
   source `registry` or `local:<path>`, the SHA-256 of the binary). It loads only while its binary is
@@ -193,7 +199,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   - what exempts it, if anything (a union body, an exempting flag, a kind that accepts no `verify`).
 
   The registry checks and the rules read the records (`specforge_registry::entity::EntityRecord`).
-  The pass input, a custom validator's context and the coverage rule's entities are adapters over it.
+  The pass input and a custom validator's context are adapters over it; the coverage rule reads the pass
+  input's entities (`specforge_coverage::Entity::from`), on the host as in every extension pass.
   Never read a graph node to answer what an entity says or owes.
 - **Field text**: the one string a field value is to a rule, a custom validator and a compiler pass
   (ADR 0019): scalars as written; lists of strings or references and mixed lists joined by `", "`;
@@ -214,8 +221,11 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   - how many obligations it declares.
 
   It **owes** obligations when a rule applies and nothing exempts it. It **counts** toward coverage
-  when testable and owing or declaring. It is **exempt** when testable and neither. W004, the pass
-  input's `exempt`, the coverage rule, stats, plan validation and the verify-stub fix read it.
+  when testable and owing or declaring, and is **exempt** when testable and neither: the coverage
+  rule's one counting rule (`specforge_coverage::Counting`), read with the standing's facts
+  (`Standing::counting`). W004, stats, plan validation and the verify-stub fix read it. The pass
+  input's `owes_none` is not this word: it says the entity owes none, and such an entity still counts
+  when it declares obligations.
 - **Package registry client**: what talks to a package registry: search, versions, metadata, download and
   publish over HTTP, credentials in the OS keyring, publisher trust and package signing
   (`specforge-registry-client`). Not the Registry build, which is pure and needs none of it.
@@ -256,7 +266,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Package name**: what an extension package is called, `@scope/name` (a registry holds only
   these) or `name` alone (a local module); each part `a-z 0-9 . _ -`, starting with a letter or
   digit, so it is always a relative path inside the directory it is joined to and one URL segment
-  (`specforge_protocol_types::PackageName`, ADR 0036). A declaration's `name` is checked as one where
+  (`specforge_package::PackageName`, ADR 0036, 0050). A declaration's `name` is checked as one where
   `add` installs and `publish` uploads it; a `specforge.json` entry and a lock entry are read as one.
 - **Version requirement**: which version of a package is asked for: `latest` (the highest release,
   a pre-release only when there is none), one full version, or a SemVer requirement read as Cargo
@@ -265,7 +275,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   resolve.
 - **Peer requirement**: what an extension declares it needs from another extension: the peer's name,
   a SemVer range read as Cargo reads one, and whether the peer may be absent
-  (`specforge_protocol_types::peers::PeerRequirement`). One rule judges it (`peers::verdict`): an
+  (`specforge_package::peers::PeerRequirement`, ADR 0050). One rule judges it (`peers::verdict`): an
   unreadable range satisfies nothing (E073); a required peer must be installed; an installed one must
   be at a version the range accepts (E027 otherwise). The registry build, `doctor` and the lock plan
   read that rule and nothing else (ADR 0041).
@@ -335,7 +345,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   target.
 - **Configured providers**: the `providers` `specforge.json` lists (scheme, alias, extension,
   settings), registered once per environment against the loaded declarations, each with its
-  status (registered, extension not loaded, not a provider, scheme taken) and the W118/E057 the
+  status (registered, extension not loaded, not a provider (its handshake does not say `providers`), scheme taken) and the W118/E057 the
   registration reported (`specforge_project::providers::Providers`). The compile's I005 and the
   providers listing read this one registration.
 - **Management operation**: an operation about a project's setup and tooling rather than its

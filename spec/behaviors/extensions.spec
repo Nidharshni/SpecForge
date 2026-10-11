@@ -85,9 +85,7 @@ behavior load_extension_manifests "Load Extension Manifests" {
     binary and reads its declaration once. Once all declarations are loaded
     and the extension_manifests_loaded event is produced, the registry build
     (build_registries_from_declarations) validates them and populates the
-    KindRegistry, FieldRegistry, and EdgeRegistry. The grammars and
-    body_parsers contribution flags are reserved: nothing reads those
-    contributions.
+    KindRegistry, FieldRegistry, and EdgeRegistry.
   """
   verify unit "installed extension manifest is loaded"
   verify unit "an installed extension loads only when its binary is the one its specforge.lock entry pins"
@@ -116,9 +114,9 @@ behavior load_extension_declaration "Load Extension Declaration" {
   types      [ExtensionDeclaration, HandshakeResponse]
   contract   """
     The host MUST read an extension's declaration through one loader: its
-    handshake, then every declared describe category (entities, edges,
+    handshake, then every describe category (entities, edges,
     shared_fields, enhancements, validation_rules, surfaces, collectors,
-    analyzers, passes, feature_flags), whatever its contribution flags say.
+    analyzers, passes, feature_flags), the only ones the protocol defines.
     A category that does not parse MUST fail the extension's load (E028)
     naming the category. A describe item key the protocol does not define
     MUST produce W138. The declaration is read once per environment load;
@@ -133,7 +131,7 @@ behavior load_extension_declaration "Load Extension Declaration" {
   verify unit "a declaration round-trips through its wire answers unchanged"
   verify unit "a describe category that does not parse fails the load naming the category"
   verify unit "a describe item key the protocol does not define produces W138"
-  verify unit "the fields category is every kind's fields, concatenated"
+  verify unit "the declared categories are the protocol's only describe categories"
   verify unit "an absent short is the name's last segment"
   verify unit "a declaration's default short name is its package name's base"
   verify unit "the SDK's short name reaches the handshake as ext_short"

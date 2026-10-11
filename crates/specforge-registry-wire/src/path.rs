@@ -1,8 +1,8 @@
 //! Where each call goes. A client joins these to the registry's base URL; the server mounts [`route`]'s
 //! patterns, which are [`PREFIX`] followed by the same paths.
 
-use specforge_protocol_types::PackageName;
-use specforge_protocol_types::package::Version;
+use specforge_package::PackageName;
+use specforge_package::Version;
 
 /// What a registry's base URL ends with, and what the server mounts every path under.
 pub const PREFIX: &str = "/v1";

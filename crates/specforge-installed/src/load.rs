@@ -9,7 +9,8 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use specforge_common::{Diagnostic, ExtensionEntry, codes};
-use specforge_protocol_types::{ExtensionDeclaration, PackageName};
+use specforge_package::PackageName;
+use specforge_protocol_types::ExtensionDeclaration;
 use specforge_wasm::protocol::load_declaration;
 use specforge_wasm::{ExtensionCalls, WasmRuntime};
 

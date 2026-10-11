@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use specforge_common::{Diagnostic, codes};
-use specforge_protocol_types::PackageName;
+use specforge_package::PackageName;
 use std::path::Path;
 
 use crate::layout::lock_path;
@@ -233,7 +233,7 @@ mod tests {
         let lock = LockFile {
             lockfile_version: 1,
             entries: vec![LockFileEntry {
-                name: specforge_protocol_types::PackageName::parse("@specforge/software").unwrap(),
+                name: specforge_package::PackageName::parse("@specforge/software").unwrap(),
                 version: "1.0.0".to_string(),
                 source: crate::LockSource::parse("registry"),
                 wasm_hash: "abc123".to_string(),
@@ -275,8 +275,7 @@ mod tests {
             lockfile_version: 1,
             entries: vec![
                 LockFileEntry {
-                    name: specforge_protocol_types::PackageName::parse("@specforge/software")
-                        .unwrap(),
+                    name: specforge_package::PackageName::parse("@specforge/software").unwrap(),
                     version: "1.0.0".to_string(),
                     source: crate::LockSource::parse("registry"),
                     wasm_hash: "abc123".to_string(),
@@ -284,8 +283,7 @@ mod tests {
                     peer_dependencies: Vec::new(),
                 },
                 LockFileEntry {
-                    name: specforge_protocol_types::PackageName::parse("@specforge/governance")
-                        .unwrap(),
+                    name: specforge_package::PackageName::parse("@specforge/governance").unwrap(),
                     version: "1.0.0".to_string(),
                     source: crate::LockSource::parse("local"),
                     wasm_hash: "def456".to_string(),

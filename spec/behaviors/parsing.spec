@@ -440,8 +440,7 @@ behavior extension_owned_body_syntax "Extension-Owned Body Syntax" {
     on every incremental rebuild (which uses the file's current
     entities). The entity's other fields are parsed by the core field
     parser as usual; no extension code runs on the body. Extensions
-    cannot contribute body parsers or grammars: those contribution
-    flags are reserved (ADR 0004 D5-a).
+    cannot contribute body parsers or grammars (ADR 0004 D5-a, ADR 0050).
   """
   verify integration "extension-owned body syntax does not surface E001 parse errors"
 }

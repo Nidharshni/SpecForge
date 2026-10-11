@@ -5,8 +5,8 @@
 use std::path::{Path, PathBuf};
 
 use specforge_common::{Code, Diagnostic, Severity, codes};
+use specforge_package::{PackageName, Version};
 use specforge_protocol_types::ExtensionDeclaration;
-use specforge_protocol_types::package::{PackageName, Version};
 use specforge_wasm::WasmRuntime;
 
 use crate::extension::Candidate;
@@ -100,7 +100,7 @@ fn read(binary: &Path) -> Result<Vec<u8>, OpError> {
 /// What is uploaded is a registry package: a scoped name and a full version
 /// (E072).
 fn identity(declaration: &ExtensionDeclaration) -> Result<(PackageName, Version), OpError> {
-    let name = match declaration.package_name() {
+    let name = match PackageName::declared_by(declaration) {
         Ok(name) if name.scope().is_some() => name,
         Ok(name) => {
             return Err(specforge_common::package::invalid(&format_args!(

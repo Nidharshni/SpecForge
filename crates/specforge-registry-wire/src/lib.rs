@@ -73,18 +73,6 @@ pub struct SearchQuery {
     pub contributes: Option<String>,
 }
 
-/// Whether `declaration` declares anything in `category`: its describe items for it are not empty. What a
-/// registry filters a search on, and what the in-memory client filters on.
-pub fn declares(
-    declaration: &specforge_protocol_types::ExtensionDeclaration,
-    category: specforge_protocol_types::DeclaredCategory,
-) -> bool {
-    declaration
-        .describe_items(category.name())
-        .and_then(|items| items.as_array().map(|a| !a.is_empty()))
-        .unwrap_or(false)
-}
-
 impl SearchQuery {
     /// `query` with the default limit.
     pub fn new(query: &str) -> Self {
@@ -229,8 +217,8 @@ impl ErrorBody {
 mod tests {
     use super::*;
     use serde_json::json;
-    use specforge_protocol_types::PackageName;
-    use specforge_protocol_types::package::Version;
+    use specforge_package::PackageName;
+    use specforge_package::Version;
 
     /// `value` serializes to `expected` and `expected` reads back as `value`.
     fn is_this_json<T>(value: &T, expected: serde_json::Value)

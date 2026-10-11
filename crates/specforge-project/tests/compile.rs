@@ -395,7 +395,7 @@ fn provider_extensions(
                 let mut b = specforge_extension_sdk::ContributionsBuilder::new(
                     specforge_extension_sdk::ExtensionMeta::new(name, "1.0.0"),
                 );
-                b.raw_category("providers", serde_json::json!([]));
+                b.providers();
                 b
             })
         },
@@ -683,7 +683,7 @@ mod declared_in_process {
         let typo = || {
             let mut b = ContributionsBuilder::new(ExtensionMeta::new("@acme/typo", "0.1.0"));
             b.raw_category(
-                "entities",
+                specforge_extension_sdk::DeclaredCategory::Entities,
                 serde_json::json!([{ "name": "memo", "testabel": true }]),
             );
             b
@@ -1010,7 +1010,7 @@ fn install_greet(root: &Path, hash: Option<&str>) {
     let lock = specforge_installed::LockFile {
         lockfile_version: 1,
         entries: vec![specforge_installed::LockFileEntry {
-            name: specforge_protocol_types::PackageName::parse("@sdk/greet").unwrap(),
+            name: specforge_package::PackageName::parse("@sdk/greet").unwrap(),
             version: "0.1.0".into(),
             source: specforge_installed::LockSource::Registry,
             wasm_hash: hash.map_or_else(|| specforge_installed::hex_sha256(&bytes), str::to_string),

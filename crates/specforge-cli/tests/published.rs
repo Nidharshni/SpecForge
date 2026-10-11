@@ -54,7 +54,6 @@ impl Package {
                     "protocol_version": "1.0.0",
                     "name": self.name,
                     "version": self.version,
-                    "contribution_flags": {},
                     "peer_dependencies": [],
                     "sandbox_policy": null,
                 }

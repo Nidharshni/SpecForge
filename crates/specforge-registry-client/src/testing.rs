@@ -5,8 +5,9 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 use sha2::{Digest, Sha256};
-use specforge_protocol_types::package::Version;
-use specforge_protocol_types::{DeclaredCategory, ExtensionDeclaration, PackageName};
+use specforge_package::PackageName;
+use specforge_package::Version;
+use specforge_protocol_types::{DeclaredCategory, ExtensionDeclaration};
 use specforge_registry_wire::{
     DEFAULT_SEARCH_LIMIT, PackageMetadata, SearchHit, SearchQuery, path,
 };
@@ -321,7 +322,7 @@ impl RegistryClient for MemoryClient {
         let matches = |m: &Stored| {
             let declares = category.is_none_or(|category| {
                 serde_json::from_str::<ExtensionDeclaration>(&m.metadata.manifest)
-                    .is_ok_and(|d| specforge_registry_wire::declares(&d, category))
+                    .is_ok_and(|d| d.declares(category))
             });
             declares
                 && (m.name.to_ascii_lowercase().contains(&needle)
@@ -378,9 +379,8 @@ impl RegistryClient for MemoryClient {
         registry: &RegistryConfig,
         credential: Option<&RegistryCredential>,
     ) -> Result<String, RegistryError> {
-        let name = declaration
-            .package_name()
-            .map_err(|why| RegistryError::InvalidPackage {
+        let name =
+            PackageName::declared_by(declaration).map_err(|why| RegistryError::InvalidPackage {
                 message: why.to_string(),
             })?;
         let version =
@@ -527,7 +527,6 @@ fn contract_declaration(version: &str) -> ExtensionDeclaration {
             "version": version,
             "description": "Contract tool",
             "keywords": ["contract"],
-            "contribution_flags": {},
             "peer_dependencies": [],
             "sandbox_policy": null
         }

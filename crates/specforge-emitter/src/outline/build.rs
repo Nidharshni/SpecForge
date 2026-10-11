@@ -108,18 +108,12 @@ impl OutlineIntermediate {
                 .collect();
 
             // Map contributes
-            let flags = m.contribution_flags();
-            let contributes = OutlineContributes {
-                entities: flags.entities,
-                validators: flags.validators,
-                renderers: flags.renderers,
-                providers: flags.providers,
-                collectors: flags.collectors,
-                prompts: flags.prompts,
-                parsers: flags.parsers,
-                grammars: flags.grammars,
-                body_parsers: flags.body_parsers,
-            };
+            // The categories it declares, in the host's read order, then providers.
+            let contributes: Vec<String> = m
+                .declared_categories()
+                .map(|category| category.name().to_string())
+                .chain(m.handshake.providers.then(|| "providers".to_string()))
+                .collect();
 
             // Map surface counts
             let surface_counts = OutlineSurfaceCounts {

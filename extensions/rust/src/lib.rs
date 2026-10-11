@@ -362,8 +362,10 @@ mod tests {
         let handshake: specforge_protocol_types::HandshakeResponse =
             serde_json::from_str(&specforge_extension_build().handshake_json()).unwrap();
         assert_eq!(handshake.name, "@specforge/rust");
-        assert!(handshake.contribution_flags.analyzers);
-        assert!(!handshake.contribution_flags.entities);
+        assert!(!handshake.providers);
+        let declaration = specforge_extension_build().declaration();
+        assert!(declaration.declares(specforge_extension_sdk::DeclaredCategory::Analyzers));
+        assert!(!declaration.declares(specforge_extension_sdk::DeclaredCategory::Entities));
         let policy = handshake.sandbox_policy.expect("sandbox policy");
         assert_eq!(policy.max_memory_mb, Some(512));
         assert_eq!(policy.max_execution_ms, Some(30000));

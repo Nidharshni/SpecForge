@@ -279,7 +279,7 @@ impl Database {
         if let Some(category) = contributes {
             out.retain(|p| {
                 serde_json::from_str::<specforge_protocol_types::ExtensionDeclaration>(&p.manifest)
-                    .is_ok_and(|d| specforge_registry_wire::declares(&d, category))
+                    .is_ok_and(|d| d.declares(category))
             });
         }
         out.sort_by(|a, b| a.name.cmp(&b.name));

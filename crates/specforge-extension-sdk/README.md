@@ -91,7 +91,7 @@ crate compiles.
 ## Not modeled yet?
 
 Categories the builders do not cover can be served with
-`ContributionsBuilder::raw_category(category, items)`; exports no builder
+`ContributionsBuilder::raw_category(DeclaredCategory::..., items)`; exports no builder
 declares go to `component_guest!`'s `handler`, which can decode and encode with
 `answer_export`.
 

@@ -50,12 +50,12 @@ mod tests {
     use super::*;
     use crate::lock::{LockFile, LockState};
     use crate::module::hex_sha256;
-    use specforge_protocol_types::PackageName;
+    use specforge_package::PackageName;
     use tempfile::TempDir;
 
     fn entry(name: &str, hash: &str) -> LockFileEntry {
         LockFileEntry {
-            name: specforge_protocol_types::PackageName::parse(name).unwrap(),
+            name: specforge_package::PackageName::parse(name).unwrap(),
             version: "1.0.0".to_string(),
             source: crate::LockSource::parse("registry"),
             wasm_hash: hash.to_string(),

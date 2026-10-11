@@ -52,7 +52,7 @@ fn rules_extension() -> InProcessRuntime {
             k.keyword("gadget");
         });
         c.raw_category(
-            "validation_rules",
+            specforge_extension_sdk::DeclaredCategory::ValidationRules,
             serde_json::json!([
                 {
                     "code": "W900", "severity": "warning", "check": "no_incoming_edges",

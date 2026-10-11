@@ -8,8 +8,9 @@ use specforge_ops::extension::Trust;
 use specforge_ops::registry::testing::declaration;
 use specforge_ops::registry::{Registry, Upload};
 use specforge_ops_registry::{ConfiguredRegistry, User};
-use specforge_protocol_types::package::Version;
-use specforge_protocol_types::{ExtensionDeclaration, PackageName};
+use specforge_package::PackageName;
+use specforge_package::Version;
+use specforge_protocol_types::ExtensionDeclaration;
 use specforge_registry_client::credentials::{CredentialEntry, CredentialStore};
 use specforge_registry_client::testing::{CallKind, MemoryClient};
 use specforge_registry_client::{

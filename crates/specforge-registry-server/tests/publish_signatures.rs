@@ -24,7 +24,6 @@ fn manifest_of(version: &str) -> ExtensionDeclaration {
             "protocol_version": "1.0.0",
             "name": "@test/signed-ext",
             "version": version,
-            "contribution_flags": {},
             "peer_dependencies": [],
             "sandbox_policy": null
         }

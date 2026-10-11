@@ -5,6 +5,7 @@ members = [
     "crates/specforge-common",
     "crates/specforge-component",
     "crates/specforge-protocol-types",
+    "crates/specforge-package",
     "crates/specforge-extension-sdk",
     "crates/specforge-extension-sdk-macros",
     "crates/tree-sitter-specforge",

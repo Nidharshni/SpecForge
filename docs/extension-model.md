@@ -2,7 +2,7 @@
 
 > **Status:** only **extensions** are implemented today. **Providers** and
 > **generators** are designed here but not yet built — the extension
-> protocol declares `providers: false` and `renderers: false`
+> no builtin's handshake says `providers`, and the protocol has no renderer contribution
 > ([extension-protocol.md](extension-protocol.md)). Syntax below is the
 > design target, not current grammar.
 
@@ -68,8 +68,7 @@ specforge extensions                    # list installed extensions
 
 ## Providers
 
-> **Planned — not yet implemented** (extension protocol capability:
-> `providers: false`). The `providers` block does not parse today; the
+> **Planned — not yet implemented** (no builtin's handshake says `providers`). The `providers` block does not parse today; the
 > field spelling below (`extension "@specforge/…"`) is the design of
 > record. In `specforge.json`, `providers` is an array of
 > `{"scheme", "alias", "extension", "settings"}` (ADR 0004 D3-c):

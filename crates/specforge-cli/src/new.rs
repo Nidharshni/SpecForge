@@ -11,7 +11,7 @@ use crate::terminal::{Terminal, outln};
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use serde_json::json;
 use specforge_common::codes;
-use specforge_protocol_types::PackageName;
+use specforge_package::PackageName;
 use std::path::{Path, PathBuf};
 
 // `specforge new`'s command line.

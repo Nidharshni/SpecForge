@@ -1,4 +1,4 @@
-use serde_json::Value;
+use serde_json::{Value, json};
 use specforge_emitter::outline::{
     DependencyDepth, OutlineDetail, OutlineFormat, OutlineOptions, export,
 };
@@ -11,6 +11,7 @@ fn load_manifest(name: &str) -> ExtensionDeclaration {
         "software" => "@specforge/software",
         "governance" => "@specforge/governance",
         "formal" => "@specforge/formal",
+        "rust" => "@specforge/rust",
         _ => panic!("unknown extension: {}", name),
     };
     let runtime = wasm_runtime_for(&[ext_name]);
@@ -100,8 +101,48 @@ fn single_extension_maps_basic_metadata() {
     assert_eq!(ext["version"], "1.0.0");
     assert_eq!(ext["entity_kinds"].as_array().unwrap().len(), 9);
     assert_eq!(ext["edge_types"].as_array().unwrap().len(), 20);
-    assert_eq!(ext["contributes"]["entities"], true);
-    assert_eq!(ext["contributes"]["validators"], true);
+    assert_eq!(
+        ext["contributes"],
+        json!([
+            "entities",
+            "edges",
+            "shared_fields",
+            "validation_rules",
+            "surfaces",
+            "passes"
+        ])
+    );
+}
+
+#[specforge_test_macros::test(
+    behavior = "render_extension_outline",
+    verify = "each extension's card names the describe categories it declares, and providers when its handshake says so"
+)]
+fn an_outline_card_names_the_categories_its_extension_declares() {
+    let mut provider = ExtensionDeclaration::default();
+    provider.handshake.name = "@acme/provider".to_string();
+    provider.handshake.version = "1.0.0".to_string();
+    provider.handshake.providers = true;
+    let outline = outline_json(&[load_manifest("rust"), load_manifest("product"), provider]);
+    assert_eq!(
+        card(&outline, "@specforge/rust")["contributes"],
+        json!(["analyzers"])
+    );
+    assert_eq!(
+        card(&outline, "@specforge/product")["contributes"],
+        json!([
+            "entities",
+            "edges",
+            "shared_fields",
+            "validation_rules",
+            "surfaces",
+            "passes"
+        ])
+    );
+    assert_eq!(
+        card(&outline, "@acme/provider")["contributes"],
+        json!(["providers"])
+    );
 }
 
 // --- Peer dependencies ---

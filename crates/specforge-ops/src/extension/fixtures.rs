@@ -4,7 +4,8 @@
 use specforge_installed::{
     Installed, LockFile, LockFileEntry, LockSource, hex_sha256, lock_path, write_lock_file,
 };
-use specforge_protocol_types::{ExtensionDeclaration, PackageName};
+use specforge_package::PackageName;
+use specforge_protocol_types::ExtensionDeclaration;
 use specforge_registry::PeerDependency;
 use std::path::{Path, PathBuf};
 

@@ -63,7 +63,6 @@ impl World {
                 "name": name,
                 "version": version,
                 "description": description,
-                "contribution_flags": {},
                 "peer_dependencies": [],
                 "sandbox_policy": null,
             },

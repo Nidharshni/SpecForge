@@ -355,7 +355,7 @@ fn an_untargeted_obligation_rule_obliges_every_kind() {
         ("gamma", false),
         ("delta", true),
     ] {
-        assert_eq!(pass_entity(&runtime, id)["exempt"], exempt, "{id}");
+        assert_eq!(pass_entity(&runtime, id)["owes_none"], exempt, "{id}");
     }
     // And so does coverage: alpha and beta are testable and owe (gamma's
     // kind is not testable).
@@ -378,7 +378,7 @@ fn an_untargeted_obligation_rule_skips_kinds_that_accept_no_verify() {
             .any(|d| d.contains("epsilon")),
         "{diagnostics:?}"
     );
-    assert_eq!(pass_entity(&runtime, "epsilon")["exempt"], true);
+    assert_eq!(pass_entity(&runtime, "epsilon")["owes_none"], true);
     assert_eq!(pass_entity(&runtime, "epsilon")["testable"], false);
     assert_eq!(testable_total(&compiled, dir.path()), 2);
 }

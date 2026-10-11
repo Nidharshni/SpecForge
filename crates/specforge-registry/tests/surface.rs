@@ -1,7 +1,7 @@
 use specforge_extension_sdk::{ContributionsBuilder, ExtensionMeta};
 use specforge_protocol_types::{
-    CommandArgDescriptor, CommandDescriptor, ExtensionDeclaration, McpResourceDescriptor,
-    McpToolDescriptor, SurfaceDescriptor,
+    CommandArgDescriptor, CommandDescriptor, DeclaredCategory, ExtensionDeclaration,
+    McpResourceDescriptor, McpToolDescriptor, SurfaceDescriptor,
 };
 use specforge_registry::{
     CommandArgType, SurfaceRegistryEntry, SurfaceType, register_surface_contributions,
@@ -57,7 +57,7 @@ fn make_resource(name: &str, export: &str) -> McpResourceDescriptor {
 fn declared_with(surfaces: Option<serde_json::Value>) -> ExtensionDeclaration {
     let mut c = ContributionsBuilder::new(ExtensionMeta::new("@ext/test", "1.0.0"));
     if let Some(surfaces) = surfaces {
-        c.raw_category("surfaces", serde_json::json!([surfaces]));
+        c.raw_category(DeclaredCategory::Surfaces, serde_json::json!([surfaces]));
     }
     c.declaration()
 }

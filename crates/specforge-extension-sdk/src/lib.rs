@@ -20,7 +20,7 @@ pub use specforge_extension_sdk_macros::extension;
 pub use specforge_protocol_types::{CheckKind, ConstraintKind, FieldType};
 
 pub use specforge_protocol_types::{
-    ContributionFlags, EdgeTypeDescriptor, EntityEnhancementDescriptor, EntityKindDescriptor,
+    DeclaredCategory, EdgeTypeDescriptor, EntityEnhancementDescriptor, EntityKindDescriptor,
     ExtensionDeclaration, FeatureFlagDescriptor, FieldConstraintDescriptor, FieldDescriptor,
     HandshakeResponse, PeerDependency, ProtocolError, SandboxPolicy, ValidationRuleDescriptor,
     ValidationSeverity, ValidatorContext, ValidatorEntity, ValidatorField, ValidatorMethod,
@@ -29,14 +29,14 @@ pub use specforge_protocol_types::{
 
 use specforge_protocol_types::{
     AnalyzerDescriptor, AutoDetectConfig, CollectorDescriptor, CompilerPassDescriptor,
-    DeclaredCategory, DescribeRequest, DescribeResponse, SUPPORTED_CATEGORIES, pass_export,
+    DescribeRequest, DescribeResponse, pass_export,
 };
 
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 
 /// The categories an extension gave as raw items, by name.
-type RawCategories = BTreeMap<String, serde_json::Value>;
+type RawCategories = BTreeMap<&'static str, serde_json::Value>;
 
 /// Runtime-free testing of an extension's contributions.
 pub mod testing;
@@ -77,6 +77,8 @@ pub struct ExtensionMeta {
     pub migration_hook: Option<String>,
     /// The colour diagrams draw the extension in (`#rrggbb`).
     pub theme_color: Option<String>,
+    /// It implements configured providers (the handshake's `providers`).
+    pub providers: bool,
 }
 
 impl ExtensionMeta {
@@ -98,8 +100,8 @@ pub trait Contributions {
 /// Accumulates everything an extension contributes: its
 /// [`ExtensionDeclaration`] ([`ContributionsBuilder::declaration`]), which
 /// the guest serves on the wire, plus the handlers of its declared
-/// surfaces. Contribution flags are **derived** from what was actually
-/// contributed, so they cannot drift from the content.
+/// surfaces. What it contributes is what it declares
+/// ([`ExtensionDeclaration::declares`]); no flag restates it.
 #[derive(Default)]
 pub struct ContributionsBuilder {
     pub meta: ExtensionMeta,
@@ -394,44 +396,25 @@ impl ContributionsBuilder {
     /// naming the category when they do not, so the extension fails when it
     /// is built, not when a host loads it. Keys the descriptors do not
     /// define are ignored by the host and reported (W138).
-    pub fn raw_category(&mut self, category: &str, items: serde_json::Value) -> &mut Self {
-        self.raw.insert(category.to_string(), items);
+    pub fn raw_category(
+        &mut self,
+        category: DeclaredCategory,
+        items: serde_json::Value,
+    ) -> &mut Self {
+        self.raw.insert(category.name(), items);
         self
     }
 
-    /// The contribution flags the handshake carries: derived from the
-    /// declaration's content, plus each raw category served (a raw
-    /// `entities` contributes entities exactly as much as the builders do)
-    /// and the flags only a raw category can raise (`providers`, the
-    /// reserved ones).
-    fn flags(&self, declaration: &ExtensionDeclaration) -> ContributionFlags {
-        let has = |cat: &str| self.raw.get(cat).is_some_and(|v| !v.is_null());
-        let derived = declaration.contribution_flags();
-        ContributionFlags {
-            entities: derived.entities
-                || [
-                    "entities",
-                    "edges",
-                    "fields",
-                    "shared_fields",
-                    "enhancements",
-                ]
-                .iter()
-                .any(|cat| has(cat)),
-            validators: derived.validators || has("validation_rules"),
-            renderers: has("renderers"),
-            providers: has("providers"),
-            collectors: derived.collectors || has("collectors"),
-            prompts: has("prompts"),
-            parsers: has("parsers"),
-            grammars: has("grammars"),
-            body_parsers: has("body_parsers"),
-            analyzers: derived.analyzers || has("analyzers"),
-        }
+    /// It implements configured providers: a `specforge.json` `providers`
+    /// entry may name it. The handshake says so (`providers`); no describe
+    /// category carries it.
+    pub fn providers(&mut self) -> &mut Self {
+        self.meta.providers = true;
+        self
     }
 
     /// Everything this extension declares, as the guest serves it and the
-    /// host loads it: the handshake (from [`ExtensionMeta`], flags derived),
+    /// host loads it: the handshake (from [`ExtensionMeta`]),
     /// every category the builders contributed, the declared surfaces, and
     /// each raw category in place of its builders'.
     ///
@@ -442,17 +425,18 @@ impl ContributionsBuilder {
     pub fn declaration(&self) -> ExtensionDeclaration {
         let mut declaration = self.decl.clone();
         declaration.surfaces = self.surfaces.descriptor();
-        for (category, items) in &self.raw {
-            if let Some(declared) = DeclaredCategory::from_name(category) {
+        for category in DeclaredCategory::ALL {
+            if let Some(items) = self.raw.get(category.name()) {
+                let name = category.name();
                 declaration
-                    .set_category(declared, items)
+                    .set_category(category, items)
                     .unwrap_or_else(|error| match error {
                         ProtocolError::DescribeFailed { reason, .. } => {
                             panic!(
-                                "raw category '{category}' does not parse as its descriptors: {reason}"
+                                "raw category '{name}' does not parse as its descriptors: {reason}"
                             )
                         }
-                        other => panic!("raw category '{category}': {other}"),
+                        other => panic!("raw category '{name}': {other}"),
                     });
             }
         }
@@ -460,7 +444,6 @@ impl ContributionsBuilder {
             protocol_version: specforge_protocol_types::PROTOCOL_VERSION.to_string(),
             name: self.meta.name.clone(),
             version: self.meta.version.clone(),
-            contribution_flags: ContributionFlags::default(),
             peer_dependencies: self.meta.peer_dependencies.clone(),
             sandbox_policy: self.meta.sandbox_policy.clone(),
             starter_template: self.meta.starter_template.clone(),
@@ -469,8 +452,8 @@ impl ContributionsBuilder {
             ext_short: self.meta.short.clone(),
             description: self.meta.description.clone(),
             keywords: self.meta.keywords.clone(),
+            providers: self.meta.providers,
         };
-        declaration.handshake.contribution_flags = self.flags(&declaration);
         declaration
     }
 
@@ -481,9 +464,8 @@ impl ContributionsBuilder {
     }
 
     /// The `__describe` wire payload for `category`, or `None` when the
-    /// category is not one of the protocol's supported categories: a raw
-    /// category as given, else the declaration's items (`fields` derived
-    /// from the kinds, the reserved categories empty).
+    /// category is not one the protocol defines: a raw category as given,
+    /// else the declaration's items.
     ///
     /// For tests: a guest answers through [`Served`], which reads the
     /// declaration once.
@@ -499,19 +481,15 @@ fn describe_answer<'d>(
     declaration: impl FnOnce() -> Cow<'d, ExtensionDeclaration>,
     category: &str,
 ) -> Option<String> {
-    if !SUPPORTED_CATEGORIES.contains(&category) {
-        return None;
-    }
-    match raw.get(category) {
-        Some(items) => Some(
-            DescribeResponse {
-                category: category.to_string(),
-                items: items.clone(),
-            }
-            .wire_json(),
-        ),
+    let category = DeclaredCategory::from_name(category)?;
+    Some(match raw.get(category.name()) {
+        Some(items) => DescribeResponse {
+            category: category.name().to_string(),
+            items: items.clone(),
+        }
+        .wire_json(),
         None => declaration().describe_json(category),
-    }
+    })
 }
 
 /// An extension as its component guest serves the host: its builder, and
@@ -1157,18 +1135,21 @@ pub mod prelude {
 }
 
 #[cfg(test)]
-mod raw_category_flag_tests {
+mod raw_category_tests {
     use super::*;
 
     /// Formal's migration exposed this: an extension serving describes via
-    /// `raw_category` (static data) must still raise the corresponding
-    /// contribution flags, or the host never requests those categories.
+    /// `raw_category` (static data) is declared by them exactly as the
+    /// builders declare, and its handshake carries no flags.
     #[test]
-    fn raw_categories_raise_their_flags() {
+    fn raw_categories_are_declared() {
         let mut b = ContributionsBuilder::new(ExtensionMeta::new("@acme/formal", "1.0.0"));
-        b.raw_category("entities", serde_json::json!([{ "name": "Property" }]));
         b.raw_category(
-            "validation_rules",
+            DeclaredCategory::Entities,
+            serde_json::json!([{ "name": "Property" }]),
+        );
+        b.raw_category(
+            DeclaredCategory::ValidationRules,
             serde_json::json!([{
                 "code": "F100",
                 "severity": "warning",
@@ -1177,20 +1158,13 @@ mod raw_category_flag_tests {
             }]),
         );
 
-        let handshake = b.handshake_json();
-        let value: serde_json::Value = serde_json::from_str(&handshake).unwrap();
-        let flags = &value["contribution_flags"];
-        assert_eq!(
-            flags["entities"],
-            serde_json::json!(true),
-            "raw entities must raise entities flag"
-        );
-        assert_eq!(
-            flags["validators"],
-            serde_json::json!(true),
-            "raw validation_rules must raise validators flag"
-        );
-        assert_eq!(flags["grammars"], serde_json::json!(false));
+        let declaration = b.declaration();
+        assert!(declaration.declares(DeclaredCategory::Entities));
+        assert!(declaration.declares(DeclaredCategory::ValidationRules));
+        assert!(!declaration.declares(DeclaredCategory::Collectors));
+        let value: serde_json::Value = serde_json::from_str(&b.handshake_json()).unwrap();
+        assert!(value.get("contribution_flags").is_none());
+        assert!(value.get("providers").is_none());
     }
 
     #[test]

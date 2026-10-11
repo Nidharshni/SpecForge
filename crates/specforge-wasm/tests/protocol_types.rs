@@ -6,7 +6,6 @@ use specforge_protocol_types::*;
 fn handshake_request_round_trip() {
     let req = HandshakeRequest {
         host_version: "1.0.0".to_string(),
-        supported_categories: vec!["entities".to_string(), "edges".to_string()],
     };
     let json = serde_json::to_string(&req).unwrap();
     let decoded: HandshakeRequest = serde_json::from_str(&json).unwrap();
@@ -17,32 +16,20 @@ fn handshake_request_round_trip() {
 fn handshake_request_json_field_names() {
     let req = HandshakeRequest {
         host_version: "1.0.0".to_string(),
-        supported_categories: vec!["entities".to_string()],
     };
     let json = serde_json::to_string(&req).unwrap();
     assert!(
         json.contains("host_version"),
         "expected snake_case field name"
     );
-    assert!(
-        json.contains("supported_categories"),
-        "expected snake_case field name"
-    );
 }
 
 #[test]
 fn protocol_version_constant() {
-    assert_eq!(PROTOCOL_VERSION, "1.1.0");
+    assert_eq!(PROTOCOL_VERSION, "1.2.0");
 }
 
-#[test]
-fn supported_categories_has_13_entries() {
-    assert_eq!(SUPPORTED_CATEGORIES.len(), 13);
-    assert!(SUPPORTED_CATEGORIES.contains(&"entities"));
-    assert!(SUPPORTED_CATEGORIES.contains(&"feature_flags"));
-}
-
-// ── Step 2: HandshakeResponse + ContributionFlags ──
+// ── Step 2: HandshakeResponse ──
 
 #[test]
 fn handshake_response_round_trip() {
@@ -50,18 +37,7 @@ fn handshake_response_round_trip() {
         protocol_version: "1.0".to_string(),
         name: "@specforge/software".to_string(),
         version: "1.0.0".to_string(),
-        contribution_flags: ContributionFlags {
-            entities: true,
-            validators: true,
-            renderers: false,
-            providers: false,
-            collectors: false,
-            prompts: false,
-            parsers: false,
-            grammars: false,
-            body_parsers: false,
-            analyzers: false,
-        },
+        providers: true,
         peer_dependencies: vec![PeerDependency {
             name: "@specforge/governance".to_string(),
             version: ">=1.0.0".to_string(),
@@ -85,14 +61,8 @@ fn handshake_response_round_trip() {
 fn handshake_response_rejects_missing_critical_fields() {
     // C7-07: the handshake's critical envelope fields are REQUIRED on the
     // wire. A truncated handshake must fail deserialization instead of
-    // silently yielding empty flags or an empty peer-dependency list.
-    for missing in [
-        "protocol_version",
-        "name",
-        "version",
-        "contribution_flags",
-        "peer_dependencies",
-    ] {
+    // silently yielding an empty peer-dependency list.
+    for missing in ["protocol_version", "name", "version", "peer_dependencies"] {
         let full = handshake_with_all_fields();
         let mut truncated = full.clone();
         truncated.as_object_mut().unwrap().remove(missing);
@@ -112,8 +82,8 @@ fn handshake_sandbox_policy_is_fail_safe_optional() {
     // substitutes its own deny-by-default policy). Pin that documented
     // semantic so it cannot silently change.
     for json in [
-        r#"{"protocol_version":"1.0.0","name":"@t/x","version":"0.1.0","contribution_flags":{},"peer_dependencies":[]}"#,
-        r#"{"protocol_version":"1.0.0","name":"@t/x","version":"0.1.0","contribution_flags":{},"peer_dependencies":[],"sandbox_policy":null}"#,
+        r#"{"protocol_version":"1.0.0","name":"@t/x","version":"0.1.0","peer_dependencies":[]}"#,
+        r#"{"protocol_version":"1.0.0","name":"@t/x","version":"0.1.0","peer_dependencies":[],"sandbox_policy":null}"#,
     ] {
         let resp: HandshakeResponse =
             serde_json::from_str(json).expect("no/absent sandbox_policy is valid");
@@ -127,25 +97,9 @@ fn handshake_with_all_fields() -> serde_json::Value {
         "protocol_version": "1.0.0",
         "name": "@specforge/test",
         "version": "0.1.0",
-        "contribution_flags": {},
         "peer_dependencies": [],
         "sandbox_policy": null,
     })
-}
-
-#[test]
-fn contribution_flags_default_all_false() {
-    let flags = ContributionFlags::default();
-    assert!(!flags.entities);
-    assert!(!flags.validators);
-    assert!(!flags.renderers);
-    assert!(!flags.providers);
-    assert!(!flags.collectors);
-    assert!(!flags.prompts);
-    assert!(!flags.parsers);
-    assert!(!flags.grammars);
-    assert!(!flags.body_parsers);
-    assert!(!flags.analyzers);
 }
 
 #[test]
@@ -636,41 +590,6 @@ fn command_arg_type_round_trip_all_variants() {
     }
 }
 
-// ── Step 11: GrammarDescriptor ──
-
-#[test]
-fn grammar_descriptor_round_trip() {
-    let grammar = GrammarDescriptor {
-        entity_kind: "behavior".to_string(),
-        grammar_wasm_path: "grammars/behavior.wasm".to_string(),
-        export_name: Some("parse_behavior_body".to_string()),
-    };
-    let json = serde_json::to_string(&grammar).unwrap();
-    let decoded: GrammarDescriptor = serde_json::from_str(&json).unwrap();
-    assert_eq!(grammar, decoded);
-}
-
-#[test]
-fn grammar_descriptor_minimal() {
-    let json = r#"{"entity_kind": "process", "grammar_wasm_path": "grammar.wasm"}"#;
-    let grammar: GrammarDescriptor = serde_json::from_str(json).unwrap();
-    assert_eq!(grammar.entity_kind, "process");
-    assert!(grammar.export_name.is_none());
-}
-
-// ── Step 12: BodyParserDescriptor ──
-
-#[test]
-fn body_parser_descriptor_round_trip() {
-    let parser = BodyParserDescriptor {
-        entity_kind: "behavior".to_string(),
-        export_name: "parse__behavior".to_string(),
-    };
-    let json = serde_json::to_string(&parser).unwrap();
-    let decoded: BodyParserDescriptor = serde_json::from_str(&json).unwrap();
-    assert_eq!(parser, decoded);
-}
-
 // ── Step 13: CollectorDescriptor ──
 
 #[test]
@@ -827,12 +746,6 @@ fn protocol_error_display_describe_failed() {
 fn protocol_error_display_deserialization() {
     let err = ProtocolError::DeserializationError("missing field 'name'".to_string());
     assert!(err.to_string().contains("missing field 'name'"));
-}
-
-#[test]
-fn protocol_error_display_unsupported_category() {
-    let err = ProtocolError::UnsupportedCategory("widgets".to_string());
-    assert_eq!(err.to_string(), "unsupported category: widgets");
 }
 
 #[test]
