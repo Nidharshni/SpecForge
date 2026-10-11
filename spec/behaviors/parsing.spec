@@ -370,6 +370,7 @@ behavior lex_spec_text "Lex Spec Text" {
   verify unit "a string spanning lines is one lexeme, and one the grammar would not close ends at its line's end"
   verify unit "strings and comments are lexemes of their own and hold no others"
   verify unit "a line starts a top-level form exactly where the grammar reads one, on every spec file of the repository"
+  verify unit "the grammar ends an unclosed body at exactly the lines the form-start rule reads as form starts"
 }
 
 behavior parse_define_blocks "Parse Define Blocks" {

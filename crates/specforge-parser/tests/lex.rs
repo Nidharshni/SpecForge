@@ -436,3 +436,106 @@ fn form_starts_are_the_grammars_top_level_nodes() {
         "form starts inside a form: {spurious:#?}"
     );
 }
+
+/// Whether tree-sitter's grammar ends what is left open before `line` (one
+/// line, not indented): its scanner (`crates/tree-sitter-specforge/src/scanner.c`)
+/// reads the line as a form start. The probe leaves a list open inside a
+/// body, which the scanner ends with a zero-width token, no error, before
+/// such a line (the body then misses its `}`); a list the grammar does not
+/// end there runs on, or misses its `]`. Read off the list, the answer is
+/// the scanner's, whatever the error recovery makes of the line after it.
+fn grammar_ends_a_body_at(parser: &mut tree_sitter::Parser, line: &str) -> bool {
+    fn ended_list(node: tree_sitter::Node, end: usize) -> bool {
+        let mut cursor = node.walk();
+        let children: Vec<_> = node.children(&mut cursor).collect();
+        (node.kind() == kind::LIST
+            && node.end_byte() == end
+            && !children.iter().any(|c| c.is_missing()))
+            || children.into_iter().any(|c| ended_list(c, end))
+    }
+    let probe = "probe p {\n  k [v\n";
+    let source = format!("{probe}{line}\n");
+    let tree = parser.parse(&source, None).unwrap();
+    ended_list(tree.root_node(), probe.len() - 1)
+}
+
+#[specforge_test(
+    behavior = "lex_spec_text",
+    verify = "the grammar ends an unclosed body at exactly the lines the form-start rule reads as form starts"
+)]
+fn the_grammars_scanner_reads_form_starts_as_the_lexer_does() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut files = Vec::new();
+    for corpus in ["spec", "integrations/rust/spec", "examples"] {
+        spec_files(&root.join(corpus), &mut files);
+    }
+    files.push(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/lexemes.spec"));
+    let mut lines = std::collections::BTreeSet::new();
+    for file in files {
+        let src = std::fs::read_to_string(&file).unwrap();
+        lines.extend(src.lines().map(|l| l.trim().to_string()));
+    }
+    // The shapes the corpora do not write.
+    for line in [
+        "use",
+        "use x",
+        "use *",
+        "use {",
+        "use \"unclosed",
+        "pub",
+        "pub use",
+        "pub use \"a\"",
+        "pub x \"a\"",
+        "spec x {",
+        "spec \"T\"",
+        "spec \"T\" {",
+        "spec \"T\"{",
+        "spec\"T\"{",
+        "ref x \"T\"",
+        "ref a.b:c",
+        "ref a.b: \"T\"",
+        "ref a.b:c\"T\"",
+        "ref a.b:c \"T\" {",
+        "ref é.b:c \"T\"",
+        "kind name {",
+        "kind name{",
+        "kind name =",
+        "kind name=x",
+        "kind name \"T\" {",
+        "kind name \"T\"",
+        "kind name \"\" {",
+        "kind name \"\"\"T\"\"\" {",
+        "kind name \"T\\\" {",
+        "kind name \"T\\\\\" {",
+        "kind name \"unclosed {",
+        "kind name \"T\" x {",
+        "kind name // {",
+        "kind name.x {",
+        "kind a.b:c {",
+        "a.b:c name {",
+        "kind 1 {",
+        "1kind name {",
+        "kïnd nämé {",
+        "kind name\t{",
+        "kind_2 name_3 {",
+        "verify unit \"x\" {",
+        "{",
+        "}",
+        "= x",
+        "// comment",
+    ] {
+        lines.insert(line.to_string());
+    }
+    lines.remove("");
+    assert!(lines.len() > 5000, "found only {} lines", lines.len());
+    let mut parser = tree_sitter::Parser::new();
+    parser
+        .set_language(&tree_sitter_specforge::LANGUAGE.into())
+        .unwrap();
+    let disagree: Vec<String> = lines
+        .iter()
+        .filter(|line| starts_alone(line, 0) != grammar_ends_a_body_at(&mut parser, line))
+        .map(|line| format!("{line:?}: lexer {}", starts_alone(line, 0)))
+        .collect();
+    assert!(disagree.is_empty(), "{disagree:#?}");
+}
