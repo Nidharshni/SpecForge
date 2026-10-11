@@ -214,8 +214,11 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   - how many obligations it declares.
 
   It **owes** obligations when a rule applies and nothing exempts it. It **counts** toward coverage
-  when testable and owing or declaring. It is **exempt** when testable and neither. W004, the pass
-  input's `exempt`, the coverage rule, stats, plan validation and the verify-stub fix read it.
+  when testable and owing or declaring, and is **exempt** when testable and neither: the coverage
+  rule's one counting rule (`specforge_coverage::Counting`), read with the standing's facts
+  (`Standing::counting`). W004, stats, plan validation and the verify-stub fix read it. The pass
+  input's `exempt` is not this word: it says the entity owes none, and such an entity still counts
+  when it declares obligations.
 - **Package registry client**: what talks to a package registry: search, versions, metadata, download and
   publish over HTTP, credentials in the OS keyring, publisher trust and package signing
   (`specforge-registry-client`). Not the Registry build, which is pure and needs none of it.

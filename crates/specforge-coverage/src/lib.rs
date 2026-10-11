@@ -38,6 +38,36 @@ pub struct RiskGrading {
     pub error_at: String,
 }
 
+/// Whether an entity counts toward coverage, from the three facts the rule
+/// reads (ADR 0004 D2-b, ADR 0019): the one statement of the counting rule.
+/// The host's `Standing` and a pass's [`Entity`] both answer through it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Counting {
+    /// Its kind is testable (its registry entry says so).
+    pub testable: bool,
+    /// It owes obligations of its own: a `no_verify_statements` rule
+    /// applies to its kind and nothing exempts it.
+    pub owes_obligations: bool,
+    /// How many obligations (`verify` statements) it declares.
+    pub declared: usize,
+}
+
+impl Counting {
+    /// It counts toward coverage (the testable totals and the `--min`
+    /// gate's denominator): testable, and it owes obligations or declares
+    /// some.
+    pub fn counts(self) -> bool {
+        self.testable && (self.owes_obligations || self.declared > 0)
+    }
+
+    /// Testable, yet it owes none and declares none, so it does not count:
+    /// the summary's `testable_exempt`, the coverage view's and inspect's
+    /// `exempt`. Not [`Entity::exempt`], which says only that it owes none.
+    pub fn exempt(self) -> bool {
+        self.testable && !self.counts()
+    }
+}
+
 /// An entity as the rule sees it.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Entity {
@@ -51,7 +81,9 @@ pub struct Entity {
     /// kind no rule requires obligations of (governance). Decided by the
     /// host from the registry. An exempt entity that declares none is
     /// left out of the testable count and is not A001; one that declares
-    /// some counts like any other.
+    /// some counts like any other. This is "owes none", not
+    /// [`Counting::exempt`]: an entity that owes none and declares some
+    /// still counts.
     #[serde(default)]
     pub exempt: bool,
     /// One entry per `verify` statement, in order: its kind, or `""` for a
@@ -77,11 +109,18 @@ impl Entity {
         self.verify_texts.len()
     }
 
-    /// Whether the entity counts toward coverage (the testable totals and
-    /// the gate's denominator): its kind is testable, and it is not an
-    /// exempt entity that declares nothing.
+    /// The facts the counting rule reads.
+    pub fn counting(&self) -> Counting {
+        Counting {
+            testable: self.testable,
+            owes_obligations: !self.exempt,
+            declared: self.obligations(),
+        }
+    }
+
+    /// Whether the entity counts toward coverage ([`Counting::counts`]).
     pub fn counts_toward_coverage(&self) -> bool {
-        self.testable && !(self.exempt && self.obligations() == 0)
+        self.counting().counts()
     }
 }
 
@@ -191,7 +230,7 @@ impl Verdict {
 
     /// The per-entity view, from the same facts as [`Verdict::is_proven`].
     pub fn status(&self) -> Status {
-        if self.obligations > 0 && self.unproven.is_empty() && self.failing == 0 {
+        if self.is_proven() {
             Status::Covered
         } else if self.proven > 0 || self.failing > 0 {
             Status::Partial
@@ -427,9 +466,10 @@ pub fn assess(
             funnel.formally_discharged += 1;
         }
 
-        if entity.testable && !entity.counts_toward_coverage() {
+        let counting = entity.counting();
+        if counting.exempt() {
             testable_exempt += 1;
-        } else if entity.testable {
+        } else if counting.counts() {
             testable_total += 1;
             if obligations == 0 {
                 finding(

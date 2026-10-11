@@ -334,20 +334,26 @@ impl Standing {
         self.rule.is_some() && self.exemption.is_none()
     }
 
-    /// It counts toward coverage: testable, and it owes obligations or
-    /// declares some. The one place the host states the rule;
-    /// `specforge_coverage::Entity::counts_toward_coverage` is its twin for
-    /// the pass's entity (the `coverage` extension's input), pinned equal by
-    /// `standing_counts_as_the_coverage_rule_does`. Every other reader
-    /// (inspect, the coverage view, stats) asks the snapshot's standing.
+    /// The facts the coverage rule counts it by.
+    pub fn counting(&self) -> specforge_coverage::Counting {
+        specforge_coverage::Counting {
+            testable: self.testable,
+            owes_obligations: self.owes_obligations(),
+            declared: self.declared,
+        }
+    }
+
+    /// It counts toward coverage: the coverage rule's
+    /// [`Counting::counts`](specforge_coverage::Counting::counts) over its
+    /// facts. Every reader (inspect, the coverage view, stats) asks this.
     pub fn counts(&self) -> bool {
-        self.testable && (self.owes_obligations() || self.declared > 0)
+        self.counting().counts()
     }
 
     /// Testable, but it owes none and declares none, so it does not count
     /// (the coverage view's and inspect's `exempt`).
     pub fn exempt(&self) -> bool {
-        self.testable && !self.counts()
+        self.counting().exempt()
     }
 
     /// The rule that reports it now: it owes obligations and declares none.
@@ -1066,8 +1072,8 @@ mod tests {
     }
 
     #[specforge_test(
-        behavior = "read_views_over_the_project_view",
-        verify = "an entity is unverified when it counts toward coverage and is not proven"
+        behavior = "snapshot_entities_once",
+        verify = "the standing counts an entity toward coverage exactly as the coverage rule counts the pass entity it sends"
     )]
     fn standing_counts_as_the_coverage_rule_does() {
         let span = specforge_common::SourceSpan {
@@ -1102,11 +1108,7 @@ mod tests {
                             declared,
                         };
                         let entity = coverage_entity(&record, &standing);
-                        assert_eq!(
-                            standing.counts(),
-                            entity.counts_toward_coverage(),
-                            "{standing:?}"
-                        );
+                        assert_eq!(standing.counting(), entity.counting(), "{standing:?}");
                         assert_eq!(entity.exempt, !standing.owes_obligations());
                         assert_eq!(standing.exempt(), testable && !standing.counts());
                         combinations += 1;

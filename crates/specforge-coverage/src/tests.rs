@@ -388,3 +388,47 @@ fn without_grading_no_kind_is_risk_tallied_and_nothing_is_a002() {
         Some("severe-risk hazard: add at least one `verify property` obligation")
     );
 }
+
+#[specforge_test(
+    behavior = "te_coverage_pass",
+    verify = "an entity counts toward coverage when its kind is testable and it owes or declares obligations, and is exempt when testable and neither"
+)]
+fn counting_is_testable_and_owing_or_declaring() {
+    for testable in [false, true] {
+        for owes_obligations in [false, true] {
+            for declared in 0..=2 {
+                let counting = Counting {
+                    testable,
+                    owes_obligations,
+                    declared,
+                };
+                assert_eq!(
+                    counting.counts(),
+                    testable && (owes_obligations || declared > 0),
+                    "{counting:?}"
+                );
+                assert_eq!(
+                    counting.exempt(),
+                    testable && !counting.counts(),
+                    "{counting:?}"
+                );
+            }
+        }
+    }
+    let entity = Entity {
+        testable: true,
+        exempt: true,
+        verify_texts: vec!["a".into(), "b".into()],
+        verify_kinds: vec!["unit".into(), "unit".into()],
+        ..Entity::default()
+    };
+    assert_eq!(
+        entity.counting(),
+        Counting {
+            testable: true,
+            owes_obligations: false,
+            declared: 2,
+        }
+    );
+    assert!(entity.counts_toward_coverage());
+}
