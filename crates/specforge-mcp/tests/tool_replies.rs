@@ -108,24 +108,6 @@ fn open_paths(schema: &Value, path: &str, found: &mut BTreeSet<String>) {
     }
 }
 
-/// The open values of the core output schemas: content an extension
-/// defines, which no core type can close.
-const OPEN: &[(&str, &str)] = &[
-    // The export document: a context node is open to the headline fields
-    // its extension declares; `fields` and `verify` are content too.
-    ("specforge.query", "$.nodes[]"),
-    ("specforge.query", "$.nodes[].fields"),
-    ("specforge.query", "$.nodes[].verify"),
-    // What a pass summarizes is the pass's own.
-    ("specforge.analyze", "$.passes[].summary"),
-    // The rules an extension declares.
-    ("specforge.schema", "$.validation_rules[]"),
-    // Every field the entity declares, whatever its kind names them.
-    ("specforge.inspect", "$.fields"),
-    // A map from an entity kind to its enhancements: the keys are kinds.
-    ("specforge.doctor", "$.enhancements"),
-];
-
 #[specforge_test(
     behavior = "follow_negotiated_mcp_revision",
     verify = "a core tool's output schema is derived from its typed reply: every object it closes lists its keys, every array its items"
@@ -142,9 +124,13 @@ fn every_core_output_schema_is_closed() {
             found.insert((spec.name().to_string(), path));
         }
     }
-    let listed: BTreeSet<(String, String)> = OPEN
+    let listed: BTreeSet<(String, String)> = specforge_mcp::tools::CORE_TOOLS
         .iter()
-        .map(|(tool, path)| (tool.to_string(), path.to_string()))
+        .flat_map(|tool| {
+            tool.open_values()
+                .iter()
+                .map(move |path| (tool.name().to_string(), (*path).to_string()))
+        })
         .collect();
     let unlisted: Vec<_> = found.difference(&listed).collect();
     let stale: Vec<_> = listed.difference(&found).collect();
