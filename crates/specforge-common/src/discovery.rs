@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 /// Directories never entered below a walked root: build artifacts,
 /// dependency trees, and VCS internals. A walked root is entered whatever
 /// its own name.
-pub const SKIP_DIRS: &[&str] = &["target", "node_modules", ".git", ".hg", "dist", "build"];
+const SKIP_DIRS: &[&str] = &["target", "node_modules", ".git", ".hg", "dist", "build"];
 
 /// What one walk of a directory found.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
