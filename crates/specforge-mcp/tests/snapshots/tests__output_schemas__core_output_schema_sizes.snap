@@ -24,7 +24,7 @@ specforge.remove_extension 444
 specforge.migrate 10228
 specforge.extensions 884
 specforge.providers 2826
-specforge.doctor 4112
+specforge.doctor 4186
 specforge.collect 3091
 specforge.render 251
 specforge.infer_progress 864
@@ -32,4 +32,4 @@ specforge.infer_gaps 1101
 specforge.infer_session 295
 specforge.find_implementation 502
 specforge.find_spec_for_source 642
-total 61048
+total 61122
