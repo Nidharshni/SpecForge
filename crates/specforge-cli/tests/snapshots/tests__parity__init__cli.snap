@@ -22,14 +22,16 @@ expression: cli_snap
   },
   "ok": true,
   "payload": {
-    "config_path": "[ROOT]/specforge.json",
+    "config_file": "specforge.json",
     "extensions_installed": [],
     "files_written": [
       ".gitignore",
       "spec/hello.spec",
       "specforge.json"
     ],
+    "name": "demo",
     "project_root": "[ROOT]",
-    "spec_file_path": "[ROOT]/spec/hello.spec"
+    "starter_file": "spec/hello.spec",
+    "version": "0.1.0"
   }
 }

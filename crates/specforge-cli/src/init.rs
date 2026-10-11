@@ -1,6 +1,5 @@
 use crate::OutputFormat;
-use crate::outcome::{Exit, Refusal};
-use serde_json::json;
+use crate::outcome::{Exit, Refusal, Written, print_json};
 use specforge_common::find_project_root;
 use specforge_ops::init;
 use std::path::Path;
@@ -46,17 +45,7 @@ pub fn run(
     let written = outcome.writes.names_under(path);
     match format {
         OutputFormat::Json => {
-            let output = json!({
-                "project_root": outcome.root,
-                "config_path": outcome.config_path,
-                "spec_file_path": outcome.starter_path,
-                "extensions_installed": outcome.extensions,
-                "files_written": written,
-            });
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&output).expect("serialize JSON output")
-            );
+            print_json(&Written::of(outcome.document(), written));
         }
         OutputFormat::Human => {
             println!(

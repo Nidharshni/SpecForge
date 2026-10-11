@@ -750,7 +750,10 @@ fn init_creates_the_project() {
         json!({"path": project.to_str().unwrap(), "name": "myproject"}),
     );
 
-    assert_eq!(parsed["project_path"], project.display().to_string());
+    assert_eq!(
+        parsed["project_root"],
+        project.canonicalize().unwrap().display().to_string()
+    );
     let config = read_config(&project);
     assert_eq!(config["name"], "myproject");
     assert_eq!(config["version"], "0.1.0");

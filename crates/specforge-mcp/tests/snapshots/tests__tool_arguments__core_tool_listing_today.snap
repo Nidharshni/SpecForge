@@ -4339,7 +4339,7 @@ expression: listing
         "name": {
           "type": "string"
         },
-        "project_path": {
+        "project_root": {
           "type": "string"
         },
         "starter_file": {
@@ -4350,12 +4350,12 @@ expression: listing
         }
       },
       "required": [
-        "project_path",
+        "project_root",
+        "name",
+        "version",
         "config_file",
         "starter_file",
-        "extensions_installed",
-        "name",
-        "version"
+        "extensions_installed"
       ],
       "type": "object"
     },

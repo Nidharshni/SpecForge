@@ -408,12 +408,16 @@ type McpDoctorReport {
 }
 
 type McpInitResult {
-  project_path         string @readonly
-  config_file          string @readonly
-  starter_file         string @readonly
-  extensions_installed string[]
+  /// The new project's root, absolute.
+  project_root         string @readonly
   name                 string
   version              string
+  /// specforge.json, relative to project_root.
+  config_file          string @readonly
+  /// The starter spec file, relative to project_root.
+  starter_file         string @readonly
+  /// The extensions enabled: builtins by name, local installs by the name they declare.
+  extensions_installed string[]
   verify unit "McpInitResult schema is valid"
 }
 

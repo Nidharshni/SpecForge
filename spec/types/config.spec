@@ -198,14 +198,6 @@ type InitConfig {
   verify unit "InitConfig schema is valid"
 }
 
-type InitOutput {
-  project_root         string   @readonly
-  config_path          string   @readonly
-  spec_file_path       string   @readonly
-  extensions_installed string[] @readonly
-  verify unit "InitOutput schema is valid"
-}
-
 // ProjectConfig is the serialization shape of specforge.json — the subset
 // of CompilerConfig that users edit directly. CompilerConfig extends this
 // with computed fields (schema, watch settings, etc.) derived

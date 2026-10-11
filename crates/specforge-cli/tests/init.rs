@@ -707,7 +707,7 @@ fn init_enables_runner_extensions_for_detected_test_runners() {
 
 #[specforge_test(
     behavior = "non_interactive_init",
-    verify = "non-interactive init with --format=json outputs InitOutput JSON"
+    verify = "non-interactive init with --format=json prints the init document specforge.init answers"
 )]
 fn non_interactive_json_output() {
     let dir = TempDir::new().unwrap();
@@ -724,11 +724,10 @@ fn non_interactive_json_output() {
         serde_json::from_str(&stdout).expect("--format=json should produce valid JSON");
 
     assert!(json["project_root"].is_string(), "should have project_root");
-    assert!(json["config_path"].is_string(), "should have config_path");
-    assert!(
-        json["spec_file_path"].is_string(),
-        "should have spec_file_path"
-    );
+    assert_eq!(json["config_file"], "specforge.json");
+    assert_eq!(json["starter_file"], "spec/hello.spec");
+    assert_eq!(json["name"], "json-out");
+    assert!(json["version"].is_string(), "should have version");
     assert!(
         json["extensions_installed"].is_array(),
         "should have extensions_installed"
@@ -737,7 +736,7 @@ fn non_interactive_json_output() {
 
 #[specforge_test(
     behavior = "non_interactive_init",
-    verify = "non-interactive init --format=json includes all 4 required fields: project_root, config_path, spec_file_path, extensions_installed"
+    verify = "non-interactive init --format=json includes project_root, name, version, config_file, starter_file and extensions_installed"
 )]
 fn non_interactive_json_all_fields() {
     let dir = TempDir::new().unwrap();
@@ -760,15 +759,13 @@ fn non_interactive_json_all_fields() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let json: serde_json::Value = serde_json::from_str(&stdout).unwrap();
 
-    // Verify all 4 required fields exist and are correct types
+    // Every field of the init document, in its type.
     let project_root = json["project_root"].as_str().unwrap();
-    assert!(!project_root.is_empty());
-
-    let config_path = json["config_path"].as_str().unwrap();
-    assert!(config_path.ends_with("specforge.json"));
-
-    let spec_path = json["spec_file_path"].as_str().unwrap();
-    assert!(spec_path.ends_with("hello.spec"));
+    assert!(std::path::Path::new(project_root).is_absolute());
+    assert_eq!(json["name"], "fields-test");
+    assert_eq!(json["version"], "0.1.0");
+    assert_eq!(json["config_file"], "specforge.json");
+    assert_eq!(json["starter_file"], "spec/hello.spec");
 
     let exts = json["extensions_installed"].as_array().unwrap();
     assert_eq!(
@@ -1448,7 +1445,7 @@ fn non_interactive_init_contract_in_init() {
         config
     );
 
-    // json_output_supported: --format json prints the InitOutput.
+    // json_output_supported: --format json prints the init document.
     let json_dir = TempDir::new().unwrap();
     let output = specforge_cmd()
         .args(["init", "--name", "ni-json", "--format", "json"])
@@ -1458,15 +1455,16 @@ fn non_interactive_init_contract_in_init() {
     assert!(output.status.success());
     let out: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     let root = json_dir.path().canonicalize().unwrap();
-    let root_of = |key: &str| {
-        std::path::PathBuf::from(out[key].as_str().unwrap())
-            .canonicalize()
-            .unwrap()
-    };
-    assert_eq!(root_of("project_root"), root);
-    assert_eq!(root_of("config_path"), root.join("specforge.json"));
+    let root_of = std::path::PathBuf::from(out["project_root"].as_str().unwrap())
+        .canonicalize()
+        .unwrap();
+    assert_eq!(root_of, root);
     assert_eq!(
-        root_of("spec_file_path"),
+        root.join(out["config_file"].as_str().unwrap()),
+        root.join("specforge.json")
+    );
+    assert_eq!(
+        root.join(out["starter_file"].as_str().unwrap()),
         root.join("spec").join("hello.spec")
     );
     assert_eq!(out["extensions_installed"], serde_json::json!([]));

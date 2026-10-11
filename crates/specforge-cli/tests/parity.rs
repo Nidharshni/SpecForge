@@ -95,11 +95,6 @@ const EXPECTED_DIVERGENCES: &[(&str, Aspect, &str)] = &[
         "two JSON shapes today (plan 07 converges it)",
     ),
     (
-        "init",
-        Aspect::Document,
-        "two JSON shapes today (plan 07 converges it)",
-    ),
-    (
         "migrate",
         Aspect::Document,
         "two JSON shapes today (plan 07 converges it)",

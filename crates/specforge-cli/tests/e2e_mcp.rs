@@ -2337,7 +2337,10 @@ fn mcp_tool_init_returns_project() {
     let resp = find_response(&responses, 1).expect("should get response for id 1");
     assert!(resp["error"].is_null(), "should not be error: {}", resp);
     let content = parse_tool_content(resp);
-    assert_eq!(content["project_path"], dir.path().to_str().unwrap());
+    assert_eq!(
+        content["project_root"],
+        dir.path().canonicalize().unwrap().to_str().unwrap()
+    );
     assert!(dir.path().join("specforge.json").is_file());
     assert_eq!(content["config_file"], "specforge.json");
     assert_eq!(content["starter_file"], "spec/hello.spec");
