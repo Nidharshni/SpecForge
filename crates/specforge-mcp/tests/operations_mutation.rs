@@ -140,6 +140,27 @@ fn format_paths_restrict_the_run() {
 }
 
 #[specforge_test(
+    behavior = "discover_format_targets",
+    verify = "a file several arguments reach is formatted once"
+)]
+fn format_counts_a_file_two_paths_name_once() {
+    let (mut server, root) = server_with_unformatted();
+    std::fs::create_dir(root.join("x")).unwrap();
+
+    let parsed = format_result(
+        &mut server,
+        json!({"paths": ["a.spec", "x/../a.spec"], "check": true}),
+    );
+
+    assert_eq!(parsed["total_checked"], 1, "{parsed}");
+    assert_eq!(
+        parsed["changed_files"].as_array().unwrap().len(),
+        1,
+        "{parsed}"
+    );
+}
+
+#[specforge_test(
     behavior = "provide_mcp_format_tool",
     verify = "diff mode returns FormatDiff entries"
 )]

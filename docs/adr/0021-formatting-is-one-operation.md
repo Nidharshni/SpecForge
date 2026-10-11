@@ -50,6 +50,10 @@ rules live in ops and `specforge-common`.
   `specforge.json` is that project's sources; a walk of any other named directory takes a nested
   project's sources where it reaches one, so naming a project never reaches its fixtures.
   `specforge_formatter::discover` is deleted.
+  *(Round 6 plan 12: a named directory is walked by `specforge_common::walk_spec_files`, the walk discovery
+  uses, stopping at nested project roots (`is_project_root`). Target selection stays in
+  `specforge_ops::format`, its only caller: no paths, a named file, a named project, any other directory.
+  Migrate takes no paths. A file several arguments reach is one target, shown as first spelled.)*
 - **D4. Clean means canonical; an unreadable file is a failure.** `Outcome::clean()` holds when every
   target was read, nothing would change and no region was left unformatted (W142). The CLI exits 1,
   in every mode (write, `--check`, `--diff`, `--stdin`), when a file could not be read or written or

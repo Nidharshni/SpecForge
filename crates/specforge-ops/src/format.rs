@@ -480,7 +480,8 @@ impl Outcome {
 }
 
 /// The files a run from `root` over `paths` formats, de-duplicated, in
-/// discovery order (ADR 0021 D3):
+/// discovery order (ADR 0021 D3). A file reached several times is one target,
+/// shown as first spelled:
 ///
 /// - no paths: the project's sources ([`ProjectConfig::spec_files`]);
 /// - a named `.spec` file: that file, even if excluded (the user named it);
@@ -506,10 +507,13 @@ fn targets(root: &Path, paths: &[PathBuf]) -> Vec<PathBuf> {
         }
         found
     };
+    // One target per file, however many arguments reach it: keyed by the
+    // canonical path (a file that does not exist keys by its spelling),
+    // shown as first spelled.
     let mut seen = std::collections::HashSet::new();
     found
         .into_iter()
-        .filter(|path| seen.insert(path.clone()))
+        .filter(|path| seen.insert(path.canonicalize().unwrap_or_else(|_| path.clone())))
         .collect()
 }
 
@@ -1555,16 +1559,17 @@ mod tests {
         assert_eq!(walked.checked, 1);
     }
 
-    /// Pins a defect of the time; plan 12 T5 flips it to
-    /// `a_file_several_arguments_reach_is_formatted_once`.
-    #[test]
-    fn a_file_two_arguments_reach_is_two_targets_today() {
+    #[specforge_test(
+        behavior = "discover_format_targets",
+        verify = "a file several arguments reach is formatted once"
+    )]
+    fn a_file_several_arguments_reach_is_formatted_once() {
         let dir = project_with("{}", &[("a.spec", MESSY)]);
         std::fs::create_dir(dir.path().join("x")).unwrap();
 
         let twice = check_paths(dir.path(), &["a.spec", "x/../a.spec"]);
-        assert_eq!(twice.checked, 2);
-        assert_eq!(twice.changes.len(), 2);
+        assert_eq!(twice.checked, 1);
+        assert_eq!(changed_in(dir.path(), &twice), ["a.spec"]);
 
         // `Path` equality already folds a redundant component.
         let folded = check_paths(dir.path(), &["", "a.spec"]);
