@@ -105,6 +105,21 @@ expression: digest(&build)
     "behavior.watched: ReferenceList",
     "rule.limit: String"
   ],
+  "graph_inputs": {
+    "absent_reference_targets": {
+      "behavior.owner": "nowhere"
+    },
+    "bidirectional_pairs": [],
+    "body_parser_kinds": [],
+    "derived_references": [],
+    "field_coercions": {
+      "behavior.watched": "List",
+      "rule.limit": "Text"
+    },
+    "single_reference_fields": [
+      "behavior.owner"
+    ]
+  },
   "kinds": [
     {
       "allowed_verify_kinds": [

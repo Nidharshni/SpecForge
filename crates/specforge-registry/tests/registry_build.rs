@@ -5,6 +5,7 @@
 use specforge_test_macros::test as spec;
 
 use specforge_extension_sdk::prelude::*;
+use specforge_graph::{FieldCoercion, GraphInputs};
 use specforge_protocol_types::ExtensionDeclaration;
 use specforge_registry::build_registries;
 
@@ -120,32 +121,54 @@ fn rules_include_the_manifest_rules_and_the_required_field_rules() {
     assert!(codes.contains(&("E006", "")), "{codes:?}");
 }
 
-#[test]
+#[spec(
+    behavior = "registry_build_graph_inputs",
+    verify = "the registry build derives every graph input from the declarations"
+)]
 fn derived_graph_inputs_match_the_manifests() {
     let build = build_registries(vec![software(), product()]);
+    let inputs = build.graph_inputs();
 
     assert_eq!(
-        build.body_parser_kinds,
+        inputs.body_parser_kinds,
         ["type".to_string()].into_iter().collect()
     );
     assert!(
-        build
+        inputs
             .single_reference_fields
             .contains(&("behavior".to_string(), "owner".to_string()))
     );
     assert!(
-        !build
+        !inputs
             .single_reference_fields
             .contains(&("behavior".to_string(), "types".to_string())),
         "a reference list is not a single reference"
     );
     // `team` is declared by no loaded extension.
     assert_eq!(
-        build
+        inputs
             .absent_reference_targets
             .get(&("behavior".to_string(), "owner".to_string()))
             .map(String::as_str),
         Some("team")
+    );
+    // A single reference is read as written; a reference list is a list.
+    assert!(
+        !inputs
+            .field_coercions
+            .contains_key(&("behavior".to_string(), "owner".to_string()))
+    );
+    assert_eq!(
+        inputs
+            .field_coercions
+            .get(&("behavior".to_string(), "contract".to_string())),
+        Some(&FieldCoercion::Text)
+    );
+    assert_eq!(
+        inputs
+            .field_coercions
+            .get(&("behavior".to_string(), "types".to_string())),
+        Some(&FieldCoercion::List)
     );
 }
 
@@ -229,10 +252,7 @@ fn no_declarations_build_empty_registries() {
     assert!(build.rules.is_empty());
     assert!(build.surfaces.is_empty());
     assert!(build.passes.is_empty());
-    assert!(build.body_parser_kinds.is_empty());
-    assert!(build.single_reference_fields.is_empty());
-    assert!(build.bidirectional_pairs.is_empty());
-    assert!(build.absent_reference_targets.is_empty());
+    assert_eq!(build.graph_inputs(), GraphInputs::default());
     assert!(build.declarations().is_empty());
     assert!(build.declaration_diagnostics.is_empty());
     assert!(build.registry_diagnostics.is_empty());

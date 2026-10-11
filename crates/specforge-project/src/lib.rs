@@ -22,7 +22,6 @@ mod build_cache;
 mod check_passes;
 mod compiled;
 pub mod coverage;
-mod field_types;
 mod freshness;
 mod inputs;
 pub mod passes;
@@ -44,7 +43,7 @@ use specforge_common::{
     ConfigProblem, ConfigRead, Diagnostic, ProjectConfig, codes, discover_spec_files,
     is_discovered, read_project_config,
 };
-use specforge_graph::{Graph, GraphBuild, GraphConfig, GraphInputs};
+use specforge_graph::{Graph, GraphBuild, GraphConfig};
 use specforge_installed::{Builtins, Installed};
 use specforge_parser::SpecFile;
 use specforge_protocol_types::ExtensionDeclaration;
@@ -237,14 +236,7 @@ impl Environment {
         let build = &self.registries;
         GraphConfig {
             known_provider_schemes: self.providers.schemes(),
-            inputs: GraphInputs {
-                bidirectional_pairs: build.bidirectional_pairs.clone(),
-                body_parser_kinds: build.body_parser_kinds.clone(),
-                single_reference_fields: build.single_reference_fields.clone(),
-                absent_reference_targets: build.absent_reference_targets.clone(),
-                field_coercions: field_types::field_coercions(&build.fields),
-                derived_references: field_types::derived_references(&build.fields),
-            },
+            inputs: build.graph_inputs(),
         }
     }
 

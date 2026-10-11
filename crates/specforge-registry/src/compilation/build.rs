@@ -8,19 +8,19 @@
 //! registers the surfaces. Callers read [`RegistryBuild`].
 //! It is pure: no I/O, no runtime.
 
-use std::collections::{HashMap, HashSet};
-
 use specforge_common::Diagnostic;
+use specforge_graph::GraphInputs;
 use specforge_protocol_types::{CompilerPassDescriptor, ExtensionDeclaration};
 
 use super::declaration::{consistency, order_passes, shape};
+use super::graph_inputs;
 use super::peers;
-use super::populate::{keyword, populate};
+use super::populate::populate;
 use super::validate::validate_extension_testability;
 use crate::rules::{Registries, Rules};
 use crate::{
-    EdgeRegistry, FieldRegistry, FieldType, KindRegistry, SurfaceRegistryEntry,
-    refuse_malformed_tool_schemas, register_surface_contributions,
+    EdgeRegistry, FieldRegistry, KindRegistry, SurfaceRegistryEntry, refuse_malformed_tool_schemas,
+    register_surface_contributions,
 };
 
 /// The phase a pass declares to run with every compile instead of under
@@ -62,17 +62,6 @@ pub struct RegistryBuild {
     /// the registries) plus the host-generated E006 rules for required
     /// fields, each with its origin (ADR 0020).
     pub rules: Rules,
-    /// Kinds whose bodies an extension parses: the core grammar's parse
-    /// errors inside them are not reported.
-    pub body_parser_kinds: HashSet<String>,
-    /// (kind, field) pairs registered as single references (empty when no
-    /// kind is registered).
-    pub single_reference_fields: HashSet<(String, String)>,
-    /// Inverse field pairs that are not reference cycles.
-    pub bidirectional_pairs: Vec<(String, String)>,
-    /// (kind, field) reference fields whose target kind no loaded extension
-    /// declares, mapped to that kind.
-    pub absent_reference_targets: HashMap<(String, String), String>,
     /// Registered surface contributions (first registration wins).
     pub surfaces: Vec<SurfaceRegistryEntry>,
     /// Every declared pass with its extension: extension by extension in
@@ -94,6 +83,15 @@ pub struct RegistryBuild {
 }
 
 impl RegistryBuild {
+    /// What the graph build reads of these declarations: body-parser kinds,
+    /// single and absent-target reference fields, inverse pairs, value
+    /// coercions and derived references (ADR 0032, amended). The one place
+    /// they are derived; `Environment::graph_config` adds the provider
+    /// schemes.
+    pub fn graph_inputs(&self) -> GraphInputs {
+        graph_inputs::derive(&self.declarations, &self.kinds, &self.fields)
+    }
+
     /// The declarations the build was made from, in load order.
     pub fn declarations(&self) -> &[ExtensionDeclaration] {
         &self.declarations
@@ -176,24 +174,6 @@ pub fn build_registries(declarations: Vec<ExtensionDeclaration>) -> RegistryBuil
     );
     registry_diagnostics.extend(rule_diagnostics);
 
-    let body_parser_kinds: HashSet<String> = declarations
-        .iter()
-        .flat_map(|d| d.entities.iter())
-        .filter(|k| k.has_body_parser)
-        .map(|k| keyword(k).to_string())
-        .collect();
-    let single_reference_fields: HashSet<(String, String)> = if kinds.is_empty() {
-        HashSet::new()
-    } else {
-        fields
-            .iter()
-            .filter(|(_, _, entry)| entry.field_type() == FieldType::Reference)
-            .map(|(kind, field, _)| (kind.to_string(), field.to_string()))
-            .collect()
-    };
-    let bidirectional_pairs = fields.bidirectional_pairs();
-    let absent_reference_targets = fields.absent_reference_targets(&kinds);
-
     let surface_inputs: Vec<(String, _)> = declarations
         .iter()
         .map(|d| (d.name().to_string(), d.surfaces.clone()))
@@ -207,10 +187,6 @@ pub fn build_registries(declarations: Vec<ExtensionDeclaration>) -> RegistryBuil
         fields,
         edges,
         rules,
-        body_parser_kinds,
-        single_reference_fields,
-        bidirectional_pairs,
-        absent_reference_targets,
         surfaces,
         passes,
         declaration_diagnostics,
