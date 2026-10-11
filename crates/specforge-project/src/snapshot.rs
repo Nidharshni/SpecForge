@@ -1122,13 +1122,13 @@ mod tests {
         verify = "the coverage rule reads each entity as the pass input carries it"
     )]
     fn coverage_entities_are_the_pass_entities_as_the_rule_reads_them() {
-        let mut kinds = KindRegistry::new();
-        kinds.register(kind("behavior", true, true));
-        kinds.register(kind("type", true, true));
-        kinds.register(kind("memo", false, false));
-        let registries = build(
-            kinds,
-            abstract_behaviors(),
+        let registries = declared(
+            &[
+                ("behavior", true, true),
+                ("type", true, true),
+                ("memo", false, false),
+            ],
+            true,
             vec![w004("behavior"), w004("type")],
         );
         let source = "behavior open \"Open\" {\n  features [base]\n  verify unit \"works\"\n}\n\n\
