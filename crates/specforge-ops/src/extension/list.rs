@@ -376,6 +376,99 @@ mod tests {
         );
     }
 
+    /// What the load records for an entry it could not load.
+    fn failing(
+        entry: EnabledExtension,
+        problem: specforge_installed::LoadProblem,
+    ) -> EnabledExtension {
+        EnabledExtension {
+            failure: Some(specforge_installed::LoadFailure {
+                diagnostic: Diagnostic::new(
+                    specforge_common::codes::E028,
+                    format!("{} did not load", entry.entry),
+                ),
+                problem,
+            }),
+            ..entry
+        }
+    }
+
+    #[test]
+    fn pin_a_builtin_name_in_the_lock_is_named_by_its_lock_source() {
+        let fixture = Fixture::new()
+            .config(&["@specforge/product"])
+            .declarations(vec![Fixture::declaration("@specforge/product", "1.0.0")])
+            .lock(&[("@specforge/product", "9.9.9", "registry")]);
+
+        let listing = list(&fixture.view());
+
+        let row = &listing.extensions[0];
+        assert_eq!(
+            row.origin,
+            Origin::Installed {
+                source: LockSource::Registry
+            }
+        );
+        assert_eq!(row.version.as_deref(), Some("1.0.0"));
+    }
+
+    #[test]
+    fn pin_the_source_of_a_named_and_a_file_entry_follows_entry_order() {
+        use specforge_installed::LoadProblem;
+        let file = failing(
+            EnabledExtension::unloaded("@sdk/greet=greet.wasm"),
+            LoadProblem::AlreadyLoaded {
+                declared: "@sdk/greet".into(),
+            },
+        );
+        let named = EnabledExtension::unloaded("@sdk/greet");
+        let origin_of = |enabled: Vec<EnabledExtension>| {
+            let fixture = Fixture::new()
+                .enabled(enabled)
+                .declarations(vec![Fixture::declaration("@sdk/greet", "0.1.0")])
+                .lock(&[("@sdk/greet", "0.1.0", "registry")]);
+            list(&fixture.view()).extensions[0].origin.clone()
+        };
+
+        assert_eq!(
+            origin_of(vec![file.clone(), named.clone()]),
+            Origin::File {
+                path: "greet.wasm".into()
+            }
+        );
+        assert_eq!(
+            origin_of(vec![named, file]),
+            Origin::Installed {
+                source: LockSource::Registry
+            }
+        );
+    }
+
+    #[test]
+    fn pin_a_failed_file_entry_takes_the_version_of_a_lock_entry_of_its_name() {
+        use specforge_installed::LoadProblem;
+        let fixture = Fixture::new()
+            .enabled(vec![failing(
+                EnabledExtension::unloaded("@test/probe=nope.wasm"),
+                LoadProblem::FileMissing {
+                    path: "nope.wasm".into(),
+                },
+            )])
+            .lock(&[("@test/probe", "0.1.0", "local:/blobs/probe.wasm")]);
+
+        let listing = list(&fixture.view());
+
+        let row = &listing.extensions[0];
+        assert_eq!(
+            row.origin,
+            Origin::File {
+                path: "nope.wasm".into()
+            }
+        );
+        assert_eq!(row.version.as_deref(), Some("0.1.0"));
+        assert_eq!(row.status, Status::NotLoaded);
+    }
+
     #[specforge_test(
         behavior = "list_configured_providers",
         verify = "list shows all configured providers"

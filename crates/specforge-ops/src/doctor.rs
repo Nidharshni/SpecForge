@@ -598,6 +598,89 @@ mod tests {
         }
     }
 
+    fn failing_entry(
+        entry: &str,
+        problem: specforge_installed::LoadProblem,
+    ) -> specforge_project::EnabledExtension {
+        failed(
+            entry,
+            problem,
+            Diagnostic::new(codes::E028, format!("{entry} did not load")),
+        )
+    }
+
+    #[test]
+    fn pin_doctor_leaves_out_an_enabled_entry_neither_loaded_nor_locked() {
+        use specforge_installed::LoadProblem;
+        let fixture = Fixture::new().enabled(vec![failing_entry(
+            "@acme/missing",
+            LoadProblem::NotInstalled,
+        )]);
+        let view = fixture.view();
+
+        let report = diagnose_with(&view, true);
+
+        assert!(report.extensions.is_empty());
+        assert_eq!(crate::extension::list(&view).extensions.len(), 1);
+        assert_eq!(report.about(Part::Load).count(), 1);
+    }
+
+    #[test]
+    fn pin_doctor_names_a_lock_only_row_by_its_lock_source() {
+        use specforge_installed::LoadProblem;
+        let fixture = Fixture::new()
+            .enabled(vec![failing_entry(
+                "@test/probe=nope.wasm",
+                LoadProblem::FileMissing {
+                    path: "nope.wasm".into(),
+                },
+            )])
+            .lock(&[("@test/probe", "0.1.0", "local:/blobs/probe.wasm")]);
+        let view = fixture.view();
+
+        let report = diagnose_with(&view, true);
+
+        assert_eq!(report.extensions[0].source, "local:/blobs/probe.wasm");
+        assert_eq!(
+            crate::extension::list(&view).extensions[0].origin.source(),
+            "file:nope.wasm"
+        );
+    }
+
+    #[test]
+    fn pin_doctor_lists_loaded_extensions_in_load_order_then_the_lock() {
+        let fixture = Fixture::new()
+            .config(&["@z/z", "@a/a"])
+            .declarations(vec![
+                Fixture::declaration("@z/z", "1.0.0"),
+                Fixture::declaration("@a/a", "1.0.0"),
+            ])
+            .lock(&[("@m/m", "1.0.0", "registry")]);
+        let view = fixture.view();
+
+        let report = diagnose_with(&view, true);
+
+        let names: Vec<&str> = report.extensions.iter().map(|e| e.name.as_str()).collect();
+        assert_eq!(names, ["@z/z", "@a/a", "@m/m"]);
+        let listed = crate::extension::list(&view);
+        let listed: Vec<&str> = listed.extensions.iter().map(|e| e.name.as_str()).collect();
+        assert_eq!(listed, ["@a/a", "@m/m", "@z/z"]);
+    }
+
+    #[test]
+    fn pin_doctor_lists_load_failures_in_entry_order() {
+        use specforge_installed::LoadProblem;
+        let fixture = Fixture::new().enabled(vec![
+            failing_entry("@z/z", LoadProblem::NotInstalled),
+            failing_entry("@a/a", LoadProblem::NotInstalled),
+        ]);
+
+        let report = diagnose_with(&fixture.view(), true);
+
+        let checks: Vec<&str> = report.about(Part::Load).map(|f| f.check.as_str()).collect();
+        assert_eq!(checks, ["@z/z did not load", "@a/a did not load"]);
+    }
+
     #[specforge_test(
         behavior = "run_doctor_check",
         verify = "a finding without its own suggestion quotes the catalogued explanation"

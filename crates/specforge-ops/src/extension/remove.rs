@@ -634,6 +634,73 @@ mod tests {
     }
 
     #[test]
+    fn pin_remove_refuses_an_enabled_entry_that_is_not_installed() {
+        let fixture = Fixture::new().config(&["@specforge/product", "@acme/missing"]);
+        write_config(
+            &fixture,
+            r#"{"extensions": ["@specforge/product", "@acme/missing"]}"#,
+        );
+        let before = files_under(fixture.dir.path());
+
+        let error = remove(&fixture.view(), &removing("@acme/missing")).unwrap_err();
+
+        assert_eq!(error.code, NOT_FOUND);
+        assert_eq!(
+            error.message,
+            "extension '@acme/missing' is not installed (no lock file found)"
+        );
+        assert_eq!(files_under(fixture.dir.path()), before);
+    }
+
+    #[test]
+    fn pin_remove_refuses_an_entry_that_is_no_package_name_with_e072() {
+        let fixture = Fixture::new().config(&["Bad Name"]);
+        write_config(&fixture, r#"{"extensions": ["Bad Name"]}"#);
+        let before = files_under(fixture.dir.path());
+
+        let error = remove(&fixture.view(), &removing("Bad Name")).unwrap_err();
+
+        assert_eq!(error.code, "E072");
+        assert_eq!(files_under(fixture.dir.path()), before);
+    }
+
+    #[specforge_test(
+        behavior = "remove_extension",
+        verify = "a .wasm file entry is removed by the name it declares or by its entry as written, leaving its file in place"
+    )]
+    fn remove_selects_a_file_entry_by_its_text_its_path_or_its_name() {
+        let fixture = Fixture::new()
+            .enabled(vec![EnabledExtension {
+                entry: "@sdk/greet=greet.wasm".into(),
+                name: "@sdk/greet".into(),
+                file: Some("greet.wasm".into()),
+                failure: None,
+            }])
+            .declarations(vec![Fixture::declaration("@sdk/greet", "0.1.0")]);
+        write_config(&fixture, r#"{"extensions": ["@sdk/greet=greet.wasm"]}"#);
+
+        for argument in ["@sdk/greet=greet.wasm", "greet.wasm", "@sdk/greet"] {
+            let request = RemoveRequest {
+                name: argument,
+                force: false,
+                dry_run: true,
+            };
+            let outcome = remove(&fixture.view(), &request).unwrap();
+
+            assert_eq!(outcome.name, "@sdk/greet", "{argument}");
+            assert_eq!(
+                outcome.origin,
+                Origin::File {
+                    path: "greet.wasm".into()
+                },
+                "{argument}"
+            );
+            assert_eq!(outcome.version.as_deref(), Some("0.1.0"), "{argument}");
+            assert!(outcome.writes.is_empty(), "{argument}");
+        }
+    }
+
+    #[test]
     fn an_unreadable_lock_is_why_nothing_is_installed() {
         let mut fixture = Fixture::new();
         write_config(&fixture, r#"{"extensions": []}"#);
