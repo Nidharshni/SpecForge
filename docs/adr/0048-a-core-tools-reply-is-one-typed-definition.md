@@ -1,7 +1,7 @@
 # A core tool's reply is one typed definition
 
 **Status:** accepted (2026-10-09). Supersedes ADR 0033's consequence "Output schemas stay
-hand-written". Amends ADR 0004 D2-c, ADR 0015 I5 and ADR 0016 (the inspect aliases).
+hand-written". Amends ADR 0004 D2-c, ADR 0015 I5 and ADR 0016 (the inspect aliases). D2's tool table and D9 are refined by ADR 0049: a tool's module names its reply (`type Returns`).
 
 Every core MCP tool's reply was written three times: a spec type in `spec/types/mcp.spec`, a
 hand-written output schema in `tools/table.rs` (25 schemas, 199 lines) and a `json!` in the handler

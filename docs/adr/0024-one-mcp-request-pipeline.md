@@ -1,6 +1,6 @@
 # One MCP request pipeline; resources read through the view
 
-**Status:** accepted (2026-10-06); D6 amended and D8 added (2026-10-08, architecture plan 12); a tool spec declares what it does once (2026-10-09, architecture plan 10, last section). Amends
+**Status:** accepted (2026-10-06); D6 amended and D8 added (2026-10-08, architecture plan 12); a tool spec declares what it does once (2026-10-09, architecture plan 10, last section); A1's tool spec is one module implementing `CoreTool` (ADR 0049). Amends
 ADR 0004 "MCP tool table" (D4-e) and ADR 0017 D6 and D14's resource code.
 
 `tools/call`, `resources/read` and `prompts/get` ran the same steps in three functions: read the

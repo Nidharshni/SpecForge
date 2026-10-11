@@ -459,8 +459,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Extension surface table**: what MCP serves from the project's extensions, built once per
   reload from their declarations: each tool once (an explicit `mcp__` tool, or an extension
   command), each resource with its URI template; listings are the core tables plus it, and a call
-  is one lookup in it. A contribution it does not serve is reported with I017
-  (`specforge_mcp`'s `ExtensionSurfaceTable`, ADR 0017).
+  is one lookup in it. Its entries are run by MCP's extension dispatch: an explicit tool's `mcp__`
+  export, a command's `cmd__` export or a resource's `mcp__` export, one call each over the
+  `WasmRuntime` port (`specforge_mcp`'s `extension_dispatch`). A contribution it does not serve is
+  reported with I017 (`specforge_mcp`'s `ExtensionSurfaceTable`, ADR 0017).
 - **Extension call**: one typed operation the host performs on a loaded extension — handshake,
   describe, command, MCP tool, MCP resource, compiler pass, collector, custom validator, scanner,
   migration hook — over the `WasmRuntime` port. Its input and answer are protocol types
@@ -492,14 +494,14 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Command format**: the output an extension command is asked for, `human` (the CLI default) or
   `json` (always, over MCP). The host owns the `--format` flag; the extension renders both, since
   only it knows its payloads (ADR 0011).
-- **Tool spec**: the single definition of an MCP tool: its name, description and effect. The effect
-  says what the tool does to its environment: it reads (listed in its group: core, navigation or
-  management), writes output artifacts (listed in its group, with how it writes), or mutates its
-  target's project (category mutation, with how it writes, its reply listing `files_written`); and it
-  holds the handler, whose variant is what the handler is given (nothing, the project view, the
-  project, or the directory init creates), with the tool arguments it reads and the tool reply it
-  answers. Its category, annotations, call target and descriptor (input and output schemas included)
-  derive from it (`specforge_mcp`'s `ToolSpec` table, ADR 0024).
+- **Tool spec**: the single definition of a core MCP tool: its own module under `specforge_mcp::tools`,
+  implementing `CoreTool` once: its name, description and effect, the spec type its reply is, the tool
+  arguments it reads, what its handler is given (nothing, the project view, the project, or the
+  directory init creates, with how it reaches its project) and the tool reply it answers (typed, text,
+  or a mutation's). Its category, annotations, call target, descriptor (input and output schemas
+  included) and dispatch derive from it; the core tool table lists each once (`CORE_TOOLS`, each seen
+  as a `ToolSpec`), and a declaration that contradicts its handler does not build. A prompt names a
+  tool by its typed name (ADR 0024, ADR 0049).
 - **Tool effect**: what a tool does to its environment, declared once on its tool spec
   (`specforge_mcp::tool::Effect`): reads, writes output artifacts (collect, render), or mutates the
   target's project files (a mutation, ADR 0022), with how a writing tool writes (destructive,
@@ -538,7 +540,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Resource spec**: the single definition of a core MCP resource: its URI or template, descriptor
   and its read of the project view. A graph view (`graph`, `context`, `brief`, scoped or not, and `graph/{entity_id}`)
   is `specforge export` over the call's project view; the entity list and the diagnostics read what
-  `specforge.list` and `specforge.validate` read (`specforge_mcp`'s `ResourceSpec` table).
+  `specforge.list` and `specforge.validate` read (`specforge_mcp`'s `ResourceSpec` table). A URI names a resource, core or extension, by one
+  rule (`specforge_mcp`'s `uri_template`): a template names every URI that starts with its text before
+  the first placeholder, a URI without one names itself, alone or with a query; a placeholder's value
+  and a query are the reader's to read or refuse (ADR 0049).
 - **Stateless request**: an MCP request whose `_meta` names its protocol version (MCP 2026-07-28),
   answered on its own without `initialize`; every other request follows the revision `initialize`
   negotiated (`specforge_mcp::modern`). Every request is served under its revision, which travels
