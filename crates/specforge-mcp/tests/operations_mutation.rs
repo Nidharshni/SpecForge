@@ -1079,11 +1079,11 @@ fn add_extension_returns_result() {
     let resp = call_tool(
         &mut server,
         "specforge.add_extension",
-        json!({"specifier": blob.to_str().unwrap()}),
+        json!({"specifiers": [blob.to_str().unwrap()]}),
     );
     let text = tool_text(&resp);
     let parsed: Value = serde_json::from_str(&text).unwrap();
-    assert_eq!(parsed["action"], "installed");
+    assert_eq!(parsed["added"][0]["action"], "installed");
     // Local installs derive the name from the file stem (same as the CLI).
     let lock = std::fs::read_to_string(dir.as_path().join("specforge.lock")).unwrap();
     assert!(lock.contains("@sdk/greet"));
@@ -1114,7 +1114,7 @@ fn add_extension_overwrites_a_changed_module() {
         let resp = call_tool(
             server,
             "specforge.add_extension",
-            json!({"specifier": blob.to_str().unwrap()}),
+            json!({"specifiers": [blob.to_str().unwrap()]}),
         );
         assert_eq!(resp["result"]["isError"], false, "{resp}");
         tool_json(&resp)
@@ -1221,11 +1221,11 @@ fn add_extension_reads_the_candidate_in_the_host_runtime() {
     let resp = call_tool(
         &mut server,
         "specforge.add_extension",
-        json!({"specifier": greet.to_str().unwrap()}),
+        json!({"specifiers": [greet.to_str().unwrap()]}),
     );
 
     let parsed: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
-    assert_eq!(parsed["action"], "installed", "{parsed}");
+    assert_eq!(parsed["added"][0]["action"], "installed", "{parsed}");
     let lock = std::fs::read_to_string(root.join("specforge.lock")).unwrap();
     assert!(lock.contains("@sdk/greet"), "{lock}");
     let handshakes = runtime
@@ -1270,7 +1270,7 @@ fn server_with_product() -> (Served, std::path::PathBuf) {
     let resp = call_tool(
         &mut server,
         "specforge.add_extension",
-        json!({"specifier": greet_blob().to_str().unwrap()}),
+        json!({"specifiers": [greet_blob().to_str().unwrap()]}),
     );
     assert!(resp["result"].is_object(), "install failed: {resp}");
     (server, root)
@@ -1300,12 +1300,12 @@ fn add_extension_dry_run_writes_nothing() {
     let resp = call_tool(
         &mut server,
         "specforge.add_extension",
-        json!({"specifier": greet_blob().to_str().unwrap(), "dry_run": true}),
+        json!({"specifiers": [greet_blob().to_str().unwrap()], "dry_run": true}),
     );
 
     let parsed: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
-    assert_eq!(parsed["action"], "planned", "{parsed}");
-    assert_eq!(parsed["extension"], GREET, "{parsed}");
+    assert_eq!(parsed["added"][0]["action"], "planned", "{parsed}");
+    assert_eq!(parsed["added"][0]["extension"], GREET, "{parsed}");
     assert_eq!(files_under(&root), before, "a dry run writes nothing");
 }
 
@@ -1512,7 +1512,7 @@ fn add_extension_already_installed_placeholder() {
     let first = call_tool(
         &mut server,
         "specforge.add_extension",
-        json!({"specifier": blob.to_str().unwrap()}),
+        json!({"specifiers": [blob.to_str().unwrap()]}),
     );
     assert!(first["result"].is_object());
     // Second install of the same blob: the config update is idempotent and
@@ -1521,7 +1521,7 @@ fn add_extension_already_installed_placeholder() {
     let second = call_tool(
         &mut server,
         "specforge.add_extension",
-        json!({"specifier": blob.to_str().unwrap()}),
+        json!({"specifiers": [blob.to_str().unwrap()]}),
     );
     let still_ok = second["result"].is_object();
     assert!(still_ok);
@@ -1535,7 +1535,7 @@ fn add_extension_invalid_manifest_placeholder() {
     let resp = call_tool(
         &mut server,
         "specforge.add_extension",
-        json!({"specifier": "invalid-extension-xyz"}),
+        json!({"specifiers": ["invalid-extension-xyz"]}),
     );
     let error = crate::tool_errors::mcp_error(&resp);
     assert_eq!(error["diagnostic"]["code"], "E054", "{resp}");
@@ -1619,7 +1619,7 @@ fn add_extension_invalid_specifier() {
     let resp = call_tool(
         &mut server,
         "specforge.add_extension",
-        json!({"specifier": "no-at-sign"}),
+        json!({"specifiers": ["no-at-sign"]}),
     );
     let error = crate::tool_errors::mcp_error(&resp);
     assert_eq!(error["diagnostic"]["code"], "E054", "{resp}");
@@ -1645,7 +1645,7 @@ fn add_extension_reads_specifiers_as_add_does() {
         let resp = call_tool(
             &mut server,
             "specforge.add_extension",
-            json!({"specifier": specifier}),
+            json!({"specifiers": [specifier]}),
         );
         let error = crate::tool_errors::mcp_error(&resp);
         assert_eq!(error["diagnostic"]["code"], code, "{specifier}: {resp}");
@@ -1689,11 +1689,11 @@ fn add_extension_dry_run() {
     let resp = call_tool(
         &mut server,
         "specforge.add_extension",
-        json!({"specifier": blob.to_str().unwrap(), "dry_run": true}),
+        json!({"specifiers": [blob.to_str().unwrap()], "dry_run": true}),
     );
     let text = tool_text(&resp);
     let parsed: Value = serde_json::from_str(&text).unwrap();
-    assert_eq!(parsed["action"], "planned", "{parsed}");
+    assert_eq!(parsed["added"][0]["action"], "planned", "{parsed}");
 }
 
 #[test]
@@ -1712,7 +1712,7 @@ fn remove_extension_dry_run() {
     let _install = call_tool(
         &mut server,
         "specforge.add_extension",
-        json!({"specifier": blob.to_str().unwrap()}),
+        json!({"specifiers": [blob.to_str().unwrap()]}),
     );
     let resp = call_tool(
         &mut server,
@@ -1787,10 +1787,10 @@ fn add_extension_contract() {
     let resp = call_tool(
         &mut server,
         "specforge.add_extension",
-        json!({"specifier": specifier, "dry_run": true}),
+        json!({"specifiers": [specifier], "dry_run": true}),
     );
     let preview: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
-    assert_eq!(preview["action"], "planned", "{preview}");
+    assert_eq!(preview["added"][0]["action"], "planned", "{preview}");
     assert_eq!(files_under(&root), before);
     assert!(events(&server, "extension_added").is_empty());
 
@@ -1798,10 +1798,10 @@ fn add_extension_contract() {
     let resp = call_tool(
         &mut server,
         "specforge.add_extension",
-        json!({"specifier": specifier}),
+        json!({"specifiers": [specifier]}),
     );
     let installed: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
-    assert_eq!(installed["action"], "installed", "{installed}");
+    assert_eq!(installed["added"][0]["action"], "installed", "{installed}");
     // Enabled by its bare name; the lock pins version and hash (D3-b).
     assert_eq!(config_extensions(&root), vec![GREET]);
     let lock = std::fs::read_to_string(root.join("specforge.lock")).unwrap();
@@ -1841,7 +1841,7 @@ fn remove_extension_contract() {
     let _install = call_tool(
         &mut server,
         "specforge.add_extension",
-        json!({"specifier": blob.to_str().unwrap()}),
+        json!({"specifiers": [blob.to_str().unwrap()]}),
     );
     // Requires: filesystem available
     // Ensures: not-installed extension is an honest error, not fake success
@@ -2045,7 +2045,7 @@ fn add_extension_from_a_registry_reports_a_duplicate_registry_alias() {
     let resp = call_tool(
         &mut server,
         "specforge.add_extension",
-        json!({"specifier": "@acme/widget@1.0.0", "path": path}),
+        json!({"specifiers": ["@acme/widget@1.0.0"], "path": path}),
     );
     let codes: Vec<&str> = resp["result"]["_meta"]["diagnostics"]
         .as_array()
@@ -2059,7 +2059,7 @@ fn add_extension_from_a_registry_reports_a_duplicate_registry_alias() {
     let builtin = call_tool(
         &mut server,
         "specforge.add_extension",
-        json!({"specifier": "@specforge/software", "path": path, "dry_run": true}),
+        json!({"specifiers": ["@specforge/software"], "path": path, "dry_run": true}),
     );
     assert!(builtin["result"]["_meta"].is_null(), "{builtin}");
 }
@@ -2077,7 +2077,7 @@ fn add_extension_dry_run_of_an_exact_version_reports_no_registry_configuration()
     let resp = call_tool(
         &mut server,
         "specforge.add_extension",
-        json!({"specifier": "@acme/widget@1.0.0", "path": path, "dry_run": true}),
+        json!({"specifiers": ["@acme/widget@1.0.0"], "path": path, "dry_run": true}),
     );
     let codes: Vec<&str> = resp["result"]["_meta"]["diagnostics"]
         .as_array()
@@ -2224,7 +2224,7 @@ fn add_then_tools_list_shows_the_extension_tools() {
     let resp = call_tool(
         &mut server,
         "specforge.add_extension",
-        json!({"specifier": "@specforge/product"}),
+        json!({"specifiers": ["@specforge/product"]}),
     );
     assert_eq!(resp["result"]["isError"], false, "{resp}");
 

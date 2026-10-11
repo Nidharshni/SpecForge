@@ -30,13 +30,18 @@ expression: cli_snap
   },
   "ok": true,
   "payload": {
-    "action": "enabled",
-    "changed": true,
-    "extension": "@specforge/product",
+    "added": [
+      {
+        "action": "enabled",
+        "changed": true,
+        "extension": "@specforge/product",
+        "peers_enabled": [],
+        "source": "builtin",
+        "specifier": "@specforge/product"
+      }
+    ],
     "files_written": [
       "specforge.json"
-    ],
-    "peers_enabled": [],
-    "source": "builtin"
+    ]
   }
 }

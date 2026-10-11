@@ -30,15 +30,20 @@ expression: cli_snap
   },
   "ok": true,
   "payload": {
-    "action": "installed",
-    "extension": "@sdk/greet",
+    "added": [
+      {
+        "action": "installed",
+        "extension": "@sdk/greet",
+        "sha256": "[SHA256]",
+        "source": "local:[BLOB]",
+        "specifier": "[BLOB]",
+        "version": "0.1.0"
+      }
+    ],
     "files_written": [
       ".specforge/extensions/@sdk/greet/extension.wasm",
       "specforge.json",
       "specforge.lock"
-    ],
-    "sha256": "[SHA256]",
-    "source": "local:[BLOB]",
-    "version": "0.1.0"
+    ]
   }
 }

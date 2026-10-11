@@ -253,15 +253,26 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
     extension_resolvable   "Extension specifier can be resolved via registry, bundled index, or local cache"
   }
   ensures {
-    extension_appended      "Extension is added to the extensions list in specforge.json"
+    extension_appended      "Each extension is added to the extensions list in specforge.json, all of them as one change or none"
     no_duplicate_added      "Already-installed extensions are not duplicated"
     other_fields_preserved  "No other fields in specforge.json are modified"
     peer_deps_satisfied     "An install that leaves a locked peer requirement unsatisfied, or whose own peer range can't be read, is refused before anything is written"
     extension_added_emitted "extension_added event is emitted after successful addition"
   }
   contract   """
-    When specforge add <extension-specifier> is invoked on an existing project,
-    the system MUST add the extension to the extensions list in specforge.json.
+    When specforge add <extension-specifier>... is invoked on an existing
+    project, the system MUST add each extension to the extensions list in
+    specforge.json. It takes one or more specifiers and adds them as one
+    change: every install is staged in one lock plan and judged once, on the
+    whole set (ADR 0041), so the order of the specifiers decides nothing;
+    the modules, specforge.lock (written once) and specforge.json are
+    written together. The add is all or nothing: if any specifier is
+    refused, nothing is written, and with several specifiers the refusal
+    names the one refused ("adding '<specifier>': ..."). A specifier naming
+    an extension an earlier specifier of the same add names, the same way,
+    is reported as a duplicate of it (added once); two specifiers adding
+    one extension differently (another version, other bytes, another
+    source) are refused with extension_conflict, naming both.
     The extension specifier MUST accept @scope/name@version syntax; version
     resolution is delegated to parse_extension_specifier
     (specforge_ops::extension::parse over the package module).
@@ -273,9 +284,9 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
     and diamond checks compare real versions and update never replaces a
     local build from a registry.
     The system MUST NOT duplicate an already-installed extension.
-    A dry run reports what the add would do and writes nothing; an
-    extension already present answers as the add would, whatever its
-    source.
+    A dry run reports what the add would do for each specifier and writes
+    nothing; an extension already present answers as the add would,
+    whatever its source.
     The system MUST NOT modify any other field in specforge.json.
     When adding an extension, the system MUST judge its peers by the one
     peer rule (ADR 0041) before anything is installed: a peer range that is
@@ -305,15 +316,24 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
     with no registry configured in specforge.json MUST make no network call
     and MUST fail with E063, whose suggestion names the registries key.
     Its JSON output is the add document specforge.add_extension answers
-    (McpAddExtensionResult, its action enabled, installed, already_present
-    or planned; no note), with the files it wrote as files_written (empty
-    when the extension was already enabled). A registry package's source is
-    registry, and its key_id is present only when the package is signed.
+    (McpAddExtensionResult: added, one entry per specifier in the order
+    given, each naming its specifier, its action enabled, installed,
+    already_present, planned or duplicate; no note), with the files it
+    wrote as files_written (empty when every extension was already
+    enabled). A registry package's source is registry, and its key_id is
+    present only when the package is signed.
   """
   verify unit "with no registry configured, add makes no network call and reports how to configure one"
   verify unit "add extension appends to extensions list"
   verify integration "add --format json lists the files it wrote in files_written"
-  verify unit "the add document says what the add did by action, with source always and key_id only for a signed package"
+  verify integration "specforge add with several specifiers prints one entry per specifier and writes them as one change, or nothing"
+  verify unit "the add document lists what the add did for each specifier by action, with source always and key_id only for a signed package"
+  verify unit "add takes several specifiers and adds them as one change"
+  verify unit "an add of several specifiers that refuses one writes nothing, its refusal naming that specifier"
+  verify unit "the specifiers of an add are read in order, the first unreadable one refused and named among several"
+  verify unit "an add of several specifiers judges their peers on the whole set, whatever their order"
+  verify unit "a specifier naming an extension an earlier one adds is a duplicate, and two adding it differently are refused"
+  verify unit "a dry run of several specifiers previews each and writes nothing"
   verify unit "add enables a builtin's required peers but not its optional ones"
   verify unit "add enables the builtins a required builtin peer requires, dependencies first"
   verify unit "a builtin whose declaration cannot be read is refused before anything is written"

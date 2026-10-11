@@ -271,7 +271,7 @@ mod tests {
                 "`specforge {command}` takes --json"
             );
         }
-        for name in ["analyze", "watch"] {
+        for name in ["analyze", "watch", "format"] {
             let command = root.find_subcommand(name).expect("a core command");
             let format = command
                 .get_arguments()

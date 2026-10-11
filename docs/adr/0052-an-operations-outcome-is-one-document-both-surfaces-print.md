@@ -40,8 +40,7 @@ type, matched neither surface.
 - **D5. The rule covers every printed outcome**, update's included, though only the CLI prints it.
 - **D6. The spec type of a document is its tool's `Mcp*` reply type** (ADR 0048 D8 holds it);
   `ProjectStatistics`, `EntityKindCount` and `InitOutput` are deleted.
-- **D7. The CLI parity harness compares documents** (`Document` aspect): only `specforge format`,
-  which prints no JSON, differs.
+- **D7. The CLI parity harness compares documents** (`Document` aspect): none differs (D8).
 
 ## Consequences
 
@@ -58,8 +57,9 @@ type, matched neither surface.
 - `extensions`: `extensions`, `count`, `lock_file_entries`, `entity_kinds_in_graph`.
 - `migrate`: one record (`pending`, `files_migrated`, …, `backups`) on both surfaces; MCP's
   `Current`/`Ran` union and the CLI's `MigrationSummary` output are gone.
-- `update --format json`: `{ok, extensions: [rows by status], batch_update_completed}`; a failed
-  update prints it and exits 1, instead of the first failure's error document.
+- `update --format json`: `{ok, extensions: [rows by status], extension_upgrade_completed: [one
+  per extension an applied update moved], batch_update_completed}`; a failed update prints it (no
+  upgrade completed) and exits 1, instead of the first failure's error document.
 - `specforge infer-guide --format json` and the infer prompt leave out a kind's missing
   `description` instead of writing `null`.
 - CLI JSON keys follow the document's field order rather than alphabetical order.
@@ -74,9 +74,31 @@ type, matched neither surface.
   says what they are.
 - **Renaming the shared spec types off `Mcp`**: a rename of some forty types, left for a round in
   which nothing else edits `mcp.spec`.
-- **A CLI JSON for `specforge format`**: a new feature, not a convergence.
+- **A CLI JSON for `specforge format`** in this round: a new feature, not a convergence. It
+  followed in the round 6 follow-ups (D8).
+
+## Amendment (round 6 follow-ups)
+
+- **D8. `specforge format` takes `--format human|json`** (ADR 0029 D5b). Its document is
+  `specforge_ops::format::FormatDocument` (`Outcome::document`, spec type `McpFormatResult`), which
+  `specforge.format` answers and a failed call carries in its `data`; the CLI adds only
+  `files_written` (D2), absent when the run only reports (`--check`, `--diff`). Under JSON the W141
+  and W142 diagnostics and the failed files are the document's and nothing goes to stderr; the exit
+  stays the run's verdict (`--check` with a change exits 1). `--stdin`, whose output is the
+  formatted text, refuses `--format json` (`invalid_input`, the error document).
 
 ## What would reopen it
 
 A consumer pinned to one surface's shape that extras cannot serve; or an outcome whose printed form
 must differ per surface for a reason the surface alone knows, beyond adding keys.
+
+## Amendment (2026-10-11): an add of several specifiers is one document
+
+`specforge add` takes one or more specifiers, and `specforge.add_extension` a `specifiers` list
+(its single `specifier` is gone), added as one change (ADR 0041's lock plan, judged on the whole
+set; all or nothing). D1's `AddDocument` is now `{added: [AddResult]}`: one entry per specifier,
+in the order given, each the union tagged by `action` that D1 described (enabled, installed,
+already_present, planned), plus `duplicate` (`duplicate_of`: the earlier specifier of the same add
+that names the extension the same way), and every entry names its `specifier` as given. MCP's
+`note` (D2) sits beside `added`, once per reply; the CLI's `files_written` lists the files of the
+whole set. The spec type is `McpAddExtensionResult { added: McpAddedExtension[], note? }`.

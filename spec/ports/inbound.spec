@@ -26,7 +26,7 @@ port CompilerApi {
   method format(paths: string[], config: FormatConfig) -> Result<FormatDiff[], EmitterError>
   method watch(config: CompilerConfig) -> Result<void, EmitterError>
   method init(config: InitConfig) -> Result<ProjectConfig, InitError>
-  method add(specifier: ExtensionSpecifier) -> Result<ExtensionDeclaration, RegistryError>
+  method add(specifiers: ExtensionSpecifier[]) -> Result<ExtensionDeclaration[], RegistryError>
   requires {
     config_valid        "CompilerConfig has a non-empty spec_root and at least one extension"
     export_format_known "export format argument is one of context, graph, brief, json, dot"

@@ -1,5 +1,5 @@
 use crate::{
-    EdgeRegistry, EdgeRegistryEntry, FieldRegistry, FieldRegistryEntry, KindRegistry,
+    EdgeRegistry, EdgeRegistryEntry, EdgeWriter, FieldRegistry, FieldRegistryEntry, KindRegistry,
     KindRegistryEntry, UnknownFieldType,
 };
 use specforge_common::{Diagnostic, DiagnosticData, codes};
@@ -27,6 +27,10 @@ pub(crate) fn populate(
         register_entity_kinds(&mut kind_reg, declaration, &mut diagnostics);
         register_fields(&mut field_reg, declaration, &mut diagnostics);
         register_edge_types(&mut edge_reg, declaration, &mut diagnostics);
+    }
+    // Once every declared edge type is in: a label any extension declares
+    // is that declaration, whichever field wrote it first.
+    for declaration in declarations {
         register_implicit_edges(&mut edge_reg, declaration);
     }
 
@@ -253,6 +257,7 @@ fn register_edge_types(
         let entry = EdgeRegistryEntry {
             source_extension: declaration.name().to_string(),
             declared: edge.clone(),
+            writers: Vec::new(),
         };
         if let Some(existing) = registry.register(entry) {
             diagnostics.push(Diagnostic::new(
@@ -271,24 +276,30 @@ fn register_edge_types(
     }
 }
 
-/// Register the edge types a declaration's fields map to without declaring
-/// them.
+/// Record each field of a declaration's kinds that writes an edge label no
+/// extension declares as one of that edge type's writers: per kind, its
+/// shared fields (those it does not declare again) then its own, as the
+/// field registry registers them.
 fn register_implicit_edges(registry: &mut EdgeRegistry, declaration: &ExtensionDeclaration) {
     for kind in &declaration.entities {
-        for field in &kind.fields {
-            if let Some(ref edge_label) = field.edge
-                && !registry.contains(edge_label)
-            {
-                registry.register(EdgeRegistryEntry {
-                    source_extension: declaration.name().to_string(),
-                    declared: specforge_protocol_types::EdgeTypeDescriptor {
-                        label: edge_label.clone(),
-                        source_kind: Some(keyword(kind).to_string()),
-                        target_kind: field.target_kind.clone(),
-                        ..Default::default()
-                    },
-                });
+        let shared = declaration
+            .shared_fields
+            .iter()
+            .filter(|s| !kind.fields.iter().any(|f| f.name == s.name));
+        for field in shared.chain(&kind.fields) {
+            let Some(label) = &field.edge else { continue };
+            if registry.get(label).is_some_and(|e| e.writers.is_empty()) {
+                continue; // declared
             }
+            registry.record_writer(
+                label,
+                EdgeWriter {
+                    extension: declaration.name().to_string(),
+                    kind: keyword(kind).to_string(),
+                    field: field.name.clone(),
+                    target_kind: field.target_kind.clone(),
+                },
+            );
         }
     }
 }

@@ -61,9 +61,10 @@ pub(crate) enum Check {
 pub(crate) enum EdgeScope {
     /// Every edge.
     Any,
-    /// Only edges to (outgoing) or from (incoming) an entity of this kind:
-    /// the far end of the rule's edge type.
-    Peer(String),
+    /// Only edges to (outgoing) or from (incoming) an entity of one of
+    /// these kinds: the far end of the rule's edge type (its declared kind,
+    /// else every kind that writes it without declaring it).
+    Peers(Vec<String>),
 }
 
 /// A `field_value_constraint`'s predicate on the field's text.
@@ -185,12 +186,8 @@ fn evaluate(
 ) -> Result<Option<Violation>, VerdictError> {
     let violated = |violated: bool| Ok(violated.then(Violation::default));
     match &rule.check {
-        Check::NoIncomingEdges(scope) => {
-            violated(record.edges(Direction::Incoming, scope.peer()) == 0)
-        }
-        Check::NoOutgoingEdges(scope) => {
-            violated(record.edges(Direction::Outgoing, scope.peer()) == 0)
-        }
+        Check::NoIncomingEdges(scope) => violated(scope.count(record, Direction::Incoming) == 0),
+        Check::NoOutgoingEdges(scope) => violated(scope.count(record, Direction::Outgoing) == 0),
         Check::NoEdges => violated(
             record.edges(Direction::Incoming, None) == 0
                 && record.edges(Direction::Outgoing, None) == 0,
@@ -256,10 +253,14 @@ fn evaluate(
 }
 
 impl EdgeScope {
-    fn peer(&self) -> Option<&str> {
+    /// The edges of `record` in `direction` it counts.
+    fn count(&self, record: &EntityRecord, direction: Direction) -> usize {
         match self {
-            EdgeScope::Any => None,
-            EdgeScope::Peer(kind) => Some(kind),
+            EdgeScope::Any => record.edges(direction, None),
+            EdgeScope::Peers(kinds) => kinds
+                .iter()
+                .map(|kind| record.edges(direction, Some(kind)))
+                .sum(),
         }
     }
 }

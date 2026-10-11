@@ -3820,7 +3820,7 @@ expression: listing
   },
   {
     "name": "specforge.add_extension",
-    "description": "Install an extension",
+    "description": "Install extensions, as one change",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -3838,183 +3838,215 @@ expression: listing
           "description": "Project root path (uses initialized root if omitted)",
           "type": "string"
         },
-        "specifier": {
-          "description": "Extension specifier",
-          "type": "string"
+        "specifiers": {
+          "description": "Extension specifiers (@scope/name[@version], a builtin's name or a .wasm path), added as one change",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array"
         }
       },
       "required": [
-        "specifier"
+        "specifiers"
       ],
       "type": "object"
     },
     "outputSchema": {
-      "oneOf": [
-        {
-          "additionalProperties": false,
-          "properties": {
-            "action": {
-              "enum": [
-                "enabled"
-              ],
-              "type": "string"
-            },
-            "changed": {
-              "type": "boolean"
-            },
-            "extension": {
-              "type": "string"
-            },
-            "files_written": {
-              "items": {
-                "type": "string"
+      "additionalProperties": false,
+      "properties": {
+        "added": {
+          "items": {
+            "oneOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "action": {
+                    "enum": [
+                      "enabled"
+                    ],
+                    "type": "string"
+                  },
+                  "changed": {
+                    "type": "boolean"
+                  },
+                  "extension": {
+                    "type": "string"
+                  },
+                  "peers_enabled": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "source": {
+                    "enum": [
+                      "builtin"
+                    ],
+                    "type": "string"
+                  },
+                  "specifier": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "action",
+                  "specifier",
+                  "extension",
+                  "source",
+                  "changed",
+                  "peers_enabled"
+                ],
+                "type": "object"
               },
-              "type": "array"
-            },
-            "note": {
-              "type": "string"
-            },
-            "peers_enabled": {
-              "items": {
-                "type": "string"
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "action": {
+                    "enum": [
+                      "installed"
+                    ],
+                    "type": "string"
+                  },
+                  "extension": {
+                    "type": "string"
+                  },
+                  "key_id": {
+                    "type": "string"
+                  },
+                  "publisher": {
+                    "enum": [
+                      "unsigned",
+                      "pinned",
+                      "pinned_now",
+                      "repinned"
+                    ],
+                    "type": "string"
+                  },
+                  "sha256": {
+                    "type": "string"
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "specifier": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "action",
+                  "specifier",
+                  "extension",
+                  "version",
+                  "sha256",
+                  "source"
+                ],
+                "type": "object"
               },
-              "type": "array"
-            },
-            "source": {
-              "enum": [
-                "builtin"
-              ],
-              "type": "string"
-            }
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "action": {
+                    "enum": [
+                      "already_present"
+                    ],
+                    "type": "string"
+                  },
+                  "extension": {
+                    "type": "string"
+                  },
+                  "specifier": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "action",
+                  "specifier",
+                  "extension",
+                  "version"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "action": {
+                    "enum": [
+                      "planned"
+                    ],
+                    "type": "string"
+                  },
+                  "extension": {
+                    "type": "string"
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "specifier": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "action",
+                  "specifier",
+                  "extension",
+                  "source"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "action": {
+                    "enum": [
+                      "duplicate"
+                    ],
+                    "type": "string"
+                  },
+                  "duplicate_of": {
+                    "type": "string"
+                  },
+                  "extension": {
+                    "type": "string"
+                  },
+                  "specifier": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "action",
+                  "specifier",
+                  "extension",
+                  "duplicate_of"
+                ],
+                "type": "object"
+              }
+            ],
+            "type": "object"
           },
-          "required": [
-            "action",
-            "extension",
-            "source",
-            "changed",
-            "peers_enabled"
-          ],
-          "type": "object"
+          "type": "array"
         },
-        {
-          "additionalProperties": false,
-          "properties": {
-            "action": {
-              "enum": [
-                "installed"
-              ],
-              "type": "string"
-            },
-            "extension": {
-              "type": "string"
-            },
-            "files_written": {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "key_id": {
-              "type": "string"
-            },
-            "note": {
-              "type": "string"
-            },
-            "publisher": {
-              "enum": [
-                "unsigned",
-                "pinned",
-                "pinned_now",
-                "repinned"
-              ],
-              "type": "string"
-            },
-            "sha256": {
-              "type": "string"
-            },
-            "source": {
-              "type": "string"
-            },
-            "version": {
-              "type": "string"
-            }
+        "files_written": {
+          "items": {
+            "type": "string"
           },
-          "required": [
-            "action",
-            "extension",
-            "version",
-            "sha256",
-            "source"
-          ],
-          "type": "object"
+          "type": "array"
         },
-        {
-          "additionalProperties": false,
-          "properties": {
-            "action": {
-              "enum": [
-                "already_present"
-              ],
-              "type": "string"
-            },
-            "extension": {
-              "type": "string"
-            },
-            "files_written": {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "note": {
-              "type": "string"
-            },
-            "version": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "action",
-            "extension",
-            "version"
-          ],
-          "type": "object"
-        },
-        {
-          "additionalProperties": false,
-          "properties": {
-            "action": {
-              "enum": [
-                "planned"
-              ],
-              "type": "string"
-            },
-            "extension": {
-              "type": "string"
-            },
-            "files_written": {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "note": {
-              "type": "string"
-            },
-            "source": {
-              "type": "string"
-            },
-            "version": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "action",
-            "extension",
-            "source"
-          ],
-          "type": "object"
+        "note": {
+          "type": "string"
         }
+      },
+      "required": [
+        "added"
       ],
       "type": "object"
     },

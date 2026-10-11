@@ -3200,7 +3200,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "edge_fields": [
         "depends_on"
       ],
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": "ModuleDependsOn",
       "field": null,
       "message_template": "module dependency cycle detected involving '{id}'",
@@ -3216,7 +3216,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "edge_fields": [
         "depends_on"
       ],
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": "MilestoneDependsOn",
       "field": null,
       "message_template": "milestone dependency cycle detected involving '{id}'",
@@ -3232,7 +3232,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "edge_fields": [
         "depends_on"
       ],
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": "DeliverableDependsOn",
       "field": null,
       "message_template": "deliverable dependency cycle detected involving '{id}'",
@@ -3245,7 +3245,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "no_edges",
       "code": "I010",
       "constraint": null,
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": null,
       "message_template": "term '{id}' has no edges — it may be unreferenced",
@@ -3258,7 +3258,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "no_incoming_edges",
       "code": "I046",
       "constraint": null,
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": null,
       "message_template": "persona '{id}' has no incoming edges — it may be unreferenced by any journey",
@@ -3271,7 +3271,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "no_incoming_edges",
       "code": "I047",
       "constraint": null,
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": null,
       "message_template": "channel '{id}' has no incoming edges — it may be unreferenced by any journey",
@@ -3288,7 +3288,7 @@ expression: "digest(&load(&runtime, &[name]))"
         "pattern": null,
         "values": []
       },
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "acceptance",
       "message_template": "feature '{id}' has no acceptance criteria",
@@ -3301,7 +3301,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "I048",
       "constraint": null,
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "acceptance",
       "message_template": "feature '{id}' has no acceptance criteria",
@@ -3318,7 +3318,7 @@ expression: "digest(&load(&runtime, &[name]))"
         "pattern": null,
         "values": []
       },
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "flow",
       "message_template": "journey '{id}' has an empty flow",
@@ -3335,7 +3335,7 @@ expression: "digest(&load(&runtime, &[name]))"
         "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
         "values": []
       },
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "target_date",
       "message_template": "milestone '{id}' has target_date '{value}' — expected YYYY-MM-DD",
@@ -3348,7 +3348,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "I054",
       "constraint": null,
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "persona",
       "message_template": "journey '{id}' has no persona",
@@ -3364,7 +3364,9 @@ expression: "digest(&load(&runtime, &[name]))"
       "edge_fields": [
         "channels"
       ],
-      "edge_peer_kind": "channel",
+      "edge_peer_kinds": [
+        "channel"
+      ],
       "edge_type": "JourneyUsesChannel",
       "field": null,
       "message_template": "journey '{id}' uses no channels",
@@ -3383,7 +3385,7 @@ expression: "digest(&load(&runtime, &[name]))"
           "blocked"
         ]
       },
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "depends_on",
       "message_template": "milestone '{id}' has status 'blocked' but no depends_on",
@@ -3402,7 +3404,7 @@ expression: "digest(&load(&runtime, &[name]))"
           "deferred"
         ]
       },
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "reason",
       "message_template": "feature '{id}' has status 'deferred' but no reason --- consider adding a reason field",
@@ -3421,7 +3423,7 @@ expression: "digest(&load(&runtime, &[name]))"
           "blocked"
         ]
       },
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "blockers",
       "message_template": "milestone '{id}' has status 'blocked' but no blockers --- consider listing what is blocking",
@@ -3438,7 +3440,7 @@ expression: "digest(&load(&runtime, &[name]))"
         "pattern": "^\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9]+(\\.[a-zA-Z0-9]+)*)?(\\+[a-zA-Z0-9]+(\\.[a-zA-Z0-9]+)*)?$",
         "values": []
       },
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "version",
       "message_template": "deliverable '{id}' has version '{value}' — expected semver (e.g., 1.0.0)",
@@ -3461,7 +3463,7 @@ expression: "digest(&load(&runtime, &[name]))"
           "advisory"
         ]
       },
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "family",
       "message_template": "module '{id}' has non-standard family '{value}' — standard families: core, platform, extension, integration, advisory",
@@ -3480,7 +3482,7 @@ expression: "digest(&load(&runtime, &[name]))"
           "deprecated"
         ]
       },
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "reason",
       "message_template": "deliverable '{id}' has status 'deprecated' but no reason",
@@ -3496,7 +3498,9 @@ expression: "digest(&load(&runtime, &[name]))"
       "edge_fields": [
         "features"
       ],
-      "edge_peer_kind": "feature",
+      "edge_peer_kinds": [
+        "feature"
+      ],
       "edge_type": "ModuleContainsFeature",
       "field": null,
       "message_template": "module '{id}' contains no features",
@@ -3513,7 +3517,7 @@ expression: "digest(&load(&runtime, &[name]))"
         "pattern": "^(?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?(?:, (?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?)*$",
         "values": []
       },
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "tags",
       "message_template": "{kind} '{id}' has a tag that is not lowercase-hyphenated (2-50 of a-z, 0-9, -, not starting or ending with -): tags [{value}]",
@@ -3530,7 +3534,7 @@ expression: "digest(&load(&runtime, &[name]))"
         "pattern": "^(?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?(?:, (?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?)*$",
         "values": []
       },
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "tags",
       "message_template": "{kind} '{id}' has a tag that is not lowercase-hyphenated (2-50 of a-z, 0-9, -, not starting or ending with -): tags [{value}]",
@@ -3547,7 +3551,7 @@ expression: "digest(&load(&runtime, &[name]))"
         "pattern": "^(?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?(?:, (?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?)*$",
         "values": []
       },
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "tags",
       "message_template": "{kind} '{id}' has a tag that is not lowercase-hyphenated (2-50 of a-z, 0-9, -, not starting or ending with -): tags [{value}]",
@@ -3564,7 +3568,7 @@ expression: "digest(&load(&runtime, &[name]))"
         "pattern": "^(?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?(?:, (?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?)*$",
         "values": []
       },
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "tags",
       "message_template": "{kind} '{id}' has a tag that is not lowercase-hyphenated (2-50 of a-z, 0-9, -, not starting or ending with -): tags [{value}]",
@@ -3581,7 +3585,7 @@ expression: "digest(&load(&runtime, &[name]))"
         "pattern": "^(?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?(?:, (?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?)*$",
         "values": []
       },
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "tags",
       "message_template": "{kind} '{id}' has a tag that is not lowercase-hyphenated (2-50 of a-z, 0-9, -, not starting or ending with -): tags [{value}]",
@@ -3598,7 +3602,7 @@ expression: "digest(&load(&runtime, &[name]))"
         "pattern": "^(?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?(?:, (?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?)*$",
         "values": []
       },
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "tags",
       "message_template": "{kind} '{id}' has a tag that is not lowercase-hyphenated (2-50 of a-z, 0-9, -, not starting or ending with -): tags [{value}]",
@@ -3615,7 +3619,7 @@ expression: "digest(&load(&runtime, &[name]))"
         "pattern": "^(?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?(?:, (?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?)*$",
         "values": []
       },
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "tags",
       "message_template": "{kind} '{id}' has a tag that is not lowercase-hyphenated (2-50 of a-z, 0-9, -, not starting or ending with -): tags [{value}]",
@@ -3632,7 +3636,7 @@ expression: "digest(&load(&runtime, &[name]))"
         "pattern": "^(?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?(?:, (?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?)*$",
         "values": []
       },
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "tags",
       "message_template": "{kind} '{id}' has a tag that is not lowercase-hyphenated (2-50 of a-z, 0-9, -, not starting or ending with -): tags [{value}]",
@@ -3649,7 +3653,7 @@ expression: "digest(&load(&runtime, &[name]))"
         "pattern": "^(?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?(?:, (?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?)*$",
         "values": []
       },
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "tags",
       "message_template": "{kind} '{id}' has a tag that is not lowercase-hyphenated (2-50 of a-z, 0-9, -, not starting or ending with -): tags [{value}]",
@@ -3668,7 +3672,7 @@ expression: "digest(&load(&runtime, &[name]))"
           "deprecated"
         ]
       },
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "reason",
       "message_template": "persona '{id}' has status 'deprecated' but no reason",
@@ -3687,7 +3691,7 @@ expression: "digest(&load(&runtime, &[name]))"
           "deprecated"
         ]
       },
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "reason",
       "message_template": "channel '{id}' has status 'deprecated' but no reason",
@@ -3700,7 +3704,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "I080",
       "constraint": null,
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "owner",
       "message_template": "{kind} '{id}' has no owner",
@@ -3713,7 +3717,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "I080",
       "constraint": null,
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "owner",
       "message_template": "{kind} '{id}' has no owner",
@@ -3726,7 +3730,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "I080",
       "constraint": null,
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "owner",
       "message_template": "{kind} '{id}' has no owner",
@@ -3739,7 +3743,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "I080",
       "constraint": null,
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "owner",
       "message_template": "{kind} '{id}' has no owner",
@@ -3752,7 +3756,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "I081",
       "constraint": null,
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "effort",
       "message_template": "feature '{id}' has no effort estimate",
@@ -3768,7 +3772,9 @@ expression: "digest(&load(&runtime, &[name]))"
       "edge_fields": [
         "deliverables"
       ],
-      "edge_peer_kind": "deliverable",
+      "edge_peer_kinds": [
+        "deliverable"
+      ],
       "edge_type": "ReleaseIncludesDeliverable",
       "field": null,
       "message_template": "release '{id}' includes no deliverables",
@@ -3784,7 +3790,9 @@ expression: "digest(&load(&runtime, &[name]))"
       "edge_fields": [
         "milestones"
       ],
-      "edge_peer_kind": "milestone",
+      "edge_peer_kinds": [
+        "milestone"
+      ],
       "edge_type": "ReleaseCompletesMilestone",
       "field": null,
       "message_template": "release '{id}' completes no milestones",
@@ -3801,7 +3809,7 @@ expression: "digest(&load(&runtime, &[name]))"
         "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
         "values": []
       },
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "release_date",
       "message_template": "release '{id}' has release_date '{value}' — expected YYYY-MM-DD",
@@ -3818,7 +3826,7 @@ expression: "digest(&load(&runtime, &[name]))"
         "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
         "values": []
       },
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "start_date",
       "message_template": "milestone '{id}' has start_date '{value}' — expected YYYY-MM-DD",
@@ -3837,7 +3845,7 @@ expression: "digest(&load(&runtime, &[name]))"
           "recalled"
         ]
       },
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "reason",
       "message_template": "release '{id}' has status 'recalled' but no reason",
@@ -3850,7 +3858,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "no_incoming_edges",
       "code": "W041",
       "constraint": null,
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": null,
       "message_template": "feature '{id}' has no incoming edges — it may be unreferenced by any journey, milestone, or module",
@@ -3863,7 +3871,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "no_incoming_edges",
       "code": "W042",
       "constraint": null,
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": null,
       "message_template": "journey '{id}' has no incoming edges — it may be unreferenced by any deliverable",
@@ -3879,7 +3887,9 @@ expression: "digest(&load(&runtime, &[name]))"
       "edge_fields": [
         "journeys"
       ],
-      "edge_peer_kind": "journey",
+      "edge_peer_kinds": [
+        "journey"
+      ],
       "edge_type": "DeliverableSupportsJourney",
       "field": null,
       "message_template": "deliverable '{id}' supports no journeys",
@@ -3892,7 +3902,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "no_incoming_edges",
       "code": "W044",
       "constraint": null,
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": null,
       "message_template": "module '{id}' has no incoming edges — it may be unreferenced by any deliverable or milestone",
@@ -3908,7 +3918,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "edge_fields": [
         "depends_on"
       ],
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": "FeatureDependsOn",
       "field": null,
       "message_template": "feature dependency cycle detected involving '{id}'",
@@ -3924,7 +3934,9 @@ expression: "digest(&load(&runtime, &[name]))"
       "edge_fields": [
         "modules"
       ],
-      "edge_peer_kind": "module",
+      "edge_peer_kinds": [
+        "module"
+      ],
       "edge_type": "DeliverableContainsModule",
       "field": null,
       "message_template": "deliverable '{id}' contains no modules",
@@ -3937,7 +3949,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_field_when_flag_set",
       "code": "W049",
       "constraint": null,
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "features",
       "message_template": "milestone '{id}' has no features — it may be empty",
@@ -3956,7 +3968,7 @@ expression: "digest(&load(&runtime, &[name]))"
           "completed"
         ]
       },
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "exit_criteria",
       "message_template": "milestone '{id}' has status 'completed' but no exit_criteria",
@@ -3980,7 +3992,7 @@ expression: "digest(&load(&runtime, &[name]))"
           "deprecated"
         ]
       },
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "status",
       "message_template": "feature '{id}' has invalid status '{value}' — expected one of: proposed, accepted, in_progress, done, deferred, deprecated",
@@ -4002,7 +4014,7 @@ expression: "digest(&load(&runtime, &[name]))"
           "low"
         ]
       },
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "priority",
       "message_template": "{kind} '{id}' has invalid priority '{value}' — expected one of: critical, high, medium, low",
@@ -4024,7 +4036,7 @@ expression: "digest(&load(&runtime, &[name]))"
           "low"
         ]
       },
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "priority",
       "message_template": "{kind} '{id}' has invalid priority '{value}' — expected one of: critical, high, medium, low",
@@ -4046,7 +4058,7 @@ expression: "digest(&load(&runtime, &[name]))"
           "low"
         ]
       },
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "priority",
       "message_template": "{kind} '{id}' has invalid priority '{value}' — expected one of: critical, high, medium, low",
@@ -4068,7 +4080,7 @@ expression: "digest(&load(&runtime, &[name]))"
           "blocked"
         ]
       },
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "status",
       "message_template": "milestone '{id}' has invalid status '{value}' — expected one of: planned, in_progress, completed, blocked",
@@ -4095,7 +4107,7 @@ expression: "digest(&load(&runtime, &[name]))"
           "package"
         ]
       },
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "artifact_type",
       "message_template": "deliverable '{id}' has invalid artifact_type '{value}' — expected one of: cli, service, library, web_app, mobile_app, api, extension, documentation, package",
@@ -4115,7 +4127,7 @@ expression: "digest(&load(&runtime, &[name]))"
           "deprecated"
         ]
       },
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "status",
       "message_template": "persona '{id}' has invalid status '{value}' — expected one of: active, deprecated",
@@ -4135,7 +4147,7 @@ expression: "digest(&load(&runtime, &[name]))"
           "deprecated"
         ]
       },
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "status",
       "message_template": "channel '{id}' has invalid status '{value}' — expected one of: active, deprecated",
@@ -4157,7 +4169,7 @@ expression: "digest(&load(&runtime, &[name]))"
           "deprecated"
         ]
       },
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "status",
       "message_template": "deliverable '{id}' has invalid status '{value}' — expected one of: draft, in_progress, shipped, deprecated",
@@ -4173,7 +4185,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "edge_fields": [
         "depends_on"
       ],
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": "ReleaseDependsOn",
       "field": null,
       "message_template": "release dependency cycle detected involving '{id}'",
@@ -4190,7 +4202,7 @@ expression: "digest(&load(&runtime, &[name]))"
         "pattern": "^\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9.]+)?(\\+[a-zA-Z0-9.]+)?$",
         "values": []
       },
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "version",
       "message_template": "release '{id}' has invalid version format — expected semver (e.g., 1.0.0)",
@@ -4213,7 +4225,7 @@ expression: "digest(&load(&runtime, &[name]))"
           "xl"
         ]
       },
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "effort",
       "message_template": "feature '{id}' has invalid effort '{value}' — expected one of: xs, s, m, l, xl",
@@ -4226,7 +4238,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "E006",
       "constraint": null,
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "description",
       "message_template": "channel '{id}' is missing required field 'description'",
@@ -4239,7 +4251,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "E006",
       "constraint": null,
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "artifact_type",
       "message_template": "deliverable '{id}' is missing required field 'artifact_type'",
@@ -4252,7 +4264,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "E006",
       "constraint": null,
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "problem",
       "message_template": "feature '{id}' is missing required field 'problem'",
@@ -4265,7 +4277,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "E006",
       "constraint": null,
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "flow",
       "message_template": "journey '{id}' is missing required field 'flow'",
@@ -4278,7 +4290,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "E006",
       "constraint": null,
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "description",
       "message_template": "persona '{id}' is missing required field 'description'",
@@ -4291,7 +4303,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "E006",
       "constraint": null,
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "version",
       "message_template": "release '{id}' is missing required field 'version'",
@@ -4304,7 +4316,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "E006",
       "constraint": null,
-      "edge_peer_kind": null,
+      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "definition",
       "message_template": "term '{id}' is missing required field 'definition'",

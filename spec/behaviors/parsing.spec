@@ -61,7 +61,10 @@ behavior recover_from_syntax_errors "Recover From Syntax Errors" {
     entity block), as the lexer's form-start rule reads it; the text is read
     through the lexer (lex_spec_text), so a
     backslash before a line break leaves a string unclosed, as the grammar
-    reads it.
+    reads it. A body left unclosed ends, missing its closing brace, where
+    the next line starts a top-level form indented no deeper than the form
+    the body opened (the same form-start rule, read by the grammar's
+    scanner), so the blocks after it are parsed.
   """
   requires {
     error_recovery_enabled "SourceParser is initialized with error-recovery mode enabled"
@@ -76,6 +79,10 @@ behavior recover_from_syntax_errors "Recover From Syntax Errors" {
   verify unit "a closed multi-line string that contains a block-like line stays whole"
   verify unit "recovery resumes at every top-level form the grammar reads, a union block included"
   verify unit "a backslash before a line break leaves a string unclosed, as the grammar reads it"
+  verify unit "the blocks after an unclosed body are parsed, and its missing closing brace is reported"
+  verify unit "an unclosed body ends where the next top-level form starts, missing its closing brace"
+  verify unit "an unclosed body ends at a form indented no deeper than the form it opened"
+  verify unit "the grammar resumes at every top-level form of the repository's spec after an unclosed body"
   verify unit "completely invalid syntax produces error with location"
   verify unit "missing opening brace produces a parse error"
   verify contract "Recover From Syntax Errors: syntax error recovery holds — error_recovery_enabled, valid_utf8_input, valid_blocks_preserved, errors_collected"
@@ -334,7 +341,7 @@ behavior lex_spec_text "Lex Spec Text" {
   ensures {
     lexemes_match_grammar  "every identifier, scheme ref ID, number, string and comment the grammar reads is one lexeme with the same bytes"
     strings_as_the_grammar "a string spanning lines is one lexeme, as the grammar reads it; one the grammar would not close is marked unclosed"
-    half_typed_text_lexes  "text the grammar rejects still lexes, an unclosed regular string ending at its line's end"
+    half_typed_text_lexes  "text the grammar rejects still lexes, an unclosed regular string ending at its line's end and an unclosed triple-quoted one before the next line that starts a top-level form"
     form_starts_as_grammar "a line starts a top-level form of the grammar exactly where the grammar reads one, whether its lexemes are read alone or in their document"
   }
   contract   """
@@ -346,7 +353,11 @@ behavior lex_spec_text "Lex Spec Text" {
     (ADR 0023, ADR 0038). A string is read as the grammar reads it, across
     lines; a regular string the grammar would not close (no closing quote,
     a backslash before a line break, or a closing quote that runs straight
-    into text) ends at its line's end and is marked unclosed, so an
+    into text) ends at its line's end and is marked unclosed, and a
+    triple-quoted string the grammar would not close (no closing quotes,
+    or, spanning lines, closing quotes that run straight into text) ends
+    before the next line
+    that starts a top-level form, where the parser's recovery resumes, so an
     unclosed quote never swallows the rest of a document being typed.
     Where a top-level form starts (an import, a spec, ref, define, union or
     entity block) is read from lexemes by one rule: the parser's recovery
@@ -363,6 +374,8 @@ behavior lex_spec_text "Lex Spec Text" {
   verify unit "a string spanning lines is one lexeme, and one the grammar would not close ends at its line's end"
   verify unit "strings and comments are lexemes of their own and hold no others"
   verify unit "a line starts a top-level form exactly where the grammar reads one, on every spec file of the repository"
+  verify unit "an unclosed triple-quoted string ends before the next line that starts a top-level form"
+  verify unit "the grammar ends an unclosed body at exactly the lines the form-start rule reads as form starts"
 }
 
 behavior parse_define_blocks "Parse Define Blocks" {

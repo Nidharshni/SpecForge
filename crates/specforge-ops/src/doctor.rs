@@ -916,7 +916,7 @@ mod tests {
         crate::extension::add(
             &crate::extension::AddRequest {
                 root: dir.path(),
-                source: crate::extension::Source::Local(blob),
+                extensions: vec![crate::extension::Source::Local(blob).into()],
                 allow_unsigned: false,
                 trust: crate::extension::Trust::Refuse,
                 dry_run: false,
@@ -985,7 +985,7 @@ mod tests {
         crate::extension::add(
             &crate::extension::AddRequest {
                 root: dir.path(),
-                source: crate::extension::Source::Local(command.into()),
+                extensions: vec![crate::extension::Source::Local(command.into()).into()],
                 allow_unsigned: false,
                 trust: crate::extension::Trust::Refuse,
                 dry_run: false,

@@ -68,8 +68,8 @@ fn add_local_file_json_output() {
 
     assert!(output.status.success());
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(json["action"], "installed");
-    assert_eq!(json["source"], "local:my-ext.wasm");
+    assert_eq!(json["added"][0]["action"], "installed");
+    assert_eq!(json["added"][0]["source"], "local:my-ext.wasm");
 }
 
 #[test]
@@ -488,7 +488,7 @@ fn mcp_add_extension_without_registry_makes_no_network_call() {
             "clientInfo": {"name": "t", "version": "0"}}}),
         serde_json::json!({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {
             "name": "specforge.add_extension",
-            "arguments": {"specifier": "@acme/widget"}}}),
+            "arguments": {"specifiers": ["@acme/widget"]}}}),
     ];
     {
         let stdin = child.stdin.as_mut().unwrap();
@@ -718,8 +718,8 @@ fn add_without_a_version_installs_the_latest() {
         String::from_utf8_lossy(&output.stdout)
     );
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(json["extension"], "@sdk/greet", "{json}");
-    assert_eq!(json["version"], "0.1.0", "{json}");
+    assert_eq!(json["added"][0]["extension"], "@sdk/greet", "{json}");
+    assert_eq!(json["added"][0]["version"], "0.1.0", "{json}");
     let lock = std::fs::read_to_string(dir.path().join("specforge.lock")).unwrap();
     assert!(lock.contains("\"0.1.0\""), "{lock}");
 }
@@ -1229,7 +1229,7 @@ fn an_unsigned_add_reports_w155_in_both_formats() {
         stderr_of(&json)
     );
     let doc: serde_json::Value = serde_json::from_slice(&json.stdout).unwrap();
-    assert_eq!(doc["publisher"], "unsigned", "{doc}");
+    assert_eq!(doc["added"][0]["publisher"], "unsigned", "{doc}");
 }
 
 // ---------------------------------------------------------------

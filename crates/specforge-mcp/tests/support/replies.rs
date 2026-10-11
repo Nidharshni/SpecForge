@@ -130,14 +130,14 @@ pub const WRITES: &[(&str, &str)] = &[
     ("specforge.init", r#"{"path":"<elsewhere>/new"}"#),
     (
         "specforge.add_extension",
-        r#"{"specifier":"@specforge/product","dry_run":true}"#,
+        r#"{"specifiers":["@specforge/product"],"dry_run":true}"#,
     ),
     (
         "specforge.add_extension",
-        r#"{"specifier":"@specforge/governance"}"#,
+        r#"{"specifiers":["@specforge/governance"]}"#,
     ),
-    ("specforge.add_extension", r#"{"specifier":"<greet>"}"#),
-    ("specforge.add_extension", r#"{"specifier":"<greet>"}"#),
+    ("specforge.add_extension", r#"{"specifiers":["<greet>"]}"#),
+    ("specforge.add_extension", r#"{"specifiers":["<greet>"]}"#),
     (
         "specforge.remove_extension",
         r#"{"name":"@specforge/testing","dry_run":true}"#,

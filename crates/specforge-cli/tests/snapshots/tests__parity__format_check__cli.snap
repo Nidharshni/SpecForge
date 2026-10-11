@@ -27,5 +27,14 @@ expression: cli_snap
     "spec/messy.spec": "behavior messy \"Messy\" {\ncategory \"core\"\ncontract \"The system MUST work\"\n}\n"
   },
   "ok": false,
-  "payload": "[ROOT]/spec/messy.spec\n"
+  "payload": {
+    "all_clean": false,
+    "changed_files": [
+      "[ROOT]/spec/messy.spec"
+    ],
+    "check_only": true,
+    "diagnostics": [],
+    "ok": false,
+    "total_checked": 2
+  }
 }

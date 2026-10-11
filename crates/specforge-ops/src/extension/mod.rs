@@ -13,8 +13,9 @@ mod resolve;
 mod update;
 
 pub use add::{
-    AddDocument, AddOutcome, AddRequest, Added, BuiltinSource, EnabledBuiltin, InstalledPackage,
-    PlannedAdd, PresentExtension, Source, Trust, add, parse,
+    AddDocument, AddOutcome, AddRequest, AddResult, Added, AddedExtension, BuiltinSource,
+    DuplicateSpecifier, EnabledBuiltin, InstalledPackage, PlannedAdd, PresentExtension, Source,
+    Specified, Trust, add, parse, specified,
 };
 pub use candidate::{Candidate, Installable, LocalFile};
 pub use inventory::{Inventory, ProjectExtension, Selection, Status, inventory};
@@ -28,7 +29,7 @@ pub use remove::{
 pub use resolve::{resolve, resolve_requirement};
 pub use update::{
     BatchUpdateCompleted, BatchUpdateEvent, ExtensionUpdate, NO_LOCK, UpdateDocument,
-    UpdateOutcome, UpdateRequest, UpdateRow, UpdateStatus, update,
+    UpdateOutcome, UpdateRequest, UpdateRow, UpdateStatus, UpgradeCompleted, update,
 };
 
 pub(crate) use candidate::required_builtins;

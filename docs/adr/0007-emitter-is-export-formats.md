@@ -115,12 +115,12 @@ and the schema.
 - ~~**`specforge-cli/src/product`** implements product queries natively.~~ Closed by
   [ADR 0008](0008-extension-commands-run-over-the-graph.md): they are `@specforge/product`'s commands.
 - The model's DOT cluster ids strip the `@specforge/` scope (snapshot-locked output).
-- **Implicit edge types name their first writer only.** An edge a field writes without its extension
+- ~~**Implicit edge types name their first writer only.** An edge a field writes without its extension
   declaring it is registered once, with the first writing kind as its source and that field's target
   (`compilation/populate.rs`, `register_implicit_edges`). A second kind writing the same undeclared
   edge is in neither side, and the schema's inference does not run for a side that is set. No builtin
   has such an edge (round 6 plan 12, R5). Fixing it means deciding what an edge rule's peer scope is
-  for an edge several kinds write.
+  for an edge several kinds write.~~ Closed by the round 6 follow-up amendment below.
 
 ## Amendment (architecture round 5, plan 16): an extension's counts are what the model draws
 
@@ -137,3 +137,19 @@ declares is kept. The inference stays in the emitter. `generate_schema` is its o
 `specforge schema --kind` and the exports read the schema it returns), so moving it beside the
 registries would relocate it without a second caller. Reopen this when another reader needs an edge
 type's endpoints.
+
+## Amendment (round 6 follow-up): an undeclared edge type names every writer
+
+An edge label fields write without any loaded extension declaring it is registered with its label alone
+and every field that writes it (`EdgeRegistryEntry::writers`: extension, kind, field, target kind), in load
+order: a kind's shared fields it does not declare again, then its own. Its ends are its writers'
+(`EdgeRegistryEntry::source_kinds` and `target_kinds`, each kind once, in load order), and the first writer's
+extension owns it (`source_extension`, which the model's per-extension edge count reads). It is recorded after
+every declaration's edge types, so a label any extension declares is that declaration, whichever field wrote it
+first, and no W018 is reported against an undeclared use.
+
+An edge rule's peer scope is its edge type's far end: the declared kind, else every writer's kind (or, outgoing,
+every writer's target kind) that is loaded, and an edge counts when its peer is any of them
+(`EdgeScope::Peers`; the registry snapshot's `edge_peer_kinds`). A rule none of whose far-end kinds is loaded is
+inert, as before; an open far end counts every edge. The schema names every writing kind through the open-side
+inference above (both sides of an undeclared edge type are open); each of those kinds names its own extension.

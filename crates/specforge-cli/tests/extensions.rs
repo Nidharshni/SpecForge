@@ -1272,9 +1272,12 @@ fn add_validates_local_specifier() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let json: serde_json::Value = serde_json::from_str(&stdout).unwrap();
 
-    assert_eq!(json["action"], "installed");
-    assert_eq!(json["extension"], "@sdk/greet", "{json}");
-    assert_eq!(json["source"], "local:my-extension.wasm", "{json}");
+    assert_eq!(json["added"][0]["action"], "installed");
+    assert_eq!(json["added"][0]["extension"], "@sdk/greet", "{json}");
+    assert_eq!(
+        json["added"][0]["source"], "local:my-extension.wasm",
+        "{json}"
+    );
 }
 
 // ===============================================================
@@ -2136,11 +2139,89 @@ fn add_json_lists_the_files_it_wrote() {
     // Already there: nothing written.
     let before = files_under(root);
     let again = json_of(&["add", &wasm], root);
-    assert_eq!(again["action"], "already_present", "{again}");
+    assert_eq!(again["added"][0]["action"], "already_present", "{again}");
     assert_eq!(files_written(&again), Vec::<String>::new());
     assert_eq!(changed_since(root, &before), Vec::<String>::new());
     let enabled = json_of(&["add", "@specforge/product"], root);
     assert_eq!(files_written(&enabled), Vec::<String>::new());
+}
+
+#[specforge_test(
+    behavior = "add_extension_to_existing_project",
+    verify = "specforge add with several specifiers prints one entry per specifier and writes them as one change, or nothing"
+)]
+fn add_with_several_specifiers_is_one_change() {
+    let (dir, _blobs, wasm) = empty_project();
+    let root = dir.path();
+
+    // One refused: nothing written, the refusal naming it, in both formats.
+    let before = files_under(root);
+    let missing = root.join("missing.wasm");
+    let missing = missing.to_str().unwrap();
+    for format in ["human", "json"] {
+        let output = specforge_cmd()
+            .args(["add", "@specforge/product", missing, "--path"])
+            .arg(root)
+            .args(["--format", format])
+            .output()
+            .unwrap();
+        assert!(!output.status.success(), "{format}: {output:?}");
+        let shown = format!(
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(
+            shown.contains(&format!("adding '{missing}': file not found")),
+            "{format}: {shown}"
+        );
+        assert_eq!(changed_since(root, &before), Vec::<String>::new());
+    }
+
+    // All accepted: one entry per specifier, the files of the whole set.
+    let added = json_of(
+        &["add", "@specforge/product", &wasm, "@specforge/product"],
+        root,
+    );
+    let actions: Vec<&str> = added["added"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|entry| entry["action"].as_str().unwrap())
+        .collect();
+    assert_eq!(actions, ["enabled", "installed", "duplicate"], "{added}");
+    assert_eq!(added["added"][1]["specifier"], wasm.as_str(), "{added}");
+    assert_eq!(
+        files_written(&added),
+        [
+            ".specforge/extensions/@sdk/greet/extension.wasm",
+            "specforge.json",
+            "specforge.lock"
+        ]
+    );
+    assert_eq!(changed_since(root, &before), files_written(&added));
+
+    // The human surface tells each specifier on its own line.
+    let output = specforge_cmd()
+        .args(["add", "@specforge/product", &wasm, "--path"])
+        .arg(root)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{output:?}");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("@specforge/product is already enabled")
+            && stdout.contains("@sdk/greet 0.1.0 is already installed"),
+        "{stdout}"
+    );
+
+    // `add` without a specifier is a usage error.
+    let output = specforge_cmd()
+        .args(["add", "--path"])
+        .arg(root)
+        .output()
+        .unwrap();
+    assert!(!output.status.success(), "{output:?}");
 }
 
 #[specforge_test(

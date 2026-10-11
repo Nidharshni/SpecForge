@@ -511,7 +511,7 @@ mod tests {
             let added = add(
                 &AddRequest {
                     root: fixture.dir.path(),
-                    source: Source::Builtin("@specforge/product"),
+                    extensions: vec![Source::Builtin("@specforge/product").into()],
                     allow_unsigned: false,
                     trust: Trust::Refuse,
                     dry_run: false,

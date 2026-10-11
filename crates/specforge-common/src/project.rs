@@ -14,16 +14,18 @@ pub fn is_project_root(dir: &Path) -> bool {
 ///
 /// Returns `None` if neither file is found in any ancestor.
 pub fn find_project_root(start: &Path) -> Option<PathBuf> {
-    let mut current = start.canonicalize().ok()?;
+    enclosing_project_root(&start.canonicalize().ok()?)
+}
 
-    loop {
-        if is_project_root(&current) {
-            return Some(current);
-        }
-        if !current.pop() {
-            return None;
-        }
-    }
+/// The nearest project root at or above `start`, `start` included (closest
+/// wins), spelled as `start` spells it: [`find_project_root`]'s rule with no
+/// symlink resolved, for an absolute path a client names (the LSP's
+/// workspace), whose files the client keeps naming that way.
+pub fn enclosing_project_root(start: &Path) -> Option<PathBuf> {
+    start
+        .ancestors()
+        .find(|dir| is_project_root(dir))
+        .map(Path::to_path_buf)
 }
 
 /// The project `path` is in: its nearest enclosing project
@@ -534,6 +536,21 @@ mod tests {
         // A path that does not exist is itself.
         let missing = root.join("nowhere");
         assert_eq!(project_root_of(&missing), missing);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_enclosing_project_root_keeps_the_paths_spelling() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let real = dir.path().canonicalize().unwrap().join("real");
+        std::fs::create_dir_all(real.join("project/spec")).unwrap();
+        std::fs::write(real.join("project/specforge.json"), "{}").unwrap();
+        let link = dir.path().join("link");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        let start = link.join("project/spec");
+        assert_eq!(enclosing_project_root(&start), Some(link.join("project")));
+        assert_eq!(find_project_root(&start), Some(real.join("project")));
+        assert_eq!(enclosing_project_root(&real), None);
     }
 
     #[test]

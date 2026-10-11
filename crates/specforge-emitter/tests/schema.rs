@@ -83,6 +83,7 @@ fn make_edge_entry(
             target_kind: tgt.map(|s| s.to_string()),
             ..Default::default()
         },
+        writers: Vec::new(),
     }
 }
 
@@ -2181,10 +2182,11 @@ fn an_open_edge_type_takes_the_kinds_of_the_fields_writing_it() {
     assert_eq!(owns.target_kinds, Some(vec!["b".into(), "c".into()]));
 }
 
-/// A latent defect (plan 12 section 11, ADR 0007 known gap) pinned as it
-/// stands; it flips when implicit edge types take every writer.
-#[test]
-fn an_undeclared_edge_two_kinds_write_names_only_the_first_writer() {
+#[specforge_test(
+    behavior = "generate_schema_from_registries",
+    verify = "an edge type several kinds write without declaring it names every writing kind"
+)]
+fn an_undeclared_edge_two_kinds_write_names_every_writer() {
     use specforge_protocol_types::{EntityKindDescriptor, ExtensionDeclaration, FieldDescriptor};
     let writer = |name: &str| EntityKindDescriptor {
         name: name.to_string(),
@@ -2216,5 +2218,9 @@ fn an_undeclared_edge_two_kinds_write_names_only_the_first_writer() {
         .iter()
         .find(|e| e.label == "links")
         .expect("the implicit edge type is registered");
-    assert_eq!(links.source_kinds, Some(vec!["alpha".to_string()]));
+    assert_eq!(
+        links.source_kinds,
+        Some(vec!["alpha".to_string(), "beta".to_string()])
+    );
+    assert_eq!(links.target_kinds, Some(vec!["gamma".to_string()]));
 }

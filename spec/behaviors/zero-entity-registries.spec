@@ -464,6 +464,7 @@ behavior registry_build_edges "Registry Build Registers Edge Types" {
   }
   ensures {
     edge_types_registered "Every declared edge type, and every edge label a field maps to without declaring it, is in the build's EdgeRegistry"
+    every_writer_named    "An edge label no extension declares names every field that writes it, in load order, and its ends are those writers' kinds and target kinds"
     first_wins            "An edge label two extensions declare belongs to the first in load order; the later declaration is W018 and its constraints are discarded"
   }
   contract   """
@@ -471,7 +472,12 @@ behavior registry_build_edges "Registry Build Registers Edge Types" {
     declares, embedding its descriptor (label, description, source and
     target kind, style) and naming the declaring extension. An edge label
     a field maps to that no edge type declares MUST be registered as an
-    edge from the field's kind to its target kind. An edge label declared
+    edge from the field's kind to its target kind, naming every field of a
+    loaded kind that writes it (its extension, kind, field and target
+    kind) in load order: its source kinds are those writers' kinds and its
+    target kinds their declared target kinds, each once, in that order;
+    the first writer's extension owns it. A label any loaded extension
+    declares is that declaration, whatever field wrote it first. An edge label declared
     again by a later extension MUST produce a W018 warning naming both
     extensions; the first in load order keeps the label and its
     constraints, which graph validation uses.
@@ -479,8 +485,9 @@ behavior registry_build_edges "Registry Build Registers Edge Types" {
   verify unit "edge type registered with label and description"
   verify unit "source/target kind constraints recorded"
   verify unit "a field's edge label no edge type declares is registered as an edge from the field's kind to its target kind"
+  verify unit "an edge label several kinds write without declaring it names every writer, in load order"
   verify unit "an edge label a later extension declares again is W018 and the first in load order keeps it"
-  verify contract "Registry Build Registers Edge Types: edge type registration holds — declarations_in_load_order, edge_types_registered, first_wins"
+  verify contract "Registry Build Registers Edge Types: edge type registration holds — declarations_in_load_order, edge_types_registered, every_writer_named, first_wins"
 }
 
 behavior registry_build_graph_inputs "Registry Build Derives the Graph Inputs" {

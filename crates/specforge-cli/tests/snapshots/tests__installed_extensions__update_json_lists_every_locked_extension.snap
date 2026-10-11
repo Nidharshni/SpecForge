@@ -9,6 +9,13 @@ expression: "serde_json::to_string_pretty(&document).unwrap()"
     "timestamp": "[TIME]",
     "updatedCount": 1
   },
+  "extension_upgrade_completed": [
+    {
+      "extensionName": "@sdk/greet",
+      "newVersion": "0.1.0",
+      "previousVersion": "0.0.9"
+    }
+  ],
   "extensions": [
     {
       "from": "0.0.9",
