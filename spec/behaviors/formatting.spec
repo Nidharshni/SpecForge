@@ -48,6 +48,7 @@ behavior format_spec_files "Format Spec Files" {
   verify unit "summary count reflects actual changes"
   verify integration "formatting all files in spec/ directory succeeds"
   verify unit "a region left unformatted makes the run exit 1, the rest of the file still written"
+  verify unit "the format document names each changed file, each failed file with its kind, and the run's verdict"
   verify contract "Format Spec Files: spec file formatting holds — spec_files_available, format_config_loaded, formatted_output_written, unchanged_files_preserved, format_complete_emitted, summary_printed"
 }
 
