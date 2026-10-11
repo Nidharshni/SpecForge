@@ -9,11 +9,17 @@
 //! re-implements the rule, and both are held to the golden vectors in
 //! `tests/fixtures/coverage-cases.json`.
 //!
-//! It depends on serde only, so it builds for `wasm32-wasip2`. Keep these
-//! types out of the extension SDK and protocol-types: every builtin blob is
-//! built from those, and a change there makes all of them stale.
+//! It reads a pass's entities through `Entity::from(&PassEntity)`, the one
+//! reading the host and the extensions share, and it states the counting rule
+//! once ([`Counting`]).
+//!
+//! It depends on serde and the guest wire's `PassEntity` only, so it builds
+//! for `wasm32-wasip2`. Keep these types out of the extension SDK and
+//! protocol-types: every builtin blob is built from those, and a change there
+//! makes all of them stale. It reads them; they never read it.
 
 use serde::{Deserialize, Serialize};
+use specforge_protocol_types::PassEntity;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// How a recorded test's status names a passing test.
@@ -121,6 +127,27 @@ impl Entity {
     /// Whether the entity counts toward coverage ([`Counting::counts`]).
     pub fn counts_toward_coverage(&self) -> bool {
         self.counting().counts()
+    }
+}
+
+impl From<&PassEntity> for Entity {
+    /// A pass's entity as the rule reads it. The host's per-entity views and
+    /// every extension's pass share this one reading:
+    /// - its testable flag, `exempt` (it owes none) and obligations, as the
+    ///   host decided them;
+    /// - referenced when any edge comes in;
+    /// - `risk` unset: a caller that grades a kind fills it ([`RiskGrading`]).
+    fn from(entity: &PassEntity) -> Self {
+        Entity {
+            id: entity.id.clone(),
+            kind: entity.kind.clone(),
+            testable: entity.testable,
+            exempt: entity.exempt,
+            verify_kinds: entity.verify_kinds.clone(),
+            verify_texts: entity.verify_texts.clone(),
+            risk: None,
+            referenced: entity.incoming_edge_count > 0,
+        }
     }
 }
 

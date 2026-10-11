@@ -177,16 +177,10 @@ fn pass_coverage(input: &PassInput) -> PassOutput {
         .entities
         .iter()
         .map(|e| coverage::Entity {
-            id: e.id.clone(),
-            kind: e.kind.clone(),
-            testable: e.testable,
-            exempt: e.exempt,
-            verify_kinds: e.verify_kinds.clone(),
-            verify_texts: e.verify_texts.clone(),
             risk: graded
                 .filter(|(kind, _)| *kind == e.kind)
                 .and_then(|(_, risk)| e.fields.get(risk.field).cloned()),
-            referenced: e.incoming_edge_count > 0,
+            ..coverage::Entity::from(e)
         })
         .collect();
     let results = input.test_results.as_ref().map(|r| coverage::TestResults {

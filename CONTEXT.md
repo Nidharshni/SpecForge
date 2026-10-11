@@ -193,7 +193,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   - what exempts it, if anything (a union body, an exempting flag, a kind that accepts no `verify`).
 
   The registry checks and the rules read the records (`specforge_registry::entity::EntityRecord`).
-  The pass input, a custom validator's context and the coverage rule's entities are adapters over it.
+  The pass input and a custom validator's context are adapters over it; the coverage rule reads the pass
+  input's entities (`specforge_coverage::Entity::from`), on the host as in every extension pass.
   Never read a graph node to answer what an entity says or owes.
 - **Field text**: the one string a field value is to a rule, a custom validator and a compiler pass
   (ADR 0019): scalars as written; lists of strings or references and mixed lists joined by `", "`;

@@ -200,13 +200,8 @@ fn pass_coverage_tracking(input: &PassInput) -> Vec<PassDiagnostic> {
     let mut proven: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
     for e in &input.entities {
         let entity = coverage::Entity {
-            id: e.id.clone(),
-            kind: e.kind.clone(),
             testable: e.testable || e.kind == INVARIANT_KIND,
-            exempt: e.exempt,
-            verify_kinds: e.verify_kinds.clone(),
-            verify_texts: e.verify_texts.clone(),
-            ..Default::default()
+            ..coverage::Entity::from(e)
         };
         if !entity.counts_toward_coverage() {
             continue;

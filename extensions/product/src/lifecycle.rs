@@ -286,16 +286,7 @@ pub fn pass_delivery_evidence(input: &PassInput) -> PassOutput {
     // and the testing extension's coverage pass apply.
     let score = |id: &str| -> Option<EntityEvidence> {
         let entity = snap.entities.get(id)?;
-        let rule_entity = coverage::Entity {
-            id: entity.id.clone(),
-            kind: entity.kind.clone(),
-            testable: entity.testable,
-            exempt: entity.exempt,
-            verify_kinds: entity.verify_kinds.clone(),
-            verify_texts: entity.verify_texts.clone(),
-            risk: None,
-            referenced: entity.incoming_edge_count > 0,
-        };
+        let rule_entity = coverage::Entity::from(*entity);
         let tests: Vec<coverage::RecordedTest> = results
             .results
             .get(id)

@@ -129,6 +129,7 @@ behavior te_coverage_pass "Coverage Analysis Pass" {
   verify unit "an entity whose obligations are all formally discharged is proven without tests"
   verify unit "entities W004 exempts are not A001 and leave the testable count"
   verify unit "an entity counts toward coverage when its kind is testable and it owes or declares obligations, and is exempt when testable and neither"
+  verify unit "the rule reads a pass entity as the host decided it, with no risk unless the grading caller sets one"
   verify unit "without a risk grading no kind is risk-tallied and nothing is A002"
 }
 

@@ -149,33 +149,10 @@ impl EntitySnapshot {
 
     // ── Adapters to fixed external shapes (ADR 0019, "Wire") ──
 
-    /// `PassInput::entities`: each entity's field texts by key (a key
-    /// written twice keeps its last text), edge totals, span, `testable`,
-    /// and `exempt` = it owes no obligations of its own.
+    /// `PassInput::entities`: one [`pass_entity`] per entity, in id order.
     pub fn pass_entities(&self) -> Vec<PassEntity> {
         self.iter()
-            .map(|(record, standing)| PassEntity {
-                id: record.id.clone(),
-                kind: record.kind.clone(),
-                fields: record
-                    .fields
-                    .iter()
-                    .map(|f| (f.key.clone(), f.text.clone()))
-                    .collect(),
-                incoming_edge_count: record.incoming.total,
-                outgoing_edge_count: record.outgoing.total,
-                span: Some(PassSpan {
-                    file: record.span.file.as_str().to_string(),
-                    start_line: record.span.start_line,
-                    start_col: record.span.start_col,
-                    end_line: record.span.end_line,
-                    end_col: record.span.end_col,
-                }),
-                testable: standing.testable,
-                exempt: !standing.owes_obligations(),
-                verify_kinds: record.obligations.iter().map(|o| o.kind.clone()).collect(),
-                verify_texts: record.obligations.iter().map(|o| o.text.clone()).collect(),
-            })
+            .map(|(record, standing)| pass_entity(record, standing))
             .collect()
     }
 
@@ -261,29 +238,44 @@ impl EntitySnapshot {
         }
     }
 
-    /// The coverage rule's entities (`specforge_coverage::Entity`), in id
-    /// order: the same facts the `@specforge/testing:coverage` pass
-    /// receives, so a per-entity view and the pass cannot disagree.
+    /// The coverage rule's entities, in id order. They are the pass
+    /// entities, read as the `@specforge/testing:coverage` pass reads them
+    /// (`specforge_coverage::Entity::from`), so a per-entity view and the
+    /// pass cannot disagree.
     pub fn coverage_entities(&self) -> Vec<specforge_coverage::Entity> {
-        self.iter()
-            .map(|(record, standing)| coverage_entity(record, standing))
+        self.pass_entities()
+            .iter()
+            .map(specforge_coverage::Entity::from)
             .collect()
     }
 }
 
-/// An entity as the coverage rule sees it.
-fn coverage_entity(record: &EntityRecord, standing: &Standing) -> specforge_coverage::Entity {
-    specforge_coverage::Entity {
+/// One entity as a pass receives it:
+/// - its field texts by key (a key written twice keeps its last text);
+/// - its edge totals and span;
+/// - `testable`, and `exempt` = it owes no obligations of its own.
+fn pass_entity(record: &EntityRecord, standing: &Standing) -> PassEntity {
+    PassEntity {
         id: record.id.clone(),
         kind: record.kind.clone(),
+        fields: record
+            .fields
+            .iter()
+            .map(|f| (f.key.clone(), f.text.clone()))
+            .collect(),
+        incoming_edge_count: record.incoming.total,
+        outgoing_edge_count: record.outgoing.total,
+        span: Some(PassSpan {
+            file: record.span.file.as_str().to_string(),
+            start_line: record.span.start_line,
+            start_col: record.span.start_col,
+            end_line: record.span.end_line,
+            end_col: record.span.end_col,
+        }),
         testable: standing.testable,
         exempt: !standing.owes_obligations(),
         verify_kinds: record.obligations.iter().map(|o| o.kind.clone()).collect(),
         verify_texts: record.obligations.iter().map(|o| o.text.clone()).collect(),
-        // The host grades no kind by risk (ADR 0009, B): the testing pass
-        // reads risk for the kind it grades.
-        risk: None,
-        referenced: record.edges(Direction::Incoming, None) > 0,
     }
 }
 
@@ -1107,7 +1099,8 @@ mod tests {
                             exemption: exemption.clone(),
                             declared,
                         };
-                        let entity = coverage_entity(&record, &standing);
+                        let entity =
+                            specforge_coverage::Entity::from(&pass_entity(&record, &standing));
                         assert_eq!(standing.counting(), entity.counting(), "{standing:?}");
                         assert_eq!(entity.exempt, !standing.owes_obligations());
                         assert_eq!(standing.exempt(), testable && !standing.counts());

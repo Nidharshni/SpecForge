@@ -432,3 +432,31 @@ fn counting_is_testable_and_owing_or_declaring() {
     );
     assert!(entity.counts_toward_coverage());
 }
+
+#[specforge_test(
+    behavior = "te_coverage_pass",
+    verify = "the rule reads a pass entity as the host decided it, with no risk unless the grading caller sets one"
+)]
+fn a_pass_entity_is_read_as_the_host_decided_it() {
+    let mut wire = specforge_protocol_types::PassEntity {
+        id: "a".into(),
+        kind: "invariant".into(),
+        testable: true,
+        exempt: true,
+        verify_kinds: vec!["unit".into(), "property".into()],
+        verify_texts: vec!["one".into(), "two".into()],
+        incoming_edge_count: 0,
+        ..specforge_protocol_types::PassEntity::default()
+    };
+    wire.fields.insert("risk".into(), "high".into());
+    let entity = Entity::from(&wire);
+    assert_eq!(entity.id, "a");
+    assert_eq!(entity.kind, "invariant");
+    assert!(entity.testable && entity.exempt);
+    assert_eq!(entity.verify_kinds, wire.verify_kinds);
+    assert_eq!(entity.verify_texts, wire.verify_texts);
+    assert_eq!(entity.risk, None);
+    assert!(!entity.referenced);
+    wire.incoming_edge_count = 2;
+    assert!(Entity::from(&wire).referenced);
+}

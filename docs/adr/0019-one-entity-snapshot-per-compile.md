@@ -28,7 +28,9 @@ compile (`CompiledProject`) and per session check (`ProjectSession`) *(ADR 0047:
 build reads it:
 
 - the registry checks and the rules read its records;
-- the pass input, a custom validator's context and the coverage rule's entities are adapters over it;
+- the pass input and a custom validator's context are adapters over it; the coverage rule reads the pass
+  input's entities (`specforge_coverage::Entity::from(&PassEntity)`), on the host as in every extension
+  pass *(amended, round 6 plan 12)*;
 - the coverage view, plan validation, stats and the verify-stub fix read its standings.
 
 Operations reach it through the project view (`ProjectView::entities`), seeded into the per-compile memo
