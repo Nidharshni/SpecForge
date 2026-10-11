@@ -1,11 +1,15 @@
 //! Wave 0 pin: the registry build of declarations that drive every
 //! diagnostic the build reports, at once. It characterizes the build (no
 //! spec link): while the tests move behind `build_registries`, its
-//! snapshot must not change.
+//! snapshot must not change; it reads what the build answers, never its
+//! fields' layout.
+
+use std::collections::BTreeMap;
 
 use serde_json::{Value, json};
 use specforge_common::Diagnostic;
 use specforge_extension_sdk::prelude::*;
+use specforge_graph::GraphInputs;
 use specforge_protocol_types::ExtensionDeclaration;
 use specforge_registry::RegistryBuild;
 
@@ -137,11 +141,58 @@ fn pin_unnamed() -> ExtensionDeclaration {
     declare("", |_| {})
 }
 
-fn diagnostics(diagnostics: &[Diagnostic]) -> Value {
+fn rendered<'a>(diagnostics: impl IntoIterator<Item = &'a Diagnostic>) -> Value {
     diagnostics
-        .iter()
+        .into_iter()
         .map(|d| json!([d.code, format!("{:?}", d.severity), d.message]))
         .collect()
+}
+
+/// What the graph build reads of the build's declarations.
+fn graph_inputs(inputs: &GraphInputs) -> Value {
+    let bidirectional_pairs: Vec<Value> = inputs
+        .bidirectional_pairs
+        .iter()
+        .map(|(a, b)| json!([a, b]))
+        .collect();
+    let absent_reference_targets: BTreeMap<String, &String> = inputs
+        .absent_reference_targets
+        .iter()
+        .map(|((kind, field), target)| (format!("{kind}.{field}"), target))
+        .collect();
+    let field_coercions: BTreeMap<String, String> = inputs
+        .field_coercions
+        .iter()
+        .map(|((kind, field), coercion)| (format!("{kind}.{field}"), format!("{coercion:?}")))
+        .collect();
+    let derived_references: Vec<Value> = inputs
+        .derived_references
+        .iter()
+        .map(|d| {
+            json!({
+                "source_kind": d.source_kind,
+                "field": d.field,
+                "target_kind": d.target_kind,
+                "from": format!("{:?}", d.from),
+            })
+        })
+        .collect();
+    let mut body_parser_kinds: Vec<&String> = inputs.body_parser_kinds.iter().collect();
+    body_parser_kinds.sort();
+    let mut single_reference_fields: Vec<String> = inputs
+        .single_reference_fields
+        .iter()
+        .map(|(kind, field)| format!("{kind}.{field}"))
+        .collect();
+    single_reference_fields.sort();
+    json!({
+        "body_parser_kinds": body_parser_kinds,
+        "single_reference_fields": single_reference_fields,
+        "bidirectional_pairs": bidirectional_pairs,
+        "absent_reference_targets": absent_reference_targets,
+        "field_coercions": field_coercions,
+        "derived_references": derived_references,
+    })
 }
 
 /// What the snapshot reads of the build.
@@ -172,9 +223,8 @@ fn digest(build: &RegistryBuild) -> Value {
         .collect();
     edges.sort();
     json!({
-        "declaration_diagnostics": diagnostics(&build.declaration_diagnostics),
-        "registry_diagnostics": diagnostics(&build.registry_diagnostics),
-        "surface_diagnostics": diagnostics(&build.surface_diagnostics),
+        // Every diagnostic the build reports, in its order (T3: `build.diagnostics()`).
+        "diagnostics": rendered(build.diagnostics()),
         "rules": build
             .rules
             .iter()
@@ -190,6 +240,7 @@ fn digest(build: &RegistryBuild) -> Value {
         "kinds": kinds,
         "fields": fields,
         "edges": edges,
+        "graph_inputs": graph_inputs(&build.graph_inputs()),
         "passes": build.passes.iter().map(|p| p.full_name()).collect::<Vec<_>>(),
     })
 }

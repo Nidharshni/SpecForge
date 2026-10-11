@@ -7,7 +7,7 @@ use specforge_extension_sdk::prelude::*;
 use specforge_protocol_types::ExtensionDeclaration;
 use specforge_test_macros::test as spec;
 
-use crate::support::{build, coded, declare, diagnostics, product, software};
+use crate::support::{build, coded, codes, declare, diagnostics, product, software};
 
 /// `@other/ext`, declaring `behavior` again.
 fn other_behavior() -> ExtensionDeclaration {
@@ -198,7 +198,7 @@ fn a_lifecycle_field_must_name_a_field_the_kind_declares() {
         "{}",
         refused[0].message
     );
-    assert!(build.registry_diagnostics.contains(refused[0]));
+    assert_eq!(codes(&build), ["W021"]);
 }
 
 #[spec(
@@ -259,7 +259,7 @@ fn a_testable_kind_without_verify_support_is_w017() {
         "{}",
         w017[0].message
     );
-    assert!(build.registry_diagnostics.contains(w017[0]));
+    assert_eq!(codes(&build), ["W017"]);
     assert!(
         build.kinds.contains("thing"),
         "W017 is advisory: the kind registers"

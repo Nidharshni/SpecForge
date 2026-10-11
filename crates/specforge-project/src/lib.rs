@@ -22,7 +22,6 @@ mod build_cache;
 mod check_passes;
 mod compiled;
 pub mod coverage;
-mod field_types;
 mod freshness;
 mod inputs;
 pub mod passes;
@@ -203,10 +202,7 @@ impl Environment {
         // A custom rule's wasm_function is resolved against its extension
         // now, so a name it does not export is reported once (W112).
         if let Some(runtime) = runtime.as_deref() {
-            let probes = registries
-                .rules
-                .probe(&verdicts::WasmVerdicts::probe_only(runtime));
-            registries.registry_diagnostics.extend(probes);
+            registries.probe(&verdicts::WasmVerdicts::probe_only(runtime));
         }
         let providers = Providers::register(config.raw.as_ref(), registries.declarations());
         let mut setup_diagnostics = Vec::new();
@@ -237,12 +233,7 @@ impl Environment {
         let build = &self.registries;
         GraphConfig {
             known_provider_schemes: self.providers.schemes(),
-            bidirectional_pairs: build.bidirectional_pairs.clone(),
-            body_parser_kinds: build.body_parser_kinds.clone(),
-            single_reference_fields: build.single_reference_fields.clone(),
-            absent_reference_targets: build.absent_reference_targets.clone(),
-            field_coercions: field_types::field_coercions(&build.fields),
-            derived_references: field_types::derived_references(&build.fields),
+            inputs: build.graph_inputs(),
         }
     }
 
@@ -276,23 +267,18 @@ impl Environment {
         diagnostics
     }
 
-    /// The diagnostics reported before any source, in this order: why
-    /// `specforge.json` is not used as written (E069), the runtime's load
-    /// failures (E028/E033), unknown declaration keys
-    /// (W138), the declarations' own (E030, W021, E027, W145), provider
-    /// registration (W118/E057), I002, then the registry build's.
+    /// The diagnostics reported before any source, in this order: the
+    /// environment's own (why `specforge.json` is not used as written
+    /// (E069), the extension load's failures (E033, then E028/E070/W149 per
+    /// entry) and warnings (W153, W138), provider registration (W118/E057),
+    /// I002), then the registry build's, in its order
+    /// ([`specforge_registry::RegistryBuild::diagnostics`]).
     pub fn diagnostics(&self) -> impl Iterator<Item = &Diagnostic> {
         self.load_diagnostics
             .iter()
-            .chain(&self.registries.declaration_diagnostics)
             .chain(self.providers.diagnostics())
             .chain(&self.setup_diagnostics)
-            .chain(&self.registries.registry_diagnostics)
-    }
-
-    /// Surface registration conflicts (E039), which `check` reports last.
-    pub fn surface_diagnostics(&self) -> &[Diagnostic] {
-        &self.registries.surface_diagnostics
+            .chain(self.registries.diagnostics())
     }
 
     /// Whether a file (its path relative to the spec root) is left out of

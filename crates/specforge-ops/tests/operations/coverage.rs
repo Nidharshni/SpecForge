@@ -1,20 +1,24 @@
+use specforge_extension_sdk::prelude::FieldType;
 use specforge_ops::coverage::{CoverageQuery, CoverageRow, coverage, row};
 use specforge_project::coverage::Status;
 use specforge_test::prelude::*;
 
-use crate::view_support::{Project, exempting_field, registries};
+use crate::view_support::{Project, registries_with};
 
 /// login (proven), logout (one unproven obligation), a union, an abstract
 /// behavior, a governance constraint that declares nothing and one that
 /// declares an obligation, and a feature (not testable).
 fn project() -> Project {
-    let mut build = registries(&["behavior", "type"], &["constraint"]);
-    build
-        .kinds
-        .register(crate::view_support::kind("feature", false));
-    build
-        .fields
-        .register(exempting_field("behavior", "abstract"));
+    let build = registries_with(&["behavior", "type"], &["constraint"], |c| {
+        c.kind("feature", |k| {
+            k.keyword("feature");
+        });
+        c.enhance("behavior", "@t/soft", |e| {
+            e.field("abstract", |f| {
+                f.field_type(FieldType::Bool).exempts_obligations();
+            });
+        });
+    });
     let project = Project::new(
         r#"
 behavior login "Login" {

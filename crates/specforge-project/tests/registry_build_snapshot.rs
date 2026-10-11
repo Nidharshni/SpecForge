@@ -1,8 +1,8 @@
 //! The registry build of the builtins, pinned: a canonical digest of what
 //! `Environment::load` derives from every builtin together, from each
-//! builtin alone and from the SDK greet fixture alone. The digest reads the
-//! registries as they are typed today; a refactor of those types rewrites
-//! the digest, never the pinned snapshots.
+//! builtin alone and from the SDK greet fixture alone. The digest reads what
+//! the environment answers (its registries, its graph configuration, its
+//! diagnostics in report order), never a field of the build's layout.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -82,6 +82,52 @@ fn surfaces(s: &SurfaceDescriptor) -> Value {
             "export": r.export,
             "mime_type": r.mime_type,
         })).collect::<Vec<_>>(),
+    })
+}
+
+/// What every graph of the project is built with, as the environment answers it
+/// (`Environment::graph_config`), without the provider schemes.
+fn graph_inputs(env: &Environment) -> Value {
+    let config = env.graph_config().inputs;
+    let bidirectional_pairs: Vec<Value> = config
+        .bidirectional_pairs
+        .iter()
+        .map(|(a, b)| {
+            let (a, b) = if a <= b { (a, b) } else { (b, a) };
+            json!([a, b])
+        })
+        .collect();
+    let absent_reference_targets: BTreeMap<String, &String> = config
+        .absent_reference_targets
+        .iter()
+        .map(|((kind, field), target)| (format!("{kind}.{field}"), target))
+        .collect();
+    let field_coercions: BTreeMap<String, String> = config
+        .field_coercions
+        .iter()
+        .map(|((kind, field), coercion)| (format!("{kind}.{field}"), format!("{coercion:?}")))
+        .collect();
+    let derived_references: Vec<Value> = config
+        .derived_references
+        .iter()
+        .map(|d| {
+            json!({
+                "source_kind": d.source_kind,
+                "field": d.field,
+                "target_kind": d.target_kind,
+                "from": format!("{:?}", d.from),
+            })
+        })
+        .collect();
+    json!({
+        "body_parser_kinds": sorted(config.body_parser_kinds.iter().map(|k| json!(k)).collect()),
+        "single_reference_fields": sorted(
+            config.single_reference_fields.iter().map(|(k, f)| json!([k, f])).collect()
+        ),
+        "bidirectional_pairs": sorted(bidirectional_pairs),
+        "absent_reference_targets": absent_reference_targets,
+        "field_coercions": field_coercions,
+        "derived_references": derived_references,
     })
 }
 
@@ -172,19 +218,6 @@ fn digest(env: &Environment) -> Value {
             described
         })
         .collect();
-    let bidirectional_pairs: Vec<Value> = r
-        .bidirectional_pairs
-        .iter()
-        .map(|(a, b)| {
-            let (a, b) = if a <= b { (a, b) } else { (b, a) };
-            json!([a, b])
-        })
-        .collect();
-    let absent_reference_targets: BTreeMap<String, &String> = r
-        .absent_reference_targets
-        .iter()
-        .map(|((kind, field), target)| (format!("{kind}.{field}"), target))
-        .collect();
     // An extension's routing name: its declared short name, else its name's
     // last segment.
     let ext_short: BTreeMap<&str, String> = r
@@ -192,26 +225,12 @@ fn digest(env: &Environment) -> Value {
         .iter()
         .map(|d| (d.name(), d.short().into_owned()))
         .collect();
-    // The load's diagnostics, then the declarations' own, then the setup's
-    // (providers, I002): what `Environment::diagnostics()` reports before
-    // the registry build's.
-    let load_diagnostics = env
-        .load_diagnostics
-        .iter()
-        .chain(&r.declaration_diagnostics)
-        .chain(env.providers.diagnostics())
-        .chain(&env.setup_diagnostics);
     json!({
         "kinds": kinds,
         "fields": fields,
         "edges": edges,
         "rules": rules,
-        "body_parser_kinds": sorted(r.body_parser_kinds.iter().map(|k| json!(k)).collect()),
-        "single_reference_fields": sorted(
-            r.single_reference_fields.iter().map(|(k, f)| json!([k, f])).collect()
-        ),
-        "bidirectional_pairs": sorted(bidirectional_pairs),
-        "absent_reference_targets": absent_reference_targets,
+        "graph_inputs": graph_inputs(env),
         "surfaces": r.surfaces.iter().map(|s| json!({
             "surface_type": format!("{:?}", s.surface_type),
             "name": s.contribution_name,
@@ -227,9 +246,8 @@ fn digest(env: &Environment) -> Value {
             .map(|p| json!({ "extension": p.extension, "name": p.pass.name }))
             .collect::<Vec<_>>(),
         "ext_short": ext_short,
-        "load_diagnostics": diagnostics(load_diagnostics),
-        "registry_diagnostics": diagnostics(&r.registry_diagnostics),
-        "surface_diagnostics": diagnostics(&r.surface_diagnostics),
+        // Everything the environment reports, in its order.
+        "diagnostics": diagnostics(env.diagnostics()),
     })
 }
 

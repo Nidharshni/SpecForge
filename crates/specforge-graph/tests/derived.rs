@@ -2,7 +2,9 @@
 //! writes in its field types or method signatures (behavior
 //! `link_derived_references`).
 
-use specforge_graph::{DerivedFrom, DerivedReference, Graph, GraphConfig, build_graph_with_config};
+use specforge_graph::{
+    DerivedFrom, DerivedReference, Graph, GraphConfig, GraphInputs, build_graph_with_config,
+};
 use specforge_parser::parse;
 use specforge_test_macros::test as specforge_test;
 
@@ -31,10 +33,13 @@ fn build(
     derived: Vec<DerivedReference>,
 ) -> (Graph, Vec<specforge_graph::Diagnostic>) {
     let config = GraphConfig {
-        derived_references: derived,
-        single_reference_fields: [("shape".to_string(), "base".to_string())]
-            .into_iter()
-            .collect(),
+        inputs: GraphInputs {
+            derived_references: derived,
+            single_reference_fields: [("shape".to_string(), "base".to_string())]
+                .into_iter()
+                .collect(),
+            ..Default::default()
+        },
         ..Default::default()
     };
     build_graph_with_config(&[parse(source, "main.spec")], &config)

@@ -842,47 +842,16 @@ mod tests {
     // ── The obligation rule (moved from coverage.rs; links kept) ──
 
     use specforge_protocol_types::{
-        ExtensionDeclaration, ValidationRuleDescriptor, ValidationSeverity,
+        EntityKindDescriptor, ExtensionDeclaration, FieldDescriptor, ValidationRuleDescriptor,
+        ValidationSeverity,
     };
-    use specforge_registry::rules::{NoVerdicts, Registries, Rules};
-    use specforge_registry::{FieldRegistry, KindRegistry, KindRegistryEntry, RegistryBuild};
-
-    fn kind(name: &str, testable: bool, supports_verify: bool) -> KindRegistryEntry {
-        KindRegistryEntry {
-            kind_name: name.into(),
-            source_extension: "@test/ext".into(),
-            testable,
-            supports_verify,
-            allowed_verify_kinds: Vec::new(),
-            lifecycle_field: None,
-            ..Default::default()
-        }
-    }
+    use specforge_registry::rules::NoVerdicts;
+    use specforge_registry::{RegistryBuild, build_registries};
 
     fn graph_of(source: &str) -> Graph {
         let (graph, _) =
             specforge_graph::build_graph(&[specforge_parser::parse(source, "test.spec")]);
         graph
-    }
-
-    /// The field registry of a project whose `behavior` kind declares the
-    /// `abstract` flag (as @specforge/formal does).
-    fn abstract_behaviors() -> FieldRegistry {
-        let mut fields = FieldRegistry::new();
-        fields.register(
-            specforge_registry::FieldRegistryEntry::new(
-                "behavior",
-                "@test/formal",
-                specforge_protocol_types::FieldDescriptor {
-                    name: "abstract".into(),
-                    field_type: "bool".into(),
-                    exempts_obligations: true,
-                    ..Default::default()
-                },
-            )
-            .unwrap(),
-        );
-        fields
     }
 
     fn w004(kind: &str) -> ValidationRuleDescriptor {
@@ -897,27 +866,50 @@ mod tests {
         }
     }
 
-    /// The registry build of `kinds`, `fields` and the rule set of an
-    /// extension declaring `rules`.
-    fn build(
-        kinds: KindRegistry,
-        fields: FieldRegistry,
+    /// The registry build of one extension declaring `kinds` as
+    /// `(name, testable, supports_verify)`, the `abstract` flag on
+    /// `behavior` (as @specforge/formal does) when `abstract_behaviors`, and
+    /// `rules`.
+    fn declared(
+        kinds: &[(&str, bool, bool)],
+        abstract_behaviors: bool,
         rules: Vec<ValidationRuleDescriptor>,
     ) -> RegistryBuild {
-        let mut build = RegistryBuild::default();
-        build.kinds = kinds;
-        build.fields = fields;
-        let declaration = ExtensionDeclaration {
+        let mut declaration = ExtensionDeclaration {
             validation_rules: rules,
+            entities: kinds
+                .iter()
+                .map(|(name, testable, supports_verify)| EntityKindDescriptor {
+                    name: name.to_string(),
+                    keyword: Some(name.to_string()),
+                    testable: *testable,
+                    supports_verify: *supports_verify,
+                    ..Default::default()
+                })
+                .collect(),
             ..Default::default()
         };
-        (build.rules, _) = Rules::build(
-            &[declaration],
-            Registries {
-                kinds: &build.kinds,
-                fields: &build.fields,
-                edges: &build.edges,
-            },
+        declaration.handshake.name = "@specforge/testing".into();
+        declaration.handshake.version = "1.0.0".into();
+        if abstract_behaviors {
+            declaration
+                .entities
+                .iter_mut()
+                .find(|kind| kind.name == "behavior")
+                .expect("a behavior kind")
+                .fields
+                .push(FieldDescriptor {
+                    name: "abstract".into(),
+                    field_type: "bool".into(),
+                    exempts_obligations: true,
+                    ..Default::default()
+                });
+        }
+        let build = build_registries(vec![declaration]);
+        assert!(
+            build.diagnostics().next().is_none(),
+            "{:?}",
+            build.diagnostics().collect::<Vec<_>>()
         );
         build
     }
@@ -927,13 +919,14 @@ mod tests {
     }
 
     /// The ids W004 reports on `source` (rules on `behavior` and `type`).
-    fn w004_ids(source: &str, fields: FieldRegistry) -> Vec<String> {
+    fn w004_ids(source: &str, abstract_behaviors: bool) -> Vec<String> {
         // A rule for a kind nobody declares is inert (ADR 0020 D5): declare
         // the two the rules target.
-        let mut kinds = KindRegistry::new();
-        kinds.register(kind("behavior", true, true));
-        kinds.register(kind("type", true, true));
-        let registries = build(kinds, fields, vec![w004("behavior"), w004("type")]);
+        let registries = declared(
+            &[("behavior", true, true), ("type", true, true)],
+            abstract_behaviors,
+            vec![w004("behavior"), w004("type")],
+        );
         let snapshot = snapshot(source, &registries);
         let mut ids: Vec<String> = registries
             .rules
@@ -952,7 +945,7 @@ mod tests {
     fn a_union_type_owes_no_obligations() {
         let ids = w004_ids(
             "type Status = active | inactive\n\ntype Plain \"Plain\" {\n  id string\n}\n",
-            FieldRegistry::new(),
+            false,
         );
         assert_eq!(ids, ["Plain"]);
     }
@@ -961,7 +954,7 @@ mod tests {
     fn an_enum_values_list_is_not_a_union() {
         let ids = w004_ids(
             "type Priority \"Priority\" {\n  values [high, low]\n}\n",
-            FieldRegistry::new(),
+            false,
         );
         assert_eq!(ids, ["Priority"]);
     }
@@ -973,14 +966,15 @@ mod tests {
     fn an_abstract_entity_owes_no_obligations_when_its_kind_declares_the_flag() {
         let source = "behavior base \"Base\" {\n  contract \"The system MUST work\"\n  abstract true\n}\n\n\
                       behavior concrete \"Concrete\" {\n  contract \"The system MUST work\"\n  abstract false\n}\n";
-        assert_eq!(w004_ids(source, abstract_behaviors()), ["concrete"]);
+        assert_eq!(w004_ids(source, true), ["concrete"]);
         // Without a registry entry declaring it, `abstract` is just a name.
-        assert_eq!(w004_ids(source, FieldRegistry::new()), ["base", "concrete"]);
+        assert_eq!(w004_ids(source, false), ["base", "concrete"]);
     }
 
-    /// The ids of `source`'s entities whose kind is testable, under `kinds`.
-    fn testable_ids(source: &str, kinds: KindRegistry) -> Vec<String> {
-        let snapshot = snapshot(source, &build(kinds, FieldRegistry::new(), Vec::new()));
+    /// The ids of `source`'s entities whose kind is testable, under `kinds`
+    /// as `(name, testable, supports_verify)`.
+    fn testable_ids(source: &str, kinds: &[(&str, bool, bool)]) -> Vec<String> {
+        let snapshot = snapshot(source, &declared(kinds, false, Vec::new()));
         snapshot
             .iter()
             .filter(|(_, standing)| standing.testable)
@@ -994,11 +988,8 @@ mod tests {
     )]
     fn no_kind_is_testable_unless_an_extension_says_so() {
         let source = "behavior login \"Login\" {\n}\n";
-        assert!(testable_ids(source, KindRegistry::new()).is_empty());
-
-        let mut reg = KindRegistry::new();
-        reg.register(kind("behavior", false, false));
-        assert!(testable_ids(source, reg).is_empty());
+        assert!(testable_ids(source, &[]).is_empty());
+        assert!(testable_ids(source, &[("behavior", false, false)]).is_empty());
     }
 
     #[specforge_test(
@@ -1006,15 +997,16 @@ mod tests {
         verify = "testable=false entity excluded from coverage"
     )]
     fn only_kinds_declared_testable_count() {
-        let mut reg = KindRegistry::new();
-        reg.register(kind("behavior", true, true));
-        reg.register(kind("type", true, true));
-        // Accepts verify statements but does not count toward coverage.
-        reg.register(kind("property", false, true));
-        reg.register(kind("feature", false, false));
+        let kinds = [
+            ("behavior", true, true),
+            ("type", true, true),
+            // Accepts verify statements but does not count toward coverage.
+            ("property", false, true),
+            ("feature", false, false),
+        ];
         let source = "behavior b \"B\" {\n}\n\ntype t \"T\" {\n}\n\n\
                       property p \"P\" {\n  verify unit \"holds\"\n}\n\nfeature f \"F\" {\n}\n";
-        assert_eq!(testable_ids(source, reg), ["b", "t"]);
+        assert_eq!(testable_ids(source, &kinds), ["b", "t"]);
     }
 
     #[specforge_test(
@@ -1022,18 +1014,16 @@ mod tests {
         verify = "an entity owes obligations when a no_verify_statements rule applies to its kind and neither a union body nor an exempting flag exempts it"
     )]
     fn an_entity_owes_obligations_when_a_rule_applies_and_nothing_exempts_it() {
-        let kinds = || {
-            let mut kinds = KindRegistry::new();
-            kinds.register(kind("behavior", true, true));
-            kinds.register(kind("type", true, true));
-            kinds.register(kind("memo", false, false));
-            kinds
-        };
+        let kinds = [
+            ("behavior", true, true),
+            ("type", true, true),
+            ("memo", false, false),
+        ];
         let source = "behavior open \"Open\" {\n}\n\nbehavior base \"Base\" {\n  abstract true\n}\n\n\
                       type Status = active | inactive\n\ntype Plain \"Plain\" {\n  id string\n}\n\n\
                       memo note \"Note\" {\n}\n";
         let owes = |rules: Vec<ValidationRuleDescriptor>| -> Vec<String> {
-            let registries = build(kinds(), abstract_behaviors(), rules);
+            let registries = declared(&kinds, true, rules);
             snapshot(source, &registries)
                 .iter()
                 .filter(|(_, standing)| standing.owes_obligations())
@@ -1050,7 +1040,7 @@ mod tests {
         untargeted.target_kind = None;
         assert_eq!(owes(vec![untargeted]), ["Plain", "open"]);
         // What exempts each, decided once.
-        let registries = build(kinds(), abstract_behaviors(), Vec::new());
+        let registries = declared(&kinds, true, Vec::new());
         let exemptions: Vec<(String, Option<Exemption>)> = snapshot(source, &registries)
             .iter()
             .map(|(record, standing)| {

@@ -93,8 +93,7 @@ fn sdk_vocabulary_round_trips_through_the_registry_build() {
     let build = build_registries(vec![loaded(extension)]);
 
     let unread: Vec<_> = build
-        .registry_diagnostics
-        .iter()
+        .diagnostics()
         .filter(|d| d.code == "W019" || d.code == "W112")
         .collect();
     assert!(unread.is_empty(), "host could not read: {unread:?}");
@@ -152,8 +151,7 @@ fn older_sdk_check_names_still_load() {
 
     let build = build_registries(vec![ext]);
     let unread: Vec<_> = build
-        .registry_diagnostics
-        .iter()
+        .diagnostics()
         .filter(|d| d.code == "W019" || d.code == "W112")
         .collect();
     assert!(unread.is_empty(), "host could not read: {unread:?}");
@@ -224,8 +222,7 @@ fn sdk_constraint_kinds_load_for_the_checks_that_read_them() {
 
     let build = build_registries(vec![loaded(build)]);
     let unread: Vec<_> = build
-        .registry_diagnostics
-        .iter()
+        .diagnostics()
         .filter(|d| d.code == "W019" || d.code == "W112")
         .collect();
     assert!(unread.is_empty(), "host could not read: {unread:?}");

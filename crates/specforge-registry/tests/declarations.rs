@@ -6,16 +6,14 @@ use specforge_extension_sdk::prelude::*;
 use specforge_extension_sdk::{ExtensionDeclaration, PeerDependency};
 use specforge_registry::build_registries;
 
+use crate::support::{codes, diagnostics};
+
 fn declaration(name: &str, version: &str) -> ContributionsBuilder {
     let mut c = ContributionsBuilder::new(ExtensionMeta::new(name, version));
     c.kind("report", |k| {
         k.description("A report");
     });
     c
-}
-
-fn codes(diagnostics: &[specforge_common::Diagnostic]) -> Vec<&str> {
-    diagnostics.iter().map(|d| d.code.as_str()).collect()
 }
 
 #[specforge_test_macros::test(
@@ -28,20 +26,16 @@ fn an_empty_name_or_version_is_e030() {
         declaration("@acme/b", "").declaration(),
         declaration("@acme/c", "1.0.0").declaration(),
     ]);
-    assert_eq!(codes(&build.declaration_diagnostics), ["E030", "E030"]);
+    // The declarations' own, then the registries' (the kind collides).
+    assert_eq!(codes(&build), ["E030", "E030", "E026", "E026"]);
+    assert!(diagnostics(&build)[0].message.contains("name is empty"));
     assert!(
-        build.declaration_diagnostics[0]
-            .message
-            .contains("name is empty")
-    );
-    assert!(
-        build.declaration_diagnostics[1]
+        diagnostics(&build)[1]
             .message
             .contains("'@acme/b': its version is empty")
     );
     // The declarations still build: the registries hold their kinds.
     assert!(build.kinds.contains("report"));
-    assert!(build.registry_diagnostics.iter().all(|d| d.code != "E030"));
 }
 
 #[specforge_test_macros::test(
@@ -56,8 +50,8 @@ fn a_malformed_short_name_is_e030() {
     good.entities.clear();
     good.handshake.ext_short = Some("my-tools2".to_string());
     let build = build_registries(vec![bad, good]);
-    assert_eq!(codes(&build.declaration_diagnostics), ["E030"]);
-    let message = &build.declaration_diagnostics[0].message;
+    assert_eq!(codes(&build), ["E030"]);
+    let message = &diagnostics(&build)[0].message;
     assert!(
         message.contains("ext_short 'Reports Tool' is not lowercase kebab case"),
         "{message}"
@@ -90,13 +84,13 @@ fn peers_are_checked_by_the_build() {
         with_peer("@acme/b", "@acme/a", "^2", false),
         with_peer("@acme/c", "@acme/also-missing", "^1", true),
     ]);
-    assert_eq!(codes(&build.declaration_diagnostics), ["E027", "E027"]);
+    assert_eq!(codes(&build), ["E027", "E027"]);
     assert_eq!(
-        build.declaration_diagnostics[0].message,
+        diagnostics(&build)[0].message,
         "extension '@acme/a' requires peer dependency '@acme/missing' ^1 which is not installed"
     );
     assert_eq!(
-        build.declaration_diagnostics[1].message,
+        diagnostics(&build)[1].message,
         "extension '@acme/b' requires peer dependency '@acme/a' ^2 but version 1.0.0 is installed"
     );
 }
@@ -164,7 +158,7 @@ fn passes_are_ordered_in_the_registry_build() {
     let check: Vec<String> = build.check_passes().map(|p| p.full_name()).collect();
     assert_eq!(check, ["@acme/formal:coverage_tracking"]);
     assert_eq!(build.analyze_passes().count(), 6);
-    assert!(build.declaration_diagnostics.is_empty());
+    assert!(build.diagnostics().next().is_none());
 }
 
 #[specforge_test_macros::test(
@@ -187,8 +181,8 @@ fn a_pass_cycle_is_w145_in_declaration_order() {
         order(&build),
         ["@acme/loop:a", "@acme/loop:b", "@acme/loop:c"]
     );
-    assert_eq!(codes(&build.declaration_diagnostics), ["W145"]);
-    let message = &build.declaration_diagnostics[0].message;
+    assert_eq!(codes(&build), ["W145"]);
+    let message = &diagnostics(&build)[0].message;
     assert!(message.contains("'@acme/loop'"), "{message}");
     assert!(message.contains("'a', 'b'"), "{message}");
 }
@@ -244,8 +238,10 @@ fn declaration_diagnostics_come_in_a_fixed_order() {
         mutual("@acme/q", "@acme/p"),
     ]);
     assert_eq!(
-        codes(&build.declaration_diagnostics),
-        ["E030", "W021", "E027", "E073", "E027", "W145"]
+        codes(&build),
+        [
+            "E030", "W021", "E027", "E073", "E027", "W145", "E026", "E026", "E026"
+        ]
     );
 }
 

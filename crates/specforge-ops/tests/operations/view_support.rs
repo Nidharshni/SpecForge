@@ -3,6 +3,7 @@
 //! directory to record a test report in.
 
 use specforge_common::Diagnostic;
+use specforge_extension_sdk::prelude::*;
 use specforge_graph::Graph;
 use specforge_ops::plan::{PlanGapKind, PlanOutcome};
 use specforge_ops::stats::Stats;
@@ -10,11 +11,7 @@ use specforge_ops::trace::{Target, TraceChain};
 use specforge_ops::view::ProjectView;
 use specforge_project::Environment;
 use specforge_project::coverage::RecordedCoverage;
-use specforge_protocol_types::{
-    ExtensionDeclaration, ValidationRuleDescriptor, ValidationSeverity,
-};
-use specforge_registry::rules::{Registries, Rules};
-use specforge_registry::{FieldRegistryEntry, KindRegistryEntry, RegistryBuild};
+use specforge_registry::{RegistryBuild, build_registries};
 use tempfile::TempDir;
 
 /// A project of five kinds of connectedness (plan 04): `hub` is referenced
@@ -47,75 +44,49 @@ feature alone \"Alone\" {
 }
 ";
 
-/// A kind `@t/soft` declares.
-pub fn kind(name: &str, testable: bool) -> KindRegistryEntry {
-    KindRegistryEntry {
-        kind_name: name.to_string(),
-        source_extension: "@t/soft".into(),
-        testable,
-        supports_verify: testable,
-        allowed_verify_kinds: Vec::new(),
-        lifecycle_field: None,
-        ..Default::default()
-    }
-}
-
-/// The W004 rule requiring `kind`'s entities to declare obligations, as
-/// `@t/soft` declares it.
-pub fn obligations_rule(kind: &str) -> ValidationRuleDescriptor {
-    ValidationRuleDescriptor {
-        code: "W004".into(),
-        severity: ValidationSeverity::Warning,
-        message_template: "{kind} '{id}' is testable but declares no verify obligations".into(),
-        check: "no_verify_statements".into(),
-        target_kind: Some(kind.to_string()),
-        field: Some("verify".into()),
-        ..Default::default()
-    }
-}
-
-/// A boolean `kind.field` that, set, exempts the entity from obligations
-/// (as `@specforge/formal` declares `abstract`).
-pub fn exempting_field(kind: &str, field: &str) -> FieldRegistryEntry {
-    FieldRegistryEntry::new(
-        kind,
-        "@t/formal",
-        specforge_registry::FieldDescriptor {
-            name: field.to_string(),
-            field_type: "bool".to_string(),
-            exempts_obligations: true,
-            ..Default::default()
-        },
-    )
-    .unwrap()
-}
-
 /// Registries whose `obligated` kinds are testable and must declare
 /// obligations (W004 targets each), and whose `free` kinds are testable
 /// with no such rule (governance kinds).
 pub fn registries(obligated: &[&str], free: &[&str]) -> RegistryBuild {
-    let mut build = RegistryBuild::default();
+    registries_with(obligated, free, |_| {})
+}
+
+/// [`registries`], with `extra` adding more to `@t/soft`, the extension
+/// that declares the kinds.
+pub fn registries_with(
+    obligated: &[&str],
+    free: &[&str],
+    extra: impl FnOnce(&mut ContributionsBuilder),
+) -> RegistryBuild {
+    let mut soft = ContributionsBuilder::new(ExtensionMeta::new("@t/soft", "1.0.0"));
     for name in obligated.iter().chain(free) {
-        build.kinds.register(kind(name, true));
+        soft.kind(name, |k| {
+            k.keyword(name).testable(true).supports_verify(true);
+        });
     }
-    // The rule set the testing extension's W004 rules make (it owns W004),
-    // through the rules' build.
-    let mut soft = ExtensionDeclaration::default();
-    soft.handshake.name = "@specforge/testing".into();
-    soft.validation_rules = obligated
-        .iter()
-        .map(|name| obligations_rule(name))
-        .collect();
-    let (rules, diagnostics) = Rules::build(
-        &[soft],
-        Registries {
-            kinds: &build.kinds,
-            fields: &build.fields,
-            edges: &build.edges,
-        },
+    extra(&mut soft);
+    // The testing extension owns W004: one rule per obligated kind.
+    let mut testing = ContributionsBuilder::new(ExtensionMeta::new("@specforge/testing", "1.0.0"));
+    testing.meta.peer_dependencies = vec![PeerDependency {
+        name: "@t/soft".into(),
+        version: "^1".into(),
+        optional: false,
+    }];
+    for name in obligated {
+        testing.rule("W004", |r| {
+            r.severity(ValidationSeverity::Warning)
+                .message_template("{kind} '{id}' is testable but declares no verify obligations")
+                .check(CheckKind::NoVerifyStatements)
+                .target_kind(name)
+                .field("verify");
+        });
+    }
+    let build = build_registries(vec![soft.declaration(), testing.declaration()]);
+    assert!(
+        build.diagnostics().next().is_none(),
+        "{:?}",
+        build.diagnostics().collect::<Vec<_>>()
     );
-    assert!(diagnostics.is_empty(), "{diagnostics:?}");
-    build.rules = rules;
     build
 }
 

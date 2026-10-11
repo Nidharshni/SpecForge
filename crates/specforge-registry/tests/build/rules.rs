@@ -8,7 +8,7 @@ use specforge_protocol_types::ExtensionDeclaration;
 use specforge_registry::rules::{Origin, Rule};
 use specforge_test_macros::test as spec;
 
-use crate::support::{build, coded, declare, diagnostics, rule_codes, software};
+use crate::support::{build, coded, codes, declare, diagnostics, rule_codes, software};
 
 /// An extension `name` declaring warning rules `(code, message, check)`.
 fn rules(name: &str, declared: &[(&str, &str, CheckKind)]) -> ExtensionDeclaration {
@@ -297,7 +297,7 @@ fn rule_collection_holds() {
     for part in ["'W900'", "'@ext/a'", "'@ext/b'"] {
         assert!(w023[0].message.contains(part), "{}", w023[0].message);
     }
-    assert!(build.registry_diagnostics.contains(w023[0]));
+    assert_eq!(codes(&build), ["W023"]);
 
     // required_enforced: the required field has its E006 rule.
     let e006 = build.rules.iter().last().unwrap();

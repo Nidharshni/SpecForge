@@ -198,7 +198,7 @@ fn a_function_failing_on_entities_is_one_w148_per_check() {
     verify = "unresolvable wasm_function produces warning"
 )]
 fn a_function_that_cannot_answer_the_probe_is_w112_once() {
-    let built = rules(vec![
+    let mut built = rules(vec![
         custom("E300", "validate__present", Some("gadget")),
         custom("E301", "validate__absent", Some("gadget")),
         custom("E302", "validate__untargeted", None),
@@ -217,7 +217,12 @@ fn a_function_that_cannot_answer_the_probe_is_w112_once() {
         }
     };
 
-    let diagnostics = built.rules.probe(&verdicts);
+    built.build.probe(&verdicts);
+    let diagnostics: Vec<_> = built
+        .build
+        .diagnostics()
+        .filter(|d| d.code == "W112")
+        .collect();
 
     assert_eq!(
         *probed.borrow(),
@@ -241,5 +246,6 @@ fn a_function_that_cannot_answer_the_probe_is_w112_once() {
     // The rule stays registered.
     assert_eq!(built.codes(), ["E300", "E301", "E302"]);
     // Without a runtime nothing is probed.
-    assert!(built.rules.probe(&NoVerdicts).is_empty());
+    built.build.probe(&NoVerdicts);
+    assert!(built.build.diagnostics().all(|d| d.code != "W112"));
 }

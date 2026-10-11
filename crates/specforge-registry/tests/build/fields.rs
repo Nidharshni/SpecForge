@@ -9,7 +9,7 @@ use specforge_registry::{
 };
 use specforge_test_macros::test as spec;
 
-use crate::support::{build, coded, declare, diagnostics, software};
+use crate::support::{build, coded, codes, declare, diagnostics, software};
 
 #[spec(
     behavior = "registry_build_fields",
@@ -138,7 +138,7 @@ fn a_field_of_an_undefined_type_is_w019_and_not_registered() {
 
     let w019 = coded(&build, "W019");
     assert_eq!(w019.len(), 2, "{:?}", diagnostics(&build));
-    assert_eq!(diagnostics(&build).len(), 2, "nothing but the two W019s");
+    assert_eq!(codes(&build), ["W019", "W019"], "nothing but the two W019s");
     for (diagnostic, quoted) in w019.iter().zip(["'text'", "'unknown_type_xyz'"]) {
         assert_eq!(diagnostic.severity, Severity::Warning);
         assert!(
@@ -146,7 +146,6 @@ fn a_field_of_an_undefined_type_is_w019_and_not_registered() {
             "{}",
             diagnostic.message
         );
-        assert!(build.registry_diagnostics.contains(diagnostic));
     }
     assert!(!build.fields.contains("thing", "notes"));
     assert!(!build.fields.contains("thing", "data"));

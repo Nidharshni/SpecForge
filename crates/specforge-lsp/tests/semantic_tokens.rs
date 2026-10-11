@@ -5,7 +5,7 @@ use specforge_lsp::{Document, MOD_DECLARATION, MOD_REFERENCE, SemanticToken};
 use specforge_ops::view::ProjectView;
 use specforge_parser::{EntityId, EntityKind, FieldMap};
 use specforge_project::coverage::RecordedCoverage;
-use specforge_registry::{KindRegistry, RegistryBuild};
+use specforge_registry::RegistryBuild;
 use specforge_test_macros::test as spec;
 use tree_sitter_specforge::{field, kind};
 
@@ -20,14 +20,9 @@ fn tokens_over(text: &str, registries: RegistryBuild, graph: &Graph) -> Vec<Sema
     Document::new("file:///test.spec".into(), text.into()).tokens(&view)
 }
 
-/// The semantic tokens of `text` with `kinds` registered and an empty
-/// graph (every reference names no entity).
-fn tokens_of(text: &str, kinds: KindRegistry) -> Vec<SemanticToken> {
-    let registries = {
-        let mut registries = RegistryBuild::default();
-        registries.kinds = kinds;
-        registries
-    };
+/// The semantic tokens of `text` over `registries` and an empty graph
+/// (every reference names no entity).
+fn tokens_of(text: &str, registries: RegistryBuild) -> Vec<SemanticToken> {
     tokens_over(text, registries, &Graph::new())
 }
 
@@ -44,9 +39,9 @@ fn declare_kinds(c: &mut ContributionsBuilder, entries: &[(&str, Option<&str>)])
     }
 }
 
-/// A registry of `(kind keyword, declared semantic_token)` pairs.
-fn kinds(entries: &[(&str, Option<&str>)]) -> KindRegistry {
-    registries("@test/ext", |c| declare_kinds(c, entries)).kinds
+/// The registries of `(kind keyword, declared semantic_token)` pairs.
+fn kinds(entries: &[(&str, Option<&str>)]) -> RegistryBuild {
+    registries("@test/ext", |c| declare_kinds(c, entries))
 }
 
 /// The token classified for `text`, which must exist.
@@ -210,7 +205,7 @@ fn extension_semantic_token_outside_legend_falls_back_to_function() {
     verify = "structural keywords are classified as keyword"
 )]
 fn structural_keywords_classified() {
-    let tokens = tokens_of("use \"behaviors/core\"\n", KindRegistry::new());
+    let tokens = tokens_of("use \"behaviors/core\"\n", RegistryBuild::default());
     assert!(
         tokens
             .iter()
@@ -366,7 +361,7 @@ fn verify_kind_classified_as_enum_member() {
     verify = "comments classified as comment"
 )]
 fn comments_classified() {
-    let tokens = tokens_of("// this is a comment\n", KindRegistry::new());
+    let tokens = tokens_of("// this is a comment\n", RegistryBuild::default());
     assert!(tokens.iter().any(|t| t.token_type == "comment"));
 }
 
@@ -375,7 +370,7 @@ fn comments_classified() {
     verify = "structural keywords are classified as keyword"
 )]
 fn define_block_classified() {
-    let tokens = tokens_of("define MyType {\n}\n", KindRegistry::new());
+    let tokens = tokens_of("define MyType {\n}\n", RegistryBuild::default());
     assert!(
         tokens
             .iter()
@@ -468,7 +463,7 @@ fn entity_title_classified_as_string() {
     verify = "use path classified as string"
 )]
 fn use_path_classified_as_string() {
-    let tokens = tokens_of("use \"core/types\"\n", KindRegistry::new());
+    let tokens = tokens_of("use \"core/types\"\n", RegistryBuild::default());
     assert!(
         tokens
             .iter()

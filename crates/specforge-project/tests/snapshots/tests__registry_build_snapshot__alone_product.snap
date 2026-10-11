@@ -3,15 +3,13 @@ source: crates/specforge-project/tests/registry_build_snapshot.rs
 expression: "digest(&load(&runtime, &[name]))"
 ---
 {
-  "absent_reference_targets": {},
-  "bidirectional_pairs": [],
-  "body_parser_kinds": [],
   "check_passes": [
     {
       "extension": "@specforge/product",
       "name": "lifecycle"
     }
   ],
+  "diagnostics": [],
   "edges": {
     "DeliverableContainsModule": {
       "description": null,
@@ -1738,6 +1736,111 @@ expression: "digest(&load(&runtime, &[name]))"
       "target_kind": null
     }
   },
+  "graph_inputs": {
+    "absent_reference_targets": {},
+    "bidirectional_pairs": [],
+    "body_parser_kinds": [],
+    "derived_references": [],
+    "field_coercions": {
+      "channel.description": "Text",
+      "channel.interaction_model": "Text",
+      "channel.reason": "Text",
+      "channel.status": "Text",
+      "channel.tags": "List",
+      "channel.url": "Text",
+      "deliverable.artifact_type": "Text",
+      "deliverable.contributors": "List",
+      "deliverable.depends_on": "List",
+      "deliverable.description": "Text",
+      "deliverable.journeys": "List",
+      "deliverable.milestones": "List",
+      "deliverable.modules": "List",
+      "deliverable.owner": "Text",
+      "deliverable.reason": "Text",
+      "deliverable.status": "Text",
+      "deliverable.tags": "List",
+      "deliverable.version": "Text",
+      "feature.acceptance": "List",
+      "feature.contributors": "List",
+      "feature.depends_on": "List",
+      "feature.description": "Text",
+      "feature.effort": "Text",
+      "feature.features": "List",
+      "feature.owner": "Text",
+      "feature.priority": "Text",
+      "feature.problem": "Text",
+      "feature.reason": "Text",
+      "feature.refs": "List",
+      "feature.solution": "Text",
+      "feature.status": "Text",
+      "feature.tags": "List",
+      "feature.tests": "List",
+      "journey.channels": "List",
+      "journey.description": "Text",
+      "journey.features": "List",
+      "journey.flow": "List",
+      "journey.priority": "Text",
+      "journey.tags": "List",
+      "milestone.blockers": "List",
+      "milestone.contributors": "List",
+      "milestone.depends_on": "List",
+      "milestone.description": "Text",
+      "milestone.exit_criteria": "List",
+      "milestone.features": "List",
+      "milestone.modules": "List",
+      "milestone.owner": "Text",
+      "milestone.priority": "Text",
+      "milestone.reason": "Text",
+      "milestone.refs": "List",
+      "milestone.start_date": "Text",
+      "milestone.status": "Text",
+      "milestone.tags": "List",
+      "milestone.target_date": "Text",
+      "module.depends_on": "List",
+      "module.description": "Text",
+      "module.family": "Text",
+      "module.features": "List",
+      "module.reason": "Text",
+      "module.tags": "List",
+      "persona.description": "Text",
+      "persona.goals": "List",
+      "persona.key_features": "List",
+      "persona.pain_points": "List",
+      "persona.reason": "Text",
+      "persona.status": "Text",
+      "persona.tags": "List",
+      "persona.technical_level": "Text",
+      "release.changelog": "Text",
+      "release.contributors": "List",
+      "release.deliverables": "List",
+      "release.depends_on": "List",
+      "release.description": "Text",
+      "release.milestones": "List",
+      "release.owner": "Text",
+      "release.reason": "Text",
+      "release.refs": "List",
+      "release.release_date": "Text",
+      "release.status": "Text",
+      "release.tags": "List",
+      "release.target_date": "Text",
+      "release.version": "Text",
+      "term.aliases": "List",
+      "term.context": "Text",
+      "term.definition": "Text",
+      "term.see_also": "List",
+      "term.tags": "List"
+    },
+    "single_reference_fields": [
+      [
+        "journey",
+        "persona"
+      ],
+      [
+        "term",
+        "module"
+      ]
+    ]
+  },
   "kinds": {
     "channel": {
       "allowed_verify_kinds": [],
@@ -1911,7 +2014,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "testable": false
     }
   },
-  "load_diagnostics": [],
   "manifest_surfaces": [
     {
       "extension": "@specforge/product",
@@ -3090,7 +3192,6 @@ expression: "digest(&load(&runtime, &[name]))"
       }
     }
   ],
-  "registry_diagnostics": [],
   "rules": [
     {
       "check": "cycle_detection",
@@ -4213,17 +4314,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "wasm_function": null
     }
   ],
-  "single_reference_fields": [
-    [
-      "journey",
-      "persona"
-    ],
-    [
-      "term",
-      "module"
-    ]
-  ],
-  "surface_diagnostics": [],
   "surfaces": [
     {
       "export": "cmd__product_features",

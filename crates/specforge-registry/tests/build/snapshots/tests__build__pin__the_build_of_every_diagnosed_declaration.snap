@@ -3,7 +3,7 @@ source: crates/specforge-registry/tests/build/pin.rs
 expression: digest(&build)
 ---
 {
-  "declaration_diagnostics": [
+  "diagnostics": [
     [
       "E030",
       "Error",
@@ -38,52 +38,7 @@ expression: digest(&build)
       "W145",
       "Warning",
       "extension '@pin/software': the order constraints of passes 'a', 'b' form a cycle; its passes run in declaration order"
-    ]
-  ],
-  "edges": [
-    "links_to: @pin/software",
-    "missing_edge: @pin/software"
-  ],
-  "fields": [
-    "behavior.contract: Block",
-    "behavior.owner: Reference",
-    "behavior.watched: ReferenceList",
-    "rule.limit: String"
-  ],
-  "kinds": [
-    {
-      "allowed_verify_kinds": [
-        "unit",
-        "contract"
-      ],
-      "keyword": "behavior",
-      "source_extension": "@pin/software",
-      "testable": true
-    },
-    {
-      "allowed_verify_kinds": [],
-      "keyword": "note",
-      "source_extension": "@pin/software",
-      "testable": false
-    },
-    {
-      "allowed_verify_kinds": [],
-      "keyword": "rule",
-      "source_extension": "@pin/software",
-      "testable": false
-    },
-    {
-      "allowed_verify_kinds": [],
-      "keyword": "thing",
-      "source_extension": "@pin/software",
-      "testable": true
-    }
-  ],
-  "passes": [
-    "@pin/software:a",
-    "@pin/software:b"
-  ],
-  "registry_diagnostics": [
+    ],
     [
       "W021",
       "Warning",
@@ -128,7 +83,75 @@ expression: digest(&build)
       "W023",
       "Warning",
       "validation rule code 'W900' from '@pin/product' duplicates code from '@pin/software'"
+    ],
+    [
+      "E055",
+      "Error",
+      "MCP tool 'probe' of extension '@pin/product': input_schema must be a JSON object; the tool is not registered"
+    ],
+    [
+      "E039",
+      "Error",
+      "duplicate surface command ID 'hello': extension '@pin/product' conflicts with '@pin/software'"
     ]
+  ],
+  "edges": [
+    "links_to: @pin/software",
+    "missing_edge: @pin/software"
+  ],
+  "fields": [
+    "behavior.contract: Block",
+    "behavior.owner: Reference",
+    "behavior.watched: ReferenceList",
+    "rule.limit: String"
+  ],
+  "graph_inputs": {
+    "absent_reference_targets": {
+      "behavior.owner": "nowhere"
+    },
+    "bidirectional_pairs": [],
+    "body_parser_kinds": [],
+    "derived_references": [],
+    "field_coercions": {
+      "behavior.watched": "List",
+      "rule.limit": "Text"
+    },
+    "single_reference_fields": [
+      "behavior.owner"
+    ]
+  },
+  "kinds": [
+    {
+      "allowed_verify_kinds": [
+        "unit",
+        "contract"
+      ],
+      "keyword": "behavior",
+      "source_extension": "@pin/software",
+      "testable": true
+    },
+    {
+      "allowed_verify_kinds": [],
+      "keyword": "note",
+      "source_extension": "@pin/software",
+      "testable": false
+    },
+    {
+      "allowed_verify_kinds": [],
+      "keyword": "rule",
+      "source_extension": "@pin/software",
+      "testable": false
+    },
+    {
+      "allowed_verify_kinds": [],
+      "keyword": "thing",
+      "source_extension": "@pin/software",
+      "testable": true
+    }
+  ],
+  "passes": [
+    "@pin/software:a",
+    "@pin/software:b"
   ],
   "rules": [
     [
@@ -148,18 +171,6 @@ expression: digest(&build)
       "",
       "behavior",
       "contract"
-    ]
-  ],
-  "surface_diagnostics": [
-    [
-      "E055",
-      "Error",
-      "MCP tool 'probe' of extension '@pin/product': input_schema must be a JSON object; the tool is not registered"
-    ],
-    [
-      "E039",
-      "Error",
-      "duplicate surface command ID 'hello': extension '@pin/product' conflicts with '@pin/software'"
     ]
   ]
 }

@@ -77,6 +77,10 @@ behavior load_extension_manifests "Load Extension Manifests" {
     array) is replaced by its default, and an extensions or exclude item
     that is not a string is ignored; the rest of the file is used. A
     missing specforge.json is the default config and produces no E069.
+    Before any source, the environment MUST report its own diagnostics —
+    E069, the load's failures and warnings, provider registration (W118,
+    E057), then I002 — and then the registry build's, in the build's one
+    order (build_registries_from_declarations).
     This behavior orchestrates: for each extension, it loads its
     binary and reads its declaration once. Once all declarations are loaded
     and the extension_manifests_loaded event is produced, the registry build
@@ -100,6 +104,7 @@ behavior load_extension_manifests "Load Extension Manifests" {
   verify unit "E069 names why specforge.json can't be used"
   verify unit "E069 names a mistyped key or a non-string item, and the rest of specforge.json is used"
   verify integration "a specforge.json that is there and can't be used produces E069 first and an I002 that names it"
+  verify integration "the environment reports its own diagnostics, then the registry build's, before any source"
   verify contract "Load Extension Manifests: extension manifest loading holds — all_files_parsed, extensions_config_available, all_extensions_attempted, loaded_manifests_available, failed_extensions_diagnosed, loaded_event_fired, extension_isolation"
 }
 
@@ -156,11 +161,18 @@ behavior build_registries_from_declarations "Build Registries From Declarations"
     malformed ext_short), self-consistency (W021), peer requirements (E073,
     E027, and E027 for a cycle among required peers), the order of declared
     passes (W145 when their constraints form a cycle, declaration order
-    kept), the kind, field and edge registries, the rules and the surfaces.
-    It MUST be pure.
+    kept), the kind, field and edge registries, the rules, the surfaces and
+    the graph inputs (registry_build_graph_inputs). It MUST report its
+    diagnostics in one order: the declarations' own, the registries', the
+    custom rules' probes, then the surfaces'. A custom rule whose function
+    its extension cannot answer through is W112, after the registries'
+    diagnostics, once, when the build is probed in the runtime its
+    extensions loaded in. It MUST be pure: the probe, through the
+    CustomVerdicts port its caller passes, is the one call it makes out.
+    It is read only through its methods; nothing assigns its registries.
 
     Its outcomes are stated by registry_build_kinds, registry_build_fields,
-    registry_build_edges, registry_build_rules,
+    registry_build_edges, registry_build_graph_inputs, registry_build_rules,
     registry_build_declaration_consistency,
     registry_build_peer_dependencies and registry_build_load_order. The build produces
     registries_populated: nothing reads a registry before every loaded
@@ -175,6 +187,8 @@ behavior build_registries_from_declarations "Build Registries From Declarations"
   verify integration "a passes description that does not parse fails the extension's load"
   verify unit "a build of no declarations has empty registries, no rules and no diagnostics"
   verify unit "the declarations' own diagnostics come in a fixed order: E030, W021, the peers' E073 and E027, the cycles' E027, W145"
+  verify unit "the registry build reports its diagnostics in one order: the declarations', the registries', the custom rules' probes, the surfaces'"
+  verify unit "probing the build reports each custom rule whose function cannot answer once, as W112 after the registries' diagnostics"
   verify integration "every loaded declaration is registered before a compile checks anything"
 }
 

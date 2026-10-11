@@ -3,25 +3,8 @@ source: crates/specforge-project/tests/registry_build_snapshot.rs
 expression: "digest(&load(&runtime, &[name]))"
 ---
 {
-  "absent_reference_targets": {
-    "constraint.constrains": "behavior",
-    "constraint.enforced_by": "behavior",
-    "constraint.governs_features": "feature",
-    "constraint.protects": "invariant",
-    "decision.affects_features": "feature",
-    "decision.invariants": "invariant",
-    "failure_mode.affected_behaviors": "behavior",
-    "failure_mode.invariant": "invariant",
-    "failure_mode.threatens_features": "feature"
-  },
-  "bidirectional_pairs": [
-    [
-      "enforced_by",
-      "invariants"
-    ]
-  ],
-  "body_parser_kinds": [],
   "check_passes": [],
+  "diagnostics": [],
   "edges": {
     "ConstraintConstrainsBehavior": {
       "description": "Constraint constrains a behavior",
@@ -893,6 +876,81 @@ expression: "digest(&load(&runtime, &[name]))"
       "target_kind": "feature"
     }
   },
+  "graph_inputs": {
+    "absent_reference_targets": {
+      "constraint.constrains": "behavior",
+      "constraint.enforced_by": "behavior",
+      "constraint.governs_features": "feature",
+      "constraint.protects": "invariant",
+      "decision.affects_features": "feature",
+      "decision.invariants": "invariant",
+      "failure_mode.affected_behaviors": "behavior",
+      "failure_mode.invariant": "invariant",
+      "failure_mode.threatens_features": "feature"
+    },
+    "bidirectional_pairs": [
+      [
+        "enforced_by",
+        "invariants"
+      ]
+    ],
+    "body_parser_kinds": [],
+    "derived_references": [],
+    "field_coercions": {
+      "constraint.category": "Text",
+      "constraint.constrains": "List",
+      "constraint.description": "Text",
+      "constraint.enforced_by": "List",
+      "constraint.governs_features": "List",
+      "constraint.metric": "Text",
+      "constraint.priority": "Text",
+      "constraint.protects": "List",
+      "constraint.refs": "List",
+      "constraint.scope": "Text",
+      "constraint.threshold": "Text",
+      "decision.affects_features": "List",
+      "decision.alternatives": "List",
+      "decision.authors": "List",
+      "decision.consequences": "List",
+      "decision.constraints": "List",
+      "decision.context": "Text",
+      "decision.date": "Text",
+      "decision.deciders": "List",
+      "decision.decision": "Text",
+      "decision.description": "Text",
+      "decision.invariants": "List",
+      "decision.reason": "Text",
+      "decision.refs": "List",
+      "decision.status": "Text",
+      "decision.tags": "List",
+      "failure_mode.affected_behaviors": "List",
+      "failure_mode.cause": "Text",
+      "failure_mode.description": "Text",
+      "failure_mode.detection": "Text",
+      "failure_mode.effect": "Text",
+      "failure_mode.mitigation": "Text",
+      "failure_mode.occurrence": "Text",
+      "failure_mode.post_detection": "Text",
+      "failure_mode.post_mitigation": "Text",
+      "failure_mode.post_occurrence": "Text",
+      "failure_mode.post_severity": "Text",
+      "failure_mode.refs": "List",
+      "failure_mode.risk": "Text",
+      "failure_mode.rpn": "Integer",
+      "failure_mode.severity": "Text",
+      "failure_mode.threatens_features": "List"
+    },
+    "single_reference_fields": [
+      [
+        "decision",
+        "superseded_by"
+      ],
+      [
+        "failure_mode",
+        "invariant"
+      ]
+    ]
+  },
   "kinds": {
     "constraint": {
       "allowed_verify_kinds": [],
@@ -952,9 +1010,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "testable": false
     }
   },
-  "load_diagnostics": [],
   "manifest_surfaces": [],
-  "registry_diagnostics": [],
   "rules": [
     {
       "check": "field_value_constraint",
@@ -1206,16 +1262,5 @@ expression: "digest(&load(&runtime, &[name]))"
       "wasm_function": null
     }
   ],
-  "single_reference_fields": [
-    [
-      "decision",
-      "superseded_by"
-    ],
-    [
-      "failure_mode",
-      "invariant"
-    ]
-  ],
-  "surface_diagnostics": [],
   "surfaces": []
 }

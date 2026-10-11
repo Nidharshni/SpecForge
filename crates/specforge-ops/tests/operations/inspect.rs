@@ -3,6 +3,7 @@
 //! render them (ADR 0015, section "Inspect").
 
 use specforge_common::{Diagnostic, DiagnosticData, Severity, SourceSpan, Sym};
+use specforge_extension_sdk::prelude::FieldType;
 use specforge_ops::inspect::inspect;
 use specforge_ops::navigate::Reference;
 use specforge_ops::view::ProjectView;
@@ -11,7 +12,7 @@ use specforge_project::snapshot::Standing;
 use specforge_test::prelude::*;
 
 use crate::navigate::compile;
-use crate::view_support::{Project, exempting_field, kind, registries};
+use crate::view_support::{Project, registries, registries_with};
 
 /// A project of every standing: `ob` (an obligated kind), `fr` (a testable
 /// kind no W004 rule targets), `U` (a union of an obligated kind), `ab`
@@ -26,11 +27,16 @@ note n \"Note\" {\n}\n\
 behavior done \"Done\" {\n  verify unit \"first\"\n  verify unit \"second\"\n}\n";
 
 fn standings() -> Project {
-    let mut build = registries(&["behavior", "type"], &["constraint"]);
-    build
-        .fields
-        .register(exempting_field("behavior", "abstract"));
-    build.kinds.register(kind("note", false));
+    let build = registries_with(&["behavior", "type"], &["constraint"], |c| {
+        c.kind("note", |k| {
+            k.keyword("note");
+        });
+        c.enhance("behavior", "@t/soft", |e| {
+            e.field("abstract", |f| {
+                f.field_type(FieldType::Bool).exempts_obligations();
+            });
+        });
+    });
     Project::new(STANDINGS, build)
 }
 
