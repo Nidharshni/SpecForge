@@ -10,9 +10,9 @@
 use specforge_common::{Code, Diagnostic, codes};
 use specforge_ops::extension::Trust;
 use specforge_ops::registry::{
-    Found, METADATA_MISMATCH, NO_REGISTRY, NO_REGISTRY_FOR_NAME, NOT_AUTHENTICATED, Package,
-    Published, Publisher, Registry, Searched, UNREADABLE_MANIFEST, UNUSABLE_SIGNING_KEY, Upload,
-    no_registry,
+    Found, KeyPin, METADATA_MISMATCH, NO_REGISTRY, NO_REGISTRY_FOR_NAME, NOT_AUTHENTICATED,
+    Package, Published, Publisher, Registry, Searched, TrustPolicy, UNREADABLE_MANIFEST,
+    UNUSABLE_SIGNING_KEY, Upload, no_registry,
 };
 use specforge_ops::{OpError, OpErrorKind};
 use specforge_package::PackageName;
@@ -21,9 +21,9 @@ use specforge_protocol_types::{DeclaredCategory, ExtensionDeclaration};
 use specforge_registry_client::credentials::{read_credentials, user_dir};
 use specforge_registry_client::signing::load_or_create_signing_key_at;
 use specforge_registry_client::{
-    Accepted, HttpRegistryClient, KeyChange, RegistryClient, RegistryConfig, RegistryCredential,
-    RegistryError, Retrying, SigningKey, parse_registries_from_config, publish_to_registry,
-    verify_registry_integrity,
+    Accepted, HttpRegistryClient, KeyChange, NewPin, RegistryClient, RegistryConfig,
+    RegistryCredential, RegistryError, Retrying, SigningKey, parse_registries_from_config,
+    publish_to_registry, verify_registry_integrity,
 };
 use specforge_registry_wire::{PackageMetadata, SearchQuery};
 use std::path::PathBuf;
@@ -225,9 +225,11 @@ pub fn configured(
 /// 2. the binary hashes to the reply's SHA-256 (R-OPS-002);
 /// 3. the manifest reads as an extension declaration (R-OPS-004; a `manifest.json` from before ADR 0012 is
 ///    refused with a re-publish suggestion) naming the package and version asked for (R-TRUST-004);
-/// 4. the publisher signature verifies and the key matches its pin, or is pinned (R-TRUST-001..006).
+/// 4. the publisher signature verifies and the key matches the one expected for the name: the user's
+///    pin, else the key the project's lock records, else any (trust on first use) (R-TRUST-001..006).
+///    The decision is the package's publisher; [`Registry::pin`] writes it once the install is.
 ///
-/// A refused package pins no key. The policy runs over any [`RegistryClient`]: HTTP unless
+/// A fetch writes nothing. The policy runs over any [`RegistryClient`]: HTTP unless
 /// [`ConfiguredRegistry::with_client`] gives another. Built without reading, touching the network or
 /// failing: with no registry configured, each call fails with E063 before any request.
 pub struct ConfiguredRegistry {
@@ -240,8 +242,8 @@ pub struct ConfiguredRegistry {
     user: User,
     /// Whom a key change is asked of when a fetch is `Trust::Prompt`ed; nobody by default.
     asker: Option<Asker>,
-    /// What the fetch policy reported (W155, W156), in fetch order.
-    fetched: Mutex<Vec<Diagnostic>>,
+    /// What the fetch policy reported (W155 at a fetch, W156 at a pin), in order.
+    reported_by_policy: Mutex<Vec<Diagnostic>>,
 }
 
 impl ConfiguredRegistry {
@@ -255,7 +257,7 @@ impl ConfiguredRegistry {
             client: Box::new(Retrying::new(HttpRegistryClient::new())),
             user: User::current(),
             asker: None,
-            fetched: Mutex::new(Vec::new()),
+            reported_by_policy: Mutex::new(Vec::new()),
         }
     }
 
@@ -282,15 +284,14 @@ impl ConfiguredRegistry {
     /// What this registry reported, once an operation has asked it anything: the registry
     /// configuration's diagnostics (E067 for an entry it skipped, W140 for a duplicate alias, I003
     /// when none is the default; nothing when reading failed outright, each call then failing with
-    /// that error), then the fetch policy's (W155 for an unsigned package accepted, W156 for a key
-    /// change accepted) in fetch order. A surface shows these after the operation, whatever its
-    /// result.
+    /// that error), then the fetch policy's W155 in fetch order, then a W156 for each re-pin a
+    /// committed operation saved. A surface shows these after the operation, whatever its result.
     pub fn reported(&self) -> Vec<Diagnostic> {
         let mut reported = match self.registries.get() {
             Some(Ok(configured)) => configured.diagnostics.clone(),
             _ => Vec::new(),
         };
-        reported.extend(self.fetched.lock().unwrap().iter().cloned());
+        reported.extend(self.reported_by_policy.lock().unwrap().iter().cloned());
         reported
     }
 
@@ -323,8 +324,7 @@ impl Registry for ConfiguredRegistry {
         &self,
         name: &PackageName,
         version: &Version,
-        allow_unsigned: bool,
-        trust: Trust,
+        policy: TrustPolicy<'_>,
     ) -> Result<Package, OpError> {
         let registry = self.registry_for(name)?;
         let credential = self.read_credential(registry)?; // R-AUTH-020/021, R010, R011, R012
@@ -349,40 +349,20 @@ impl Registry for ConfiguredRegistry {
         declaration_names(name, version, &declaration)?; // 3
 
         // Publisher signature and the TOFU pin policy.
-        let known_keys = self.user.known_keys();
         let trusted = specforge_registry_client::trust_flow::check(
             &metadata.name,
             &metadata,
             &wasm,
-            allow_unsigned,
-            &self.decider(trust),
-            &known_keys,
+            policy.allow_unsigned,
+            &self.decider(policy.trust),
+            &self.user.known_keys(),
             None,
         )
-        .map_err(OpError::from)?; // 4
-        self.fetched.lock().unwrap().extend(trusted.diagnostics);
-        // Until the lock plan pins what it accepted (ADR 0059), the fetch records the pin itself.
-        let pin = match &trusted.accepted {
-            Accepted::Signed {
-                key_id,
-                first_use: true,
-            } => Some(specforge_registry_client::NewPin {
-                package: &metadata.name,
-                key_id,
-                replaces: None,
-            }),
-            Accepted::Repinned { key_id, previous } => Some(specforge_registry_client::NewPin {
-                package: &metadata.name,
-                key_id,
-                replaces: Some(previous),
-            }),
-            Accepted::Signed { .. } | Accepted::Unsigned => None,
-        };
-        if let Some(pin) = pin {
-            let repinned = specforge_registry_client::trust_flow::record(&[pin], &known_keys)
-                .map_err(OpError::from)?;
-            self.fetched.lock().unwrap().extend(repinned);
-        }
+        .map_err(OpError::from)?; // 4: R-TRUST-001..006, writes nothing
+        self.reported_by_policy
+            .lock()
+            .unwrap()
+            .extend(trusted.diagnostics); // W155
 
         Ok(Package {
             name: name.clone(),
@@ -396,6 +376,21 @@ impl Registry for ConfiguredRegistry {
                 Accepted::Repinned { key_id, previous } => Publisher::Repinned { key_id, previous },
             },
         })
+    }
+
+    fn pin(&self, pins: &[KeyPin]) -> Result<(), OpError> {
+        let new: Vec<NewPin<'_>> = pins
+            .iter()
+            .map(|p| NewPin {
+                package: p.name.as_str(),
+                key_id: &p.key_id,
+                replaces: p.replaces.as_deref(),
+            })
+            .collect();
+        let repinned = specforge_registry_client::trust_flow::record(&new, &self.user.known_keys())
+            .map_err(OpError::from)?; // R-TRUST-006, nothing saved
+        self.reported_by_policy.lock().unwrap().extend(repinned); // W156, one per re-pin
+        Ok(())
     }
 
     fn versions(&self, name: &PackageName) -> Result<Vec<Version>, OpError> {
@@ -657,7 +652,11 @@ mod tests {
         assert!(error.is(specforge_ops::registry::NO_REGISTRY), "{error:?}");
         assert!(error.message.contains("`update`"), "{error:?}");
         let error = registry
-            .fetch(&sdk, &Version::new(0, 1, 0), false, Trust::Refuse)
+            .fetch(
+                &sdk,
+                &Version::new(0, 1, 0),
+                TrustPolicy::new(false, Trust::Refuse),
+            )
             .unwrap_err();
         assert!(error.is(specforge_ops::registry::NO_REGISTRY), "{error:?}");
         assert!(registry.reported().is_empty());

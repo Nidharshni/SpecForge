@@ -6,7 +6,7 @@
 //! keys in a temporary store, never in `~/.specforge`.
 
 use specforge_ops::extension::Trust;
-use specforge_ops::registry::{Publisher, Registry};
+use specforge_ops::registry::{Publisher, Registry, TrustPolicy};
 use specforge_ops_registry::{ConfiguredRegistry, User};
 use specforge_package::PackageName;
 use specforge_package::Version;
@@ -143,8 +143,7 @@ impl Project {
         self.registry().fetch(
             &PackageName::parse(NAME).unwrap(),
             &Version::parse(VERSION).unwrap(),
-            allow_unsigned,
-            trust,
+            TrustPolicy::new(allow_unsigned, trust),
         )
     }
 
@@ -180,6 +179,19 @@ fn an_unreadable_known_keys_file_refuses_the_fetch_and_is_left_as_it_was() {
         std::fs::read_to_string(project.known_keys()).unwrap(),
         broken
     );
+}
+
+/// `@acme/tool@1.0.0` fetched through `registry`.
+fn fetch_through(
+    registry: &ConfiguredRegistry,
+    allow_unsigned: bool,
+    trust: Trust,
+) -> Result<specforge_ops::registry::Package, specforge_ops::OpError> {
+    registry.fetch(
+        &PackageName::parse(NAME).unwrap(),
+        &Version::parse(VERSION).unwrap(),
+        TrustPolicy::new(allow_unsigned, trust),
+    )
 }
 
 fn pinned_at(path: &Path) -> Option<String> {
@@ -305,8 +317,9 @@ fn an_unsigned_package_is_accepted_with_allow_unsigned_and_pins_nothing() {
 fn a_correctly_signed_package_is_accepted_and_its_key_pinned() {
     let key = SigningKey::generate();
     let project = Project::on(Reply::signed(&key));
+    let registry = project.registry();
 
-    let package = project.fetch(false, Trust::Refuse).unwrap();
+    let package = fetch_through(&registry, false, Trust::Refuse).unwrap();
     assert_eq!(package.name.as_str(), NAME);
     assert_eq!(package.version.to_string(), VERSION);
     assert_eq!(package.wasm, WASM);
@@ -318,6 +331,13 @@ fn a_correctly_signed_package_is_accepted_and_its_key_pinned() {
             first_use: true
         }
     );
+    assert_eq!(project.pinned(), None, "the fetch pins nothing");
+
+    // The lock plan that fetched it pins the key when it commits.
+    let name = PackageName::parse(NAME).unwrap();
+    registry
+        .pin(&[package.publisher.pin(&name).expect("a first use pins")])
+        .unwrap();
     assert_eq!(project.pinned(), Some(key.key_id()));
 
     // A second install under the same pin is accepted as is.
@@ -330,6 +350,45 @@ fn a_correctly_signed_package_is_accepted_and_its_key_pinned() {
         }
     );
     assert_eq!(project.pinned(), Some(key.key_id()));
+}
+
+#[specforge_test(
+    behavior = "pin_publisher_key",
+    verify = "a fetch pins nothing; its pins are recorded when the install is written"
+)]
+fn a_fetch_pins_nothing() {
+    let pinned = SigningKey::generate();
+    let other = SigningKey::generate();
+    let project = Project::on(Reply::signed(&other));
+
+    // First use: no store is created.
+    project.fetch(false, Trust::Refuse).unwrap();
+    assert!(!project.known_keys().exists());
+
+    // A consented key change: the store is as it was, byte for byte.
+    project.pin(&pinned);
+    let before = std::fs::read(project.known_keys()).unwrap();
+    project.fetch(false, Trust::AssumeYes).unwrap();
+    project.fetch(false, Trust::Refuse).unwrap_err();
+    assert_eq!(std::fs::read(project.known_keys()).unwrap(), before);
+}
+
+#[test]
+fn a_pin_that_cannot_be_saved_is_r_trust_006() {
+    let key = SigningKey::generate();
+    let project = Project::on(Reply::signed(&key));
+    let registry = project.registry();
+    let package = fetch_through(&registry, false, Trust::Refuse).unwrap();
+    // The store's path is a directory: it can be neither read nor replaced.
+    std::fs::create_dir_all(project.known_keys()).unwrap();
+    let name = PackageName::parse(NAME).unwrap();
+
+    let error = registry
+        .pin(&[package.publisher.pin(&name).unwrap()])
+        .unwrap_err();
+
+    assert_eq!(error.code, "R-TRUST-006", "{error:?}");
+    assert!(project.known_keys().is_dir());
 }
 
 #[specforge_test(
@@ -361,8 +420,9 @@ fn consent_to_a_key_change_re_pins_the_new_key() {
     let other = SigningKey::generate();
     let project = Project::on(Reply::signed(&other));
     project.pin(&pinned);
+    let registry = project.registry();
 
-    let package = project.fetch(false, Trust::AssumeYes).unwrap();
+    let package = fetch_through(&registry, false, Trust::AssumeYes).unwrap();
     assert_eq!(
         package.publisher,
         Publisher::Repinned {
@@ -370,6 +430,16 @@ fn consent_to_a_key_change_re_pins_the_new_key() {
             previous: pinned.key_id()
         }
     );
+    assert_eq!(
+        project.pinned(),
+        Some(pinned.key_id()),
+        "the fetch pins nothing"
+    );
+
+    let name = PackageName::parse(NAME).unwrap();
+    registry
+        .pin(&[package.publisher.pin(&name).expect("a re-pin pins")])
+        .unwrap();
     assert_eq!(project.pinned(), Some(other.key_id()));
 }
 
@@ -552,8 +622,7 @@ fn a_read_carries_the_stored_credential() {
         .fetch(
             &name,
             &Version::parse(VERSION).unwrap(),
-            true,
-            Trust::Refuse,
+            TrustPolicy::new(true, Trust::Refuse),
         )
         .unwrap();
 
@@ -621,8 +690,7 @@ fn an_unsigned_fetch_is_reported_as_w155() {
         .fetch(
             &PackageName::parse(NAME).unwrap(),
             &Version::parse(VERSION).unwrap(),
-            true,
-            Trust::Refuse,
+            TrustPolicy::new(true, Trust::Refuse),
         )
         .unwrap();
 
@@ -644,13 +712,19 @@ fn a_consented_key_change_is_reported_as_w156() {
     project.pin(&pinned);
     let registry = project.registry();
 
+    let package = fetch_through(&registry, false, Trust::AssumeYes).unwrap();
+
+    let name = PackageName::parse(NAME).unwrap();
+    let w156_count = |registry: &ConfiguredRegistry| {
+        registry
+            .reported()
+            .iter()
+            .filter(|d| d.code == "W156")
+            .count()
+    };
+    assert_eq!(w156_count(&registry), 0, "{:?}", registry.reported());
     registry
-        .fetch(
-            &PackageName::parse(NAME).unwrap(),
-            &Version::parse(VERSION).unwrap(),
-            false,
-            Trust::AssumeYes,
-        )
+        .pin(&[package.publisher.pin(&name).expect("a re-pin pins")])
         .unwrap();
 
     let reported = registry.reported();
@@ -681,7 +755,7 @@ fn a_key_change_is_decided_by_the_asker() {
         true
     });
     asked
-        .fetch(&name, &version, false, Trust::Prompt)
+        .fetch(&name, &version, TrustPolicy::new(false, Trust::Prompt))
         .expect("the asker said yes");
 
     // Without an asker, a Prompt is a refusal.
@@ -689,7 +763,7 @@ fn a_key_change_is_decided_by_the_asker() {
     project.pin(&pinned);
     let error = project
         .registry()
-        .fetch(&name, &version, false, Trust::Prompt)
+        .fetch(&name, &version, TrustPolicy::new(false, Trust::Prompt))
         .unwrap_err();
     assert_eq!(error.code, "R-TRUST-003", "{error:?}");
 }

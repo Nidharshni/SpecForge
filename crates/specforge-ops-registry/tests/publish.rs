@@ -5,7 +5,7 @@
 use specforge_ops::OpErrorKind;
 use specforge_ops::extension::Trust;
 use specforge_ops::registry::testing::declaration;
-use specforge_ops::registry::{Registry, Upload};
+use specforge_ops::registry::{Registry, TrustPolicy, Upload};
 use specforge_ops_registry::{ConfiguredRegistry, User};
 use specforge_package::PackageName;
 use specforge_package::Version;
@@ -299,7 +299,11 @@ fn publish_asks_the_registry_fetch_asks() {
     let acme = pkg("@acme/x", "1.0.0");
     registry.publish(&acme.upload()).unwrap();
     registry
-        .fetch(&acme.name, &acme.version, false, Trust::Refuse)
+        .fetch(
+            &acme.name,
+            &acme.version,
+            TrustPolicy::new(false, Trust::Refuse),
+        )
         .unwrap();
     let other = pkg("@other/y", "1.0.0");
     registry.publish(&other.upload()).unwrap();

@@ -8,7 +8,8 @@
 //! registry the install came from (R-RES-006/005, ADR 0001) or, for a local file, refused with
 //! E027. A peer that is not locked is `check`'s. Only then is each binary fetched from a
 //! registry loaded, and it must declare what was published (ADR 0012). What passes is committed
-//! as one change (ADR 0028 D4).
+//! as one change (ADR 0028 D4), whose last step pins the publisher keys its fetches accepted
+//! (ADR 0059): a refused or failed plan pins nothing.
 
 use std::path::Path;
 
@@ -22,7 +23,7 @@ use specforge_wasm::WasmRuntime;
 
 use super::Trust;
 use super::candidate::{Installable, LocalFile};
-use crate::registry::{METADATA_MISMATCH, Publisher, Registry};
+use crate::registry::{KeyPin, METADATA_MISMATCH, Publisher, Registry, TrustPolicy};
 use crate::{OpError, OpErrorKind, Writes};
 
 /// What a lock plan is for. It words the refusal of an install that a locked extension does not
@@ -51,12 +52,17 @@ impl Verb {
     }
 }
 
-/// Where registry installs come from and how they are accepted: the registry, the runtime their
-/// binaries load in once the plan's gate has passed, and the fetch policy's two choices.
+/// Where registry installs come from and how they are accepted: the registry port, the runtime
+/// their binaries load in once the gate has passed, the lock whose keys they are held to, and the
+/// caller's two trust choices.
 #[derive(Clone, Copy)]
 pub(crate) struct Fetch<'a> {
     pub(crate) registry: &'a dyn Registry,
     pub(crate) runtime: &'a dyn WasmRuntime,
+    /// The project's installed extensions: the publisher key its lock records for a name is the
+    /// pin when the user has none.
+    #[expect(dead_code, reason = "read when the lock's key is the pin (T4)")]
+    pub(crate) installed: &'a Installed,
     pub(crate) allow_unsigned: bool,
     pub(crate) trust: Trust,
 }
@@ -86,15 +92,15 @@ impl<'a> Fetch<'a> {
     /// `name@version` fetched as an install. The registry adapter checks integrity and the
     /// publisher signature under the TOFU policy. Its pin is read from the published declaration:
     /// its version and its peers, the publisher's key id, `source: registry`. Its binary is not
-    /// loaded: [`LockPlan::check`] loads it after the gate.
+    /// loaded: [`LockPlan::check`] loads it after the gate. Nothing is pinned for the user: the
+    /// publisher the fetch decided is pinned when the plan commits.
     pub(crate) fn install(
         &self,
         name: &PackageName,
         version: &Version,
     ) -> Result<Install<'a>, OpError> {
-        let mut package = self
-            .registry
-            .fetch(name, version, self.allow_unsigned, self.trust)?;
+        let policy = TrustPolicy::new(self.allow_unsigned, self.trust);
+        let mut package = self.registry.fetch(name, version, policy)?;
         let module = Module::new(std::mem::take(&mut package.wasm));
         let pin = Pin {
             name: package.name.clone(),
@@ -171,6 +177,15 @@ struct Staged<'a> {
 }
 
 impl Staged<'_> {
+    /// The pin its registry fetch decided, once it is written; none for a local file, a key already
+    /// pinned or an unsigned package.
+    fn key_pin(&self) -> Option<KeyPin> {
+        match &self.from {
+            From::Registry { publisher, .. } => publisher.pin(&self.name),
+            From::File => None,
+        }
+    }
+
     /// The registry an unsatisfied peer touching this install is unified against; `None` for a
     /// local file (E027).
     fn registry(&self) -> Option<&dyn Registry> {
@@ -226,6 +241,8 @@ pub(crate) struct LockPlan<'a> {
     change: Change<'a>,
     staged: Vec<Staged<'a>>,
     verb: Verb,
+    /// The registry port its registry installs came from: an operation fetches through one.
+    registry: Option<&'a dyn Registry>,
 }
 
 impl<'a> LockPlan<'a> {
@@ -236,13 +253,27 @@ impl<'a> LockPlan<'a> {
             change: installed.change()?,
             staged: Vec::new(),
             verb,
+            registry: None,
         })
     }
 
     /// Stage `install`. Its entry replaces the package's previous one, if the lock has one.
     /// Nothing is judged yet.
+    ///
+    /// # Panics
+    /// When a registry install comes through another registry port than one staged before: an
+    /// operation passes one port, which routes each name itself (ADR 0045).
     pub(crate) fn stage(&mut self, install: Install<'a>) {
         let Install { module, pin, from } = install;
+        if let From::Registry { fetch, .. } = &from {
+            match self.registry {
+                None => self.registry = Some(fetch.registry),
+                Some(first) => assert!(
+                    std::ptr::addr_eq(first, fetch.registry),
+                    "a lock plan stages installs from one registry port"
+                ),
+            }
+        }
         let staged = Staged {
             name: pin.name.clone(),
             version: pin.version.clone(),
@@ -265,12 +296,14 @@ impl<'a> LockPlan<'a> {
     ///    (E028, `extension_conflict`), declaring the name and version it was published as
     ///    (E028) and the declaration it was published with (R-TRUST-004).
     ///
-    /// Lock order decides nothing.
+    /// What passes carries the pins its registry fetches decided (`Publisher::pin`), in staging
+    /// order, for [`Checked::commit`] to save. Lock order decides nothing.
     pub(crate) fn check(self) -> Result<Checked<'a>, Refused> {
         let LockPlan {
             change,
             staged,
             verb,
+            registry,
         } = self;
         let lock = change.lock();
         let changing: Vec<&str> = staged.iter().map(|s| s.name.as_str()).collect();
@@ -293,7 +326,11 @@ impl<'a> LockPlan<'a> {
             .filter_map(|(s, f)| f.map(|(e, judged)| ((s.name.clone(), e), judged)))
             .unzip();
         if failures.is_empty() {
-            Ok(Checked { change })
+            let pins = staged.iter().filter_map(Staged::key_pin).collect();
+            Ok(Checked {
+                change,
+                pins: registry.map(|registry| (registry, pins)),
+            })
         } else {
             Err(Refused { failures, judged })
         }
@@ -301,32 +338,50 @@ impl<'a> LockPlan<'a> {
 }
 
 /// A lock plan the peer rule accepts and whose binaries all loaded as published: what may be
-/// written.
+/// written, and the publisher keys to pin once it is.
 pub(crate) struct Checked<'a> {
     change: Change<'a>,
+    /// The pins its registry installs call for, and the registry port that pins them; none for a
+    /// plan with no registry install.
+    pins: Option<(&'a dyn Registry, Vec<KeyPin>)>,
 }
 
 impl Checked<'_> {
-    /// Write it: each module placed, the lock written once (ADR 0028 D4). On failure every file
-    /// is put back, and the error's writes name what could not be (normally nothing).
+    /// Write it: each module placed, the lock written once (ADR 0028 D4), then the publisher keys
+    /// pinned, last (ADR 0059). A failure at any step, the pins' included (R-TRUST-006), puts
+    /// every file back and pins nothing. The error's writes name what could not be put back
+    /// (normally nothing).
     pub(crate) fn commit(self) -> Result<Writes, OpError> {
-        self.change
-            .commit()
+        let Checked { change, pins } = self;
+        change
+            .commit_with(None, || record(pins))
             .map(|committed| Writes::of(committed.changed))
-            .map_err(|failed| OpError::from(failed.error).with_writes(Writes::of(failed.left)))
+            .map_err(|failed| failed.error.with_writes(Writes::of(failed.left)))
     }
 
-    /// [`Self::commit`], then `edit`, the `specforge.json` write at `config` that goes with it.
-    /// All or nothing, `edit` included.
+    /// [`Self::commit`] with `edit`, the `specforge.json` write at `config` that goes with it, run
+    /// after the lock and before the pins. All or nothing, `edit` and the pins included.
     pub(crate) fn commit_with(
         self,
         config: &Path,
         edit: impl FnOnce() -> Result<(), OpError>,
     ) -> Result<Writes, OpError> {
-        self.change
-            .commit_with(Some(config), edit)
+        let Checked { change, pins } = self;
+        change
+            .commit_with(Some(config), || {
+                edit()?;
+                record(pins)
+            })
             .map(|committed| Writes::of(committed.changed))
             .map_err(|failed| failed.error.with_writes(Writes::of(failed.left)))
+    }
+}
+
+/// Pin what a committed plan's fetches decided, through the port that fetched them.
+fn record(pins: Option<(&dyn Registry, Vec<KeyPin>)>) -> Result<(), OpError> {
+    match pins {
+        Some((registry, pins)) if !pins.is_empty() => registry.pin(&pins),
+        _ => Ok(()),
     }
 }
 
@@ -711,10 +766,15 @@ mod tests {
             .serving(published("2.0.0", b"\0asm b2"))
     }
 
-    fn fetch<'a>(registry: &'a MemoryRegistry, runtime: &'a InProcessRuntime) -> Fetch<'a> {
+    fn fetch<'a>(
+        registry: &'a MemoryRegistry,
+        runtime: &'a InProcessRuntime,
+        installed: &'a Installed,
+    ) -> Fetch<'a> {
         Fetch {
             registry,
             runtime,
+            installed,
             allow_unsigned: true,
             trust: Trust::Refuse,
         }
@@ -751,7 +811,7 @@ mod tests {
         let registry = registry.serving(app);
         let mut plan = LockPlan::new(&installed, Verb::Install).unwrap();
         plan.stage(
-            fetch(&registry, &runtime)
+            fetch(&registry, &runtime, &installed)
                 .install(
                     &PackageName::parse("@acme/app").unwrap(),
                     &Version::new(1, 0, 0),
@@ -787,7 +847,7 @@ mod tests {
         let runtime = runtime();
         let mut plan = LockPlan::new(&installed, Verb::Install).unwrap();
         plan.stage(
-            fetch(&registry, &runtime)
+            fetch(&registry, &runtime, &installed)
                 .install(
                     &PackageName::parse("@acme/app").unwrap(),
                     &Version::new(1, 0, 0),
@@ -834,7 +894,7 @@ mod tests {
         let runtime = runtime();
         let mut plan = LockPlan::new(&installed, Verb::Install).unwrap();
         plan.stage(
-            fetch(&registry, &runtime)
+            fetch(&registry, &runtime, &installed)
                 .install(
                     &PackageName::parse("@acme/app").unwrap(),
                     &Version::new(1, 0, 0),
@@ -879,7 +939,7 @@ mod tests {
         let runtime = runtime();
         let mut plan = LockPlan::new(&installed, Verb::Install).unwrap();
         plan.stage(
-            fetch(&registry, &runtime)
+            fetch(&registry, &runtime, &installed)
                 .install(
                     &PackageName::parse("@acme/app").unwrap(),
                     &Version::new(1, 0, 0),
@@ -905,7 +965,7 @@ mod tests {
         ));
         let mut plan = LockPlan::new(&installed, Verb::Install).unwrap();
         plan.stage(
-            fetch(&registry, &runtime)
+            fetch(&registry, &runtime, &installed)
                 .install(
                     &PackageName::parse("@acme/app").unwrap(),
                     &Version::new(1, 0, 0),
@@ -935,7 +995,7 @@ mod tests {
         let runtime = runtime();
         let mut plan = LockPlan::new(&installed, Verb::Install).unwrap();
         plan.stage(
-            fetch(&registry, &runtime)
+            fetch(&registry, &runtime, &installed)
                 .install(
                     &PackageName::parse("@acme/app").unwrap(),
                     &Version::new(1, 0, 0),
@@ -963,7 +1023,7 @@ mod tests {
         let runtime = runtime();
         let mut plan = LockPlan::new(&installed, Verb::Install).unwrap();
         plan.stage(
-            fetch(&registry, &runtime)
+            fetch(&registry, &runtime, &installed)
                 .install(
                     &PackageName::parse("@acme/app").unwrap(),
                     &Version::new(2, 0, 0),
@@ -1103,7 +1163,7 @@ mod tests {
         let runtime = runtime();
         let mut plan = LockPlan::new(&installed, Verb::Install).unwrap();
         plan.stage(
-            fetch(&registry, &runtime)
+            fetch(&registry, &runtime, &installed)
                 .install(
                     &PackageName::parse("@acme/app").unwrap(),
                     &Version::new(1, 0, 0),
@@ -1124,6 +1184,179 @@ mod tests {
         );
     }
 
+    /// `@acme/app` 1.0.0 (needs base `^1.0`), published signed by `signer` (unsigned when `None`).
+    fn app_registry(signer: Option<&str>) -> MemoryRegistry {
+        let app = Published::new(
+            APP_NEEDS_BASE_1.to_vec(),
+            crate::publish::declare(&runtime(), APP_NEEDS_BASE_1)
+                .expect("a publishable binary")
+                .0,
+        );
+        MemoryRegistry::new().serving(match signer {
+            Some(key) => app.signed_by(key),
+            None => app,
+        })
+    }
+
+    /// A project on disk locking base 1.0.0, with a `specforge.json`.
+    fn base_project() -> tempfile::TempDir {
+        let dir =
+            super::super::fixtures::project(vec![entry("@acme/base", "1.0.0", "registry", &[])]);
+        std::fs::write(dir.path().join("specforge.json"), "{\"extensions\":[]}").unwrap();
+        dir
+    }
+
+    /// `@acme/app` 1.0.0 fetched from `registry` and staged over the lock in `installed`.
+    fn stage_app<'a>(
+        registry: &'a MemoryRegistry,
+        runtime: &'a InProcessRuntime,
+        installed: &'a Installed,
+    ) -> LockPlan<'a> {
+        let mut plan = LockPlan::new(installed, Verb::Install).unwrap();
+        plan.stage(
+            fetch(registry, runtime, installed)
+                .install(
+                    &PackageName::parse("@acme/app").unwrap(),
+                    &Version::new(1, 0, 0),
+                )
+                .unwrap(),
+        );
+        plan
+    }
+
+    fn app() -> PackageName {
+        PackageName::parse("@acme/app").unwrap()
+    }
+
+    #[specforge_test(
+        behavior = "pin_publisher_key",
+        verify = "a lock plan pins the keys its fetches decided only when it commits"
+    )]
+    fn a_lock_plan_pins_what_its_fetches_decided_only_when_it_commits() {
+        let runtime = runtime();
+
+        // Refused by the gate (app wants base ^2, base 1.0.0 is locked): nothing is pinned.
+        let installed = nowhere(base_and_other("^1.0"));
+        let refused_app = base_registry().serving(
+            Published::new(
+                APP_NEEDS_BASE_2.to_vec(),
+                declaration("@acme/app", "1.0.0", &[("@acme/base", "^2.0")]),
+            )
+            .signed_by("k1"),
+        );
+        let mut plan = LockPlan::new(&installed, Verb::Install).unwrap();
+        plan.stage(
+            fetch(&refused_app, &runtime, &installed)
+                .install(&app(), &Version::new(1, 0, 0))
+                .unwrap(),
+        );
+        assert_eq!(refused(plan).code, "R-RES-005");
+        assert!(refused_app.pins().is_empty());
+
+        // Checked but not committed: nothing is pinned either.
+        let dir = base_project();
+        let installed = Installed::at(dir.path());
+        let registry = app_registry(Some("k1"));
+        let checked = stage_app(&registry, &runtime, &installed).check().unwrap();
+        assert!(registry.pins().is_empty(), "a check pins nothing");
+        drop(checked);
+        assert!(registry.pins().is_empty());
+
+        // Committed: pinned.
+        let checked = stage_app(&registry, &runtime, &installed).check().unwrap();
+        checked.commit().unwrap();
+        assert_eq!(registry.pins(), [(app(), "k1".to_string())].into());
+    }
+
+    #[specforge_test(
+        invariant = "registry_integrity",
+        verify = "the hash and the key id are recorded in the lock file"
+    )]
+    fn a_committed_registry_install_locks_its_hash_and_key_id() {
+        let (runtime, registry) = (runtime(), app_registry(Some("k1")));
+        let dir = base_project();
+        let installed = Installed::at(dir.path());
+
+        stage_app(&registry, &runtime, &installed)
+            .check()
+            .unwrap()
+            .commit()
+            .unwrap();
+
+        let lock = specforge_installed::read_lock_file(&specforge_installed::lock_path(dir.path()))
+            .unwrap();
+        let locked = lock
+            .entries
+            .iter()
+            .find(|e| e.name == app())
+            .expect("the app is locked");
+        assert_eq!(
+            locked.wasm_hash,
+            specforge_installed::hex_sha256(APP_NEEDS_BASE_1)
+        );
+        assert_eq!(locked.key_id.as_deref(), Some("k1"));
+    }
+
+    #[specforge_test(
+        invariant = "extension_operation_atomicity",
+        verify = "a pin that cannot be saved puts back everything the install wrote"
+    )]
+    fn a_pin_that_cannot_be_saved_puts_back_everything_the_install_wrote() {
+        let (runtime, registry) = (runtime(), app_registry(Some("k1")));
+        let registry = registry.refusing_pins();
+        let dir = base_project();
+        let installed = Installed::at(dir.path());
+        let lock_file = specforge_installed::lock_path(dir.path());
+        let config = dir.path().join("specforge.json");
+        let module = installed.module_path(&app());
+        let (lock_before, config_before) = (
+            std::fs::read(&lock_file).unwrap(),
+            std::fs::read(&config).unwrap(),
+        );
+
+        let error = stage_app(&registry, &runtime, &installed)
+            .check()
+            .unwrap()
+            .commit_with(&config, || {
+                std::fs::write(&config, "{\"extensions\":[\"@acme/app\"]}").unwrap();
+                Ok(())
+            })
+            .unwrap_err();
+
+        assert!(error.is(codes::R_TRUST_006), "{error:?}");
+        assert_eq!(std::fs::read(&lock_file).unwrap(), lock_before);
+        assert_eq!(std::fs::read(&config).unwrap(), config_before);
+        assert!(!module.exists(), "the placed module is taken away");
+        assert!(registry.pins().is_empty());
+    }
+
+    #[test]
+    fn an_already_pinned_or_unsigned_install_pins_nothing() {
+        let runtime = runtime();
+        let dir = base_project();
+        let installed = Installed::at(dir.path());
+
+        // The user already pinned this key.
+        let registry = app_registry(Some("k1")).pinning("@acme/app", "k1");
+        stage_app(&registry, &runtime, &installed)
+            .check()
+            .unwrap()
+            .commit()
+            .unwrap();
+        assert_eq!(registry.pins(), [(app(), "k1".to_string())].into());
+
+        // Unsigned, accepted with allow_unsigned.
+        let dir = base_project();
+        let installed = Installed::at(dir.path());
+        let registry = app_registry(None);
+        stage_app(&registry, &runtime, &installed)
+            .check()
+            .unwrap()
+            .commit()
+            .unwrap();
+        assert!(registry.pins().is_empty());
+    }
+
     #[test]
     fn a_fetched_binary_that_declares_otherwise_than_published_is_refused_after_the_gate() {
         let installed = nowhere(Vec::new());
@@ -1135,7 +1368,7 @@ mod tests {
         let runtime = runtime();
         let mut plan = LockPlan::new(&installed, Verb::Install).unwrap();
         plan.stage(
-            fetch(&registry, &runtime)
+            fetch(&registry, &runtime, &installed)
                 .install(
                     &PackageName::parse("@acme/app").unwrap(),
                     &Version::new(1, 0, 0),

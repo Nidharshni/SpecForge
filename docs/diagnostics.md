@@ -3238,10 +3238,12 @@ Level: warning
 W156: Publisher key re-pinned
 
 A registry package is signed with a different key than the one pinned for it,
-and the change was accepted (`--yes`, a yes at the prompt, or the new key on
-`trusted_keys`), so the new key is now pinned. That is what a key rotation looks
-like, and also what a compromised publisher looks like: confirm the change with
-the publisher if you did not expect it. The message names both key ids.
+the change was accepted (`--yes`, a yes at the prompt, or the new key on
+`trusted_keys`), and the install was written, so the new key is now pinned. It
+is reported when the pin is saved: an install that is refused or fails pins
+nothing and reports none. That is what a key rotation looks like, and also what
+a compromised publisher looks like: confirm the change with the publisher if you
+did not expect it. The message names both key ids.
 
 Owner: core
 Level: warning

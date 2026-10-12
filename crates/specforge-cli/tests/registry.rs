@@ -1530,8 +1530,11 @@ fn setup(pin_k1: bool) -> TrustingSetup {
     }
 }
 
-#[test]
-fn pin_a_refused_add_re_pins_the_publisher_key() {
+#[specforge_test(
+    behavior = "pin_publisher_key",
+    verify = "a refused install pins no key, so the locked version installs again"
+)]
+fn a_refused_install_pins_no_key_so_the_locked_version_installs_again() {
     let t = trusting(setup(true));
 
     let refused = t.run(&["add", "@sdk/greet@0.2.0", "--yes", "--format", "json"]);
@@ -1539,26 +1542,30 @@ fn pin_a_refused_add_re_pins_the_publisher_key() {
     assert!(!refused.status.success());
     assert_eq!(json_of(&refused)["code"], "R-RES-006");
     assert!(
-        stderr_of(&refused).contains("warning[W156]"),
+        !stderr_of(&refused).contains("W156"),
         "{}",
         stderr_of(&refused)
     );
-    assert_eq!(
-        t.pinned("@sdk/greet"),
-        Some(t.k2.key_id()),
-        "today: the refused install re-pinned k2"
-    );
+    assert_eq!(t.pinned("@sdk/greet"), Some(t.k1.key_id()));
     assert_eq!(t.locked_key("@sdk/greet"), Some(t.k1.key_id()));
     let again = t.run(&["add", "@sdk/greet@0.1.0", "--format", "json"]);
+    assert!(
+        again.status.success(),
+        "{}",
+        String::from_utf8_lossy(&again.stdout)
+    );
     assert_eq!(
-        json_of(&again)["code"],
-        "R-TRUST-003",
-        "today: the locked version can't be installed again"
+        json_of(&again)["added"][0]["publisher"],
+        "pinned",
+        "{again:?}"
     );
 }
 
-#[test]
-fn pin_a_refused_update_re_pins_the_publisher_key() {
+#[specforge_test(
+    behavior = "pin_publisher_key",
+    verify = "a refused update pins no key"
+)]
+fn a_refused_update_pins_no_key() {
     let t = trusting(setup(true));
 
     let output = t.run(&["update", "--major", "--yes", "--format", "json"]);
@@ -1576,19 +1583,25 @@ fn pin_a_refused_update_re_pins_the_publisher_key() {
         .unwrap_or_else(|| panic!("no greet row: {json}"));
     assert_eq!(greet["status"], "failed", "{json}");
     assert_eq!(greet["code"], "R-RES-006", "{json}");
-    assert!(stderr_of(&output).contains("warning[W156]"));
-    assert_eq!(t.pinned("@sdk/greet"), Some(t.k2.key_id()));
+    assert!(
+        !stderr_of(&output).contains("W156"),
+        "{}",
+        stderr_of(&output)
+    );
+    assert_eq!(t.pinned("@sdk/greet"), Some(t.k1.key_id()));
 }
 
 #[test]
-fn pin_a_refused_add_pins_its_first_use_key() {
+fn a_refused_install_pins_no_first_use_key() {
     let t = trusting(setup(false));
 
     let output = t.run(&["add", "@sdk/greet@0.2.0", "--format", "json"]);
 
     assert!(!output.status.success());
-    assert_eq!(json_of(&output)["code"], "R-RES-006");
-    assert_eq!(t.pinned("@sdk/greet"), Some(t.k2.key_id()));
+    assert!(
+        !known_keys(&t.home).exists(),
+        "a refused install creates no pin store"
+    );
 }
 
 #[test]
@@ -1612,8 +1625,11 @@ fn pin_the_key_the_lock_records_is_not_read() {
     assert_eq!(t.pinned("@sdk/greet"), Some(t.k2.key_id()));
 }
 
-#[test]
-fn pin_an_install_refused_at_the_load_re_pins_the_publisher_key() {
+#[specforge_test(
+    behavior = "pin_publisher_key",
+    verify = "an install refused when its binary loads pins no key"
+)]
+fn an_install_refused_at_the_load_pins_no_key() {
     let t = trusting(TrustingSetup {
         lock_app: false,
         ..setup(true)
@@ -1623,13 +1639,20 @@ fn pin_an_install_refused_at_the_load_re_pins_the_publisher_key() {
 
     assert!(!output.status.success());
     assert_eq!(json_of(&output)["code"], "E028");
-    assert!(stderr_of(&output).contains("warning[W156]"));
-    assert_eq!(t.pinned("@sdk/greet"), Some(t.k2.key_id()));
+    assert!(
+        !stderr_of(&output).contains("W156"),
+        "{}",
+        stderr_of(&output)
+    );
+    assert_eq!(t.pinned("@sdk/greet"), Some(t.k1.key_id()));
     assert_eq!(t.locked_key("@sdk/greet"), Some(t.k1.key_id()));
 }
 
-#[test]
-fn pin_a_refused_add_of_several_keeps_the_first_specifiers_pin() {
+#[specforge_test(
+    behavior = "pin_publisher_key",
+    verify = "a refused add of several specifiers pins no key"
+)]
+fn a_refused_add_of_several_specifiers_pins_no_key() {
     use crate::published::Package;
     let t = trusting(TrustingSetup {
         more: vec![Package::new("@x/plain", "1.0.0", b"\0asm plain".to_vec())],
@@ -1662,5 +1685,10 @@ fn pin_a_refused_add_of_several_keeps_the_first_specifiers_pin() {
         std::fs::read(t.dir.path().join("specforge.json")).unwrap(),
         config_before
     );
-    assert_eq!(t.pinned("@sdk/greet"), Some(t.k2.key_id()));
+    assert!(
+        !stderr_of(&output).contains("W156"),
+        "{}",
+        stderr_of(&output)
+    );
+    assert_eq!(t.pinned("@sdk/greet"), Some(t.k1.key_id()));
 }

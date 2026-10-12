@@ -919,10 +919,10 @@ behavior verify_publisher_signature "Verify Publisher Signature" {
 
 behavior pin_publisher_key "Pin Publisher Key" {
   features   [extension_registry]
-  invariants [publisher_trust]
+  invariants [publisher_trust, extension_operation_atomicity]
   category   command
-  types      [PackageMetadata, LockFileEntry, ExtensionError]
-  ports      [FileSystem]
+  types      [PackageMetadata, LockFileEntry, TrustPolicy, KeyPin, ExtensionError]
+  ports      [FileSystem, Registry]
   requires {
     signature_verified "The package's publisher signature verified"
   }
@@ -932,25 +932,30 @@ behavior pin_publisher_key "Pin Publisher Key" {
     changed_key_refused "A key other than the pinned one is refused with R-TRUST-003 and both key ids, unless the user consents"
     consent_repins      "Consent to a key change (--yes, or yes at the prompt) re-pins the new key"
     denied_key_refused  "A key on denied_keys is refused with R-TRUST-005, even with consent"
-    repin_reported      "A re-pinned key is reported as W156 naming both key ids"
+    repin_reported      "A re-pinned key is reported as W156 naming both key ids, once it is saved"
     first_use_named     "A first-use pin is named in the operation's outcome (the publisher is pinned now)"
     surface_decides     "Whether to accept a key change is asked of the surface that can ask (the CLI's terminal); MCP and --format json refuse it"
+    pinned_when_written "A key is pinned only when the install that fetched it is written, after its lock entry: a refused or failed operation pins nothing"
     store_fails_closed  "A known-keys store that can't be read refuses the install with R-TRUST-006 and is left as it was"
   }
   contract   """
-    Trust on first use: the first time a signed package verifies, its
-    publisher key id MUST be pinned for the package name in the user's
-    known-keys store, and later installs signed by that key MUST be
-    accepted. A package signed by another key MUST be refused with
-    R-TRUST-003 naming both key ids unless the user consents (--yes, an
-    interactive yes, or the key on trusted_keys); --allow-unsigned is not
-    consent. Consent MUST re-pin the new key. A key on denied_keys MUST be
-    refused with R-TRUST-005 whatever the consent. A refused package
-    leaves the pin as it was. A re-pin is reported as W156; a first-use
-    pin is part of the outcome. The decision on a key change belongs to
-    the surface: the CLI asks on its terminal (y or yes, in any case,
-    consents; any other answer refuses), and a surface nobody can be
-    asked on refuses.
+    Trust on first use: a signed package's publisher key id MUST be pinned
+    for the package name in the user's known-keys store, and later installs
+    signed by that key MUST be accepted. A package signed by another key
+    MUST be refused with R-TRUST-003 naming both key ids unless the user
+    consents (--yes, an interactive yes, or the key on trusted_keys);
+    --allow-unsigned is not consent. Consent MUST re-pin the new key. A key
+    on denied_keys MUST be refused with R-TRUST-005 whatever the consent.
+    Fetching a package only decides: its key is pinned when the
+    operation's lock plan commits, after the binaries, the lock and
+    specforge.json are written, and a pin that can't be saved puts all of
+    them back (R-TRUST-006). A refused or failed operation leaves every pin
+    as it was and reports no W156. A known-keys store that exists and can't
+    be read refuses the install (R-TRUST-006) and is never overwritten. A
+    re-pin is reported as W156 once it is saved; a first-use pin is part of
+    the outcome. The decision on a key change belongs to the surface: the
+    CLI asks on its terminal (y or yes, in any case, consents; any other
+    answer refuses), and a surface nobody can be asked on refuses.
   """
   verify integration "the key of the first verified install is pinned and accepted again"
   verify integration "a package signed by another key than the pinned one is refused"
@@ -959,6 +964,12 @@ behavior pin_publisher_key "Pin Publisher Key" {
   verify integration "consent to a key change is reported as W156"
   verify integration "a key change is decided by the surface that can ask"
   verify unit "the CLI asks its terminal about a key change: yes at the prompt consents, and with nobody to ask nothing is asked"
+  verify integration "a fetch pins nothing; its pins are recorded when the install is written"
+  verify unit "a lock plan pins the keys its fetches decided only when it commits"
+  verify integration "a refused install pins no key, so the locked version installs again"
+  verify integration "a refused update pins no key"
+  verify integration "an install refused when its binary loads pins no key"
+  verify integration "a refused add of several specifiers pins no key"
   verify integration "a known-keys store that can't be read refuses the install and is left as it was"
 }
 
