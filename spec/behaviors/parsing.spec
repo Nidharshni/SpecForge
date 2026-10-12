@@ -364,7 +364,11 @@ behavior lex_spec_text "Lex Spec Text" {
     Where a top-level form starts (an import, a spec, ref, define, union or
     entity block) is read from lexemes by one rule: the parser's recovery
     ends an unclosed string before such a line and the LSP's document closes
-    every body left open at one (ADR 0038 D6). The expression
+    every body left open at one (ADR 0038 D6). A document's form starts are
+    read in one walk (form_starts): a line that starts a top-level form at
+    most as deep as the last line begun with no bracket open closes every
+    bracket open before it; the parser's recovery and the LSP's document
+    both read that walk. The expression
     tokenizer of the prove pass (parse_expression) reads a sub-language with
     lexical rules of its own and is not built on the lexer; it MUST cut the
     expressions of the repository's spec into the same tokens (the
@@ -378,6 +382,7 @@ behavior lex_spec_text "Lex Spec Text" {
   verify unit "a line starts a top-level form exactly where the grammar reads one, on every spec file of the repository"
   verify unit "an unclosed triple-quoted string ends before the next line that starts a top-level form"
   verify unit "the grammar ends an unclosed body at exactly the lines the form-start rule reads as form starts"
+  verify unit "a document's form starts are the grammar's top-level nodes, and stay so with every body left unclosed"
 }
 
 behavior parse_define_blocks "Parse Define Blocks" {

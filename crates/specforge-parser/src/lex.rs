@@ -162,6 +162,50 @@ pub fn starts_top_level_form(text: &str, lexemes: &[Lexeme], max_indent: usize) 
     }
 }
 
+/// The lexemes of `text` (indices into `lexemes`, its `lex`, in order) that
+/// start a top-level form as a document reads it: each first on its line,
+/// whose line reads one of the grammar's top-level shapes
+/// (`starts_top_level_form`) indented no deeper than the last line begun
+/// with no bracket open (`{`, `[` or `(`). Such a line closes every bracket
+/// open before it: a body, block, list or parameter list left unclosed ends
+/// there. Comments neither start a form nor measure a line.
+///
+/// The one reading of where a document's forms start (ADR 0063 D3). The
+/// parser's recovery cuts the source at each one the grammar's tree did not
+/// start a form at (`cst`), and the LSP's document closes its frames at each.
+pub fn form_starts(text: &str, lexemes: &[Lexeme]) -> Vec<usize> {
+    let mut starts = Vec::new();
+    let mut depth = 0usize;
+    let mut top_indent = 0usize;
+    let mut previous_end: Option<usize> = None;
+    for (i, lexeme) in lexemes.iter().enumerate() {
+        if lexeme.kind == LexemeKind::Comment {
+            continue;
+        }
+        let first_on_line = previous_end.is_none_or(|end| text[end..lexeme.start].contains('\n'));
+        previous_end = Some(lexeme.end);
+        if first_on_line {
+            let indent = line_indent(text, lexeme.start);
+            if depth == 0
+                && let Some(indent) = indent
+            {
+                top_indent = indent;
+            }
+            if starts_top_level_form(text, &lexemes[i..], top_indent) {
+                starts.push(i);
+                depth = 0;
+                top_indent = indent.unwrap_or(top_indent);
+            }
+        }
+        match lexeme.kind {
+            LexemeKind::Punct('{' | '[' | '(') => depth += 1,
+            LexemeKind::Punct('}' | ']' | ')') => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+    }
+    starts
+}
+
 /// The start of the first line after the one holding byte `from` of `text`
 /// that starts a top-level form indented by no more than `max_indent` bytes
 /// (`starts_top_level_form`, each line lexed alone: the text after a string

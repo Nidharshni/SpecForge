@@ -1,8 +1,8 @@
 //! A document's lexemes (`specforge_parser::lex`), each with its role, and
 //! the entity bodies, nested blocks, expression groups, lists and parameter
 //! lists they open: the structure the cursor and the semantic tokens read.
-//! A line that starts a top-level form (`lex::starts_top_level_form`, the
-//! parser's rule) closes every frame left open before it.
+//! A line that starts a top-level form (`lex::form_starts`, where the
+//! parser's recovery cuts too) closes every frame left open before it.
 //! Nothing here names a kind or a field: kinds and fields are read as
 //! structure; the registries are consulted by the readers.
 
@@ -203,6 +203,7 @@ impl Syntax {
     /// The syntax of `text`.
     pub(crate) fn read(text: &str) -> Syntax {
         let lexemes = lex(text);
+        let form_starts = lex::form_starts(text, &lexemes);
         let n = lexemes.len();
         let mut walk = Walk {
             text,
@@ -223,7 +224,8 @@ impl Syntax {
             state: Expect::Top,
             top: None,
             prev: None,
-            top_indent: 0,
+            form_starts,
+            next_form: 0,
         };
         walk.run();
         let mut syntax = walk.syntax;
@@ -359,10 +361,11 @@ struct Walk<'t> {
     top: Option<u32>,
     /// The last lexeme read that is not a comment.
     prev: Option<usize>,
-    /// The indentation of the last line begun with no frame open: a line
-    /// indented no deeper may start a top-level form, which closes every
-    /// frame open before it (`lex::starts_top_level_form`).
-    top_indent: usize,
+    /// The lexemes that start a top-level form (`lex::form_starts`), in
+    /// order, and how many of them the walk has passed: a frame open at one
+    /// is closed there.
+    form_starts: Vec<usize>,
+    next_form: usize,
 }
 
 impl Walk<'_> {
@@ -379,24 +382,18 @@ impl Walk<'_> {
             let newline = self
                 .prev
                 .is_some_and(|p| self.newline_between(self.syntax.lexemes[p].end, lexeme.start));
-            let first_on_line = newline || self.prev.is_none();
-            if first_on_line
-                && self.top.is_some()
-                && lex::starts_top_level_form(self.text, &self.syntax.lexemes[i..], self.top_indent)
-            {
+            let starts_form = self.form_starts.get(self.next_form) == Some(&i);
+            if starts_form {
+                self.next_form += 1;
+            }
+            if starts_form && self.top.is_some() {
                 // A line that starts a top-level form closes whatever is
-                // open (the parser's rule: a block being typed never takes
-                // the forms after it).
+                // open (`lex::form_starts`, where the parser's recovery cuts
+                // too: a block being typed never takes the forms after it).
                 self.top = None;
                 self.state = Expect::Top;
             } else if newline {
                 self.state = self.at_line_end(self.state, Some(&lexeme));
-            }
-            if first_on_line
-                && self.top.is_none()
-                && let Some(indent) = lex::line_indent(self.text, lexeme.start)
-            {
-                self.top_indent = indent;
             }
             self.syntax.frame_of[i] = self.top;
             // A lexeme a state does not take ends the statement; it is
