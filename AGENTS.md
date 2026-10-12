@@ -15,5 +15,7 @@ Configuration (created by `/setup-matt-pocock-skills`):
 - **Issue tracker**: GitHub Issues on `leaderiop/SpecForge` via the `gh` CLI — see `docs/agents/issue-tracker.md` (includes "Wayfinding operations" for `/wayfinder`)
 - **Triage labels**: default vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`) — see `docs/agents/triage-labels.md`
 - **Domain docs**: single-context layout (`CONTEXT.md` + `docs/adr/` at repo root, created lazily by `/domain-modeling`) — see `docs/agents/domain.md`
+- **Architecture rounds**: the explore → plan → implement method and its agent briefs — see `docs/agents/architecture-rounds.md`
+- **Re-vendoring builtins**: when a change touches what the extension blobs compile from — see `docs/agents/revendor.md`
 
 Run engineering skills before assuming workflow; they read this block and the files above.
