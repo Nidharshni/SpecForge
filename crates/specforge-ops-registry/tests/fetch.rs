@@ -239,6 +239,31 @@ fn a_registry_sha256_that_does_not_match_the_download_is_refused() {
 }
 
 #[specforge_test(
+    invariant = "mcp_structured_error_responses",
+    verify = "a package the registry or the trust check refuses is never an internal_error"
+)]
+fn a_trust_refusal_is_permission_denied() {
+    // Unsigned, without --allow-unsigned.
+    let project = Project::on(Reply::unsigned());
+    let error = project.fetch(false, Trust::Refuse).unwrap_err();
+    assert_eq!(error.code, "R-TRUST-001", "{error:?}");
+    assert_eq!(error.kind, specforge_ops::OpErrorKind::PermissionDenied);
+
+    // A signature over other bytes.
+    let key = SigningKey::generate();
+    let served = Reply {
+        sha256: sha256_hex(b"\0asm-evil"),
+        wasm: b"\0asm-evil".to_vec(),
+        ..Reply::signed(&key)
+    };
+    let error = Project::on(served)
+        .fetch(true, Trust::AssumeYes)
+        .unwrap_err();
+    assert_eq!(error.code, "R-TRUST-002", "{error:?}");
+    assert_eq!(error.kind, specforge_ops::OpErrorKind::PermissionDenied);
+}
+
+#[specforge_test(
     behavior = "verify_publisher_signature",
     verify = "a signature over other bytes is refused even with --allow-unsigned"
 )]
@@ -642,6 +667,7 @@ fn a_download_that_misses_is_refused_and_pins_nothing() {
 
     let error = project.fetch(true, Trust::AssumeYes).unwrap_err();
     assert_eq!(error.code, "R006", "{error:?}");
+    assert_eq!(error.kind, specforge_ops::OpErrorKind::ExtensionNotFound);
     assert_eq!(project.pinned(), None, "nothing is pinned for it");
 }
 

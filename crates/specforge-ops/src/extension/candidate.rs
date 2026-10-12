@@ -32,7 +32,8 @@ impl Candidate {
     /// when they are no extension. `publish` and `extension validate` read a
     /// binary through it.
     pub fn read(runtime: &dyn WasmRuntime, bytes: &[u8]) -> Result<Candidate, OpError> {
-        let loaded = declaration_of(bytes, runtime)?;
+        let loaded = declaration_of(bytes, runtime)
+            .map_err(|why| OpError::of(OpErrorKind::InvalidInput, why))?;
         Ok(Candidate {
             declaration: loaded.declaration,
             warnings: loaded.warnings,
@@ -143,8 +144,12 @@ impl Installable {
     /// Its declared name as the package name it installs under: E072 when it
     /// is none, before anything is written (ADR 0036).
     pub fn package(&self) -> Result<PackageName, OpError> {
-        PackageName::declared_by(&self.candidate.declaration)
-            .map_err(|why| OpError::from(specforge_common::package::invalid(&why)))
+        PackageName::declared_by(&self.candidate.declaration).map_err(|why| {
+            OpError::of(
+                OpErrorKind::InvalidInput,
+                specforge_common::package::invalid(&why),
+            )
+        })
     }
 }
 

@@ -564,12 +564,6 @@ impl ErrorCode {
             | ErrorCode::PreconditionFailed => error_codes::INTERNAL_ERROR,
         }
     }
-
-    /// The code a failure reported with diagnostic `code` carries: the
-    /// kind operations give it ([`OpErrorKind::of_diagnostic`]).
-    pub fn for_diagnostic(code: &str) -> Self {
-        OpErrorKind::of_diagnostic(code).into()
-    }
 }
 
 /// The code an operation's failure kind is reported as: total, one arm per
@@ -646,16 +640,6 @@ impl McpError {
             data: None,
             reported: Vec::new(),
         }
-    }
-
-    /// A failure reported as `diagnostic`, its code mapped by
-    /// [`ErrorCode::for_diagnostic`].
-    pub fn from_diagnostic(diagnostic: &Diagnostic) -> Self {
-        Self::new(
-            ErrorCode::for_diagnostic(&diagnostic.code),
-            diagnostic.message.clone(),
-        )
-        .with_diagnostic(diagnostic)
     }
 
     /// Invalid input: an argument the tool cannot use.

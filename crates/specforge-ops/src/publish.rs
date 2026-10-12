@@ -103,18 +103,28 @@ fn identity(declaration: &ExtensionDeclaration) -> Result<(PackageName, Version)
     let name = match PackageName::declared_by(declaration) {
         Ok(name) if name.scope().is_some() => name,
         Ok(name) => {
-            return Err(specforge_common::package::invalid(&format_args!(
-                "'{name}' is not a registry package name: registry packages are named @scope/name"
-            ))
-            .into());
+            return Err(OpError::of(
+                OpErrorKind::InvalidInput,
+                specforge_common::package::invalid(&format_args!(
+                    "'{name}' is not a registry package name: registry packages are named @scope/name"
+                )),
+            ));
         }
-        Err(why) => return Err(specforge_common::package::invalid(&why).into()),
+        Err(why) => {
+            return Err(OpError::of(
+                OpErrorKind::InvalidInput,
+                specforge_common::package::invalid(&why),
+            ));
+        }
     };
     let version = Version::parse(declaration.version()).map_err(|why| {
-        OpError::from(specforge_common::package::invalid(&format_args!(
-            "'{}' is not a SemVer version: {why}",
-            declaration.version()
-        )))
+        OpError::of(
+            OpErrorKind::InvalidInput,
+            specforge_common::package::invalid(&format_args!(
+                "'{}' is not a SemVer version: {why}",
+                declaration.version()
+            )),
+        )
     })?;
     Ok((name, version))
 }

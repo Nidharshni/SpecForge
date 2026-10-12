@@ -130,7 +130,7 @@ impl Change<'_> {
     /// Write the change: every binary placed or moved aside, then the lock
     /// once. All or nothing (see [`Self::commit_with`]).
     pub fn commit(self) -> Result<Committed, Failed<Diagnostic>> {
-        self.run(None, || Ok(()))
+        self.run(None, || Ok(()), std::convert::identity)
     }
 
     /// [`Self::commit`], then `last`: what goes with the change outside its
@@ -141,19 +141,21 @@ impl Change<'_> {
     /// must itself leave nothing when it fails, since only `config` is
     /// restored for it. `config` is in [`Committed::changed`] when its bytes
     /// changed. E032 for a binary that can't be placed or moved aside, E033
-    /// for a lock that can't be written, `last`'s own error otherwise.
-    pub fn commit_with<E: From<Diagnostic>>(
+    /// for a lock that can't be written (as `own` makes them an `E`), `last`'s own error otherwise.
+    pub fn commit_with<E>(
         self,
         config: Option<&Path>,
         last: impl FnOnce() -> Result<(), E>,
+        own: impl FnOnce(Diagnostic) -> E,
     ) -> Result<Committed, Failed<E>> {
-        self.run(config, last)
+        self.run(config, last, own)
     }
 
-    fn run<E: From<Diagnostic>>(
+    fn run<E>(
         self,
         config: Option<&Path>,
         last: impl FnOnce() -> Result<(), E>,
+        own: impl FnOnce(Diagnostic) -> E,
     ) -> Result<Committed, Failed<E>> {
         let Change {
             installed,
@@ -207,7 +209,7 @@ impl Change<'_> {
                 }
                 let error = match cause {
                     Cause::Last(error) => error,
-                    Cause::Diagnostic(diagnostic) => E::from(says_what_is_left(diagnostic, &left)),
+                    Cause::Diagnostic(diagnostic) => own(says_what_is_left(diagnostic, &left)),
                 };
                 Err(Failed { error, left })
             }

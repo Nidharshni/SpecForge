@@ -284,7 +284,11 @@ impl<'a> LockPlan<'a> {
     ) -> Result<LockPlan<'a>, OpError> {
         Ok(LockPlan {
             installed,
-            change: Some(installed.change()?),
+            change: Some(
+                installed
+                    .change()
+                    .map_err(|why| OpError::of(OpErrorKind::SchemaMismatch, why))?,
+            ),
             staged: Vec::new(),
             entries: entries.to_vec(),
             appended: Vec::new(),
@@ -650,7 +654,11 @@ impl Checked<'_> {
         };
         let writes = match change {
             Some(change) => change
-                .commit_with((!names.is_empty()).then_some(config_path.as_path()), last)
+                .commit_with(
+                    (!names.is_empty()).then_some(config_path.as_path()),
+                    last,
+                    |why| OpError::of(OpErrorKind::Internal, why),
+                )
                 .map(|committed| Writes::of(committed.changed))
                 .map_err(|failed| failed.error.with_writes(Writes::of(failed.left)))?,
             None => {
@@ -765,17 +773,17 @@ fn refusal(
 ) -> OpError {
     let peer = edge.declared.name.as_str();
     let checks = || {
-        OpError::from(
+        OpError::of(
+            OpErrorKind::SchemaMismatch,
             specforge_common::peers::of(edge.dependent, edge.declared, &edge.verdict)
                 .expect("an unsatisfied peer is a diagnostic"),
         )
     };
     let error = match &edge.verdict {
-        Verdict::Unreadable(why) => OpError::from(specforge_common::peers::unreadable(
-            edge.dependent,
-            edge.declared,
-            why,
-        )),
+        Verdict::Unreadable(why) => OpError::of(
+            OpErrorKind::SchemaMismatch,
+            specforge_common::peers::unreadable(edge.dependent, edge.declared, why),
+        ),
         Verdict::Missing => checks(),
         Verdict::OutOfRange { installed } | Verdict::NotSemver { installed } => {
             match set.member(peer).map(|member| &member.origin) {
@@ -857,15 +865,19 @@ fn diamond(registry: &dyn Registry, set: &ProjectPeers, edge: &Edge, locked: &st
         .with_suggestion(format!(
             "install '{peer}' at {unified} (specforge add {peer}@{unified}), or at another version every requirer accepts, then retry; when a locked extension must move with it, specforge update --major moves them together"
         )),
-        Err(diagnostic) => OpError::from(diagnostic),
+        Err(diagnostic) => OpError::of(OpErrorKind::Conflict, diagnostic),
     }
 }
 
 /// The versions `registry` publishes of `peer`, in the registry's order. E072 when `peer` is no
 /// package name.
 fn published_versions(registry: &dyn Registry, peer: &str) -> Result<Vec<Version>, OpError> {
-    let name = PackageName::parse(peer)
-        .map_err(|why| OpError::from(specforge_common::package::invalid(&why)))?;
+    let name = PackageName::parse(peer).map_err(|why| {
+        OpError::of(
+            OpErrorKind::InvalidInput,
+            specforge_common::package::invalid(&why),
+        )
+    })?;
     registry.versions(&name)
 }
 

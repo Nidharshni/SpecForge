@@ -809,7 +809,7 @@ pub fn collect(view: &ProjectView, request: Request) -> Result<Outcome, OpError>
             &files,
             stdout.as_deref(),
         )
-        .map_err(|error| OpError::from(error.diagnostic()))?;
+        .map_err(|error| OpError::of(OpErrorKind::Internal, error.diagnostic()))?;
         let (by_convention, diags) = convention::resolve(&collected.unlinked, known);
         diagnostics.extend(diags);
         let by_convention_count = by_convention.iter().map(|e| e.test_results.len()).sum();

@@ -26,7 +26,8 @@ pub use http_client::HttpRegistryClient;
 pub use registry_client::{RegistryClient, RegistryError};
 pub use registry_config::{RegistryConfig, RegistryCredential, parse_registries_from_config};
 pub use registry_ops::{
-    TrustCheck, publish_to_registry, verify_package_signature, verify_registry_integrity,
+    PublishError, TrustCheck, publish_to_registry, verify_package_signature,
+    verify_registry_integrity,
 };
 pub use retry::{RetryPolicy, Retrying};
 pub use signing::{SigningKey, load_or_create_signing_key_at, signing_key_path};
