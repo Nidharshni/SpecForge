@@ -75,7 +75,8 @@ behavior load_extension_manifests "Load Extension Manifests" {
     could not be read, not that no extensions are configured. A key of the
     wrong type (name, version or spec_root not a string, exclude not an
     array) is replaced by its default, and an extensions or exclude item
-    that is not a string is ignored; the rest of the file is used. A
+    that is not a string, or an exclude item that can match no source
+    (resolve_use_imports), is ignored; the rest of the file is used. A
     missing specforge.json is the default config and produces no E069.
     Before any source, the environment MUST report its own diagnostics —
     E069, the extension load's entry by entry (an entry's failure, or what

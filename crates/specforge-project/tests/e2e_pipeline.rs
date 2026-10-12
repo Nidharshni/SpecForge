@@ -314,7 +314,7 @@ fn single_entity_roundtrip() {
 // B:resolve_use_imports — verify unit "multi-file resolution with imports"
 #[specforge_test(
     behavior = "resolve_use_imports",
-    verify = "resolve use path to file on disk"
+    verify = "a use path resolves to the project source it names"
 )]
 fn multi_file_with_imports() {
     let (dir, ctx) = compile_specs_in(&[

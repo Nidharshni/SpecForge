@@ -35,7 +35,7 @@ fn setup_project(files: &[(&str, &str)]) -> TempDir {
 
 #[specforge_test(
     behavior = "resolve_use_imports",
-    verify = "resolve use path to file on disk"
+    verify = "a use path resolves to the project source it names"
 )]
 fn resolve_use_import_to_file() {
     let dir = setup_project(&[
@@ -172,7 +172,7 @@ fn imports_across_nested_directories_resolve_correctly() {
 
 #[specforge_test(
     behavior = "resolve_use_imports",
-    verify = "resolve use path to file on disk"
+    verify = "a use path resolves to the project source it names"
 )]
 fn resolve_relative_dot_slash() {
     let dir = setup_project(&[
@@ -197,7 +197,7 @@ fn resolve_relative_dot_slash() {
 
 #[specforge_test(
     behavior = "resolve_use_imports",
-    verify = "resolve use path to file on disk"
+    verify = "a use path resolves to the project source it names"
 )]
 fn resolve_relative_dot_dot_slash() {
     let dir = setup_project(&[
@@ -242,7 +242,7 @@ fn resolve_relative_escaping_spec_root() {
 
 #[specforge_test(
     behavior = "resolve_use_imports",
-    verify = "resolve use path to file on disk"
+    verify = "a use path resolves to the project source it names"
 )]
 fn resolve_directory_to_index_spec() {
     let dir = setup_project(&[
@@ -268,7 +268,7 @@ fn resolve_directory_to_index_spec() {
 
 #[specforge_test(
     behavior = "resolve_use_imports",
-    verify = "resolve use path to file on disk"
+    verify = "a use path resolves to the project source it names"
 )]
 fn bare_path_precedence_over_index() {
     let dir = setup_project(&[
@@ -548,7 +548,7 @@ fn w113_names_each_cycle_the_same_way_on_every_run() {
 /// directory-index targets, relative to the spec root.
 #[specforge_test(
     behavior = "resolve_use_imports",
-    verify = "resolve use path to file on disk"
+    verify = "a use path resolves to the project source it names"
 )]
 fn resolve_one_import_by_the_compile_cascade() {
     let dir = setup_project(&[
@@ -719,4 +719,55 @@ fn pub_use_through_cycle_no_transitive_w027() {
     ]);
     assert_eq!(w027.len(), 1, "{w027:?}");
     assert!(w027[0].contains("'Beta'"), "{w027:?}");
+}
+
+#[specforge_test(
+    behavior = "resolve_use_imports",
+    verify = "a dotted import path names the file with .spec appended"
+)]
+#[ignore = "fixed by T1"]
+fn a_dotted_import_path_names_the_file_with_spec_appended() {
+    let dir = setup_project(&[
+        ("api.v2.spec", "term v \"V\" {\n}\n"),
+        ("api.spec", "term w \"W\" {\n}\n"),
+        (
+            "main.spec",
+            "pub use { v } from \"api.v2\"\nuse \"api.v2\"\n",
+        ),
+    ]);
+
+    let diagnostics = resolve_dir(dir.path());
+
+    assert!(
+        !diagnostics
+            .iter()
+            .any(|d| d.code == "E025" || d.code == "W027"),
+        "{diagnostics:?}"
+    );
+}
+
+#[specforge_test(
+    behavior = "resolve_use_imports",
+    verify = "import paths match source paths exactly, whatever the file system's case rules"
+)]
+#[ignore = "fixed by T1"]
+fn import_paths_match_source_paths_exactly() {
+    let dir = setup_project(&[
+        ("types.spec", "term t \"T\" {\n}\n"),
+        ("main.spec", "use \"Types\"\n"),
+    ]);
+
+    let diagnostics = resolve_dir(dir.path());
+
+    let e025: Vec<_> = diagnostics.iter().filter(|d| d.code == "E025").collect();
+    assert_eq!(e025.len(), 1, "{diagnostics:?}");
+    assert!(
+        matches!(
+            e025[0].data.as_deref(),
+            Some(specforge_common::DiagnosticData::UnresolvedImport { path, did_you_mean })
+                if path == "Types" && did_you_mean.as_deref() == Some("types")
+        ),
+        "{:?}",
+        e025[0].data
+    );
 }

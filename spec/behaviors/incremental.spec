@@ -362,14 +362,17 @@ behavior resolve_imports_on_update "Resolve Imports on Every Update" {
   }
   contract   """
     After every update, the system MUST resolve the use imports of every
-    file again, over the cached parses (no file is re-read or re-parsed
-    for it), so the import diagnostics (E025, I004, W113, W027) are the
-    ones a full rebuild reports. A source that could not be read stays
-    E025 until it is readable or gone. The import graph is rebuilt rather than
-    patched: an added or removed import, an import target created or
+    file again, over the cached parses and the keys of the sources the
+    session holds (no file is re-read, re-parsed or looked up for it), so
+    the import diagnostics (E025, I004, W113, W027) are the ones a full
+    rebuild reports. A source that could not be read stays E025 until it
+    is readable or gone. The import graph is rebuilt rather than patched:
+    an added or removed import, a source an import names created or
     deleted, and a cycle closed or broken anywhere are all seen on the
-    update that causes them. References resolve across the project
-    without use (ADR 0004 D1-a), so the import graph decides no re-parse.
+    update that causes them; a file that is no source (excluded, under a
+    skipped directory) changes nothing when it is created or deleted.
+    References resolve across the project without use (ADR 0004 D1-a),
+    so the import graph decides no re-parse.
   """
   verify unit "an added use import is resolved on the next update"
   verify unit "a removed use import no longer reports"

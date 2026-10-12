@@ -36,10 +36,10 @@ fn setup_project(files: &[(&str, &str)]) -> TempDir {
 // B:resolve_use_imports — verify contract "requires/ensures consistency for use import resolution"
 #[specforge_test(
     behavior = "resolve_use_imports",
-    verify = "Resolve Use Imports: use import resolution holds — registries_populated_fired, filesystem_available, imports_resolved, missing_files_diagnosed, dependency_graph_built"
+    verify = "Resolve Use Imports: use import resolution holds — registries_populated_fired, sources_held, imports_resolved, missing_files_diagnosed, dependency_graph_built"
 )]
 fn resolve_use_imports_contract() {
-    // Requires filesystem_available: the project lives on disk. main.spec
+    // Requires sources_held: the project lives on disk. main.spec
     // imports two files, one nested, and one that does not exist.
     let dir = setup_project(&[
         ("types.spec", r#"behavior alpha "A" { contract "first" }"#),

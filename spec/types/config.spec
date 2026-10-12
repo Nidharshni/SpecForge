@@ -14,8 +14,9 @@ type CompilerConfig {
   name                 string           @readonly
   version              string           @readonly
   spec_root            string           @optional
-  // Path substrings (not globs), relative to the spec root: a .spec file
-  // whose path contains one is not compiled on any surface.
+  // Gitignore-style patterns over a file's path relative to the spec root
+  // (resolve_use_imports): a .spec file one leaves out is no source on any
+  // surface, and no import names it.
   exclude              string[]         @optional
   strict               boolean          @optional
   namespace            string           @optional

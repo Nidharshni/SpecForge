@@ -815,3 +815,67 @@ fn watch_ends_when_its_reader_leaves() {
     };
     assert_eq!(status.code(), Some(0), "the command's own exit");
 }
+
+/// A file discovery does not find (an excluded `drafts/x.spec`) is no
+/// source: creating it moves nothing, and every event watch sends is what
+/// `check` reports (ADR 0055).
+#[specforge_test(
+    invariant = "incremental_correctness",
+    verify = "a file discovery does not find changes nothing a compile or a session reports"
+)]
+#[ignore = "fixed by T1"]
+fn watch_reports_what_check_reports_when_an_excluded_import_target_appears() {
+    let project = TempDir::new().unwrap();
+    fs::write(
+        project.path().join("specforge.json"),
+        r#"{"name":"w","version":"0.1.0","extensions":[],"exclude":["drafts/"]}"#,
+    )
+    .unwrap();
+    fs::write(
+        project.path().join("a.spec"),
+        "use \"drafts/x\"\n\nterm a \"A\" {\n}\n",
+    )
+    .unwrap();
+    fs::write(project.path().join("b.spec"), "term b \"B\" {\n}\n").unwrap();
+    let check = |project: &TempDir| -> serde_json::Value {
+        let out = specforge_cmd()
+            .args(["check", "--format", "json"])
+            .arg(project.path())
+            .output()
+            .unwrap();
+        serde_json::from_slice(&out.stdout).unwrap()
+    };
+
+    let (rx, child) = spawn_watch(&project);
+    let ready = wait_for_line(&rx, "\"event\":\"ready\"", Duration::from_secs(60))
+        .expect("watch never reported ready");
+    settle(&rx);
+    let mut last: serde_json::Value = serde_json::from_str(&ready).unwrap();
+
+    fs::create_dir_all(project.path().join("drafts")).unwrap();
+    fs::write(project.path().join("drafts/x.spec"), "term x \"X\" {\n}\n").unwrap();
+    while let Some(event) = next_event(&rx, Duration::from_secs(2)) {
+        last = event;
+    }
+    let checked = check(&project);
+    assert!(
+        diagnostic_set(&checked)
+            .keys()
+            .any(|d| d.contains("\"E025\"")),
+        "{checked}"
+    );
+    assert_eq!(
+        diagnostic_set(&last["diagnostics"]),
+        diagnostic_set(&checked)
+    );
+
+    fs::write(project.path().join("b.spec"), "term b \"B2\" {\n}\n").unwrap();
+    let rebuilt = wait_for_line(&rx, "\"event\":\"rebuilt\"", Duration::from_secs(60))
+        .expect("no rebuild event");
+    drop(child);
+    let rebuilt: serde_json::Value = serde_json::from_str(&rebuilt).unwrap();
+    assert_eq!(
+        diagnostic_set(&rebuilt["diagnostics"]),
+        diagnostic_set(&check(&project))
+    );
+}

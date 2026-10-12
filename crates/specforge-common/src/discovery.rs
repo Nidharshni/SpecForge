@@ -158,6 +158,58 @@ mod tests {
         assert!(is_discovered("build.spec", &exclude));
     }
 
+    fn found(relative: &str, exclude: &[&str]) -> bool {
+        let exclude: Vec<String> = exclude.iter().map(|e| e.to_string()).collect();
+        is_discovered(relative, &exclude)
+    }
+
+    #[specforge_test(
+        behavior = "resolve_use_imports",
+        verify = "an exclude entry without a slash matches a name at any depth"
+    )]
+    #[ignore = "fixed by T3"]
+    fn an_exclude_entry_without_a_slash_matches_a_name_at_any_depth() {
+        assert!(!found("drafts/a.spec", &["drafts"]));
+        assert!(!found("sub/drafts/b.spec", &["drafts"]));
+        assert!(found("mydrafts/c.spec", &["drafts"]));
+        assert!(found("drafts.spec", &["drafts"]));
+        assert!(found("general.spec", &["gen"]));
+        assert!(!found("x.draft.spec", &["*.draft.spec"]));
+        assert!(!found("sub/y.draft.spec", &["*.draft.spec"]));
+        assert!(!found("drafts/a.spec", &["drafts/"]));
+        assert!(!found("sub/drafts/a.spec", &["drafts/"]));
+    }
+
+    #[specforge_test(
+        behavior = "resolve_use_imports",
+        verify = "an exclude entry with a slash is anchored at the spec root"
+    )]
+    #[ignore = "fixed by T3"]
+    fn an_exclude_entry_with_a_slash_is_anchored_at_the_spec_root() {
+        assert!(!found("sub/drafts/a.spec", &["sub/drafts"]));
+        assert!(found("x/sub/drafts/a.spec", &["sub/drafts"]));
+        assert!(!found("drafts/a.spec", &["/drafts"]));
+        assert!(found("sub/drafts/a.spec", &["/drafts"]));
+    }
+
+    #[specforge_test(
+        behavior = "resolve_use_imports",
+        verify = "exclude entries are glob patterns matched against a file and its directories"
+    )]
+    #[ignore = "fixed by T3"]
+    fn exclude_entries_are_glob_patterns_over_a_file_and_its_directories() {
+        assert!(!found("drafts/a.spec", &["drafts/**"]));
+        assert!(!found("drafts/x/y.spec", &["drafts/**"]));
+        assert!(found("sub/drafts/a.spec", &["drafts/**"]));
+        assert!(!found("v1/old/a.spec", &["v?/old"]));
+        assert!(!found("a/x/y.spec", &["[ab]/x"]));
+        assert!(found("c/x/y.spec", &["[ab]/x"]));
+        assert!(!found("gen/a.spec", &["**/gen"]));
+        assert!(!found("p/q/gen/a.spec", &["**/gen"]));
+        // A trailing slash matches directories only.
+        assert!(found("x.spec", &["x.spec/"]));
+    }
+
     #[specforge_test(
         behavior = "resolve_use_imports",
         verify = "a spec root named like a skipped directory is compiled"

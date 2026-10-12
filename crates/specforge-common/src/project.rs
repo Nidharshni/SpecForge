@@ -804,6 +804,54 @@ mod tests {
         );
     }
 
+    #[specforge_test(
+        behavior = "resolve_use_imports",
+        verify = "an exclude entry that can match no source is E069 and ignored"
+    )]
+    #[ignore = "fixed by T3"]
+    fn an_exclude_entry_that_can_match_no_source_is_e069_and_ignored() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let root = dir.path();
+        for file in ["a.spec", "drafts/d.spec"] {
+            std::fs::create_dir_all(root.join(file).parent().unwrap()).unwrap();
+            std::fs::write(root.join(file), "").unwrap();
+        }
+        let path = root.join("specforge.json");
+
+        let read = parse_project_config(
+            &path,
+            r#"{"exclude": ["", "!drafts", "./drafts", "a/../b", "a[b", "drafts"]}"#,
+        );
+
+        let shown = |entry: &str, index: usize, why: &str| {
+            format!(
+                "\"exclude\"[{index}] in {}, \"{entry}\", {why}",
+                path.display()
+            )
+        };
+        let dots = "has a \".\" or \"..\" name, which no path under the spec root has";
+        let problems: Vec<String> = read.problems.iter().map(ToString::to_string).collect();
+        assert_eq!(
+            problems,
+            [
+                shown("", 0, "matches nothing: it has no name"),
+                shown(
+                    "!drafts",
+                    1,
+                    "starts with \"!\", and exclude has no negation"
+                ),
+                shown("./drafts", 2, dots),
+                shown("a/../b", 3, dots),
+                shown(
+                    "a[b",
+                    4,
+                    "is not a glob pattern (Pattern syntax error near position 1: invalid range pattern)"
+                ),
+            ]
+        );
+        assert_eq!(read.config.spec_files(root), [root.join("a.spec")]);
+    }
+
     #[test]
     fn keys_are_read_in_the_order_the_file_writes_them() {
         assert_eq!(
