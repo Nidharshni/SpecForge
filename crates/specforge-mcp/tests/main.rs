@@ -24,6 +24,7 @@ mod revision;
 mod schema_reflection;
 mod served_project;
 mod stateless;
+mod stdio;
 mod subscriptions;
 mod support;
 mod surface_call;

@@ -14,6 +14,7 @@ pub mod registry;
 pub mod reply;
 pub mod resources;
 pub mod state;
+pub mod stdio;
 pub mod subscriptions;
 mod surface_call;
 pub mod surface_table;
@@ -65,7 +66,14 @@ impl McpServer {
     /// 2025-03-26 session) a JSON-RPC batch of them, and return the reply
     /// to send, if any.
     pub fn handle_message(&mut self, input: &str) -> Option<String> {
-        let message: Value = match serde_json::from_str(input) {
+        self.handle_bytes(input.as_bytes())
+    }
+
+    /// [`Self::handle_message`] over the message's bytes: bytes that are not
+    /// JSON, invalid UTF-8 included (RFC 8259 section 8.1), are a -32700
+    /// Parse error.
+    fn handle_bytes(&mut self, input: &[u8]) -> Option<String> {
+        let message: Value = match serde_json::from_slice(input) {
             Ok(message) => message,
             Err(_) => {
                 let response =
@@ -185,7 +193,8 @@ impl McpServer {
     }
 
     /// The notifications queued since the last call, oldest first: the host
-    /// writes them after the response of the message that queued them.
+    /// writes them after the response of the message that queued them
+    /// ([`McpServer::serve_stdio`] is the stdio host).
     pub fn take_notifications(&mut self) -> Vec<serde_json::Value> {
         self.state
             .subscriptions
@@ -195,8 +204,8 @@ impl McpServer {
             .collect()
     }
 
-    /// The connection ended (stdio: end of input): every subscription and
-    /// listen stream ends.
+    /// The connection ended ([`McpServer::serve_stdio`] calls it when the
+    /// stdio connection ends): every subscription and listen stream ends.
     pub fn disconnect(&mut self) {
         self.state.subscriptions.disconnect(&mut *self.state.events);
     }
