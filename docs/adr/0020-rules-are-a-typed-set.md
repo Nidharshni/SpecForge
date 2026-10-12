@@ -20,7 +20,8 @@ base and settled the untargeted obligation rule.) Five fixes in a month (376d47a
 `Rules::build(declarations, registries) -> (Rules, diagnostics)` turns each descriptor into a
 `Rule` (code, severity, template, target, origin) around a private `Check` enum with one variant per
 check kind, carrying exactly what that check reads, resolved: the compiled `matches` regex, the peer
-kind of an edge-scoped rule, the fields an edge type is written as. The host's E006 rules and W023
+kind of an edge-scoped rule, the fields an edge type is written as *(ADR 0060: an edge rule's edge type; the
+snapshot types every edge)*. The host's E006 rules and W023
 are built there too. `rules.check(&input, &verdicts)` runs every check, cycles included, in a fixed
 order (declared rules by code, then E006 by kind and field; entities by id). Queries replace field
 reads: `Rule::applies_to(kind)`, `verify_rule_for(kind)`, `obligates(kind)`, `files(&input)`,
@@ -34,7 +35,7 @@ outside the module reads a rule's parts. `validation_engine`, `detect_cycles`,
 
 `Rules::check(&RuleInput<'_>, &dyn CustomVerdicts)` reads ADR 0019's plain, graph-free
 `specforge_registry::entity::RuleInput { entities, edges, spec_root }`: field text and presence,
-edge counts by peer kind, obligations and exemption from each `EntityRecord`, cycles from the
+edge counts by peer kind *(by edge type, ADR 0060)*, obligations and exemption from each `EntityRecord`, cycles from the
 `EdgeRecord`s. There is no trait; tests build records directly. Rules never stringify a value.
 
 ## D3. Custom verdicts are one port; this supersedes ADR 0013 D13
@@ -65,7 +66,8 @@ A peer dependency is not the tool for that: peers order extension loading and pi
 mutual optional pair is a needless cycle (the
 registry build's load order drops an optional edge that would close one, and E027 is only for cycles
 among required peers, ADR 0041). A cycle follows
-every field that writes the edge type. A rule that reads `verify` statements on a declared kind that
+every field that writes the edge type *(ADR 0060: it follows the edges of the edge type)*. A rule
+is inert when no loaded field can write its edge type's edges at its target kind (ADR 0060). A rule that reads `verify` statements on a declared kind that
 accepts none is W112. The files `file_exists` rules read (against the spec root, ADR 0019; each item
 of a list field) are a session's check inputs. W148 carries every failed entity as data.
 

@@ -145,4 +145,11 @@ back when an item contains the joiner.
   from a scalar). Add a structured value beside the text; do not change the text. Reopened by
   ADR 0031 for the host's own checks: `FieldRecord::shape` and `value_span` (never on the wire).
 - A kind of obligation other than `verify` statements counting toward coverage.
+
+## Amendment (round 7, plan 11): edge counts are by edge type
+
+A record's edge counts are in total and by edge type (`EdgeCounts::by_type`), not by the kind at the far end,
+and every `EdgeRecord` carries its `edge_type`. The snapshot types each edge once, by the edge type the
+edge's field writes from the kind it starts at (`EdgeRegistry::written_by`); an edge whose field writes none
+has no type and counts in the total only. See [ADR 0060](0060-edge-types-resolved-once.md).
 - Graphs large enough that one snapshot per check costs more than an incremental patch.

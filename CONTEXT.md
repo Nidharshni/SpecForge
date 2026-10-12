@@ -175,7 +175,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   where the diagnostic is raised (`specforge_project::SetupPart`, the registry build's `BuildPart`);
   doctor makes one finding per setup diagnostic from it and reads no code but E013's (ADR 0054).
 - **Registry build**: the pure result of putting extension declarations in load order and turning
-  them into kind, field and edge registries, the rule set, pass order, the graph inputs
+  them into kind, field and edge registries (each edge type resolved once: every field that writes it, its
+  ends, and the edge type each field writes; ADR 0060), the rule set, pass order, the graph inputs
   (`RegistryBuild::graph_inputs`) and the diagnostics of those declarations, in one order
   (`RegistryBuild::reported`: the declarations' own, the registries', the custom rules' probes, the
   surfaces', each with the setup part it is about) (`specforge_registry::build_registries`). The custom rules' probe is the one call it
@@ -188,13 +189,20 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   its fields are private (ADR 0031).
 - **Graph inputs**: what the graph build reads of the loaded extensions (`specforge_graph::GraphInputs`):
   the kinds whose bodies an extension parses, the single and the absent-target reference fields, the
-  inverse field pairs, each field's value coercion and the derived reference fields. Only the registry
+  inverse field pairs (a reference field and its inverse fields, fields of its target kind), each field's value coercion and the derived reference fields. Only the registry
   build derives them (`RegistryBuild::graph_inputs`); with the provider schemes the environment
   registers they are every graph's `GraphConfig` (`Environment::graph_config`, ADR 0032).
+- **Edge type**: a relationship an extension declares (`edges`), or that fields name without one declaring it
+  (W021). The registry build resolves each once (`RegistryBuild::edges()`): its writers, every field that names it
+  as its `edge` (a kind's own, shared and enhancement fields), its ends (the declared kind on a side it declares,
+  else its writers'), and the edge type each field writes (`EdgeRegistry::written_by`). A field writing a declared
+  edge type outside its declared ends is W021 and writes none. A graph edge's label is the field that wrote it; its
+  edge type is read from the field, once, in the entity snapshot. Rules count by it, the schema prints its ends,
+  trace names it (ADR 0060).
 - **Rule set**: the extensions' declared validation rules plus the host's E006 rules for required
   fields, each turned once per registry build into a typed rule that carries only what its check
-  reads, resolved against the registries (a compiled regex, an edge rule's peer kind, the fields an
-  edge type is written as). It runs itself over the entity snapshot's records (`RuleInput`, ADR
+  reads, resolved against the registries (a compiled regex, an edge rule's edge type and the fields that
+  write it). An edge rule counts the edges of its edge type; a cycle rule follows them. It runs itself over the entity snapshot's records (`RuleInput`, ADR
   0019), cycles included, and answers which rule applies to a kind, which the snapshot's standing
   reads (`specforge_registry::rules::Rules`, ADR 0020). A declared rule that cannot work is W112; a
   property its check does not read is W147.
@@ -219,7 +227,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
     strings or references, …) and span beside it for the host's own checks
     (`specforge_registry::entity::ValueShape`);
   - its references, obligations and methods;
-  - its edge counts by peer kind;
+  - its edge counts, in total and by edge type (each edge typed once, by the edge type its field writes from the
+    kind it starts at);
   - what exempts it, if anything (a union body, an exempting flag, a kind that accepts no `verify`).
 
   The registry checks and the rules read the records (`specforge_registry::entity::EntityRecord`).
