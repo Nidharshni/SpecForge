@@ -330,7 +330,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   `specforge-registry-wire`, which `specforge-registry-server` and `specforge-registry-client` both compile against
   (ADR 0044, ADR 0061). A registry's refusal (HTTP 400) carries a typed code and reaches the user as R008; an
   answer that isn't the call's wire type is R009. A test reaches a registry through the real server in process or
-  an in-memory client, never through JSON written by hand.
+  an in-memory client, never through JSON written by hand. A search matches by one rule, an ASCII
+  case-insensitive substring of a package's name, description or one keyword
+  (`specforge_package::search::matches`), on the server and in both in-memory registries.
 - **Registry for a package**: the one configured registry that serves a package name: the first
   `registries` entry whose `scope_filter` is the name's scope, else the first marked
   `default_registry`; with neither, none does, and the operation refuses with R-OPS-001 before any

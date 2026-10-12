@@ -11,6 +11,7 @@
 
 mod name;
 pub mod peers;
+pub mod search;
 pub mod upgrade;
 
 pub use name::{

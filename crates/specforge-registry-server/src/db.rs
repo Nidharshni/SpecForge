@@ -236,7 +236,13 @@ impl Database {
         use std::collections::BTreeMap;
 
         let conn = self.conn();
-        let pattern = format!("%{query}%");
+        // An escaped prefilter (`%`, `_` and `\` are text); `specforge_package::search::matches`
+        // decides, as the in-memory registries do.
+        let escaped = query
+            .replace('\\', "\\\\")
+            .replace('%', "\\%")
+            .replace('_', "\\_");
+        let pattern = format!("%{escaped}%");
         // Every non-yanked version of each package one of whose versions matches the term.
         let mut stmt = conn
             .prepare(
@@ -244,7 +250,7 @@ impl Database {
                  FROM packages
                  WHERE yanked = 0 AND name IN (
                    SELECT name FROM packages
-                   WHERE yanked = 0 AND (name LIKE ?1 OR description LIKE ?1 OR keywords LIKE ?1))",
+                   WHERE yanked = 0 AND (name LIKE ?1 ESCAPE '\\' OR description LIKE ?1 ESCAPE '\\' OR keywords LIKE ?1 ESCAPE '\\'))",
             )
             .map_err(|e| format!("search query failed: {e}"))?;
         let rows: Vec<PackageVersion> = stmt
@@ -264,6 +270,20 @@ impl Database {
             })
             .map_err(|e| format!("search query failed: {e}"))?
             .filter_map(|r| r.ok())
+            .collect();
+        // The one rule decides which of a package's versions' terms match: the prefilter spans
+        // the joined keyword column, so `a,b` passes it and fails here.
+        let matching: std::collections::BTreeSet<String> = rows
+            .iter()
+            .filter(|p| {
+                let keywords: Vec<&str> = p.keywords.split(',').filter(|k| !k.is_empty()).collect();
+                specforge_package::search::matches(query, &p.name, &p.description, &keywords)
+            })
+            .map(|p| p.name.clone())
+            .collect();
+        let rows: Vec<PackageVersion> = rows
+            .into_iter()
+            .filter(|p| matching.contains(&p.name))
             .collect();
 
         // Each package at what `latest` picks, by SemVer (SQL MAX(version) is lexicographic and

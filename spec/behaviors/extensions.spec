@@ -699,7 +699,12 @@ behavior search_registry "Search Registry" {
   }
   contract   """
     When specforge search is invoked, the system MUST query all configured
-    registries with the search term. Each registry lists a package once,
+    registries with the search term. A search matches a package when the
+    query is an ASCII case-insensitive substring of its name, its
+    description or one of its keywords; % and _ in the query are text. The
+    server, the in-memory client and the in-memory registry MUST match by
+    this one rule (specforge_package::search::matches).
+    Each registry lists a package once,
     when any of its versions matches the term, at the version specforge
     add <name> would install from it (latest: the highest release, a
     pre-release only when the package has none). Results MUST be
@@ -727,6 +732,7 @@ behavior search_registry "Search Registry" {
   verify unit "with no registry configured, search makes no network call and reports how to configure one"
   verify unit "an unusable specforge.json is refused with the refusal add gives, before any network call"
   verify unit "queries all configured registries"
+  verify unit "a search matches a case-insensitive substring of a package's name, description or one keyword, wildcards included as text"
   verify unit "filters by declared category"
   verify unit "a registry lists each package at the version add installs from it"
   verify unit "each failed registry is reported once, and search fails when every registry failed"

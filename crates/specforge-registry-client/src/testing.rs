@@ -314,21 +314,18 @@ impl RegistryClient for MemoryClient {
         credential: Option<&RegistryCredential>,
     ) -> Result<Vec<SearchHit>, RegistryError> {
         self.read(CallKind::Search, registry, query.q.clone(), credential)?;
-        let needle = query.q.to_ascii_lowercase();
         let category = query
             .contributes
             .as_deref()
             .and_then(DeclaredCategory::from_name);
         let matches_term = |m: &Stored| {
-            m.name.to_ascii_lowercase().contains(&needle)
-                || m.metadata
-                    .description
-                    .to_ascii_lowercase()
-                    .contains(&needle)
-                || m.metadata
-                    .keywords
-                    .iter()
-                    .any(|k| k.to_ascii_lowercase().contains(&needle))
+            let keywords: Vec<&str> = m.metadata.keywords.iter().map(String::as_str).collect();
+            specforge_package::search::matches(
+                &query.q,
+                &m.name,
+                &m.metadata.description,
+                &keywords,
+            )
         };
         let declares = |m: &Stored| {
             category.is_none_or(|category| {
@@ -643,6 +640,16 @@ pub fn assert_client_contract(
     assert_eq!(hits[0].name, "@contract/tool", "K8: the hit's name");
     assert_eq!(hits[0].version, "1.1.0", "K8: the latest version");
     assert_eq!(hits[0].description, "Contract tool", "K8: the description");
+    // A query is text: case is ignored, `_` and `%` are no wildcards.
+    let found = |q: &str| {
+        client
+            .search(&SearchQuery::new(q), registry, None)
+            .expect("K8: search")
+            .len()
+    };
+    assert_eq!(found("CONTRACT"), 1, "K8: case is ignored");
+    assert_eq!(found("t_ol"), 0, "K8: _ is text");
+    assert_eq!(found("%"), 0, "K8: % is text");
     assert_eq!(
         client
             .search(&SearchQuery::new("a&b=c#d"), registry, None)

@@ -1194,8 +1194,11 @@ fn stored_described(state: &AppState, name: &str, description: &str, keywords: &
         .unwrap();
 }
 
+#[specforge_test_macros::test(
+    behavior = "search_registry",
+    verify = "a search matches a case-insensitive substring of a package's name, description or one keyword, wildcards included as text"
+)]
 #[tokio::test]
-#[ignore = "fixed by T17"]
 async fn search_matches_as_the_fakes_do() {
     let dir = tempfile::tempdir().unwrap();
     let state = app_state(dir.path(), 100);
