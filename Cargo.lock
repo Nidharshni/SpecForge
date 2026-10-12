@@ -3240,9 +3240,13 @@ dependencies = [
 name = "specforge-registry-wire"
 version = "0.1.0"
 dependencies = [
+ "chrono",
+ "ed25519-dalek",
  "form_urlencoded",
+ "hex",
  "serde",
  "serde_json",
+ "sha2",
  "specforge-package",
  "specforge-protocol-types",
  "specforge-test",

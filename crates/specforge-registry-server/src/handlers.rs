@@ -10,9 +10,9 @@ use specforge_package::PackageName;
 use specforge_package::Version;
 use specforge_registry_wire::path::route;
 use specforge_registry_wire::{
-    ErrorBody, PackageMetadata, PublishReceipt, SearchHit, SearchQuery, SearchResults, TokenIssued,
-    TokenList, TokenRequest, TokenRevoked, TokenSummary, TokenVerified, VersionList, Yanked, code,
-    form, path,
+    ErrorBody, ErrorCode, PackageMetadata, PackageSignature, PublishReceipt, SearchHit,
+    SearchQuery, SearchResults, SignedContent, TokenIssued, TokenList, TokenRequest, TokenRevoked,
+    TokenSummary, TokenVerified, VersionList, Yanked, form, path,
 };
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -63,7 +63,7 @@ async fn get_package_versions(
             .await
             .expect("package versions query panicked")
     }
-    .map_err(|e| ApiError::internal(code::DB_ERROR, e))?;
+    .map_err(|e| ApiError::internal(ErrorCode::DbError, e))?;
 
     if versions.is_empty() {
         return Err(ApiError::not_found(format!("package '{name}' not found")));
@@ -91,7 +91,7 @@ async fn get_package_version(
             .await
             .map_err(|e| {
                 ApiError::internal(
-                    code::DB_TASK,
+                    ErrorCode::DbTask,
                     format!("package version query task failed: {e}"),
                 )
             })?
@@ -123,7 +123,6 @@ async fn get_package_version(
         published_at: pkg.published_at,
         wasm_url,
         signature: pkg.signature,
-        key_id: pkg.key_id,
         manifest: pkg.manifest,
     }))
 }
@@ -146,7 +145,10 @@ async fn download_package(
     })
     .await
     .map_err(|e| {
-        ApiError::internal(code::STORAGE_TASK, format!("storage read task failed: {e}"))
+        ApiError::internal(
+            ErrorCode::StorageTask,
+            format!("storage read task failed: {e}"),
+        )
     })?;
 
     // C8-09 hardening: serve only blobs whose bytes hash to the DB's
@@ -175,14 +177,14 @@ async fn download_package(
             .await
             .map_err(|e| {
                 ApiError::internal(
-                    code::INTEGRITY_TASK,
+                    ErrorCode::IntegrityTask,
                     format!("integrity check task failed: {e}"),
                 )
             })?
         };
         if !expected.is_empty() && actual != expected {
             return Err(ApiError::internal(
-                code::INTEGRITY_VIOLATION,
+                ErrorCode::IntegrityViolation,
                 "stored blob does not match its recorded digest",
             ));
         }
@@ -211,7 +213,7 @@ async fn search_packages(
         Some(name) => Some(
             specforge_protocol_types::DeclaredCategory::from_name(name).ok_or_else(|| {
                 ApiError::bad_request(
-                    code::BAD_REQUEST,
+                    ErrorCode::BadRequest,
                     format!(
                         "'{name}' is not a declared category; one of: {}",
                         specforge_protocol_types::DECLARED_CATEGORIES.join(", ")
@@ -226,7 +228,7 @@ async fn search_packages(
     })
     .await
     .expect("search query task panicked")
-    .map_err(|e| ApiError::internal(code::DB_ERROR, e))?;
+    .map_err(|e| ApiError::internal(ErrorCode::DbError, e))?;
 
     let results = results
         .into_iter()
@@ -242,19 +244,19 @@ async fn search_packages(
 
 /// Typed API failure (C14-05): one IntoResponse implementation replaces the
 /// hand-built `(StatusCode, Json)` tuples that mutating handlers used to
-/// copy-paste. The body is the wire crate's [`ErrorBody`], so the code is one
-/// of [`code`]'s constants.
+/// copy-paste. The body is the wire crate's [`ErrorBody`], so the code is an
+/// [`ErrorCode`].
 #[derive(Debug)]
 pub struct ApiError {
     pub status: StatusCode,
-    pub code: &'static str,
+    pub code: ErrorCode,
     pub message: String,
     /// Seconds for the Retry-After response header (rate limiting).
     pub retry_after_secs: Option<u64>,
 }
 
 impl ApiError {
-    pub fn bad_request(code: &'static str, message: impl Into<String>) -> Self {
+    pub fn bad_request(code: ErrorCode, message: impl Into<String>) -> Self {
         Self {
             status: StatusCode::BAD_REQUEST,
             code,
@@ -263,7 +265,7 @@ impl ApiError {
         }
     }
 
-    pub fn conflict(code: &'static str, message: impl Into<String>) -> Self {
+    pub fn conflict(code: ErrorCode, message: impl Into<String>) -> Self {
         Self {
             status: StatusCode::CONFLICT,
             code,
@@ -273,11 +275,11 @@ impl ApiError {
     }
 
     pub fn forbidden(message: impl Into<String>) -> Self {
-        Self::forbidden_code(code::FORBIDDEN, message)
+        Self::forbidden_code(ErrorCode::Forbidden, message)
     }
 
     /// FORBIDDEN with a specific machine code (e.g. SCOPE_OWNED).
-    pub fn forbidden_code(code: &'static str, message: impl Into<String>) -> Self {
+    pub fn forbidden_code(code: ErrorCode, message: impl Into<String>) -> Self {
         Self {
             status: StatusCode::FORBIDDEN,
             code,
@@ -289,7 +291,7 @@ impl ApiError {
     pub fn not_found(message: impl Into<String>) -> Self {
         Self {
             status: StatusCode::NOT_FOUND,
-            code: code::NOT_FOUND,
+            code: ErrorCode::NotFound,
             message: message.into(),
             retry_after_secs: None,
         }
@@ -298,7 +300,7 @@ impl ApiError {
     pub fn unauthorized(message: impl Into<String>) -> Self {
         Self {
             status: StatusCode::UNAUTHORIZED,
-            code: code::UNAUTHORIZED,
+            code: ErrorCode::Unauthorized,
             message: message.into(),
             retry_after_secs: None,
         }
@@ -307,7 +309,7 @@ impl ApiError {
     pub fn rate_limited(retry_after: std::time::Duration) -> Self {
         Self {
             status: StatusCode::TOO_MANY_REQUESTS,
-            code: code::RATE_LIMITED,
+            code: ErrorCode::RateLimited,
             message: format!(
                 "too many publish requests; retry after {} seconds",
                 retry_after.as_secs()
@@ -316,7 +318,7 @@ impl ApiError {
         }
     }
 
-    pub fn internal(code: &'static str, message: impl Into<String>) -> Self {
+    pub fn internal(code: ErrorCode, message: impl Into<String>) -> Self {
         Self {
             status: StatusCode::INTERNAL_SERVER_ERROR,
             code,
@@ -359,7 +361,10 @@ impl AuthToken {
             tokio::task::spawn_blocking(move || auth::validate_bearer(&st.database, &auth_header))
                 .await
                 .map_err(|e| {
-                    ApiError::internal(code::AUTH_TASK, format!("auth validation task failed: {e}"))
+                    ApiError::internal(
+                        ErrorCode::AuthTask,
+                        format!("auth validation task failed: {e}"),
+                    )
                 })?
                 .ok_or_else(|| ApiError::unauthorized("invalid or revoked token"))?;
         Ok(Self { record })
@@ -415,7 +420,7 @@ impl FromRequestParts<Arc<AppState>> for AdminToken {
         let token = AuthToken::extract(state, &parts.headers).await?;
         if !auth::is_admin(&token.record) {
             return Err(ApiError::forbidden_code(
-                code::ADMIN_REQUIRED,
+                ErrorCode::AdminRequired,
                 "this endpoint requires an admin token",
             ));
         }
@@ -471,7 +476,7 @@ async fn publish_package(
     };
     if duplicate {
         return Err(ApiError::conflict(
-            code::DUPLICATE_VERSION,
+            ErrorCode::DuplicateVersion,
             format!("version {version} already exists for {name}"),
         ));
     }
@@ -517,7 +522,7 @@ async fn publish_package(
         };
         match claim {
             Ok(claimed) => claimed,
-            Err(e) => return Err(ApiError::internal(code::STORAGE_ERROR, e)),
+            Err(e) => return Err(ApiError::internal(ErrorCode::StorageError, e)),
         }
     };
     if !claimed_now
@@ -531,7 +536,7 @@ async fn publish_package(
         && owner_hash != token_record.token_hash
     {
         return Err(ApiError::forbidden_code(
-            code::SCOPE_OWNED,
+            ErrorCode::ScopeOwned,
             format!(
                 "scope '{scope}' is owned by publisher '{owner_account}' — only the owning publisher may publish into it"
             ),
@@ -545,14 +550,19 @@ async fn publish_package(
 
     // --- Publish validation contract (spec #21, T3) ---
     // 1. Signed packages only: the signature field must be present.
-    let signature_json = match signature_json {
-        Some(sig) if !sig.trim().is_empty() => sig,
-        _ => {
+    let signature = match signature_json.as_deref().map(str::trim) {
+        None | Some("") => {
             return Err(ApiError::bad_request(
-                code::UNSIGNED_PACKAGE,
+                ErrorCode::UnsignedPackage,
                 "packages must be signed: run `specforge publish` (which signs) instead of uploading raw artifacts",
             ));
         }
+        Some(text) => PackageSignature::parse(text).map_err(|why| {
+            ApiError::bad_request(
+                ErrorCode::InvalidSignature,
+                format!("{why} (publish with `specforge publish`, which signs every package)"),
+            )
+        })?,
     };
 
     // 2. wasm magic bytes: reject non-wasm payloads.
@@ -560,14 +570,14 @@ async fn publish_package(
         Some(d) if !d.is_empty() => d,
         _ => {
             return Err(ApiError::bad_request(
-                code::BAD_REQUEST,
+                ErrorCode::BadRequest,
                 "missing 'wasm' field in multipart body",
             ));
         }
     };
     if !wasm_data.starts_with(b"\0asm") {
         return Err(ApiError::bad_request(
-            code::INVALID_WASM,
+            ErrorCode::InvalidWasm,
             "the uploaded 'wasm' field does not look like a Wasm binary (missing magic bytes)",
         ));
     }
@@ -579,7 +589,7 @@ async fn publish_package(
         .is_none_or(|m| m.trim().is_empty())
     {
         return Err(ApiError::bad_request(
-            code::INVALID_MANIFEST,
+            ErrorCode::InvalidManifest,
             "missing 'manifest' field in multipart body",
         ));
     }
@@ -589,7 +599,7 @@ async fn publish_package(
         Ok(d) => d,
         Err(e) => {
             return Err(ApiError::bad_request(
-                code::INVALID_MANIFEST,
+                ErrorCode::InvalidManifest,
                 format!(
                     "manifest is not an extension declaration: {e} (publish it with \
                          `specforge publish`, which uploads the declaration it reads from the binary)"
@@ -601,7 +611,7 @@ async fn publish_package(
     // 4. Its identity must match the upload URL.
     if declaration.name() != name || declaration.version() != version {
         return Err(ApiError::bad_request(
-            code::NAME_MISMATCH,
+            ErrorCode::NameMismatch,
             format!(
                 "manifest identifies {}@{} but the upload path is {}@{}",
                 declaration.name(),
@@ -612,18 +622,36 @@ async fn publish_package(
         ));
     }
 
+    // 5. The signature verifies over this upload: its name, version, binary
+    //    and exact manifest. Hashing is CPU-bound, so it runs on the blocking
+    //    pool; the binary is hashed once, for the signature and the row.
+    let manifest_json = declaration_json.unwrap_or_default();
+    let (content, verified) = {
+        let (name, version, wasm, manifest, signature) = (
+            name.clone(),
+            version.clone(),
+            wasm_data.clone(),
+            manifest_json.clone(),
+            signature.clone(),
+        );
+        tokio::task::spawn_blocking(move || {
+            let content = SignedContent::of(&name, &version, &wasm, &manifest);
+            let verified = signature.verify(&content);
+            (content, verified)
+        })
+        .await
+        .expect("signature check task panicked")
+    };
+    verified.map_err(|why| {
+        ApiError::bad_request(
+            ErrorCode::InvalidSignature,
+            format!("{why}: {name}@{version} as uploaded"),
+        )
+    })?;
+    let sha256 = content.wasm_sha256().to_string();
+
     // --- end validation contract ---
 
-    // Compute SHA256 — hashing the payload is CPU-bound: run it on the
-    // blocking pool.
-    let hash_data = wasm_data.clone();
-    let sha256 = tokio::task::spawn_blocking(move || {
-        let mut hasher = Sha256::new();
-        hasher.update(&hash_data);
-        hex::encode(hasher.finalize())
-    })
-    .await
-    .expect("sha256 hashing task panicked");
     // What search shows: the description and keywords the declaration's
     // handshake carries.
     let description = declaration
@@ -651,16 +679,12 @@ async fn publish_package(
     .expect("storage write task panicked")
     {
         Ok(temp) => temp,
-        Err(e) => return Err(ApiError::internal(code::STORAGE_ERROR, e)),
+        Err(e) => return Err(ApiError::internal(ErrorCode::StorageError, e)),
     };
 
-    // Extract the short key id from the signature wire object for display
-    // and indexing. The full signature object is stored verbatim so clients
-    // can verify offline (spec #21: the registry is not the trust anchor).
-    let key_id = serde_json::from_str::<serde_json::Value>(&signature_json)
-        .ok()
-        .and_then(|v| v.get("keyId").and_then(|k| k.as_str()).map(str::to_string))
-        .unwrap_or_default();
+    // The verified signature is stored so clients can verify offline again
+    // (spec #21: the registry is not the trust anchor).
+    let key_id = signature.key_id();
 
     // Insert into database — rusqlite is blocking: run it on the blocking
     // pool.
@@ -673,9 +697,8 @@ async fn publish_package(
         keywords,
         publisher: publisher_account,
         published_at: chrono::Utc::now().to_rfc3339(),
-        signature: signature_json,
-        key_id: key_id.clone(),
-        manifest: declaration_json.unwrap_or_default(),
+        signature: Some(signature),
+        manifest: manifest_json,
     };
 
     // Run the insert on the blocking pool, but keep the temp path
@@ -696,7 +719,7 @@ async fn publish_package(
         .expect("database insert task panicked")
     };
     if let Err(e) = insert_result {
-        return Err(ApiError::conflict(code::DUPLICATE_VERSION, e));
+        return Err(ApiError::conflict(ErrorCode::DuplicateVersion, e));
     }
 
     // 3. Atomic rename — the moment the blob becomes visible.
@@ -722,7 +745,7 @@ async fn publish_package(
                 .delete_package(&rollback_name, &rollback_version)
         })
         .await;
-        return Err(ApiError::internal(code::STORAGE_ERROR, e));
+        return Err(ApiError::internal(ErrorCode::StorageError, e));
     }
 
     tracing::info!("published {}@{} ({} bytes)", name, version, wasm_data.len());
@@ -734,7 +757,7 @@ async fn publish_package(
             version,
             sha256: pkg.sha256,
             size_bytes: pkg.size_bytes,
-            key_id: pkg.key_id,
+            key_id,
         }),
     ))
 }
@@ -831,7 +854,7 @@ async fn admin_list_tokens(
         tokio::task::spawn_blocking(move || auth::list_tokens(&st.database))
             .await
             .expect("token listing panicked")
-            .map_err(|e| ApiError::internal(code::DB_ERROR, e))?
+            .map_err(|e| ApiError::internal(ErrorCode::DbError, e))?
             .into_iter()
             .map(|t| TokenSummary {
                 prefix: t.token_hash[..8.min(t.token_hash.len())].to_string(),

@@ -1,7 +1,8 @@
 //! The package registry's HTTP contract (ADR 0044): the paths a registry serves, the JSON it answers with,
-//! the multipart form a publish uploads and the codes its errors carry. `specforge-registry-server`
-//! serializes these and mounts these routes; `specforge-registry-client` requests these paths and
-//! deserializes these bodies. Nothing else writes a registry's JSON: a test reaches a registry through the
+//! the multipart form a publish uploads, the package signature it carries and the codes its errors carry.
+//! `specforge-registry-server` serializes these and mounts these routes; `specforge-registry-client` requests
+//! these paths and deserializes these bodies. Both ends parse, sign and verify the package signature with
+//! [`signature`] (ADR 0061). Nothing else writes a registry's JSON: a test reaches a registry through the
 //! real server in process (`specforge_registry_server::testing`) or an in-memory client
 //! (`specforge_registry_client::testing`).
 //!
@@ -11,6 +12,10 @@
 pub mod code;
 pub mod form;
 pub mod path;
+pub mod signature;
+
+pub use code::ErrorCode;
+pub use signature::{PackageSignature, SignatureError, SignedContent, sha256_hex};
 
 use serde::{Deserialize, Serialize};
 
@@ -44,13 +49,12 @@ pub struct PackageMetadata {
     /// Where the binary downloads from. The server answers [`path::download`] (relative to the base); a
     /// client hands it on absolute.
     pub wasm_url: String,
-    /// The publisher signature object (JSON: `sig`, `keyId`, `pubkey`, `signedAt`); empty when unsigned.
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub signature: String,
-    /// The signing key's short id, as the server read it from `signature`; empty when unsigned.
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub key_id: String,
-    /// The exact manifest uploaded with the package: its extension declaration (ADR 0012).
+    /// The publisher signature; absent when unsigned (a registry that refuses unsigned uploads serves none such).
+    /// Only a well-formed one reads: a reply carrying another is not this body.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signature: Option<PackageSignature>,
+    /// The exact manifest uploaded with the package: its extension declaration (ADR 0012). A string on purpose:
+    /// the signature covers these bytes.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub manifest: String,
 }
@@ -124,7 +128,7 @@ pub struct PublishReceipt {
     pub version: String,
     pub sha256: String,
     pub size_bytes: u64,
-    /// Empty when the upload carried no readable key id.
+    /// The id of the key whose signature the registry verified over the upload.
     pub key_id: String,
 }
 
@@ -196,17 +200,18 @@ pub struct ErrorBody {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ErrorDetail {
-    /// One of [`code`]'s constants.
+    /// What the registry refused, as one of [`ErrorCode`]'s names; [`ErrorCode::Unknown`] for a code this client does
+    /// not know, or none.
     #[serde(default)]
-    pub code: String,
+    pub code: ErrorCode,
     pub message: String,
 }
 
 impl ErrorBody {
-    pub fn new(code: &str, message: impl Into<String>) -> Self {
+    pub fn new(code: ErrorCode, message: impl Into<String>) -> Self {
         Self {
             error: ErrorDetail {
-                code: code.to_string(),
+                code,
                 message: message.into(),
             },
         }
@@ -248,6 +253,12 @@ mod tests {
         verify = "PackageMetadata is the JSON a registry serves for one version"
     )]
     fn package_metadata_is_this_json() {
+        use chrono::TimeZone;
+        let signature = PackageSignature::sign(
+            &ed25519_dalek::SigningKey::from_bytes(&[7; 32]),
+            &SignedContent::of("@acme/tool", "1.0.0", b"\0asm", "{}"),
+            chrono::Utc.with_ymd_and_hms(2026, 10, 8, 0, 0, 0).unwrap(),
+        );
         let signed = PackageMetadata {
             name: "@acme/tool".into(),
             version: "1.0.0".into(),
@@ -258,8 +269,7 @@ mod tests {
             publisher: "acct_1".into(),
             published_at: "2026-10-08T00:00:00+00:00".into(),
             wasm_url: "/packages/@acme%2Ftool/1.0.0/download".into(),
-            signature: r#"{"sig":"x","keyId":"k1","pubkey":"z","signedAt":"now"}"#.into(),
-            key_id: "k1".into(),
+            signature: Some(signature.clone()),
             manifest: "{}".into(),
         };
         is_this_json(
@@ -274,25 +284,34 @@ mod tests {
                 "publisher": "acct_1",
                 "published_at": "2026-10-08T00:00:00+00:00",
                 "wasm_url": "/packages/@acme%2Ftool/1.0.0/download",
-                "signature": r#"{"sig":"x","keyId":"k1","pubkey":"z","signedAt":"now"}"#,
-                "key_id": "k1",
+                "signature": serde_json::from_str::<serde_json::Value>(&signature.to_json()).unwrap(),
                 "manifest": "{}",
             }),
         );
 
-        // An unsigned one omits the three optional strings.
+        // An unsigned one omits the signature and the manifest.
         let unsigned = PackageMetadata {
-            signature: String::new(),
-            key_id: String::new(),
+            signature: None,
             manifest: String::new(),
             ..signed
         };
         let value = serde_json::to_value(&unsigned).unwrap();
         let object = value.as_object().unwrap();
-        for key in ["signature", "key_id", "manifest"] {
+        for key in ["signature", "manifest"] {
             assert!(!object.contains_key(key), "{key}");
         }
         assert_eq!(object.len(), 9);
+
+        // A signature that isn't one makes the reply unreadable.
+        let malformed = json!({
+            "name": "@acme/tool", "version": "1.0.0", "sha256": "ab", "wasm_url": "/x",
+            "signature": {"sig": "x", "public_key": "z", "signed_at": "now"},
+        });
+        let error = serde_json::from_value::<PackageMetadata>(malformed).unwrap_err();
+        assert!(
+            error.to_string().contains("`sig` is not 128 hex"),
+            "{error}"
+        );
 
         // A reply with only the required four keys reads.
         let minimal: PackageMetadata = serde_json::from_value(
@@ -378,13 +397,17 @@ mod tests {
     )]
     fn an_error_body_is_this_json() {
         is_this_json(
-            &ErrorBody::new(code::NOT_FOUND, "package not found"),
+            &ErrorBody::new(ErrorCode::NotFound, "package not found"),
             json!({"error": {"code": "NOT_FOUND", "message": "package not found"}}),
         );
-        // An error from a registry that sends no code still reads.
+        // An error from a registry that sends no code, or one this client does not know, still reads.
         let codeless: ErrorBody =
             serde_json::from_value(json!({"error": {"message": "no"}})).unwrap();
-        assert_eq!(codeless.error.code, "");
+        assert_eq!(codeless.error.code, ErrorCode::Unknown);
+        let unknown: ErrorBody =
+            serde_json::from_value(json!({"error": {"code": "SOMETHING_NEW", "message": "no"}}))
+                .unwrap();
+        assert_eq!(unknown.error.code, ErrorCode::Unknown);
     }
 
     #[test]

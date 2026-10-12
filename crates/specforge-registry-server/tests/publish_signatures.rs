@@ -8,11 +8,10 @@
 
 use specforge_protocol_types::ExtensionDeclaration;
 use specforge_registry_client::registry_config::{RegistryConfig, RegistryCredential};
-use specforge_registry_client::{
-    HttpRegistryClient, PackageSignature, SigningKey, publish_to_registry, verify_signature,
-};
+use specforge_registry_client::{HttpRegistryClient, SigningKey, publish_to_registry};
 use specforge_registry_server::state::PublishLimits;
 use specforge_registry_server::testing::LocalRegistry;
+use specforge_registry_wire::{PackageSignature, SignatureError, SignedContent};
 
 fn minimal_manifest() -> ExtensionDeclaration {
     manifest_of("1.0.0")
@@ -44,13 +43,6 @@ fn client_of(server: &LocalRegistry) -> (RegistryConfig, RegistryCredential) {
     )
 }
 
-fn sha256_hex(data: &[u8]) -> String {
-    use sha2::{Digest, Sha256};
-    let mut hasher = Sha256::new();
-    hasher.update(data);
-    hex::encode(hasher.finalize())
-}
-
 #[test]
 fn signed_publish_round_trips_through_http_boundary() {
     let server = LocalRegistry::start();
@@ -67,7 +59,7 @@ fn signed_publish_round_trips_through_http_boundary() {
         &registry,
         Some(&credential),
         &HttpRegistryClient::new(),
-        Some(&key),
+        &key,
     )
     .expect("signed publish should succeed");
     assert!(url.contains("signed-ext"), "{}", url);
@@ -78,30 +70,28 @@ fn signed_publish_round_trips_through_http_boundary() {
         .expect("metadata request")
         .json()
         .expect("metadata json");
-    assert_eq!(body["key_id"], key.key_id().as_str());
-    let signature: PackageSignature = serde_json::from_str(
-        body["signature"]
-            .as_str()
-            .expect("signature served as string"),
-    )
-    .expect("signature wire object");
-    assert_eq!(signature.key_id, key.key_id());
-    assert_eq!(signature.public_key, key.public_key_hex());
-    assert!(!signature.signed_at.is_empty());
+    assert!(
+        body.get("key_id").is_none(),
+        "the key id is not a wire field"
+    );
+    let signature: PackageSignature =
+        serde_json::from_value(body["signature"].clone()).expect("signature wire object");
+    assert_eq!(signature.key_id(), key.key_id());
+    assert!(!signature.signed_at().is_empty());
     let served_manifest = body["manifest"].as_str().expect("manifest served");
     assert_eq!(served_manifest, serde_json::to_string(&manifest).unwrap());
 
     // Offline verification from served data alone: wasm bytes (as downloaded)
     // + served manifest + timestamp inside the signature object. The registry
     // is not the trust anchor.
-    verify_signature(
-        manifest.name(),
-        manifest.version(),
-        &sha256_hex(wasm_bytes),
-        &sha256_hex(served_manifest.as_bytes()),
-        &signature,
-    )
-    .expect("served signature must verify offline against served metadata");
+    signature
+        .verify(&SignedContent::of(
+            manifest.name(),
+            manifest.version(),
+            wasm_bytes,
+            served_manifest,
+        ))
+        .expect("served signature must verify offline against served metadata");
 }
 
 #[specforge_test_macros::test(
@@ -124,7 +114,7 @@ fn a_rate_limited_publish_is_r003() {
             &registry,
             Some(&credential),
             &client,
-            Some(&key),
+            &key,
         )
     };
 
@@ -137,6 +127,73 @@ fn a_rate_limited_publish_is_r003() {
     );
 }
 
+/// A signature text no client accepts: the round-3 envelope with values that are not hex.
+const MALFORMED: &str = r#"{"sig":"x","keyId":"y","pubkey":"z","signedAt":"now"}"#;
+
+#[specforge_test_macros::test(
+    behavior = "publish_to_registry",
+    verify = "the registry refuses a signature that is not a package signature, and the version stays publishable"
+)]
+fn a_signature_the_client_would_refuse_is_refused_and_the_version_stays_publishable() {
+    use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
+    use specforge_package::{PackageName, Version};
+    use specforge_registry_client::RegistryClient;
+    use specforge_registry_wire::form;
+
+    let server = LocalRegistry::start();
+    let (registry, credential) = client_of(&server);
+    let declaration = minimal_manifest();
+    let manifest = serde_json::to_string(&declaration).unwrap();
+    let wasm: &[u8] = b"\0asm-fake-extension-bytes";
+
+    // 1. What no client sends is refused, and nothing is stored.
+    let response = reqwest::blocking::Client::new()
+        .put(format!(
+            "{}/packages/%40test%2Fsigned-ext/1.0.0",
+            server.url()
+        ))
+        .header(AUTHORIZATION, format!("Bearer {}", server.token()))
+        .header(CONTENT_TYPE, form::content_type("p12"))
+        .body(form::body("p12", &manifest, wasm, Some(MALFORMED)))
+        .send()
+        .expect("the local registry answers");
+    assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = response.json().unwrap();
+    assert_eq!(body["error"]["code"], "INVALID_SIGNATURE", "{body}");
+
+    // 2. The version is still publishable, and what is published verifies and pins.
+    let client = HttpRegistryClient::new();
+    publish_to_registry(
+        wasm,
+        &declaration,
+        &registry,
+        Some(&credential),
+        &client,
+        &SigningKey::generate(),
+    )
+    .expect("the refused version publishes");
+    let name = PackageName::parse("@test/signed-ext").unwrap();
+    let version = Version::parse("1.0.0").unwrap();
+    let metadata = client.metadata(&name, &version, &registry, None).unwrap();
+    let bytes = client
+        .download(&metadata.wasm_url, &registry, None)
+        .unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let trusted = specforge_registry_client::trust_flow::check_and_pin(
+        "@test/signed-ext",
+        &metadata,
+        &bytes,
+        false,
+        &|_| false,
+        &home.path().join("known-keys.json"),
+    )
+    .expect("the published package verifies");
+    assert!(matches!(
+        trusted.accepted,
+        specforge_registry_client::Accepted::Signed { .. }
+    ));
+}
+
 #[test]
 fn tampered_wasm_fails_offline_verification() {
     // A signature over one wasm hash must not verify against different bytes.
@@ -144,24 +201,23 @@ fn tampered_wasm_fails_offline_verification() {
     let manifest = minimal_manifest();
     let declaration_json = serde_json::to_string(&manifest).unwrap();
     let wasm = b"\0asm-real-bytes";
-    let signature = key.sign_package(
+    let signature = key.sign(&SignedContent::of(
         manifest.name(),
         manifest.version(),
-        &sha256_hex(wasm),
-        &sha256_hex(declaration_json.as_bytes()),
-        "2026-09-24T00:00:00+00:00",
-    );
+        wasm,
+        &declaration_json,
+    ));
 
     let tampered = b"\0asm-swapped-bytes";
-    let err = verify_signature(
-        manifest.name(),
-        manifest.version(),
-        &sha256_hex(tampered),
-        &sha256_hex(declaration_json.as_bytes()),
-        &signature,
-    )
-    .unwrap_err();
-    assert!(err.contains("verification failed"), "{}", err);
+    let err = signature
+        .verify(&SignedContent::of(
+            manifest.name(),
+            manifest.version(),
+            tampered,
+            &declaration_json,
+        ))
+        .unwrap_err();
+    assert_eq!(err, SignatureError::DoesNotVerify);
 }
 
 #[test]
@@ -172,24 +228,23 @@ fn tampered_manifest_fails_offline_verification() {
     let manifest = minimal_manifest();
     let declaration_json = serde_json::to_string(&manifest).unwrap();
     let wasm = b"\0asm-bytes";
-    let signature = key.sign_package(
+    let signature = key.sign(&SignedContent::of(
         manifest.name(),
         manifest.version(),
-        &sha256_hex(wasm),
-        &sha256_hex(declaration_json.as_bytes()),
-        "2026-09-24T00:00:00+00:00",
-    );
+        wasm,
+        &declaration_json,
+    ));
 
     let mut swapped: ExtensionDeclaration = minimal_manifest();
     swapped.handshake.version = "9.9.9".to_string();
     let swapped_json = serde_json::to_string(&swapped).unwrap();
-    let err = verify_signature(
-        manifest.name(),
-        manifest.version(),
-        &sha256_hex(wasm),
-        &sha256_hex(swapped_json.as_bytes()),
-        &signature,
-    )
-    .unwrap_err();
-    assert!(err.contains("verification failed"), "{}", err);
+    let err = signature
+        .verify(&SignedContent::of(
+            manifest.name(),
+            manifest.version(),
+            wasm,
+            &swapped_json,
+        ))
+        .unwrap_err();
+    assert_eq!(err, SignatureError::DoesNotVerify);
 }

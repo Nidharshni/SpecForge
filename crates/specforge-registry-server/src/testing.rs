@@ -132,7 +132,6 @@ impl LocalRegistry {
             publisher: metadata.publisher.clone(),
             published_at,
             signature: metadata.signature.clone(),
-            key_id: metadata.key_id.clone(),
             manifest: metadata.manifest.clone(),
         };
         let temp = self

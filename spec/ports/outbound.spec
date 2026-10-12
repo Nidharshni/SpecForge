@@ -68,11 +68,14 @@ port RegistryClient {
   // the in-memory client (tests); both keep one contract suite.
   // A read carries the credential the user keeps for the registry, when
   // there is one; a download carries it only to the registry's own origin.
+  // A publish is always signed; a registry refuses a signature that isn't
+  // one or doesn't verify over the upload (INVALID_SIGNATURE), and the
+  // in-memory client refuses it the same way.
   method versions(name: PackageName, registry: RegistryConfig, credential: RegistryCredential) -> Result<string[], RegistryError>
   method metadata(name: PackageName, version: string, registry: RegistryConfig, credential: RegistryCredential) -> Result<PackageMetadata, RegistryError>
   method download(wasmUrl: string, registry: RegistryConfig, credential: RegistryCredential) -> Result<u8[], RegistryError>
   method search(query: SearchQuery, registry: RegistryConfig, credential: RegistryCredential) -> Result<SearchHit[], RegistryError>
-  method publish(wasm: u8[], declaration: ExtensionDeclaration, manifest: string, signature: string, registry: RegistryConfig, credential: RegistryCredential) -> Result<string, RegistryError>
+  method publish(wasm: u8[], declaration: ExtensionDeclaration, manifest: string, signature: PackageSignature, registry: RegistryConfig, credential: RegistryCredential) -> Result<PublishReceipt, RegistryError>
   method authenticate(registry: RegistryConfig, credential: RegistryCredential) -> Result<string, RegistryError>
   verify integration "RegistryClient contract is satisfied"
 }

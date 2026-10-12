@@ -4,7 +4,9 @@ use super::registry_config::{RegistryConfig, RegistryCredential};
 use specforge_package::PackageName;
 use specforge_package::Version;
 use specforge_protocol_types::ExtensionDeclaration;
-use specforge_registry_wire::{PackageMetadata, SearchHit, SearchQuery};
+use specforge_registry_wire::{
+    ErrorCode, PackageMetadata, PackageSignature, PublishReceipt, SearchHit, SearchQuery,
+};
 
 /// Errors that can occur during registry operations.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -34,6 +36,17 @@ pub enum RegistryError {
     /// The declaration to publish names no package: its name or version is
     /// not one (E072).
     InvalidPackage {
+        message: String,
+    },
+    /// The registry read the request and refused it (HTTP 400), saying why (R008).
+    Refused {
+        code: ErrorCode,
+        message: String,
+    },
+    /// The registry answered with a body that isn't the wire type of the call: a malformed publisher signature
+    /// among them (R009).
+    InvalidReply {
+        subject: String,
         message: String,
     },
 }
@@ -82,6 +95,24 @@ impl RegistryError {
             RegistryError::InvalidPackage { message } => {
                 specforge_common::package::invalid(message)
             }
+            RegistryError::Refused { code, message } => Diagnostic::new(
+                codes::R008,
+                format!("the registry refused the request ({code}): {message}"),
+            )
+            .with_suggestion(
+                "fix what the registry names and try again; sending the same request again is refused the same way"
+                    .to_string(),
+            ),
+            RegistryError::InvalidReply { subject, message } => Diagnostic::new(
+                codes::R009,
+                format!(
+                    "the registry's answer for {subject} is not the registry protocol's JSON: {message}"
+                ),
+            )
+            .with_suggestion(
+                "install nothing from this registry until it is fixed, and check that its URL is a SpecForge registry"
+                    .to_string(),
+            ),
         }
     }
 }
@@ -134,22 +165,18 @@ pub trait RegistryClient: Send + Sync {
         credential: Option<&RegistryCredential>,
     ) -> Result<Vec<SearchHit>, RegistryError>;
 
-    /// Publish an extension package (Wasm binary + manifest) to the registry.
-    ///
-    /// `manifest_json` is the exact serialization uploaded as the `manifest`
-    /// multipart field — the signature (when present) covers its SHA256.
-    /// `signature`, when provided, is the wire signature object JSON from
-    /// [`crate::signing::PackageSignature`]. `credential`, when provided,
-    /// authenticates the upload as an `Authorization: Bearer` header.
+    /// Upload `package` with `manifest_json` (the exact text `signature` covers) and `signature`; `credential`,
+    /// when given, authenticates it as an `Authorization: Bearer` header. A publish is always signed. The
+    /// registry's receipt: what it stored.
     fn publish(
         &self,
         package: &[u8],
         declaration: &ExtensionDeclaration,
         manifest_json: &str,
-        signature: Option<&str>,
+        signature: &PackageSignature,
         registry: &RegistryConfig,
         credential: Option<&RegistryCredential>,
-    ) -> Result<String, RegistryError>;
+    ) -> Result<PublishReceipt, RegistryError>;
 
     /// Validate that the given credential authenticates successfully.
     /// Returns the server-reported expiry (RFC3339), when the registry tracks one.

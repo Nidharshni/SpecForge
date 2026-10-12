@@ -1,5 +1,10 @@
 use rusqlite::{Connection, params};
+use specforge_registry_wire::PackageSignature;
 use std::path::Path;
+
+/// The schema this registry reads and writes (`PRAGMA user_version`). A data directory written before the
+/// signature was typed (ADR 0061) has none and is refused.
+const SCHEMA: i64 = 1;
 use std::sync::Mutex;
 
 pub struct Database {
@@ -27,10 +32,9 @@ pub struct PackageVersion {
     pub keywords: String,
     pub publisher: String,
     pub published_at: String,
-    /// Wire signature object (JSON with sig/keyId/pubkey/signedAt); empty when unsigned.
-    pub signature: String,
-    /// Short publisher key id; empty when unsigned.
-    pub key_id: String,
+    /// The publisher signature, stored as its JSON; `None` only for what `testing::LocalRegistry::store` stores
+    /// unsigned. Its key id is `signature.key_id()`.
+    pub signature: Option<PackageSignature>,
     /// Exact manifest JSON uploaded with the package; served so clients can
     /// verify manifest_sha256 offline.
     pub manifest: String,
@@ -57,6 +61,24 @@ impl Database {
         )
         .map_err(|e| format!("failed to set pragmas: {e}"))?;
 
+        let version: i64 = conn
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .map_err(|e| format!("failed to read the schema version: {e}"))?;
+        let has_packages: bool = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'packages'",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .map(|n| n > 0)
+            .map_err(|e| format!("failed to read the schema: {e}"))?;
+        if has_packages && version != SCHEMA {
+            return Err(format!(
+                "the registry data in {} was written by an earlier specforge-registry (schema {version}); this one reads schema {SCHEMA}: serve from a new --data-dir",
+                path.display()
+            ));
+        }
+
         let db = Self {
             conn: Mutex::new(conn),
         };
@@ -78,6 +100,8 @@ impl Database {
                 publisher TEXT NOT NULL DEFAULT '',
                 published_at TEXT NOT NULL DEFAULT (datetime('now')),
                 yanked INTEGER NOT NULL DEFAULT 0,
+                signature TEXT,
+                manifest TEXT NOT NULL DEFAULT '',
                 UNIQUE(name, version)
             );
 
@@ -106,45 +130,16 @@ impl Database {
         )
         .map_err(|e| format!("migration failed: {}", e))?;
 
-        // Signature columns arrived after the initial schema: add them to
-        // databases created before signed publishing existed.
-        for (column, ddl) in [
-            (
-                "signature",
-                "ALTER TABLE packages ADD COLUMN signature TEXT NOT NULL DEFAULT ''",
-            ),
-            (
-                "key_id",
-                "ALTER TABLE packages ADD COLUMN key_id TEXT NOT NULL DEFAULT ''",
-            ),
-            (
-                "manifest",
-                "ALTER TABLE packages ADD COLUMN manifest TEXT NOT NULL DEFAULT ''",
-            ),
-        ] {
-            let present: bool = conn
-                .query_row(
-                    &format!(
-                        "SELECT COUNT(*) FROM pragma_table_info('packages') WHERE name = '{column}'"
-                    ),
-                    [],
-                    |row| row.get::<_, i64>(0),
-                )
-                .map(|n| n > 0)
-                .unwrap_or(false);
-            if !present {
-                conn.execute_batch(ddl)
-                    .map_err(|e| format!("migration failed ({column}): {}", e))?;
-            }
-        }
+        conn.execute_batch(&format!("PRAGMA user_version = {SCHEMA}"))
+            .map_err(|e| format!("migration failed (schema version): {e}"))?;
         Ok(())
     }
 
     pub fn insert_package(&self, pkg: &PackageVersion) -> Result<(), String> {
         let conn = self.conn();
         conn.execute(
-            "INSERT INTO packages (name, version, sha256, size_bytes, description, keywords, publisher, published_at, signature, key_id, manifest)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            "INSERT INTO packages (name, version, sha256, size_bytes, description, keywords, publisher, published_at, signature, manifest)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 pkg.name,
                 pkg.version,
@@ -154,8 +149,7 @@ impl Database {
                 pkg.keywords,
                 pkg.publisher,
                 pkg.published_at,
-                pkg.signature,
-                pkg.key_id,
+                pkg.signature.as_ref().map(PackageSignature::to_json),
                 pkg.manifest,
             ],
         ).map_err(|e| {
@@ -171,7 +165,7 @@ impl Database {
     pub fn get_package_version(&self, name: &str, version: &str) -> Option<PackageVersion> {
         let conn = self.conn();
         conn.query_row(
-            "SELECT name, version, sha256, size_bytes, description, keywords, publisher, published_at, signature, key_id, manifest
+            "SELECT name, version, sha256, size_bytes, description, keywords, publisher, published_at, signature, manifest
              FROM packages WHERE name = ?1 AND version = ?2 AND yanked = 0",
             params![name, version],
             |row| {
@@ -184,9 +178,19 @@ impl Database {
                     keywords: row.get(5)?,
                     publisher: row.get(6)?,
                     published_at: row.get(7)?,
-                    signature: row.get(8)?,
-                    key_id: row.get(9)?,
-                    manifest: row.get(10)?,
+                    signature: row
+                        .get::<_, Option<String>>(8)?
+                        .map(|text| {
+                            PackageSignature::parse(&text).map_err(|why| {
+                                rusqlite::Error::FromSqlConversionFailure(
+                                    8,
+                                    rusqlite::types::Type::Text,
+                                    Box::new(why),
+                                )
+                            })
+                        })
+                        .transpose()?,
+                    manifest: row.get(9)?,
                 })
             },
         )
@@ -243,8 +247,7 @@ impl Database {
                     keywords: row.get(5)?,
                     publisher: row.get(6)?,
                     published_at: row.get(7)?,
-                    signature: String::new(),
-                    key_id: String::new(),
+                    signature: None,
                     manifest: row.get(8)?,
                 })
             })
@@ -415,10 +418,34 @@ mod tests {
             keywords: String::new(),
             publisher: "tester".to_string(),
             published_at: "2026-01-01".to_string(),
-            signature: String::new(),
-            key_id: String::new(),
+            signature: None,
             manifest: String::new(),
         }
+    }
+
+    #[test]
+    fn an_older_data_directory_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("old.db");
+        {
+            let conn = Connection::open(&path).unwrap();
+            conn.execute_batch("CREATE TABLE packages (id INTEGER PRIMARY KEY, name TEXT)")
+                .unwrap();
+        }
+        let error = Database::open(&path)
+            .err()
+            .expect("an older file is refused");
+        assert!(error.contains("--data-dir"), "{error}");
+
+        // An empty file opens and carries the schema version.
+        let fresh = dir.path().join("fresh.db");
+        drop(Database::open(&fresh).unwrap());
+        let version: i64 = Connection::open(&fresh)
+            .unwrap()
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, SCHEMA);
+        Database::open(&fresh).expect("a current file reopens");
     }
 
     // C8-08: committed data survives an unclean shutdown — the leaked

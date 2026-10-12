@@ -245,18 +245,26 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   keyring (a 0600 file without one), or a reference to an environment variable (`--token-env`) or a file
   (`--token-file`), resolved before any request (`CredentialStore::credential`; R010, R011). Every read carries
   it; a publish takes `SPECFORGE_REGISTRY_TOKEN` first (ADR 0045 as amended).
-- **Fetch policy**: what a package passes before an operation sees it: the registry's reply names the
-  package and version asked for, the binary hashes to the served SHA-256, the served manifest reads as that
+- **Fetch policy**: what a package passes before an operation sees it: the registry's reply reads as the protocol's JSON (R009 else;
+  a malformed signature is that) and names the package and version asked for, the binary hashes to the served SHA-256, the served manifest reads as that
   package's declaration (one from before ADR 0012 is refused), and the publisher signature verifies with a
   key that matches its pin or is pinned now (`ConfiguredRegistry::fetch`; ADR 0010, 0012, 0044). A refused
   package pins no key. Accepting an unsigned package (`--allow-unsigned`) is reported as W155 and a re-pinned
   key as W156; a first-use pin is part of the outcome (`Publisher`). The check writes nothing to the terminal:
   a key change is asked of the surface that can ask.
-- **Package registry contract**: what a package registry and its client exchange over HTTP: the paths, the
-  JSON bodies, the publish form and the error codes, each defined once in `specforge-registry-wire`, which
-  `specforge-registry-server` and `specforge-registry-client` both compile against (ADR 0044). A test
-  reaches a registry through the real server in process or an in-memory client, never through JSON written
-  by hand.
+- **Package signature**: a publisher's Ed25519 signature over a package's signed content (its name and version as
+  declared, and the SHA-256 of the exact binary and manifest uploaded), with the public key and the time that verify it
+  offline (`specforge_registry_wire::PackageSignature`, JSON `{sig, public_key, signed_at}`). Its key id is the first
+  16 hex of the public key's SHA-256. Only a well-formed one exists. `specforge publish` signs with the user's key; the
+  registry refuses an upload whose signature isn't one or doesn't verify over it (INVALID_SIGNATURE), before storing
+  anything, so the version stays publishable; `add` verifies what it downloads again, because the registry is not the
+  trust anchor: which keys to trust is the user's pins (ADR 0061).
+- **Package registry contract**: what a package registry and its client exchange over HTTP: the paths, the JSON
+  bodies (the package signature among them), the publish form and the error codes, each defined once in
+  `specforge-registry-wire`, which `specforge-registry-server` and `specforge-registry-client` both compile against
+  (ADR 0044, ADR 0061). A registry's refusal (HTTP 400) carries a typed code and reaches the user as R008; an
+  answer that isn't the call's wire type is R009. A test reaches a registry through the real server in process or
+  an in-memory client, never through JSON written by hand.
 - **Registry for a package**: the one configured registry that serves a package name: the first
   `registries` entry whose `scope_filter` is the name's scope, else the first marked
   `default_registry`; with neither, none does, and the operation refuses with R-OPS-001 before any

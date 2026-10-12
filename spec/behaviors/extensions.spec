@@ -736,6 +736,9 @@ behavior publish_to_registry "Publish to Registry" {
   ensures {
     sha256_computed            "SHA256 hash of .wasm binary is computed and included in the upload"
     duplicate_version_rejected "A version the registry already holds is refused (R007): a published version is immutable"
+    signature_checked_on_upload "The registry refuses an upload whose signature is missing (UNSIGNED_PACKAGE), isn't a package signature, or doesn't verify over its name, version, binary and exact manifest (INVALID_SIGNATURE), before storing anything"
+    refusal_reported           "A registry's refusal reaches the publisher as R008 with the registry's code and reason, not as a network error"
+    receipt_checked            "Publish checks the registry's receipt names the uploaded name, version, SHA-256, size and key id, else R009"
     registry_url_returned      "Successful publish returns the registry URL for the published version"
     published_event_emitted    "extension_published_to_registry event fires on successful publish"
   }
@@ -746,8 +749,17 @@ behavior publish_to_registry "Publish to Registry" {
     with the .wasm binary and its SHA256 hash, before any network call
     deciding whether to refuse; the request MUST be authenticated. The
     registry MUST refuse a manifest that is not an extension declaration,
-    and takes the description and keywords it shows from the declaration. A version the registry
+    and takes the description and keywords it shows from the declaration.
+    The registry MUST refuse an upload with no signature (UNSIGNED_PACKAGE),
+    or whose signature is not a package signature or does not verify over
+    the name and version in the upload path, the binary and the exact
+    manifest uploaded (INVALID_SIGNATURE), before it stores anything, so a
+    version it refuses stays publishable; it judges no key's trust
+    (ADR 0061). A version the registry
     already holds MUST be refused (R007): a published version is immutable.
+    A registry's refusal MUST reach the publisher as R008 naming the
+    registry's code and reason. Publish MUST check that the registry's
+    receipt names what it uploaded.
     The package MUST go to the one registry that serves its name, the
     registry add and update fetch that name from (ADR 0045). The upload MUST
     be authenticated: with no credential for that registry
@@ -771,6 +783,10 @@ behavior publish_to_registry "Publish to Registry" {
   verify unit "publish refuses a binary whose declaration has errors before any network call"
   verify integration "the registry refuses a manifest that is not an extension declaration"
   verify integration "the registry takes a package's description and keywords from its declaration"
+  verify integration "the registry refuses a signature that is not a package signature, and the version stays publishable"
+  verify integration "the registry refuses a signature that does not verify over the upload"
+  verify unit "a registry's refusal reaches the publisher with its reason"
+  verify unit "publish checks the registry's receipt against what it uploaded"
   verify unit "SHA256 computed and included in upload"
   verify unit "a version already published is refused with R007"
   verify unit "successful publish returns registry URL"
@@ -783,7 +799,7 @@ behavior publish_to_registry "Publish to Registry" {
   verify unit "publish asks the registry add fetches the same name from"
   verify unit "the declaration's warnings are reported even when publish is refused"
   verify unit "what publish uploads is what add installs"
-  verify contract "Publish to Registry: registry publishing holds — declaration_valid, wasm_binary_available, registry_client_available, credentials_available, sha256_computed, duplicate_version_rejected, registry_url_returned, published_event_emitted"
+  verify contract "Publish to Registry: registry publishing holds — declaration_valid, wasm_binary_available, registry_client_available, credentials_available, sha256_computed, duplicate_version_rejected, signature_checked_on_upload, refusal_reported, receipt_checked, registry_url_returned, published_event_emitted"
 }
 
 behavior verify_registry_integrity "Verify Registry Integrity" {
@@ -831,22 +847,23 @@ behavior check_registry_reply "Check Registry Reply" {
     reply_received "The registry answered a request for name@version and its download passed the SHA256 check"
   }
   ensures {
+    reply_readable         "A reply that isn't the registry protocol's JSON (a malformed publisher signature among them) is refused with R009, even with --allow-unsigned"
     reply_names_request    "A reply naming another package or version than the one requested is refused with R-TRUST-004"
-    key_id_consistent      "A reply whose key id differs from the key id inside its signature is refused with R-TRUST-004"
     manifest_names_request "A served manifest naming another package or version is refused with R-TRUST-004"
     manifest_fails_closed  "A missing or unreadable served manifest is refused with R-OPS-004, never read as declaring no peers"
     peers_from_manifest    "The peers the served declaration declares are the ones the ADR-0001 diamond gate checks"
     declaration_matches    "A binary whose declaration differs from the served one is refused with R-TRUST-004 naming the first differing category"
   }
   contract   """
+    A reply that isn't the registry protocol's JSON for the request (a
+    publisher signature that isn't one among them) MUST be refused (R009)
+    before anything else is checked: no flag accepts it.
     Before a registry package's signature is checked or its key pinned,
     the system MUST refuse the reply when it describes another package or
     version than the one requested, or when its manifest does: the
     signature covers the name and version the reply carries, and the pin
     is keyed by name, so an answer for another package would otherwise be
-    verified, pinned and installed in its place (R-TRUST-004). A reply
-    whose key id differs from the one inside its signature MUST be
-    refused (R-TRUST-004). The served manifest is the package's
+    verified, pinned and installed in its place (R-TRUST-004). The served manifest is the package's
     declaration, whose peers decide the diamond gate before anything is
     loaded: a missing manifest, or one that isn't a readable extension
     declaration (one published before declarations, carrying
@@ -856,8 +873,8 @@ behavior check_registry_reply "Check Registry Reply" {
     package is refused (R-TRUST-004) naming the first differing category.
     A refused reply pins no key and installs nothing.
   """
+  verify unit "a reply that is not the protocol's JSON is refused with R009, even with --allow-unsigned"
   verify integration "a reply for another package is refused and pins nothing"
-  verify integration "a key id the signature does not carry is refused"
   verify integration "a manifest that cannot be read is refused and pins nothing"
   verify integration "the peers the served manifest declares reach the package"
   verify unit "add refuses a package whose binary declares other than its published declaration"
@@ -875,7 +892,7 @@ behavior verify_publisher_signature "Verify Publisher Signature" {
     reply_checked "The registry reply passed the SHA256 check and names the package requested"
   }
   ensures {
-    broken_signature_refused "A signature that is malformed or doesn't verify is refused with R-TRUST-002, even with --allow-unsigned"
+    broken_signature_refused "A signature that doesn't verify is refused with R-TRUST-002, even with --allow-unsigned"
     unsigned_refused         "An unsigned package is refused with R-TRUST-001 unless --allow-unsigned is given"
     unsigned_pins_nothing    "An unsigned package accepted with --allow-unsigned pins no key"
     unsigned_reported        "An unsigned package accepted with --allow-unsigned is reported as W155"
@@ -885,16 +902,16 @@ behavior verify_publisher_signature "Verify Publisher Signature" {
     over the canonical payload {name, version, wasmSha256, manifestSha256,
     signedAt} re-derived from the downloaded Wasm bytes and the manifest
     the registry serves, with the public key carried in the signature
-    object. A malformed signature, or one that doesn't verify (tampered
-    binary or swapped manifest), MUST be refused with R-TRUST-002, and
-    --allow-unsigned MUST NOT bypass it. A package with no signature MUST
+    object. A signature that doesn't verify (tampered binary or swapped
+    manifest) MUST be refused with R-TRUST-002, and --allow-unsigned MUST
+    NOT bypass it; one that isn't a package signature makes the reply
+    unreadable (R009, check_registry_reply). A package with no signature MUST
     be refused with R-TRUST-001 unless the user passes --allow-unsigned;
     one accepted that way pins no key. Accepting it is reported as W155 on
     every surface; the check itself writes nothing to the terminal.
   """
   verify integration "a signature over other bytes is refused even with --allow-unsigned"
   verify integration "a swapped manifest breaks the signature"
-  verify integration "a malformed signature object is refused"
   verify integration "an unsigned package is refused without --allow-unsigned"
   verify integration "an unsigned package is accepted with --allow-unsigned and pins no key"
   verify integration "an unsigned package accepted with --allow-unsigned is reported as W155"
