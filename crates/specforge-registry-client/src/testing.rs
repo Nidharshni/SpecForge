@@ -8,8 +8,8 @@ use specforge_package::PackageName;
 use specforge_package::Version;
 use specforge_protocol_types::{DeclaredCategory, ExtensionDeclaration};
 use specforge_registry_wire::{
-    DEFAULT_SEARCH_LIMIT, PackageMetadata, PackageSignature, SearchHit, SearchQuery, SignedContent,
-    path, sha256_hex,
+    DEFAULT_SEARCH_LIMIT, ErrorCode, PackageMetadata, PackageSignature, SearchHit, SearchQuery,
+    SignedContent, path, sha256_hex,
 };
 
 use crate::registry_client::{RegistryClient, RegistryError};
@@ -416,6 +416,18 @@ impl RegistryClient for MemoryClient {
                 version: declaration.version().to_string(),
             });
         }
+        // As the registry server does: a signature that doesn't verify over the upload is refused.
+        signature
+            .verify(&SignedContent::of(
+                declaration.name(),
+                &version.to_string(),
+                package,
+                manifest_json,
+            ))
+            .map_err(|why| RegistryError::Refused {
+                code: ErrorCode::InvalidSignature,
+                message: why.to_string(),
+            })?;
         let mut metadata = package_metadata(
             declaration.name(),
             &version.to_string(),
@@ -680,6 +692,58 @@ pub fn assert_client_contract(
         matches!(error, RegistryError::Unauthorized { .. }),
         "K10: publishing with no credential is Unauthorized, not {error:?}"
     );
+
+    // K11
+    let next_wasm = b"\0asm next";
+    let mismatched = key.sign(&SignedContent::of(
+        "@contract/tool",
+        "2.0.0",
+        b"\0asm other",
+        &manifest,
+    ));
+    let error = client
+        .publish(
+            next_wasm,
+            &next,
+            &manifest,
+            &mismatched,
+            registry,
+            Some(credential),
+        )
+        .unwrap_err();
+    assert!(
+        matches!(
+            error,
+            RegistryError::Refused {
+                code: ErrorCode::InvalidSignature,
+                ..
+            }
+        ),
+        "K11: a signature over other bytes is Refused(InvalidSignature), not {error:?}"
+    );
+    let error = client
+        .metadata(&tool, &Version::new(2, 0, 0), registry, None)
+        .unwrap_err();
+    assert!(
+        matches!(error, RegistryError::NotFound { .. }),
+        "K11: a refused publish stores nothing, not {error:?}"
+    );
+    let signature = key.sign(&SignedContent::of(
+        "@contract/tool",
+        "2.0.0",
+        next_wasm,
+        &manifest,
+    ));
+    client
+        .publish(
+            next_wasm,
+            &next,
+            &manifest,
+            &signature,
+            registry,
+            Some(credential),
+        )
+        .expect("K11: the same version, correctly signed, publishes");
 }
 
 /// The private client contract (plan 16): what every `RegistryClient` adapter does against a registry that

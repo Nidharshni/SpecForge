@@ -797,58 +797,112 @@ async fn publish_signed_ext(
     (status, json_of(response).await)
 }
 
-// bug: plan 12 §3 R1, flipped by T4
+/// `get_json` of the version's metadata: its status.
+async fn metadata_status(router: &axum::Router, version: &str) -> StatusCode {
+    get_json(
+        router,
+        &format!("/v1/packages/@test%2Fsigned-ext/{version}"),
+    )
+    .await
+    .0
+}
+
+#[specforge_test_macros::test(
+    behavior = "publish_to_registry",
+    verify = "the registry refuses a signature that is not a package signature, and the version stays publishable"
+)]
 #[tokio::test]
-async fn signatures_that_are_not_signatures_are_stored_today() {
+async fn a_signature_that_is_not_one_is_refused() {
     let dir = tempfile::tempdir().unwrap();
     let state = app_state(dir.path(), 100);
     let token = auth::create_token(&state.database, None, "pub", Some(90), false);
     let router = app_clone(&state);
-    for (version, signature) in [
+    for (version, signature, reason) in [
         (
             "1.0.0",
             r#"{"sig":"x","keyId":"y","pubkey":"z","signedAt":"now"}"#,
+            "unknown field `keyId`",
         ),
-        ("1.0.1", "hello"),
-        ("1.0.2", r#"{"sig":"aa"}"#),
+        ("1.0.1", "hello", "expected value"),
+        ("1.0.2", r#"{"sig":"aa"}"#, "missing field"),
     ] {
         let manifest = VALID_MANIFEST.replace("1.0.0", version);
-        let (status, receipt) =
+        let (status, body) =
             publish_signed_ext(&router, &token, version, &manifest, WASM, signature).await;
-        assert_eq!(status, StatusCode::CREATED, "{version}: {receipt}");
-        // The key id is read through the typed signature: none of these has one.
-        assert_eq!(receipt["key_id"], "", "{version}");
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{version}: {body}");
+        assert_eq!(body["error"]["code"], "INVALID_SIGNATURE", "{version}");
+        let message = body["error"]["message"].as_str().unwrap();
+        assert!(message.contains(reason), "{version}: {message}");
+        assert_eq!(
+            metadata_status(&router, version).await,
+            StatusCode::NOT_FOUND,
+            "{version} is stored"
+        );
     }
-}
-
-// bug: plan 12 §3 R2, flipped by T4
-#[tokio::test]
-async fn a_signature_over_other_bytes_is_stored_today() {
-    let dir = tempfile::tempdir().unwrap();
-    let state = app_state(dir.path(), 100);
-    let token = auth::create_token(&state.database, None, "pub", Some(90), false);
-    let signature = signed(VALID_MANIFEST, b"\0asm-other");
+    // A sig that is not hex is refused by name.
+    let signature = signed(VALID_MANIFEST, WASM).replace("\"sig\":\"", "\"sig\":\"zz");
+    let (status, body) =
+        publish_signed_ext(&router, &token, "1.0.0", VALID_MANIFEST, WASM, &signature).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+    assert!(
+        body["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("`sig` is not 128 hex"),
+        "{body}"
+    );
+    // The version stays publishable.
     let (status, receipt) = publish_signed_ext(
-        &app_clone(&state),
+        &router,
         &token,
         "1.0.0",
         VALID_MANIFEST,
         WASM,
-        &signature,
+        &signed(VALID_MANIFEST, WASM),
     )
     .await;
     assert_eq!(status, StatusCode::CREATED, "{receipt}");
 }
 
-// bug: plan 12 §3 R2, flipped by T4
+#[specforge_test_macros::test(
+    behavior = "publish_to_registry",
+    verify = "the registry refuses a signature that does not verify over the upload"
+)]
 #[tokio::test]
-async fn a_signature_of_another_version_is_stored_today() {
+async fn a_signature_over_other_bytes_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = app_state(dir.path(), 100);
+    let token = auth::create_token(&state.database, None, "pub", Some(90), false);
+    let router = app_clone(&state);
+    let signature = signed(VALID_MANIFEST, b"\0asm-other");
+    let (status, body) =
+        publish_signed_ext(&router, &token, "1.0.0", VALID_MANIFEST, WASM, &signature).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+    assert_eq!(body["error"]["code"], "INVALID_SIGNATURE");
+    let message = body["error"]["message"].as_str().unwrap();
+    assert!(message.contains("is not its key's signature"), "{message}");
+    assert!(
+        message.contains("@test/signed-ext@1.0.0 as uploaded"),
+        "{message}"
+    );
+    assert_eq!(
+        metadata_status(&router, "1.0.0").await,
+        StatusCode::NOT_FOUND
+    );
+}
+
+#[specforge_test_macros::test(
+    behavior = "publish_to_registry",
+    verify = "the registry refuses a signature that does not verify over the upload"
+)]
+#[tokio::test]
+async fn a_signature_of_another_version_is_refused() {
     let dir = tempfile::tempdir().unwrap();
     let state = app_state(dir.path(), 100);
     let token = auth::create_token(&state.database, None, "pub", Some(90), false);
     // Made for 1.0.0, replayed with the 1.0.1 manifest at 1.0.1.
     let signature = signed(VALID_MANIFEST, WASM);
-    let (status, receipt) = publish_signed_ext(
+    let (status, body) = publish_signed_ext(
         &app_clone(&state),
         &token,
         "1.0.1",
@@ -857,7 +911,34 @@ async fn a_signature_of_another_version_is_stored_today() {
         &signature,
     )
     .await;
-    assert_eq!(status, StatusCode::CREATED, "{receipt}");
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+    assert_eq!(body["error"]["code"], "INVALID_SIGNATURE");
+}
+
+#[specforge_test_macros::test(
+    behavior = "publish_to_registry",
+    verify = "the registry refuses a signature that does not verify over the upload"
+)]
+#[tokio::test]
+async fn a_signature_over_another_manifest_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = app_state(dir.path(), 100);
+    let token = auth::create_token(&state.database, None, "pub", Some(90), false);
+    let described = VALID_MANIFEST.replace(
+        "\"sandbox_policy\":null",
+        "\"sandbox_policy\":null,\"description\":\"other\"",
+    );
+    let (status, body) = publish_signed_ext(
+        &app_clone(&state),
+        &token,
+        "1.0.0",
+        VALID_MANIFEST,
+        WASM,
+        &signed(&described, WASM),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+    assert_eq!(body["error"]["code"], "INVALID_SIGNATURE");
 }
 
 #[tokio::test]

@@ -307,9 +307,8 @@ fn publish_signs_package_when_key_provided() {
     assert_eq!(sig.key_id(), key.key_id());
 }
 
-// bug: plan 12 §3 R2, flipped by T4
 #[test]
-fn the_memory_client_stores_a_signature_that_does_not_verify_today() {
+fn the_memory_client_refuses_a_signature_that_does_not_verify() {
     let registry = default_registry();
     let declaration = minimal_manifest();
     let manifest = serde_json::to_string(&declaration).unwrap();
@@ -321,7 +320,7 @@ fn the_memory_client_stores_a_signature_that_does_not_verify_today() {
     ));
     let client = client();
 
-    client
+    let error = client
         .publish(
             b"\0asm wasm",
             &declaration,
@@ -330,14 +329,24 @@ fn the_memory_client_stores_a_signature_that_does_not_verify_today() {
             &registry,
             Some(&accepted()),
         )
-        .expect("the memory client stores what does not verify");
-    let served = client
+        .unwrap_err();
+    assert!(
+        matches!(
+            error,
+            RegistryError::Refused {
+                code: specforge_registry_wire::ErrorCode::InvalidSignature,
+                ..
+            }
+        ),
+        "{error:?}"
+    );
+    let error = client
         .metadata(
             &PackageName::parse("@test/ext").unwrap(),
             &Version::new(1, 0, 0),
             &registry,
             None,
         )
-        .unwrap();
-    assert_eq!(served.signature, signature.to_json());
+        .unwrap_err();
+    assert!(matches!(error, RegistryError::NotFound { .. }), "{error:?}");
 }

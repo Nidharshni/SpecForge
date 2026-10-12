@@ -131,9 +131,11 @@ fn a_rate_limited_publish_is_r003() {
 /// A signature text no client accepts: the round-3 envelope with values that are not hex.
 const MALFORMED: &str = r#"{"sig":"x","keyId":"y","pubkey":"z","signedAt":"now"}"#;
 
-// bug: plan 12 §3 R1, flipped by T4
-#[test]
-fn a_signature_the_client_refuses_is_stored_and_burns_the_version_today() {
+#[specforge_test_macros::test(
+    behavior = "publish_to_registry",
+    verify = "the registry refuses a signature that is not a package signature, and the version stays publishable"
+)]
+fn a_signature_the_client_would_refuse_is_refused_and_the_version_stays_publishable() {
     use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
     use specforge_package::{PackageName, Version};
     use specforge_registry_client::RegistryClient;
@@ -145,7 +147,7 @@ fn a_signature_the_client_refuses_is_stored_and_burns_the_version_today() {
     let manifest = serde_json::to_string(&declaration).unwrap();
     let wasm: &[u8] = b"\0asm-fake-extension-bytes";
 
-    // 1. What no client sends is stored.
+    // 1. What no client sends is refused, and nothing is stored.
     let response = reqwest::blocking::Client::new()
         .put(format!(
             "{}/packages/%40test%2Fsigned-ext/1.0.0",
@@ -156,30 +158,13 @@ fn a_signature_the_client_refuses_is_stored_and_burns_the_version_today() {
         .body(form::body("p12", &manifest, wasm, Some(MALFORMED)))
         .send()
         .expect("the local registry answers");
-    assert_eq!(response.status(), reqwest::StatusCode::CREATED);
+    assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = response.json().unwrap();
+    assert_eq!(body["error"]["code"], "INVALID_SIGNATURE", "{body}");
 
-    // 2. Every client refuses it, even with --allow-unsigned.
+    // 2. The version is still publishable, and what is published verifies and pins.
     let client = HttpRegistryClient::new();
-    let name = PackageName::parse("@test/signed-ext").unwrap();
-    let version = Version::parse("1.0.0").unwrap();
-    let metadata = client.metadata(&name, &version, &registry, None).unwrap();
-    let bytes = client
-        .download(&metadata.wasm_url, &registry, None)
-        .unwrap();
-    let home = tempfile::tempdir().unwrap();
-    let error = specforge_registry_client::trust_flow::check_and_pin(
-        "@test/signed-ext",
-        &metadata,
-        &bytes,
-        true,
-        &|_| true,
-        &home.path().join("known-keys.json"),
-    )
-    .unwrap_err();
-    assert_eq!(error.code, "R-TRUST-002", "{error:?}");
-
-    // 3. The version is burned: a correctly signed publish of it is refused.
-    let error = publish_to_registry(
+    publish_to_registry(
         wasm,
         &declaration,
         &registry,
@@ -187,8 +172,27 @@ fn a_signature_the_client_refuses_is_stored_and_burns_the_version_today() {
         &client,
         &SigningKey::generate(),
     )
-    .unwrap_err();
-    assert_eq!(error.code, "R007", "{error:?}");
+    .expect("the refused version publishes");
+    let name = PackageName::parse("@test/signed-ext").unwrap();
+    let version = Version::parse("1.0.0").unwrap();
+    let metadata = client.metadata(&name, &version, &registry, None).unwrap();
+    let bytes = client
+        .download(&metadata.wasm_url, &registry, None)
+        .unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let trusted = specforge_registry_client::trust_flow::check_and_pin(
+        "@test/signed-ext",
+        &metadata,
+        &bytes,
+        false,
+        &|_| false,
+        &home.path().join("known-keys.json"),
+    )
+    .expect("the published package verifies");
+    assert!(matches!(
+        trusted.accepted,
+        specforge_registry_client::Accepted::Signed { .. }
+    ));
 }
 
 #[test]

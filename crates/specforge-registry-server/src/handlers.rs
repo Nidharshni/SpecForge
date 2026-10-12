@@ -11,8 +11,8 @@ use specforge_package::Version;
 use specforge_registry_wire::path::route;
 use specforge_registry_wire::{
     ErrorBody, ErrorCode, PackageMetadata, PackageSignature, PublishReceipt, SearchHit,
-    SearchQuery, SearchResults, TokenIssued, TokenList, TokenRequest, TokenRevoked, TokenSummary,
-    TokenVerified, VersionList, Yanked, form, path,
+    SearchQuery, SearchResults, SignedContent, TokenIssued, TokenList, TokenRequest, TokenRevoked,
+    TokenSummary, TokenVerified, VersionList, Yanked, form, path,
 };
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -551,14 +551,19 @@ async fn publish_package(
 
     // --- Publish validation contract (spec #21, T3) ---
     // 1. Signed packages only: the signature field must be present.
-    let signature_json = match signature_json {
-        Some(sig) if !sig.trim().is_empty() => sig,
-        _ => {
+    let signature = match signature_json.as_deref().map(str::trim) {
+        None | Some("") => {
             return Err(ApiError::bad_request(
                 ErrorCode::UnsignedPackage,
                 "packages must be signed: run `specforge publish` (which signs) instead of uploading raw artifacts",
             ));
         }
+        Some(text) => PackageSignature::parse(text).map_err(|why| {
+            ApiError::bad_request(
+                ErrorCode::InvalidSignature,
+                format!("{why} (publish with `specforge publish`, which signs every package)"),
+            )
+        })?,
     };
 
     // 2. wasm magic bytes: reject non-wasm payloads.
@@ -618,18 +623,36 @@ async fn publish_package(
         ));
     }
 
+    // 5. The signature verifies over this upload: its name, version, binary
+    //    and exact manifest. Hashing is CPU-bound, so it runs on the blocking
+    //    pool; the binary is hashed once, for the signature and the row.
+    let manifest_json = declaration_json.unwrap_or_default();
+    let (content, verified) = {
+        let (name, version, wasm, manifest, signature) = (
+            name.clone(),
+            version.clone(),
+            wasm_data.clone(),
+            manifest_json.clone(),
+            signature.clone(),
+        );
+        tokio::task::spawn_blocking(move || {
+            let content = SignedContent::of(&name, &version, &wasm, &manifest);
+            let verified = signature.verify(&content);
+            (content, verified)
+        })
+        .await
+        .expect("signature check task panicked")
+    };
+    verified.map_err(|why| {
+        ApiError::bad_request(
+            ErrorCode::InvalidSignature,
+            format!("{why}: {name}@{version} as uploaded"),
+        )
+    })?;
+    let sha256 = content.wasm_sha256().to_string();
+
     // --- end validation contract ---
 
-    // Compute SHA256 — hashing the payload is CPU-bound: run it on the
-    // blocking pool.
-    let hash_data = wasm_data.clone();
-    let sha256 = tokio::task::spawn_blocking(move || {
-        let mut hasher = Sha256::new();
-        hasher.update(&hash_data);
-        hex::encode(hasher.finalize())
-    })
-    .await
-    .expect("sha256 hashing task panicked");
     // What search shows: the description and keywords the declaration's
     // handshake carries.
     let description = declaration
@@ -660,12 +683,10 @@ async fn publish_package(
         Err(e) => return Err(ApiError::internal(ErrorCode::StorageError, e)),
     };
 
-    // The short key id of the signature, for display and indexing. The full
-    // signature object is stored verbatim so clients can verify offline
-    // (spec #21: the registry is not the trust anchor).
-    let key_id = PackageSignature::parse(&signature_json)
-        .map(|signature| signature.key_id())
-        .unwrap_or_default();
+    // The short key id of the verified signature. The full signature object
+    // is stored verbatim so clients can verify offline (spec #21: the
+    // registry is not the trust anchor).
+    let key_id = signature.key_id();
 
     // Insert into database — rusqlite is blocking: run it on the blocking
     // pool.
@@ -678,9 +699,9 @@ async fn publish_package(
         keywords,
         publisher: publisher_account,
         published_at: chrono::Utc::now().to_rfc3339(),
-        signature: signature_json,
+        signature: signature.to_json(),
         key_id: key_id.clone(),
-        manifest: declaration_json.unwrap_or_default(),
+        manifest: manifest_json,
     };
 
     // Run the insert on the blocking pool, but keep the temp path
