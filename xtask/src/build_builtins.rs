@@ -775,4 +775,40 @@ mod tests {
             );
         }
     }
+
+    /// A blob compiles no test code: a test module is declared out of line (`#[cfg(test)] mod
+    /// tests;`), which a release build never reads, so a test-only edit re-vendors nothing; and
+    /// the SDK's test helpers are behind its `testing` feature (ADR 0050).
+    #[test]
+    fn a_builtin_compiles_no_test_code() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        for builtin in BUILTINS {
+            let name = builtin.dir;
+            let path = root.join(format!("extensions/{name}/wasm/{INPUTS_FILE}"));
+            let record: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+            for key in record["inputs"].as_object().unwrap().keys() {
+                assert_ne!(
+                    key, "crates/specforge-extension-sdk/src/testing.rs",
+                    "{name} compiles the SDK's test helpers"
+                );
+                let Ok(text) = std::fs::read_to_string(root.join(key)) else {
+                    continue;
+                };
+                let lines: Vec<&str> = text.lines().collect();
+                for pair in lines.windows(2) {
+                    let inline_module = pair[1]
+                        .trim_start()
+                        .strip_prefix("pub ")
+                        .map_or_else(|| pair[1].trim_start(), str::trim_start);
+                    assert!(
+                        !(pair[0].trim() == "#[cfg(test)]"
+                            && inline_module.starts_with("mod ")
+                            && inline_module.trim_end().ends_with('{')),
+                        "{name}: {key} holds an inline test module `{}`; declare it out of line",
+                        pair[1].trim()
+                    );
+                }
+            }
+        }
+    }
 }

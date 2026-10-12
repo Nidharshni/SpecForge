@@ -1139,73 +1139,7 @@ pub mod prelude {
 }
 
 #[cfg(test)]
-mod raw_category_tests {
-    use super::*;
-
-    /// Formal's migration exposed this: an extension serving describes via
-    /// `raw_category` (static data) is declared by them exactly as the
-    /// builders declare, and its handshake carries no flags.
-    #[test]
-    fn raw_categories_are_declared() {
-        let mut b = ContributionsBuilder::new(ExtensionMeta::new("@acme/formal", "1.0.0"));
-        b.raw_category(
-            DeclaredCategory::Entities,
-            serde_json::json!([{ "name": "Property" }]),
-        );
-        b.raw_category(
-            DeclaredCategory::ValidationRules,
-            serde_json::json!([{
-                "code": "F100",
-                "severity": "warning",
-                "message_template": "m",
-                "check": "custom"
-            }]),
-        );
-
-        let declaration = b.declaration();
-        assert!(declaration.declares(DeclaredCategory::Entities));
-        assert!(declaration.declares(DeclaredCategory::ValidationRules));
-        assert!(!declaration.declares(DeclaredCategory::Collectors));
-        let value: serde_json::Value = serde_json::from_str(&b.handshake_json()).unwrap();
-        assert!(value.get("contribution_flags").is_none());
-        assert!(value.get("providers").is_none());
-    }
-
-    #[test]
-    fn a_collector_can_capture_stdout() {
-        let mut k = CollectorBuilder::new("cargo-test");
-        let plain = serde_json::to_value(&k.descriptor).unwrap();
-        assert!(plain.get("capture").is_none());
-        k.capture_stdout();
-        let captured = serde_json::to_value(&k.descriptor).unwrap();
-        assert_eq!(captured["capture"], serde_json::json!("stdout"));
-    }
-
-    #[test]
-    fn a_starter_template_rides_the_handshake() {
-        let mut b = ContributionsBuilder::new(ExtensionMeta::new("@acme/x", "1.0.0"));
-        let without: serde_json::Value = serde_json::from_str(&b.handshake_json()).unwrap();
-        assert!(without.get("starter_template").is_none(), "{without}");
-
-        b.starter_template("spec \"{project}\" {}\n");
-        let with: serde_json::Value = serde_json::from_str(&b.handshake_json()).unwrap();
-        assert_eq!(
-            with["starter_template"],
-            serde_json::json!("spec \"{project}\" {}\n")
-        );
-    }
-
-    #[test]
-    fn a_migration_hook_rides_the_handshake() {
-        let mut b = ContributionsBuilder::new(ExtensionMeta::new("@acme/x", "1.0.0"));
-        let without: serde_json::Value = serde_json::from_str(&b.handshake_json()).unwrap();
-        assert!(without.get("migration_hook").is_none(), "{without}");
-
-        b.migration_hook_handler("migrate_acme", |_| Ok(()));
-        let with: serde_json::Value = serde_json::from_str(&b.handshake_json()).unwrap();
-        assert_eq!(with["migration_hook"], serde_json::json!("migrate_acme"));
-    }
-}
+mod raw_category_tests;
 
 // ── Operational payloads ───────────────────────────────────────────────────
 // What the host sends each export it calls and what the export answers are
@@ -1337,53 +1271,7 @@ impl CommandGraph {
 }
 
 #[cfg(test)]
-mod command_graph_tests {
-    use super::*;
-
-    #[test]
-    fn a_command_input_carries_its_args_and_graph() {
-        let input: CommandInput = serde_json::from_value(serde_json::json!({
-            "args": {"status": "done", "limit": 2, "offset": "1", "all": true},
-            "cwd": "/p",
-            "graph": {
-                "format_version": "1.0",
-                "nodes": [
-                    {"id": "a", "kind": "k", "title": "A", "file": "x.spec", "line": 1,
-                     "fields": {"status": "done", "refs": ["b"]}},
-                    {"id": "b", "kind": "k", "file": "x.spec", "line": 2, "fields": {}}
-                ],
-                "edges": [{"source": "a", "target": "b", "label": "refs"}]
-            }
-        }))
-        .unwrap();
-        assert_eq!(input.args["status"], "done");
-        assert_eq!(input.args["limit"], 2);
-        let a = input.graph.node("a").unwrap();
-        assert_eq!(a.text("status"), Some("done"));
-        assert_eq!(a.text("refs"), None);
-        assert_eq!(a.list("refs"), ["b"]);
-        assert_eq!(input.graph.nodes_of_kind("k").count(), 2);
-        assert_eq!(input.graph.edges_from("a")[0].target, "b");
-        assert_eq!(input.graph.edges_to("b")[0].source, "a");
-        assert!(input.graph.edges_to("a").is_empty());
-    }
-
-    #[test]
-    fn a_command_input_is_built_by_its_fields() {
-        // The alias of the protocol's generic input builds and defaults as
-        // the SDK's own struct did.
-        let input = CommandInput {
-            args: serde_json::Map::new(),
-            cwd: "/p".to_string(),
-            graph: CommandGraph::default(),
-            format: CommandFormat::Json,
-            today: String::new(),
-            evidence: Default::default(),
-        };
-        assert!(input.is_json());
-        assert!(!CommandInput::default().is_json());
-    }
-}
+mod command_graph_tests;
 
 /// Component-mode export glue (wasm32-wasip2 guests).
 ///
