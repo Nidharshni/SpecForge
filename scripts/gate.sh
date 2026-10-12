@@ -229,7 +229,7 @@ run_quick() {
         # a test's verify text must match its spec entity (A016, statically)
         case $file in
             *.spec|spec/*) links=1 ;;
-            *.rs) if [[ $file == */tests/* ]] || grep -q 'verify *=' "$file" 2>/dev/null; then links=1; fi ;;
+            *.rs) if [[ $file == tests/* || $file == */tests/* ]] || grep -q 'verify *=' "$file" 2>/dev/null; then links=1; fi ;;
         esac
     done
     # Deduplicate (no mapfile: macOS ships bash 3.2).

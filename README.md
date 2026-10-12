@@ -190,7 +190,7 @@ The implementation is a Rust workspace (edition 2024) under [`crates/`](crates/)
 
 ## Development
 
-Run `scripts/setup-hooks.sh` once per clone: it points git at the tracked pre-commit hook, which checks the staged files in seconds (no pending `.snap.new`, rustfmt, spec formatting, and that every test's `verify` text exists in its spec entity). Run `scripts/gate.sh` before a PR and `scripts/gate.sh full` before a merge.
+Run `scripts/setup-hooks.sh` once per clone: it points git at the tracked pre-commit hook, which checks the staged files in seconds (no pending `.snap.new`, rustfmt, spec formatting, and that every test's `verify` text exists in its spec entity). Run `scripts/gate.sh quick` before a PR and `scripts/gate.sh full` before a merge.
 
 ## Documentation
 
