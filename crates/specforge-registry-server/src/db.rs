@@ -22,6 +22,17 @@ impl Database {
     }
 }
 
+/// Why a publish was not recorded ([`Database::publish`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PublishRefused {
+    /// The scope is owned by another publisher (its account).
+    ScopeOwned { account: String },
+    /// The version is already stored (the message says so).
+    DuplicateVersion(String),
+    /// The database failed.
+    Storage(String),
+}
+
 #[derive(Debug, Clone)]
 pub struct PackageVersion {
     pub name: String,
@@ -277,22 +288,68 @@ impl Database {
         Ok(out)
     }
 
-    /// Claim a namespace scope on first publish. Returns `true` when this
-    /// call claimed it, `false` when it was already owned (by anyone).
-    pub fn claim_scope(
+    /// Record `pkg` as `owner_token_hash` (account `account_id`) publishes it into `scope`, in one
+    /// transaction: claim the scope for the publisher when nobody owns it, refuse when another
+    /// token owns it, insert the version (`UNIQUE(name, version)` refuses a duplicate). A refusal
+    /// leaves the scope as it was. `Ok(true)` when this publish claimed the scope.
+    pub fn publish(
         &self,
+        pkg: &PackageVersion,
         scope: &str,
         owner_token_hash: &str,
         account_id: &str,
-    ) -> Result<bool, String> {
-        let conn = self.conn();
-        let rows = conn
+    ) -> Result<bool, PublishRefused> {
+        let mut conn = self.conn();
+        let storage =
+            |e: rusqlite::Error| PublishRefused::Storage(format!("failed to publish: {e}"));
+        let tx = conn.transaction().map_err(storage)?;
+        let claimed = tx
             .execute(
                 "INSERT OR IGNORE INTO scopes (scope, owner_token_hash, account_id) VALUES (?1, ?2, ?3)",
                 params![scope, owner_token_hash, account_id],
             )
-            .map_err(|e| format!("failed to claim scope: {}", e))?;
-        Ok(rows > 0)
+            .map_err(storage)?
+            > 0;
+        if !claimed {
+            let (owner, account): (String, String) = tx
+                .query_row(
+                    "SELECT owner_token_hash, account_id FROM scopes WHERE scope = ?1",
+                    params![scope],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )
+                .map_err(storage)?;
+            if owner != owner_token_hash {
+                return Err(PublishRefused::ScopeOwned { account });
+            }
+        }
+        let inserted = tx.execute(
+            "INSERT INTO packages (name, version, sha256, size_bytes, description, keywords, publisher, published_at, signature, manifest)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            params![
+                pkg.name,
+                pkg.version,
+                pkg.sha256,
+                pkg.size_bytes,
+                pkg.description,
+                pkg.keywords,
+                pkg.publisher,
+                pkg.published_at,
+                pkg.signature.as_ref().map(PackageSignature::to_json),
+                pkg.manifest,
+            ],
+        );
+        if let Err(e) = inserted {
+            return Err(if e.to_string().contains("UNIQUE constraint") {
+                PublishRefused::DuplicateVersion(format!(
+                    "version {} already exists for {}",
+                    pkg.version, pkg.name
+                ))
+            } else {
+                storage(e)
+            });
+        }
+        tx.commit().map_err(storage)?;
+        Ok(claimed)
     }
 
     /// The owner (token hash) and registry-assigned account id of a claimed
@@ -307,16 +364,26 @@ impl Database {
         .ok()
     }
 
-    /// Compensating delete for a publish whose blob commit failed after
-    /// the row landed. Returns true when a row was removed.
-    pub fn delete_package(&self, name: &str, version: &str) -> bool {
+    /// Withdraw a version whose blob could not be committed, and the scope claim the same publish
+    /// made (`claimed`) unless a package of the scope has been stored since: the compensation of
+    /// [`Self::publish`]. True when a row was removed.
+    pub fn withdraw(&self, name: &str, version: &str, scope: &str, claimed: bool) -> bool {
         let conn = self.conn();
-        conn.execute(
-            "DELETE FROM packages WHERE name = ?1 AND version = ?2",
-            params![name, version],
-        )
-        .map(|n| n > 0)
-        .unwrap_or(false)
+        let removed = conn
+            .execute(
+                "DELETE FROM packages WHERE name = ?1 AND version = ?2",
+                params![name, version],
+            )
+            .map(|n| n > 0)
+            .unwrap_or(false);
+        if claimed {
+            let _ = conn.execute(
+                "DELETE FROM scopes WHERE scope = ?1 AND NOT EXISTS (
+                   SELECT 1 FROM packages WHERE substr(name, 1, length(?1) + 1) = ?1 || '/')",
+                params![scope],
+            );
+        }
+        removed
     }
 
     pub fn yank_version(&self, name: &str, version: &str) -> bool {
@@ -499,5 +566,66 @@ mod tests {
         assert_eq!(listed(&["2.0.0-beta.1", "1.9.0", "2.0.0"]), "2.0.0");
         // A pre-release only when there is no release; identifiers compare as SemVer, not text.
         assert_eq!(listed(&["2.0.0-beta.9", "2.0.0-beta.10"]), "2.0.0-beta.10");
+    }
+
+    #[specforge_test_macros::test(
+        behavior = "publish_to_registry",
+        verify = "a publish the registry refuses claims no scope"
+    )]
+    fn a_refused_publish_leaves_the_scope_unclaimed() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = Database::open(&dir.path().join("t.db")).unwrap();
+        // The lost race: the version is stored between the handler's check and the transaction.
+        db.insert_package(&pv("@fresh/x", "1.0.0")).unwrap();
+        let refused = db.publish(&pv("@fresh/x", "1.0.0"), "@fresh", "tok-a", "acct-a");
+        assert!(
+            matches!(refused, Err(PublishRefused::DuplicateVersion(_))),
+            "{refused:?}"
+        );
+        assert_eq!(db.get_scope_owner("@fresh"), None);
+
+        // A publish that stores claims; another token's is refused and the owner stays.
+        assert_eq!(
+            db.publish(&pv("@fresh/y", "1.0.0"), "@fresh", "tok-a", "acct-a"),
+            Ok(true)
+        );
+        assert_eq!(
+            db.publish(&pv("@fresh/z", "1.0.0"), "@fresh", "tok-a", "acct-a"),
+            Ok(false)
+        );
+        assert_eq!(
+            db.publish(&pv("@fresh/w", "1.0.0"), "@fresh", "tok-b", "acct-b"),
+            Err(PublishRefused::ScopeOwned {
+                account: "acct-a".to_string()
+            })
+        );
+        assert_eq!(
+            db.get_scope_owner("@fresh"),
+            Some(("tok-a".to_string(), "acct-a".to_string()))
+        );
+    }
+
+    #[test]
+    fn withdrawing_a_claiming_publish_releases_the_scope() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = Database::open(&dir.path().join("t.db")).unwrap();
+        assert_eq!(
+            db.publish(&pv("@fresh/y", "1.0.0"), "@fresh", "tok-a", "acct-a"),
+            Ok(true)
+        );
+        assert!(db.withdraw("@fresh/y", "1.0.0", "@fresh", true));
+        assert_eq!(db.get_scope_owner("@fresh"), None);
+
+        // A scope that holds another package keeps its claim.
+        assert_eq!(
+            db.publish(&pv("@fresh/y", "1.0.0"), "@fresh", "tok-a", "acct-a"),
+            Ok(true)
+        );
+        assert_eq!(
+            db.publish(&pv("@fresh/z", "1.0.0"), "@fresh", "tok-a", "acct-a"),
+            Ok(false)
+        );
+        db.withdraw("@fresh/y", "1.0.0", "@fresh", true);
+        assert!(db.get_scope_owner("@fresh").is_some());
     }
 }

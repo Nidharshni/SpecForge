@@ -775,6 +775,11 @@ behavior publish_to_registry "Publish to Registry" {
     version it refuses stays publishable; it judges no key's trust
     (ADR 0061). A version the registry
     already holds MUST be refused (R007): a published version is immutable.
+    On the registry server, the first accepted publish into a scope claims
+    the scope for its publisher; only that publisher publishes into it
+    after. A publish the registry refuses (an invalid upload, a duplicate
+    version, a storage failure) claims no scope: the claim and the version
+    are recorded together or not at all.
     A registry's refusal MUST reach the publisher as R008 naming the
     registry's code and reason. Publish MUST check that the registry's
     receipt names what it uploaded.
@@ -807,6 +812,8 @@ behavior publish_to_registry "Publish to Registry" {
   verify unit "publish checks the registry's receipt against what it uploaded"
   verify unit "SHA256 computed and included in upload"
   verify unit "a version already published is refused with R007"
+  verify integration "the first publish into a scope claims it, and only its publisher publishes there after"
+  verify integration "a publish the registry refuses claims no scope"
   verify unit "successful publish returns registry URL"
   verify unit "unauthenticated publish produces ExtensionError"
   verify unit "the registry refuses a name or version that is not a package name or version"

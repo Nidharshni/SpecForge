@@ -366,8 +366,11 @@ mod ownership {
             .token_hash
     }
 
+    #[specforge_test_macros::test(
+        behavior = "publish_to_registry",
+        verify = "a publish the registry refuses claims no scope"
+    )]
     #[tokio::test]
-    #[ignore = "fixed by T16"]
     async fn a_refused_upload_claims_no_scope() {
         let dir = tempfile::tempdir().unwrap();
         let state = app_state(dir.path(), 10_000);
@@ -400,7 +403,7 @@ mod ownership {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::CREATED);
-        let (owner, _) = state.database.get_scope_owner("fresh").unwrap();
+        let (owner, _) = state.database.get_scope_owner("@fresh").unwrap();
         assert_eq!(owner, hash_of(&state, "pub-b"));
     }
 
@@ -430,9 +433,13 @@ mod ownership {
             json_of(response).await["error"]["code"],
             "DUPLICATE_VERSION"
         );
-        assert_eq!(state.database.get_scope_owner("fresh"), None);
+        assert_eq!(state.database.get_scope_owner("@fresh"), None);
     }
 
+    #[specforge_test_macros::test(
+        behavior = "publish_to_registry",
+        verify = "the first publish into a scope claims it, and only its publisher publishes there after"
+    )]
     #[tokio::test]
     async fn first_publish_claims_scope_and_blocks_other_tokens() {
         let dir = tempfile::tempdir().unwrap();
