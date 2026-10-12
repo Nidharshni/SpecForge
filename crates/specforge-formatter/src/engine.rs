@@ -62,7 +62,9 @@ pub fn format_source(source: &str, config: &FormatConfig) -> FormatResult {
 }
 
 /// Format a range of lines within a source string.
-/// The range is expanded to complete block boundaries.
+/// The range is expanded to complete block boundaries. Every byte outside the
+/// widened lines is the source's, line endings included; the widened lines
+/// read as `format_source` writes them.
 pub fn format_range(
     source: &str,
     start_line: usize,
@@ -110,33 +112,24 @@ pub fn format_range(
         };
     }
 
-    let mut result_lines: Vec<String> = Vec::new();
-
-    // Copy lines before the range
-    for line in lines.iter().take(expanded_start) {
-        result_lines.push(line.to_string());
+    // Each line's first byte; a line's terminator belongs to it.
+    let starts: Vec<usize> = std::iter::once(0)
+        .chain(source.match_indices('\n').map(|(i, _)| i + 1))
+        .collect();
+    let from = starts[expanded_start];
+    let to = starts
+        .get(expanded_end + 1)
+        .copied()
+        .unwrap_or(source.len());
+    let range_source = &source[from..to];
+    let range_result = format_source(range_source, config);
+    let mut middle = range_result.formatted;
+    // The file's last line, unterminated: so is its formatted text (the final newline is the whole
+    // document's to add).
+    if !range_source.ends_with('\n') && middle.ends_with('\n') {
+        middle.pop();
     }
-
-    // Format the range
-    let range_source: String = lines[expanded_start..=expanded_end].join("\n");
-    let range_result = format_source(&range_source, config);
-
-    for line in range_result.formatted.lines() {
-        result_lines.push(line.to_string());
-    }
-
-    // Copy lines after the range
-    for line in lines.iter().skip(expanded_end + 1) {
-        result_lines.push(line.to_string());
-    }
-
-    let formatted = result_lines.join("\n");
-    // Preserve trailing newline if original had one
-    let formatted = if source.ends_with('\n') && !formatted.ends_with('\n') {
-        formatted + "\n"
-    } else {
-        formatted
-    };
+    let formatted = format!("{}{middle}{}", &source[..from], &source[to..]);
 
     // The range was formatted as its own source: its regions are reported
     // at their lines in the whole document.
@@ -1277,7 +1270,6 @@ mod tests {
         behavior = "lsp_format_range",
         verify = "range formatting changes no byte outside the blocks it touches"
     )]
-    #[ignore = "fixed by T1"]
     fn a_range_keeps_every_byte_outside_its_blocks() {
         let config = FormatConfig::default();
         assert_eq!(

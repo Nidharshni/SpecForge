@@ -433,7 +433,9 @@ behavior lsp_format_range "LSP Format Range" {
     TextEdit coordinates use 0-indexed lines and columns (LSP standard).
     TextEdit operations in a response MUST NOT overlap. The formatted
     range MUST produce the same result as full-document formatting for
-    the affected blocks. When the selected range contains parse errors,
+    the affected blocks, and every byte outside those blocks, line
+    endings included, MUST be left as it is. When the selected range
+    contains parse errors,
     error regions within the range MUST be left unchanged.
   """
   verify unit "range is expanded to block boundaries"
