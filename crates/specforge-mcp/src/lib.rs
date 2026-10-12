@@ -20,7 +20,6 @@ pub mod surface_table;
 pub mod target;
 pub mod tool;
 pub mod tools;
-pub mod types;
 mod uri_template;
 
 use events::{EventSink, McpEvent};

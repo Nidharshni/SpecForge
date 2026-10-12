@@ -232,7 +232,7 @@ fn a_tools_output_schema_is_built_once() {
             tool.name()
         );
         assert_eq!(
-            tool.descriptor().output_schema.as_ref(),
+            tool.descriptor(crate::support::latest()).output_schema,
             Some(first),
             "{}'s descriptor lists another schema",
             tool.name()

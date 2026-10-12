@@ -18,18 +18,11 @@ use crate::state::McpState;
 use crate::surface_call::{Found, Invocation, Surface};
 use crate::target::{Call, TargetSpec};
 use crate::tool::McpError;
-use crate::types::McpPromptDescriptor;
 pub use table::CORE_PROMPTS;
 
 /// The core prompt named `name`.
 pub fn core_prompt(name: &str) -> Option<&'static PromptSpec> {
     CORE_PROMPTS.iter().find(|p| p.name == name)
-}
-
-/// What `prompts/list` lists and `initialize` reports: every core prompt,
-/// in table order.
-pub fn descriptors() -> Vec<McpPromptDescriptor> {
-    CORE_PROMPTS.iter().map(PromptSpec::descriptor).collect()
 }
 
 /// `prompts/get`: the core prompt table (no extension declares a prompt).

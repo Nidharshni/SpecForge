@@ -43,6 +43,10 @@ pub fn documents() -> Vec<SentDocument> {
     vec![
         sent::<crate::lifecycle::InitializeResult>(),
         sent::<crate::lifecycle::DiscoverResult>(),
+        sent::<crate::registry::ToolDescriptor<'static>>(),
+        sent::<crate::registry::ResourceDescriptor>(),
+        sent::<crate::registry::ResourceTemplateDescriptor>(),
+        sent::<crate::registry::PromptDescriptor>(),
         sent::<specforge_project::GraphDelta>(),
         sent::<crate::subscriptions::DiagnosticsDelta>(),
         sent::<crate::tool::McpError>(),
@@ -55,6 +59,23 @@ impl Message for crate::lifecycle::InitializeResult {
 
 impl Message for crate::lifecycle::DiscoverResult {
     const SPEC: &'static str = "McpDiscoverResult";
+}
+
+impl Message for crate::registry::ToolDescriptor<'static> {
+    const SPEC: &'static str = "McpToolDescriptor";
+    const OPEN_VALUES: &'static [&'static str] = &["$.inputSchema", "$.outputSchema"];
+}
+
+impl Message for crate::registry::ResourceDescriptor {
+    const SPEC: &'static str = "McpResourceDescriptor";
+}
+
+impl Message for crate::registry::ResourceTemplateDescriptor {
+    const SPEC: &'static str = "McpResourceTemplateDescriptor";
+}
+
+impl Message for crate::registry::PromptDescriptor {
+    const SPEC: &'static str = "McpPromptDescriptor";
 }
 
 impl Message for specforge_project::GraphDelta {

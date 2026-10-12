@@ -17,11 +17,12 @@ use specforge_graph::Graph;
 
 use crate::args::{Argument, Arguments};
 use crate::events::EventSink;
+use crate::lifecycle::Revision;
 use crate::mutation::{Mutation, MutationArgs, MutationReply};
 use crate::protocol::{JsonRpcError, JsonRpcResponse, error_codes};
+use crate::registry::{ToolAnnotations, ToolDescriptor};
 use crate::reply::{Answered, Object, Source, Text};
 use crate::target::{Call, Input, TargetSpec};
-use crate::types::McpToolDescriptor;
 use specforge_ops::{OpError, OpErrorKind};
 
 /// The group a tool that is no mutation is listed in: the spec's
@@ -104,13 +105,13 @@ pub struct WriteHints {
 
 impl WriteHints {
     /// `{readOnlyHint: false, destructiveHint, idempotentHint, openWorldHint}`.
-    pub fn annotations(self) -> Value {
-        json!({
-            "readOnlyHint": false,
-            "destructiveHint": self.destructive,
-            "idempotentHint": self.idempotent,
-            "openWorldHint": self.open_world,
-        })
+    pub fn annotations(self) -> ToolAnnotations {
+        ToolAnnotations {
+            read_only_hint: false,
+            destructive_hint: Some(self.destructive),
+            idempotent_hint: Some(self.idempotent),
+            open_world_hint: self.open_world,
+        }
     }
 }
 
@@ -118,8 +119,13 @@ impl WriteHints {
 /// project, `{readOnlyHint: true, openWorldHint: false}`: every core read,
 /// and every extension tool (the host grants an extension no capability,
 /// ADR 0037 D1).
-pub fn read_only_annotations() -> Value {
-    json!({ "readOnlyHint": true, "openWorldHint": false })
+pub fn read_only_annotations() -> ToolAnnotations {
+    ToolAnnotations {
+        read_only_hint: true,
+        destructive_hint: None,
+        idempotent_hint: None,
+        open_world_hint: false,
+    }
 }
 
 /// What a tool does to its environment: the one declaration its category,
@@ -156,7 +162,7 @@ impl Effect {
     }
 
     /// `read_only_annotations()` for `Reads`, else its hints' annotations.
-    pub fn annotations(self) -> Value {
+    pub fn annotations(self) -> ToolAnnotations {
         match self {
             Effect::Reads { .. } => read_only_annotations(),
             Effect::WritesOutput { hints, .. } | Effect::Mutates { hints } => hints.annotations(),
@@ -362,7 +368,7 @@ pub trait ToolSpec: Sync {
     }
 
     /// `readOnlyHint` for a read, else its hints'.
-    fn annotations(&self) -> Value {
+    fn annotations(&self) -> ToolAnnotations {
         self.effect().annotations()
     }
 
@@ -393,15 +399,19 @@ pub trait ToolSpec: Sync {
         crate::args::undeclared(arguments, &self.arguments(), self.target())
     }
 
-    /// The tool as `tools/list` describes it.
-    fn descriptor(&self) -> McpToolDescriptor {
-        McpToolDescriptor {
+    /// The tool as `tools/list` describes it under `revision`: it lists its
+    /// outputSchema from 2025-06-18, the revision that came with
+    /// structured content.
+    fn descriptor(&self, revision: Revision) -> ToolDescriptor<'static> {
+        ToolDescriptor {
             name: self.name().into(),
             description: self.description().into(),
             input_schema: self.input_schema(),
-            output_schema: self.output_schema().cloned(),
-            category: Some(self.category().as_str().into()),
-            source: Some(CORE_SOURCE.into()),
+            output_schema: self
+                .output_schema()
+                .filter(|_| revision.sends_structured_content()),
+            category: self.category(),
+            source: CORE_SOURCE.into(),
             annotations: self.annotations(),
         }
     }
@@ -1238,9 +1248,11 @@ mod spec_tests {
         assert_eq!(input["properties"]["name"]["type"], "string", "{input}");
         let output = tool.output_schema().expect("a typed reply lists a schema");
         assert_eq!(output["properties"]["name"]["type"], "string", "{output}");
-        let descriptor = tool.descriptor();
-        assert_eq!(descriptor.category.as_deref(), Some("navigation"));
-        assert_eq!(descriptor.source.as_deref(), Some(CORE_SOURCE));
+        let descriptor = tool.descriptor(Revision::Negotiated(
+            crate::lifecycle::LATEST_PROTOCOL_VERSION,
+        ));
+        assert_eq!(descriptor.category, Category::Navigation);
+        assert_eq!(descriptor.source, CORE_SOURCE);
     }
 
     #[specforge_test_macros::test(

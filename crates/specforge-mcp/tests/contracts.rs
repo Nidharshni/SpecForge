@@ -1752,7 +1752,7 @@ fn contract_guard_reinit() {
         .state()
         .project_root()
         .map(std::path::Path::to_path_buf);
-    let tools = specforge_mcp::registry::listed_tools(server.state()).count();
+    let tools = specforge_mcp::registry::listed_tools(server.state(), latest()).count();
     let other = tempfile::TempDir::new().unwrap();
 
     // reinit_rejected: -32600, even when naming another project.
@@ -1766,7 +1766,10 @@ fn contract_guard_reinit() {
     // session_unaffected: same project, graph and registries.
     let state = server.state();
     assert_eq!(state.project_root().map(std::path::Path::to_path_buf), root);
-    assert_eq!(specforge_mcp::registry::listed_tools(state).count(), tools);
+    assert_eq!(
+        specforge_mcp::registry::listed_tools(state, latest()).count(),
+        tools
+    );
     assert_eq!(state.graph().node_count(), 2);
     let stats = tool(&mut server, "specforge.stats", json!({}));
     assert_eq!(stats["edge_count"], 1);

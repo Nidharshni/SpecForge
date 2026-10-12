@@ -11,9 +11,9 @@ use serde_json::{Value, json};
 
 use crate::args::Argument;
 use crate::protocol::JsonRpcResponse;
+use crate::registry::{PromptArgument, PromptDescriptor};
 use crate::target::TargetSpec;
 use crate::tool::McpError;
-use crate::types::{McpPromptArgument, McpPromptDescriptor};
 use specforge_ops::view::ProjectView;
 
 /// What a prompt rendered: the instruction, and the graph data it is about.
@@ -56,20 +56,18 @@ impl PromptSpec {
     }
 
     /// The prompt as `prompts/list` describes it.
-    pub fn descriptor(&self) -> McpPromptDescriptor {
-        McpPromptDescriptor {
+    pub fn descriptor(&self) -> PromptDescriptor {
+        PromptDescriptor {
             name: self.name.into(),
             description: self.description.into(),
-            arguments: Some(
-                (self.arguments)()
-                    .into_iter()
-                    .map(|argument| McpPromptArgument {
-                        name: argument.name.into(),
-                        description: argument.description.into(),
-                        required: argument.required,
-                    })
-                    .collect(),
-            ),
+            arguments: (self.arguments)()
+                .into_iter()
+                .map(|argument| PromptArgument {
+                    name: argument.name.into(),
+                    description: argument.description.into(),
+                    required: argument.required,
+                })
+                .collect(),
         }
     }
 }

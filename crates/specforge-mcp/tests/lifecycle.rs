@@ -60,7 +60,7 @@ fn state_snapshot(server: &McpServer) -> Value {
         .collect();
     nodes.sort();
     json!({
-        "tools": specforge_mcp::registry::listed_tools(state).collect::<Vec<_>>(),
+        "tools": specforge_mcp::registry::listed_tools(state, latest()).collect::<Vec<_>>(),
         "resources": specforge_mcp::registry::listed_resources(state).collect::<Vec<_>>(),
         "nodes": nodes,
         "edges": state.graph().edge_count(),
@@ -525,7 +525,7 @@ fn reinit_rejected_no_resource_leak() {
     let mut server = init_server();
     let listed = |server: &McpServer| {
         (
-            specforge_mcp::registry::listed_tools(server.state()).count(),
+            specforge_mcp::registry::listed_tools(server.state(), latest()).count(),
             specforge_mcp::registry::listed_resources(server.state()).count(),
         )
     };

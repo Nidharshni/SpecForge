@@ -103,37 +103,51 @@ type McpServerInfo {
   verify unit "McpServerInfo schema is valid"
 }
 
+// A resource as resources/list lists it (MCP Resource).
 type McpResourceDescriptor {
   uri         string @readonly
   name        string
   description string @optional
-  mime_type   string @optional
+  mimeType    string
   verify unit "McpResourceDescriptor schema is valid"
 }
 
+// A templated resource as resources/templates/list lists it (MCP
+// ResourceTemplate).
+type McpResourceTemplateDescriptor {
+  uriTemplate string @readonly
+  name        string
+  description string @optional
+  mimeType    string
+  verify unit "McpResourceTemplateDescriptor schema is valid"
+}
+
+// A tool as tools/list lists it (MCP Tool, with SpecForge's category and
+// source). inputSchema and outputSchema are JSON Schema documents: open
+// values. outputSchema is listed from 2025-06-18, for a tool with one.
 type McpToolDescriptor {
-  name          string          @readonly
-  description   string
-  input_schema  JsonSchema
-  output_schema JsonSchema      @optional
+  name         string          @readonly
+  description  string
+  inputSchema  object
+  outputSchema object          @optional
   /// The tool's role, never where it comes from.
-  category      McpToolCategory @optional
-  /// "core" for built-in tools, extension name for contributed tools
-  source        string          @optional
+  category     McpToolCategory
+  /// "core" for built-in tools, the extension's name for contributed tools.
+  source       string
   /// MCP ToolAnnotations: what the tool does to its environment.
-  annotations   McpToolAnnotations
+  annotations  McpToolAnnotations
   verify unit "McpToolDescriptor schema is valid"
 }
 
-// MCP's ToolAnnotations (wire names readOnlyHint, destructiveHint,
-// idempotentHint, openWorldHint). A core tool's derive from what its tool
-// spec declares it does; an extension tool's say it only reads, since the
-// host grants an extension no capability.
+// MCP's ToolAnnotations. A core tool's derive from what its tool spec
+// declares it does: a read is readOnlyHint and not openWorldHint; a tool
+// that writes states all four. An extension tool's say it only reads,
+// since the host grants an extension no capability.
 type McpToolAnnotations {
-  read_only_hint   boolean @optional
-  destructive_hint boolean @optional
-  idempotent_hint  boolean @optional
-  open_world_hint  boolean @optional
+  readOnlyHint    boolean
+  destructiveHint boolean @optional
+  idempotentHint  boolean @optional
+  openWorldHint   boolean
   verify unit "McpToolAnnotations schema is valid"
 }
 

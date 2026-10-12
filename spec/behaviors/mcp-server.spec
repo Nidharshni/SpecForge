@@ -143,7 +143,7 @@ behavior list_mcp_resources "List MCP Resources" {
   invariants [mcp_structured_error_responses, mcp_tool_idempotency]
   category   query
   ports      [McpProtocol, CompilerApi]
-  types      [McpResourceDescriptor]
+  types      [McpResourceDescriptor, McpResourceTemplateDescriptor]
   produces   [mcp_discovery_invoked]
   requires {
     server_initialized "MCP server has been initialized and all extensions loaded"

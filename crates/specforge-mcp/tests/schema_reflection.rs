@@ -72,7 +72,6 @@ fn each_core_prompt_lists_exactly_the_arguments_its_handler_reads() {
         let listed: Vec<String> = prompt
             .descriptor()
             .arguments
-            .unwrap_or_default()
             .into_iter()
             .map(|a| a.name)
             .collect();

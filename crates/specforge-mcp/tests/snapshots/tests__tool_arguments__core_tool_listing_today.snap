@@ -495,8 +495,8 @@ expression: listing
     "category": "core",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -545,8 +545,8 @@ expression: listing
     "category": "core",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -1007,8 +1007,8 @@ expression: listing
     "category": "core",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -1069,8 +1069,8 @@ expression: listing
     "category": "core",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -1258,8 +1258,8 @@ expression: listing
     "category": "core",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -1356,8 +1356,8 @@ expression: listing
     "category": "core",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -1466,8 +1466,8 @@ expression: listing
     "category": "core",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -1669,8 +1669,8 @@ expression: listing
     "category": "core",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -1736,8 +1736,8 @@ expression: listing
     "category": "core",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -1783,8 +1783,8 @@ expression: listing
     "category": "core",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -1886,8 +1886,8 @@ expression: listing
     "category": "core",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -1991,8 +1991,8 @@ expression: listing
     "category": "core",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -2058,8 +2058,8 @@ expression: listing
     "category": "core",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -2434,8 +2434,8 @@ expression: listing
     "category": "navigation",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -2533,8 +2533,8 @@ expression: listing
     "category": "navigation",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -2669,8 +2669,8 @@ expression: listing
     "category": "navigation",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -2799,8 +2799,8 @@ expression: listing
     "category": "navigation",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -2923,8 +2923,8 @@ expression: listing
     "category": "navigation",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -3348,10 +3348,10 @@ expression: listing
     "category": "mutation",
     "source": "core",
     "annotations": {
+      "readOnlyHint": false,
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": false,
-      "readOnlyHint": false
+      "openWorldHint": false
     }
   },
   {
@@ -3730,10 +3730,10 @@ expression: listing
     "category": "mutation",
     "source": "core",
     "annotations": {
+      "readOnlyHint": false,
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": false,
-      "readOnlyHint": false
+      "openWorldHint": false
     }
   },
   {
@@ -3812,10 +3812,10 @@ expression: listing
     "category": "mutation",
     "source": "core",
     "annotations": {
+      "readOnlyHint": false,
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": false,
-      "readOnlyHint": false
+      "openWorldHint": false
     }
   },
   {
@@ -4053,10 +4053,10 @@ expression: listing
     "category": "mutation",
     "source": "core",
     "annotations": {
+      "readOnlyHint": false,
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true,
-      "readOnlyHint": false
+      "openWorldHint": true
     }
   },
   {
@@ -4145,10 +4145,10 @@ expression: listing
     "category": "mutation",
     "source": "core",
     "annotations": {
+      "readOnlyHint": false,
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": false,
-      "readOnlyHint": false
+      "openWorldHint": false
     }
   },
   {
@@ -4694,10 +4694,10 @@ expression: listing
     "category": "mutation",
     "source": "core",
     "annotations": {
+      "readOnlyHint": false,
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": false,
-      "readOnlyHint": false
+      "openWorldHint": false
     }
   },
   {
@@ -4800,8 +4800,8 @@ expression: listing
     "category": "management",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -5139,8 +5139,8 @@ expression: listing
     "category": "management",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -5629,8 +5629,8 @@ expression: listing
     "category": "management",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -6011,10 +6011,10 @@ expression: listing
     "category": "management",
     "source": "core",
     "annotations": {
+      "readOnlyHint": false,
       "destructiveHint": true,
       "idempotentHint": false,
-      "openWorldHint": true,
-      "readOnlyHint": false
+      "openWorldHint": true
     }
   },
   {
@@ -6079,10 +6079,10 @@ expression: listing
     "category": "management",
     "source": "core",
     "annotations": {
+      "readOnlyHint": false,
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": false,
-      "readOnlyHint": false
+      "openWorldHint": false
     }
   },
   {
@@ -6180,8 +6180,8 @@ expression: listing
     "category": "core",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -6303,8 +6303,8 @@ expression: listing
     "category": "core",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -6396,10 +6396,10 @@ expression: listing
     "category": "mutation",
     "source": "core",
     "annotations": {
+      "readOnlyHint": false,
       "destructiveHint": true,
       "idempotentHint": false,
-      "openWorldHint": false,
-      "readOnlyHint": false
+      "openWorldHint": false
     }
   },
   {
@@ -6471,8 +6471,8 @@ expression: listing
     "category": "navigation",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -6560,8 +6560,8 @@ expression: listing
     "category": "navigation",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   }
 ]
