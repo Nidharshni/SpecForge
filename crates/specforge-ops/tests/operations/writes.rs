@@ -976,7 +976,6 @@ fn init_refuses_a_local_file_the_embedded_builtin_does_not_satisfy() {
     behavior = "non_interactive_init",
     verify = "init enables the builtins a local file requires before it"
 )]
-#[ignore = "fixed by T3"]
 fn init_enables_the_builtins_a_local_file_requires() {
     use specforge_ops::init;
     let scratch = TempDir::new().unwrap();

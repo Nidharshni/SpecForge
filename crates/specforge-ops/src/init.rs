@@ -8,7 +8,9 @@
 //! doesn't exist yet can't have, so it is added afterwards with `specforge
 //! add`.
 
-use crate::extension::{self, Candidate, Install, LocalFile, LockPlan, Refused, Source, Verb};
+use crate::extension::{
+    self, Appended, Candidate, Install, LocalFile, LockPlan, Refused, Source, Verb,
+};
 use crate::{OpError, OpErrorKind, Writes};
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -153,41 +155,36 @@ pub fn plan(req: &Request, runtime: &dyn WasmRuntime) -> Result<Plan, OpError> {
     }
     let version = req.version.to_string();
 
-    let (extensions, installs) = extensions_of(req.extensions, runtime)?;
-    // The lock plan the installs will be: an unreadable lock refuses here (E033).
+    let (requested, installs) = extensions_of(req.extensions, runtime)?;
+    // The lock plan the installs will be, `add`'s: an unreadable lock refuses here (E033), and the
+    // project's peer set is judged before anything is written.
     let installed = Installed::at(req.dir);
     let mut lock_plan = if installs.is_empty() {
         LockPlan::enabling(&installed, &[], runtime)
     } else {
         LockPlan::new(&installed, &[], runtime, Verb::Install)?
     };
-    // A builtin is enabled after the builtins it requires, as `add` does.
-    let mut extensions = with_required_builtins(extensions, runtime)?;
+    for local in &installs {
+        lock_plan.stage(Install::local(req.dir, local.clone())?);
+    }
+    for name in &requested {
+        lock_plan.enable(name);
+    }
+    // Each extension is enabled after the builtins it requires, as `add` does.
+    lock_plan.close()?;
     // Test obligations (`verify`) on software kinds come from
     // @specforge/testing (ADR 0002), so enabling software enables it too;
     // the project's test runners get the extensions that collect their
     // results.
-    let has = |list: &[String], name: &str| list.iter().any(|e| e == name);
-    if has(&extensions, "@specforge/software") && !has(&extensions, "@specforge/testing") {
-        extensions.push("@specforge/testing".to_string());
+    for extra in init_extras(lock_plan.appended(), req.dir) {
+        lock_plan.enable(&extra);
     }
-    if has(&extensions, "@specforge/testing") {
-        for runner in detected_runners(req.dir) {
-            if !has(&extensions, runner) {
-                extensions.push(runner.to_string());
-            }
-        }
-    }
-
-    // The project's peer set as the plan will leave it, judged by the rule `add` uses: refused
-    // here, before anything is written.
-    for local in &installs {
-        lock_plan.stage(Install::local(req.dir, local.clone())?);
-    }
-    for name in &extensions {
-        lock_plan.enable(name);
-    }
-    lock_plan.check().map_err(Refused::first)?;
+    let checked = lock_plan.check().map_err(Refused::first)?;
+    let extensions: Vec<String> = checked
+        .appended()
+        .iter()
+        .map(|appended| appended.name.clone())
+        .collect();
 
     let starter = match starter_template(&extensions, &installs, runtime)? {
         Some(template) => template
@@ -410,26 +407,26 @@ fn extensions_of(
     Ok((extensions, installs))
 }
 
-/// `extensions`, each builtin after the builtins it requires, each once, in
-/// order.
-fn with_required_builtins(
-    extensions: Vec<String>,
-    runtime: &dyn WasmRuntime,
-) -> Result<Vec<String>, OpError> {
-    let mut enabled: Vec<String> = Vec::new();
-    for name in extensions {
-        if let Some(builtin) = extension::builtin_name(&name) {
-            for peer in extension::required_builtins(runtime, builtin)? {
-                if !enabled.iter().any(|e| e == peer) {
-                    enabled.push(peer.to_string());
-                }
+/// The extensions `init` enables beyond what was asked for and what it requires: @specforge/testing
+/// beside @specforge/software (ADR 0002), and the extensions that collect the results of the
+/// project's test runners beside @specforge/testing.
+fn init_extras(appended: &[Appended], dir: &Path) -> Vec<String> {
+    let has = |extensions: &[String], name: &str| extensions.iter().any(|e| e == name);
+    let mut extensions: Vec<String> = appended.iter().map(|a| a.name.clone()).collect();
+    let mut extras = Vec::new();
+    if has(&extensions, "@specforge/software") && !has(&extensions, "@specforge/testing") {
+        extensions.push("@specforge/testing".to_string());
+        extras.push("@specforge/testing".to_string());
+    }
+    if has(&extensions, "@specforge/testing") {
+        for runner in detected_runners(dir) {
+            if !has(&extensions, runner) {
+                extensions.push(runner.to_string());
+                extras.push(runner.to_string());
             }
         }
-        if !enabled.contains(&name) {
-            enabled.push(name);
-        }
     }
-    Ok(enabled)
+    extras
 }
 
 /// The starter template the extensions contribute: the one listed first

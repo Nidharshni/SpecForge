@@ -40,6 +40,12 @@ pub(crate) enum Verb {
 }
 
 impl Verb {
+    /// Whether the verb enables what it installs and the builtins those require (`add`, `init`).
+    /// `update` moves versions and enables nothing.
+    fn enables(self) -> bool {
+        matches!(self, Verb::Install)
+    }
+
     fn participle(self) -> &'static str {
         match self {
             Verb::Install => "installing",
@@ -244,6 +250,10 @@ impl Staged<'_> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Appended {
     pub(crate) name: String,
+    /// For a builtin the plan enabled because an extension the change asked for requires it, that
+    /// extension (the root of the chain: `formal` for `software` and for `product` under it);
+    /// `None` for an entry asked for.
+    pub(crate) required_by: Option<String>,
 }
 
 /// The lock and the `extensions` entries as the operation leaves them, staged in memory.
@@ -345,13 +355,131 @@ impl<'a> LockPlan<'a> {
         if !enabled {
             self.appended.push(Appended {
                 name: name.to_string(),
+                required_by: None,
             });
         }
     }
 
+    /// The entries the change appends, in order: dependencies first once [`Self::close`] ran.
+    pub(crate) fn appended(&self) -> &[Appended] {
+        &self.appended
+    }
+
+    /// The project's installed extensions as the change leaves them.
+    fn view(&self) -> Installed {
+        match &self.change {
+            Some(change) => change.installed(),
+            None => self.installed.clone(),
+        }
+    }
+
+    /// What `specforge.json` enables as the change leaves it.
+    fn entries_after(&self) -> Vec<String> {
+        self.entries
+            .iter()
+            .cloned()
+            .chain(self.appended.iter().map(|appended| appended.name.clone()))
+            .collect()
+    }
+
+    /// Enable what the change requires (a verb that `enables`; `update`'s plan enables nothing):
+    /// each required peer of an extension the change touches that is a builtin no entry enables,
+    /// and theirs, each appended just before the entry that first requires it (dependencies
+    /// first). E028 when a builtin's declaration can't be read. Idempotent; [`Self::check`] runs
+    /// it first.
+    ///
+    /// A cycle among required builtins ends it too: its builtins are enabled once, and the cycle's
+    /// E027 stays the compile's (ADR 0041 D4).
+    pub(crate) fn close(&mut self) -> Result<(), OpError> {
+        if !self.verb.enables() {
+            return Ok(());
+        }
+        loop {
+            let set =
+                ProjectPeers::of(&self.view(), &self.entries_after(), &mut self.declarations)?;
+            let changing = Changing::of(&self.staged, &self.appended);
+            let mut wanted: Vec<(String, &'static str)> = Vec::new();
+            for name in &changing.names {
+                let Some(member) = set.member(name) else {
+                    continue;
+                };
+                for peer in member.peers.iter().filter(|peer| !peer.optional) {
+                    if let Some(builtin) = super::builtin_name(&peer.name)
+                        && set.member(builtin).is_none()
+                        && !wanted.iter().any(|(_, wanted)| *wanted == builtin)
+                    {
+                        wanted.push((name.clone(), builtin));
+                    }
+                }
+            }
+            if wanted.is_empty() {
+                self.dependencies_first(&set);
+                return Ok(());
+            }
+            for (dependent, builtin) in wanted {
+                let root = self
+                    .appended
+                    .iter()
+                    .find(|appended| appended.name == dependent)
+                    .and_then(|appended| appended.required_by.clone())
+                    .unwrap_or_else(|| dependent.clone());
+                self.appended.push(Appended {
+                    name: builtin.to_string(),
+                    required_by: Some(root),
+                });
+            }
+        }
+    }
+
+    /// The appended entries, each after the appended builtins it requires (its non-optional
+    /// peers): a depth-first order, otherwise the order they were enabled in. A cycle puts each of
+    /// its entries once.
+    fn dependencies_first(&mut self, set: &ProjectPeers) {
+        let names: Vec<String> = self
+            .appended
+            .iter()
+            .map(|appended| appended.name.clone())
+            .collect();
+        let mut order: Vec<usize> = Vec::with_capacity(names.len());
+        let mut visited = vec![false; names.len()];
+        fn visit(
+            at: usize,
+            names: &[String],
+            set: &ProjectPeers,
+            visited: &mut [bool],
+            order: &mut Vec<usize>,
+        ) {
+            if std::mem::replace(&mut visited[at], true) {
+                return;
+            }
+            if let Some(member) = set.member(&names[at]) {
+                for peer in member.peers.iter().filter(|peer| !peer.optional) {
+                    if super::builtin_name(&peer.name).is_none() {
+                        continue;
+                    }
+                    if let Some(next) = names.iter().position(|name| *name == peer.name) {
+                        visit(next, names, set, visited, order);
+                    }
+                }
+            }
+            order.push(at);
+        }
+        for at in 0..names.len() {
+            visit(at, &names, set, &mut visited, &mut order);
+        }
+        let mut taken: Vec<Option<Appended>> = std::mem::take(&mut self.appended)
+            .into_iter()
+            .map(Some)
+            .collect();
+        self.appended = order
+            .into_iter()
+            .map(|at| taken[at].take().expect("each entry is placed once"))
+            .collect();
+    }
+
     /// Judge the plan, then load what it fetched.
     ///
-    /// 1. The peer rule over the project peer set as the change leaves it
+    /// 1. [`Self::close`], then the peer rule over the project peer set as the change leaves it
     ///    ([`ProjectPeers::of`] over the staged lock and the entries plus the appended ones). It
     ///    judges every declared peer whose dependent or peer the change touches (a staged install,
     ///    an appended entry):
@@ -373,20 +501,17 @@ impl<'a> LockPlan<'a> {
     /// What passes carries the pins its registry fetches decided (`Publisher::pin`), in staging
     /// order, for [`Checked::commit`] to save. Lock order and entry order decide nothing.
     pub(crate) fn check(mut self) -> Result<Checked<'a>, Refused> {
+        if let Err(error) = self.close() {
+            return Err(Refused::of(
+                &Changing::of(&self.staged, &self.appended),
+                error,
+            ));
+        }
         let changing = Changing::of(&self.staged, &self.appended);
         let mut failed: Vec<Option<(OpError, bool)>> =
             changing.names.iter().map(|_| None).collect();
         if !changing.names.is_empty() {
-            let view = match &self.change {
-                Some(change) => change.installed(),
-                None => self.installed.clone(),
-            };
-            let after: Vec<String> = self
-                .entries
-                .iter()
-                .cloned()
-                .chain(self.appended.iter().map(|appended| appended.name.clone()))
-                .collect();
+            let (view, after) = (self.view(), self.entries_after());
             let set = match ProjectPeers::of(&view, &after, &mut self.declarations) {
                 Ok(set) => set,
                 Err(error) => return Err(Refused::of(&changing, error)),
@@ -494,6 +619,11 @@ pub(crate) struct Applied {
 }
 
 impl Checked<'_> {
+    /// The entries the change appends, dependencies first.
+    pub(crate) fn appended(&self) -> &[Appended] {
+        &self.appended
+    }
+
     /// Write it, all or nothing (ADR 0028 D4): each staged module placed, the lock written once,
     /// then the appended entries (`config::enable`, the change's `specforge.json` edit) and last
     /// the publisher keys pinned (ADR 0059). A plan that stages no install writes no module and no
@@ -1823,6 +1953,63 @@ mod tests {
         // One that installs refuses: writing a lock would drop what it records.
         let refused = LockPlan::new(&installed, &[], &runtime, Verb::Install).map(drop);
         assert_eq!(refused.unwrap_err().code, "E033");
+    }
+
+    #[test]
+    fn close_enables_required_builtins_dependencies_first() {
+        const APP_NEEDS_FORMAL: &[u8] = b"\0asm in-process @acme/app 1.0.0 needs formal";
+        let builtin = |runtime, name: &'static str, peers| {
+            crate::testing::serving_builtin(runtime, name, declaring(name, "1.0.0", peers))
+        };
+        // formal requires software, which has product as an optional peer.
+        let runtime = runtime().binary(
+            APP_NEEDS_FORMAL,
+            declaring(
+                "@acme/app",
+                "1.0.0",
+                &[("@specforge/formal", "^1.0", false)],
+            ),
+        );
+        let runtime = builtin(
+            runtime,
+            "@specforge/formal",
+            &[("@specforge/software", "^1.0", false)],
+        );
+        let runtime = builtin(
+            runtime,
+            "@specforge/software",
+            &[("@specforge/product", "^1.0", true)],
+        );
+        let installed = nowhere(Vec::new());
+
+        let mut plan = LockPlan::new(&installed, &[], &runtime, Verb::Install).unwrap();
+        stage(&mut plan, local(&runtime, APP_NEEDS_FORMAL, "app.wasm"));
+        plan.close().unwrap();
+
+        let appended: Vec<(&str, Option<&str>)> = plan
+            .appended()
+            .iter()
+            .map(|a| (a.name.as_str(), a.required_by.as_deref()))
+            .collect();
+        assert_eq!(
+            appended,
+            [
+                ("@specforge/software", Some("@acme/app")),
+                ("@specforge/formal", Some("@acme/app")),
+                ("@acme/app", None),
+            ],
+            "the optional product is not enabled"
+        );
+        plan.close().unwrap();
+        assert_eq!(plan.appended().len(), 3, "idempotent");
+
+        // Asked in the wrong order, a builtin still comes after the builtin it requires.
+        let mut plan = LockPlan::enabling(&installed, &[], &runtime);
+        plan.enable("@specforge/formal");
+        plan.enable("@specforge/software");
+        plan.close().unwrap();
+        let names: Vec<&str> = plan.appended().iter().map(|a| a.name.as_str()).collect();
+        assert_eq!(names, ["@specforge/software", "@specforge/formal"]);
     }
 
     #[test]

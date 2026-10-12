@@ -242,7 +242,6 @@ fn lock_record(root: &Path, name: &str, version: &str, peers: &[(&str, &str)]) {
     behavior = "add_extension_to_existing_project",
     verify = "add and check agree: an add check would report E027 or E073 for is refused, and an add that passes leaves none"
 )]
-#[ignore = "fixed by T3"]
 fn add_and_check_agree_on_the_project_peer_set() {
     use specforge_ops::extension::{self, AddRequest, Source, Trust};
     use specforge_ops::testing::{

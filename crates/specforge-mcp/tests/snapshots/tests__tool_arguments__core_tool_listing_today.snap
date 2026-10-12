@@ -3915,6 +3915,12 @@ expression: listing
                   "key_id": {
                     "type": "string"
                   },
+                  "peers_enabled": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
                   "publisher": {
                     "enum": [
                       "unsigned",
@@ -3943,7 +3949,8 @@ expression: listing
                   "extension",
                   "version",
                   "sha256",
-                  "source"
+                  "source",
+                  "peers_enabled"
                 ],
                 "type": "object"
               },

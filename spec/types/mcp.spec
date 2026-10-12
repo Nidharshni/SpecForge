@@ -784,7 +784,7 @@ type McpAddExtensionEnabled "A builtin extension enabled" {
   source        "builtin" @literal
   /// False when the builtin was already enabled: nothing changed.
   changed       boolean
-  /// The required builtin peers enabled first.
+  /// The required builtins the add enabled with it, dependencies first.
   peers_enabled string[]
   verify unit "McpAddExtensionEnabled schema is valid"
 }
@@ -802,6 +802,8 @@ type McpAddExtensionInstalled "A package installed and locked" {
   key_id    string              @optional
   /// Absent for a local file.
   publisher PublisherAcceptance @optional
+  /// The required builtins the add enabled with it, dependencies first.
+  peers_enabled string[]
   verify unit "McpAddExtensionInstalled schema is valid"
 }
 

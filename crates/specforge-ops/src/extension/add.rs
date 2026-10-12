@@ -1,7 +1,7 @@
 //! `specforge add` and `specforge.add_extension`.
 
 use super::candidate::LocalFile;
-use super::lock_plan::{Fetch, Install, LockPlan, Verb};
+use super::lock_plan::{Appended, Fetch, Install, LockPlan, Verb};
 use super::{Origin, builtin_name};
 use crate::registry::{Acceptance, Publisher, Registry};
 use crate::{OpError, OpErrorKind, Writes};
@@ -186,7 +186,8 @@ pub enum AddOutcome {
         changed: bool,
         peers_enabled: Vec<&'static str>,
     },
-    /// Installed under `.specforge/extensions/` and locked.
+    /// Installed under `.specforge/extensions/` and locked. `peers_enabled` are the required
+    /// builtins enabled with it, dependencies first.
     Installed {
         name: String,
         version: String,
@@ -194,6 +195,7 @@ pub enum AddOutcome {
         /// How the registry's publisher was accepted; `None` for a local file.
         publisher: Option<Publisher>,
         origin: Origin,
+        peers_enabled: Vec<&'static str>,
     },
     /// Already installed at this version (or, from a local file, with
     /// these exact bytes) and enabled: nothing changed.
@@ -255,6 +257,7 @@ impl AddedExtension {
                 sha256,
                 publisher,
                 origin,
+                peers_enabled,
             } => AddResult::Installed(InstalledPackage {
                 specifier,
                 extension: name.clone(),
@@ -266,6 +269,10 @@ impl AddedExtension {
                     .and_then(Publisher::key_id)
                     .map(str::to_string),
                 publisher: publisher.as_ref().map(Publisher::acceptance),
+                peers_enabled: peers_enabled
+                    .iter()
+                    .map(|peer| (*peer).to_string())
+                    .collect(),
             }),
             AddOutcome::AlreadyPresent { name, version } => {
                 AddResult::AlreadyPresent(PresentExtension {
@@ -351,6 +358,8 @@ pub struct InstalledPackage {
     /// How the publisher was accepted; absent for a local file.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub publisher: Option<Acceptance>,
+    /// The required builtins enabled with it, dependencies first.
+    pub peers_enabled: Vec<String>,
 }
 
 /// An extension already installed and enabled.
@@ -482,11 +491,8 @@ pub fn add(
 enum Step<'a> {
     /// Nothing to write: already enabled or present, a dry run's plan, or a duplicate.
     Unchanged(AddOutcome),
-    /// A builtin to enable, after its required builtin peers.
-    Enable {
-        name: &'static str,
-        peers: Vec<&'static str>,
-    },
+    /// A builtin to enable (the lock plan enables the builtins it requires first).
+    Enable { name: &'static str },
     /// A local file to install.
     Local(Install<'a>),
     /// A registry package to fetch and install.
@@ -600,10 +606,7 @@ impl<'a> Resolver<'_, 'a> {
                 origin: Origin::Builtin,
             }));
         }
-        // Required builtin peers come first, so they're enabled before the
-        // extension that builds on them, in the one edit that enables it.
-        let peers = super::required_builtins(self.runtime, name)?;
-        Ok(Step::Enable { name, peers })
+        Ok(Step::Enable { name })
     }
 
     fn local(&mut self, wanted: &Specified, install: Install<'a>) -> Result<Step<'a>, Resolved> {
@@ -701,14 +704,15 @@ fn installed_outcome(install: &Install<'_>) -> AddOutcome {
         origin: Origin::Installed {
             source: install.source().clone(),
         },
+        peers_enabled: Vec::new(),
     }
 }
 
 /// Fetch what `steps` install from a registry, stage every install and enable every entry in
-/// `plan`, check it once and commit it with the `specforge.json` entries (each builtin after its
-/// required peers, each install by its bare name): one change that puts everything back when a
-/// step fails. A plan the peer rule refuses writes nothing, its refusal naming the specifier when
-/// there are several (ADR 0041).
+/// `plan`, check it once and commit it with the `specforge.json` entries (each builtin after the
+/// builtins it requires, each install by its bare name): one change that puts everything back
+/// when a step fails. A plan the peer rule refuses writes nothing, its refusal naming the
+/// specifier when there are several (ADR 0041).
 fn apply<'a>(
     req: &AddRequest,
     config: &specforge_common::ProjectConfig,
@@ -719,9 +723,8 @@ fn apply<'a>(
     let several = req.extensions.len() > 1;
     let specifier = |at: usize| req.extensions[at].specifier.as_str();
     let mut outcomes: Vec<Option<AddOutcome>> = Vec::with_capacity(steps.len());
-    let mut builtins: Vec<(usize, &'static str, Vec<&'static str>)> = Vec::new();
-    let mut staged: Vec<(PackageName, usize)> = Vec::new();
-    let mut asked = false;
+    // Each specifier that adds something: its position and the extension it enables.
+    let mut asked: Vec<(usize, String)> = Vec::new();
     for (at, step) in steps.into_iter().enumerate() {
         outcomes.push(None);
         let install = match step {
@@ -729,13 +732,9 @@ fn apply<'a>(
                 outcomes[at] = Some(outcome);
                 continue;
             }
-            Step::Enable { name, peers } => {
-                asked = true;
-                for peer in &peers {
-                    plan.enable(peer);
-                }
+            Step::Enable { name } => {
                 plan.enable(name);
-                builtins.push((at, name, peers));
+                asked.push((at, name.to_string()));
                 continue;
             }
             Step::Local(install) => install,
@@ -743,13 +742,12 @@ fn apply<'a>(
                 .install(&name, &version)
                 .map_err(|error| named(several, specifier(at), error))?,
         };
-        asked = true;
         outcomes[at] = Some(installed_outcome(&install));
-        staged.push((install.name().clone(), at));
+        asked.push((at, install.name().to_string()));
         plan.enable(install.name().as_str());
         plan.stage(install);
     }
-    if !asked {
+    if asked.is_empty() {
         return Ok(Added {
             added: added(req, outcomes),
             writes: Writes::none(),
@@ -757,46 +755,57 @@ fn apply<'a>(
         });
     }
 
+    // The builtins the add requires are enabled first; a builtin that does not load refuses.
+    plan.close()?;
+    let appended = plan.appended().to_vec();
     let checked = plan.check().map_err(|refused| {
         let (name, error) = refused.decisive();
-        // An install is its own specifier; a builtin, or one it requires, is the builtin's.
-        let at = staged
-            .iter()
-            .find(|(staged, _)| *staged == name)
-            .map(|(_, at)| *at)
-            .or_else(|| {
-                builtins
-                    .iter()
-                    .find(|(_, builtin, peers)| {
-                        *builtin == name.as_str() || peers.contains(&name.as_str())
-                    })
-                    .map(|(at, _, _)| *at)
-            })
-            .unwrap_or_default();
-        named(several, specifier(at), error)
+        named(
+            several,
+            specifier(specifier_of(name.as_str(), &asked, &appended)),
+            error,
+        )
     })?;
     let applied = checked.commit(req.root.dir())?;
-    let appended = |name: &str| {
+    let written = |name: &str| {
         applied
             .enabled
             .as_ref()
             .is_some_and(|enabled| enabled.appended.iter().any(|a| a == name))
     };
 
-    // A builtin asked for is reported as its own; a required peer, once, by the first builtin
-    // that required it.
-    let asked: Vec<&str> = builtins.iter().map(|(_, name, _)| *name).collect();
-    let mut claimed: Vec<&str> = Vec::new();
-    for (at, name, peers) in builtins {
-        let peers_enabled = peers
-            .into_iter()
-            .filter(|peer| appended(peer) && !asked.contains(peer) && !claimed.contains(peer))
-            .collect::<Vec<_>>();
-        claimed.extend(peers_enabled.iter().copied());
-        outcomes[at] = Some(AddOutcome::Builtin {
-            name,
-            changed: appended(name),
-            peers_enabled,
+    // The required builtins an extension asked for enabled with it, dependencies first; each is
+    // reported once, by the extension that first required it.
+    let peers_enabled = |root: &str| -> Vec<&'static str> {
+        appended
+            .iter()
+            .filter(|entry| entry.required_by.as_deref() == Some(root) && written(&entry.name))
+            .filter_map(|entry| super::builtin_name(&entry.name))
+            .collect()
+    };
+    for (at, name) in &asked {
+        let peers = peers_enabled(name);
+        outcomes[*at] = Some(match outcomes[*at].take() {
+            Some(AddOutcome::Installed {
+                name,
+                version,
+                sha256,
+                publisher,
+                origin,
+                ..
+            }) => AddOutcome::Installed {
+                name,
+                version,
+                sha256,
+                publisher,
+                origin,
+                peers_enabled: peers,
+            },
+            _ => AddOutcome::Builtin {
+                name: super::builtin_name(name).expect("an enabled builtin"),
+                changed: written(name),
+                peers_enabled: peers,
+            },
         });
     }
     Ok(Added {
@@ -807,6 +816,21 @@ fn apply<'a>(
             .map_or(config.extensions.len(), |enabled| enabled.total),
         writes: applied.writes,
     })
+}
+
+/// The specifier a refusal of the extension `name` belongs to: the one that asked for it, or, for
+/// a builtin the plan enabled because an extension requires it, the one that asked for that
+/// extension.
+fn specifier_of(name: &str, asked: &[(usize, String)], appended: &[Appended]) -> usize {
+    let root = appended
+        .iter()
+        .find(|entry| entry.name == name)
+        .and_then(|entry| entry.required_by.as_deref())
+        .unwrap_or(name);
+    asked
+        .iter()
+        .find(|(_, asked)| asked == root)
+        .map_or(0, |(at, _)| *at)
 }
 
 /// Each specifier of `req` with its outcome.
@@ -1445,19 +1469,24 @@ mod tests {
         use crate::config::testing::files_under;
         let dir = project_with(EMPTY_PROJECT);
         let before = files_under(dir.path());
-        // formal wants software ^2.0; the software this specforge embeds is 1.0.0.
+        // formal wants software ^2.0; the software this specforge embeds is 1.0.0. (Init also
+        // enables testing beside software.)
         let runtime = serving_builtin(
             serving_builtin(
-                runtime(),
-                "@specforge/formal",
-                declaring(
+                serving_builtin(
+                    runtime(),
                     "@specforge/formal",
-                    "1.0.0",
-                    &[("@specforge/software", "^2.0", false)],
+                    declaring(
+                        "@specforge/formal",
+                        "1.0.0",
+                        &[("@specforge/software", "^2.0", false)],
+                    ),
                 ),
+                "@specforge/software",
+                declaring("@specforge/software", "1.0.0", &[]),
             ),
-            "@specforge/software",
-            declaring("@specforge/software", "1.0.0", &[]),
+            "@specforge/testing",
+            declaring("@specforge/testing", "1.0.0", &[]),
         );
 
         let error = add(
@@ -1471,10 +1500,13 @@ mod tests {
         .unwrap_err();
 
         assert_eq!(error.code, "E027");
-        assert!(
-            error.message.contains("'@specforge/software' ^2.0"),
-            "{}",
-            error.message
+        assert_eq!(
+            error.message,
+            "extension '@specforge/formal' requires peer dependency '@specforge/software' ^2.0 but version 1.0.0 is installed"
+        );
+        assert_eq!(
+            error.suggestion.as_deref(),
+            Some("this specforge build's builtin extensions disagree: reinstall specforge")
         );
         assert_eq!(files_under(dir.path()), before);
 
@@ -1705,7 +1737,6 @@ mod tests {
         behavior = "add_extension_to_existing_project",
         verify = "an install enables the builtins it requires first, whatever its source"
     )]
-    #[ignore = "fixed by T3"]
     fn an_install_enables_the_builtins_it_requires_first() {
         let files = tempfile::tempdir().unwrap();
         let local = Source::Local(wasm_file(
@@ -1725,6 +1756,15 @@ mod tests {
 
             let added = add_one(dir.path(), source, registry).unwrap();
 
+            assert!(
+                matches!(
+                    &added.added[0].outcome,
+                    AddOutcome::Installed { peers_enabled, .. }
+                        if peers_enabled == &["@specforge/software"]
+                ),
+                "{:?}",
+                added.added[0].outcome
+            );
             let config = specforge_common::read_project_config(dir.path()).config;
             assert_eq!(
                 config.extensions,
@@ -1739,42 +1779,6 @@ mod tests {
                 added.writes
             );
         }
-    }
-
-    /// Pinned: today the builtin walk words a builtin's mismatch its own way. T3 deletes the walk
-    /// and check's wording takes over.
-    #[test]
-    fn pin_a_builtins_embedded_mismatch_has_its_own_wording() {
-        let dir = project_with(EMPTY_PROJECT);
-        let runtime = serving_builtin(
-            serving_builtin(
-                runtime(),
-                "@specforge/formal",
-                declaring(
-                    "@specforge/formal",
-                    "1.0.0",
-                    &[("@specforge/software", "^2.0", false)],
-                ),
-            ),
-            "@specforge/software",
-            declaring("@specforge/software", "1.0.0", &[]),
-        );
-
-        let error = add(
-            &builtin_request(
-                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-                "@specforge/formal",
-            ),
-            &crate::registry::Unconfigured("add"),
-            &runtime,
-        )
-        .unwrap_err();
-
-        assert!(
-            error.message.contains("embeds @specforge/software 1.0.0"),
-            "{}",
-            error.message
-        );
     }
 
     #[test]
@@ -2203,6 +2207,7 @@ mod tests {
             sha256: "ab".into(),
             publisher,
             origin: Origin::Installed { source },
+            peers_enabled: Vec::new(),
         };
         let signed = Publisher::Signed {
             key_id: "k1".into(),
@@ -2221,17 +2226,17 @@ mod tests {
             (
                 installed_from(Some(Publisher::Unsigned), LockSource::Registry),
                 serde_json::json!({"specifier": "s", "action": "installed", "extension": "@acme/x", "version": "1.0.0",
-                    "sha256": "ab", "source": "registry", "publisher": "unsigned"}),
+                    "sha256": "ab", "source": "registry", "publisher": "unsigned", "peers_enabled": []}),
             ),
             (
                 installed_from(Some(signed), LockSource::Registry),
                 serde_json::json!({"specifier": "s", "action": "installed", "extension": "@acme/x", "version": "1.0.0",
-                    "sha256": "ab", "source": "registry", "key_id": "k1", "publisher": "pinned_now"}),
+                    "sha256": "ab", "source": "registry", "key_id": "k1", "publisher": "pinned_now", "peers_enabled": []}),
             ),
             (
                 installed_from(None, LockSource::Local("x.wasm".into())),
                 serde_json::json!({"specifier": "s", "action": "installed", "extension": "@acme/x", "version": "1.0.0",
-                    "sha256": "ab", "source": "local:x.wasm"}),
+                    "sha256": "ab", "source": "local:x.wasm", "peers_enabled": []}),
             ),
             (
                 AddOutcome::AlreadyPresent {
