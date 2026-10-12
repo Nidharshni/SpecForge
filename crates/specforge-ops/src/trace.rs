@@ -6,7 +6,7 @@ use serde::ser::SerializeStruct;
 use serde::{Serialize, Serializer};
 use specforge_common::shape::Shape;
 use specforge_graph::Graph;
-use specforge_registry::{FieldRegistry, KindRegistry};
+use specforge_registry::RegistryBuild;
 use std::collections::{BTreeMap, BTreeSet, HashSet, VecDeque};
 
 use specforge_emitter::SCHEMA_VERSION;
@@ -104,7 +104,8 @@ impl TraceExpectations {
     /// - it points at another kind: a self-relation (`depends_on`,
     ///   `extends`, `superseded_by`...) is a hierarchy or ordering whose
     ///   roots or leaves lack it by construction.
-    pub fn from_registries(fields: &FieldRegistry, kinds: &KindRegistry) -> Self {
+    pub fn of(build: &RegistryBuild) -> Self {
+        let (fields, kinds) = (build.fields(), build.kinds());
         let mut expectations = Self::new();
         for (kind, field, entry) in fields.iter() {
             let Some(target) = entry.declared().target_kind.as_deref() else {
@@ -121,22 +122,19 @@ impl TraceExpectations {
             {
                 continue;
             }
-            let mut inverse_labels: Vec<String> =
-                entry.declared().inverse_of.iter().cloned().collect();
-            inverse_labels.extend(
-                fields
-                    .fields_for_kind(target)
-                    .into_iter()
-                    .filter(|other| other.declared().inverse_of.as_deref() == Some(field))
-                    .map(|other| other.declared().name.clone()),
-            );
-            inverse_labels.sort();
-            inverse_labels.dedup();
+            let inverse_labels = fields
+                .inverse_fields(kind, field)
+                .into_iter()
+                .map(str::to_string)
+                .collect();
             expectations.expect(
                 kind,
                 ExpectedEdge {
                     label: field.to_string(),
-                    edge_type: entry.declared().edge.clone(),
+                    edge_type: build
+                        .edges()
+                        .written_by(kind, field)
+                        .map(|edge| edge.label().to_string()),
                     target_kind: target.to_string(),
                     required: entry.declared().required,
                     inverse_labels,
@@ -300,8 +298,7 @@ impl From<TraceError> for OpError {
 /// edge the registries lead the traced entity to have, and it lacks,
 /// flagged as missing.
 pub fn trace(view: &ProjectView, target: Target) -> Result<TraceOutcome, TraceError> {
-    let expectations =
-        TraceExpectations::from_registries(view.registries().fields(), view.registries().kinds());
+    let expectations = TraceExpectations::of(view.registries());
     let graph = view.graph();
     match target {
         Target::Entity(entity_id) => {

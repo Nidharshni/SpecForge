@@ -86,8 +86,9 @@ type RegistryBuild {
 // Only the registry build derives it; with the provider schemes the
 // environment registers it is every graph's configuration (ADR 0032).
 type GraphInputs {
-  // Inverse field pairs, each written lesser label first, sorted: a two-hop
-  // cycle through both labels of one pair is not a reference cycle
+  // A reference field and each of its inverse fields (fields of its target
+  // kind), each pair written lesser label first, sorted: a two-hop cycle
+  // through both labels of one pair is not a reference cycle
   bidirectional_pairs      string[] @readonly
   // Kinds whose bodies an extension parses: the core grammar's parse
   // errors inside their entities are not reported

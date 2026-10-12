@@ -987,12 +987,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "failure_mode.invariant": "invariant",
       "failure_mode.threatens_features": "feature"
     },
-    "bidirectional_pairs": [
-      [
-        "enforced_by",
-        "invariants"
-      ]
-    ],
+    "bidirectional_pairs": [],
     "body_parser_kinds": [],
     "derived_references": [],
     "field_coercions": {

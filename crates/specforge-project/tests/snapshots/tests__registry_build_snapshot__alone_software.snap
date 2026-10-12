@@ -901,16 +901,7 @@ expression: "digest(&load(&runtime, &[name]))"
     "absent_reference_targets": {
       "behavior.features": "feature"
     },
-    "bidirectional_pairs": [
-      [
-        "behaviors",
-        "features"
-      ],
-      [
-        "enforced_by",
-        "invariants"
-      ]
-    ],
+    "bidirectional_pairs": [],
     "body_parser_kinds": [
       "port",
       "type"
