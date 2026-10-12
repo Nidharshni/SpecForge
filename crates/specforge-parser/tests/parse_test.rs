@@ -2544,11 +2544,21 @@ fn a_half_typed_field_ends_its_body_at_the_next_form() {
     assert_eq!(result.errors[0].span.start_line, 3);
 }
 
-#[test]
-fn a_half_typed_method_header_takes_the_forms_after_its_body() {
+#[specforge_test(
+    behavior = "recover_from_syntax_errors",
+    verify = "the parser resumes at every form start the grammar's tree missed"
+)]
+fn a_half_typed_method_header_ends_its_body_at_the_next_form() {
     let result = parse(HALF_TYPED_METHOD, "test.spec");
     let ids: Vec<&str> = result.entities.iter().map(|e| e.id.raw.as_str()).collect();
-    assert_eq!(ids, ["pay"], "errors: {:?}", result.errors);
+    // `pay` itself is lost: the grammar reads no entity from a method header
+    // cut short (README section 5, R15).
+    assert!(ids.contains(&"settle"), "entities: {ids:?}");
+    assert!(
+        result.errors.iter().any(|e| e.span.start_line == 1),
+        "errors: {:?}",
+        result.errors
+    );
 }
 
 #[test]

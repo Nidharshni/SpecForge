@@ -118,11 +118,11 @@ pub fn line_indent(text: &str, at: usize) -> Option<usize> {
 /// ["Title"] {` (a define block too); or `kind name =` (a union). A title
 /// is a `"…"` closed on that line.
 ///
-/// The one rule of where a top-level form starts (ADR 0038 D6). The
-/// parser's recovery ends an unclosed string before such a line, passing
-/// each line it scans lexed alone; the LSP's document closes every body,
-/// block and list left open at one, passing its own lexemes. A test holds
-/// it to the grammar's top-level nodes in the repository's spec, both ways.
+/// The one rule of where a top-level form starts (ADR 0038 D6). The lexer
+/// ends an unclosed `"""` before such a line, passing each line it scans
+/// lexed alone; `form_starts` asks it over a whole document, for the parser's
+/// recovery and the LSP's document. A test holds it to the grammar's
+/// top-level nodes in the repository's spec, both ways.
 pub fn starts_top_level_form(text: &str, lexemes: &[Lexeme], max_indent: usize) -> bool {
     let Some(first) = lexemes.first() else {
         return false;
@@ -211,8 +211,8 @@ pub fn form_starts(text: &str, lexemes: &[Lexeme]) -> Vec<usize> {
 /// (`starts_top_level_form`, each line lexed alone: the text after a string
 /// the grammar would not close cannot be lexed whole). Where such a string
 /// ends: the lexer ends an unclosed `"""…"""` at the end of the line before
-/// it, and the parser's recovery ends any unclosed string at it (ADR 0038).
-pub(crate) fn next_form_line(text: &str, from: usize, max_indent: usize) -> Option<usize> {
+/// it (ADR 0038).
+fn next_form_line(text: &str, from: usize, max_indent: usize) -> Option<usize> {
     let mut at = from;
     while let Some(nl) = text[at..].find('\n') {
         let line = at + nl + 1;

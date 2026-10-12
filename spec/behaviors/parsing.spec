@@ -63,9 +63,12 @@ behavior recover_from_syntax_errors "Recover From Syntax Errors" {
     backslash before a line break leaves a string unclosed, as the grammar
     reads it. A body left unclosed ends, missing its closing brace, where
     the next line starts a top-level form indented no deeper than the form
-    the body opened (the same form-start rule, read by the grammar's
-    scanner), whatever member was being typed in it (a field's name with
-    no value, an open bracket), so the blocks after it are parsed.
+    the body opened, whatever member was being typed in it (a field's name
+    with no value, an open bracket); the grammar's scanner ends it there
+    for the members it reaches, and the parser cuts the source before every
+    form start the grammar's tree still missed (the same form-start rule,
+    form_starts) and parses each piece alone, so every form after a broken
+    one is parsed.
   """
   requires {
     error_recovery_enabled "SourceParser is initialized with error-recovery mode enabled"
@@ -85,6 +88,7 @@ behavior recover_from_syntax_errors "Recover From Syntax Errors" {
   verify unit "an unclosed body ends at a form indented no deeper than the form it opened"
   verify unit "the grammar resumes at every top-level form of the repository's spec after an unclosed body"
   verify unit "a body member left half-typed ends where the next top-level form starts"
+  verify unit "the parser resumes at every form start the grammar's tree missed"
   verify unit "completely invalid syntax produces error with location"
   verify unit "missing opening brace produces a parse error"
   verify contract "Recover From Syntax Errors: syntax error recovery holds — error_recovery_enabled, valid_utf8_input, valid_blocks_preserved, errors_collected"
