@@ -33,7 +33,7 @@ mod suggest_fixes;
 pub(crate) mod trace;
 pub(crate) mod validate;
 
-use serde_json::{Value, json};
+use serde_json::Value;
 
 use crate::events::{EventSink, McpEvent};
 use crate::lifecycle::Revision;
@@ -147,22 +147,20 @@ impl Surface for Tools {
     ) -> Option<McpEvent> {
         // The category it is listed with: no second lookup.
         let category = match found {
-            Found::Core(spec) => spec.category().as_str(),
-            Found::Extension(entry) => Category::from(entry.group).as_str(),
+            Found::Core(spec) => spec.category(),
+            Found::Extension(entry) => Category::from(entry.group),
         };
-        let mut event = json!({
-            "toolName": invocation.name,
-            "category": category,
-            "params": invocation.arguments.to_string(),
-        });
-        if let Some(entity_id) = invocation
+        let entity_id = invocation
             .arguments
             .get("entity_id")
             .and_then(Value::as_str)
-        {
-            event["entityId"] = Value::from(entity_id);
-        }
-        Some(McpEvent::new("mcp_tool_invoked", event))
+            .map(str::to_string);
+        Some(McpEvent::McpToolInvoked {
+            tool_name: invocation.name.clone(),
+            category,
+            entity_id,
+            params: invocation.arguments.to_string(),
+        })
     }
 
     fn run(

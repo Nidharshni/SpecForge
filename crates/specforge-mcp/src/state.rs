@@ -245,13 +245,10 @@ impl McpState {
             );
             let stats = self.surfaces.stats();
             if stats.declared > 0 {
-                self.events.record(McpEvent::new(
-                    "commands_auto_promoted",
-                    serde_json::json!({
-                        "promotedCount": stats.promoted,
-                        "conflictCount": stats.conflicts,
-                    }),
-                ));
+                self.events.record(McpEvent::CommandsAutoPromoted {
+                    promoted_count: stats.promoted,
+                    conflict_count: stats.conflicts,
+                });
             }
         }
         // Subscribers hear what changed (ADR 0024 D6), here because every

@@ -34,7 +34,7 @@ event mcp_tool_invoked "MCP Tool Invoked" {
     toolName  string
     category  McpToolCategory
     entityId  string @optional
-    params    string @optional
+    params    string
     timestamp timestamp
   }
   verify integration "emits mcp_tool_invoked with correct toolName, category, and parameters for any tool call"
@@ -73,9 +73,9 @@ event mcp_initialized "MCP Initialized" {
     resources_registered         integer
     prompts_registered           integer
     extensions_loaded            integer
-    surface_tools_registered     integer @optional
-    surface_resources_registered integer @optional
-    auto_promoted_tools          integer @optional
+    surface_tools_registered     integer
+    surface_resources_registered integer
+    auto_promoted_tools          integer
     timestamp                    timestamp
   }
   verify integration "mcp initialization emits event with tool counts"

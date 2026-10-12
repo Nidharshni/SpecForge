@@ -11,6 +11,7 @@ use std::marker::PhantomData;
 
 use serde::Serialize;
 use serde_json::{Value, json};
+use specforge_common::shape::Shape;
 use specforge_common::{Diagnostic, Severity};
 use specforge_graph::Graph;
 
@@ -52,7 +53,8 @@ impl ToolGroup {
 /// `McpToolCategory`. Never declared: a mutation's is `Mutation`, any other
 /// tool's its group ([`ToolSpec::category`]). Where a tool comes from is its
 /// `source`, a separate field (ADR 0004 D4-b).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Shape)]
+#[serde(rename_all = "lowercase")]
 pub enum Category {
     Core,
     Navigation,

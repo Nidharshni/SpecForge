@@ -15,12 +15,11 @@ mod wire;
 
 use std::collections::HashSet;
 
-use serde_json::{Value, json};
+use serde_json::Value;
 use specforge_common::Diagnostic;
 use specforge_project::{GraphDelta, Update, UpdateKind};
 
 use crate::events::{EventSink, McpEvent};
-use crate::protocol::id_text;
 
 /// What a resource's content changes with: the one rule both eras read.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -180,7 +179,7 @@ impl Subscriptions {
             return false;
         }
         self.resources.push(uri.to_string());
-        events.record(subscription_event("mcp_subscription_created", uri, None));
+        events.record(McpEvent::subscription_created(uri, None));
         true
     }
 
@@ -192,7 +191,7 @@ impl Subscriptions {
             return false;
         };
         self.resources.remove(position);
-        events.record(subscription_event("mcp_subscription_removed", uri, None));
+        events.record(McpEvent::subscription_removed(uri, None));
         true
     }
 
@@ -210,11 +209,7 @@ impl Subscriptions {
         }
         self.outbox.push(wire::acknowledged(&id, &named));
         for uri in &named {
-            events.record(subscription_event(
-                "mcp_subscription_created",
-                uri,
-                Some(&id),
-            ));
+            events.record(McpEvent::subscription_created(uri, Some(&id)));
         }
         self.streams.push(Stream { id, uris: named });
     }
@@ -228,11 +223,7 @@ impl Subscriptions {
         };
         let ended = self.streams.remove(position);
         for uri in &ended.uris {
-            events.record(subscription_event(
-                "mcp_subscription_removed",
-                uri,
-                Some(&ended.id),
-            ));
+            events.record(McpEvent::subscription_removed(uri, Some(&ended.id)));
         }
         true
     }
@@ -244,16 +235,12 @@ impl Subscriptions {
     pub fn disconnect(&mut self, events: &mut dyn EventSink) -> usize {
         let mut ended = 0;
         for uri in self.resources.drain(..) {
-            events.record(subscription_event("mcp_subscription_removed", &uri, None));
+            events.record(McpEvent::subscription_removed(&uri, None));
             ended += 1;
         }
         for stream in self.streams.drain(..) {
             for uri in &stream.uris {
-                events.record(subscription_event(
-                    "mcp_subscription_removed",
-                    uri,
-                    Some(&stream.id),
-                ));
+                events.record(McpEvent::subscription_removed(uri, Some(&stream.id)));
                 ended += 1;
             }
         }
@@ -295,29 +282,15 @@ impl Subscriptions {
             |watched: Watched| self.resources.iter().any(|uri| Watched::of(uri) == watched);
         if !changes.graph.is_empty() && subscribed(Watched::Graph) {
             self.outbox.push(wire::graph_changed(changes.graph));
-            events.record(McpEvent::new(
-                "mcp_delta_notified",
-                json!({
-                    "notificationType": "graph",
-                    "subscriberCount": 1,
-                    "addedNodes": changes.graph.added_nodes.len(),
-                    "removedNodes": changes.graph.removed_nodes.len(),
-                    "modifiedNodes": changes.graph.modified_nodes.len(),
-                }),
-            ));
+            events.record(McpEvent::graph_delta(changes.graph));
         }
         if let Some(delta) = changes.diagnostics.as_ref().filter(|d| !d.is_empty())
             && subscribed(Watched::Diagnostics)
         {
             self.outbox.push(wire::diagnostics_changed(delta));
-            events.record(McpEvent::new(
-                "mcp_delta_notified",
-                json!({
-                    "notificationType": "diagnostics",
-                    "subscriberCount": 1,
-                    "addedDiagnostics": delta.added.len(),
-                    "removedDiagnostics": delta.removed.len(),
-                }),
+            events.record(McpEvent::diagnostics_delta(
+                delta.added.len(),
+                delta.removed.len(),
             ));
         }
     }
@@ -341,16 +314,6 @@ impl Subscriptions {
     pub fn is_empty(&self) -> bool {
         self.resources.is_empty() && self.streams.is_empty()
     }
-}
-
-/// An `mcp_subscription_created` / `_removed` event: the resource, and the
-/// listen request's id when it is on a stream.
-fn subscription_event(name: &str, uri: &str, stream: Option<&Value>) -> McpEvent {
-    let mut params = json!({ "resourceUri": uri });
-    if let Some(id) = stream {
-        params["subscriptionId"] = Value::String(id_text(id));
-    }
-    McpEvent::new(name, params)
 }
 
 #[cfg(test)]

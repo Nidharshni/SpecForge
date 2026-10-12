@@ -44,7 +44,7 @@ event surface_mcp_resource_dispatched "Surface MCP Resource Dispatched" {
   payload {
     extensionName string
     uriTemplate   string
-    mimeType      string @optional
+    mimeType      string
     durationMs    integer
     timestamp     timestamp
   }

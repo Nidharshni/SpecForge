@@ -23,12 +23,12 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 use serde::Serialize;
-use serde_json::{Value, json};
+use serde_json::Value;
 use specforge_common::shape::{Object, Shape};
 use specforge_common::{Diagnostic, DiagnosticList};
 use specforge_ops::{OpError, Writes};
 
-use crate::events::{EventSink, McpEvent};
+use crate::events::{EventSink, ExtensionAdded, McpEvent, ProjectInitialized};
 use crate::reply::Answer;
 use crate::target::Call;
 use crate::tool::{McpError, Payload, ToolOutcome};
@@ -91,56 +91,18 @@ impl Written {
 pub enum MutationEvent {
     /// `extension_added`: one specifier of an add that succeeded, a duplicate
     /// included.
-    ExtensionAdded {
-        /// The specifier as the call gave it.
-        specifier: String,
-        /// How many extensions `specforge.json` enables after the add.
-        total_extensions: usize,
-        /// The extension was already installed (or enabled): nothing
-        /// changed.
-        was_duplicate: bool,
-    },
+    ExtensionAdded(ExtensionAdded),
     /// `project_initialized`: the scaffold init wrote.
-    ProjectInitialized {
-        project_name: String,
-        extension_count: usize,
-        /// The starter entity spec file, relative to the new root (not
-        /// `specforge.json`).
-        spec_file_path: String,
-    },
+    ProjectInitialized(ProjectInitialized),
 }
 
-impl MutationEvent {
-    /// The event's name, as `spec/events` declares it.
-    pub fn name(&self) -> &'static str {
-        match self {
-            MutationEvent::ExtensionAdded { .. } => "extension_added",
-            MutationEvent::ProjectInitialized { .. } => "project_initialized",
-        }
-    }
-
-    /// Its payload, camelCase as declared (`timestamp` is added when
-    /// recorded).
-    pub fn params(&self) -> Value {
-        match self {
-            MutationEvent::ExtensionAdded {
-                specifier,
-                total_extensions,
-                was_duplicate,
-            } => json!({
-                "extensionSpecifier": specifier,
-                "totalExtensions": total_extensions,
-                "wasDuplicate": was_duplicate,
-            }),
-            MutationEvent::ProjectInitialized {
-                project_name,
-                extension_count,
-                spec_file_path,
-            } => json!({
-                "projectName": project_name,
-                "extensionCount": extension_count,
-                "specFilePath": spec_file_path,
-            }),
+impl From<MutationEvent> for McpEvent {
+    fn from(event: MutationEvent) -> Self {
+        match event {
+            MutationEvent::ExtensionAdded(added) => McpEvent::ExtensionAdded(added),
+            MutationEvent::ProjectInitialized(initialized) => {
+                McpEvent::ProjectInitialized(initialized)
+            }
         }
     }
 }
@@ -486,18 +448,15 @@ fn sent<R: Object + Serialize, A: AfterWrite>(
 fn record(events: &mut dyn EventSink, tool: &str, success: bool, written: &Written) {
     if success {
         for event in &written.events {
-            events.record(McpEvent::new(event.name(), event.params()));
+            events.record(event.clone().into());
         }
     }
-    events.record(McpEvent::new(
-        "mcp_mutation_completed",
-        json!({
-            "toolName": tool,
-            "files_changed": written.files.len(),
-            "entities_affected": written.entities.len(),
-            "success": success,
-        }),
-    ));
+    events.record(McpEvent::McpMutationCompleted {
+        tool_name: tool.to_string(),
+        files_changed: written.files.len(),
+        entities_affected: written.entities.len(),
+        success,
+    });
 }
 
 /// `files` named from `root` ([`Writes::names_under`]), else displayed
@@ -517,6 +476,7 @@ mod tests {
     use super::*;
     use crate::events::testing::EventLog;
     use crate::tool::ErrorCode;
+    use serde_json::json;
     use specforge_common::{Diagnostic, Severity};
 
     /// The `mcp_mutation_completed` payloads `log` kept.
@@ -558,11 +518,11 @@ mod tests {
     }
 
     fn added() -> MutationEvent {
-        MutationEvent::ExtensionAdded {
-            specifier: "@x/y".into(),
+        MutationEvent::ExtensionAdded(ExtensionAdded {
+            extension_specifier: "@x/y".into(),
             total_extensions: 1,
             was_duplicate: false,
-        }
+        })
     }
 
     #[test]
@@ -628,30 +588,6 @@ mod tests {
         assert_eq!(
             payload(&outcome),
             json!({"name": "x", "files_written": ["specforge.json"]})
-        );
-    }
-
-    #[test]
-    fn event_names_are_the_specs() {
-        let added = MutationEvent::ExtensionAdded {
-            specifier: "@x/y".into(),
-            total_extensions: 2,
-            was_duplicate: true,
-        };
-        let initialized = MutationEvent::ProjectInitialized {
-            project_name: "demo".into(),
-            extension_count: 1,
-            spec_file_path: "spec/hello.spec".into(),
-        };
-        assert_eq!(added.name(), "extension_added");
-        assert_eq!(
-            added.params(),
-            json!({"extensionSpecifier": "@x/y", "totalExtensions": 2, "wasDuplicate": true})
-        );
-        assert_eq!(initialized.name(), "project_initialized");
-        assert_eq!(
-            initialized.params(),
-            json!({"projectName": "demo", "extensionCount": 1, "specFilePath": "spec/hello.spec"})
         );
     }
 

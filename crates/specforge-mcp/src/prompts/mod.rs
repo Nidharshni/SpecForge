@@ -8,7 +8,7 @@ mod review;
 mod table;
 mod trace;
 
-use serde_json::{Value, json};
+use serde_json::Value;
 
 use crate::events::{EventSink, McpEvent};
 use crate::lifecycle::Revision;
@@ -63,13 +63,18 @@ impl Surface for Prompts {
         invocation: &Invocation,
     ) -> Option<McpEvent> {
         let spec = found.core_entry();
-        let mut event = json!({ "promptName": spec.name });
-        for (argument, field) in [("entity_id", "entityId"), ("kind", "kind")] {
-            if let Some(value) = invocation.arguments.get(argument).and_then(Value::as_str) {
-                event[field] = Value::from(value);
-            }
-        }
-        Some(McpEvent::new("mcp_prompt_invoked", event))
+        let argument = |name: &str| {
+            invocation
+                .arguments
+                .get(name)
+                .and_then(Value::as_str)
+                .map(str::to_string)
+        };
+        Some(McpEvent::McpPromptInvoked {
+            prompt_name: spec.name.to_string(),
+            entity_id: argument("entity_id"),
+            kind: argument("kind"),
+        })
     }
 
     fn run(

@@ -404,33 +404,6 @@ fn event_mcp_subscription_removed() {
     );
 }
 
-/// Each event `spec/events/mcp.spec` declares, with its payload fields as
-/// `(name, optional)`.
-fn declared_payloads() -> std::collections::BTreeMap<String, Vec<(String, bool)>> {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../spec/events/mcp.spec");
-    let spec = std::fs::read_to_string(&path).unwrap();
-    let mut events = std::collections::BTreeMap::new();
-    let mut current: Option<String> = None;
-    let mut in_payload = false;
-    for line in spec.lines().map(str::trim) {
-        if let Some(rest) = line.strip_prefix("event ") {
-            let name = rest.split_whitespace().next().unwrap().to_string();
-            events.insert(name.clone(), Vec::new());
-            current = Some(name);
-        } else if line.starts_with("payload {") {
-            in_payload = true;
-        } else if in_payload && line == "}" {
-            in_payload = false;
-        } else if in_payload && !line.is_empty() {
-            let field = line.split_whitespace().next().unwrap().to_string();
-            let optional = line.contains("@optional");
-            let event = current.as_ref().unwrap();
-            events.get_mut(event).unwrap().push((field, optional));
-        }
-    }
-    events
-}
-
 /// A session touching every MCP event: initialize (twice), subscribe,
 /// the listings, a read, a tool, a prompt, a rename (a mutation and a
 /// graph delta), a protocol error, a cancel and shutdown. The project's
@@ -487,35 +460,34 @@ fn core_session() -> (Logged, tempfile::TempDir) {
     (server, dir)
 }
 
-/// A session touching every MCP event: each payload carries every field
-/// the spec requires and none it does not declare.
-#[test]
-fn every_event_in_a_session_carries_exactly_its_declared_payload() {
-    let declared = declared_payloads();
-    assert_eq!(declared.len(), 13, "{declared:?}");
-
+/// The core session records every event `spec/events/mcp.spec` declares,
+/// and each recorded event serializes to the shape `McpEvent` derives.
+#[specforge_test(
+    behavior = "mcp_event_record",
+    verify = "every event the server records is one an events spec declares, its payload exactly the declared fields"
+)]
+fn a_session_records_every_mcp_event() {
     let (server, _dir) = core_session();
     let events = recorded(&server);
     let emitted: std::collections::BTreeSet<&str> =
         events.iter().map(|(name, _)| name.as_str()).collect();
-    let all: std::collections::BTreeSet<&str> = declared.keys().map(String::as_str).collect();
-    assert_eq!(emitted, all, "the session emits every MCP event");
+    let spec = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../spec/events/mcp.spec"),
+    )
+    .unwrap();
+    let declared: std::collections::BTreeSet<&str> = spec
+        .lines()
+        .filter_map(|line| line.strip_prefix("event "))
+        .filter_map(|rest| rest.split_whitespace().next())
+        .collect();
+    assert_eq!(declared.len(), 13, "{declared:?}");
+    assert_eq!(emitted, declared, "the session emits every MCP event");
 
-    for (event, params) in &events {
-        let fields = &declared[event];
-        let payload = params.as_object().unwrap();
-        for key in payload.keys() {
-            assert!(
-                fields.iter().any(|(name, _)| name == key),
-                "{event} carries undeclared field {key}: {params}"
-            );
-        }
-        for (name, optional) in fields {
-            assert!(
-                *optional || payload.contains_key(name),
-                "{event} lacks required field {name}: {params}"
-            );
-        }
+    let document = specforge_common::shape::document::<specforge_mcp::events::McpEvent>();
+    for recorded in server.log().recorded() {
+        let value = serde_json::to_value(&recorded.event).unwrap();
+        let violations = specforge_common::shape::violations(document, &value);
+        assert!(violations.is_empty(), "{}: {violations:?}", recorded.name());
     }
 }
 

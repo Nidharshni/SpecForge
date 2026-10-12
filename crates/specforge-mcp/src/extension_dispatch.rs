@@ -120,16 +120,13 @@ fn mcp_tool_adapter(
     };
     // A tool whose export returned is a dispatched tool; it succeeded when
     // its output is the tool's result.
-    let event = json!({
-        "extensionName": entry.extension,
-        "toolName": entry.name,
-        "durationMs": elapsed_ms(started),
-        "success": result.succeeded(),
-    });
-    (
-        result,
-        Some(McpEvent::new("surface_mcp_tool_dispatched", event)),
-    )
+    let event = McpEvent::SurfaceMcpToolDispatched {
+        extension_name: entry.extension.clone(),
+        tool_name: entry.name.clone(),
+        duration_ms: elapsed_ms(started),
+        success: result.succeeded(),
+    };
+    (result, Some(event))
 }
 
 /// A command's run as a tool result, and its dispatch event when its export
@@ -148,16 +145,13 @@ fn command_adapter(
     let started = std::time::Instant::now();
     match specforge_ops::command::run(&project.view(), command, &given, CommandFormat::Json) {
         Ok(output) => {
-            let event = json!({
-                "extensionName": command.extension(),
-                "commandId": command.id(),
-                "exitCode": output.exit_code,
-                "durationMs": elapsed_ms(started),
-            });
-            (
-                output_result(output),
-                Some(McpEvent::new("surface_command_dispatched", event)),
-            )
+            let event = McpEvent::SurfaceCommandDispatched {
+                extension_name: command.extension().to_string(),
+                command_id: command.id().to_string(),
+                exit_code: output.exit_code,
+                duration_ms: elapsed_ms(started),
+            };
+            (output_result(output), Some(event))
         }
         Err(RunError::Args(refused)) => (ToolOutcome::failed(refused.to_json()), None),
         Err(RunError::Call(error)) => (failed_call(&error.diagnostic()).into(), None),
@@ -185,15 +179,12 @@ fn resource_adapter(
         // resource; a failed call is the read's error, and no dispatch is
         // recorded.
         Ok(read) => {
-            let event = McpEvent::new(
-                "surface_mcp_resource_dispatched",
-                json!({
-                    "extensionName": entry.extension,
-                    "uriTemplate": entry.uri_template,
-                    "mimeType": read.mime_type,
-                    "durationMs": elapsed_ms(started),
-                }),
-            );
+            let event = McpEvent::SurfaceMcpResourceDispatched {
+                extension_name: entry.extension.clone(),
+                uri_template: entry.uri_template.clone(),
+                mime_type: read.mime_type.clone(),
+                duration_ms: elapsed_ms(started),
+            };
             let text = ResourceText {
                 text: read.content,
                 mime_type: read.mime_type,

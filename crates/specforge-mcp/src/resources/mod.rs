@@ -88,10 +88,10 @@ impl Surface for Resources {
     ) -> Option<McpEvent> {
         // A read that returned content: its format is its MIME type.
         let text = outcome.as_ref().ok()?;
-        Some(McpEvent::new(
-            "mcp_resource_read",
-            json!({"resourceUri": invocation.name, "format": text.mime_type}),
-        ))
+        Some(McpEvent::McpResourceRead {
+            resource_uri: invocation.name.clone(),
+            format: text.mime_type.clone(),
+        })
     }
 
     fn envelope(

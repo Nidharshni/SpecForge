@@ -173,16 +173,11 @@ impl McpServer {
         let Some(error) = &response.error else {
             return;
         };
-        let mut event = serde_json::json!({
-            "errorCode": error.code,
-            "errorMessage": error.message,
+        self.state.events.record(McpEvent::McpProtocolErrorHandled {
+            error_code: error.code,
+            error_message: error.message.clone(),
+            method: method.map(str::to_string),
         });
-        if let Some(method) = method {
-            event["method"] = Value::from(method);
-        }
-        self.state
-            .events
-            .record(McpEvent::new("mcp_protocol_error_handled", event));
     }
 
     pub fn state(&self) -> &McpState {
