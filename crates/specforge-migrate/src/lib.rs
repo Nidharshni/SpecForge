@@ -4,6 +4,7 @@ use specforge_common::shape::Shape;
 use specforge_common::{Diagnostic, ProjectRoot, Severity, codes, load_project_config};
 use specforge_emitter::schema::{GraphProtocolSchema, SchemaMigration, diff_schemas};
 use specforge_formatter::unified_diff;
+use specforge_graph::{EdgeChange, GraphDelta, ModifiedNodeChange, NodeAspect};
 use specforge_parser::{FORMAT_HEADER_PREFIX, FormatVersion, detect_format_version};
 use std::path::{Path, PathBuf};
 
@@ -241,6 +242,76 @@ pub fn check_schema_compatibility(
     }
 
     diagnostics
+}
+
+/// What a migration changed in the graph, as W054 warnings, from the graph delta between the graph before it and the
+/// graph after (source positions ignored, ADR 0032): one per entity removed, one per entity added, one per entity
+/// whose content changed (naming its changed fields, then what else changed: `kind`, `title`, `methods` or `edges`),
+/// then one per edge removed and one per edge added. Empty exactly when `delta` is: a migration keeps the graph only
+/// then.
+pub fn structural_differences(delta: &GraphDelta) -> Vec<Diagnostic> {
+    let warn = |message: String| Diagnostic::new(codes::W054, message);
+    let edge = |e: &EdgeChange| format!("edge {}-[{}]->{}", e.source, e.label, e.target);
+    let removed = delta.removed_nodes.iter().map(|n| {
+        warn(format!(
+            "entity '{}' ({}) present before migration but missing after",
+            n.id, n.kind
+        ))
+    });
+    let added = delta.added_nodes.iter().map(|n| {
+        warn(format!(
+            "entity '{}' ({}) appeared after migration but was not present before",
+            n.id, n.kind
+        ))
+    });
+    let modified = delta.modified_nodes.iter().map(|n| {
+        warn(format!(
+            "entity '{}' changed during migration: {}",
+            n.id,
+            changed(n)
+        ))
+    });
+    let lost = delta.removed_edges.iter().map(|e| {
+        warn(format!(
+            "{} present before migration but missing after",
+            edge(e)
+        ))
+    });
+    let gained = delta.added_edges.iter().map(|e| {
+        warn(format!(
+            "{} appeared after migration but was not present before",
+            edge(e)
+        ))
+    });
+    removed
+        .chain(added)
+        .chain(modified)
+        .chain(lost)
+        .chain(gained)
+        .collect()
+}
+
+/// What changed in `node`: its fields by name, then its aspects. A field named like an aspect (`kind`, `methods`)
+/// is written `field 'kind'`, so the two read apart.
+fn changed(node: &ModifiedNodeChange) -> String {
+    let aspect = |a: &NodeAspect| match a {
+        NodeAspect::Kind => "kind",
+        NodeAspect::Title => "title",
+        NodeAspect::Methods => "methods",
+        NodeAspect::Edges => "edges",
+    };
+    let aspects: Vec<&str> = node.changed_aspects.iter().map(aspect).collect();
+    let fields = node.changed_fields.iter().map(|f| {
+        if ["kind", "title", "methods", "edges"].contains(&f.as_str()) {
+            format!("field '{f}'")
+        } else {
+            f.clone()
+        }
+    });
+    fields
+        .chain(aspects.iter().map(|a| a.to_string()))
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 /// Compare two graphs for structural equivalence (entity IDs, edges, field values).

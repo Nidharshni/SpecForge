@@ -1,10 +1,17 @@
 //! The migration crate's pure comparisons: the graph a migration must keep
-//! ([`compare_graphs`]) and the schema it must stay compatible with
+//! ([`structural_differences`]) and the schema it must stay compatible with
 //! ([`check_schema_compatibility`]).
 
-use specforge_common::Sym;
+use specforge_common::{Diagnostic, Sym};
+use specforge_graph::{Graph, compute_graph_delta};
+use specforge_migrate::structural_differences;
 use specforge_protocol_types::FieldType;
 use specforge_test_macros::test as specforge_test;
+
+/// The W054s for a migration that turned `pre` into `post`.
+fn drift(pre: &Graph, post: &Graph) -> Vec<Diagnostic> {
+    structural_differences(&compute_graph_delta(pre, post))
+}
 
 // F2: Post-migration structural equivalence (format-only migration)
 #[specforge_test(
@@ -13,7 +20,6 @@ use specforge_test_macros::test as specforge_test;
 )]
 fn format_only_migration_zero_differences() {
     use specforge_graph::{Edge, EntityId, EntityKind, FieldMap, FieldValue, Graph, Node};
-    use specforge_migrate::compare_graphs;
     use specforge_parser::SpannedRef;
 
     // A graph as compiled from files whose lines start at `first_line`:
@@ -78,7 +84,7 @@ fn format_only_migration_zero_differences() {
     // Same entities, edges and field values; only the spans moved.
     let pre = build(1, "does stuff", false);
     let post = build(2, "does stuff", false);
-    let diagnostics = compare_graphs(&pre, &post);
+    let diagnostics = drift(&pre, &post);
     assert!(
         diagnostics.is_empty(),
         "shifted spans are not a structural difference: {diagnostics:?}"
@@ -86,20 +92,26 @@ fn format_only_migration_zero_differences() {
 
     // A changed field value is a difference.
     let changed = build(2, "does other stuff", false);
-    let diagnostics = compare_graphs(&pre, &changed);
+    let diagnostics = drift(&pre, &changed);
     assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
     assert_eq!(diagnostics[0].code, "W054");
-    assert!(
-        diagnostics[0].message.contains("beh_a") && diagnostics[0].message.contains("contract"),
-        "{diagnostics:?}"
+    assert_eq!(
+        diagnostics[0].message,
+        "entity 'beh_a' changed during migration: contract"
     );
 
     // So is an edge that appeared.
     let grown = build(2, "does stuff", true);
-    let diagnostics = compare_graphs(&pre, &grown);
-    assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
-    assert_eq!(diagnostics[0].code, "W054");
-    assert!(diagnostics[0].message.contains("inv_b"), "{diagnostics:?}");
+    let diagnostics = drift(&pre, &grown);
+    let messages: Vec<&str> = diagnostics.iter().map(|d| d.message.as_str()).collect();
+    assert_eq!(
+        messages,
+        [
+            "entity 'beh_a' changed during migration: edges",
+            "edge beh_a-[invariants]->inv_b appeared after migration but was not present before",
+        ]
+    );
+    assert!(diagnostics.iter().all(|d| d.code == "W054"));
 }
 
 // F3: Structural differences → warnings
@@ -109,7 +121,6 @@ fn format_only_migration_zero_differences() {
 )]
 fn structural_differences_produce_warnings() {
     use specforge_graph::{EntityId, EntityKind, FieldMap, Graph, Node, SourceSpan};
-    use specforge_migrate::compare_graphs;
 
     let mut pre = Graph::new();
     pre.add_node(Node {
@@ -133,7 +144,7 @@ fn structural_differences_produce_warnings() {
 
     let post = Graph::new(); // Empty graph — entity "foo" is missing
 
-    let diagnostics = compare_graphs(&pre, &post);
+    let diagnostics = drift(&pre, &post);
     assert!(
         !diagnostics.is_empty(),
         "missing entity should produce diagnostic"
@@ -246,7 +257,6 @@ fn non_breaking_schema_change_no_w053() {
 #[test]
 fn new_entities_after_migration_reported() {
     use specforge_graph::{EntityId, EntityKind, FieldMap, Graph, Node, SourceSpan};
-    use specforge_migrate::compare_graphs;
 
     let pre = Graph::new(); // empty before
 
@@ -270,7 +280,7 @@ fn new_entities_after_migration_reported() {
         methods: Vec::new(),
     });
 
-    let diags = compare_graphs(&pre, &post);
+    let diags = drift(&pre, &post);
     assert!(
         diags
             .iter()
@@ -285,7 +295,6 @@ fn new_entities_after_migration_reported() {
 )]
 fn post_migration_integrity_contract() {
     use specforge_graph::{Edge, EntityId, EntityKind, FieldMap, Graph, Node, SourceSpan};
-    use specforge_migrate::compare_graphs;
 
     let make_node = |id: &str| Node {
         id: EntityId { raw: Sym::new(id) },
@@ -306,13 +315,13 @@ fn post_migration_integrity_contract() {
 
     // Ensures: structural_equivalence_checked — identical graphs yield empty
     let g = Graph::new();
-    assert!(compare_graphs(&g, &g).is_empty());
+    assert!(drift(&g, &g).is_empty());
 
     // Ensures: differences_reported — missing entity yields W054
     let mut pre = Graph::new();
     pre.add_node(make_node("x"));
     let post = Graph::new();
-    let diags = compare_graphs(&pre, &post);
+    let diags = drift(&pre, &post);
     assert!(
         diags.iter().any(|d| d.code == "W054"),
         "missing entity → W054"
@@ -330,7 +339,7 @@ fn post_migration_integrity_contract() {
     let mut post2 = Graph::new();
     post2.add_node(make_node("a"));
     post2.add_node(make_node("b"));
-    let diags2 = compare_graphs(&pre2, &post2);
+    let diags2 = drift(&pre2, &post2);
     assert!(
         diags2
             .iter()
@@ -671,7 +680,6 @@ fn added_optional_field_not_breaking() {
 )]
 fn cross_extension_broken_reference_produces_diagnostic() {
     use specforge_graph::{Edge, EntityId, EntityKind, FieldMap, Graph, Node, SourceSpan};
-    use specforge_migrate::compare_graphs;
 
     let make_node = |id: &str, kind: &str| Node {
         id: EntityId { raw: Sym::new(id) },
@@ -704,7 +712,7 @@ fn cross_extension_broken_reference_produces_diagnostic() {
     let mut post = Graph::new();
     post.add_node(make_node("login_flow", "behavior"));
 
-    let diags = compare_graphs(&pre, &post);
+    let diags = drift(&pre, &post);
     // Should report both the missing entity and the missing edge
     assert!(
         diags.iter().any(|d| d.message.contains("user_auth")),
@@ -750,4 +758,156 @@ fn graph_protocol_compatibility_contract() {
     assert_eq!(diags.len(), 1, "{diags:?}");
     assert_eq!(diags[0].code, "W053");
     assert!(diags[0].message.contains("KindRemoved(\"behavior\")"));
+}
+
+/// One way a migration can leave the graph, for the table below.
+#[derive(Clone, Copy)]
+enum Change {
+    Moved,
+    Title,
+    Kind,
+    Methods,
+    Field,
+    EdgeRemoved,
+    NodeRemoved,
+    NodeAdded,
+}
+
+/// The graph `alpha` (a behavior titled `Alpha`, `contract "x"`, method `run()`, an edge to `beta`) and `beta`,
+/// changed by `change`.
+fn graph_after(change: Option<Change>) -> Graph {
+    use specforge_graph::{Edge, EntityId, EntityKind, FieldMap, FieldValue, Node, SourceSpan};
+    use specforge_parser::MethodDecl;
+
+    let shift = usize::from(matches!(change, Some(Change::Moved)));
+    let span = |line: usize| SourceSpan {
+        file: Sym::new("spec/a.spec"),
+        start_line: line + shift,
+        start_col: 0,
+        end_line: line + shift,
+        end_col: 10,
+    };
+    let node = |id: &str, kind: &str, title: Option<&str>, contract: &str, methods: bool, line| {
+        let mut fields = FieldMap::new();
+        fields.push(Sym::new("contract"), FieldValue::String(contract.into()));
+        Node {
+            id: EntityId { raw: Sym::new(id) },
+            kind: EntityKind {
+                raw: Sym::new(kind),
+            },
+            title: title.map(Into::into),
+            source_span: span(line),
+            fields,
+            methods: if methods {
+                vec![MethodDecl {
+                    name: "run".into(),
+                    params: Vec::new(),
+                    returns: None,
+                    span: span(line + 1),
+                }]
+            } else {
+                Vec::new()
+            },
+        }
+    };
+    let mut graph = Graph::new();
+    graph.add_node(node(
+        "alpha",
+        if matches!(change, Some(Change::Kind)) {
+            "feature"
+        } else {
+            "behavior"
+        },
+        Some(if matches!(change, Some(Change::Title)) {
+            "Renamed"
+        } else {
+            "Alpha"
+        }),
+        if matches!(change, Some(Change::Field)) {
+            "y"
+        } else {
+            "x"
+        },
+        !matches!(change, Some(Change::Methods)),
+        1,
+    ));
+    if !matches!(change, Some(Change::NodeRemoved)) {
+        graph.add_node(node("beta", "behavior", None, "b", false, 5));
+    }
+    if matches!(change, Some(Change::NodeAdded)) {
+        graph.add_node(node("gamma", "behavior", None, "g", false, 9));
+    }
+    if !matches!(change, Some(Change::EdgeRemoved | Change::NodeRemoved)) {
+        graph.add_edge(Edge {
+            source: Sym::new("alpha"),
+            target: Sym::new("beta"),
+            label: Sym::new("refs"),
+        });
+    }
+    graph
+}
+
+#[specforge_test(
+    invariant = "migration_semantic_preservation",
+    verify = "pre-migration and post-migration entity graphs are structurally identical"
+)]
+#[specforge_test(
+    behavior = "validate_post_migration_integrity",
+    verify = "each change the graph delta names is one W054 warning, and an empty delta none"
+)]
+fn every_change_the_delta_names_is_one_w054_and_a_move_is_none() {
+    let edge_gone = "edge alpha-[refs]->beta present before migration but missing after";
+    let cases: [(Change, Vec<&str>); 8] = [
+        (Change::Moved, vec![]),
+        (
+            Change::Title,
+            vec!["entity 'alpha' changed during migration: title"],
+        ),
+        (
+            Change::Kind,
+            vec!["entity 'alpha' changed during migration: kind"],
+        ),
+        (
+            Change::Methods,
+            vec!["entity 'alpha' changed during migration: methods"],
+        ),
+        (
+            Change::Field,
+            vec!["entity 'alpha' changed during migration: contract"],
+        ),
+        (
+            Change::EdgeRemoved,
+            vec!["entity 'alpha' changed during migration: edges", edge_gone],
+        ),
+        (
+            Change::NodeRemoved,
+            vec![
+                "entity 'beta' (behavior) present before migration but missing after",
+                "entity 'alpha' changed during migration: edges",
+                edge_gone,
+            ],
+        ),
+        (
+            Change::NodeAdded,
+            vec!["entity 'gamma' (behavior) appeared after migration but was not present before"],
+        ),
+    ];
+    let pre = graph_after(None);
+    for (change, expected) in cases {
+        let post = graph_after(Some(change));
+        let diagnostics = drift(&pre, &post);
+
+        let messages: Vec<&str> = diagnostics.iter().map(|d| d.message.as_str()).collect();
+        assert_eq!(messages, expected);
+        assert!(
+            diagnostics
+                .iter()
+                .all(|d| d.code == "W054" && d.severity == specforge_common::Severity::Warning),
+            "{diagnostics:?}"
+        );
+        assert_eq!(
+            messages.is_empty(),
+            compute_graph_delta(&pre, &post).is_empty()
+        );
+    }
 }

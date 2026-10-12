@@ -232,6 +232,7 @@ behavior validate_post_migration_integrity "Validate Post-Migration Integrity" {
   verify unit "structural differences reported as warnings"
   verify unit "new diagnostics from migration reported"
   verify unit "a migration step that changes an entity's title or kind is reported and rolled back"
+  verify unit "each change the graph delta names is one W054 warning, and an empty delta none"
   verify contract "Validate Post-Migration Integrity: post-migration integrity validation holds — extension_hooks_complete_fired, structural_equivalence_checked, differences_reported, migration_validation_complete_emitted"
 }
 
