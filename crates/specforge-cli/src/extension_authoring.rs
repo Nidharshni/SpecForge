@@ -184,7 +184,7 @@ fn run_build(path: &Path, format: OutputFormat, terminal: &Terminal) -> Exit {
         }
         return Refusal::of(format).coded(terminal, NOT_BUILT, message);
     }
-    let binary = match specforge_ops::publish::binary_at(path) {
+    let binary = match specforge_ops::extension::binary_at(path) {
         Ok(binary) => binary,
         Err(error) => {
             return Refusal::of(format).report(terminal, &error);
@@ -203,7 +203,7 @@ fn run_build(path: &Path, format: OutputFormat, terminal: &Terminal) -> Exit {
 }
 
 fn run_validate(path: &Path, format: OutputFormat, terminal: &Terminal) -> Exit {
-    let binary = match specforge_ops::publish::binary_at(path) {
+    let binary = match specforge_ops::extension::binary_at(path) {
         Ok(binary) => binary,
         Err(error) => {
             return Refusal::of(format).report(terminal, &error);

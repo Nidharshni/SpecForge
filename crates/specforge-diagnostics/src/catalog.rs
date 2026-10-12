@@ -177,7 +177,7 @@ catalog! {
         "Two extensions register the same CLI surface command ID, the same MCP tool name, or the same MCP resource name. Rename one extension's contribution so the identifier is unique across installed extensions.";
     E040: Error core,
         "Extension project not found or not built",
-        "`specforge extension build`, `extension validate` or `publish` found no extension to work on: the directory has no `Cargo.toml`, the build (`cargo build --release --target wasm32-wasip2`) failed, no built component is in `target/wasm32-wasip2/release/` (or several are, and none is the crate's), or the `.wasm` file couldn't be read. Build the extension, fix the build error the message quotes, or name the component to use.";
+        "`specforge extension build`, `extension validate`, `publish`, or `add`/`init --extensions` given a crate directory, found no extension to work on: the directory has no `Cargo.toml`, the build (`cargo build --release --target wasm32-wasip2`) failed, no built component is in `target/wasm32-wasip2/release/` (or several are, and none is the crate's), or the `.wasm` file couldn't be read. Build the extension, fix the build error the message quotes, or name the component to use.";
     E041: Error formal,
         "Refinement chain cycle",
         "The `refines` layering graph between behaviors contains a cycle. Break the cycle by removing or redirecting one of the `refines` edges.";

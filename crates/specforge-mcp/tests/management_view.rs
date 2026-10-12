@@ -69,6 +69,30 @@ fn server_with_greet_installed() -> (McpServer, tempfile::TempDir) {
     (server, root)
 }
 
+/// A relative local path in `specforge.add_extension` is read from the project's root, not the
+/// server process's working directory.
+#[test]
+fn add_extension_reads_a_relative_local_path_from_the_project_root() {
+    let (mut server, root) =
+        server_over(json!({"name": "t", "version": "0.1.0", "extensions": []}));
+    std::fs::create_dir(root.path().join("ext")).unwrap();
+    std::fs::copy(greet_blob(), root.path().join("ext/greet.wasm")).unwrap();
+
+    let resp = call_tool(
+        &mut server,
+        "specforge.add_extension",
+        json!({"specifiers": ["./ext/greet.wasm"]}),
+    );
+
+    assert_eq!(resp["result"]["isError"], false, "{resp}");
+    assert!(
+        root.path()
+            .join(".specforge/extensions")
+            .join(GREET)
+            .exists()
+    );
+}
+
 /// Doctor's findings, without the z3 probe's (it depends on PATH).
 fn project_findings(report: &Value) -> Vec<Value> {
     report["findings"]

@@ -607,4 +607,24 @@ mod tests {
         );
         assert!(!dir.exists(), "nothing was written");
     }
+
+    #[test]
+    fn init_installs_a_crate_directory() {
+        let scratch = tempfile::tempdir().unwrap();
+        let release = scratch.path().join("b-ext/target/wasm32-wasip2/release");
+        std::fs::create_dir_all(&release).unwrap();
+        std::fs::write(
+            scratch.path().join("b-ext/Cargo.toml"),
+            "[package]\nname = \"b-ext\"\nversion = \"0.1.0\"\n",
+        )
+        .unwrap();
+        std::fs::write(release.join("b_ext.wasm"), B).unwrap();
+        let specifier = scratch.path().join("b-ext").display().to_string();
+
+        let (extensions, installs) = extensions_of(&[specifier], &runtime()).unwrap();
+
+        assert_eq!(extensions, ["@x/b"]);
+        assert_eq!(installs.len(), 1);
+        assert!(installs[0].path.ends_with("release/b_ext.wasm"));
+    }
 }

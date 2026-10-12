@@ -18,7 +18,7 @@ pub use add::{
     DuplicateSpecifier, EnabledBuiltin, InstalledPackage, PlannedAdd, PresentExtension, Source,
     Specified, Trust, add, parse, specified,
 };
-pub use candidate::{Candidate, Installable, LocalFile};
+pub use candidate::{Candidate, Installable, LocalFile, binary_at};
 pub use inventory::{Inventory, ProjectExtension, Selection, Status, inventory};
 pub use list::{
     ExtensionInfo, ExtensionListing, ExtensionsDocument, LockedExtension, ProviderEntry,

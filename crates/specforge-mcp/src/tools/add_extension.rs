@@ -78,7 +78,12 @@ impl CoreTool for Tool {
         // The project the call installs into: the served one, or the one
         // `path` names.
         let root = project.root;
-        let extensions = extension::specified(&args.specifiers.0)?;
+        // A relative local path is read from the project's root: the server has no working
+        // directory of its own to mean it.
+        let extensions = extension::specified(&args.specifiers.0)?
+            .into_iter()
+            .map(|specified| specified.relative_to(root.dir()))
+            .collect();
 
         let registry =
             specforge_ops_registry::ConfiguredRegistry::for_project(root, "add_extension");

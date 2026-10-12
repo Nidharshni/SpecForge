@@ -364,7 +364,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`Peers::load_order`); a cycle among required peers is E027 and its extensions load together in
   entry order (ADR 0041).
 - **Extension specifier**: an `add` argument (also each of `specforge.add_extension`'s
-  `specifiers` and `init --extensions`'): a builtin's name, a local path, a `git+` URL, or a package
+  `specifiers` and `init --extensions`'): a builtin's name, a local path (a `.wasm` file, or an
+  extension's crate directory, read as the component its crate builds:
+  `specforge_ops::extension::binary_at`), a `git+` URL, or a package
   reference `@scope/name[@requirement]` (`PackageRef`), read once by
   `specforge_ops::extension::parse`. An add takes one or more and adds them as one change, judged on
   the whole set (one lock plan, ADR 0041); a specifier naming an extension an earlier one of the same

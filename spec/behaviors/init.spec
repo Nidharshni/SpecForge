@@ -285,6 +285,10 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
     source "registry", or "local:<path>" for a local .wasm file, so peer
     and diamond checks compare real versions and update never replaces a
     local build from a registry.
+    A local path may name an extension's crate directory: the component its
+    crate builds (target/wasm32-wasip2/release/<crate>.wasm) is installed
+    and locked by its own path, as publish reads it; a directory with no
+    built component is E040.
     The system MUST NOT duplicate an already-installed extension.
     A dry run reports what the add would do for each specifier and writes
     nothing; an extension already present answers as the add would,
@@ -371,6 +375,7 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
   verify unit "an extension no specforge.json entry enables is not judged"
   verify integration "add and check agree: an add check would report E027 or E073 for is refused, and an add that passes leaves none"
   verify integration "a local .wasm install is locked at its declared version with source local:<path> and enabled by its bare name"
+  verify unit "a local crate directory installs the component its crate builds"
   verify integration "add extension preserves all other config fields"
   verify contract "Add Extension to Existing Project: adding extension to existing project holds — existing_project_found, extension_resolvable, extension_appended, no_duplicate_added, other_fields_preserved, peer_deps_satisfied, extension_added_emitted"
 }
