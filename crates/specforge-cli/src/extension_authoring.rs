@@ -9,6 +9,7 @@ use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use crate::terminal::{Terminal, err, errln, outln};
 use serde_json::json;
 use specforge_common::{Code, Diagnostic, Severity, codes};
+use specforge_ops::OpErrorKind;
 use std::path::{Path, PathBuf};
 
 /// The diagnostic for an extension project that isn't there or isn't
@@ -91,12 +92,13 @@ fn run_init(path: &Path, name: Option<&str>, format: OutputFormat, terminal: &Te
     if ext_dir.exists() {
         return Refusal::of(format).coded(
             terminal,
+            OpErrorKind::Conflict,
             codes::E065,
             format!("directory '{}' already exists", ext_dir.display()),
         );
     }
     if let Err(message) = crate::new::scaffold(&ext_dir, &declared) {
-        return Refusal::of(format).coded(terminal, codes::E066, message);
+        return Refusal::of(format).coded(terminal, OpErrorKind::Internal, codes::E066, message);
     }
 
     match format {
@@ -141,6 +143,7 @@ fn run_build(path: &Path, format: OutputFormat, terminal: &Terminal) -> Exit {
     if !path.join("Cargo.toml").exists() {
         return Refusal::of(format).coded(
             terminal,
+            OpErrorKind::PreconditionFailed,
             NOT_BUILT,
             format!("no Cargo.toml found at {}", path.display()),
         );
@@ -166,6 +169,7 @@ fn run_build(path: &Path, format: OutputFormat, terminal: &Terminal) -> Exit {
         Err(e) => {
             return Refusal::of(format).coded(
                 terminal,
+                OpErrorKind::Internal,
                 NOT_BUILT,
                 format!("cannot run cargo: {e}"),
             );
@@ -182,7 +186,7 @@ fn run_build(path: &Path, format: OutputFormat, terminal: &Terminal) -> Exit {
         if format == OutputFormat::Human {
             err!(terminal, "{stderr}");
         }
-        return Refusal::of(format).coded(terminal, NOT_BUILT, message);
+        return Refusal::of(format).coded(terminal, OpErrorKind::Internal, NOT_BUILT, message);
     }
     let binary = match specforge_ops::extension::binary_at(path) {
         Ok(binary) => binary,
@@ -214,6 +218,7 @@ fn run_validate(path: &Path, format: OutputFormat, terminal: &Terminal) -> Exit 
         Err(e) => {
             return Refusal::of(format).coded(
                 terminal,
+                OpErrorKind::Internal,
                 NOT_BUILT,
                 format!("cannot read {}: {e}", binary.display()),
             );

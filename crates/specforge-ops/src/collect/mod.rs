@@ -640,8 +640,8 @@ impl Consent<'_> {
 }
 
 /// A failure reported as diagnostic `code` (E058, E045).
-fn fail(code: Code, message: impl Into<String>) -> OpError {
-    OpError::diagnostic(code, message)
+fn fail(kind: OpErrorKind, code: Code, message: impl Into<String>) -> OpError {
+    OpError::coded(kind, code, message)
 }
 
 /// What happened for one collector.
@@ -730,6 +730,7 @@ pub fn collect(view: &ProjectView, request: Request) -> Result<Outcome, OpError>
     {
         let names: Vec<&str> = selected.iter().map(|c| c.name.as_str()).collect();
         return Err(fail(
+            OpErrorKind::PreconditionFailed,
             codes::E058,
             format!(
                 "--report needs one collector, but {} apply here; pick one with --runner",
@@ -744,8 +745,10 @@ pub fn collect(view: &ProjectView, request: Request) -> Result<Outcome, OpError>
     let mut unsaved_approvals = Vec::new();
     let store = consent_path();
     for collector in selected {
-        let report_at = report_path(collector, root).map_err(|m| fail(codes::E058, m))?;
-        let capturing = captures_stdout(collector).map_err(|m| fail(codes::E058, m))?;
+        let report_at = report_path(collector, root)
+            .map_err(|m| fail(OpErrorKind::PreconditionFailed, codes::E058, m))?;
+        let capturing = captures_stdout(collector)
+            .map_err(|m| fail(OpErrorKind::PreconditionFailed, codes::E058, m))?;
         let argv = command_line(collector, &report_at);
         let mut exit_code = None;
         let mut since = None;
@@ -753,6 +756,7 @@ pub fn collect(view: &ProjectView, request: Request) -> Result<Outcome, OpError>
         if let Mode::Run(output) = mode {
             if !consent.allows(&store, collector, &argv, root, &mut unsaved_approvals) {
                 return Err(fail(
+                    OpErrorKind::PermissionDenied,
                     codes::E059,
                     format!(
                         "running `{}` needs your approval: run `specforge collect` in a \
@@ -762,7 +766,8 @@ pub fn collect(view: &ProjectView, request: Request) -> Result<Outcome, OpError>
                 ));
             }
             announce(collector, &argv);
-            let ran = run(collector, root, &report_at, output).map_err(|m| fail(codes::E045, m))?;
+            let ran = run(collector, root, &report_at, output)
+                .map_err(|m| fail(OpErrorKind::SchemaMismatch, codes::E045, m))?;
             exit_code = ran.exit_code;
             since = Some(ran.started);
             stdout = ran.stdout.as_deref().and_then(read_capture);
@@ -780,7 +785,7 @@ pub fn collect(view: &ProjectView, request: Request) -> Result<Outcome, OpError>
                 .map(|files| files.into_iter().flatten().collect()),
             _ => read_report(&report_at, root, since),
         }
-        .map_err(|m| fail(codes::E045, m))?;
+        .map_err(|m| fail(OpErrorKind::SchemaMismatch, codes::E045, m))?;
         if files.is_empty() && stdout.as_deref().is_none_or(str::is_empty) {
             let message = match mode {
                 Mode::Run(_) => format!(
@@ -795,7 +800,7 @@ pub fn collect(view: &ProjectView, request: Request) -> Result<Outcome, OpError>
                 ),
                 Mode::Reports(_) => "the --report files don't exist".to_string(),
             };
-            return Err(fail(codes::E045, message));
+            return Err(fail(OpErrorKind::SchemaMismatch, codes::E045, message));
         }
 
         let mut collected = dispatch(
@@ -840,6 +845,7 @@ fn select<'a>(
 ) -> Result<Vec<&'a Collector>, OpError> {
     if available.is_empty() {
         return Err(fail(
+            OpErrorKind::PreconditionFailed,
             codes::E058,
             "no enabled extension provides a test collector; enable a runner extension \
              (e.g. `specforge add @specforge/cargo-test`)",
@@ -859,6 +865,7 @@ fn select<'a>(
             .map(|c| vec![c])
             .ok_or_else(|| {
                 fail(
+                    OpErrorKind::PreconditionFailed,
                     codes::E058,
                     format!("unknown runner '{runner}' (available: {})", names()),
                 )
@@ -873,6 +880,7 @@ fn select<'a>(
     }
     if detected.is_empty() {
         return Err(fail(
+            OpErrorKind::PreconditionFailed,
             codes::E058,
             format!(
                 "no test runner detected in {}; pick one with --runner (available: {})",

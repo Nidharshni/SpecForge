@@ -34,10 +34,12 @@ pub enum Source {
 pub fn parse(specifier: &str) -> Result<Source, OpError> {
     let specifier = specifier.trim();
     if specifier.is_empty() {
-        return Err(
-            OpError::diagnostic(codes::E054, "empty extension specifier")
-                .with_suggestion(SPECIFIER_FORMS),
-        );
+        return Err(OpError::coded(
+            crate::OpErrorKind::InvalidInput,
+            codes::E054,
+            "empty extension specifier",
+        )
+        .with_suggestion(SPECIFIER_FORMS));
     }
     if let Some(builtin) = builtin_name(specifier) {
         return Ok(Source::Builtin(builtin));
@@ -68,14 +70,21 @@ const SPECIFIER_FORMS: &str =
 impl From<SpecifierError> for OpError {
     fn from(error: SpecifierError) -> Self {
         match error {
-            SpecifierError::Requirement(_) => {
-                OpError::diagnostic(codes::R_RES_003, error.to_string()).with_suggestion(
-                    "use a version such as 1.2.0, a requirement such as ^1.0, ~2.3, 1.x or \
+            SpecifierError::Requirement(_) => OpError::coded(
+                crate::OpErrorKind::InvalidInput,
+                codes::R_RES_003,
+                error.to_string(),
+            )
+            .with_suggestion(
+                "use a version such as 1.2.0, a requirement such as ^1.0, ~2.3, 1.x or \
                      >=1.0.0, <2.0.0, or latest",
-                )
-            }
-            _ => OpError::diagnostic(codes::E054, format!("invalid extension specifier: {error}"))
-                .with_suggestion(SPECIFIER_FORMS),
+            ),
+            _ => OpError::coded(
+                crate::OpErrorKind::InvalidInput,
+                codes::E054,
+                format!("invalid extension specifier: {error}"),
+            )
+            .with_suggestion(SPECIFIER_FORMS),
         }
     }
 }
@@ -151,7 +160,12 @@ pub fn specified<S: AsRef<str>>(specifiers: &[S]) -> Result<Vec<Specified>, OpEr
 
 /// E054: an add with nothing to add.
 fn no_specifier() -> OpError {
-    OpError::diagnostic(codes::E054, "no extension specifier").with_suggestion(SPECIFIER_FORMS)
+    OpError::coded(
+        crate::OpErrorKind::InvalidInput,
+        codes::E054,
+        "no extension specifier",
+    )
+    .with_suggestion(SPECIFIER_FORMS)
 }
 
 /// `error`, naming the specifier it refuses when the add has several.
@@ -556,7 +570,8 @@ impl<'a> Resolver<'_, 'a> {
                 self.local(wanted, Install::local(self.req.root.dir(), local)?)
             }
             Source::Registry(package) => self.package(before, wanted, package),
-            Source::Git { url } => Err(Resolved::Refused(OpError::diagnostic(
+            Source::Git { url } => Err(Resolved::Refused(OpError::coded(
+                crate::OpErrorKind::InvalidInput,
                 codes::E064,
                 format!("git source '{url}' not yet supported"),
             ))),

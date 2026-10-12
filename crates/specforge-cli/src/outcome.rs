@@ -10,7 +10,7 @@
 
 use crate::terminal::{Terminal, err};
 use specforge_common::Code;
-use specforge_ops::{OpError, Writes};
+use specforge_ops::{OpError, OpErrorKind, Writes};
 use std::path::Path;
 
 /// The process exit code: one table for every core command. A core
@@ -137,8 +137,14 @@ impl<'a> Refusal<'a> {
 
     /// Report a failure under the catalogued error `code`, as
     /// [`Self::report`].
-    pub(crate) fn coded(self, terminal: &Terminal, code: Code, message: impl Into<String>) -> Exit {
-        self.report(terminal, &OpError::diagnostic(code, message))
+    pub(crate) fn coded(
+        self,
+        terminal: &Terminal,
+        kind: OpErrorKind,
+        code: Code,
+        message: impl Into<String>,
+    ) -> Exit {
+        self.report(terminal, &OpError::coded(kind, code, message))
     }
 }
 
@@ -232,7 +238,11 @@ mod tests {
         verify = "under --format json a refusal is the error document on stdout and nothing on stderr"
     )]
     fn a_refusal_writes_to_the_stream_its_format_names() {
-        let error = OpError::diagnostic(codes::E003, "gone");
+        let error = OpError::coded(
+            specforge_ops::OpErrorKind::EntityNotFound,
+            codes::E003,
+            "gone",
+        );
 
         let (terminal, capture) = Terminal::captured("", Facts::PIPED);
         assert_eq!(
@@ -252,9 +262,13 @@ mod tests {
     }
 
     fn failed_after_writing() -> OpError {
-        OpError::diagnostic(codes::E032, "failed to write specforge.lock")
-            .with_suggestion("check the permissions")
-            .with_writes(Writes::from_iter(["/p/specforge.json", "/p/spec/a.spec"]))
+        OpError::coded(
+            specforge_ops::OpErrorKind::Internal,
+            codes::E032,
+            "failed to write specforge.lock",
+        )
+        .with_suggestion("check the permissions")
+        .with_writes(Writes::from_iter(["/p/specforge.json", "/p/spec/a.spec"]))
     }
 
     #[specforge_test_macros::test(
@@ -270,7 +284,14 @@ mod tests {
         );
         // Nothing to add: the code and the message alone.
         assert_eq!(
-            error_lines(&OpError::diagnostic(codes::E003, "gone"), None),
+            error_lines(
+                &OpError::coded(
+                    specforge_ops::OpErrorKind::EntityNotFound,
+                    codes::E003,
+                    "gone"
+                ),
+                None
+            ),
             "error[E003]: gone\n"
         );
     }
@@ -281,12 +302,21 @@ mod tests {
     )]
     fn error_document_carries_files_written_only_when_written() {
         let json = |document: ErrorDocument| serde_json::to_value(document).unwrap();
-        let plain = OpError::diagnostic(codes::E003, "gone");
+        let plain = OpError::coded(
+            specforge_ops::OpErrorKind::EntityNotFound,
+            codes::E003,
+            "gone",
+        );
         assert_eq!(
             json(error_document(&plain, None)),
             serde_json::json!({"error": "gone", "code": "E003"})
         );
-        let hinted = OpError::diagnostic(codes::E003, "gone").with_suggestion("look again");
+        let hinted = OpError::coded(
+            specforge_ops::OpErrorKind::EntityNotFound,
+            codes::E003,
+            "gone",
+        )
+        .with_suggestion("look again");
         assert_eq!(
             json(error_document(&hinted, None)),
             serde_json::json!({"error": "gone", "code": "E003", "suggestion": "look again"})
@@ -310,7 +340,11 @@ mod tests {
         assert_eq!(Exit::of_verdict(true).code(), 0);
         assert_eq!(Exit::of_verdict(false).code(), 1);
         assert_eq!(Exit::Unjudged.code(), 2);
-        let error = OpError::diagnostic(codes::E003, "gone");
+        let error = OpError::coded(
+            specforge_ops::OpErrorKind::EntityNotFound,
+            codes::E003,
+            "gone",
+        );
         let (terminal, _) = Terminal::captured("", Facts::PIPED);
         // Both formats end the same way; only the stream differs.
         for format in [OutputFormat::Human, OutputFormat::Json] {

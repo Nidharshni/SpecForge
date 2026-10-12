@@ -105,7 +105,8 @@ fn login(
         source.token_file.is_some(),
     ];
     if given.iter().filter(|g| **g).count() != 1 {
-        return refuse(&OpError::diagnostic(
+        return refuse(&OpError::coded(
+            specforge_ops::OpErrorKind::InvalidInput,
             codes::R_LOGIN_001,
             "login takes exactly one token source: --token <TOKEN>, --token-env <VAR> or --token-file <PATH>",
         ));
@@ -164,7 +165,11 @@ fn login(
         None => {
             if let Err(message) = store.set_token(alias, credential.token().to_string(), expires_at)
             {
-                return refuse(&OpError::diagnostic(codes::R_LOGIN_002, message));
+                return refuse(&OpError::coded(
+                    specforge_ops::OpErrorKind::PreconditionFailed,
+                    codes::R_LOGIN_002,
+                    message,
+                ));
             }
         }
     }

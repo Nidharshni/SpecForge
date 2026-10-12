@@ -1037,10 +1037,13 @@ mod tests {
         assert_eq!(json["data"]["suggestion"], "pick another");
         assert!(json.get("diagnostic").is_none(), "{json}");
 
-        let error: McpError =
-            OpError::diagnostic(specforge_common::codes::E062, "the budget is too small")
-                .with_suggestion("raise it")
-                .into();
+        let error: McpError = OpError::coded(
+            specforge_ops::OpErrorKind::InvalidInput,
+            specforge_common::codes::E062,
+            "the budget is too small",
+        )
+        .with_suggestion("raise it")
+        .into();
         let json = serde_json::to_value(&error).unwrap();
         assert_eq!(json["code"], "invalid_input");
         assert_eq!(json["diagnostic"]["code"], "E062");

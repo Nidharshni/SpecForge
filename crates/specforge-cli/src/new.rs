@@ -11,6 +11,7 @@ use crate::terminal::{Terminal, outln};
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use serde_json::json;
 use specforge_common::codes;
+use specforge_ops::OpErrorKind;
 use specforge_package::PackageName;
 use std::path::{Path, PathBuf};
 
@@ -54,26 +55,33 @@ fn new(
     if !extension {
         return Refusal::of(format).coded(
             terminal,
+            OpErrorKind::InvalidInput,
             codes::E065,
             "only `--extension` scaffolding is supported right now",
         );
     }
 
     if let Err(why) = PackageName::parse(name) {
-        return Refusal::of(format).coded(terminal, codes::E065, why.to_string());
+        return Refusal::of(format).coded(
+            terminal,
+            OpErrorKind::InvalidInput,
+            codes::E065,
+            why.to_string(),
+        );
     }
 
     let dir = target_dir(path, name);
     if dir.exists() {
         return Refusal::of(format).coded(
             terminal,
+            OpErrorKind::Conflict,
             codes::E065,
             format!("destination '{}' already exists", dir.display()),
         );
     }
 
     if let Err(message) = scaffold(&dir, name) {
-        return Refusal::of(format).coded(terminal, codes::E066, message);
+        return Refusal::of(format).coded(terminal, OpErrorKind::Internal, codes::E066, message);
     }
 
     match format {

@@ -161,7 +161,7 @@ fn refuse_errors(
         .map(|d| format!("{}: {}", d.code, d.message))
         .collect();
     Err(OpError::new(
-        OpErrorKind::of_diagnostic(&first.code),
+        OpErrorKind::InvalidInput,
         first.code.clone(),
         format!(
             "{}@{} can't be published: its declaration has errors ({})",

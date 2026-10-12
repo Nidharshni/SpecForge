@@ -199,7 +199,6 @@ fn add_package(
     invariant = "mcp_structured_error_responses",
     verify = "a package the registry or the trust check refuses is never an internal_error"
 )]
-#[ignore = "fixed by T5"]
 fn a_registry_refusal_is_never_an_internal_error() {
     use specforge_ops::OpErrorKind;
     use specforge_ops::extension::Trust;

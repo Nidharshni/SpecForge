@@ -303,7 +303,8 @@ fn refuse_if_required(req: &Removing, extension: &ProjectExtension) -> Result<()
     if dependents.is_empty() {
         return Ok(());
     }
-    Err(OpError::diagnostic(
+    Err(OpError::coded(
+        crate::OpErrorKind::Conflict,
         codes::E027,
         format!(
             "cannot uninstall '{}': required by {}",

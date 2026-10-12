@@ -52,7 +52,8 @@ impl Candidate {
             ));
         };
         let loaded = declaration_of(bytes, runtime).map_err(|why| {
-            OpError::diagnostic(
+            OpError::coded(
+                crate::OpErrorKind::Internal,
                 codes::E028,
                 format!("the builtin '{name}' does not load: {}", why.message),
             )
@@ -166,14 +167,19 @@ impl LocalFile {
     /// component>`.
     pub fn read(runtime: &dyn WasmRuntime, path: &Path) -> Result<LocalFile, OpError> {
         if !path.exists() {
-            return Err(OpError::diagnostic(
+            return Err(OpError::coded(
+                crate::OpErrorKind::FileNotFound,
                 codes::E054,
                 format!("file not found: {}", path.display()),
             ));
         }
         let path = binary_at(path)?;
         let module = Module::read(&path).map_err(|e| {
-            OpError::diagnostic(codes::E054, format!("cannot read {}: {e}", path.display()))
+            OpError::coded(
+                crate::OpErrorKind::InvalidInput,
+                codes::E054,
+                format!("cannot read {}: {e}", path.display()),
+            )
         })?;
         Ok(LocalFile {
             binary: Installable::read(runtime, module)?,

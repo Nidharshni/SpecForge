@@ -219,7 +219,8 @@ impl Staged<'_> {
         let binary = Installable::read(fetch.runtime, bytes.clone())?;
         let declared = binary.candidate();
         if declared.name() != self.name.as_str() || declared.version() != self.version {
-            return Err(OpError::diagnostic(
+            return Err(OpError::coded(
+                crate::OpErrorKind::InvalidInput,
                 codes::E028,
                 format!(
                     "registry package {}@{} declares itself {}@{}",
