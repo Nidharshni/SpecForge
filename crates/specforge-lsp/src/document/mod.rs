@@ -25,7 +25,6 @@ use tower_lsp::lsp_types::{Position, Range};
 /// consulted for structure: it lags the buffer while the user types
 /// (ADR 0023).
 pub struct Document {
-    uri: String,
     text: String,
     /// The editor's version from didOpen/didChange, stamped onto published
     /// diagnostics so clients drop stale deliveries.
@@ -35,19 +34,14 @@ pub struct Document {
 }
 
 impl Document {
-    pub fn new(uri: String, text: String) -> Document {
+    pub fn new(text: String) -> Document {
         let index = Arc::new(LineIndex::new(&text));
         Document {
-            uri,
             text,
             version: None,
             index,
             syntax: OnceLock::new(),
         }
-    }
-
-    pub fn uri(&self) -> &str {
-        &self.uri
     }
 
     pub fn text(&self) -> &str {

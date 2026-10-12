@@ -10,10 +10,7 @@ use tower_lsp::lsp_types::Position;
     verify = "incremental change applies correctly to source buffer"
 )]
 fn incremental_change_applies_correctly() {
-    let mut buf = Document::new(
-        "file:///test.spec".into(),
-        "behavior foo \"Foo\" {\n  contract \"old\"\n}\n".into(),
-    );
+    let mut buf = Document::new("behavior foo \"Foo\" {\n  contract \"old\"\n}\n".into());
 
     // Replace "old" with "new" (line 1, col 12..15)
     buf.apply_change(Some(crate::lsp_range(1, 12, 1, 15)), "new");
@@ -29,7 +26,7 @@ fn incremental_change_applies_correctly() {
     verify = "multiple incremental changes produce correct source"
 )]
 fn multiple_incremental_changes_produce_correct_source() {
-    let mut buf = Document::new("file:///test.spec".into(), "line0\nline1\nline2\n".into());
+    let mut buf = Document::new("line0\nline1\nline2\n".into());
 
     // Replace "line1" with "REPLACED"
     buf.apply_change(Some(crate::lsp_range(1, 0, 1, 5)), "REPLACED");
@@ -120,10 +117,7 @@ fn utf16_columns_resolve_to_byte_offsets_after_multibyte_chars() {
     //   🚀 = 2 UTF-16 units / 4 bytes (units 14..16, bytes 14..18)
     //   世 = 1 UTF-16 unit / 3 bytes (unit 16..17, bytes 18..21)
     //   `"` at unit 17..18 (byte 21..22), `{` at unit 19 (byte 23)
-    let mut buf = Document::new(
-        "file:///test.spec".into(),
-        "behavior foo \"🚀世\" {\n}\n".into(),
-    );
+    let mut buf = Document::new("behavior foo \"🚀世\" {\n}\n".into());
 
     // Replace the emoji via UTF-16 columns 14..16.
     buf.apply_change(Some(crate::lsp_range(0, 14, 0, 16)), "🌟");

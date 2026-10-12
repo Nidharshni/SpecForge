@@ -60,21 +60,12 @@ async fn did_close_removes_document() {
     // The state forgets both.
     let mut state = specforge_lsp::LspState::new();
     state.open_document(uri, LOGIN);
-    state.set_diagnostics(uri, vec![e003()]);
     state.close_document(uri);
     assert!(!state.is_open(uri));
-    assert!(state.diagnostics(uri).is_empty());
 }
 
 /// `login` references `session_limit`, which exists nowhere.
 const LOGIN: &str = "behavior login \"Login\" {\n  invariants [session_limit]\n}\n";
-
-fn e003() -> specforge_common::Diagnostic {
-    specforge_common::Diagnostic::new(
-        specforge_common::codes::E003,
-        "unresolved reference 'session_limit' in entity 'login'",
-    )
-}
 
 #[test]
 fn only_open_documents_tracked() {

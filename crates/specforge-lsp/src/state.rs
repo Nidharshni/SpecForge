@@ -5,7 +5,7 @@ use specforge_graph::Graph;
 use specforge_ops::view::ProjectView;
 use specforge_project::coverage::RecordedCoverage;
 use specforge_project::{Environment, ProjectSession};
-use specforge_registry::{EdgeRegistry, FieldRegistry, KindRegistry, RegistryBuild};
+use specforge_registry::{FieldRegistry, KindRegistry, RegistryBuild};
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -146,10 +146,8 @@ impl LspState {
         if self.shutdown {
             return;
         }
-        self.documents.insert(
-            uri.to_string(),
-            Document::new(uri.to_string(), content.to_string()),
-        );
+        self.documents
+            .insert(uri.to_string(), Document::new(content.to_string()));
     }
 
     pub fn close_document(&mut self, uri: &str) {
@@ -188,10 +186,6 @@ impl LspState {
         }
     }
 
-    pub fn set_diagnostics(&mut self, uri: &str, diags: Vec<Diagnostic>) {
-        self.diagnostics.insert(uri.to_string(), diags);
-    }
-
     pub fn diagnostics(&self, uri: &str) -> &[Diagnostic] {
         self.diagnostics
             .get(uri)
@@ -213,11 +207,6 @@ impl LspState {
     /// The URIs diagnostics were last published for.
     pub fn published_uris(&self) -> Vec<String> {
         self.diagnostics.keys().cloned().collect()
-    }
-
-    /// Forget what was published for `uri` (it was cleared).
-    pub fn clear_diagnostics(&mut self, uri: &str) {
-        self.diagnostics.remove(uri);
     }
 
     pub fn graph(&self) -> &Graph {
@@ -345,10 +334,6 @@ impl LspState {
         self.registries().fields()
     }
 
-    pub fn edge_registry(&self) -> &EdgeRegistry {
-        self.registries().edges()
-    }
-
     /// Everything built from the loaded extensions.
     pub fn registries(&self) -> &RegistryBuild {
         self.environment().registries()
@@ -398,10 +383,6 @@ impl LspState {
     /// on (`None` once it is closed).
     pub fn anchor(&self) -> Option<&str> {
         self.anchor.as_deref().filter(|uri| self.is_open(uri))
-    }
-
-    pub fn set_anchor(&mut self, uri: Option<String>) {
-        self.anchor = uri;
     }
 
     /// Keep what `publication` sends: each file's placed diagnostics (code
