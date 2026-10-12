@@ -249,7 +249,7 @@ fn init(dir: &Path, extensions: &[String]) -> specforge_ops::init::Outcome {
         extensions,
     };
     let plan = init::plan(&request, &candidates()).unwrap();
-    init::apply(dir, plan).unwrap()
+    init::apply(dir, plan, &candidates()).unwrap()
 }
 
 #[test]
@@ -428,7 +428,7 @@ fn a_failed_init_puts_back_what_was_there() {
     };
 
     let plan = init::plan(&request, &candidates()).unwrap();
-    let error = init::apply(&dir, plan).unwrap_err();
+    let error = init::apply(&dir, plan, &candidates()).unwrap_err();
 
     assert_eq!(error.code, "E032", "{error:?}");
     assert!(error.writes.is_empty(), "{:?}", error.writes);
@@ -910,7 +910,7 @@ fn init_reads_a_local_file_once() {
     let plan = init::plan(&request, &runtime).unwrap();
     assert_eq!(handshakes(&runtime), 1);
 
-    init::apply(&dir, plan).unwrap();
+    init::apply(&dir, plan, &runtime).unwrap();
     assert_eq!(
         handshakes(&runtime),
         1,
@@ -945,7 +945,6 @@ fn add_from_a_subdirectory_adds_to_the_project_it_is_in() {
     behavior = "non_interactive_init",
     verify = "init refuses local extensions the lock plan refuses before it writes anything"
 )]
-#[ignore = "fixed by T2"]
 fn init_refuses_a_local_file_the_embedded_builtin_does_not_satisfy() {
     use specforge_ops::init;
     let scratch = TempDir::new().unwrap();
@@ -1003,7 +1002,7 @@ fn init_enables_the_builtins_a_local_file_requires() {
             "@specforge/testing"
         ]
     );
-    init::apply(&dir, plan).unwrap();
+    init::apply(&dir, plan, &runtime).unwrap();
     let compiled = CompiledProject::compile(
         &specforge_common::ProjectRoot::of(&dir).unwrap(),
         Some(Arc::new(runtime)),

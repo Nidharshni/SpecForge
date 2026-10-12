@@ -446,9 +446,9 @@ pub fn add(
     let installed = Installed::at(req.root.dir());
     // A specforge.lock that can't be read refuses before a file is read or a registry asked.
     let plan = if req.extensions.iter().any(|e| e.source.installs()) {
-        Some(LockPlan::new(&installed, Verb::Install)?)
+        LockPlan::new(&installed, &config.extensions, runtime, Verb::Install)?
     } else {
-        None
+        LockPlan::enabling(&installed, &config.extensions, runtime)
     };
     let mut resolver = Resolver {
         req,
@@ -704,15 +704,15 @@ fn installed_outcome(install: &Install<'_>) -> AddOutcome {
     }
 }
 
-/// Fetch what `steps` install from a registry, stage every install in `plan`, check it once and
-/// commit it with the `specforge.json` entries (each builtin after its required peers, each
-/// install by its bare name): one change that puts everything back when a step fails. A plan the
-/// peer rule refuses writes nothing, its refusal naming the specifier when there are several
-/// (ADR 0041).
+/// Fetch what `steps` install from a registry, stage every install and enable every entry in
+/// `plan`, check it once and commit it with the `specforge.json` entries (each builtin after its
+/// required peers, each install by its bare name): one change that puts everything back when a
+/// step fails. A plan the peer rule refuses writes nothing, its refusal naming the specifier when
+/// there are several (ADR 0041).
 fn apply<'a>(
     req: &AddRequest,
     config: &specforge_common::ProjectConfig,
-    plan: Option<LockPlan<'a>>,
+    mut plan: LockPlan<'a>,
     fetch: &Fetch<'a>,
     steps: Vec<Step<'a>>,
 ) -> Result<Added, OpError> {
@@ -720,33 +720,36 @@ fn apply<'a>(
     let specifier = |at: usize| req.extensions[at].specifier.as_str();
     let mut outcomes: Vec<Option<AddOutcome>> = Vec::with_capacity(steps.len());
     let mut builtins: Vec<(usize, &'static str, Vec<&'static str>)> = Vec::new();
-    let mut installs: Vec<(usize, Install<'a>)> = Vec::new();
-    let mut names: Vec<String> = Vec::new();
+    let mut staged: Vec<(PackageName, usize)> = Vec::new();
+    let mut asked = false;
     for (at, step) in steps.into_iter().enumerate() {
-        match step {
+        outcomes.push(None);
+        let install = match step {
             Step::Unchanged(outcome) => {
-                outcomes.push(Some(outcome));
+                outcomes[at] = Some(outcome);
                 continue;
             }
             Step::Enable { name, peers } => {
-                names.extend(peers.iter().chain([&name]).map(|n| n.to_string()));
+                asked = true;
+                for peer in &peers {
+                    plan.enable(peer);
+                }
+                plan.enable(name);
                 builtins.push((at, name, peers));
+                continue;
             }
-            Step::Local(install) => {
-                names.push(install.name().to_string());
-                installs.push((at, install));
-            }
-            Step::Fetch(name, version) => {
-                let install = fetch
-                    .install(&name, &version)
-                    .map_err(|error| named(several, specifier(at), error))?;
-                names.push(install.name().to_string());
-                installs.push((at, install));
-            }
-        }
-        outcomes.push(None);
+            Step::Local(install) => install,
+            Step::Fetch(name, version) => fetch
+                .install(&name, &version)
+                .map_err(|error| named(several, specifier(at), error))?,
+        };
+        asked = true;
+        outcomes[at] = Some(installed_outcome(&install));
+        staged.push((install.name().clone(), at));
+        plan.enable(install.name().as_str());
+        plan.stage(install);
     }
-    if names.is_empty() {
+    if !asked {
         return Ok(Added {
             added: added(req, outcomes),
             writes: Writes::none(),
@@ -754,46 +757,37 @@ fn apply<'a>(
         });
     }
 
-    let names: Vec<&str> = names.iter().map(String::as_str).collect();
-    let config_path = req.root.dir().join(crate::config::CONFIG_FILE);
-    let mut enabled = None;
-    let writes = match plan {
-        Some(mut plan) if !installs.is_empty() => {
-            let mut staged: Vec<(PackageName, usize)> = Vec::with_capacity(installs.len());
-            for (at, install) in installs {
-                outcomes[at] = Some(installed_outcome(&install));
-                staged.push((install.name().clone(), at));
-                plan.stage(install);
-            }
-            let checked = plan.check().map_err(|refused| {
-                let (name, error) = refused.decisive();
-                let at = staged
+    let checked = plan.check().map_err(|refused| {
+        let (name, error) = refused.decisive();
+        // An install is its own specifier; a builtin, or one it requires, is the builtin's.
+        let at = staged
+            .iter()
+            .find(|(staged, _)| *staged == name)
+            .map(|(_, at)| *at)
+            .or_else(|| {
+                builtins
                     .iter()
-                    .find(|(staged, _)| *staged == name)
-                    .map_or(0, |(_, at)| *at);
-                named(several, specifier(at), error)
-            })?;
-            checked.commit_with(&config_path, || {
-                enabled = Some(crate::config::enable(req.root.dir(), &names)?);
-                Ok(())
-            })?
-        }
-        _ => {
-            let edit = crate::config::enable(req.root.dir(), &names)?;
-            let mut writes = Writes::none();
-            writes.record_if(!edit.appended.is_empty(), &config_path);
-            enabled = Some(edit);
-            writes
-        }
+                    .find(|(_, builtin, peers)| {
+                        *builtin == name.as_str() || peers.contains(&name.as_str())
+                    })
+                    .map(|(at, _, _)| *at)
+            })
+            .unwrap_or_default();
+        named(several, specifier(at), error)
+    })?;
+    let applied = checked.commit(req.root.dir())?;
+    let appended = |name: &str| {
+        applied
+            .enabled
+            .as_ref()
+            .is_some_and(|enabled| enabled.appended.iter().any(|a| a == name))
     };
-    let enabled = enabled.expect("the config edit ran");
 
     // A builtin asked for is reported as its own; a required peer, once, by the first builtin
     // that required it.
     let asked: Vec<&str> = builtins.iter().map(|(_, name, _)| *name).collect();
     let mut claimed: Vec<&str> = Vec::new();
     for (at, name, peers) in builtins {
-        let appended = |n: &str| enabled.appended.iter().any(|a| a == n);
         let peers_enabled = peers
             .into_iter()
             .filter(|peer| appended(peer) && !asked.contains(peer) && !claimed.contains(peer))
@@ -807,8 +801,11 @@ fn apply<'a>(
     }
     Ok(Added {
         added: added(req, outcomes),
-        writes,
-        extensions_enabled: enabled.total,
+        extensions_enabled: applied
+            .enabled
+            .as_ref()
+            .map_or(config.extensions.len(), |enabled| enabled.total),
+        writes: applied.writes,
     })
 }
 
@@ -826,7 +823,9 @@ fn added(req: &AddRequest, outcomes: Vec<Option<AddOutcome>>) -> Vec<AddedExtens
 
 #[cfg(test)]
 mod tests {
-    use super::super::fixtures::{declaration_of, entry, greet, installed, project};
+    use super::super::fixtures::{
+        declaration_of, enabled_project, entry, greet, installed, project,
+    };
     use super::*;
     use crate::OpErrorKind;
     use crate::registry::testing::{MemoryRegistry, Published, declaration};
@@ -1260,9 +1259,13 @@ mod tests {
         let project = specforge_common::ProjectRoot::of(dir.path()).unwrap();
         let request = builtin_request(&project, "@specforge/product");
         let runtime = serving_builtin(
-            runtime(),
-            "@specforge/product",
-            declaring("@specforge/product", "1.0.0", &[]),
+            serving_builtin(
+                runtime(),
+                "@specforge/product",
+                declaring("@specforge/product", "1.0.0", &[]),
+            ),
+            "@specforge/rust",
+            declaring("@specforge/rust", "1.0.0", &[]),
         );
 
         let added = add(&request, &registry, &runtime).unwrap();
@@ -1535,7 +1538,6 @@ mod tests {
         behavior = "add_extension_to_existing_project",
         verify = "add judges the project's peer set as the add leaves it: its builtins, installed extensions and .wasm file entries"
     )]
-    #[ignore = "fixed by T2"]
     fn an_install_requiring_a_builtin_out_of_range_is_refused_from_any_source() {
         use crate::config::testing::files_under;
         let files = tempfile::tempdir().unwrap();
@@ -1585,7 +1587,6 @@ mod tests {
         behavior = "add_extension_to_existing_project",
         verify = "an install whose required peer is not installed is refused with E027 before anything is written"
     )]
-    #[ignore = "fixed by T2"]
     fn an_install_whose_required_peer_is_not_installed_is_refused() {
         use crate::config::testing::files_under;
         let files = tempfile::tempdir().unwrap();
@@ -1620,7 +1621,6 @@ mod tests {
         behavior = "add_extension_to_existing_project",
         verify = "enabling a builtin that an enabled extension's peer range does not accept is refused with E027"
     )]
-    #[ignore = "fixed by T2"]
     fn enabling_a_builtin_an_enabled_extension_rejects_is_refused() {
         use crate::config::testing::files_under;
         // `@probe/needs-software` installed by hand, requiring software ^9.
@@ -1666,7 +1666,6 @@ mod tests {
         behavior = "add_extension_to_existing_project",
         verify = "an install that breaks a .wasm file entry, or that a .wasm file entry does not satisfy, is refused with E027"
     )]
-    #[ignore = "fixed by T2"]
     fn an_install_that_breaks_a_file_entry_or_that_a_file_entry_does_not_satisfy_is_refused() {
         use crate::config::testing::files_under;
         let files = tempfile::tempdir().unwrap();
@@ -1857,7 +1856,9 @@ mod tests {
     }
 
     /// A project enabling nothing yet, with `lock` locked.
-    fn add_project(lock: Vec<LockFileEntry>) -> tempfile::TempDir {
+    /// A project locking `lock`, with a `specforge.json` enabling none of it: adding a locked
+    /// package installs it again.
+    fn disabled_project(lock: Vec<LockFileEntry>) -> tempfile::TempDir {
         let dir = project(lock);
         std::fs::write(
             dir.path().join("specforge.json"),
@@ -1865,6 +1866,11 @@ mod tests {
         )
         .unwrap();
         dir
+    }
+
+    /// A project locking `lock`, with a `specforge.json` enabling every locked extension.
+    fn add_project(lock: Vec<LockFileEntry>) -> tempfile::TempDir {
+        enabled_project(lock)
     }
 
     fn add_greet(root: &Path, registry: &MemoryRegistry) -> Result<AddOutcome, OpError> {
@@ -2581,7 +2587,7 @@ mod tests {
         // With `@x/b` 1.0.0 instead, the set is refused in either order, naming `@x/a`'s
         // specifier, and nothing is written.
         for order in [["@x/a@2.0.0", "@x/b@1.0.0"], ["@x/b@1.0.0", "@x/a@2.0.0"]] {
-            let dir = add_project(vec![entry("@x/b", "1.0.0", "registry", &[])]);
+            let dir = disabled_project(vec![entry("@x/b", "1.0.0", "registry", &[])]);
             let before = files_under(dir.path());
             let extensions = order.iter().map(|r| registry_specified(r)).collect();
             let error = add(

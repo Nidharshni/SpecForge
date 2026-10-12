@@ -71,7 +71,7 @@ fn init_at(
             enclosing.dir().display()
         );
     }
-    let outcome = match init::apply(path, plan) {
+    let outcome = match init::apply(path, plan, &runtime) {
         Ok(outcome) => outcome,
         Err(error) => return Refusal::of(format).report(terminal, &error),
     };

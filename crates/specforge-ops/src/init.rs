@@ -8,12 +8,13 @@
 //! doesn't exist yet can't have, so it is added afterwards with `specforge
 //! add`.
 
-use crate::extension::{self, Candidate, LocalFile, Source};
+use crate::extension::{self, Candidate, Install, LocalFile, LockPlan, Refused, Source, Verb};
 use crate::{OpError, OpErrorKind, Writes};
 use serde::Serialize;
 use serde_json::{Value, json};
 use specforge_common::shape::Shape;
 use specforge_common::{PROJECT_FILE, ProjectRoot, validate_project_name};
+use specforge_installed::Installed;
 use specforge_wasm::WasmRuntime;
 use std::path::{Path, PathBuf};
 
@@ -153,8 +154,13 @@ pub fn plan(req: &Request, runtime: &dyn WasmRuntime) -> Result<Plan, OpError> {
     let version = req.version.to_string();
 
     let (extensions, installs) = extensions_of(req.extensions, runtime)?;
-    // The lock plan the installs will be: refused here, before anything is written.
-    extension::check_local(req.dir, &installs)?;
+    // The lock plan the installs will be: an unreadable lock refuses here (E033).
+    let installed = Installed::at(req.dir);
+    let mut lock_plan = if installs.is_empty() {
+        LockPlan::enabling(&installed, &[], runtime)
+    } else {
+        LockPlan::new(&installed, &[], runtime, Verb::Install)?
+    };
     // A builtin is enabled after the builtins it requires, as `add` does.
     let mut extensions = with_required_builtins(extensions, runtime)?;
     // Test obligations (`verify`) on software kinds come from
@@ -172,6 +178,16 @@ pub fn plan(req: &Request, runtime: &dyn WasmRuntime) -> Result<Plan, OpError> {
             }
         }
     }
+
+    // The project's peer set as the plan will leave it, judged by the rule `add` uses: refused
+    // here, before anything is written.
+    for local in &installs {
+        lock_plan.stage(Install::local(req.dir, local.clone())?);
+    }
+    for name in &extensions {
+        lock_plan.enable(name);
+    }
+    lock_plan.check().map_err(Refused::first)?;
 
     let starter = match starter_template(&extensions, &installs, runtime)? {
         Some(template) => template
@@ -205,7 +221,7 @@ pub fn plan(req: &Request, runtime: &dyn WasmRuntime) -> Result<Plan, OpError> {
 /// failed init puts back what was there before it ran (the lock's bytes, a
 /// pre-existing `.specforge/`) and removes only what it wrote. Its error
 /// reports nothing written.
-pub fn apply(dir: &Path, plan: Plan) -> Result<Outcome, OpError> {
+pub fn apply(dir: &Path, plan: Plan, runtime: &dyn WasmRuntime) -> Result<Outcome, OpError> {
     let write_error = |what: &str, e: std::io::Error| {
         OpError::new(
             OpErrorKind::of_io(&e),
@@ -239,7 +255,12 @@ pub fn apply(dir: &Path, plan: Plan) -> Result<Outcome, OpError> {
             _ => write_error(STARTER_FILE, e),
         })?;
         writes.record(dir.join(STARTER_FILE));
-        writes.merge(extension::install_local(dir, plan.installs)?);
+        writes.merge(extension::install_local(
+            dir,
+            &plan.extensions,
+            plan.installs,
+            runtime,
+        )?);
         Ok(())
     })();
 
