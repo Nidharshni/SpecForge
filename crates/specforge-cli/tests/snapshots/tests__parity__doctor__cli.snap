@@ -34,7 +34,9 @@ expression: cli_snap
     "enhancements": {
       "milestone": [
         {
-          "edge_types": [],
+          "edge_types": [
+            "MilestoneIncludesBehavior"
+          ],
           "extension": "@specforge/software",
           "fields": [
             "behaviors"
@@ -43,7 +45,10 @@ expression: cli_snap
       ],
       "module": [
         {
-          "edge_types": [],
+          "edge_types": [
+            "ModuleConsumesPort",
+            "ModuleDefinesPort"
+          ],
           "extension": "@specforge/software",
           "fields": [
             "ports",

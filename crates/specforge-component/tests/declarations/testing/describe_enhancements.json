@@ -2,7 +2,6 @@
   "category": "enhancements",
   "items": [
     {
-      "edge_types": [],
       "fields": [],
       "source_extension": "@specforge/software",
       "target_kind": "behavior",
@@ -15,7 +14,6 @@
       ]
     },
     {
-      "edge_types": [],
       "fields": [],
       "source_extension": "@specforge/software",
       "target_kind": "invariant",
@@ -28,7 +26,6 @@
       ]
     },
     {
-      "edge_types": [],
       "fields": [],
       "source_extension": "@specforge/software",
       "target_kind": "event",
@@ -40,7 +37,6 @@
       ]
     },
     {
-      "edge_types": [],
       "fields": [],
       "source_extension": "@specforge/software",
       "target_kind": "type",
@@ -50,7 +46,6 @@
       ]
     },
     {
-      "edge_types": [],
       "fields": [],
       "source_extension": "@specforge/software",
       "target_kind": "port",
@@ -60,7 +55,6 @@
       ]
     },
     {
-      "edge_types": [],
       "fields": [],
       "source_extension": "@specforge/governance",
       "target_kind": "constraint",
@@ -73,7 +67,6 @@
       ]
     },
     {
-      "edge_types": [],
       "fields": [],
       "source_extension": "@specforge/governance",
       "target_kind": "failure_mode",

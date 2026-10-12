@@ -2,53 +2,6 @@
   "category": "enhancements",
   "items": [
     {
-      "edge_types": [
-        {
-          "description": "Behavior requires an invariant as precondition",
-          "edge_arrowhead": null,
-          "edge_color": "#1A237E",
-          "edge_style": "solid",
-          "label": "BehaviorRequiresInvariant",
-          "source_kind": "behavior",
-          "target_kind": "invariant"
-        },
-        {
-          "description": "Behavior ensures an invariant as postcondition",
-          "edge_arrowhead": null,
-          "edge_color": "#1A237E",
-          "edge_style": "solid",
-          "label": "BehaviorEnsuresInvariant",
-          "source_kind": "behavior",
-          "target_kind": "invariant"
-        },
-        {
-          "description": "Behavior maintains an invariant as frame invariant throughout execution",
-          "edge_arrowhead": null,
-          "edge_color": "#1A237E",
-          "edge_style": "dashed",
-          "label": "BehaviorMaintainsInvariant",
-          "source_kind": "behavior",
-          "target_kind": "invariant"
-        },
-        {
-          "description": "Behavior satisfies a temporal property",
-          "edge_arrowhead": null,
-          "edge_color": "#0D47A1",
-          "edge_style": "solid",
-          "label": "BehaviorSatisfiesProperty",
-          "source_kind": "behavior",
-          "target_kind": "property"
-        },
-        {
-          "description": "Concrete behavior refines an abstract behavior (specification layering)",
-          "edge_arrowhead": null,
-          "edge_color": "#4A148C",
-          "edge_style": "dashed",
-          "label": "BehaviorRefinesBehavior",
-          "source_kind": "behavior",
-          "target_kind": "behavior"
-        }
-      ],
       "fields": [
         {
           "default_value": null,
@@ -133,26 +86,6 @@
       "target_kind": "behavior"
     },
     {
-      "edge_types": [
-        {
-          "description": "Event follows a synchronization protocol",
-          "edge_arrowhead": null,
-          "edge_color": "#004D40",
-          "edge_style": "solid",
-          "label": "EventFollowsProtocol",
-          "source_kind": "event",
-          "target_kind": "protocol"
-        },
-        {
-          "description": "Event participates in a process",
-          "edge_arrowhead": null,
-          "edge_color": "#006064",
-          "edge_style": "solid",
-          "label": "EventParticipatesInProcess",
-          "source_kind": "event",
-          "target_kind": "process"
-        }
-      ],
       "fields": [
         {
           "default_value": null,
@@ -192,7 +125,6 @@
       "target_kind": "event"
     },
     {
-      "edge_types": [],
       "fields": [
         {
           "default_value": null,
