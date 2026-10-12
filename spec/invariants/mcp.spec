@@ -23,6 +23,7 @@ invariant mcp_structured_error_responses "MCP Structured Error Responses" {
   verify unit "error response includes error code and message fields"
   verify unit "error response includes entity_id when applicable"
   verify unit "no MCP endpoint returns a plain string error"
+  verify unit "a package the registry or the trust check refuses is never an internal_error"
   verify unit "success responses never have error field"
   verify unit "a failed tool call is an isError result whose content is an McpError with a code"
   verify unit "a diagnostic code behind a failed tool call is in its McpError diagnostic"

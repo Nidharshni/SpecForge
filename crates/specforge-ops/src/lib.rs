@@ -362,6 +362,28 @@ mod tests {
     }
 
     #[test]
+    fn failure_kinds_the_code_table_leaves_internal() {
+        for code in [
+            codes::R006,
+            codes::R_RES_002,
+            codes::R_TRUST_001,
+            codes::R_TRUST_002,
+            codes::R_TRUST_003,
+            codes::R_TRUST_005,
+            codes::R_TRUST_006,
+            codes::R010,
+            codes::R011,
+            codes::E070,
+        ] {
+            assert_eq!(
+                OpErrorKind::of_diagnostic(code.id()),
+                OpErrorKind::Internal,
+                "{code}"
+            );
+        }
+    }
+
+    #[test]
     fn an_error_stays_small_enough_to_return_whole() {
         // clippy.toml's `large-error-threshold` is 129 bytes.
         assert!(std::mem::size_of::<OpError>() <= 129);
