@@ -43,7 +43,7 @@ use sources::SourceCache;
 use snapshot::EntitySnapshot;
 use specforge_common::{
     ConfigProblem, ConfigRead, Diagnostic, ProjectConfig, ProjectRoot, codes, discover_spec_files,
-    is_discovered, read_project_config,
+    read_project_config,
 };
 use specforge_graph::{Graph, GraphBuild, GraphConfig};
 use specforge_installed::{Builtins, Installed};
@@ -411,14 +411,6 @@ impl Environment {
         self.setup_diagnostics()
             .into_iter()
             .map(|setup| setup.diagnostic)
-    }
-
-    /// Whether a file (its path relative to the spec root) is left out of
-    /// the project, as discovery leaves it out: not a `.spec` file, under a
-    /// skipped directory (`target`, `node_modules`, ...) or matched by an
-    /// `exclude` entry.
-    pub fn excludes(&self, relative: &str) -> bool {
-        !is_discovered(relative, &self.read.config.exclude)
     }
 
     /// The project sources discovery finds now (`exclude` and the skipped

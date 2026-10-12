@@ -2690,7 +2690,6 @@ fn an_update_naming_only_files_discovery_does_not_find_changes_nothing() {
     behavior = "resolve_use_imports",
     verify = "files matching an exclude entry are not compiled"
 )]
-#[ignore = "fixed by T3"]
 fn a_glob_exclude_entry_leaves_its_files_out_of_the_compile() {
     let dir = project(
         r#"{"name":"s","version":"0.1.0","extensions":[],"exclude":["drafts/**","**/*.draft.spec"]}"#,

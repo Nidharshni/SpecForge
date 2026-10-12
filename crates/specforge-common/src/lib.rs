@@ -4,6 +4,7 @@ extern crate self as specforge_common;
 pub mod cycles;
 mod diagnostic;
 pub mod discovery;
+mod exclude;
 mod interner;
 pub mod package;
 pub mod peers;
@@ -17,7 +18,8 @@ pub mod structural;
 pub mod suggest;
 
 pub use diagnostic::{CustomRuleFailure, Diagnostic, DiagnosticData, DiagnosticsExt, Severity};
-pub use discovery::{Walked, discover_spec_files, is_discovered, is_excluded, walk_spec_files};
+pub use discovery::{Walked, discover_spec_files, is_discovered, walk_spec_files};
+pub use exclude::{Exclude, ExcludeEntry, ExcludeError};
 pub use interner::Sym;
 pub use present::{
     Counts, DiagnosticDocument, DiagnosticJson, DiagnosticList, MAX_DIAGNOSTICS, compute_exit_code,

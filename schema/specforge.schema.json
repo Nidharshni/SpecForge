@@ -31,12 +31,12 @@
     },
     "exclude": {
       "type": "array",
-      "description": "Path substrings, relative to the spec root: a .spec file whose path contains one is not compiled (check, watch, the LSP and MCP), formatted or migrated. Plain substrings, not globs: \"drafts/\" excludes drafts/a.spec.",
+      "description": "Patterns, relative to the spec root, of .spec files that are not project sources: not compiled (check, watch, the LSP and MCP), formatted or migrated, and named by no import. `*` and `?` match within one name, `**` any number of directories, `[...]` one character of a set. An entry with no slash except a trailing one matches a name at any depth (\"drafts\" leaves out drafts/a.spec and sub/drafts/b.spec); an entry with a slash at its start or in its middle is anchored at the spec root (\"/drafts\", \"sub/drafts\"); a trailing slash matches directories only. A file is left out when an entry matches its path or one of its directories.",
       "items": {
         "type": "string",
         "minLength": 1,
-        "pattern": "^[^*?\\[\\]{}]*$",
-        "description": "A path substring such as \"drafts/\". Glob characters (* ? [ ] { }) are rejected: they would match no path."
+        "pattern": "^(?!!)(?!(.*/)?\\.{1,2}(/|$))(?!.*//).+$",
+        "description": "A pattern such as \"drafts\", \"**/*.draft.spec\" or \"sub/old/\". An entry starting with ! (exclude has no negation), with a . or .. name, or with an empty name can match no source: specforge.json reports it (E069) and it is ignored."
       },
       "uniqueItems": true,
       "default": []
