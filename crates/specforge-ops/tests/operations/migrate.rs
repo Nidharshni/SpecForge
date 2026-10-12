@@ -309,6 +309,27 @@ fn a_failed_migration_names_its_kind() {
             "the migrated project does not compile"
         )
     );
+
+    // A hook that adds an entity: the graph changed (W054), rolled back.
+    // Today the same `Internal` "the migration failed" as a failed file.
+    let dir = project_with_extension();
+    let runtime = Arc::new(hooked(|input| {
+        let path = &input.files[0];
+        let mut migrated = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+        migrated.push_str("behavior added \"Added\" {\n}\n");
+        std::fs::write(path, migrated).map_err(|e| e.to_string())
+    }));
+    let outcome = run(
+        &request(&specforge_common::ProjectRoot::of(dir.path()).unwrap()),
+        Some(runtime.clone()),
+    );
+    assert!(!outcome.structural_differences().is_empty(), "{outcome:?}");
+    assert!(outcome.rollback.is_some());
+    let failure = outcome.failure().expect("rolled back");
+    assert_eq!(
+        (failure.kind, failure.message.as_str()),
+        (OpErrorKind::Internal, "the migration failed")
+    );
 }
 
 #[specforge_test(

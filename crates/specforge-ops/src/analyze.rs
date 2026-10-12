@@ -829,6 +829,34 @@ mod tests {
         assert_eq!(names(&outcome), vec!["@t/x:scan"]);
     }
 
+    /// The `__pass_*` exports the runtime was called for.
+    fn pass_calls(runtime: &InProcessRuntime) -> Vec<String> {
+        runtime
+            .calls()
+            .into_iter()
+            .map(|c| c.export)
+            .filter(|e| e.starts_with("__pass_"))
+            .collect()
+    }
+
+    #[test]
+    fn a_builtin_pass_runs_no_extension_pass() {
+        let project = Project::new();
+        let outcome = project.run(&pass("contracts")).unwrap();
+        assert_eq!(names(&outcome), vec!["contracts"]);
+        assert!(pass_calls(&project.runtime).is_empty());
+
+        project.runtime.clear_calls();
+        let outcome = project.run(&pass("@t/x:scan")).unwrap();
+        assert_eq!(names(&outcome), vec!["@t/x:scan"]);
+        assert_eq!(pass_calls(&project.runtime), ["__pass_scan"]);
+
+        project.runtime.clear_calls();
+        let outcome = project.run(&pass("all")).unwrap();
+        assert_eq!(names(&outcome), vec!["contracts", "@t/x:scan"]);
+        assert_eq!(pass_calls(&project.runtime), ["__pass_scan"]);
+    }
+
     #[test]
     fn coverage_is_an_alias_for_the_testing_pass() {
         let outcome = Project::new().run(&pass("coverage")).unwrap();

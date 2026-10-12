@@ -88,3 +88,23 @@ fn explain_rejects_an_unknown_code_with_format_hints() {
         "the third-party range hint is printed: {stderr}"
     );
 }
+
+#[test]
+fn explain_reads_its_argument_as_given() {
+    let out = specforge().args(["explain", " e001"]).output().unwrap();
+    assert_eq!(out.status.code(), Some(1));
+    let stderr = String::from_utf8(out.stderr).unwrap();
+    assert!(
+        stderr.starts_with("error[unknown_code]: unknown diagnostic code:  e001"),
+        "stderr: {stderr}"
+    );
+}
+
+#[test]
+fn explain_takes_no_format_flag() {
+    let out = specforge()
+        .args(["explain", "e001", "--format", "json"])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(2));
+}

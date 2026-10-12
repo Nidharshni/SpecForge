@@ -167,6 +167,31 @@ fn stats_and_validate_count_the_served_projects_surface_conflicts() {
     assert!(codes.contains(&"I017"), "{validated}");
 }
 
+#[test]
+fn validate_reports_the_served_projects_notices() {
+    let (mut server, _ext, _dir) = fake_extension::initialized(
+        FakeExtension::new().with_output("mcp__check", json!({"checked": true})),
+    );
+    let resp = call_tool(&mut server, "specforge.validate", json!({}));
+    let listed = answer(&resp);
+    let notices = listed
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|d| d["code"] == "I017")
+        .count();
+    assert!(notices > 0, "{listed}");
+    let verdict = &resp["result"]["_meta"]["specforge/check"];
+    let infos = listed
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|d| d["severity"] == "Info")
+        .count();
+    assert_eq!(verdict["infos"], infos, "{resp}");
+    assert_eq!(verdict["shown"], listed.as_array().unwrap().len(), "{resp}");
+}
+
 // R2 (plan 05): remove_extension with an unreadable specforge.json refuses
 // before it writes anything (it used to uninstall the binary and empty the
 // lock first).
