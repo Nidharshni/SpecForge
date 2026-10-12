@@ -1,8 +1,10 @@
 extern crate self as specforge_mcp;
 
 pub mod args;
+pub mod events;
 mod extension_dispatch;
 pub mod lifecycle;
+pub mod message;
 pub mod modern;
 pub mod mutation;
 pub mod prompt;
@@ -12,15 +14,16 @@ pub mod registry;
 pub mod reply;
 pub mod resources;
 pub mod state;
+pub mod stdio;
 pub mod subscriptions;
 mod surface_call;
 pub mod surface_table;
 pub mod target;
 pub mod tool;
 pub mod tools;
-pub mod types;
 mod uri_template;
 
+use events::{EventSink, McpEvent};
 use protocol::router::route;
 use protocol::{JsonRpcResponse, parse_request_value};
 use serde_json::Value;
@@ -51,11 +54,26 @@ impl McpServer {
         server
     }
 
+    /// The same server, its events recorded into `sink` instead of
+    /// discarded (a test's `events::testing::EventLog`). Every server
+    /// records into [`events::Discard`] until given another sink.
+    pub fn with_events(mut self, sink: impl EventSink + 'static) -> Self {
+        self.state.events = Box::new(sink);
+        self
+    }
+
     /// Handle one incoming message, a request, a notification or (in a
     /// 2025-03-26 session) a JSON-RPC batch of them, and return the reply
     /// to send, if any.
     pub fn handle_message(&mut self, input: &str) -> Option<String> {
-        let message: Value = match serde_json::from_str(input) {
+        self.handle_bytes(input.as_bytes())
+    }
+
+    /// [`Self::handle_message`] over the message's bytes: bytes that are not
+    /// JSON, invalid UTF-8 included (RFC 8259 section 8.1), are a -32700
+    /// Parse error.
+    fn handle_bytes(&mut self, input: &[u8]) -> Option<String> {
+        let message: Value = match serde_json::from_slice(input) {
             Ok(message) => message,
             Err(_) => {
                 let response =
@@ -163,14 +181,11 @@ impl McpServer {
         let Some(error) = &response.error else {
             return;
         };
-        let mut event = serde_json::json!({
-            "errorCode": error.code,
-            "errorMessage": error.message,
+        self.state.events.record(McpEvent::McpProtocolErrorHandled {
+            error_code: error.code,
+            error_message: error.message.clone(),
+            method: method.map(str::to_string),
         });
-        if let Some(method) = method {
-            event["method"] = Value::from(method);
-        }
-        self.state.push_event("mcp_protocol_error_handled", event);
     }
 
     pub fn state(&self) -> &McpState {
@@ -178,19 +193,29 @@ impl McpServer {
     }
 
     /// The notifications queued since the last call, oldest first: the host
-    /// writes them after the response of the message that queued them.
+    /// writes them after the response of the message that queued them
+    /// ([`McpServer::serve_stdio`] is the stdio host).
     pub fn take_notifications(&mut self) -> Vec<serde_json::Value> {
-        self.state.subscriptions.drain()
+        self.state
+            .subscriptions
+            .drain()
+            .iter()
+            .map(subscriptions::Notification::framed)
+            .collect()
     }
 
-    /// The connection ended (stdio: end of input): every subscription and
-    /// listen stream ends.
+    /// The connection ended ([`McpServer::serve_stdio`] calls it when the
+    /// stdio connection ends): every subscription and listen stream ends.
     pub fn disconnect(&mut self) {
-        self.state.subscriptions.disconnect(&mut self.state.events);
+        self.state.subscriptions.disconnect(&mut *self.state.events);
     }
 
-    pub fn state_mut(&mut self) -> &mut McpState {
-        &mut self.state
+    /// The same server, its projects' extensions running in `runtime` instead of the runtime each
+    /// project builds for itself (`specforge_component::ComponentRuntime::with_user_cache`): how a
+    /// test serves extensions in process (`specforge_wasm::testing::InProcessRuntime`).
+    pub fn with_extension_runtime(mut self, runtime: specforge_project::SharedRuntime) -> Self {
+        self.state.extension_runtime = Some(runtime);
+        self
     }
 }
 

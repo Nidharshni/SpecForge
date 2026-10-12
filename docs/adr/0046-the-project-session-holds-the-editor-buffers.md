@@ -36,7 +36,9 @@ a list computed while an edit waited in the debounce went out with the newer ver
   an import names is read from disk.
 - **D4. The version travels with the text.** The session keeps each held buffer's version; the LSP labels a
   file's diagnostics with the version of the buffer the project was compiled from (none for a file compiled from
-  disk), so a client that checks versions drops a list a newer edit superseded.
+  disk), so a client that checks versions drops a list a newer edit superseded. (ADR 0056: the formatter's
+  findings carry the version they were computed on and are published only beside a compile list of that
+  version.)
 - **D5. The LSP translates protocol events.** `specforge_lsp::changes::Plan`: `Open` is a root, `Edited` is a
   hold, `Closed` is a release, `Watched` is `ProjectSession::changes`, `CatchUp` is `ProjectSession::stale`.
 - **D6. Watch and MCP hold no buffer** and see the session as before; no surface reads another's buffers

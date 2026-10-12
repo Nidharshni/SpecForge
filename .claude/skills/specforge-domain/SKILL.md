@@ -189,7 +189,7 @@ behavior create_user "Create User" {
 ### Import Resolution
 
 - `use invariants/data` resolves to `<spec_root>/invariants/data.spec`
-- Spec root is the directory containing `specforge.spec`
+- The spec root is `spec_root` in `specforge.json`, else the project root
 - Paths are forward-slash separated (platform-independent), `.spec` extension is implicit
 - All top-level declarations are public by default
 - Files must `use` another file to reference its symbols -- this is enforced at compile time

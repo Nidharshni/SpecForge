@@ -8,10 +8,12 @@ mod cursor;
 mod document;
 mod e2e;
 mod hover;
+mod identity;
 mod lifecycle;
 mod navigation;
 mod protocol;
 mod publish;
+mod published;
 mod reaction;
 mod recorder;
 mod registries;
@@ -34,6 +36,28 @@ pub fn spec_files(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
             out.push(path);
         }
     }
+}
+
+/// The URI `text` names.
+pub fn url(text: &str) -> tower_lsp::lsp_types::Url {
+    tower_lsp::lsp_types::Url::parse(text).unwrap()
+}
+
+/// A content change replacing `range` (the whole text when `None`) with `text`.
+pub fn change(
+    range: Option<tower_lsp::lsp_types::Range>,
+    text: &str,
+) -> tower_lsp::lsp_types::TextDocumentContentChangeEvent {
+    tower_lsp::lsp_types::TextDocumentContentChangeEvent {
+        range,
+        range_length: None,
+        text: text.to_string(),
+    }
+}
+
+/// A content change replacing the whole text with `text`.
+pub fn whole(text: &str) -> tower_lsp::lsp_types::TextDocumentContentChangeEvent {
+    change(None, text)
 }
 
 /// The LSP range from (`start_line`, `start_character`) to (`end_line`,

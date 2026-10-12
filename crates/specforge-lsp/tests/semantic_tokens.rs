@@ -17,7 +17,7 @@ fn tokens_over(text: &str, registries: RegistryBuild, graph: &Graph) -> Vec<Sema
     let env = specforge_project::Environment::with_registries(registries, None);
     let recorded = RecordedCoverage::over(graph, &env);
     let view = ProjectView::new(graph, &env, None, &recorded);
-    Document::new("file:///test.spec".into(), text.into()).tokens(&view)
+    Document::new(text.into()).tokens(&view)
 }
 
 /// The semantic tokens of `text` over `registries` and an empty graph
@@ -715,7 +715,10 @@ fn walk<'t>(node: tree_sitter::Node<'t>, out: &mut Vec<tree_sitter::Node<'t>>) {
 fn tokens_agree_with_the_grammar() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let runtime = specforge_component::ComponentRuntime::with_user_cache();
-    let project = specforge_project::CompiledProject::compile(&root, Some(Arc::new(runtime)));
+    let project = specforge_project::CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(&root).unwrap(),
+        Some(Arc::new(runtime)),
+    );
     let view = ProjectView::of(&project);
     let declared: Vec<&str> = view
         .registries()
@@ -728,7 +731,7 @@ fn tokens_agree_with_the_grammar() {
     assert!(files.len() > 150, "found only {} spec files", files.len());
     for path in &files {
         let text = std::fs::read_to_string(path).unwrap();
-        let doc = Document::new("file:///spec.spec".into(), text.clone());
+        let doc = Document::new(text.clone());
         let index = doc.index();
         let tokens = doc.tokens(&view);
         // Each token as (start byte, end byte) -> (type, modifiers).

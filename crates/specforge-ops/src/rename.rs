@@ -262,7 +262,7 @@ mod tests {
         }
         let runtime = specforge_component::ComponentRuntime::with_user_cache();
         let project = specforge_project::CompiledProject::compile(
-            dir.path(),
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
             Some(std::sync::Arc::new(runtime)),
         );
         (dir, project)

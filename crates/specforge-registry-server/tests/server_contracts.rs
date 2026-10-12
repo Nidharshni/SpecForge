@@ -6,8 +6,8 @@ use axum::http::{Request, StatusCode};
 use specforge_registry_server::state::{AppState, PublishLimits};
 use specforge_registry_server::{auth, handlers};
 use specforge_registry_wire::{
-    ErrorBody, PackageMetadata, PublishReceipt, SearchResults, TokenVerified, VersionList, Yanked,
-    form,
+    ErrorBody, PackageMetadata, PublishReceipt, SearchResults, SignedContent, TokenVerified,
+    VersionList, Yanked, form,
 };
 use std::sync::Arc;
 use tower::ServiceExt as _;
@@ -37,6 +37,26 @@ fn app(state: Arc<AppState>) -> axum::Router {
 
 fn app_clone(state: &Arc<AppState>) -> axum::Router {
     handlers::router(Arc::clone(state))
+}
+
+/// A publisher signature over `manifest` and `wasm` for the name and version the manifest's handshake states
+/// (empty when it states none), made as `specforge publish` makes one.
+fn signed(manifest: &str, wasm: &[u8]) -> String {
+    let value: serde_json::Value = serde_json::from_str(manifest).unwrap_or_default();
+    let field = |key: &str| {
+        value["handshake"][key]
+            .as_str()
+            .unwrap_or_default()
+            .to_string()
+    };
+    specforge_registry_client::SigningKey::from_bytes(&[7; 32])
+        .sign(&SignedContent::of(
+            &field("name"),
+            &field("version"),
+            wasm,
+            manifest,
+        ))
+        .to_json()
 }
 
 fn multipart_body(manifest: &str, wasm: &[u8], signature: Option<&str>) -> Body {
@@ -95,11 +115,7 @@ async fn name_mismatch_is_rejected() {
             &raw,
             "@test%2Fsigned-ext",
             "2.0.0",
-            multipart_body(
-                VALID_MANIFEST,
-                WASM,
-                Some(r#"{"sig":"x","keyId":"y","pubkey":"z","signedAt":"now"}"#),
-            ),
+            multipart_body(VALID_MANIFEST, WASM, Some(&signed(VALID_MANIFEST, WASM))),
         ))
         .await
         .unwrap();
@@ -128,7 +144,7 @@ async fn non_wasm_bytes_are_rejected() {
             multipart_body(
                 VALID_MANIFEST,
                 b"not a wasm module",
-                Some(r#"{"sig":"x","keyId":"y","pubkey":"z","signedAt":"now"}"#),
+                Some(&signed(VALID_MANIFEST, b"not a wasm module")),
             ),
         ))
         .await
@@ -159,7 +175,7 @@ async fn invalid_manifest_schema_is_rejected() {
             multipart_body(
                 r#"{"description":"no name or version"}"#,
                 WASM,
-                Some(r#"{"sig":"x","keyId":"y","pubkey":"z","signedAt":"now"}"#),
+                Some(&signed(r#"{"description":"no name or version"}"#, WASM)),
             ),
         ))
         .await
@@ -182,8 +198,7 @@ async fn publish_rate_limit_returns_429() {
     let raw = auth::create_token(&state.database, None, "pub", Some(90), false);
     let router = app(state);
 
-    // The signature object content is irrelevant to the validation contract;
-    // dedup prevents version reuse, so vary versions per attempt.
+    // Dedup prevents version reuse, so vary versions per attempt.
     for version in ["1.0.0", "1.0.1"] {
         let manifest = VALID_MANIFEST.replace("1.0.0", version);
         let response = router
@@ -192,11 +207,7 @@ async fn publish_rate_limit_returns_429() {
                 &raw,
                 "@test%2Fsigned-ext",
                 version,
-                multipart_body(
-                    &manifest,
-                    WASM,
-                    Some(r#"{"sig":"x","keyId":"y","pubkey":"z","signedAt":"now"}"#),
-                ),
+                multipart_body(&manifest, WASM, Some(&signed(&manifest, WASM))),
             ))
             .await
             .unwrap();
@@ -210,11 +221,7 @@ async fn publish_rate_limit_returns_429() {
             &raw,
             "@test%2Fsigned-ext",
             "1.0.2",
-            multipart_body(
-                &manifest,
-                WASM,
-                Some(r#"{"sig":"x","keyId":"y","pubkey":"z","signedAt":"now"}"#),
-            ),
+            multipart_body(&manifest, WASM, Some(&signed(&manifest, WASM))),
         ))
         .await
         .unwrap();
@@ -346,13 +353,93 @@ mod ownership {
         let manifest = format!(
             r#"{{"handshake":{{"protocol_version":"1","name":"{name}","version":"{version}","peer_dependencies":[],"sandbox_policy":null}}}}"#
         );
-        multipart_body(
-            &manifest,
-            WASM,
-            Some(r#"{"sig":"aa","keyId":"bb","pubkey":"cc","signedAt":"now"}"#),
-        )
+        multipart_body(&manifest, WASM, Some(&signed(&manifest, WASM)))
     }
 
+    /// The hash of the token labelled `label`.
+    fn hash_of(state: &AppState, label: &str) -> String {
+        auth::list_tokens(&state.database)
+            .unwrap()
+            .into_iter()
+            .find(|t| t.label == label)
+            .unwrap()
+            .token_hash
+    }
+
+    #[specforge_test_macros::test(
+        behavior = "publish_to_registry",
+        verify = "a publish the registry refuses claims no scope"
+    )]
+    #[tokio::test]
+    async fn a_refused_upload_claims_no_scope() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = app_state(dir.path(), 10_000);
+        let router = app_clone(&state);
+        let token_a = auth::create_token(&state.database, None, "pub-a", Some(90), false);
+        let token_b = auth::create_token(&state.database, None, "pub-b", Some(90), false);
+
+        let manifest = r#"{"handshake":{"protocol_version":"1","name":"@fresh/x","version":"1.0.0","peer_dependencies":[],"sandbox_policy":null}}"#;
+        let response = router
+            .clone()
+            .oneshot(put_request(
+                &token_a,
+                "@fresh%2Fx",
+                "1.0.0",
+                multipart_body(manifest, WASM, None),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(json_of(response).await["error"]["code"], "UNSIGNED_PACKAGE");
+
+        let response = router
+            .clone()
+            .oneshot(put_request(
+                &token_b,
+                "@fresh%2Fy",
+                "1.0.0",
+                signed_for("@fresh/y", "1.0.0"),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let (owner, _) = state.database.get_scope_owner("@fresh").unwrap();
+        assert_eq!(owner, hash_of(&state, "pub-b"));
+    }
+
+    // The duplicate check before the claim already refuses this one; the true race (a version stored
+    // between that check and the insert) is covered at the database in `db.rs` (T16).
+    #[tokio::test]
+    async fn a_duplicate_version_claims_no_scope() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = app_state(dir.path(), 10_000);
+        let router = app_clone(&state);
+        let token_a = auth::create_token(&state.database, None, "pub-a", Some(90), false);
+
+        // The version is already stored, under no scope.
+        stored(&state, "@fresh/x", false);
+        let response = router
+            .clone()
+            .oneshot(put_request(
+                &token_a,
+                "@fresh%2Fx",
+                "1.0.0",
+                signed_for("@fresh/x", "1.0.0"),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+        assert_eq!(
+            json_of(response).await["error"]["code"],
+            "DUPLICATE_VERSION"
+        );
+        assert_eq!(state.database.get_scope_owner("@fresh"), None);
+    }
+
+    #[specforge_test_macros::test(
+        behavior = "publish_to_registry",
+        verify = "the first publish into a scope claims it, and only its publisher publishes there after"
+    )]
     #[tokio::test]
     async fn first_publish_claims_scope_and_blocks_other_tokens() {
         let dir = tempfile::tempdir().unwrap();
@@ -466,8 +553,6 @@ async fn json_of(response: axum::response::Response) -> serde_json::Value {
     .unwrap()
 }
 
-const SIGNATURE: &str = r#"{"sig":"x","keyId":"y","pubkey":"z","signedAt":"now"}"#;
-
 #[specforge_test_macros::test(
     behavior = "publish_to_registry",
     verify = "the registry refuses a manifest that is not an extension declaration"
@@ -484,7 +569,7 @@ async fn a_manifest_that_is_not_a_declaration_is_refused() {
             &raw,
             "@test%2Fsigned-ext",
             "1.0.0",
-            multipart_body(legacy, WASM, Some(SIGNATURE)),
+            multipart_body(legacy, WASM, Some(&signed(legacy, WASM))),
         ))
         .await
         .unwrap();
@@ -515,7 +600,7 @@ async fn description_and_keywords_come_from_the_declaration() {
             &raw,
             "@test%2Fsigned-ext",
             "1.0.0",
-            multipart_body(manifest, WASM, Some(SIGNATURE)),
+            multipart_body(manifest, WASM, Some(&signed(manifest, WASM))),
         ))
         .await
         .unwrap();
@@ -671,7 +756,7 @@ async fn the_server_answers_in_these_json_shapes() {
             &token,
             "@test%2Fsigned-ext",
             "1.0.0",
-            multipart_body(VALID_MANIFEST, WASM, Some(SIGNATURE)),
+            multipart_body(VALID_MANIFEST, WASM, Some(&signed(VALID_MANIFEST, WASM))),
         ))
         .await
         .unwrap();
@@ -697,7 +782,6 @@ async fn the_server_answers_in_these_json_shapes() {
         keys_of(&metadata),
         [
             "description",
-            "key_id",
             "keywords",
             "manifest",
             "name",
@@ -709,6 +793,10 @@ async fn the_server_answers_in_these_json_shapes() {
             "version",
             "wasm_url"
         ]
+    );
+    assert_eq!(
+        keys_of(&metadata["signature"]),
+        ["public_key", "sig", "signed_at"]
     );
     assert_eq!(
         metadata["wasm_url"],
@@ -771,6 +859,173 @@ async fn the_server_answers_in_these_json_shapes() {
     let yanked = json_of(response).await;
     assert_eq!(yanked, serde_json::json!({"yanked": true}));
     round_trips::<Yanked>(&yanked);
+}
+
+/// The answer to a publish of `@test/signed-ext` at `version` with its manifest, `wasm` and `signature`.
+async fn publish_signed_ext(
+    router: &axum::Router,
+    token: &str,
+    version: &str,
+    manifest: &str,
+    wasm: &[u8],
+    signature: &str,
+) -> (StatusCode, serde_json::Value) {
+    let response = router
+        .clone()
+        .oneshot(put_request(
+            token,
+            "@test%2Fsigned-ext",
+            version,
+            multipart_body(manifest, wasm, Some(signature)),
+        ))
+        .await
+        .unwrap();
+    let status = response.status();
+    (status, json_of(response).await)
+}
+
+/// `get_json` of the version's metadata: its status.
+async fn metadata_status(router: &axum::Router, version: &str) -> StatusCode {
+    get_json(
+        router,
+        &format!("/v1/packages/@test%2Fsigned-ext/{version}"),
+    )
+    .await
+    .0
+}
+
+#[specforge_test_macros::test(
+    behavior = "publish_to_registry",
+    verify = "the registry refuses a signature that is not a package signature, and the version stays publishable"
+)]
+#[tokio::test]
+async fn a_signature_that_is_not_one_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = app_state(dir.path(), 100);
+    let token = auth::create_token(&state.database, None, "pub", Some(90), false);
+    let router = app_clone(&state);
+    for (version, signature, reason) in [
+        (
+            "1.0.0",
+            r#"{"sig":"x","keyId":"y","pubkey":"z","signedAt":"now"}"#,
+            "unknown field `keyId`",
+        ),
+        ("1.0.1", "hello", "expected value"),
+        ("1.0.2", r#"{"sig":"aa"}"#, "missing field"),
+    ] {
+        let manifest = VALID_MANIFEST.replace("1.0.0", version);
+        let (status, body) =
+            publish_signed_ext(&router, &token, version, &manifest, WASM, signature).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{version}: {body}");
+        assert_eq!(body["error"]["code"], "INVALID_SIGNATURE", "{version}");
+        let message = body["error"]["message"].as_str().unwrap();
+        assert!(message.contains(reason), "{version}: {message}");
+        assert_eq!(
+            metadata_status(&router, version).await,
+            StatusCode::NOT_FOUND,
+            "{version} is stored"
+        );
+    }
+    // A sig that is not hex is refused by name.
+    let signature = signed(VALID_MANIFEST, WASM).replace("\"sig\":\"", "\"sig\":\"zz");
+    let (status, body) =
+        publish_signed_ext(&router, &token, "1.0.0", VALID_MANIFEST, WASM, &signature).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+    assert!(
+        body["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("`sig` is not 128 hex"),
+        "{body}"
+    );
+    // The version stays publishable.
+    let (status, receipt) = publish_signed_ext(
+        &router,
+        &token,
+        "1.0.0",
+        VALID_MANIFEST,
+        WASM,
+        &signed(VALID_MANIFEST, WASM),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{receipt}");
+}
+
+#[specforge_test_macros::test(
+    behavior = "publish_to_registry",
+    verify = "the registry refuses a signature that does not verify over the upload"
+)]
+#[tokio::test]
+async fn a_signature_over_other_bytes_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = app_state(dir.path(), 100);
+    let token = auth::create_token(&state.database, None, "pub", Some(90), false);
+    let router = app_clone(&state);
+    let signature = signed(VALID_MANIFEST, b"\0asm-other");
+    let (status, body) =
+        publish_signed_ext(&router, &token, "1.0.0", VALID_MANIFEST, WASM, &signature).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+    assert_eq!(body["error"]["code"], "INVALID_SIGNATURE");
+    let message = body["error"]["message"].as_str().unwrap();
+    assert!(message.contains("is not its key's signature"), "{message}");
+    assert!(
+        message.contains("@test/signed-ext@1.0.0 as uploaded"),
+        "{message}"
+    );
+    assert_eq!(
+        metadata_status(&router, "1.0.0").await,
+        StatusCode::NOT_FOUND
+    );
+}
+
+#[specforge_test_macros::test(
+    behavior = "publish_to_registry",
+    verify = "the registry refuses a signature that does not verify over the upload"
+)]
+#[tokio::test]
+async fn a_signature_of_another_version_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = app_state(dir.path(), 100);
+    let token = auth::create_token(&state.database, None, "pub", Some(90), false);
+    // Made for 1.0.0, replayed with the 1.0.1 manifest at 1.0.1.
+    let signature = signed(VALID_MANIFEST, WASM);
+    let (status, body) = publish_signed_ext(
+        &app_clone(&state),
+        &token,
+        "1.0.1",
+        &VALID_MANIFEST.replace("1.0.0", "1.0.1"),
+        WASM,
+        &signature,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+    assert_eq!(body["error"]["code"], "INVALID_SIGNATURE");
+}
+
+#[specforge_test_macros::test(
+    behavior = "publish_to_registry",
+    verify = "the registry refuses a signature that does not verify over the upload"
+)]
+#[tokio::test]
+async fn a_signature_over_another_manifest_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = app_state(dir.path(), 100);
+    let token = auth::create_token(&state.database, None, "pub", Some(90), false);
+    let described = VALID_MANIFEST.replace(
+        "\"sandbox_policy\":null",
+        "\"sandbox_policy\":null,\"description\":\"other\"",
+    );
+    let (status, body) = publish_signed_ext(
+        &app_clone(&state),
+        &token,
+        "1.0.0",
+        VALID_MANIFEST,
+        WASM,
+        &signed(&described, WASM),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+    assert_eq!(body["error"]["code"], "INVALID_SIGNATURE");
 }
 
 #[tokio::test]
@@ -851,8 +1106,7 @@ fn stored(state: &AppState, name: &str, declares_entities: bool) {
             keywords: String::new(),
             publisher: String::new(),
             published_at: "2026-01-01T00:00:00+00:00".to_string(),
-            signature: String::new(),
-            key_id: String::new(),
+            signature: None,
             manifest,
         })
         .unwrap();
@@ -909,4 +1163,124 @@ async fn search_filters_by_declared_category() {
             .contains("surfaces"),
         "{body}"
     );
+}
+
+/// A package stored with the given description and keywords.
+fn stored_described(state: &AppState, name: &str, description: &str, keywords: &str) {
+    let manifest = serde_json::json!({
+        "handshake": {
+            "protocol_version": "1.0.0",
+            "name": name,
+            "version": "1.0.0",
+            "peer_dependencies": [],
+            "sandbox_policy": null
+        },
+    })
+    .to_string();
+    state
+        .database
+        .insert_package(&specforge_registry_server::db::PackageVersion {
+            name: name.to_string(),
+            version: "1.0.0".to_string(),
+            sha256: "00".to_string(),
+            size_bytes: 1,
+            description: description.to_string(),
+            keywords: keywords.to_string(),
+            publisher: String::new(),
+            published_at: "2026-01-01T00:00:00+00:00".to_string(),
+            signature: None,
+            manifest,
+        })
+        .unwrap();
+}
+
+#[specforge_test_macros::test(
+    behavior = "search_registry",
+    verify = "a search matches a case-insensitive substring of a package's name, description or one keyword, wildcards included as text"
+)]
+#[tokio::test]
+async fn search_matches_as_the_fakes_do() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = app_state(dir.path(), 100);
+    stored_described(&state, "@a/myxext", "plain", "");
+    stored_described(&state, "@a/words", "plain", "alpha,beta");
+    let router = app_clone(&state);
+    let hits = |query: &'static str| {
+        let router = router.clone();
+        async move {
+            let (status, body) = get_json(&router, &format!("/v1/search?q={query}")).await;
+            assert_eq!(status, StatusCode::OK, "{query}");
+            body["results"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|r| r["name"].as_str().unwrap().to_string())
+                .collect::<Vec<_>>()
+        }
+    };
+    for query in ["my_ext", "%25", "a%2Cb"] {
+        assert!(hits(query).await.is_empty(), "{query}");
+    }
+    assert_eq!(hits("xext").await, ["@a/myxext"]);
+}
+
+#[tokio::test]
+async fn revoking_takes_a_token_id() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = app_state(dir.path(), 100);
+    let router = app_clone(&state);
+    let admin = auth::create_token(&state.database, None, "admin", Some(90), true);
+    let one = auth::create_token(&state.database, None, "one", Some(90), false);
+    let two = auth::create_token(&state.database, None, "two", Some(90), false);
+    let verify = |token: String| {
+        let router = router.clone();
+        async move {
+            router
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/v1/auth/verify")
+                        .header("authorization", format!("Bearer {token}"))
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap()
+                .status()
+        }
+    };
+    let delete = |segment: String| {
+        let router = router.clone();
+        let admin = admin.clone();
+        async move {
+            router
+                .oneshot(
+                    Request::builder()
+                        .method("DELETE")
+                        .uri(format!("/v1/admin/tokens/{segment}"))
+                        .header("authorization", format!("Bearer {admin}"))
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap()
+                .status()
+        }
+    };
+
+    assert_eq!(delete("%25".to_string()).await, StatusCode::BAD_REQUEST);
+    assert_eq!(verify(one.clone()).await, StatusCode::OK);
+    assert_eq!(verify(two.clone()).await, StatusCode::OK);
+    assert_eq!(verify(admin.clone()).await, StatusCode::OK);
+
+    let id = auth::list_tokens(&state.database)
+        .unwrap()
+        .into_iter()
+        .find(|t| t.label == "one")
+        .unwrap()
+        .token_hash[..8]
+        .to_string();
+    assert_eq!(delete(id).await, StatusCode::OK);
+    assert_eq!(verify(one).await, StatusCode::UNAUTHORIZED);
+    assert_eq!(verify(two).await, StatusCode::OK);
 }

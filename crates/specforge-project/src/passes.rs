@@ -13,7 +13,6 @@ use specforge_protocol_types::{PassInput, PassOutput, PassSeverity, PassTestResu
 use specforge_registry::{FieldRegistry, KindRegistry};
 use specforge_wasm::ExtensionCalls;
 use std::collections::HashSet;
-use std::path::Path;
 
 use crate::coverage::TestReport;
 use crate::snapshot::EntitySnapshot;
@@ -26,8 +25,6 @@ pub struct AnalysisContext<'a> {
     /// The graph's entity snapshot (ADR 0019): what the passes receive,
     /// each entity with its standing (who is exempt).
     pub entities: &'a EntitySnapshot,
-    /// Project root as given to the tool, when known.
-    pub project_root: Option<&'a Path>,
     /// Parsed `--test-results` report, when provided; forwarded to extension
     /// passes (the coverage pass scores proof from it).
     pub test_results: Option<&'a TestReport>,
@@ -129,24 +126,21 @@ fn code_misuse(extension: &str, pass: &str, output: &PassOutput) -> Vec<Diagnost
     diagnostics
 }
 
-/// Run the extensions' analyze passes (`passes` as the registry build
-/// ordered them; check-phase passes run with every compile instead)
-/// through the wasm runtime: each `__pass_<name>` export receives the
-/// entity snapshot and returns host diagnostics. A pass that fails (it
-/// traps, or answers what does not parse) has a report of its own with one
-/// E028 finding, so the analysis fails.
-pub fn run_extension_passes(
-    passes: &[specforge_registry::DeclaredPass],
+/// Run `passes` (analyze-phase passes, in the order given: the registry
+/// build's; check-phase passes run with every compile instead) through the
+/// wasm runtime: each `__pass_<name>` export receives the entity snapshot
+/// and returns host diagnostics. A pass that fails (it traps, or answers
+/// what does not parse) has a report of its own with one E028 finding, so
+/// the analysis fails.
+pub fn run_extension_passes<'p>(
+    passes: impl IntoIterator<Item = &'p specforge_registry::DeclaredPass>,
     input: &AnalysisContext,
     runtime: &dyn specforge_wasm::runtime::WasmRuntime,
-    requested: &str,
 ) -> Vec<ExtensionPassReport> {
+    let passes: Vec<&specforge_registry::DeclaredPass> = passes.into_iter().collect();
     if passes.is_empty() {
         return Vec::new();
     }
-    // Only the "all" sweep and exact `<extension>:<pass>` selections run
-    // extension passes.
-    let wants = |name: &str| requested == "all" || requested == name;
 
     let payload = pass_input(input);
     let entities_analyzed = payload.entities.len();
@@ -154,11 +148,13 @@ pub fn run_extension_passes(
     let calls = ExtensionCalls::new(runtime);
 
     let mut reports = Vec::new();
-    for declared in passes.iter().filter(|p| !p.is_check_phase()) {
+    for declared in passes {
+        debug_assert!(
+            !declared.is_check_phase(),
+            "{} is a check-phase pass",
+            declared.full_name()
+        );
         let report_name = declared.full_name();
-        if !wants(&report_name) {
-            continue;
-        }
         let pass = &declared.pass;
         let mut summary = serde_json::Map::new();
         summary.insert("extension".into(), declared.extension.clone().into());

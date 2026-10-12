@@ -5,6 +5,8 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::Exclude;
+
 /// Directories never entered below a walked root: build artifacts,
 /// dependency trees, and VCS internals. A walked root is entered whatever
 /// its own name.
@@ -64,25 +66,22 @@ pub fn walk_spec_files(root: &Path, mut stop: impl FnMut(&Path) -> bool) -> Walk
 }
 
 /// A project's sources under `root` (its spec root): the `.spec` files
-/// [`walk_spec_files`] reaches that no `exclude` pattern matches, as
-/// substrings of the path relative to `root` (project `specforge.json`
-/// `exclude` entries, C4-04). Sorted for deterministic downstream behavior.
-pub fn discover_spec_files(root: &Path, exclude: &[String]) -> Vec<PathBuf> {
+/// [`walk_spec_files`] reaches that no `exclude` entry leaves out (the
+/// project's `specforge.json` `exclude`, ADR 0055 D7). Sorted for
+/// deterministic downstream behavior.
+pub fn discover_spec_files(root: &Path, exclude: &Exclude) -> Vec<PathBuf> {
     walk_spec_files(root, |_| false)
         .files
         .into_iter()
-        .filter(|path| {
-            let relative = path.strip_prefix(root).unwrap_or(path);
-            !is_excluded(&relative.to_string_lossy(), exclude)
-        })
+        .filter(|path| !exclude.excludes(path.strip_prefix(root).unwrap_or(path)))
         .collect()
 }
 
 /// Whether [`discover_spec_files`] finds `relative` (a path relative to
 /// the walked root): a `.spec` file inside the root, under no
-/// [`SKIP_DIRS`] directory, that no `exclude` pattern matches. A surface
+/// [`SKIP_DIRS`] directory, that no `exclude` entry leaves out. A surface
 /// told about one changed file applies the policy the walk would.
-pub fn is_discovered(relative: &str, exclude: &[String]) -> bool {
+pub fn is_discovered(relative: &str, exclude: &Exclude) -> bool {
     use std::path::Component;
     let path = Path::new(relative);
     path.extension().is_some_and(|ext| ext == "spec")
@@ -93,15 +92,7 @@ pub fn is_discovered(relative: &str, exclude: &[String]) -> bool {
                 _ => false,
             })
         })
-        && !is_excluded(relative, exclude)
-}
-
-/// Whether `relative` (a path relative to the walked root) matches an
-/// `exclude` pattern: patterns are plain substrings, not globs.
-pub fn is_excluded(relative: &str, exclude: &[String]) -> bool {
-    exclude
-        .iter()
-        .any(|pattern| relative.contains(pattern.as_str()))
+        && !exclude.excludes(path)
 }
 
 #[cfg(test)]
@@ -120,7 +111,7 @@ mod tests {
         fs::write(root.join("src/notes.txt"), "").unwrap();
         fs::write(root.join("target/generated.spec"), "").unwrap();
 
-        let found = discover_spec_files(root, &[]);
+        let found = discover_spec_files(root, &Exclude::default());
         let names: Vec<String> = found
             .iter()
             .map(|p| p.strip_prefix(root).unwrap().to_string_lossy().to_string())
@@ -136,7 +127,7 @@ mod tests {
         fs::write(root.join("specs/current.spec"), "").unwrap();
         fs::write(root.join("specs/legacy/old.spec"), "").unwrap();
 
-        let found = discover_spec_files(root, &["legacy".to_string()]);
+        let found = discover_spec_files(root, &Exclude::parse(["legacy"]).unwrap());
         let names: Vec<String> = found
             .iter()
             .map(|p| p.strip_prefix(root).unwrap().to_string_lossy().to_string())
@@ -146,7 +137,7 @@ mod tests {
 
     #[test]
     fn is_discovered_applies_the_walk_policy_to_one_path() {
-        let exclude = vec!["drafts/".to_string()];
+        let exclude = Exclude::parse(["drafts/"]).unwrap();
         assert!(is_discovered("a.spec", &exclude));
         assert!(is_discovered("src/deep/a.spec", &exclude));
         assert!(!is_discovered("notes.txt", &exclude));
@@ -156,6 +147,54 @@ mod tests {
         assert!(!is_discovered("../outside.spec", &exclude));
         // A file merely named like a skipped directory is still found.
         assert!(is_discovered("build.spec", &exclude));
+    }
+
+    fn found(relative: &str, exclude: &[&str]) -> bool {
+        is_discovered(relative, &Exclude::parse(exclude.iter().copied()).unwrap())
+    }
+
+    #[specforge_test(
+        behavior = "resolve_use_imports",
+        verify = "an exclude entry without a slash matches a name at any depth"
+    )]
+    fn an_exclude_entry_without_a_slash_matches_a_name_at_any_depth() {
+        assert!(!found("drafts/a.spec", &["drafts"]));
+        assert!(!found("sub/drafts/b.spec", &["drafts"]));
+        assert!(found("mydrafts/c.spec", &["drafts"]));
+        assert!(found("drafts.spec", &["drafts"]));
+        assert!(found("general.spec", &["gen"]));
+        assert!(!found("x.draft.spec", &["*.draft.spec"]));
+        assert!(!found("sub/y.draft.spec", &["*.draft.spec"]));
+        assert!(!found("drafts/a.spec", &["drafts/"]));
+        assert!(!found("sub/drafts/a.spec", &["drafts/"]));
+    }
+
+    #[specforge_test(
+        behavior = "resolve_use_imports",
+        verify = "an exclude entry with a slash is anchored at the spec root"
+    )]
+    fn an_exclude_entry_with_a_slash_is_anchored_at_the_spec_root() {
+        assert!(!found("sub/drafts/a.spec", &["sub/drafts"]));
+        assert!(found("x/sub/drafts/a.spec", &["sub/drafts"]));
+        assert!(!found("drafts/a.spec", &["/drafts"]));
+        assert!(found("sub/drafts/a.spec", &["/drafts"]));
+    }
+
+    #[specforge_test(
+        behavior = "resolve_use_imports",
+        verify = "exclude entries are glob patterns matched against a file and its directories"
+    )]
+    fn exclude_entries_are_glob_patterns_over_a_file_and_its_directories() {
+        assert!(!found("drafts/a.spec", &["drafts/**"]));
+        assert!(!found("drafts/x/y.spec", &["drafts/**"]));
+        assert!(found("sub/drafts/a.spec", &["drafts/**"]));
+        assert!(!found("v1/old/a.spec", &["v?/old"]));
+        assert!(!found("a/x/y.spec", &["[ab]/x"]));
+        assert!(found("c/x/y.spec", &["[ab]/x"]));
+        assert!(!found("gen/a.spec", &["**/gen"]));
+        assert!(!found("p/q/gen/a.spec", &["**/gen"]));
+        // A trailing slash matches directories only.
+        assert!(found("x.spec", &["x.spec/"]));
     }
 
     #[specforge_test(
@@ -169,11 +208,11 @@ mod tests {
         fs::write(root.join("build/a.spec"), "").unwrap();
 
         assert_eq!(
-            discover_spec_files(&root.join("build"), &[]),
+            discover_spec_files(&root.join("build"), &Exclude::default()),
             vec![root.join("build/a.spec")]
         );
         // The `build` directory as a child is still skipped.
-        assert!(discover_spec_files(root, &[]).is_empty());
+        assert!(discover_spec_files(root, &Exclude::default()).is_empty());
     }
 
     #[specforge_test(
@@ -186,7 +225,10 @@ mod tests {
         fs::write(root.join("a.spec"), "").unwrap();
         fs::create_dir_all(root.join("archive.spec")).unwrap();
 
-        assert_eq!(discover_spec_files(root, &[]), vec![root.join("a.spec")]);
+        assert_eq!(
+            discover_spec_files(root, &Exclude::default()),
+            vec![root.join("a.spec")]
+        );
     }
 
     #[test]
@@ -203,14 +245,14 @@ mod tests {
             fs::write(root.join(path), text).unwrap();
         }
 
-        let walked = walk_spec_files(root, crate::is_project_root);
+        let walked = walk_spec_files(root, crate::ProjectRoot::is_root);
         assert_eq!(
             walked.files,
             vec![root.join("a.spec"), root.join("q/c.spec")]
         );
         assert_eq!(walked.stopped, vec![root.join("p")]);
         // A root `stop` would hold for is still walked.
-        let inside = walk_spec_files(&root.join("p"), crate::is_project_root);
+        let inside = walk_spec_files(&root.join("p"), crate::ProjectRoot::is_root);
         assert_eq!(inside.files, vec![root.join("p/b.spec")]);
     }
 }

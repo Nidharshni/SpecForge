@@ -8,6 +8,7 @@ mod fixtures;
 mod inventory;
 mod list;
 mod lock_plan;
+mod peer_set;
 mod remove;
 mod resolve;
 mod update;
@@ -17,7 +18,7 @@ pub use add::{
     DuplicateSpecifier, EnabledBuiltin, InstalledPackage, PlannedAdd, PresentExtension, Source,
     Specified, Trust, add, parse, specified,
 };
-pub use candidate::{Candidate, Installable, LocalFile};
+pub use candidate::{Candidate, Installable, LocalFile, binary_at};
 pub use inventory::{Inventory, ProjectExtension, Selection, Status, inventory};
 pub use list::{
     ExtensionInfo, ExtensionListing, ExtensionsDocument, LockedExtension, ProviderEntry,
@@ -26,14 +27,13 @@ pub use list::{
 pub use remove::{
     RemoveAction, RemoveDocument, RemoveOutcome, RemoveRequest, StrandedEntity, remove,
 };
-pub use resolve::{resolve, resolve_requirement};
+pub use resolve::{resolve, upgrade};
 pub use update::{
     BatchUpdateCompleted, BatchUpdateEvent, ExtensionUpdate, NO_LOCK, UpdateDocument,
     UpdateOutcome, UpdateRequest, UpdateRow, UpdateStatus, UpgradeCompleted, update,
 };
 
-pub(crate) use candidate::required_builtins;
-pub(crate) use lock_plan::{check_local, install_local};
+pub(crate) use lock_plan::{Appended, Install, LockPlan, Refused, Verb, install_local};
 
 use specforge_installed::LockSource;
 

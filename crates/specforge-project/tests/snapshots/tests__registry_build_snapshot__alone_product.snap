@@ -19,7 +19,16 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "DeliverableContainsModule",
       "source_extension": "@specforge/product",
       "source_kind": "deliverable",
-      "target_kind": "module"
+      "sources": [
+        "deliverable"
+      ],
+      "target_kind": "module",
+      "targets": [
+        "module"
+      ],
+      "writers": [
+        "@specforge/product deliverable.modules -> module"
+      ]
     },
     "DeliverableDependsOn": {
       "description": null,
@@ -29,7 +38,16 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "DeliverableDependsOn",
       "source_extension": "@specforge/product",
       "source_kind": "deliverable",
-      "target_kind": "deliverable"
+      "sources": [
+        "deliverable"
+      ],
+      "target_kind": "deliverable",
+      "targets": [
+        "deliverable"
+      ],
+      "writers": [
+        "@specforge/product deliverable.depends_on -> deliverable"
+      ]
     },
     "DeliverableSupportsJourney": {
       "description": null,
@@ -39,7 +57,16 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "DeliverableSupportsJourney",
       "source_extension": "@specforge/product",
       "source_kind": "deliverable",
-      "target_kind": "journey"
+      "sources": [
+        "deliverable"
+      ],
+      "target_kind": "journey",
+      "targets": [
+        "journey"
+      ],
+      "writers": [
+        "@specforge/product deliverable.journeys -> journey"
+      ]
     },
     "DeliverableTrackedByMilestone": {
       "description": null,
@@ -49,7 +76,16 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "DeliverableTrackedByMilestone",
       "source_extension": "@specforge/product",
       "source_kind": "deliverable",
-      "target_kind": "milestone"
+      "sources": [
+        "deliverable"
+      ],
+      "target_kind": "milestone",
+      "targets": [
+        "milestone"
+      ],
+      "writers": [
+        "@specforge/product deliverable.milestones -> milestone"
+      ]
     },
     "FeatureDependsOn": {
       "description": null,
@@ -59,7 +95,16 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "FeatureDependsOn",
       "source_extension": "@specforge/product",
       "source_kind": "feature",
-      "target_kind": "feature"
+      "sources": [
+        "feature"
+      ],
+      "target_kind": "feature",
+      "targets": [
+        "feature"
+      ],
+      "writers": [
+        "@specforge/product feature.depends_on -> feature"
+      ]
     },
     "FeatureRelatesTo": {
       "description": "Feature has a non-dependency relationship to another feature",
@@ -69,7 +114,16 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "FeatureRelatesTo",
       "source_extension": "@specforge/product",
       "source_kind": "feature",
-      "target_kind": "feature"
+      "sources": [
+        "feature"
+      ],
+      "target_kind": "feature",
+      "targets": [
+        "feature"
+      ],
+      "writers": [
+        "@specforge/product feature.features -> feature"
+      ]
     },
     "JourneyExercisesFeature": {
       "description": null,
@@ -79,7 +133,16 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "JourneyExercisesFeature",
       "source_extension": "@specforge/product",
       "source_kind": "journey",
-      "target_kind": "feature"
+      "sources": [
+        "journey"
+      ],
+      "target_kind": "feature",
+      "targets": [
+        "feature"
+      ],
+      "writers": [
+        "@specforge/product journey.features -> feature"
+      ]
     },
     "JourneyTargetsPersona": {
       "description": null,
@@ -89,7 +152,16 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "JourneyTargetsPersona",
       "source_extension": "@specforge/product",
       "source_kind": "journey",
-      "target_kind": "persona"
+      "sources": [
+        "journey"
+      ],
+      "target_kind": "persona",
+      "targets": [
+        "persona"
+      ],
+      "writers": [
+        "@specforge/product journey.persona -> persona"
+      ]
     },
     "JourneyUsesChannel": {
       "description": null,
@@ -99,7 +171,16 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "JourneyUsesChannel",
       "source_extension": "@specforge/product",
       "source_kind": "journey",
-      "target_kind": "channel"
+      "sources": [
+        "journey"
+      ],
+      "target_kind": "channel",
+      "targets": [
+        "channel"
+      ],
+      "writers": [
+        "@specforge/product journey.channels -> channel"
+      ]
     },
     "MilestoneDeliversFeature": {
       "description": null,
@@ -109,7 +190,16 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "MilestoneDeliversFeature",
       "source_extension": "@specforge/product",
       "source_kind": "milestone",
-      "target_kind": "feature"
+      "sources": [
+        "milestone"
+      ],
+      "target_kind": "feature",
+      "targets": [
+        "feature"
+      ],
+      "writers": [
+        "@specforge/product milestone.features -> feature"
+      ]
     },
     "MilestoneDependsOn": {
       "description": null,
@@ -119,7 +209,16 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "MilestoneDependsOn",
       "source_extension": "@specforge/product",
       "source_kind": "milestone",
-      "target_kind": "milestone"
+      "sources": [
+        "milestone"
+      ],
+      "target_kind": "milestone",
+      "targets": [
+        "milestone"
+      ],
+      "writers": [
+        "@specforge/product milestone.depends_on -> milestone"
+      ]
     },
     "MilestoneScopesModule": {
       "description": null,
@@ -129,7 +228,16 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "MilestoneScopesModule",
       "source_extension": "@specforge/product",
       "source_kind": "milestone",
-      "target_kind": "module"
+      "sources": [
+        "milestone"
+      ],
+      "target_kind": "module",
+      "targets": [
+        "module"
+      ],
+      "writers": [
+        "@specforge/product milestone.modules -> module"
+      ]
     },
     "ModuleContainsFeature": {
       "description": null,
@@ -139,7 +247,16 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "ModuleContainsFeature",
       "source_extension": "@specforge/product",
       "source_kind": "module",
-      "target_kind": "feature"
+      "sources": [
+        "module"
+      ],
+      "target_kind": "feature",
+      "targets": [
+        "feature"
+      ],
+      "writers": [
+        "@specforge/product module.features -> feature"
+      ]
     },
     "ModuleDependsOn": {
       "description": null,
@@ -149,7 +266,16 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "ModuleDependsOn",
       "source_extension": "@specforge/product",
       "source_kind": "module",
-      "target_kind": "module"
+      "sources": [
+        "module"
+      ],
+      "target_kind": "module",
+      "targets": [
+        "module"
+      ],
+      "writers": [
+        "@specforge/product module.depends_on -> module"
+      ]
     },
     "PersonaPrioritizesFeature": {
       "description": "Persona prioritizes a feature",
@@ -159,7 +285,16 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "PersonaPrioritizesFeature",
       "source_extension": "@specforge/product",
       "source_kind": "persona",
-      "target_kind": "feature"
+      "sources": [
+        "persona"
+      ],
+      "target_kind": "feature",
+      "targets": [
+        "feature"
+      ],
+      "writers": [
+        "@specforge/product persona.key_features -> feature"
+      ]
     },
     "ReleaseCompletesMilestone": {
       "description": null,
@@ -169,7 +304,16 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "ReleaseCompletesMilestone",
       "source_extension": "@specforge/product",
       "source_kind": "release",
-      "target_kind": "milestone"
+      "sources": [
+        "release"
+      ],
+      "target_kind": "milestone",
+      "targets": [
+        "milestone"
+      ],
+      "writers": [
+        "@specforge/product release.milestones -> milestone"
+      ]
     },
     "ReleaseDependsOn": {
       "description": null,
@@ -179,7 +323,16 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "ReleaseDependsOn",
       "source_extension": "@specforge/product",
       "source_kind": "release",
-      "target_kind": "release"
+      "sources": [
+        "release"
+      ],
+      "target_kind": "release",
+      "targets": [
+        "release"
+      ],
+      "writers": [
+        "@specforge/product release.depends_on -> release"
+      ]
     },
     "ReleaseIncludesDeliverable": {
       "description": null,
@@ -189,7 +342,16 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "ReleaseIncludesDeliverable",
       "source_extension": "@specforge/product",
       "source_kind": "release",
-      "target_kind": "deliverable"
+      "sources": [
+        "release"
+      ],
+      "target_kind": "deliverable",
+      "targets": [
+        "deliverable"
+      ],
+      "writers": [
+        "@specforge/product release.deliverables -> deliverable"
+      ]
     },
     "TermBelongsToModule": {
       "description": "Term is defined within a module's bounded context",
@@ -199,7 +361,16 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "TermBelongsToModule",
       "source_extension": "@specforge/product",
       "source_kind": "term",
-      "target_kind": "module"
+      "sources": [
+        "term"
+      ],
+      "target_kind": "module",
+      "targets": [
+        "module"
+      ],
+      "writers": [
+        "@specforge/product term.module -> module"
+      ]
     },
     "TermReferencesRelatedTerm": {
       "description": null,
@@ -209,7 +380,16 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "TermReferencesRelatedTerm",
       "source_extension": "@specforge/product",
       "source_kind": "term",
-      "target_kind": "term"
+      "sources": [
+        "term"
+      ],
+      "target_kind": "term",
+      "targets": [
+        "term"
+      ],
+      "writers": [
+        "@specforge/product term.see_also -> term"
+      ]
     }
   },
   "ext_short": {
@@ -1739,7 +1919,6 @@ expression: "digest(&load(&runtime, &[name]))"
   "graph_inputs": {
     "absent_reference_targets": {},
     "bidirectional_pairs": [],
-    "body_parser_kinds": [],
     "derived_references": [],
     "field_coercions": {
       "channel.description": "Text",
@@ -3197,11 +3376,10 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "cycle_detection",
       "code": "E007",
       "constraint": null,
-      "edge_fields": [
-        "depends_on"
-      ],
-      "edge_peer_kinds": null,
       "edge_type": "ModuleDependsOn",
+      "edge_writers": [
+        "module.depends_on"
+      ],
       "field": null,
       "message_template": "module dependency cycle detected involving '{id}'",
       "owner": "@specforge/product",
@@ -3213,11 +3391,10 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "cycle_detection",
       "code": "E015",
       "constraint": null,
-      "edge_fields": [
-        "depends_on"
-      ],
-      "edge_peer_kinds": null,
       "edge_type": "MilestoneDependsOn",
+      "edge_writers": [
+        "milestone.depends_on"
+      ],
       "field": null,
       "message_template": "milestone dependency cycle detected involving '{id}'",
       "owner": "@specforge/product",
@@ -3229,11 +3406,10 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "cycle_detection",
       "code": "E052",
       "constraint": null,
-      "edge_fields": [
-        "depends_on"
-      ],
-      "edge_peer_kinds": null,
       "edge_type": "DeliverableDependsOn",
+      "edge_writers": [
+        "deliverable.depends_on"
+      ],
       "field": null,
       "message_template": "deliverable dependency cycle detected involving '{id}'",
       "owner": "@specforge/product",
@@ -3245,7 +3421,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "no_edges",
       "code": "I010",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": null,
       "message_template": "term '{id}' has no edges — it may be unreferenced",
@@ -3258,7 +3433,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "no_incoming_edges",
       "code": "I046",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": null,
       "message_template": "persona '{id}' has no incoming edges — it may be unreferenced by any journey",
@@ -3271,7 +3445,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "no_incoming_edges",
       "code": "I047",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": null,
       "message_template": "channel '{id}' has no incoming edges — it may be unreferenced by any journey",
@@ -3288,7 +3461,6 @@ expression: "digest(&load(&runtime, &[name]))"
         "pattern": null,
         "values": []
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "acceptance",
       "message_template": "feature '{id}' has no acceptance criteria",
@@ -3301,7 +3473,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "I048",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "acceptance",
       "message_template": "feature '{id}' has no acceptance criteria",
@@ -3318,7 +3489,6 @@ expression: "digest(&load(&runtime, &[name]))"
         "pattern": null,
         "values": []
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "flow",
       "message_template": "journey '{id}' has an empty flow",
@@ -3335,7 +3505,6 @@ expression: "digest(&load(&runtime, &[name]))"
         "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
         "values": []
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "target_date",
       "message_template": "milestone '{id}' has target_date '{value}' — expected YYYY-MM-DD",
@@ -3348,7 +3517,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "I054",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "persona",
       "message_template": "journey '{id}' has no persona",
@@ -3361,13 +3529,10 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "no_outgoing_edges",
       "code": "I055",
       "constraint": null,
-      "edge_fields": [
-        "channels"
-      ],
-      "edge_peer_kinds": [
-        "channel"
-      ],
       "edge_type": "JourneyUsesChannel",
+      "edge_writers": [
+        "journey.channels"
+      ],
       "field": null,
       "message_template": "journey '{id}' uses no channels",
       "owner": "@specforge/product",
@@ -3385,7 +3550,6 @@ expression: "digest(&load(&runtime, &[name]))"
           "blocked"
         ]
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "depends_on",
       "message_template": "milestone '{id}' has status 'blocked' but no depends_on",
@@ -3404,7 +3568,6 @@ expression: "digest(&load(&runtime, &[name]))"
           "deferred"
         ]
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "reason",
       "message_template": "feature '{id}' has status 'deferred' but no reason --- consider adding a reason field",
@@ -3423,7 +3586,6 @@ expression: "digest(&load(&runtime, &[name]))"
           "blocked"
         ]
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "blockers",
       "message_template": "milestone '{id}' has status 'blocked' but no blockers --- consider listing what is blocking",
@@ -3440,7 +3602,6 @@ expression: "digest(&load(&runtime, &[name]))"
         "pattern": "^\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9]+(\\.[a-zA-Z0-9]+)*)?(\\+[a-zA-Z0-9]+(\\.[a-zA-Z0-9]+)*)?$",
         "values": []
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "version",
       "message_template": "deliverable '{id}' has version '{value}' — expected semver (e.g., 1.0.0)",
@@ -3463,7 +3624,6 @@ expression: "digest(&load(&runtime, &[name]))"
           "advisory"
         ]
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "family",
       "message_template": "module '{id}' has non-standard family '{value}' — standard families: core, platform, extension, integration, advisory",
@@ -3482,7 +3642,6 @@ expression: "digest(&load(&runtime, &[name]))"
           "deprecated"
         ]
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "reason",
       "message_template": "deliverable '{id}' has status 'deprecated' but no reason",
@@ -3495,13 +3654,10 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "no_outgoing_edges",
       "code": "I067",
       "constraint": null,
-      "edge_fields": [
-        "features"
-      ],
-      "edge_peer_kinds": [
-        "feature"
-      ],
       "edge_type": "ModuleContainsFeature",
+      "edge_writers": [
+        "module.features"
+      ],
       "field": null,
       "message_template": "module '{id}' contains no features",
       "owner": "@specforge/product",
@@ -3517,7 +3673,6 @@ expression: "digest(&load(&runtime, &[name]))"
         "pattern": "^(?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?(?:, (?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?)*$",
         "values": []
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "tags",
       "message_template": "{kind} '{id}' has a tag that is not lowercase-hyphenated (2-50 of a-z, 0-9, -, not starting or ending with -): tags [{value}]",
@@ -3534,7 +3689,6 @@ expression: "digest(&load(&runtime, &[name]))"
         "pattern": "^(?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?(?:, (?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?)*$",
         "values": []
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "tags",
       "message_template": "{kind} '{id}' has a tag that is not lowercase-hyphenated (2-50 of a-z, 0-9, -, not starting or ending with -): tags [{value}]",
@@ -3551,7 +3705,6 @@ expression: "digest(&load(&runtime, &[name]))"
         "pattern": "^(?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?(?:, (?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?)*$",
         "values": []
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "tags",
       "message_template": "{kind} '{id}' has a tag that is not lowercase-hyphenated (2-50 of a-z, 0-9, -, not starting or ending with -): tags [{value}]",
@@ -3568,7 +3721,6 @@ expression: "digest(&load(&runtime, &[name]))"
         "pattern": "^(?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?(?:, (?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?)*$",
         "values": []
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "tags",
       "message_template": "{kind} '{id}' has a tag that is not lowercase-hyphenated (2-50 of a-z, 0-9, -, not starting or ending with -): tags [{value}]",
@@ -3585,7 +3737,6 @@ expression: "digest(&load(&runtime, &[name]))"
         "pattern": "^(?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?(?:, (?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?)*$",
         "values": []
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "tags",
       "message_template": "{kind} '{id}' has a tag that is not lowercase-hyphenated (2-50 of a-z, 0-9, -, not starting or ending with -): tags [{value}]",
@@ -3602,7 +3753,6 @@ expression: "digest(&load(&runtime, &[name]))"
         "pattern": "^(?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?(?:, (?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?)*$",
         "values": []
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "tags",
       "message_template": "{kind} '{id}' has a tag that is not lowercase-hyphenated (2-50 of a-z, 0-9, -, not starting or ending with -): tags [{value}]",
@@ -3619,7 +3769,6 @@ expression: "digest(&load(&runtime, &[name]))"
         "pattern": "^(?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?(?:, (?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?)*$",
         "values": []
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "tags",
       "message_template": "{kind} '{id}' has a tag that is not lowercase-hyphenated (2-50 of a-z, 0-9, -, not starting or ending with -): tags [{value}]",
@@ -3636,7 +3785,6 @@ expression: "digest(&load(&runtime, &[name]))"
         "pattern": "^(?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?(?:, (?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?)*$",
         "values": []
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "tags",
       "message_template": "{kind} '{id}' has a tag that is not lowercase-hyphenated (2-50 of a-z, 0-9, -, not starting or ending with -): tags [{value}]",
@@ -3653,7 +3801,6 @@ expression: "digest(&load(&runtime, &[name]))"
         "pattern": "^(?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?(?:, (?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?)*$",
         "values": []
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "tags",
       "message_template": "{kind} '{id}' has a tag that is not lowercase-hyphenated (2-50 of a-z, 0-9, -, not starting or ending with -): tags [{value}]",
@@ -3672,7 +3819,6 @@ expression: "digest(&load(&runtime, &[name]))"
           "deprecated"
         ]
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "reason",
       "message_template": "persona '{id}' has status 'deprecated' but no reason",
@@ -3691,7 +3837,6 @@ expression: "digest(&load(&runtime, &[name]))"
           "deprecated"
         ]
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "reason",
       "message_template": "channel '{id}' has status 'deprecated' but no reason",
@@ -3704,7 +3849,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "I080",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "owner",
       "message_template": "{kind} '{id}' has no owner",
@@ -3717,7 +3861,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "I080",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "owner",
       "message_template": "{kind} '{id}' has no owner",
@@ -3730,7 +3873,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "I080",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "owner",
       "message_template": "{kind} '{id}' has no owner",
@@ -3743,7 +3885,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "I080",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "owner",
       "message_template": "{kind} '{id}' has no owner",
@@ -3756,7 +3897,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "I081",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "effort",
       "message_template": "feature '{id}' has no effort estimate",
@@ -3769,13 +3909,10 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "no_outgoing_edges",
       "code": "I082",
       "constraint": null,
-      "edge_fields": [
-        "deliverables"
-      ],
-      "edge_peer_kinds": [
-        "deliverable"
-      ],
       "edge_type": "ReleaseIncludesDeliverable",
+      "edge_writers": [
+        "release.deliverables"
+      ],
       "field": null,
       "message_template": "release '{id}' includes no deliverables",
       "owner": "@specforge/product",
@@ -3787,13 +3924,10 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "no_outgoing_edges",
       "code": "I083",
       "constraint": null,
-      "edge_fields": [
-        "milestones"
-      ],
-      "edge_peer_kinds": [
-        "milestone"
-      ],
       "edge_type": "ReleaseCompletesMilestone",
+      "edge_writers": [
+        "release.milestones"
+      ],
       "field": null,
       "message_template": "release '{id}' completes no milestones",
       "owner": "@specforge/product",
@@ -3809,7 +3943,6 @@ expression: "digest(&load(&runtime, &[name]))"
         "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
         "values": []
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "release_date",
       "message_template": "release '{id}' has release_date '{value}' — expected YYYY-MM-DD",
@@ -3826,7 +3959,6 @@ expression: "digest(&load(&runtime, &[name]))"
         "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
         "values": []
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "start_date",
       "message_template": "milestone '{id}' has start_date '{value}' — expected YYYY-MM-DD",
@@ -3845,7 +3977,6 @@ expression: "digest(&load(&runtime, &[name]))"
           "recalled"
         ]
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "reason",
       "message_template": "release '{id}' has status 'recalled' but no reason",
@@ -3858,7 +3989,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "no_incoming_edges",
       "code": "W041",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": null,
       "message_template": "feature '{id}' has no incoming edges — it may be unreferenced by any journey, milestone, or module",
@@ -3871,7 +4001,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "no_incoming_edges",
       "code": "W042",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": null,
       "message_template": "journey '{id}' has no incoming edges — it may be unreferenced by any deliverable",
@@ -3884,13 +4013,10 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "no_outgoing_edges",
       "code": "W043",
       "constraint": null,
-      "edge_fields": [
-        "journeys"
-      ],
-      "edge_peer_kinds": [
-        "journey"
-      ],
       "edge_type": "DeliverableSupportsJourney",
+      "edge_writers": [
+        "deliverable.journeys"
+      ],
       "field": null,
       "message_template": "deliverable '{id}' supports no journeys",
       "owner": "@specforge/product",
@@ -3902,7 +4028,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "no_incoming_edges",
       "code": "W044",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": null,
       "message_template": "module '{id}' has no incoming edges — it may be unreferenced by any deliverable or milestone",
@@ -3915,11 +4040,10 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "cycle_detection",
       "code": "W045",
       "constraint": null,
-      "edge_fields": [
-        "depends_on"
-      ],
-      "edge_peer_kinds": null,
       "edge_type": "FeatureDependsOn",
+      "edge_writers": [
+        "feature.depends_on"
+      ],
       "field": null,
       "message_template": "feature dependency cycle detected involving '{id}'",
       "owner": "@specforge/product",
@@ -3931,13 +4055,10 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "no_outgoing_edges",
       "code": "W046",
       "constraint": null,
-      "edge_fields": [
-        "modules"
-      ],
-      "edge_peer_kinds": [
-        "module"
-      ],
       "edge_type": "DeliverableContainsModule",
+      "edge_writers": [
+        "deliverable.modules"
+      ],
       "field": null,
       "message_template": "deliverable '{id}' contains no modules",
       "owner": "@specforge/product",
@@ -3949,7 +4070,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_field_when_flag_set",
       "code": "W049",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "features",
       "message_template": "milestone '{id}' has no features — it may be empty",
@@ -3968,7 +4088,6 @@ expression: "digest(&load(&runtime, &[name]))"
           "completed"
         ]
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "exit_criteria",
       "message_template": "milestone '{id}' has status 'completed' but no exit_criteria",
@@ -3992,7 +4111,6 @@ expression: "digest(&load(&runtime, &[name]))"
           "deprecated"
         ]
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "status",
       "message_template": "feature '{id}' has invalid status '{value}' — expected one of: proposed, accepted, in_progress, done, deferred, deprecated",
@@ -4014,7 +4132,6 @@ expression: "digest(&load(&runtime, &[name]))"
           "low"
         ]
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "priority",
       "message_template": "{kind} '{id}' has invalid priority '{value}' — expected one of: critical, high, medium, low",
@@ -4036,7 +4153,6 @@ expression: "digest(&load(&runtime, &[name]))"
           "low"
         ]
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "priority",
       "message_template": "{kind} '{id}' has invalid priority '{value}' — expected one of: critical, high, medium, low",
@@ -4058,7 +4174,6 @@ expression: "digest(&load(&runtime, &[name]))"
           "low"
         ]
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "priority",
       "message_template": "{kind} '{id}' has invalid priority '{value}' — expected one of: critical, high, medium, low",
@@ -4080,7 +4195,6 @@ expression: "digest(&load(&runtime, &[name]))"
           "blocked"
         ]
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "status",
       "message_template": "milestone '{id}' has invalid status '{value}' — expected one of: planned, in_progress, completed, blocked",
@@ -4107,7 +4221,6 @@ expression: "digest(&load(&runtime, &[name]))"
           "package"
         ]
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "artifact_type",
       "message_template": "deliverable '{id}' has invalid artifact_type '{value}' — expected one of: cli, service, library, web_app, mobile_app, api, extension, documentation, package",
@@ -4127,7 +4240,6 @@ expression: "digest(&load(&runtime, &[name]))"
           "deprecated"
         ]
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "status",
       "message_template": "persona '{id}' has invalid status '{value}' — expected one of: active, deprecated",
@@ -4147,7 +4259,6 @@ expression: "digest(&load(&runtime, &[name]))"
           "deprecated"
         ]
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "status",
       "message_template": "channel '{id}' has invalid status '{value}' — expected one of: active, deprecated",
@@ -4169,7 +4280,6 @@ expression: "digest(&load(&runtime, &[name]))"
           "deprecated"
         ]
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "status",
       "message_template": "deliverable '{id}' has invalid status '{value}' — expected one of: draft, in_progress, shipped, deprecated",
@@ -4182,11 +4292,10 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "cycle_detection",
       "code": "W092",
       "constraint": null,
-      "edge_fields": [
-        "depends_on"
-      ],
-      "edge_peer_kinds": null,
       "edge_type": "ReleaseDependsOn",
+      "edge_writers": [
+        "release.depends_on"
+      ],
       "field": null,
       "message_template": "release dependency cycle detected involving '{id}'",
       "owner": "@specforge/product",
@@ -4202,7 +4311,6 @@ expression: "digest(&load(&runtime, &[name]))"
         "pattern": "^\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9.]+)?(\\+[a-zA-Z0-9.]+)?$",
         "values": []
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "version",
       "message_template": "release '{id}' has invalid version format — expected semver (e.g., 1.0.0)",
@@ -4225,7 +4333,6 @@ expression: "digest(&load(&runtime, &[name]))"
           "xl"
         ]
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "effort",
       "message_template": "feature '{id}' has invalid effort '{value}' — expected one of: xs, s, m, l, xl",
@@ -4238,7 +4345,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "E006",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "description",
       "message_template": "channel '{id}' is missing required field 'description'",
@@ -4251,7 +4357,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "E006",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "artifact_type",
       "message_template": "deliverable '{id}' is missing required field 'artifact_type'",
@@ -4264,7 +4369,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "E006",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "problem",
       "message_template": "feature '{id}' is missing required field 'problem'",
@@ -4277,7 +4381,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "E006",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "flow",
       "message_template": "journey '{id}' is missing required field 'flow'",
@@ -4290,7 +4393,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "E006",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "description",
       "message_template": "persona '{id}' is missing required field 'description'",
@@ -4303,7 +4405,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "E006",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "version",
       "message_template": "release '{id}' is missing required field 'version'",
@@ -4316,7 +4417,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "E006",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "definition",
       "message_template": "term '{id}' is missing required field 'definition'",

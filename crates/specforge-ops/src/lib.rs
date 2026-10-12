@@ -16,6 +16,7 @@ pub mod command;
 pub mod config;
 pub mod coverage;
 pub mod doctor;
+pub mod explain;
 pub mod explore;
 pub mod export;
 pub mod extension;
@@ -47,7 +48,7 @@ mod writes;
 
 pub use writes::Writes;
 
-use specforge_common::{Code, codes};
+use specforge_common::Code;
 use specforge_diagnostics::Level;
 use std::borrow::Cow;
 
@@ -92,8 +93,9 @@ pub enum OpErrorKind {
     /// A file the operation reads is not what it should hold: the config,
     /// the lock, a manifest, a test report, a signature's metadata.
     SchemaMismatch,
-    /// The project the operation produced does not compile: a migration
-    /// whose migrated sources report errors.
+    /// The project the operation produced does not compile, or compiles to
+    /// another graph: a migration whose migrated sources report errors or
+    /// change the graph (W054).
     CompilationFailed,
     /// Something the operation needs is not set up: no project, no
     /// registry, no collector, no lock file.
@@ -109,45 +111,6 @@ pub enum OpErrorKind {
 }
 
 impl OpErrorKind {
-    /// The kind of a failure reported as diagnostic `code`: the one table
-    /// (E003 entity, E019/E054/E062/E064/E072 and a registry's R-RES-003/R-RES-004 input,
-    /// R-RES-001 extension, E027 and R-RES-006/R007 conflict, E045/E067/E071 and a
-    /// registry's R-TRUST-004/R-OPS-004 schema, E058/E063 precondition,
-    /// E059/R001/R002 permission, R004 timeout, else internal). MCP's
-    /// `ErrorCode::for_diagnostic` reads it.
-    pub fn of_diagnostic(code: &str) -> Self {
-        const KINDS: &[(Code, OpErrorKind)] = &[
-            (codes::E003, OpErrorKind::EntityNotFound),
-            (codes::E019, OpErrorKind::InvalidInput),
-            (codes::E054, OpErrorKind::InvalidInput),
-            (codes::E062, OpErrorKind::InvalidInput),
-            (codes::E064, OpErrorKind::InvalidInput),
-            (codes::E072, OpErrorKind::InvalidInput),
-            (codes::R_RES_003, OpErrorKind::InvalidInput),
-            (codes::R_RES_004, OpErrorKind::InvalidInput),
-            (codes::R_RES_001, OpErrorKind::ExtensionNotFound),
-            (codes::E027, OpErrorKind::Conflict),
-            (codes::R_RES_006, OpErrorKind::Conflict),
-            (codes::E045, OpErrorKind::SchemaMismatch),
-            (codes::E067, OpErrorKind::SchemaMismatch),
-            (codes::E071, OpErrorKind::SchemaMismatch),
-            (codes::E073, OpErrorKind::SchemaMismatch),
-            (codes::R_TRUST_004, OpErrorKind::SchemaMismatch),
-            (codes::R_OPS_004, OpErrorKind::SchemaMismatch),
-            (codes::E058, OpErrorKind::PreconditionFailed),
-            (codes::E063, OpErrorKind::PreconditionFailed),
-            (codes::E059, OpErrorKind::PermissionDenied),
-            (codes::R001, OpErrorKind::PermissionDenied),
-            (codes::R002, OpErrorKind::PermissionDenied),
-            (codes::R007, OpErrorKind::Conflict),
-            (codes::R004, OpErrorKind::Timeout),
-        ];
-        KINDS
-            .iter()
-            .find(|(candidate, _)| candidate.matches(code))
-            .map_or(Self::Internal, |&(_, kind)| kind)
-    }
-
     /// The kind's name, the code an operation reports a failure of this kind
     /// under when it names none of its own (`invalid_input` for an unknown
     /// name): MCP's `ErrorCode` carries the same names.
@@ -210,8 +173,7 @@ pub struct OpError {
 impl OpError {
     /// A failure the operation names itself: `code` is its own identifier
     /// (`export_failed`, `unknown_pass`), not a catalogued diagnostic
-    /// code. A catalogued code goes through [`OpError::diagnostic`] or
-    /// [`OpError::coded`], so its constant carries it.
+    /// code. A catalogued code goes through [`OpError::coded`] or [`OpError::of`], so its constant carries it.
     pub fn new(
         kind: OpErrorKind,
         code: impl Into<Cow<'static, str>>,
@@ -234,21 +196,23 @@ impl OpError {
         Self::new(OpErrorKind::PreconditionFailed, "no_project", message)
     }
 
-    /// A failure reported as the catalogued diagnostic `code`, its kind
-    /// [`OpErrorKind::of_diagnostic`]'s.
-    pub fn diagnostic(code: Code, message: impl Into<String>) -> Self {
-        Self::coded(OpErrorKind::of_diagnostic(code.id()), code, message)
-    }
-
-    /// A failure reported as the catalogued diagnostic `code`, of an
-    /// explicit `kind` (where it is not the code's usual one). It is
-    /// printed as `error[CODE]`, so the code is an error's.
+    /// A failure reported as the catalogued diagnostic `code`, of the `kind`
+    /// its raiser states. It is printed as `error[CODE]`, so the code is an
+    /// error's.
     pub fn coded(kind: OpErrorKind, code: Code, message: impl Into<String>) -> Self {
         debug_assert!(
             code.level() == Level::Error,
             "{code} is not an error code, but an OpError is printed as error[CODE]"
         );
         Self::new(kind, code.id(), message)
+    }
+
+    /// A failure reported as `diagnostic` (its code, message and suggestion), of the kind its
+    /// raiser states: the one way a diagnostic a lower crate made becomes an operation's failure.
+    pub fn of(kind: OpErrorKind, diagnostic: specforge_common::Diagnostic) -> Self {
+        let mut error = Self::new(kind, Cow::Owned(diagnostic.code), diagnostic.message);
+        error.suggestion = diagnostic.suggestion;
+        error
     }
 
     /// Whether this failure is reported as diagnostic `code`.
@@ -294,57 +258,38 @@ impl std::fmt::Display for OpError {
 
 impl std::error::Error for OpError {}
 
-/// A diagnostic's code stays data; its message and suggestion carry over.
-impl From<specforge_common::Diagnostic> for OpError {
-    fn from(diagnostic: specforge_common::Diagnostic) -> Self {
-        let kind = OpErrorKind::of_diagnostic(&diagnostic.code);
-        let mut error = Self::new(kind, Cow::Owned(diagnostic.code), diagnostic.message);
-        error.suggestion = diagnostic.suggestion;
-        error
+/// A path that names no project to open: `file_not_found` ("path not found: <path>"),
+/// the code and message MCP answers for a call's `path`.
+impl From<specforge_common::NoSuchPath> for OpError {
+    fn from(error: specforge_common::NoSuchPath) -> Self {
+        let kind = OpErrorKind::of_io_kind(error.kind);
+        Self::new(kind, kind.as_str(), error.to_string())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use specforge_common::codes;
 
     #[test]
-    fn failure_kinds_of_diagnostic_codes() {
-        for (code, kind) in [
-            (codes::E003, OpErrorKind::EntityNotFound),
-            (codes::E019, OpErrorKind::InvalidInput),
-            (codes::E027, OpErrorKind::Conflict),
-            (codes::E045, OpErrorKind::SchemaMismatch),
-            (codes::E058, OpErrorKind::PreconditionFailed),
-            (codes::E059, OpErrorKind::PermissionDenied),
-            (codes::R001, OpErrorKind::PermissionDenied),
-            (codes::R002, OpErrorKind::PermissionDenied),
-            (codes::R007, OpErrorKind::Conflict),
-            (codes::E062, OpErrorKind::InvalidInput),
-            (codes::E063, OpErrorKind::PreconditionFailed),
-            (codes::E067, OpErrorKind::SchemaMismatch),
-            (codes::E071, OpErrorKind::SchemaMismatch),
-            (codes::E072, OpErrorKind::InvalidInput),
-            (codes::E073, OpErrorKind::SchemaMismatch),
-            (codes::R_RES_001, OpErrorKind::ExtensionNotFound),
-            (codes::R_RES_003, OpErrorKind::InvalidInput),
-            (codes::R_RES_004, OpErrorKind::InvalidInput),
-            (codes::R_RES_006, OpErrorKind::Conflict),
-            (codes::R_TRUST_004, OpErrorKind::SchemaMismatch),
-            (codes::R_OPS_004, OpErrorKind::SchemaMismatch),
-            (codes::R004, OpErrorKind::Timeout),
-            (codes::E001, OpErrorKind::Internal),
+    fn an_operation_states_the_kind_of_a_code_it_raises() {
+        for kind in [
+            OpErrorKind::InvalidInput,
+            OpErrorKind::EntityNotFound,
+            OpErrorKind::FileNotFound,
+            OpErrorKind::ExtensionNotFound,
+            OpErrorKind::Conflict,
+            OpErrorKind::SchemaMismatch,
+            OpErrorKind::CompilationFailed,
+            OpErrorKind::PreconditionFailed,
+            OpErrorKind::PermissionDenied,
+            OpErrorKind::Timeout,
+            OpErrorKind::Internal,
         ] {
-            assert_eq!(OpErrorKind::of_diagnostic(code.id()), kind, "{code}");
-            assert_eq!(OpError::diagnostic(code, "x").kind, kind, "{code}");
-        }
-        // A code the table does not know, or text that is no code at all.
-        for text in ["E999", "not_a_code"] {
-            assert_eq!(
-                OpErrorKind::of_diagnostic(text),
-                OpErrorKind::Internal,
-                "{text}"
-            );
+            let error = OpError::coded(kind, codes::E027, "x");
+            assert_eq!(error.kind, kind);
+            assert_eq!(error.code, "E027");
         }
     }
 
@@ -373,14 +318,21 @@ mod tests {
 
     #[test]
     fn an_error_carries_the_writes_it_left() {
-        let error = OpError::diagnostic(codes::E032, "failed to write specforge.lock");
+        let error = OpError::coded(
+            crate::OpErrorKind::Internal,
+            codes::E032,
+            "failed to write specforge.lock",
+        );
         assert!(error.writes.is_empty());
         let module = "/p/.specforge/extensions/@sdk/greet/extension.wasm";
         let error = error.with_writes(Writes::from_iter([module]));
         let left: Vec<&std::path::Path> = error.writes.paths().collect();
         assert_eq!(left, [std::path::Path::new(module)]);
         // From a diagnostic: nothing written.
-        let from: OpError = specforge_common::Diagnostic::new(codes::E032, "x").into();
+        let from = OpError::of(
+            OpErrorKind::Internal,
+            specforge_common::Diagnostic::new(codes::E032, "x"),
+        );
         assert!(from.writes.is_empty());
     }
 }

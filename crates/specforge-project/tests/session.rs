@@ -66,7 +66,10 @@ fn graph_contents(graph: &Graph) -> (Vec<String>, Vec<String>) {
 /// The session agrees with a fresh compile of what is on disk now.
 fn assert_matches_a_fresh_compile(session: &ProjectSession, root: &Path) {
     let runtime = Arc::new(specforge_component::ComponentRuntime::with_user_cache());
-    let fresh = CompiledProject::compile(root, Some(runtime.clone()));
+    let fresh = CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(root).unwrap(),
+        Some(runtime.clone()),
+    );
     assert_eq!(
         graph_contents(session.project().graph()),
         graph_contents(fresh.graph())
@@ -112,7 +115,7 @@ fn every_update_leaves_what_a_fresh_compile_builds() {
         ],
     );
     let root = dir.path();
-    let mut session = ProjectSession::open(root);
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
     session.set_verify_incremental(true);
     assert_matches_a_fresh_compile(&session, root);
 
@@ -169,7 +172,7 @@ fn an_edited_format_version_header_is_reported_as_a_fresh_compile_reports_it() {
     const BODY: &str = "behavior alpha \"A\" {\n  contract \"The system MUST a\"\n}\n";
     let dir = project(CONFIG, &[("a.spec", BODY)]);
     let root = dir.path();
-    let mut session = ProjectSession::open(root);
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
     session.set_verify_incremental(true);
     let codes = |session: &ProjectSession| -> Vec<String> {
         session
@@ -212,7 +215,7 @@ fn an_incremental_rebuild_reports_define_blocks_as_a_fresh_compile() {
         )],
     );
     let root = dir.path();
-    let mut session = ProjectSession::open(root);
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
     session.set_verify_incremental(true);
 
     for text in [
@@ -253,7 +256,7 @@ fn an_edit_that_closes_an_import_cycle_reports_it() {
         ],
     );
     let root = dir.path();
-    let mut session = ProjectSession::open(root);
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
     assert!(w113(&session.project().diagnostics()).is_empty());
 
     write(
@@ -288,7 +291,7 @@ fn an_edit_that_breaks_an_import_cycle_clears_it() {
         ],
     );
     let root = dir.path();
-    let mut session = ProjectSession::open(root);
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
     assert_eq!(
         w113(&session.project().diagnostics()),
         ["circular import detected: a.spec -> b.spec"]
@@ -332,11 +335,11 @@ fn imports_of_every_kind_stay_resolved_across_updates() {
         ],
     );
     let root = dir.path();
-    let mut session = ProjectSession::open(root);
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
     session.set_verify_incremental(true);
     assert_eq!(
         e025(&session.project().diagnostics()),
-        ["import target not found: models"]
+        ["import target not found among the project's sources: models"]
     );
     assert!(
         session
@@ -367,7 +370,7 @@ fn imports_of_every_kind_stay_resolved_across_updates() {
     assert_eq!(update.rebuilt_files, ["types.spec"]);
     assert_eq!(
         e025(&update.diagnostics),
-        ["import target not found: ../types"]
+        ["import target not found among the project's sources: ../types"]
     );
     assert_matches_a_fresh_compile(&session, root);
 }
@@ -388,7 +391,7 @@ fn an_added_import_is_resolved_on_the_next_update() {
         ],
     );
     let root = dir.path();
-    let mut session = ProjectSession::open(root);
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
 
     for (text, e025s, i004s) in [
         ("use \"lib/shared\"\n", 0, 0),
@@ -425,7 +428,7 @@ fn a_removed_import_no_longer_reports() {
         )],
     );
     let root = dir.path();
-    let mut session = ProjectSession::open(root);
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
     assert_eq!(e025(&session.project().diagnostics()).len(), 1);
 
     write(root, "main.spec", "type Main {\n  id string\n}\n");
@@ -447,7 +450,7 @@ fn resolve_imports_on_update_contract() {
         ],
     );
     let root = dir.path();
-    let mut session = ProjectSession::open(root);
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
 
     // b imports a: no cycle yet.
     write(
@@ -500,7 +503,10 @@ fn excluded_files_stay_out_of_the_compile_and_the_session() {
     );
     let root = dir.path();
     let runtime = Arc::new(specforge_component::ComponentRuntime::with_user_cache());
-    let compiled = CompiledProject::compile(root, Some(runtime.clone()));
+    let compiled = CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(root).unwrap(),
+        Some(runtime.clone()),
+    );
     let mut files: Vec<String> = compiled.source_texts().into_keys().collect();
     files.sort();
     assert_eq!(files, ["main.spec"]);
@@ -510,7 +516,7 @@ fn excluded_files_stay_out_of_the_compile_and_the_session() {
         compiled.diagnostics()
     );
 
-    let mut session = ProjectSession::open(root);
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
     write(root, "spec/drafts/draft.spec", "term beta \"Beta\" {\n}\n");
     let update = session.update(SourceChange::Disk(&changed(&["drafts/draft.spec"])));
     assert!(
@@ -528,7 +534,7 @@ fn excluded_files_stay_out_of_the_compile_and_the_session() {
 fn a_reload_reads_the_environment_again() {
     let dir = project(CONFIG, &[("a.spec", "term alpha \"Alpha\" {\n}\n")]);
     let root = dir.path();
-    let mut session = ProjectSession::open(root);
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
     assert!(
         !session
             .project()
@@ -564,7 +570,7 @@ fn a_wasm_file_entry_loads_in_a_session_and_reloads_with_its_file() {
     let root = dir.path();
     fs::create_dir_all(root.join("ext")).unwrap();
     fs::write(root.join("ext/greet.wasm"), &greet).unwrap();
-    let mut session = ProjectSession::open(root);
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
 
     let enabled = session.project().environment().enabled();
     assert_eq!(enabled[1].name, "@sdk/greet");
@@ -648,7 +654,7 @@ fn three_files() -> TempDir {
 fn only_the_changed_files_are_re_parsed() {
     let dir = three_files();
     let root = dir.path();
-    let mut session = ProjectSession::open(root);
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
     write(root, "types.spec", &behavior("alpha2", ""));
     write(root, "c.spec", &behavior("delta2", ""));
 
@@ -668,7 +674,7 @@ fn only_the_changed_files_are_re_parsed() {
 fn an_importer_of_a_changed_file_is_not_re_parsed() {
     let dir = three_files();
     let root = dir.path();
-    let mut session = ProjectSession::open(root);
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
     session.set_verify_incremental(true);
     assert!(
         session
@@ -701,7 +707,7 @@ fn an_importer_of_a_changed_file_is_not_re_parsed() {
 fn unrelated_files_are_not_re_parsed() {
     let dir = three_files();
     let root = dir.path();
-    let mut session = ProjectSession::open(root);
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
     write(root, "c.spec", &behavior("delta", "  invariants [alpha]\n"));
 
     let update = session.update(SourceChange::Disk(&changed(&["c.spec"])));
@@ -717,7 +723,7 @@ fn unrelated_files_are_not_re_parsed() {
 fn deleted_file_entities_are_removed_from_the_graph() {
     let dir = three_files();
     let root = dir.path();
-    let mut session = ProjectSession::open(root);
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
     fs::remove_file(root.join("types.spec")).unwrap();
 
     let update = session.update(SourceChange::Disk(&changed(&["types.spec"])));
@@ -736,7 +742,7 @@ fn deleted_file_entities_are_removed_from_the_graph() {
 fn new_file_entities_are_added_to_the_graph() {
     let dir = three_files();
     let root = dir.path();
-    let mut session = ProjectSession::open(root);
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
     write(
         root,
         "nested/new.spec",
@@ -759,7 +765,7 @@ fn new_file_entities_are_added_to_the_graph() {
 fn invalidate_changed_files_contract() {
     let dir = three_files();
     let root = dir.path();
-    let mut session = ProjectSession::open(root);
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
     session.set_verify_incremental(true);
 
     // file_changes_coalesced_fired: one batch with an edit, a deletion, a
@@ -791,7 +797,7 @@ fn invalidate_changed_files_contract() {
 fn stale_nodes_are_removed() {
     let dir = three_files();
     let root = dir.path();
-    let mut session = ProjectSession::open(root);
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
     write(root, "c.spec", &behavior("renamed", ""));
 
     let update = session.update(SourceChange::Disk(&changed(&["c.spec"])));
@@ -805,7 +811,7 @@ fn stale_nodes_are_removed() {
 fn new_nodes_are_added() {
     let dir = three_files();
     let root = dir.path();
-    let mut session = ProjectSession::open(root);
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
     write(
         root,
         "c.spec",
@@ -835,7 +841,7 @@ fn new_nodes_are_added() {
 fn buffer_edits_leave_what_a_fresh_compile_builds() {
     let dir = three_files();
     let root = dir.path();
-    let mut session = ProjectSession::open(root);
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
     session.set_verify_incremental(true);
 
     let texts = [
@@ -874,7 +880,7 @@ fn buffer_edits_leave_what_a_fresh_compile_builds() {
 fn the_session_keeps_the_text_each_file_was_built_from() {
     let dir = three_files();
     let root = dir.path();
-    let mut session = ProjectSession::open(root);
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
     let on_disk = fs::read_to_string(root.join("a.spec")).unwrap();
     assert_eq!(
         session.project().source_text("a.spec").as_deref(),
@@ -927,7 +933,7 @@ fn several_buffers_are_one_update() {
         ],
     );
     let root = dir.path();
-    let mut session = ProjectSession::open(root);
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
     session.set_verify_incremental(true);
 
     let buffers = [
@@ -972,7 +978,7 @@ fn a_parse_error_in_any_edited_buffer_skips_the_checks() {
         ],
     );
     let root = dir.path();
-    let mut session = ProjectSession::open(root);
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
     let buffers = [
         Buffer::new(root.join("a.spec"), behavior("alpha", "")),
         Buffer::new(
@@ -1026,7 +1032,7 @@ fn a_parse_error_in_any_edited_buffer_skips_the_checks() {
 fn verify_incremental_compares_each_update_with_a_cold_rebuild() {
     let dir = three_files();
     let root = dir.path();
-    let mut session = ProjectSession::open(root);
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
     session.set_verify_incremental(false);
     write(root, "c.spec", &behavior("renamed", ""));
     let update = session.update(SourceChange::Disk(&changed(&["c.spec"])));
@@ -1045,7 +1051,7 @@ fn verify_incremental_compares_each_update_with_a_cold_rebuild() {
 fn rebuild_affected_subgraph_contract() {
     let dir = three_files();
     let root = dir.path();
-    let mut session = ProjectSession::open(root);
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
     session.set_verify_incremental(true);
     let untouched = |session: &ProjectSession| {
         let gamma = session.project().graph().node("gamma").unwrap();
@@ -1076,7 +1082,7 @@ fn rebuild_affected_subgraph_contract() {
 fn diagnostics_from_changed_files_are_refreshed() {
     let dir = three_files();
     let root = dir.path();
-    let mut session = ProjectSession::open(root);
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
     write(
         root,
         "c.spec",
@@ -1109,7 +1115,7 @@ fn diagnostics_from_unchanged_files_are_preserved() {
         "main.spec",
         &behavior("gamma", "  invariants [nowhere]\n"),
     );
-    let mut session = ProjectSession::open(root);
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
     let before = in_file(&session.project().diagnostics(), "main.spec");
     assert!(before.iter().any(|d| d.code == "E003"));
 
@@ -1140,7 +1146,8 @@ fn diagnostics_from_unchanged_files_are_preserved() {
 fn file_change_to_diagnostics_within_100ms() {
     let dir = three_files();
     let root = dir.path();
-    let mut session = ProjectSession::open_with_runtime(root, None);
+    let mut session =
+        ProjectSession::open_with_runtime(&specforge_common::ProjectRoot::of(root).unwrap(), None);
     write(
         root,
         "c.spec",
@@ -1167,7 +1174,7 @@ fn emit_incremental_diagnostics_contract() {
         "main.spec",
         &behavior("gamma", "  invariants [nowhere]\n"),
     );
-    let mut session = ProjectSession::open(root);
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
     let main_before = in_file(&session.project().diagnostics(), "main.spec");
 
     write(
@@ -1195,7 +1202,7 @@ fn emit_incremental_diagnostics_contract() {
 fn the_delta_check_runs_only_when_asked_for() {
     let dir = three_files();
     let root = dir.path();
-    let mut session = ProjectSession::open(root);
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
     // A release build verifies only when asked (`--verify-incremental`).
     session.set_verify_incremental(false);
     write(root, "c.spec", &behavior("renamed", ""));
@@ -1211,7 +1218,7 @@ fn the_delta_check_runs_only_when_asked_for() {
 fn a_rebuild_that_passes_the_check_is_reported_as_passed() {
     let dir = three_files();
     let root = dir.path();
-    let mut session = ProjectSession::open(root);
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
     session.set_verify_incremental(true);
     // Edges change outside the edited file: beta's reference to alpha
     // breaks, so beta is modified through its edges.
@@ -1224,7 +1231,8 @@ fn a_rebuild_that_passes_the_check_is_reported_as_passed() {
         .iter()
         .find(|n| n.id == "beta")
         .expect("beta lost its edge");
-    assert_eq!(beta.changed_fields, ["edges"]);
+    assert!(beta.changed_fields.is_empty());
+    assert_eq!(beta.changed_aspects, [specforge_project::NodeAspect::Edges]);
 }
 
 #[specforge_test(
@@ -1234,7 +1242,7 @@ fn a_rebuild_that_passes_the_check_is_reported_as_passed() {
 fn an_update_reports_its_delta_and_the_files_it_affects() {
     let dir = three_files();
     let root = dir.path();
-    let mut session = ProjectSession::open(root);
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
     write(root, "types.spec", &behavior("omega", ""));
 
     let update = session.update(SourceChange::Disk(&changed(&["types.spec"])));
@@ -1252,7 +1260,7 @@ fn an_update_reports_its_delta_and_the_files_it_affects() {
 fn notify_delta_subscribers_contract() {
     let dir = three_files();
     let root = dir.path();
-    let mut session = ProjectSession::open(root);
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
 
     // An update that changes nothing reports an empty delta.
     let update = session.update(SourceChange::Disk(&changed(&["c.spec"])));
@@ -1361,7 +1369,7 @@ fn random_updates_leave_what_a_fresh_compile_builds() {
         for path in &PATHS[..3] {
             write(&spec, path, &random_spec(&mut rng));
         }
-        let mut session = ProjectSession::open(root);
+        let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
         session.set_verify_incremental(true);
         assert_matches_a_fresh_compile(&session, root);
 
@@ -1426,7 +1434,10 @@ fn random_updates_leave_what_a_fresh_compile_builds() {
                 "{context}"
             );
             let runtime = Arc::new(specforge_component::ComponentRuntime::with_user_cache());
-            let fresh = CompiledProject::compile(root, Some(runtime.clone()));
+            let fresh = CompiledProject::compile(
+                &specforge_common::ProjectRoot::of(root).unwrap(),
+                Some(runtime.clone()),
+            );
             assert_eq!(
                 graph_contents(session.project().graph()),
                 graph_contents(fresh.graph()),
@@ -1496,7 +1507,7 @@ fn a_session_reports_what_a_fresh_compile_reports_in_order() {
             write(&spec, path, &random_spec(&mut rng));
         }
         let runtime = Arc::new(specforge_component::ComponentRuntime::with_user_cache());
-        let mut session = ProjectSession::open(root);
+        let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
         session.set_verify_incremental(true);
 
         for step in 0..30 {
@@ -1577,7 +1588,10 @@ fn a_session_reports_what_a_fresh_compile_reports_in_order() {
                 session.project().diagnostics(),
                 "{context}"
             );
-            let fresh = CompiledProject::compile(root, Some(runtime.clone()));
+            let fresh = CompiledProject::compile(
+                &specforge_common::ProjectRoot::of(root).unwrap(),
+                Some(runtime.clone()),
+            );
             assert_eq!(
                 session.project().diagnostics(),
                 fresh.diagnostics(),
@@ -1625,7 +1639,7 @@ fn every_update_kind_leaves_what_a_fresh_compile_builds() {
         ],
     );
     let root = dir.path();
-    let mut session = ProjectSession::open(root);
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
     session.set_verify_incremental(true);
     assert_matches_a_fresh_compile(&session, root);
 
@@ -1728,7 +1742,7 @@ fn an_up_to_date_session_changes_nothing() {
         ],
     );
     age_files(dir.path(), std::time::Duration::from_secs(10));
-    let mut session = ProjectSession::open(dir.path());
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(dir.path()).unwrap());
     let before = graph_contents(session.project().graph());
 
     assert!(session.stale().is_empty(), "{:?}", session.stale());
@@ -1741,7 +1755,7 @@ fn an_up_to_date_session_changes_nothing() {
 #[test]
 fn an_unchanged_racy_file_is_not_reported() {
     let dir = project(CONFIG, &[("a.spec", "behavior alpha \"A\" {\n}\n")]);
-    let mut session = ProjectSession::open(dir.path());
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(dir.path()).unwrap());
     assert!(session.stale().is_empty(), "{:?}", session.stale());
     assert!(session.ensure_fresh().is_none());
 }
@@ -1759,7 +1773,7 @@ fn edits_creations_and_deletions_apply_as_one_update() {
         ],
     );
     let root = dir.path();
-    let mut session = ProjectSession::open(root);
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
     session.set_verify_incremental(true);
 
     write(
@@ -1797,7 +1811,7 @@ fn a_racy_rewrite_is_still_seen() {
     let root = dir.path();
     let path = root.join("a.spec");
     let stamp = fs::metadata(&path).unwrap().modified().unwrap();
-    let mut session = ProjectSession::open(root);
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
 
     // Same length, same modification time: only the content tells.
     fs::write(&path, "behavior omega \"A\" {\n}\n").unwrap();
@@ -1825,7 +1839,7 @@ fn a_lock_change_reloads_the_environment() {
         r#"{"name":"s","version":"0.1.0","extensions":["@specforge/software","@acme/missing"]}"#;
     let dir = project(config, &[("a.spec", "behavior alpha \"A\" {\n}\n")]);
     let root = dir.path();
-    let mut session = ProjectSession::open(root);
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
     let e028 = |session: &ProjectSession| -> Vec<String> {
         session
             .project()
@@ -1876,7 +1890,7 @@ fn measure_ensure_fresh_on_a_thousand_files() {
         .collect();
     let dir = project(CONFIG, &refs);
     age_files(dir.path(), std::time::Duration::from_secs(10));
-    let mut session = ProjectSession::open(dir.path());
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(dir.path()).unwrap());
     let started = std::time::Instant::now();
     let rounds = 20;
     for _ in 0..rounds {
@@ -1901,7 +1915,7 @@ fn an_update_starts_a_fresh_coverage_memo() {
         )],
     );
     let root = dir.path();
-    let mut session = ProjectSession::open(root);
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
     let coverage = |session: &ProjectSession| {
         session
             .project()
@@ -1971,7 +1985,10 @@ fn a_sessions_snapshot_follows_every_update() {
     let root = dir.path();
     specforge_installed::testing::install_configured(root, &specforge_project::builtins());
     let runtime = Arc::new(InProcessRuntime::new().with(obliging_items));
-    let mut session = ProjectSession::open_with_runtime(root, Some(runtime.clone()));
+    let mut session = ProjectSession::open_with_runtime(
+        &specforge_common::ProjectRoot::of(root).unwrap(),
+        Some(runtime.clone()),
+    );
     let last_pass_input = || {
         runtime
             .calls()
@@ -2044,7 +2061,7 @@ fn an_update_that_skips_the_checks_still_scores_its_own_graph() {
         )],
     );
     let root = dir.path();
-    let mut session = ProjectSession::open(root);
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
     let before = std::sync::Arc::clone(session.project().recorded().entities());
     assert!(session.project().entities().kind_of("a").is_some());
 
@@ -2148,7 +2165,8 @@ fn a_config_written_while_the_runtime_loads_is_seen_next_time() {
     specforge_installed::testing::install(root, &["@test/a", "@test/b"]);
     let (source, seen) = source_writing(|root| fs::write(root.join("specforge.json"), V2).unwrap());
 
-    let mut session = ProjectSession::open_from(root, source);
+    let mut session =
+        ProjectSession::open_from(&specforge_common::ProjectRoot::of(root).unwrap(), source);
 
     // The runtime and the environment were built from the one read (v1),
     // so the environment asks the runtime for nothing it did not load.
@@ -2186,7 +2204,8 @@ fn a_module_rewritten_while_the_runtime_loads_is_seen_next_time() {
     let (source, _) =
         source_writing(|root| fs::write(root.join("ext/local.wasm"), "version two!").unwrap());
 
-    let mut session = ProjectSession::open_from(root, source);
+    let mut session =
+        ProjectSession::open_from(&specforge_common::ProjectRoot::of(root).unwrap(), source);
 
     assert!(session.stale().environment);
     let update = session.ensure_fresh().expect("the module changed");
@@ -2200,7 +2219,8 @@ fn a_reload_builds_its_runtime_from_the_config_it_read() {
     let root = dir.path();
     specforge_installed::testing::install(root, &["@test/a", "@test/b"]);
     let (source, seen) = source_writing(|_| {});
-    let mut session = ProjectSession::open_from(root, source);
+    let mut session =
+        ProjectSession::open_from(&specforge_common::ProjectRoot::of(root).unwrap(), source);
 
     fs::write(root.join("specforge.json"), V2).unwrap();
     session.reload_environment();
@@ -2213,7 +2233,10 @@ fn a_reload_builds_its_runtime_from_the_config_it_read() {
 
     // A fixed runtime is the same one after a reload.
     let fixed = runtime_of(&specforge_common::ProjectConfig::default());
-    let mut session = ProjectSession::open_with_runtime(root, Some(fixed.clone()));
+    let mut session = ProjectSession::open_with_runtime(
+        &specforge_common::ProjectRoot::of(root).unwrap(),
+        Some(fixed.clone()),
+    );
     session.reload_environment();
     assert!(std::sync::Arc::ptr_eq(session.runtime().unwrap(), &fixed));
 }
@@ -2248,14 +2271,17 @@ fn an_unreadable_source_is_reported_after_an_update_of_another_file() {
     let root = dir.path();
     let runtime = Arc::new(specforge_component::ComponentRuntime::with_user_cache());
     let message = "cannot read bad.spec: stream did not contain valid UTF-8";
-    let mut session = ProjectSession::open(root);
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
     assert_eq!(e025_messages(&session.project().diagnostics()), [message]);
 
     write(root, "a.spec", &behavior("alpha", "  invariants []\n"));
     session.update(SourceChange::Disk(&changed(&["a.spec"])));
 
     assert_eq!(e025_messages(&session.project().diagnostics()), [message]);
-    let fresh = CompiledProject::compile(root, Some(runtime.clone()));
+    let fresh = CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(root).unwrap(),
+        Some(runtime.clone()),
+    );
     assert_eq!(e025_messages(&fresh.diagnostics()), [message]);
     assert_matches_a_fresh_compile(&session, root);
 }
@@ -2264,7 +2290,7 @@ fn an_unreadable_source_is_reported_after_an_update_of_another_file() {
 fn a_source_that_becomes_readable_joins_the_build() {
     let dir = project_with_an_unreadable_source();
     let root = dir.path();
-    let mut session = ProjectSession::open(root);
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
     assert!(session.project().graph().node("beta").is_none());
 
     write(root, "bad.spec", "term beta \"B\" {\n}\n");
@@ -2300,7 +2326,7 @@ fn duplicates_across_files_and_kinds_stay_what_a_fresh_compile_reports() {
         ],
     );
     let root = dir.path();
-    let mut session = ProjectSession::open(root);
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
     session.set_verify_incremental(true);
     assert_matches_a_fresh_compile(&session, root);
 
@@ -2364,8 +2390,11 @@ fn the_session_reports_graph_diagnostics_in_build_order() {
             .map(|d| d.code.to_string())
             .collect()
     };
-    let compiled = CompiledProject::compile(root, Some(runtime.clone()));
-    let session = ProjectSession::open(root);
+    let compiled = CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(root).unwrap(),
+        Some(runtime.clone()),
+    );
+    let session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
 
     assert_eq!(graph_codes(&compiled.diagnostics()), ["E002", "E003"]);
     // Build order, the order `specforge check` lists them in (ADR 0032).
@@ -2385,7 +2414,7 @@ fn the_session_reports_graph_diagnostics_in_build_order() {
 fn a_session_verifies_its_updates_in_a_debug_build() {
     let dir = three_files();
     let root = dir.path();
-    let mut session = ProjectSession::open(root);
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
     for name in ["renamed", "again"] {
         write(root, "c.spec", &behavior(name, ""));
         let update = session.update(SourceChange::Disk(&changed(&["c.spec"])));
@@ -2409,7 +2438,7 @@ fn a_session_verifies_its_updates_in_a_debug_build() {
 )]
 fn a_divergence_is_the_failed_verification() {
     let dir = three_files();
-    let mut session = ProjectSession::open(dir.path());
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(dir.path()).unwrap());
     let mut update = session.update(SourceChange::Disk(&changed(&["c.spec"])));
     for (verification, divergence) in [
         (Some(Err("nodes differ".to_string())), Some("nodes differ")),
@@ -2437,13 +2466,22 @@ fn an_environment_holds_the_runtime_it_loaded_its_extensions_in() {
     specforge_installed::testing::install_configured(root, &specforge_project::builtins());
     let rt: SharedRuntime = Arc::new(InProcessRuntime::new().with(obliging_items));
 
-    let loaded = Environment::load(root, Some(rt.clone()));
+    let loaded = Environment::load(
+        &specforge_common::ProjectRoot::of(root).unwrap(),
+        Some(rt.clone()),
+    );
     assert!(Arc::ptr_eq(loaded.runtime().unwrap(), &rt));
 
-    let compiled = CompiledProject::compile(root, Some(rt.clone()));
+    let compiled = CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(root).unwrap(),
+        Some(rt.clone()),
+    );
     assert!(Arc::ptr_eq(compiled.environment().runtime().unwrap(), &rt));
 
-    let mut session = ProjectSession::open_with_runtime(root, Some(rt.clone()));
+    let mut session = ProjectSession::open_with_runtime(
+        &specforge_common::ProjectRoot::of(root).unwrap(),
+        Some(rt.clone()),
+    );
     assert!(Arc::ptr_eq(session.runtime().unwrap(), &rt));
     session.reload_environment();
     assert!(Arc::ptr_eq(session.runtime().unwrap(), &rt));
@@ -2452,7 +2490,7 @@ fn an_environment_holds_the_runtime_it_loaded_its_extensions_in() {
         &rt
     ));
 
-    let bare = CompiledProject::compile(root, None);
+    let bare = CompiledProject::compile(&specforge_common::ProjectRoot::of(root).unwrap(), None);
     assert!(bare.environment().runtime().is_none());
     assert!(bare.environment().registries().declarations().is_empty());
 }
@@ -2466,8 +2504,238 @@ fn a_spec_root_named_like_a_skipped_directory_is_compiled() {
         r#"{"name":"s","version":"0.1.0","extensions":[],"spec_root":"build"}"#,
         &[("build/main.spec", "behavior a \"A\" {\n}\n")],
     );
-    let compiled = CompiledProject::compile(dir.path(), None);
+    let compiled = CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        None,
+    );
     let mut files: Vec<String> = compiled.source_texts().into_keys().collect();
     files.sort();
     assert_eq!(files, ["main.spec"]);
+}
+
+/// A session keeps the root it was opened at: a reload does not locate the
+/// project again, even when a nearer `specforge.json` appeared since.
+#[test]
+fn a_reload_keeps_the_root_it_was_opened_at() {
+    let dir = project(r#"{"name": "p"}"#, &[("sub/a.spec", "term a \"A\" {\n}\n")]);
+    let sub = dir.path().join("sub");
+    let opened = specforge_common::ProjectRoot::of(&sub).unwrap();
+    assert_eq!(opened.dir(), dir.path());
+    let mut session = ProjectSession::open(&opened);
+
+    // A project of its own appears under the opened one.
+    write(&sub, "specforge.json", r#"{"name": "inner"}"#);
+    session.reload_environment();
+
+    let kept = session.project().project_root().expect("on disk");
+    assert_eq!(kept.dir(), dir.path());
+    assert_eq!(session.project().root(), Some(dir.path()));
+}
+
+// --- 04-T0: imports name the compile's sources ---
+
+const BARE: &str = r#"{"name":"s","version":"0.1.0","extensions":[]}"#;
+const EXCLUDING_DRAFTS: &str =
+    r#"{"name":"s","version":"0.1.0","extensions":[],"exclude":["drafts/"]}"#;
+
+#[specforge_test(
+    behavior = "resolve_use_imports",
+    verify = "an import of a file that is no project source produces E025"
+)]
+fn an_import_of_a_file_that_is_no_source_is_e025() {
+    let dir = project(
+        EXCLUDING_DRAFTS,
+        &[
+            ("drafts/x.spec", "term x \"X\" {\n}\n"),
+            ("build/f.spec", "term f \"F\" {\n}\n"),
+            (
+                "a.spec",
+                "use \"drafts/x\"\nuse \"build/f\"\nuse \"escape/secret\"\n\nterm a \"A\" {\n}\n",
+            ),
+        ],
+    );
+    let root = dir.path();
+    #[cfg(unix)]
+    {
+        let outside = TempDir::new().unwrap();
+        write(outside.path(), "secret.spec", "term secret \"S\" {\n}\n");
+        std::os::unix::fs::symlink(outside.path(), root.join("escape")).unwrap();
+        let compiled =
+            CompiledProject::compile(&specforge_common::ProjectRoot::of(root).unwrap(), None);
+        let found: Vec<(usize, String)> = compiled
+            .diagnostics()
+            .iter()
+            .filter(|d| d.code == "E025")
+            .map(|d| (d.span.as_ref().unwrap().start_line, d.message.clone()))
+            .collect();
+        assert_eq!(
+            found,
+            [
+                (
+                    1,
+                    "import target not found among the project's sources: drafts/x".to_string()
+                ),
+                (
+                    2,
+                    "import target not found among the project's sources: build/f".to_string()
+                ),
+                (
+                    3,
+                    "import target not found among the project's sources: escape/secret"
+                        .to_string()
+                ),
+            ]
+        );
+        for id in ["x", "f", "secret"] {
+            assert!(compiled.graph().node(id).is_none(), "{id}");
+        }
+    }
+}
+
+#[specforge_test(
+    behavior = "resolve_use_imports",
+    verify = "an import of an unreadable source reports only that source's E025"
+)]
+fn an_import_of_an_unreadable_source_reports_only_its_e025() {
+    let dir = project(
+        BARE,
+        &[(
+            "c.spec",
+            "use \"bad\"\npub use { q } from \"bad\"\nterm c \"C\" {\n}\n",
+        )],
+    );
+    fs::write(dir.path().join("bad.spec"), b"term bad \"B\xff\" {\n}\n").unwrap();
+    let compiled = CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        None,
+    );
+    let diagnostics = compiled.diagnostics();
+    assert_eq!(
+        e025(&diagnostics),
+        ["cannot read bad.spec: stream did not contain valid UTF-8"]
+    );
+    assert!(
+        !diagnostics.iter().any(|d| d.code == "W027"),
+        "{diagnostics:?}"
+    );
+}
+
+#[specforge_test(
+    behavior = "resolve_use_imports",
+    verify = "an import names an editor buffer's source, saved or not"
+)]
+fn an_import_names_an_unsaved_buffer() {
+    let dir = project(BARE, &[("a.spec", "use \"b\"\n\nterm a \"A\" {\n}\n")]);
+    let root = dir.path();
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
+    assert_eq!(e025(&session.project().diagnostics()).len(), 1);
+
+    let buffers = [Buffer::new(root.join("b.spec"), "term b \"B\" {\n}\n")];
+    let update = session.update(SourceChange::Hold(&buffers));
+
+    assert!(
+        e025(&update.diagnostics).is_empty(),
+        "{:?}",
+        update.diagnostics
+    );
+    assert!(session.project().graph().node("b").is_some());
+}
+
+#[specforge_test(
+    invariant = "incremental_correctness",
+    verify = "a file discovery does not find changes nothing a compile or a session reports"
+)]
+fn a_file_discovery_does_not_find_changes_nothing_a_session_reports() {
+    let dir = project(
+        EXCLUDING_DRAFTS,
+        &[("a.spec", "use \"drafts/x\"\n\nterm a \"A\" {\n}\n")],
+    );
+    let root = dir.path();
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
+    assert_eq!(e025(&session.project().diagnostics()).len(), 1);
+
+    write(root, "drafts/x.spec", "term x \"X\" {\n}\n");
+
+    assert!(session.stale().is_empty());
+    assert!(session.ensure_fresh().is_none());
+    assert_matches_a_fresh_compile(&session, root);
+    assert_eq!(e025(&session.project().diagnostics()).len(), 1);
+}
+
+#[specforge_test(
+    behavior = "classify_project_changes",
+    verify = "an excluded or undiscovered .spec file changes nothing"
+)]
+fn an_update_naming_only_files_discovery_does_not_find_changes_nothing() {
+    let dir = project(EXCLUDING_DRAFTS, &[("a.spec", "term a \"A\" {\n}\n")]);
+    let root = dir.path();
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
+    let before = session.project().diagnostics();
+
+    write(root, "drafts/d.spec", "term d \"D\" {\n}\n");
+    write(root, "build/f.spec", "term f \"F\" {\n}\n");
+    let update = session.update(SourceChange::Disk(&changed(&[
+        "drafts/d.spec",
+        "build/f.spec",
+    ])));
+
+    assert_eq!(update.kind, UpdateKind::Sources);
+    assert!(update.rebuilt_files.is_empty());
+    assert_eq!(update.delta, specforge_project::GraphDelta::default());
+    assert!(!update.inputs_changed);
+    assert_eq!(update.diagnostics, before);
+}
+
+#[specforge_test(
+    behavior = "resolve_use_imports",
+    verify = "files matching an exclude entry are not compiled"
+)]
+fn a_glob_exclude_entry_leaves_its_files_out_of_the_compile() {
+    let dir = project(
+        r#"{"name":"s","version":"0.1.0","extensions":[],"exclude":["drafts/**","**/*.draft.spec"]}"#,
+        &[
+            ("drafts/a.spec", "term a \"A\" {\n}\n"),
+            ("sub/b.draft.spec", "term b \"B\" {\n}\n"),
+            ("main.spec", "term m \"M\" {\n}\n"),
+        ],
+    );
+    let root = dir.path();
+    let compiled =
+        CompiledProject::compile(&specforge_common::ProjectRoot::of(root).unwrap(), None);
+    let mut files: Vec<String> = compiled.source_texts().into_keys().collect();
+    files.sort();
+    assert_eq!(files, ["main.spec"]);
+
+    let session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
+    assert_eq!(
+        session.inputs().classify(&root.join("sub/c.draft.spec")),
+        specforge_project::InputRole::Unrelated
+    );
+}
+
+#[specforge_test(
+    behavior = "resolve_use_imports",
+    verify = "symlink pointing outside spec_root is rejected"
+)]
+#[cfg(unix)]
+fn a_symlinked_directory_is_no_source() {
+    let outer = TempDir::new().unwrap();
+    let outside = outer.path().join("outside");
+    write(&outside, "secret.spec", "term secret \"S\" {\n}\n");
+    let dir = project(
+        BARE,
+        &[("a.spec", "use \"escape/secret\"\nterm a \"A\" {\n}\n")],
+    );
+    std::os::unix::fs::symlink(&outside, dir.path().join("escape")).unwrap();
+
+    let compiled = CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        None,
+    );
+
+    assert!(compiled.graph().node("secret").is_none());
+    assert_eq!(
+        e025(&compiled.diagnostics()),
+        ["import target not found among the project's sources: escape/secret"]
+    );
 }

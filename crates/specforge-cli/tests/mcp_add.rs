@@ -158,7 +158,10 @@ fn mcp_add_refuses_a_version_diamond() {
         Package::new("@acme/base", "2.0.0", b"base".to_vec()),
         Package::new("@acme/app", "1.0.0", b"app".to_vec()).with_peer("@acme/base", "^2.0"),
     ]);
-    let dir = project(&["@specforge/software"], registry.config_entry());
+    let dir = project(
+        &["@specforge/software", "@acme/base", "@acme/other"],
+        registry.config_entry(),
+    );
     // `@acme/base` is locked at 1.0.0 for `@acme/other`, which takes any 1+.
     std::fs::write(
         dir.path().join("specforge.lock"),
@@ -199,7 +202,10 @@ fn mcp_add_refuses_an_install_a_locked_extension_does_not_accept() {
         "0.1.0",
         crate::registry::greet_wasm(),
     )]);
-    let dir = project(&["@specforge/software"], registry.config_entry());
+    let dir = project(
+        &["@specforge/software", "@acme/app"],
+        registry.config_entry(),
+    );
     // `@acme/app` is locked and wants `@sdk/greet ^2.0`, which the registry never published.
     std::fs::write(
         dir.path().join("specforge.lock"),

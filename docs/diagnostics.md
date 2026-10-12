@@ -300,9 +300,14 @@ Level: error
 ```
 E025: Import resolution failed
 
-A `use` import's target either can't be read from disk or doesn't resolve to any
-known `.spec` file. Fix the import path; a `did you mean` suggestion is included
-when a close match exists.
+Either a `.spec` file discovery found can't be read (not UTF-8, no permission):
+it is named, left out of the graph, and an import of it reports nothing more; or
+a `use` import names no source of the project: no `.spec` file by that path
+under the spec root that discovery keeps. A file an `exclude` entry leaves out,
+one under a skipped directory (`target`, `build`, ...), one above the spec root
+and one whose name differs only in case are no source. Fix the import path or
+the `exclude` entry; a `did you mean` suggestion is included when a close match
+exists.
 
 Owner: core
 Level: error
@@ -328,12 +333,15 @@ E027: Unsatisfiable peer dependency
 An extension's peer dependency isn't satisfied: a required peer isn't installed,
 or an installed peer (optional or not) is at a version the range doesn't accept,
 a version that isn't SemVer included; or required peers form a cycle, reported
-once naming its extensions by every compile. `specforge add` and `update` refuse
-an install that would leave a locked peer unsatisfied (from a registry, a
-version diamond is R-RES-005/R-RES-006 instead), and `specforge remove` refuses
-to uninstall an extension others still require. Install or upgrade the named
-peer, make one peer of a cycle optional, or use `--force` where the command
-supports it.
+once naming its extensions by every compile. `specforge add`, `init` and
+`update` judge the project's peer set as their change leaves it (the extensions
+its `specforge.json` entries load: builtins, installed extensions and `.wasm`
+file entries) and refuse a change that would leave a peer it touches unsatisfied
+(from a registry, a version diamond is R-RES-005/R-RES-006 instead); `add` and
+`init` first enable the builtins what they add requires. `specforge remove`
+refuses to uninstall an extension others still require. Install or upgrade the
+named peer, install a version of the dependent that accepts the builtin this
+specforge embeds, or make one peer of a cycle optional.
 
 Owner: core
 Level: error
@@ -463,12 +471,13 @@ Level: error
 ```
 E040: Extension project not found or not built
 
-`specforge extension build`, `extension validate` or `publish` found no
-extension to work on: the directory has no `Cargo.toml`, the build (`cargo build
---release --target wasm32-wasip2`) failed, no built component is in
-`target/wasm32-wasip2/release/` (or several are, and none is the crate's), or
-the `.wasm` file couldn't be read. Build the extension, fix the build error the
-message quotes, or name the component to use.
+`specforge extension build`, `extension validate`, `publish`, or `add`/`init
+--extensions` given a crate directory, found no extension to work on: the
+directory has no `Cargo.toml`, the build (`cargo build --release --target
+wasm32-wasip2`) failed, no built component is in `target/wasm32-wasip2/release/`
+(or several are, and none is the crate's), or the `.wasm` file couldn't be read.
+Build the extension, fix the build error the message quotes, or name the
+component to use.
 
 Owner: core
 Level: error
@@ -801,11 +810,13 @@ structure is checked (I002 says so), and `specforge add`, `specforge update` and
 `specforge remove` refuse (config_invalid) without changing anything. When a key
 has the wrong type (`name`, `version` or `spec_root` not a string, `exclude` not
 an array), that key's default is used; when an item of `extensions` or `exclude`
-isn't a string, that item is ignored; the rest of the file is used. Each problem
-is one E069, and `check` fails on it, so a broken config can't pass a CI that
-checks nothing. Fix the file: the message names the JSON error's line and
-column, or the key and the item. A missing `specforge.json` is not this: it is a
-project with the default config (`specforge doctor` says so).
+isn't a string, or an `exclude` item can match no source (empty, starting with
+`!`, with a `.` or `..` name, or not a glob pattern), that item is ignored; the
+rest of the file is used. Each problem is one E069, and `check` fails on it, so
+a broken config can't pass a CI that checks nothing. Fix the file: the message
+names the JSON error's line and column, or the key and the item. A missing
+`specforge.json` is not this: it is a project with the default config
+(`specforge doctor` says so).
 
 Owner: core
 Level: error
@@ -1744,8 +1755,10 @@ Level: error
 ```
 R-TRUST-002: Invalid package signature
 
-The package's signature is malformed, or it doesn't verify: the Wasm binary or
-the manifest isn't what the publisher signed. Don't install the package.
+The package's publisher signature doesn't verify: the Wasm binary or the
+manifest isn't what the publisher signed. Don't install the package.
+`--allow-unsigned` doesn't accept it. (A signature that isn't one at all makes
+the registry's answer unreadable: R009.)
 
 Owner: core
 Level: error
@@ -1756,10 +1769,11 @@ Level: error
 ```
 R-TRUST-003: Publisher key changed
 
-The package is signed with a different key than the one pinned for it when it
-was first installed (trust on first use). That can be a key rotation or a
-compromised publisher. If you trust the new key, re-run with `--yes` or add it
-to `trusted_keys`.
+The package is signed with a different key than the one expected for it: the key
+pinned for it when you first installed it (trust on first use), or, when you
+have no pin for it, the key the project's `specforge.lock` records. That can be
+a key rotation or a compromised publisher. If you trust the new key, re-run with
+`--yes` or add it to `trusted_keys`.
 
 Owner: core
 Level: error
@@ -1768,13 +1782,11 @@ Level: error
 ## R-TRUST-004
 
 ```
-R-TRUST-004: Signature metadata mismatch
+R-TRUST-004: Registry answer mismatch
 
 The registry's answer doesn't match: it, or the manifest it serves, describes
-another package or version than the one requested, or the key ID it reports
-differs from the key ID inside the signature, so the registry metadata was
-edited apart from the signature or is stale. Don't install the package, and
-check the registry.
+another package or version than the one requested, or the binary declares other
+than the served declaration. Don't install the package, and check the registry.
 
 Owner: core
 Level: error
@@ -1795,11 +1807,14 @@ Level: error
 ## R-TRUST-006
 
 ```
-R-TRUST-006: Known-keys file not writable
+R-TRUST-006: Known-keys file unusable
 
-The publisher key pinned for the package couldn't be saved to
-`~/.specforge/known-keys.json`. Check the permissions on that file and its
-directory.
+Your known-keys file (`~/.specforge/known-keys.json`) can't be read as the store
+of publisher pins, or the pins an install accepted can't be saved to it. Nothing
+is installed either way: a store read as empty would trust any key and lose your
+`denied_keys`, and an install whose pin can't be saved is put back. Fix the
+file's JSON, or move it aside (every package is then trusted on first use
+again), and check the permissions on the file and its directory.
 
 Owner: core
 Level: error
@@ -1888,6 +1903,39 @@ R007: Version already published
 `specforge publish` tried to publish a version that already exists for the
 package, and published versions are immutable. Bump the version in the manifest
 and publish again.
+
+Owner: core
+Level: error
+```
+
+## R008
+
+```
+R008: Registry refused the request
+
+The registry read the request and refused it (HTTP 400), naming its reason and
+code: for a publish, a package that isn't signed or whose signature isn't one or
+doesn't verify over the uploaded binary and manifest (INVALID_SIGNATURE), a
+binary that isn't a Wasm module, or a manifest that isn't an extension
+declaration or names another package. Nothing was stored, and the version can
+still be published. Fix what the message names and try again; sending the same
+request again is refused the same way.
+
+Owner: core
+Level: error
+```
+
+## R009
+
+```
+R009: Registry reply unreadable
+
+The registry answered with a body that isn't the JSON the registry protocol
+defines for that request, such as a publisher signature that isn't an Ed25519
+signature object, or a publish receipt that describes another upload than the
+one sent. The registry is broken, or the URL isn't a SpecForge registry. Nothing
+is installed and no key is pinned, and `--allow-unsigned` doesn't accept such a
+package. Check the registry.
 
 Owner: core
 Level: error
@@ -2152,7 +2200,10 @@ appropriate peer dependency (a validation rule on another extension's kind that
 this one works without names that extension as its `target_extension` instead).
 The same code reports a declaration the registry refuses: a `derived_from` that
 derives nothing, a `proof_role` other than `bound` or `claim`, or a
-`lifecycle_field` that is not one of the kind's fields.
+`lifecycle_field` that is not one of the kind's fields. A field that writes a
+declared edge type from a kind outside its declared `source_kind`, or to a kind
+outside its declared `target_kind`, is W021 too, and its edges are of no edge
+type.
 
 Owner: core
 Level: warning
@@ -3202,10 +3253,12 @@ Level: warning
 W156: Publisher key re-pinned
 
 A registry package is signed with a different key than the one pinned for it,
-and the change was accepted (`--yes`, a yes at the prompt, or the new key on
-`trusted_keys`), so the new key is now pinned. That is what a key rotation looks
-like, and also what a compromised publisher looks like: confirm the change with
-the publisher if you did not expect it. The message names both key ids.
+the change was accepted (`--yes`, a yes at the prompt, or the new key on
+`trusted_keys`), and the install was written, so the new key is now pinned. It
+is reported when the pin is saved: an install that is refused or fails pins
+nothing and reports none. That is what a key rotation looks like, and also what
+a compromised publisher looks like: confirm the change with the publisher if you
+did not expect it. The message names both key ids.
 
 Owner: core
 Level: warning

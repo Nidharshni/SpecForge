@@ -8,9 +8,10 @@
 
 mod build;
 mod declaration;
+mod edge_types;
 mod graph_inputs;
 mod peers;
 mod populate;
 mod validate;
 
-pub use build::{CHECK_PHASE, DeclaredPass, RegistryBuild, build_registries};
+pub use build::{BuildPart, CHECK_PHASE, DeclaredPass, RegistryBuild, build_registries};

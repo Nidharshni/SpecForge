@@ -362,14 +362,17 @@ behavior resolve_imports_on_update "Resolve Imports on Every Update" {
   }
   contract   """
     After every update, the system MUST resolve the use imports of every
-    file again, over the cached parses (no file is re-read or re-parsed
-    for it), so the import diagnostics (E025, I004, W113, W027) are the
-    ones a full rebuild reports. A source that could not be read stays
-    E025 until it is readable or gone. The import graph is rebuilt rather than
-    patched: an added or removed import, an import target created or
+    file again, over the cached parses and the keys of the sources the
+    session holds (no file is re-read, re-parsed or looked up for it), so
+    the import diagnostics (E025, I004, W113, W027) are the ones a full
+    rebuild reports. A source that could not be read stays E025 until it
+    is readable or gone. The import graph is rebuilt rather than patched:
+    an added or removed import, a source an import names created or
     deleted, and a cycle closed or broken anywhere are all seen on the
-    update that causes them. References resolve across the project
-    without use (ADR 0004 D1-a), so the import graph decides no re-parse.
+    update that causes them; a file that is no source (excluded, under a
+    skipped directory) changes nothing when it is created or deleted.
+    References resolve across the project without use (ADR 0004 D1-a),
+    so the import graph decides no re-parse.
   """
   verify unit "an added use import is resolved on the next update"
   verify unit "a removed use import no longer reports"
@@ -390,7 +393,7 @@ behavior compute_graph_delta "Compute Graph Delta" {
     graph_delta_determinism,
   ]
   category   query
-  types      [Graph, GraphDelta, NodeChange, ModifiedNodeChange]
+  types      [Graph, GraphDelta, NodeChange, ModifiedNodeChange, EdgeChange]
   consumes   [incremental_rebuild_complete]
   produces   [graph_delta_computed]
   requires {
@@ -408,13 +411,18 @@ behavior compute_graph_delta "Compute Graph Delta" {
     After an incremental rebuild completes, the system MUST diff the
     previous graph state against the new graph state to produce a
     GraphDelta. The delta MUST enumerate all added nodes, removed nodes,
-    modified nodes (with what changed: field names, or kind, title,
-    methods, edges), added edges, removed edges, and the list of affected
+    modified nodes (with what changed: the fields whose values differ, by
+    name, and apart from them which of its kind, title, methods and
+    outgoing edges differ, so a field named kind or methods is never read
+    as the aspect), added edges, removed edges, and the list of affected
     files. Source positions are ignored: an entity that only moved is not
     modified. added_nodes, removed_nodes, and modified_nodes MUST be
     sorted by EntityId.raw to guarantee deterministic output. The delta
     MUST be computed before any subscribers are notified. One delta
-    serves every surface: watch prints it, MCP notifies it.
+    serves every reader: watch prints it, MCP notifies it, and the
+    post-migration check (validate_post_migration_integrity) keeps a
+    migration only when the delta from the graph before it to the graph
+    after is empty.
   """
   verify unit "added nodes appear in delta"
   verify unit "removed nodes appear in delta"
@@ -422,6 +430,7 @@ behavior compute_graph_delta "Compute Graph Delta" {
   verify unit "added and removed edges appear in delta"
   verify unit "affected files listed in delta"
   verify unit "shifted expression positions are not a modification"
+  verify unit "a field named like an aspect is a changed field, never the aspect"
   verify contract "Compute Graph Delta: graph delta computation holds — previous_graph_available"
 }
 
@@ -485,8 +494,9 @@ behavior notify_delta_subscribers "Notify Delta Subscribers" {
   contract   """
     After every update, the project session MUST report the GraphDelta
     and the files it affects with the update, for whoever holds the
-    session to deliver: specforge watch prints its counts, and MCP
-    notifies its subscribed clients (notify_graph_delta_via_mcp) and diffs
+    session to deliver: specforge watch prints it (whole, as each rebuilt
+    or rechecked line's delta under --format json; its counts in text),
+    and MCP notifies its subscribed clients (notify_graph_delta_via_mcp) and diffs
     the diagnostics into a DiagnosticsDelta itself
     (notify_diagnostics_delta_via_mcp). The session never waits on a
     subscriber, so a slow one cannot delay the compilation pipeline. The
@@ -495,6 +505,7 @@ behavior notify_delta_subscribers "Notify Delta Subscribers" {
     (provide_semantic_tokens, behaviors/lsp.spec).
   """
   verify unit "an update reports its delta and the files it affects"
+  verify unit "watch --format json prints each rebuild's GraphDelta, the one MCP notifies"
   verify contract "Notify Delta Subscribers: delta reporting holds — graph_delta_computed_fired, affected_files_delivered, delta_subscribers_notified_emitted"
 }
 

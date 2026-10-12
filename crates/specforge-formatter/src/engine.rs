@@ -1,7 +1,8 @@
 use crate::config::FormatConfig;
 use specforge_common::{Diagnostic, SourceSpan, Sym, codes};
+use specforge_parser::cst::{Cst, Piece};
 use specforge_parser::lex::lex;
-use tree_sitter::{Node, Parser};
+use tree_sitter::Node;
 use tree_sitter_specforge::{field, kind};
 
 /// Result of formatting a source string.
@@ -11,72 +12,40 @@ pub struct FormatResult {
     pub diagnostics: Vec<Diagnostic>,
 }
 
-/// A text edit with 0-indexed line/column coordinates (LSP-compatible).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TextEdit {
-    pub start_line: usize,
-    pub start_col: usize,
-    pub end_line: usize,
-    pub end_col: usize,
-    pub new_text: String,
-}
-
-/// Format a complete .spec source string.
+/// Format a complete .spec source string: every top-level form as the
+/// parser reads it (`specforge_parser::cst`), a form the parser could not
+/// read whole kept as written, with one W142 spanning its lines.
 pub fn format_source(source: &str, config: &FormatConfig) -> FormatResult {
-    let mut parser = Parser::new();
-    parser
-        .set_language(&tree_sitter_specforge::LANGUAGE.into())
-        .expect("failed to load specforge grammar");
-
-    let tree = match parser.parse(source, None) {
-        Some(t) => t,
-        None => {
+    let cst = match Cst::read(source, None) {
+        Ok(cst) => cst,
+        Err(_) => {
             return FormatResult {
                 formatted: source.to_string(),
                 diagnostics: vec![Diagnostic::new(codes::E001, "Failed to parse source")],
             };
         }
     };
-
-    let root = tree.root_node();
-
-    // Check for parse errors
-    let error_regions = collect_error_regions(root);
-    let has_errors = !error_regions.is_empty();
-
-    let mut diagnostics = Vec::new();
-    if has_errors {
-        let lines: Vec<&str> = source.lines().collect();
-        for &(start_row, end_row) in &error_regions {
-            let last_line_len = lines.get(end_row).map_or(0, |line| line.len());
-            diagnostics.push(kept_region(start_row, end_row, last_line_len));
-        }
+    let source_lines: Vec<&str> = source.lines().collect();
+    let mut emitter = Emitter::new(&source_lines, config);
+    for piece in cst.pieces() {
+        emitter.piece(piece);
     }
-
-    let formatted = format_tree(root, source, config, &error_regions);
-
-    FormatResult {
-        formatted,
-        diagnostics,
-    }
+    emitter.finish()
 }
 
 /// Format a range of lines within a source string.
-/// The range is expanded to complete block boundaries.
+/// The range is expanded to complete block boundaries. Every byte outside the
+/// widened lines is the source's, line endings included; the widened lines
+/// read as `format_source` writes them.
 pub fn format_range(
     source: &str,
     start_line: usize,
     end_line: usize,
     config: &FormatConfig,
 ) -> FormatResult {
-    let mut parser = Parser::new();
-    parser
-        .set_language(&tree_sitter_specforge::LANGUAGE.into())
-        .expect("failed to load specforge grammar");
-
-    let tree = match parser.parse(source, None) {
-        Some(t) => t,
-        None => {
+    let cst = match Cst::read(source, None) {
+        Ok(cst) => cst,
+        Err(_) => {
             return FormatResult {
                 formatted: source.to_string(),
                 diagnostics: vec![],
@@ -84,10 +53,8 @@ pub fn format_range(
         }
     };
 
-    let root = tree.root_node();
-
     // Find the blocks that overlap with the requested range
-    let (expanded_start, expanded_end) = expand_to_block_boundaries(root, start_line, end_line);
+    let (expanded_start, expanded_end) = expand_to_block_boundaries(&cst, start_line, end_line);
 
     let lines: Vec<&str> = source.lines().collect();
     // Blank lines at either end of the range lie between blocks: they stay
@@ -110,33 +77,24 @@ pub fn format_range(
         };
     }
 
-    let mut result_lines: Vec<String> = Vec::new();
-
-    // Copy lines before the range
-    for line in lines.iter().take(expanded_start) {
-        result_lines.push(line.to_string());
+    // Each line's first byte; a line's terminator belongs to it.
+    let starts: Vec<usize> = std::iter::once(0)
+        .chain(source.match_indices('\n').map(|(i, _)| i + 1))
+        .collect();
+    let from = starts[expanded_start];
+    let to = starts
+        .get(expanded_end + 1)
+        .copied()
+        .unwrap_or(source.len());
+    let range_source = &source[from..to];
+    let range_result = format_source(range_source, config);
+    let mut middle = range_result.formatted;
+    // The file's last line, unterminated: so is its formatted text (the final newline is the whole
+    // document's to add).
+    if !range_source.ends_with('\n') && middle.ends_with('\n') {
+        middle.pop();
     }
-
-    // Format the range
-    let range_source: String = lines[expanded_start..=expanded_end].join("\n");
-    let range_result = format_source(&range_source, config);
-
-    for line in range_result.formatted.lines() {
-        result_lines.push(line.to_string());
-    }
-
-    // Copy lines after the range
-    for line in lines.iter().skip(expanded_end + 1) {
-        result_lines.push(line.to_string());
-    }
-
-    let formatted = result_lines.join("\n");
-    // Preserve trailing newline if original had one
-    let formatted = if source.ends_with('\n') && !formatted.ends_with('\n') {
-        formatted + "\n"
-    } else {
-        formatted
-    };
+    let formatted = format!("{}{middle}{}", &source[..from], &source[to..]);
 
     // The range was formatted as its own source: its regions are reported
     // at their lines in the whole document.
@@ -181,89 +139,6 @@ fn kept_region(first: usize, last: usize, last_line_len: usize) -> Diagnostic {
     })
 }
 
-/// Compute minimal TextEdit operations to transform `original` into `formatted`.
-pub fn compute_edits(original: &str, formatted: &str) -> Vec<TextEdit> {
-    if original == formatted {
-        return Vec::new();
-    }
-
-    let orig_lines: Vec<&str> = original.lines().collect();
-    let fmt_lines: Vec<&str> = formatted.lines().collect();
-
-    let mut edits = Vec::new();
-    let mut i = 0;
-    let mut j = 0;
-
-    while i < orig_lines.len() || j < fmt_lines.len() {
-        if i < orig_lines.len() && j < fmt_lines.len() && orig_lines[i] == fmt_lines[j] {
-            i += 1;
-            j += 1;
-            continue;
-        }
-
-        // Find the extent of the differing region
-        let diff_start_i = i;
-        let diff_start_j = j;
-
-        // Advance both until we find matching lines again
-        let mut found = false;
-        for look_ahead in 1..=20 {
-            // Check if orig[i + look_ahead] matches some line in fmt
-            if i + look_ahead < orig_lines.len() && j < fmt_lines.len() {
-                let mut fj = j;
-                while fj < fmt_lines.len() && fj - j <= look_ahead + 5 {
-                    if orig_lines[i + look_ahead] == fmt_lines[fj] {
-                        // Found sync point
-                        let end_line = i + look_ahead - 1;
-                        let end_col = if end_line < orig_lines.len() {
-                            orig_lines[end_line].len()
-                        } else {
-                            0
-                        };
-                        let new_text: String = fmt_lines[diff_start_j..fj].join("\n");
-                        edits.push(TextEdit {
-                            start_line: diff_start_i,
-                            start_col: 0,
-                            end_line: i + look_ahead - 1,
-                            end_col,
-                            new_text,
-                        });
-                        i += look_ahead;
-                        j = fj;
-                        found = true;
-                        break;
-                    }
-                    fj += 1;
-                }
-                if found {
-                    break;
-                }
-            }
-        }
-
-        if !found {
-            // Replace all remaining lines
-            let end_line = orig_lines.len().saturating_sub(1);
-            let end_col = if end_line < orig_lines.len() {
-                orig_lines[end_line].len()
-            } else {
-                0
-            };
-            let new_text: String = fmt_lines[diff_start_j..].join("\n");
-            edits.push(TextEdit {
-                start_line: diff_start_i,
-                start_col: 0,
-                end_line,
-                end_col,
-                new_text,
-            });
-            break;
-        }
-    }
-
-    edits
-}
-
 /// Collect error regions (start_row, end_row) from the CST.
 fn collect_error_regions(root: Node) -> Vec<(usize, usize)> {
     let mut regions = Vec::new();
@@ -305,26 +180,23 @@ fn in_error_region(line: usize, error_regions: &[(usize, usize)]) -> bool {
         .any(|(start, end)| line >= *start && line <= *end)
 }
 
-/// Expand a line range to complete block boundaries.
-fn expand_to_block_boundaries(root: Node, start_line: usize, end_line: usize) -> (usize, usize) {
+/// Expand a line range to complete block boundaries (the top-level items of
+/// every piece, at their document rows).
+fn expand_to_block_boundaries(cst: &Cst, start_line: usize, end_line: usize) -> (usize, usize) {
     let mut expanded_start = start_line;
     let mut expanded_end = end_line;
 
-    let mut cursor = root.walk();
-    if cursor.goto_first_child() {
-        loop {
-            let node = cursor.node();
-            let node_start = node.start_position().row;
-            let node_end = node.end_position().row;
+    for piece in cst.pieces() {
+        let root = piece.root();
+        let mut cursor = root.walk();
+        for node in root.children(&mut cursor) {
+            let node_start = piece.row() + node.start_position().row;
+            let node_end = piece.row() + node.end_position().row;
 
             // If the block overlaps with our range, expand to include the full block
             if node_end >= start_line && node_start <= end_line {
                 expanded_start = expanded_start.min(node_start);
                 expanded_end = expanded_end.max(node_end);
-            }
-
-            if !cursor.goto_next_sibling() {
-                break;
             }
         }
     }
@@ -332,7 +204,9 @@ fn expand_to_block_boundaries(root: Node, start_line: usize, end_line: usize) ->
     (expanded_start, expanded_end)
 }
 
-/// Main formatting: emit every top-level item in source order.
+/// The output being built over a source's pieces: the lines so far, the
+/// class and last source row (absolute) of the previous top-level item, and
+/// the rows kept verbatim (absolute, inclusive), one W142 each.
 ///
 /// Nothing is reordered except runs of consecutive imports, which are
 /// sorted. Comments stay where they are: a comment on the line of a node
@@ -341,80 +215,165 @@ fn expand_to_block_boundaries(root: Node, start_line: usize, end_line: usize) ->
 /// between two comments, or between a comment and a block, is kept (one),
 /// since it tells a standalone comment from a block's doc comment. Inside
 /// blocks blank lines are removed.
-fn format_tree(
-    root: Node,
-    source: &str,
-    config: &FormatConfig,
-    error_regions: &[(usize, usize)],
-) -> String {
-    let source_lines: Vec<&str> = source.lines().collect();
-    let mut cursor = root.walk();
-    let items: Vec<Node> = root.children(&mut cursor).collect();
+struct Emitter<'a> {
+    source_lines: &'a [&'a str],
+    config: &'a FormatConfig,
+    out: Vec<String>,
+    prev: Option<(Item, usize)>,
+    kept: Vec<(usize, usize)>,
+}
 
-    let mut out: Vec<String> = Vec::new();
-    // The class and last source row of the previous top-level item.
-    let mut prev: Option<(Item, usize)> = None;
-    let mut i = 0;
-    while i < items.len() {
-        let node = items[i];
-        let class = Item::of(node);
-        let (start, end) = (node.start_position().row, node.end_position().row);
-
-        // A comment on the line where the previous item ends stays there.
-        if class == Item::Comment
-            && prev.is_some_and(|(_, prev_end)| prev_end == start)
-            && let Some(last) = out.last_mut()
-        {
-            last.push(' ');
-            last.push_str(&comment_text(node, source));
-            prev = Some((Item::Comment, end));
-            i += 1;
-            continue;
+impl<'a> Emitter<'a> {
+    fn new(source_lines: &'a [&'a str], config: &'a FormatConfig) -> Self {
+        Emitter {
+            source_lines,
+            config,
+            out: Vec::new(),
+            prev: None,
+            kept: Vec::new(),
         }
+    }
 
-        if let Some((prev_class, prev_end)) = prev {
-            let gap = start.saturating_sub(prev_end + 1);
-            if needs_blank_line(prev_class, class, gap) {
-                out.push(String::new());
-            }
-        }
+    /// Emit one piece's top-level items. An item is kept verbatim when it
+    /// overlaps an error region of the piece's tree or holds the piece's
+    /// unclosed string.
+    fn piece(&mut self, piece: &Piece<'_>) {
+        let text = piece.text();
+        let base = piece.row();
+        let root = piece.root();
+        let error_regions = collect_error_regions(root);
+        let broken = |node: Node| overlaps(node, &error_regions) || piece.holds_unclosed(node);
+        let mut cursor = root.walk();
+        let items: Vec<Node> = root.children(&mut cursor).collect();
 
-        // A run of imports (blank lines allowed, no comments) is sorted.
-        if class == Item::Import {
-            let mut run = Vec::new();
-            let mut last_end = end;
-            while i < items.len() && Item::of(items[i]) == Item::Import {
-                let import = items[i];
-                last_end = import.end_position().row;
-                if overlaps(import, error_regions) || holds_comment(import) {
-                    run.push(verbatim(import, &source_lines).join("\n"));
-                } else {
-                    run.push(one_line(import, source));
-                }
+        let mut i = 0;
+        while i < items.len() {
+            let node = items[i];
+            let class = Item::of(node);
+            let start = base + node.start_position().row;
+            let end = base + node.end_position().row;
+
+            // A comment on the line where the previous item ends stays there.
+            if class == Item::Comment
+                && self.prev.is_some_and(|(_, prev_end)| prev_end == start)
+                && let Some(last) = self.out.last_mut()
+            {
+                last.push(' ');
+                last.push_str(&comment_text(node, text));
+                self.prev = Some((Item::Comment, end));
                 i += 1;
+                continue;
             }
-            run.sort();
-            out.extend(run);
-            prev = Some((Item::Import, last_end));
-            continue;
-        }
 
-        if overlaps(node, error_regions) {
-            out.extend(verbatim(node, &source_lines));
-        } else if class == Item::Comment {
-            out.push(comment_text(node, source));
-        } else {
-            out.extend(format_block(node, source, config));
+            if let Some((prev_class, prev_end)) = self.prev {
+                let gap = start.saturating_sub(prev_end + 1);
+                if needs_blank_line(prev_class, class, gap) {
+                    self.out.push(String::new());
+                }
+            }
+
+            // A run of imports (blank lines allowed, no comments) is sorted.
+            if class == Item::Import {
+                let mut run = Vec::new();
+                let mut last_end = end;
+                while i < items.len() && Item::of(items[i]) == Item::Import {
+                    let import = items[i];
+                    last_end = base + import.end_position().row;
+                    if broken(import) {
+                        run.push(self.keep(piece, import).join("\n"));
+                    } else if holds_comment(import) {
+                        let (first, last) = self.rows(piece, import);
+                        run.push(self.lines(first, last).join("\n"));
+                    } else {
+                        run.push(one_line(import, text));
+                    }
+                    i += 1;
+                }
+                run.sort();
+                self.out.extend(run);
+                self.prev = Some((Item::Import, last_end));
+                continue;
+            }
+
+            let mut end = end;
+            if broken(node) {
+                let kept = self.keep(piece, node);
+                end = self.rows(piece, node).1;
+                self.out.extend(kept);
+            } else if class == Item::Comment {
+                self.out.push(comment_text(node, text));
+            } else {
+                self.out.extend(format_block(node, text, self.config));
+            }
+            self.prev = Some((class, end));
+            i += 1;
         }
-        prev = Some((class, end));
-        i += 1;
     }
 
-    let mut result = out.join("\n");
-    if !result.is_empty() {
-        result.push('\n');
+    /// The rows (absolute, inclusive) of `node` of `piece` as source lines:
+    /// from its first row to its last row in the piece's source (the
+    /// appended delimiter excluded), trailing blank lines dropped.
+    fn rows(&self, piece: &Piece<'_>, node: Node<'_>) -> (usize, usize) {
+        let base = piece.row();
+        let source_part = &piece.text()[..piece.source_len()];
+        let piece_last = base + source_part.trim_end_matches('\n').matches('\n').count();
+        let first = (base + node.start_position().row).min(piece_last);
+        let mut last = (base + node.end_position().row).min(piece_last);
+        while last > first
+            && self
+                .source_lines
+                .get(last)
+                .is_none_or(|l| l.trim().is_empty())
+        {
+            last -= 1;
+        }
+        (first, last)
     }
-    result
+
+    /// The source lines `first..=last`, trailing whitespace trimmed.
+    fn lines(&self, first: usize, last: usize) -> Vec<String> {
+        (first..=last)
+            .filter_map(|row| self.source_lines.get(row).map(|l| l.trim_end().to_string()))
+            .collect()
+    }
+
+    /// Keep `node` verbatim: its lines, with its rows noted for a W142.
+    fn keep(&mut self, piece: &Piece<'_>, node: Node<'_>) -> Vec<String> {
+        let (first, last) = self.rows(piece, node);
+        self.kept.push((first, last));
+        self.lines(first, last)
+    }
+
+    /// The text (`out` joined, final newline) and one W142 per kept range
+    /// (adjacent ranges merged), spanned from its first line's start to its
+    /// last line's end.
+    fn finish(self) -> FormatResult {
+        let mut merged: Vec<(usize, usize)> = Vec::new();
+        for (first, last) in self.kept {
+            if let Some(previous) = merged.last_mut()
+                && first <= previous.1 + 1
+            {
+                previous.1 = previous.1.max(last);
+                continue;
+            }
+            merged.push((first, last));
+        }
+        let diagnostics = merged
+            .into_iter()
+            .map(|(first, last)| {
+                let last_line_len = self.source_lines.get(last).map_or(0, |line| line.len());
+                kept_region(first, last, last_line_len)
+            })
+            .collect();
+        let mut formatted = self.out.join("\n");
+        if !formatted.is_empty() {
+            formatted.push('\n');
+        }
+        FormatResult {
+            formatted,
+            diagnostics,
+        }
+    }
 }
 
 /// What a top-level item is, for the blank-line rules.
@@ -454,13 +413,6 @@ fn node_text<'s>(node: Node, source: &'s str) -> &'s str {
 fn overlaps(node: Node, error_regions: &[(usize, usize)]) -> bool {
     (node.start_position().row..=node.end_position().row)
         .any(|row| in_error_region(row, error_regions))
-}
-
-/// The node's source lines, unchanged.
-fn verbatim(node: Node, source_lines: &[&str]) -> Vec<String> {
-    (node.start_position().row..=node.end_position().row)
-        .filter_map(|row| source_lines.get(row).map(|l| l.trim_end().to_string()))
-        .collect()
 }
 
 /// Whether a comment sits between `node`'s tokens, outside the values the
@@ -1237,7 +1189,8 @@ mod tests {
             .find(|d| d.code == "W142")
             .and_then(|d| d.span.clone())
             .expect("a spanned W142");
-        assert!(span.end_line > span.start_line, "{span:?}");
+        // The kept form `bar` is reported from its first line to its last.
+        assert_eq!((span.start_line, span.end_line), (5, 7), "{span:?}");
         let last = input.lines().nth(span.end_line - 1).unwrap();
         assert_eq!(span.end_col, last.len() + 1, "{span:?}");
     }
@@ -1271,35 +1224,59 @@ mod tests {
         assert_eq!(span.end_col, 4);
     }
 
-    // --- Slice 10: compute_edits ---
+    const CRLF_TWO: &str = "behavior a \"A\" {\r\n  contract \"x\"\r\n}\r\n\r\nbehavior b \"B\" {\r\n      contract \"y\"\r\n}\r\n";
 
     #[specforge_test_macros::test(
-        behavior = "lsp_format_document",
-        verify = "formatting request returns TextEdit list"
+        behavior = "lsp_format_range",
+        verify = "range formatting changes no byte outside the blocks it touches"
     )]
-    fn test_compute_edits_no_changes() {
-        let edits = compute_edits("hello\nworld\n", "hello\nworld\n");
-        assert!(edits.is_empty());
+    fn a_range_keeps_every_byte_outside_its_blocks() {
+        let config = FormatConfig::default();
+        assert_eq!(
+            format_range(CRLF_TWO, 4, 6, &config).formatted,
+            "behavior a \"A\" {\r\n  contract \"x\"\r\n}\r\n\r\nbehavior b \"B\" {\n  contract \"y\"\n}\n"
+        );
+        assert_eq!(
+            format_range(CRLF_TWO, 0, 2, &config).formatted,
+            "behavior a \"A\" {\n  contract \"x\"\n}\n\r\nbehavior b \"B\" {\r\n      contract \"y\"\r\n}\r\n"
+        );
     }
 
     #[specforge_test_macros::test(
-        behavior = "lsp_format_document",
-        verify = "formatting request returns TextEdit list"
+        behavior = "lsp_format_range",
+        verify = "range formatting changes no byte outside the blocks it touches"
     )]
-    fn test_compute_edits_single_line_change() {
-        let edits = compute_edits("  hello\n", "hello\n");
-        assert!(!edits.is_empty());
-        assert_eq!(edits[0].start_line, 0);
+    fn a_range_on_the_unterminated_last_line_adds_no_newline() {
+        let source = "behavior a \"A\" {\n  contract \"x\"\n}\n\nbehavior b \"B\" {\n      contract \"y\"\n}";
+        assert_eq!(
+            format_range(source, 4, 6, &FormatConfig::default()).formatted,
+            "behavior a \"A\" {\n  contract \"x\"\n}\n\nbehavior b \"B\" {\n  contract \"y\"\n}"
+        );
     }
 
     #[specforge_test_macros::test(
-        behavior = "lsp_format_document",
-        verify = "TextEdit coordinates are 0-indexed lines and columns"
+        behavior = "apply_format_rules",
+        verify = "the formatted text has LF line endings and exactly one final newline"
     )]
-    fn test_textedit_coordinates_are_zero_indexed() {
-        let edits = compute_edits("  line1\n  line2\n", "line1\nline2\n");
-        assert!(!edits.is_empty());
-        assert_eq!(edits[0].start_line, 0); // 0-indexed
+    fn the_formatted_text_has_lf_endings_and_one_final_newline() {
+        let canonical = "behavior a \"A\" {\n  contract \"x\"\n}\n";
+        for input in [
+            "behavior a \"A\" {\r\n  contract \"x\"\r\n}\r\n",
+            "behavior a \"A\" {\n  contract \"x\"\n}",
+            "\n\n\nbehavior a \"A\" {\n  contract \"x\"\n}\n\n\n",
+            "behavior a \"A\" {\r\n  contract \"x\"\r\n}",
+        ] {
+            assert_eq!(fmt(input), canonical, "{input:?}");
+        }
+        assert_eq!(fmt(""), "");
+        assert_eq!(fmt("\n\n"), "");
+        assert_eq!(fmt("// c\r\n"), "// c\n");
+        // A triple-quoted string's lines end in LF too (the parser reads it so).
+        let string = fmt("behavior a \"A\" {\r\n  contract \"\"\"\r\n    x\r\n  \"\"\"\r\n}");
+        assert!(
+            !string.contains('\r') && string.ends_with("}\n"),
+            "{string:?}"
+        );
     }
 
     // --- Behavior: maintain_format_idempotency ---
@@ -1435,10 +1412,7 @@ mod tests {
 
     // --- Invariant: formatting_idempotency ---
 
-    #[specforge_test_macros::test(
-        behavior = "format_spec_files",
-        verify = "files matching the canonical format are not rewritten"
-    )]
+    #[test]
     fn test_formatting_already_formatted_file_produces_identical_output() {
         // First format to get the canonical form, then verify idempotency
         let input = "use \"behaviors/auth\"\nuse \"types/core\"\n\nbehavior foo \"Foo\" {\n  invariants [a, b]\n  types [x]\n  contract \"does stuff\"\n\n  verify unit \"test one\"\n}\n";
@@ -1630,52 +1604,6 @@ mod tests {
 
     // --- Invariant: config_defaults_valid ---
 
-    #[specforge_test_macros::test(
-        behavior = "load_format_config",
-        verify = "missing config file uses defaults"
-    )]
-    fn test_default_format_config_passes_validation() {
-        let config = FormatConfig::default();
-        assert_eq!(config.indent_width, 2);
-        assert!(!config.use_tabs);
-        assert_eq!(config.max_width, 100);
-        // Verify it produces valid indent strings
-        assert_eq!(config.indent_str(), "  ");
-        // Verify it can format without error
-        let result = format_source("behavior foo \"Foo\" {\n  contract \"test\"\n}\n", &config);
-        assert!(
-            result.diagnostics.is_empty(),
-            "default config should produce no diagnostics"
-        );
-    }
-
-    #[specforge_test_macros::test(
-        behavior = "load_format_config",
-        verify = "invalid indent_width produces diagnostic and uses default"
-    )]
-    fn test_fallback_from_invalid_config_produces_usable_format_config() {
-        use tempfile::TempDir;
-        let tmp = TempDir::new().unwrap();
-        let root = tmp.path();
-        std::fs::write(root.join("specforge.json"), "{}").unwrap();
-        std::fs::write(
-            root.join(".specforgefmt.toml"),
-            "indent_width = -5\nmax_width = \"huge\"\nuse_tabs = 42\n",
-        )
-        .unwrap();
-        let (config, diags) = crate::config::load_config(root, root);
-        assert!(
-            !diags.is_empty(),
-            "should have diagnostics for invalid values"
-        );
-        // Config should still be usable (defaults for invalid fields)
-        let result = format_source("behavior foo \"Foo\" {\n  contract \"test\"\n}\n", &config);
-        assert!(
-            !result.formatted.is_empty(),
-            "fallback config should be usable"
-        );
-    }
-
     // --- Invariant: discover_completeness (tested from engine for convenience) ---
 
     #[specforge_test_macros::test(
@@ -1725,53 +1653,6 @@ mod tests {
     }
 
     // --- Performance tests ---
-
-    #[specforge_test_macros::test(
-        behavior = "lsp_format_document",
-        verify = "formats document within 50ms for files under 1000 lines"
-    )]
-    fn test_formats_document_within_50ms() {
-        // Generate a reasonably large file (under 1000 lines)
-        let mut source = String::from("use \"types/core\"\nuse \"behaviors/auth\"\n\n");
-        for i in 0..50 {
-            source.push_str(&format!(
-                "behavior b{i} \"Behavior {i}\" {{\n  invariants [inv_a, inv_b]\n  types [type_x]\n  contract \"does thing {i}\"\n\n  verify unit \"test {i}\"\n}}\n\n"
-            ));
-        }
-
-        let start = std::time::Instant::now();
-        let _result = format_source(&source, &FormatConfig::default());
-        let elapsed = start.elapsed();
-
-        assert!(
-            elapsed.as_millis() < 50,
-            "formatting should complete within 50ms, took {}ms",
-            elapsed.as_millis()
-        );
-    }
-
-    #[specforge_test_macros::test(
-        behavior = "lsp_format_range",
-        verify = "formats range within 20ms for ranges under 200 lines"
-    )]
-    fn test_formats_range_within_20ms() {
-        let mut source = String::from("use \"types/core\"\n\n");
-        for i in 0..20 {
-            source.push_str(&format!(
-                "behavior b{i} \"Behavior {i}\" {{\n  contract \"does thing {i}\"\n}}\n\n"
-            ));
-        }
-
-        let start = std::time::Instant::now();
-        let _result = format_range(&source, 10, 20, &FormatConfig::default());
-        let elapsed = start.elapsed();
-
-        assert!(
-            elapsed.as_millis() < 20,
-            "range formatting should complete within 20ms, took {}ms",
-            elapsed.as_millis()
-        );
-    }
 
     // --- Contract: apply_format_rules ---
 
@@ -2000,81 +1881,6 @@ mod tests {
 
     // --- Gap coverage: format_spec_files ---
 
-    #[specforge_test_macros::test(
-        behavior = "format_spec_files",
-        verify = "summary count reflects actual changes"
-    )]
-    fn test_summary_count_reflects_actual_changes() {
-        let config = FormatConfig::default();
-        // Already-formatted input should produce no changes
-        let clean = "behavior foo \"Foo\" {\n  contract \"test\"\n}\n";
-        let clean_result = format_source(clean, &config);
-        assert_eq!(
-            clean_result.formatted, clean,
-            "already-formatted file should not change"
-        );
-
-        // Badly-formatted input should produce changes
-        let dirty = "behavior foo \"Foo\" {\n      contract   \"test\"\n}\n";
-        let dirty_result = format_source(dirty, &config);
-        assert_ne!(
-            dirty_result.formatted, dirty,
-            "badly-formatted file should change"
-        );
-
-        // Verify we can count changes by comparing input != output
-        let inputs = [
-            clean,
-            dirty,
-            "behavior bar \"Bar\" {\n  contract \"ok\"\n}\n",
-        ];
-        let changed_count = inputs
-            .iter()
-            .filter(|input| {
-                let r = format_source(input, &config);
-                r.formatted != **input
-            })
-            .count();
-        assert_eq!(changed_count, 1, "exactly 1 of 3 files should be changed");
-    }
-
-    // --- Gap coverage: lsp_format_document ---
-
-    #[specforge_test_macros::test(
-        behavior = "lsp_format_document",
-        verify = "TextEdit operations in a response do not overlap"
-    )]
-    fn test_textedit_operations_do_not_overlap() {
-        let original = "behavior foo \"Foo\" {\n      contract   \"a\"\n      types   [x, y]\n}\n\nbehavior bar \"Bar\" {\n      contract   \"b\"\n}\n";
-        let formatted = format_source(original, &FormatConfig::default()).formatted;
-        let edits = compute_edits(original, &formatted);
-
-        // Verify no overlapping ranges
-        for i in 0..edits.len() {
-            for j in (i + 1)..edits.len() {
-                let a = &edits[i];
-                let b = &edits[j];
-                // a ends before b starts OR b ends before a starts
-                let no_overlap = (a.end_line < b.start_line
-                    || (a.end_line == b.start_line && a.end_col <= b.start_col))
-                    || (b.end_line < a.start_line
-                        || (b.end_line == a.start_line && b.end_col <= a.start_col));
-                assert!(
-                    no_overlap,
-                    "TextEdit {i} ({}:{}-{}:{}) overlaps with TextEdit {j} ({}:{}-{}:{})",
-                    a.start_line,
-                    a.start_col,
-                    a.end_line,
-                    a.end_col,
-                    b.start_line,
-                    b.start_col,
-                    b.end_line,
-                    b.end_col
-                );
-            }
-        }
-    }
-
     // --- Gap coverage: lsp_format_range ---
 
     #[specforge_test_macros::test(
@@ -2168,254 +1974,15 @@ mod tests {
         );
     }
 
-    #[specforge_test_macros::test(
-        behavior = "lsp_respect_editor_config",
-        verify = "config file takes precedence over editor settings"
-    )]
-    fn test_config_file_overrides_editor_settings() {
-        use tempfile::TempDir;
-        let tmp = TempDir::new().unwrap();
-        let root = tmp.path();
-        std::fs::write(root.join("specforge.json"), "{}").unwrap();
-        std::fs::write(
-            root.join(".specforgefmt.toml"),
-            "indent_width = 4\nmax_width = 100\n",
-        )
-        .unwrap();
-
-        let (config, diags) = crate::config::load_config(root, root);
-        assert!(
-            diags.is_empty(),
-            "valid config should produce no diagnostics"
-        );
-        assert_eq!(
-            config.indent_width, 4,
-            "config file should set indent_width=4"
-        );
-        assert_eq!(
-            config.max_width, 100,
-            "config file should set max_width=100"
-        );
-    }
-
-    #[specforge_test_macros::test(
-        behavior = "lsp_respect_editor_config",
-        verify = "LSP Respect Editor Config: editor config respect holds — lsp_initialized_fired, config_precedence_enforced, editor_fallback_applied"
-    )]
-    fn test_editor_config_contract() {
-        use tempfile::TempDir;
-
-        // Requires: LSP initialized, editor settings available
-        let editor_config = FormatConfig {
-            indent_width: 4,
-            use_tabs: false,
-            max_width: 80,
-        };
-
-        // Ensures: editor fallback applied when no config file exists
-        let tmp_no_config = TempDir::new().unwrap();
-        std::fs::write(tmp_no_config.path().join("specforge.json"), "{}").unwrap();
-        let (_, diags) = crate::config::load_config(tmp_no_config.path(), tmp_no_config.path());
-        assert!(diags.is_empty());
-        // Without config file, defaults used (editor would supply these)
-        let result_editor = format_source(
-            "behavior a \"A\" {\n    contract \"x\"\n}\n",
-            &editor_config,
-        );
-        assert!(
-            result_editor.formatted.contains("    contract"),
-            "editor settings should be applied"
-        );
-
-        // Ensures: config precedence enforced when config file exists
-        let tmp_with_config = TempDir::new().unwrap();
-        std::fs::write(tmp_with_config.path().join("specforge.json"), "{}").unwrap();
-        std::fs::write(
-            tmp_with_config.path().join(".specforgefmt.toml"),
-            "indent_width = 2\n",
-        )
-        .unwrap();
-        let (file_config, diags) =
-            crate::config::load_config(tmp_with_config.path(), tmp_with_config.path());
-        assert!(diags.is_empty());
-        assert_eq!(
-            file_config.indent_width, 2,
-            "config file should override editor tab size"
-        );
-        let result_file =
-            format_source("behavior a \"A\" {\n    contract \"x\"\n}\n", &file_config);
-        assert!(
-            result_file.formatted.contains("  contract"),
-            "config file indent should take precedence"
-        );
-    }
-
     // --- Gap coverage: format_spec_files ---
 
-    #[specforge_test_macros::test(
-        behavior = "format_spec_files",
-        verify = "changed files are printed to stdout"
-    )]
-    fn test_changed_files_printed_to_stdout() {
-        let config = FormatConfig::default();
-        let dirty = "behavior foo \"Foo\" {\n      contract   \"test\"\n}\n";
-        let result = format_source(dirty, &config);
-        // The formatter returns different output for dirty input, allowing CLI to print the filename
-        assert_ne!(
-            result.formatted, dirty,
-            "dirty file should produce changed output"
-        );
-        let clean = "behavior foo \"Foo\" {\n  contract \"test\"\n}\n";
-        let result_clean = format_source(clean, &config);
-        assert_eq!(
-            result_clean.formatted, clean,
-            "clean file should not change"
-        );
-        // CLI would print only the filename of the dirty file
-    }
-
-    #[specforge_test_macros::test(
-        behavior = "format_spec_files",
-        verify = "formatting all files in spec/ directory succeeds"
-    )]
-    fn test_formatting_multiple_files_succeeds() {
-        let config = FormatConfig::default();
-        let files = [
-            "behavior a \"A\" {\n  contract \"ok\"\n}\n",
-            "behavior b \"B\" {\n      contract   \"fix\"\n}\n",
-            "behavior c \"C\" {\n  contract \"fine\"\n}\n",
-        ];
-        let results: Vec<_> = files.iter().map(|f| format_source(f, &config)).collect();
-        for r in &results {
-            assert!(
-                r.diagnostics
-                    .iter()
-                    .all(|d| d.severity != specforge_common::Severity::Error),
-                "no formatting errors expected"
-            );
-            assert!(
-                !r.formatted.is_empty(),
-                "formatted output should not be empty"
-            );
-        }
-    }
-
-    #[specforge_test_macros::test(
-        behavior = "format_spec_files",
-        verify = "Format Spec Files: spec file formatting holds — spec_files_available, format_config_loaded, formatted_output_written, unchanged_files_preserved, format_complete_emitted, summary_printed"
-    )]
-    fn test_format_spec_files_contract() {
-        let config = FormatConfig::default();
-        // Requires: spec file available, config loaded
-        let dirty = "behavior foo \"Foo\" {\n      contract   \"test\"\n}\n";
-        let result = format_source(dirty, &config);
-        // Ensures: formatted output written (changed)
-        assert_ne!(result.formatted, dirty, "dirty file must be reformatted");
-        // Ensures: unchanged files preserved
-        let clean = result.formatted.clone();
-        let result2 = format_source(&clean, &config);
-        assert_eq!(
-            result2.formatted, clean,
-            "already-formatted file must not change"
-        );
-        // Ensures: no errors
-        assert!(
-            result
-                .diagnostics
-                .iter()
-                .all(|d| d.severity != specforge_common::Severity::Error)
-        );
-    }
-
     // --- Gap coverage: show_formatting_diff ---
-
-    #[specforge_test_macros::test(
-        behavior = "show_formatting_diff",
-        verify = "diff mode writes no files to disk"
-    )]
-    fn test_diff_mode_writes_no_files() {
-        use tempfile::TempDir;
-        let tmp = TempDir::new().unwrap();
-        let file = tmp.path().join("test.spec");
-        let content = "behavior foo \"Foo\" {\n      contract   \"test\"\n}\n";
-        std::fs::write(&file, content).unwrap();
-
-        // Format to get the diff, but do NOT write back
-        let config = FormatConfig::default();
-        let result = format_source(content, &config);
-        let diff = crate::diff::unified_diff("test.spec", content, &result.formatted);
-
-        // Verify diff exists (file would change)
-        assert!(!diff.diff_text.is_empty(), "dirty file should produce diff");
-        // Verify original file is untouched
-        let on_disk = std::fs::read_to_string(&file).unwrap();
-        assert_eq!(on_disk, content, "diff mode must not write files to disk");
-    }
-
-    #[specforge_test_macros::test(
-        behavior = "show_formatting_diff",
-        verify = "Show Formatting Diff: formatting diff holds — spec_files_available, format_config_loaded, no_files_written, unified_diff_produced"
-    )]
-    fn test_show_formatting_diff_contract() {
-        let config = FormatConfig::default();
-        let dirty = "behavior foo \"Foo\" {\n      contract   \"test\"\n}\n";
-        let clean = "behavior foo \"Foo\" {\n  contract \"test\"\n}\n";
-
-        // Requires: spec file available, config loaded
-        let result_dirty = format_source(dirty, &config);
-        let result_clean = format_source(clean, &config);
-
-        // Ensures: unified diff produced for changed files
-        let diff_dirty = crate::diff::unified_diff("test.spec", dirty, &result_dirty.formatted);
-        assert!(
-            !diff_dirty.diff_text.is_empty(),
-            "dirty file must produce diff"
-        );
-        assert!(
-            diff_dirty.diff_text.contains("---"),
-            "diff must use unified format with --- header"
-        );
-        assert!(
-            diff_dirty.diff_text.contains("+++"),
-            "diff must use unified format with +++ header"
-        );
-
-        // Ensures: no diff for unchanged files
-        let diff_clean = crate::diff::unified_diff("test.spec", clean, &result_clean.formatted);
-        assert!(
-            diff_clean.diff_text.is_empty(),
-            "clean file must produce no diff"
-        );
-    }
 
     // --- Gap coverage: lsp_format_document ---
 
     #[specforge_test_macros::test(
-        behavior = "lsp_format_document",
-        verify = "LSP format produces same result as CLI format"
-    )]
-    fn test_lsp_format_matches_cli_format() {
-        let config = FormatConfig::default();
-        let source = "behavior foo \"Foo\" {\n      contract   \"test\"\n      types   [x]\n}\n";
-
-        // CLI-style: format_source
-        let cli_result = format_source(source, &config);
-
-        // LSP-style: compute_edits then apply
-        let edits = compute_edits(source, &cli_result.formatted);
-        // Verify edits exist for dirty input
-        assert!(!edits.is_empty(), "dirty file should produce edits");
-        // The formatting engine produces the same output regardless of how it's invoked
-        assert_eq!(
-            cli_result.formatted,
-            format_source(source, &config).formatted,
-            "LSP and CLI must produce same formatted output"
-        );
-    }
-
-    #[specforge_test_macros::test(
-        behavior = "lsp_format_document",
-        verify = "parse errors in document trigger format_with_parse_errors delegation"
+        behavior = "format_with_parse_errors",
+        verify = "error regions are preserved verbatim in output"
     )]
     fn test_parse_errors_trigger_partial_formatting() {
         let config = FormatConfig::default();
@@ -2435,47 +2002,6 @@ mod tests {
         );
     }
 
-    #[specforge_test_macros::test(
-        behavior = "lsp_format_document",
-        verify = "LSP Format Document: LSP document formatting holds — document_open, format_config_loaded, textedit_list_returned, cli_parity_enforced, format_complete_emitted"
-    )]
-    fn test_lsp_format_document_contract() {
-        let config = FormatConfig::default();
-        let source = "behavior foo \"Foo\" {\n      contract   \"test\"\n}\n";
-
-        // Requires: document open, config loaded
-        let result = format_source(source, &config);
-
-        // Ensures: TextEdit list returned (non-overlapping)
-        let edits = compute_edits(source, &result.formatted);
-        assert!(!edits.is_empty(), "dirty document must produce TextEdits");
-        for i in 0..edits.len() {
-            for j in (i + 1)..edits.len() {
-                let a = &edits[i];
-                let b = &edits[j];
-                let no_overlap = (a.end_line < b.start_line
-                    || (a.end_line == b.start_line && a.end_col <= b.start_col))
-                    || (b.end_line < a.start_line
-                        || (b.end_line == a.start_line && b.end_col <= a.start_col));
-                assert!(no_overlap, "TextEdits must not overlap");
-            }
-        }
-
-        // Ensures: CLI parity
-        let cli = format_source(source, &config).formatted;
-        assert_eq!(result.formatted, cli, "LSP format must match CLI format");
-
-        // Ensures: already-formatted produces no edits
-        let clean_edits = compute_edits(
-            &result.formatted,
-            &format_source(&result.formatted, &config).formatted,
-        );
-        assert!(
-            clean_edits.is_empty(),
-            "already-formatted document must produce no edits"
-        );
-    }
-
     // --- Gap coverage: lsp_format_range ---
 
     #[specforge_test_macros::test(
@@ -2492,44 +2018,6 @@ mod tests {
         assert!(
             result.formatted.contains("{{{ broken"),
             "parse error region within range must be left unchanged"
-        );
-    }
-
-    #[specforge_test_macros::test(
-        behavior = "lsp_format_range",
-        verify = "LSP Format Range: LSP range formatting holds — document_open, format_config_loaded, range_expanded, textedit_list_returned, full_format_parity, format_complete_emitted"
-    )]
-    fn test_lsp_format_range_contract() {
-        let config = FormatConfig::default();
-        let source = "behavior foo \"Foo\" {\n  contract \"a\"\n}\n\nbehavior bar \"Bar\" {\n      contract   \"b\"\n}\n";
-
-        // Requires: document open, config loaded
-        let result = format_range(source, 5, 5, &config);
-
-        // Ensures: range expanded to block boundaries (bar block formatted)
-        assert!(
-            result.formatted.contains("  contract \"b\""),
-            "bar block contract should be formatted"
-        );
-
-        // Ensures: full format parity for affected blocks
-        let full = format_source(source, &config);
-        // The bar block in range format should match bar block in full format
-        let range_bar = result
-            .formatted
-            .lines()
-            .skip_while(|l| !l.starts_with("behavior bar"))
-            .collect::<Vec<_>>()
-            .join("\n");
-        let full_bar = full
-            .formatted
-            .lines()
-            .skip_while(|l| !l.starts_with("behavior bar"))
-            .collect::<Vec<_>>()
-            .join("\n");
-        assert_eq!(
-            range_bar, full_bar,
-            "range format must match full format for affected blocks"
         );
     }
 }
@@ -2751,5 +2239,93 @@ mod emitter_tests {
         );
         let out = fmt("port p \"P\" {\n  tags x @since   \"a  b\"\n}\n");
         assert!(out.contains("@since \"a  b\""), "{out}");
+    }
+
+    // --- Plan 14: a broken document reads as the parser reads it ---
+
+    const UNCLOSED_STRING: &str = "behavior a1 \"A\" {\n  contract \"x\n}\n\nbehavior b1 \"B\" {\n  contract    \"y\"\n}\n\nbehavior c1 \"C\" {\n  contract \"z\"\n}\n";
+
+    #[specforge_test_macros::test(
+        behavior = "format_with_parse_errors",
+        verify = "a form the parser could not read whole is kept as written and the forms after it are formatted"
+    )]
+    fn an_unclosed_string_keeps_only_its_form() {
+        let result = format_source(UNCLOSED_STRING, &FormatConfig::default());
+        assert_eq!(
+            result.formatted,
+            "behavior a1 \"A\" {\n  contract \"x\n}\n\nbehavior b1 \"B\" {\n  contract \"y\"\n}\n\nbehavior c1 \"C\" {\n  contract \"z\"\n}\n"
+        );
+        let w142: Vec<_> = result
+            .diagnostics
+            .iter()
+            .filter(|d| d.is(codes::W142))
+            .collect();
+        assert_eq!(w142.len(), 1, "{:?}", result.diagnostics);
+        assert!(
+            w142[0].message.starts_with("Parse error at lines 1-3,"),
+            "{}",
+            w142[0].message
+        );
+        let span = w142[0].span.as_ref().expect("a spanned W142");
+        assert_eq!(
+            (span.start_line, span.start_col, span.end_line, span.end_col),
+            (1, 1, 3, 2)
+        );
+    }
+
+    const UNCLOSED_BODY: &str =
+        "behavior a1 \"A\" {\n  contract    \"x\"\n\nbehavior b1 \"B\" {\n  contract    \"y\"\n}\n";
+
+    #[specforge_test_macros::test(
+        behavior = "format_with_parse_errors",
+        verify = "the diagnostic spans every line of the form it kept, never past the document"
+    )]
+    fn a_kept_form_is_reported_at_its_lines() {
+        let result = format_source(UNCLOSED_BODY, &FormatConfig::default());
+        assert!(
+            result
+                .formatted
+                .starts_with("behavior a1 \"A\" {\n  contract    \"x\"\n\nbehavior b1")
+        );
+        assert!(result.formatted.contains("  contract \"y\""));
+        let span = result
+            .diagnostics
+            .iter()
+            .find(|d| d.is(codes::W142))
+            .and_then(|d| d.span.clone())
+            .unwrap();
+        assert_eq!((span.start_line, span.end_line), (1, 2));
+    }
+
+    #[specforge_test_macros::test(
+        behavior = "format_with_parse_errors",
+        verify = "a form the parser could not read whole is kept as written and the forms after it are formatted"
+    )]
+    fn formatting_a_broken_document_twice_changes_nothing() {
+        let texts = [
+            // R1: an unclosed body, then two blocks
+            "behavior a1 \"A\" {\n  contract    \"x\"\n\nbehavior b1 \"B\" {\n  contract    \"y\"\n}\n\n\nbehavior c1 \"C\" {\n    contract \"z\"\n}\n",
+            // R2: a field name typed without its value
+            "behavior a1 \"A\" {\n  contract \"x\"\n  st\n\nbehavior b1 \"B\" {\n  contract \"y\"\n}\n\nbehavior c1 \"C\" {\n  contract \"z\"\n}\n",
+            // R3: a method header without its parameter list
+            "port pay \"Pay\" {\n  direction inbound\n  method charge\n\nbehavior settle \"Settle\" {\n  contract    \"Settles.\"\n}\n",
+            // R5: an unclosed string in a port body
+            "port pay \"Pay\" {\n  direction inbound\n  description \"Takes payments\n  method charge(amount: String) -> String\n}\n\nbehavior settle \"Settle\" {\n  contract    \"Settles.\"\n}\n",
+            // R6: an unclosed string, then two blocks
+            UNCLOSED_STRING,
+        ];
+        let ids = |text: &str| {
+            specforge_parser::parse(text, "t.spec")
+                .entities
+                .iter()
+                .map(|e| e.id.raw.to_string())
+                .collect::<Vec<_>>()
+        };
+        for text in texts {
+            let once = format_source(text, &FormatConfig::default());
+            let twice = format_source(&once.formatted, &FormatConfig::default());
+            assert_eq!(twice.formatted, once.formatted, "{text}");
+            assert_eq!(ids(&once.formatted), ids(text), "{text}");
+        }
     }
 }

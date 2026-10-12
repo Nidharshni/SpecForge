@@ -112,21 +112,19 @@ fn lsp_shutdown_contract() {
     // Requires: active LSP state with open documents
     // Ensures: shutdown releases state, subsequent operations rejected
     let mut state = specforge_lsp::LspState::new();
-    state.open_document("file:///a.spec", "content");
-    assert!(state.is_open("file:///a.spec"));
+    let (a, b) = (crate::url("file:///a.spec"), crate::url("file:///b.spec"));
+    state.open_document(&a, "content", 1);
+    assert!(state.document(&a).is_some());
 
     state.shutdown();
 
     assert!(state.is_shutdown(), "state must be marked as shutdown");
-    assert!(
-        !state.is_open("file:///a.spec"),
-        "documents must be released"
-    );
+    assert!(state.document(&a).is_none(), "documents must be released");
 
     // Post-shutdown operations should be rejected
-    state.open_document("file:///b.spec", "new content");
+    state.open_document(&b, "new content", 1);
     assert!(
-        !state.is_open("file:///b.spec"),
+        state.document(&b).is_none(),
         "must reject operations after shutdown"
     );
 }
@@ -303,7 +301,7 @@ async fn the_cli_and_the_editor_agree_on_a_nested_project() {
     let edits = session.formatting(&uri, 4).await["result"].clone();
     assert_eq!(edits, serde_json::json!([]));
     let outcome = specforge_ops::format::run(&specforge_ops::format::Request {
-        root: &root,
+        root: &specforge_common::ProjectRoot::of(&root).unwrap(),
         paths: &[root.join("inner")],
         mode: specforge_ops::format::Mode::Check,
     });
@@ -327,12 +325,175 @@ async fn lsp_format_matches_cli_format() {
     let edited = apply_edits(messy, edits.as_array().expect("an edit list"));
 
     let outcome = specforge_ops::format::run(&specforge_ops::format::Request {
-        root: &root,
+        root: &specforge_common::ProjectRoot::of(&root).unwrap(),
         paths: &[],
         mode: specforge_ops::format::Mode::Check,
     });
     assert_eq!(edited, outcome.changes[0].after);
     assert!(edited.contains("\n    contract"), "{edited}");
+}
+
+/// The round-7 probe rows (A-C1), as files of one project.
+const CONVERGE: [(&str, &str); 7] = [
+    (
+        "spec/body_blank.spec",
+        "behavior a \"A\" {\n\n  contract \"x\"\n}\n",
+    ),
+    (
+        "spec/between_blocks.spec",
+        "behavior a \"A\" {\n  contract \"x\"\n}\n\n\nbehavior b \"B\" {\n  contract \"y\"\n}\n",
+    ),
+    (
+        "spec/leading.spec",
+        "\n\n\nbehavior a \"A\" {\n  contract \"x\"\n}\n",
+    ),
+    (
+        "spec/trailing.spec",
+        "behavior a \"A\" {\n  contract \"x\"\n}\n\n\n",
+    ),
+    (
+        "spec/no_final_newline.spec",
+        "behavior a \"A\" {\n  contract \"x\"\n}",
+    ),
+    (
+        "spec/crlf.spec",
+        "behavior a \"A\" {\r\n  contract \"x\"\r\n}\r\n",
+    ),
+    (
+        "spec/misindented.spec",
+        "behavior a \"A\" {\n      contract \"x\"\n}\n",
+    ),
+];
+
+#[specforge_test(
+    behavior = "lsp_format_document",
+    verify = "editor formatting reaches the text specforge format writes in one pass: blank lines removed, final newline added, CRLF made LF"
+)]
+#[specforge_test(
+    invariant = "format_rule_determinism",
+    verify = "same input and config produce identical output across CLI and LSP"
+)]
+#[tokio::test]
+async fn editor_formatting_reaches_the_cli_text_in_one_pass() {
+    use crate::session::{Session, uri_of};
+    use specforge_ops::format::{Mode, Request, run};
+    let (_dir, root) = format_project(&CONVERGE);
+    let outcome = run(&Request {
+        root: &specforge_common::ProjectRoot::of(&root).unwrap(),
+        paths: &[],
+        mode: Mode::Check,
+    });
+    let (mut session, _) = Session::start(Some(&root)).await;
+    for (path, text) in CONVERGE {
+        let file = root.join(path);
+        let uri = uri_of(&file);
+        session.open(&uri, text).await;
+        session.diagnostics(&uri).await;
+        let cli = &outcome
+            .changes
+            .iter()
+            .find(|c| c.path == file)
+            .unwrap_or_else(|| panic!("{path} would change"))
+            .after;
+
+        let edits = session.format(&uri).await;
+        let edited = apply_edits(text, edits.as_array().expect("an edit list"));
+        assert_eq!(&edited, cli, "{path}: {edits}");
+
+        // One pass: the result is canonical, so the next request has nothing to do.
+        session
+            .did_change(&uri, 2, vec![serde_json::json!({ "text": edited })])
+            .await;
+        session.diagnostics(&uri).await;
+        assert_eq!(session.format(&uri).await, serde_json::json!([]), "{path}");
+    }
+}
+
+#[specforge_test(
+    behavior = "lsp_format_range",
+    verify = "range formatting matches full formatting for affected blocks"
+)]
+#[tokio::test]
+async fn range_formatting_removes_a_blank_line_in_its_block() {
+    let text =
+        "behavior a \"A\" {\n  contract \"x\"\n}\n\nbehavior b \"B\" {\n\n  contract \"y\"\n}\n";
+    let (_dir, root) = format_project(&[("spec/r.spec", text)]);
+    let (mut session, uri) = open_in(&root, "spec/r.spec").await;
+
+    let edits = session.range_formatting(&uri, 2, 4, 7).await["result"].clone();
+
+    assert_eq!(
+        apply_edits(text, edits.as_array().expect("an edit list")),
+        "behavior a \"A\" {\n  contract \"x\"\n}\n\nbehavior b \"B\" {\n  contract \"y\"\n}\n",
+        "{edits}"
+    );
+}
+
+/// Two blocks, CRLF, `b` misindented.
+const CRLF_TWO: &str = "behavior a \"A\" {\r\n  contract \"x\"\r\n}\r\n\r\nbehavior b \"B\" {\r\n      contract \"y\"\r\n}\r\n";
+/// Two blocks, `b` misindented, no final newline.
+const UNTERMINATED_TWO: &str =
+    "behavior a \"A\" {\n  contract \"x\"\n}\n\nbehavior b \"B\" {\n      contract \"y\"\n}";
+
+#[specforge_test(
+    behavior = "lsp_format_range",
+    verify = "range formatting changes no byte outside the blocks it touches"
+)]
+#[tokio::test]
+async fn range_formatting_changes_nothing_outside_its_blocks() {
+    let (_dir, root) = format_project(&[
+        ("spec/crlf.spec", CRLF_TWO),
+        ("spec/open.spec", UNTERMINATED_TWO),
+    ]);
+    let (mut session, _) = crate::session::Session::start(Some(&root)).await;
+    for (path, text, exact) in [
+        (
+            "spec/crlf.spec",
+            CRLF_TWO,
+            "behavior a \"A\" {\r\n  contract \"x\"\r\n}\r\n\r\nbehavior b \"B\" {\n  contract \"y\"\n}\n",
+        ),
+        (
+            "spec/open.spec",
+            UNTERMINATED_TWO,
+            "behavior a \"A\" {\n  contract \"x\"\n}\n\nbehavior b \"B\" {\n  contract \"y\"\n}",
+        ),
+    ] {
+        let uri = crate::session::uri_of(&root.join(path));
+        session.open(&uri, text).await;
+        session.diagnostics(&uri).await;
+
+        let edits = session.range_formatting(&uri, 2, 4, 6).await["result"].clone();
+        let edited = apply_edits(text, edits.as_array().expect("an edit list"));
+
+        // Block `a` (lines 0-3) is outside the range: byte for byte, its CRLF included.
+        let block_b = text.match_indices('\n').nth(3).unwrap().0 + 1;
+        assert!(edited.starts_with(&text[..block_b]), "{path}: {edited:?}");
+        assert_eq!(edited, exact, "{path}");
+        assert_eq!(edited.lines().nth(5), Some("  contract \"y\""), "{path}");
+        // The final newline is the whole document's to add, not a range's.
+        assert_eq!(edited.ends_with('\n'), text.ends_with('\n'), "{path}");
+    }
+}
+
+#[specforge_test(
+    behavior = "lsp_format_document",
+    verify = "TextEdit coordinates are 0-indexed lines and columns"
+)]
+#[tokio::test]
+async fn formatting_edits_are_zero_based_utf16_positions() {
+    // `é` is 2 bytes and 1 UTF-16 unit.
+    let text = "behavior a \"Café\"   {\n  contract \"x\"\n}\n";
+    let (_dir, root) = format_project(&[("spec/a.spec", text)]);
+    let (mut session, uri) = open_in(&root, "spec/a.spec").await;
+
+    // Only the two spaces formatting removes: after `"Café" ` (19 bytes, 18 UTF-16 units).
+    assert_eq!(
+        session.format(&uri).await,
+        serde_json::json!([{
+            "range": {"start": {"line": 0, "character": 18}, "end": {"line": 0, "character": 20}},
+            "newText": ""
+        }])
+    );
 }
 
 #[specforge_test(
@@ -459,7 +620,7 @@ fn complete_field_names_contract() {
     let (_dir, project) = crate::completion::compiled(&[("test.spec", text)]);
     let view = specforge_ops::view::ProjectView::of(&project);
     let labels_at = |line: u32| -> Vec<String> {
-        let doc = specforge_lsp::Document::new("file:///test.spec".into(), text.into());
+        let doc = specforge_lsp::Document::new(text.into());
         let cursor = doc
             .at(tower_lsp::lsp_types::Position::new(line, 2))
             .unwrap();
@@ -496,7 +657,7 @@ fn complete_keywords_contract() {
     // Ensures: all registered kinds + structural keywords returned, no duplicates
     let (_dir, project) = crate::completion::compiled(&[("test.spec", "\n")]);
     let view = specforge_ops::view::ProjectView::of(&project);
-    let doc = specforge_lsp::Document::new("file:///test.spec".into(), "\n".into());
+    let doc = specforge_lsp::Document::new("\n".into());
     let cursor = doc.at(tower_lsp::lsp_types::Position::new(0, 0)).unwrap();
     let keywords: Vec<String> =
         specforge_lsp::completion::items(&cursor.completion(), &cursor.word_edit(), false, &view)
@@ -560,29 +721,39 @@ fn hover_information_contract() {
     verify = "Go-to-Definition on Imports: import go-to-definition holds — imports_resolved, target_file_navigated"
 )]
 fn goto_import_definition_contract() {
-    // Requires: use import path + spec root with target file
-    // Ensures: resolves to target file location; None for missing
-    let tmp = tempfile::tempdir().unwrap();
-    let behaviors_dir = tmp.path().join("behaviors");
-    std::fs::create_dir_all(&behaviors_dir).unwrap();
-    std::fs::write(
-        behaviors_dir.join("auth.spec"),
-        "behavior auth \"Auth\" {}\n",
-    )
-    .unwrap();
+    // Requires: use import paths + the sources the project was compiled from
+    // Ensures: resolves to the source's location; None for missing
+    let served = crate::served::Served::new(&[
+        ("behaviors/auth.spec", "behavior auth \"Auth\" {}\n"),
+        (
+            "main.spec",
+            "use \"behaviors/auth\"\nuse \"nonexistent/path\"\n",
+        ),
+    ])
+    .open(&["main.spec"]);
+    let at = |line: u32| {
+        specforge_lsp::answers::definition(
+            &served.state(),
+            &served.uri("main.spec"),
+            Position::new(line, 5),
+        )
+    };
 
-    let goto =
-        |import: &str| specforge_lsp::goto_import_definition(import, "main.spec", tmp.path());
-
-    let result = goto("behaviors/auth");
-    let loc = result.expect("valid import path must resolve");
-    assert!(
-        loc.file.as_str().ends_with("behaviors/auth.spec"),
+    let Some(GotoDefinitionResponse::Scalar(location)) = at(0) else {
+        panic!("valid import path must resolve");
+    };
+    assert_eq!(
+        location.uri,
+        served.uri("behaviors/auth.spec"),
         "must resolve to correct file"
     );
+    assert_eq!(
+        location.range,
+        tower_lsp::lsp_types::Range::default(),
+        "from its first line"
+    );
 
-    let missing = goto("nonexistent/path");
-    assert!(missing.is_none(), "missing import must return None");
+    assert!(at(1).is_none(), "missing import must return None");
 }
 
 // B:prepare_rename — verify contract "requires/ensures consistency for prepare rename"
@@ -782,7 +953,7 @@ fn provide_semantic_tokens_contract() {
     let env = specforge_project::Environment::with_registries(registries, None);
     let recorded = specforge_project::coverage::RecordedCoverage::over(&graph, &env);
     let view = specforge_ops::view::ProjectView::new(&graph, &env, None, &recorded);
-    let tokens = specforge_lsp::Document::new("file:///t.spec".into(), source.into()).tokens(&view);
+    let tokens = specforge_lsp::Document::new(source.into()).tokens(&view);
 
     assert!(!tokens.is_empty(), "must produce tokens");
     assert!(
@@ -976,10 +1147,8 @@ fn go_to_definition_contract() {
 fn incremental_document_sync_contract() {
     // Requires: LSP initialized with INCREMENTAL sync, document open
     // Ensures: buffer consistent after partial update; only changed range applied
-    let mut buf = specforge_lsp::Document::new(
-        "file:///test.spec".into(),
-        "behavior foo \"Foo\" {\n  contract \"old\"\n}\n".into(),
-    );
+    let mut buf =
+        specforge_lsp::Document::new("behavior foo \"Foo\" {\n  contract \"old\"\n}\n".into());
 
     // Apply partial change: only replace "old" with "new"
     buf.apply_change(Some(crate::lsp_range(1, 12, 1, 15)), "new");
@@ -1056,21 +1225,12 @@ async fn live_diagnostics_contract() {
 fn shared_incremental_pipeline_contract() {
     // Requires: incremental_rebuild_complete event has fired
     // Ensures: shared graph updated, diagnostics pushed, pipeline parity enforced
-    // Open a doc, build the graph through the session, push diagnostics
+    // Open a doc and build the graph through the session
     let state = buffers(&[("/a.spec", "behavior a \"A\" {}\n")]);
-    let mut state = state;
 
     // Graph is shared: navigation works on the same graph instance
     let def = answers::definition(&state, &uri_of_path("/a.spec"), Position::new(0, 10));
     assert!(def.is_some(), "shared graph must serve navigation");
-
-    // Diagnostics pushed through the shared state
-    let a = uri_of_path("/a.spec");
-    state.set_diagnostics(a.as_str(), vec![]);
-    assert!(
-        state.diagnostics(a.as_str()).is_empty(),
-        "diagnostics must be pushable"
-    );
 }
 
 /// Build a Wasm runtime for a temp project listing `ext_names`, mirroring

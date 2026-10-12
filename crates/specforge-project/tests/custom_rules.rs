@@ -107,7 +107,10 @@ fn a_builtin_custom_rule_is_registered_with_its_wasm_function() {
     let dir = project(&["@specforge/software"], "");
     let runtime = specforge_component::ComponentRuntime::with_user_cache();
 
-    let env = Environment::load(dir.path(), Some(Arc::new(runtime)));
+    let env = Environment::load(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        Some(Arc::new(runtime)),
+    );
 
     let w010 = env
         .registries()
@@ -142,7 +145,10 @@ fn a_builtin_custom_rule_is_registered_with_its_wasm_function() {
 fn an_unresolvable_wasm_function_is_w112_on_load() {
     let dir = project(&[EXTENSION], "");
 
-    let env = Environment::load(dir.path(), Some(Arc::new(rules_extension())));
+    let env = Environment::load(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        Some(Arc::new(rules_extension())),
+    );
 
     let diagnostics: Vec<Diagnostic> = env.diagnostics().cloned().collect();
     let warnings = w112_naming(&diagnostics, "'validate__absent'");
@@ -170,7 +176,10 @@ fn an_unresolvable_wasm_function_is_w112_on_load() {
 fn a_custom_rule_without_a_wasm_function_is_w112_and_not_registered() {
     let dir = project(&[EXTENSION], "");
 
-    let env = Environment::load(dir.path(), Some(Arc::new(rules_extension())));
+    let env = Environment::load(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        Some(Arc::new(rules_extension())),
+    );
 
     let diagnostics: Vec<Diagnostic> = env.diagnostics().cloned().collect();
     let warnings = w112_naming(&diagnostics, "'E903'");
@@ -204,7 +213,10 @@ fn custom_rules_register_resolve_and_dispatch_through_a_compile() {
         "gadget good \"Good\" {\n}\n\ngadget bad \"Bad\" {\n}\n",
     );
 
-    let compiled = CompiledProject::compile(dir.path(), Some(Arc::new(rules_extension())));
+    let compiled = CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        Some(Arc::new(rules_extension())),
+    );
 
     // extension_manifests_loaded_fired + custom_patterns_registered
     assert_eq!(compiled.environment().registries().declarations().len(), 1);

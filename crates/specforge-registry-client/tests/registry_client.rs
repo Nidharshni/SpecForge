@@ -98,9 +98,19 @@ fn all_registry_errors_convert_to_diagnostics() {
             name: "n".into(),
             version: "v".into(),
         },
+        RegistryError::Refused {
+            code: specforge_registry_wire::ErrorCode::BadRequest,
+            message: "m".into(),
+        },
+        RegistryError::InvalidReply {
+            subject: "s".into(),
+            message: "m".into(),
+        },
     ];
 
-    let codes = ["R001", "R002", "R003", "R004", "R005", "R006", "R007"];
+    let codes = [
+        "R001", "R002", "R003", "R004", "R005", "R006", "R007", "R008", "R009",
+    ];
 
     for (err, expected_code) in errors.into_iter().zip(codes.iter()) {
         let diag: specforge_common::Diagnostic = err.into();

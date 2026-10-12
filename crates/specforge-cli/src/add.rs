@@ -11,8 +11,7 @@ pub(crate) struct Args {
     #[arg(required = true, num_args = 1..)]
     specifiers: Vec<String>,
 
-    /// Path to the project root
-    #[arg(long, default_value = ".")]
+    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
     path: PathBuf,
 
     #[command(flatten)]
@@ -31,7 +30,11 @@ impl Args {
     /// `specforge add`: the shared add operation, presented.
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         let format = self.output.format;
-        let path = self.path.as_path();
+        let root = match crate::project::root(&self.path) {
+            Ok(root) => root,
+            Err(error) => return Refusal::of(format).report(terminal, &error),
+        };
+        let path = root.dir();
         let extensions = match extension::specified(&self.specifiers) {
             Ok(extensions) => extensions,
             Err(error) => {
@@ -39,10 +42,10 @@ impl Args {
             }
         };
         let registry =
-            ConfiguredRegistry::for_project(path, "add").asking(crate::trust::asker(terminal));
+            ConfiguredRegistry::for_project(&root, "add").asking(crate::trust::asker(terminal));
         let runtime = specforge_component::ComponentRuntime::with_user_cache();
         let request = AddRequest {
-            root: path,
+            root: &root,
             extensions,
             allow_unsigned: self.allow_unsigned,
             trust: format.trust(self.yes),
@@ -97,18 +100,24 @@ fn print_human(added: &AddedExtension, terminal: &Terminal) {
             version,
             publisher,
             origin,
+            peers_enabled,
             ..
-        } => match origin {
-            Origin::Installed { source } if !source.is_registry() => {
-                outln!(terminal, "installed {} from local path", name);
+        } => {
+            for peer in peers_enabled {
+                outln!(terminal, "enabled builtin {peer} (required by {name})");
             }
-            _ => {
-                outln!(terminal, "installed {} v{}", name, version);
-                if let Some(publisher) = publisher {
-                    outln!(terminal, "  {}", publisher_line(publisher));
+            match origin {
+                Origin::Installed { source } if !source.is_registry() => {
+                    outln!(terminal, "installed {} from local path", name);
+                }
+                _ => {
+                    outln!(terminal, "installed {} v{}", name, version);
+                    if let Some(publisher) = publisher {
+                        outln!(terminal, "  {}", publisher_line(publisher));
+                    }
                 }
             }
-        },
+        }
         AddOutcome::AlreadyPresent { name, version } => {
             outln!(terminal, "{name} {version} is already installed");
         }

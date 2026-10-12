@@ -14,7 +14,7 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use specforge_common::{ProjectConfig, discover_spec_files, is_discovered};
+use specforge_common::{Exclude, ProjectConfig, discover_spec_files, is_discovered};
 
 use crate::build_cache::BUILD_CACHE_FILE;
 use crate::{Environment, builtins};
@@ -113,7 +113,7 @@ enum Place {
 struct OnDisk {
     root: PathBuf,
     spec_root: PathBuf,
-    exclude: Vec<String>,
+    exclude: Exclude,
     config: PathBuf,
     lock: PathBuf,
     /// The module of every enabled extension that is not built in:

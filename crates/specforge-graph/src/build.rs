@@ -14,12 +14,6 @@ pub struct GraphInputs {
     /// two-hop cycle through both labels of one pair is a known
     /// bidirectional relationship, not a reference cycle.
     pub bidirectional_pairs: Vec<(String, String)>,
-    /// Entity kinds that declare a body parser: they carry extension-owned
-    /// syntax the core grammar deliberately does not parse, so E001 parse
-    /// errors inside their entities are not reported. Applied wherever
-    /// parse errors are collected, so an incremental rebuild uses the
-    /// file's current entities.
-    pub body_parser_kinds: HashSet<String>,
     /// (kind, field) pairs registered as single reference fields (none while
     /// no kind is registered): references are re-resolved with
     /// single-reference awareness, creating edges for fields like
@@ -79,7 +73,7 @@ pub struct Applied {
 }
 
 /// The graph of a set of parsed `.spec` files and what building it
-/// reported (E001 outside body-parser entities, E002, W060, W143, I005,
+/// reported (E001, E002, W060, W143, I005,
 /// then E003/I004 and W061 from linking), kept current one whole file at a
 /// time.
 ///
@@ -291,7 +285,7 @@ struct Declarations<'a> {
 }
 
 /// The one sweep over the files, in the iteration order they are given:
-/// every file's E001s (outside body-parser entities) and the I007 / E019 its
+/// every file's E001s and the I007 / E019 its
 /// format version header reports first, then per file and entity W143 / E002 / W060, then I005. It is also first-writer-wins:
 /// `seen` is keyed on (kind, id), so a second declaration of a kind is E002
 /// naming the first of that kind; `winners` is keyed on the raw ID, so a
@@ -302,16 +296,9 @@ fn declarations<'a>(
 ) -> Declarations<'a> {
     let mut diagnostics = Vec::new();
 
-    // Surface parse errors as diagnostics so CLI/MCP consumers see them,
-    // except E001s inside a body-parser kind's entity.
+    // Surface parse errors as diagnostics so CLI/MCP consumers see them.
     for spec_file in files.clone() {
-        for error in &spec_file.errors {
-            let diagnostic = Diagnostic::from(error);
-            if !inside_body_parser_entity(&diagnostic, spec_file, &config.inputs.body_parser_kinds)
-            {
-                diagnostics.push(diagnostic);
-            }
-        }
+        diagnostics.extend(spec_file.errors.iter().map(Diagnostic::from));
         // What the format version header reports (I007, E019), where the
         // file declares it.
         diagnostics.extend(spec_file.format_diagnostics.iter().cloned());
@@ -439,26 +426,6 @@ fn define_block_warning(entity: &Entity) -> Diagnostic {
     )
 }
 
-/// Whether `diagnostic` is an E001 that starts inside an entity of `spec_file`
-/// whose kind declares a body parser.
-fn inside_body_parser_entity(
-    diagnostic: &Diagnostic,
-    spec_file: &SpecFile,
-    body_parser_kinds: &HashSet<String>,
-) -> bool {
-    if !diagnostic.is(codes::E001) || body_parser_kinds.is_empty() {
-        return false;
-    }
-    let Some(span) = &diagnostic.span else {
-        return false;
-    };
-    spec_file.entities.iter().any(|e| {
-        body_parser_kinds.contains(e.kind.raw.as_str())
-            && e.span.file == span.file
-            && (e.span.start_line..=e.span.end_line).contains(&span.start_line)
-    })
-}
-
 /// Link reference edges, resolve E003s (single-reference aware) and emit
 /// W061 cycle warnings, over the whole graph.
 fn link_and_diagnose(graph: &mut Graph, config: &GraphConfig) -> Vec<Diagnostic> {
@@ -548,8 +515,10 @@ fn changed_files(
     changed
 }
 
-/// The incremental graph is the cold one: every node's kind, file,
-/// position, title, fields and methods, and every edge.
+/// The incremental graph is the cold one: every node's kind, file, position, title, fields and methods, and every
+/// edge. It is the graph delta's comparison plus positions (each node's file, line and column, and the spans in its
+/// expressions and methods): the delta ignores them by contract, and an incremental build that misplaces a node is
+/// wrong even when nothing changed (ADR 0032, round 7 amendment).
 fn compare_graph_contents(incremental: &Graph, cold: &Graph) -> Result<(), String> {
     let node_sigs = |g: &Graph| -> BTreeMap<String, String> {
         g.nodes()
@@ -640,6 +609,35 @@ mod tests {
             err.contains("'other'") && err.contains("Stale Title"),
             "{err}"
         );
+    }
+
+    /// A node out of place is no change to the delta, but the verification places every node.
+    #[specforge_test(
+        behavior = "rebuild_affected_subgraph",
+        verify = "debug --verify-incremental performs cold rebuild comparison"
+    )]
+    fn a_node_out_of_place_is_a_divergence_the_delta_ignores() {
+        let mut build = build(&[
+            ("a.spec", "behavior foo \"Foo\" { contract \"x\" }"),
+            ("b.spec", "behavior other \"Other\" { contract \"o\" }"),
+        ]);
+        build.set_verify(true);
+        let placed = build.graph.clone();
+        let mut moved = build.graph.node("other").cloned().unwrap();
+        moved.source_span.start_line += 3;
+        build.graph.add_node(moved);
+        assert!(
+            crate::compute_graph_delta(&placed, &build.graph).is_empty(),
+            "a move is not a change"
+        );
+
+        let applied = build.apply([change(
+            "a.spec",
+            "behavior bar \"Bar\" { contract \"new\" }",
+        )]);
+
+        let err = applied.verification.unwrap().unwrap_err();
+        assert!(err.contains("'other'") && err.contains("b.spec:"), "{err}");
     }
 
     /// The diagnostics are compared too, in order.

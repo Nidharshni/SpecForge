@@ -163,8 +163,8 @@ impl LineIndex {
         }
     }
 
-    /// The position of 0-based `line` at byte column `col` (what formatter
-    /// and rename edits name), clamped to the line and to the text.
+    /// The position of 0-based `line` at byte column `col` (what rename
+    /// edits name), clamped to the line and to the text.
     pub fn position_at(&self, line: usize, col: usize) -> Position {
         let line = line.min(self.starts.len() - 1);
         let start = self.starts[line] as usize;

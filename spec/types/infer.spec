@@ -38,25 +38,6 @@ type InferenceSummary "Rollup Statistics (computed on load, never persisted)" {
   verify unit "InferenceSummary is derived from source_index, not stored"
 }
 
-type InferencePlan "Prioritized Inference Work Plan" {
-  target_spec_directory string
-  progress              InferenceSummary
-  cursor                integer
-  next_cursor           integer @optional
-  unanalyzed_files      string[]
-  unanalyzed_total      integer
-  stale_files           string[]
-  stale_total           integer
-  kind_priorities       InferenceKindPriority[]
-  verify unit "InferencePlan lists kinds with no entities first, then each kind after the kinds it references"
-}
-
-type InferenceKindPriority "One Kind in the Inference Plan's Order" {
-  kind           string
-  extension      string
-  existing_count integer
-}
-
 type InferenceGap "Uncovered Public Item in Source Code" {
   name      string
   item_kind string

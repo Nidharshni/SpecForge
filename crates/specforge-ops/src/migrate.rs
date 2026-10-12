@@ -3,19 +3,20 @@
 //! The run previews first: a project with nothing to migrate is left alone
 //! (no compile, no hooks). Otherwise it compiles the project, migrates the
 //! files, runs the extensions' migration hooks, and compiles again. When a
-//! hook fails, or the graph's structure changed, the migrated files are
-//! restored from their backups.
+//! hook fails, or the graph delta from before to after is not empty, the
+//! migrated files are restored from their backups.
 
 use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_common::{Diagnostic, DiagnosticList, Severity, codes};
+use specforge_graph::{GraphDelta, compute_graph_delta};
 /// The migration crate's report types, as this operation's interface.
 pub use specforge_migrate::{
     MigrationBackup, MigrationDiff, MigrationRecord, MigrationResult, MigrationStatus,
     MigrationSummary, RecordChange, RollbackSummary,
 };
 use specforge_migrate::{
-    check_schema_compatibility, compare_graphs, migrate_project, restore, run_rollback,
+    check_schema_compatibility, migrate_project, restore, run_rollback, structural_differences,
 };
 use specforge_parser::{
     CURRENT_FORMAT_VERSION, FormatVersion, MAX_SUPPORTED_VERSION, MIN_SUPPORTED_VERSION,
@@ -38,13 +39,15 @@ pub fn parse_target(raw: Option<&str>) -> Result<FormatVersion, OpError> {
         "Use a format version between {MIN_SUPPORTED_VERSION} and {MAX_SUPPORTED_VERSION}."
     );
     match raw.parse::<FormatVersion>() {
-        Ok(version) if version > MAX_SUPPORTED_VERSION => Err(OpError::diagnostic(
+        Ok(version) if version > MAX_SUPPORTED_VERSION => Err(OpError::coded(
+            crate::OpErrorKind::InvalidInput,
             codes::E019,
             format!("unsupported target version {raw} (max supported: {MAX_SUPPORTED_VERSION})"),
         )
         .with_suggestion(supported)),
         Ok(version) => Ok(version),
-        Err(e) => Err(OpError::diagnostic(
+        Err(e) => Err(OpError::coded(
+            crate::OpErrorKind::InvalidInput,
             codes::E019,
             format!("invalid target version '{raw}': {e}"),
         )
@@ -53,7 +56,7 @@ pub fn parse_target(raw: Option<&str>) -> Result<FormatVersion, OpError> {
 }
 
 pub struct Request<'a> {
-    pub root: &'a Path,
+    pub root: &'a specforge_common::ProjectRoot,
     pub target: FormatVersion,
     /// Report what would change; write nothing.
     pub dry_run: bool,
@@ -84,8 +87,9 @@ pub struct Outcome {
     pub validated: bool,
     /// Breaking Graph Protocol schema changes (W053).
     pub schema_warnings: Vec<Diagnostic>,
-    /// How the migrated graph differs from the one before (W054).
-    pub structural_differences: Vec<Diagnostic>,
+    /// The graph delta from the graph before the migration to the graph after it, source positions ignored: the run
+    /// keeps the migration only when it is empty. Empty when the run did not compare.
+    pub graph_delta: GraphDelta,
     /// What compiling the migrated project reported.
     pub post_diagnostics: Vec<Diagnostic>,
     /// The restore, when the migration was rolled back.
@@ -94,6 +98,61 @@ pub struct Outcome {
     /// after a rollback, the backups (the migrated files hold their old
     /// text again). Nothing for a dry run or with nothing pending.
     pub writes: Writes,
+}
+
+/// Why a migration run failed ([`Outcome::failure`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Failure {
+    /// A migration hook failed (each failure as the hook's call reported it); every migrated file
+    /// was restored.
+    HookFailed { hooks: Vec<String> },
+    /// The migrated project reports errors; every migrated file was restored.
+    DoesNotCompile { errors: usize },
+    /// The migrated project compiles to another graph (W054); every migrated file was restored.
+    ChangedGraph { differences: usize },
+    /// Files that could not be migrated (each shown path and its error); the others were.
+    FilesFailed { files: Vec<(String, String)> },
+}
+
+impl From<Failure> for OpError {
+    /// The failure as every operation reports one: its cause picks the kind and the code.
+    fn from(failure: Failure) -> OpError {
+        match failure {
+            Failure::HookFailed { hooks } => OpError::new(
+                OpErrorKind::Internal,
+                "migration_hook_failed",
+                format!(
+                    "a migration hook failed ({}); every migrated file was restored",
+                    hooks.join("; ")
+                ),
+            ),
+            Failure::DoesNotCompile { errors } => OpError::new(
+                OpErrorKind::CompilationFailed,
+                "migration_does_not_compile",
+                format!(
+                    "the migrated project does not compile ({errors} error(s)); every migrated file was restored"
+                ),
+            ),
+            Failure::ChangedGraph { differences } => OpError::new(
+                OpErrorKind::CompilationFailed,
+                "migration_changed_graph",
+                format!(
+                    "the migration changed the graph ({differences} structural difference(s), W054); every migrated file was restored"
+                ),
+            ),
+            Failure::FilesFailed { files } => {
+                let first = files
+                    .first()
+                    .map(|(path, error)| format!(": {path}: {error}"))
+                    .unwrap_or_default();
+                OpError::new(
+                    OpErrorKind::SchemaMismatch,
+                    "migration_file_failed",
+                    format!("{} file(s) could not be migrated{first}", files.len()),
+                )
+            }
+        }
+    }
 }
 
 /// What `specforge migrate --format json` and `specforge.migrate` print
@@ -133,6 +192,12 @@ pub struct MigrateDocument {
 }
 
 impl Outcome {
+    /// How the migrated graph differs from the one before: one W054 per change in [`Self::graph_delta`]; empty
+    /// exactly when it is.
+    pub fn structural_differences(&self) -> Vec<Diagnostic> {
+        structural_differences(&self.graph_delta)
+    }
+
     /// The document both surfaces print.
     pub fn document(&self) -> MigrateDocument {
         MigrateDocument {
@@ -151,7 +216,7 @@ impl Outcome {
             hooks_invoked: self.hooks_invoked.clone(),
             hook_failures: self.hook_failures.clone(),
             schema_warnings: DiagnosticList(self.schema_warnings.clone()),
-            structural_differences: DiagnosticList(self.structural_differences.clone()),
+            structural_differences: DiagnosticList(self.structural_differences()),
             rolled_back: self.rollback.is_some(),
             rollback: self.rollback.clone(),
             post_migration_validated: self.validated,
@@ -171,24 +236,34 @@ impl Outcome {
         self.summary.failed_count == 0 && self.rollback.is_none()
     }
 
-    /// Why the run failed, as every operation reports a failure; `None`
-    /// when [`Self::ok`]. Code `migration_failed`; kind `CompilationFailed`
-    /// when the migrated project reported errors before it was rolled
-    /// back, else `Internal`; message "the migrated project does not
-    /// compile" or "the migration failed".
-    pub fn failure(&self) -> Option<OpError> {
+    /// Why the run failed; `None` when [`Self::ok`]. A rollback's cause first (a hook that failed,
+    /// a project that does not compile, a graph that changed), then files that failed.
+    pub fn failure(&self) -> Option<Failure> {
         if self.ok() {
             return None;
         }
-        let (kind, message) = if self.post_errors().next().is_some() {
-            (
-                OpErrorKind::CompilationFailed,
-                "the migrated project does not compile",
-            )
-        } else {
-            (OpErrorKind::Internal, "the migration failed")
-        };
-        Some(OpError::new(kind, "migration_failed", message))
+        if self.rollback.is_none() {
+            let files = self
+                .summary
+                .results
+                .iter()
+                .filter(|r| r.status == MigrationStatus::Failed)
+                .map(|r| (r.file_path.clone(), r.error.clone().unwrap_or_default()))
+                .collect();
+            return Some(Failure::FilesFailed { files });
+        }
+        if !self.hook_failures.is_empty() {
+            return Some(Failure::HookFailed {
+                hooks: self.hook_failures.clone(),
+            });
+        }
+        let errors = self.post_errors().count();
+        if errors > 0 {
+            return Some(Failure::DoesNotCompile { errors });
+        }
+        Some(Failure::ChangedGraph {
+            differences: self.structural_differences().len(),
+        })
     }
 
     /// The errors compiling the migrated project reported.
@@ -209,15 +284,14 @@ pub use specforge_protocol_types::MigrationInput;
 
 /// Migrate the project at `request.root`: preview, compile, rewrite the files,
 /// run the extensions' migration hooks in `runtime` in dependency order,
-/// compile again and compare. A failing hook or a changed graph structure
+/// compile again and compare. A failing hook or a non-empty graph delta
 /// restores every migrated file from its backup. With no runtime no
 /// extension is loaded, so no hook runs.
 pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Outcome {
-    // The project the path is in (else the path itself): the one the files
-    // are migrated in and the one the hooks and the checks compile.
-    let root = &specforge_common::project_root_of(request.root);
+    // The project the files are migrated in and the one the hooks and the checks compile.
+    let project = request.root;
     let target = &request.target;
-    let preview = migrate_project(root, target, true, true);
+    let preview = migrate_project(project, target, true, true);
     let from = preview
         .results
         .iter()
@@ -236,7 +310,7 @@ pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Outcome {
         hook_failures: Vec::new(),
         validated: false,
         schema_warnings: Vec::new(),
-        structural_differences: Vec::new(),
+        graph_delta: GraphDelta::default(),
         post_diagnostics: Vec::new(),
         rollback: None,
         writes: Writes::none(),
@@ -246,10 +320,10 @@ pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Outcome {
     }
 
     // The graph and schema before any file is touched.
-    let pre = CompiledProject::compile(root, runtime.clone());
+    let pre = CompiledProject::compile(project, runtime.clone());
     let pre_schema = schema_of(&pre);
 
-    outcome.summary = migrate_project(root, target, false, request.no_backup);
+    outcome.summary = migrate_project(project, target, false, request.no_backup);
     outcome.applied = true;
     outcome.writes = summary_writes(&outcome.summary);
     if outcome.summary.failed_count > 0 {
@@ -280,16 +354,16 @@ pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Outcome {
     }
 
     // The migrated project must have the graph it had before.
-    let post = CompiledProject::compile(root, runtime);
+    let post = CompiledProject::compile(project, runtime);
     outcome.validated = true;
     outcome.schema_warnings = check_schema_compatibility(&pre_schema, &schema_of(&post));
-    outcome.structural_differences = compare_graphs(pre.graph(), post.graph());
+    outcome.graph_delta = compute_graph_delta(pre.graph(), post.graph());
     outcome.post_diagnostics = post.diagnostics();
-    if !outcome.structural_differences.is_empty() {
+    if !outcome.graph_delta.is_empty() {
         roll_back(&mut outcome);
         return outcome;
     }
-    keep_record(root, request, &mut outcome);
+    keep_record(project.dir(), request, &mut outcome);
     outcome
 }
 
@@ -367,26 +441,17 @@ impl RollbackOutcome {
 
 /// Restore every migrated file of the project `root` is in from its `.bak`
 /// backup.
-pub fn rollback(root: &Path) -> RollbackOutcome {
+pub fn rollback(root: &specforge_common::ProjectRoot) -> RollbackOutcome {
     let summary = run_rollback(root);
     let mut writes = restored_writes(&summary);
     if summary.record != RecordChange::Unchanged {
-        writes.record(specforge_common::project_root_of(root).join(MigrationRecord::PATH));
+        writes.record(root.dir().join(MigrationRecord::PATH));
     }
     RollbackOutcome { summary, writes }
 }
 
 fn schema_of(project: &CompiledProject) -> specforge_emitter::GraphProtocolSchema {
-    let registries = project.environment().registries();
-    specforge_emitter::generate_schema(
-        registries.kinds(),
-        registries.edges(),
-        registries.fields(),
-        &registries
-            .extension_info()
-            .map(|(name, version)| (name.to_string(), version.to_string()))
-            .collect::<Vec<_>>(),
-    )
+    specforge_emitter::generate_schema(project.environment().registries())
 }
 
 /// Run each extension's declared migration hook, in the registry build's load order (ADR 0041).

@@ -3,8 +3,8 @@
 //!
 //! [`Rules::build`] turns each declared descriptor into a [`Rule`] whose
 //! check carries exactly what that check reads, resolved once against the
-//! registries: a `matches` regex compiled, an edge rule's peer kind, the
-//! graph field labels a cycle rule's edge type is written as. A descriptor
+//! registries: a `matches` regex compiled, an edge rule's edge type and the
+//! fields that write it. A descriptor
 //! that cannot work as declared is W112 and is not registered. [`Rules::check`]
 //! runs every rule over a [`RuleInput`] (the entity snapshot's records, its
 //! edges and the spec root, ADR 0019), in a fixed order, asking
@@ -23,7 +23,7 @@ use specforge_protocol_types::{CheckKind, ConstraintKind, ExtensionDeclaration};
 
 use crate::entity::RuleInput;
 use crate::{EdgeRegistry, FieldRegistry, KindRegistry};
-use check::{Check, EdgeScope};
+use check::Check;
 
 pub use verdicts::{CustomCall, CustomVerdicts, NoVerdicts, Subject, Verdict, VerdictError};
 
@@ -79,8 +79,9 @@ pub struct Rule {
 #[derive(Debug, Clone, Default)]
 struct Declared {
     edge_type: Option<String>,
-    /// For an edge or cycle rule: the fields that write its edge type.
-    edge_fields: Vec<String>,
+    /// For an edge or cycle rule: the fields that write its edge type, as
+    /// `kind.field`.
+    edge_writers: Vec<String>,
     /// The extension whose kind or edge type the rule names, as declared.
     target_extension: Option<String>,
     constraint: Option<DeclaredConstraint>,
@@ -131,16 +132,11 @@ impl Rule {
 
     /// The rule as the registry build snapshot lists it: the descriptor's
     /// keys (`code`, `severity`, `message_template`, `check`, `target_kind`,
-    /// `edge_type`, `edge_peer_kinds`, `field`, `constraint`,
-    /// `wasm_function`), plus `edge_fields` for an edge or cycle rule with
-    /// an edge type (the fields that write it) and `target_extension` when
-    /// the rule declares one.
+    /// `edge_type`, `field`, `constraint`, `wasm_function`), plus
+    /// `edge_writers` for an edge or cycle rule with an edge type (the
+    /// `kind.field`s that write it) and `target_extension` when the rule
+    /// declares one.
     pub fn describe(&self) -> serde_json::Value {
-        let edge_peer_kinds = match &self.check {
-            Check::NoIncomingEdges(EdgeScope::Peers(kinds))
-            | Check::NoOutgoingEdges(EdgeScope::Peers(kinds)) => Some(kinds),
-            _ => None,
-        };
         let mut described = serde_json::json!({
             "code": self.code,
             "severity": format!("{:?}", self.severity),
@@ -148,7 +144,6 @@ impl Rule {
             "check": self.check_kind.as_str(),
             "target_kind": self.target,
             "edge_type": self.declared.edge_type,
-            "edge_peer_kinds": edge_peer_kinds,
             "field": self.message_field,
             "constraint": self.declared.constraint.as_ref().map(|c| serde_json::json!({
                 "kind": c.kind.map(ConstraintKind::as_str),
@@ -162,7 +157,7 @@ impl Rule {
             Check::NoIncomingEdges(_) | Check::NoOutgoingEdges(_) | Check::Cycle { .. }
         );
         if edge_rule && self.declared.edge_type.is_some() {
-            described["edge_fields"] = serde_json::json!(self.declared.edge_fields);
+            described["edge_writers"] = serde_json::json!(self.declared.edge_writers);
         }
         if let Some(extension) = &self.declared.target_extension {
             described["target_extension"] = serde_json::json!(extension);
@@ -183,14 +178,20 @@ impl Rules {
     /// The rules `declarations` declare (load order), checked and resolved
     /// against `registries`, plus an E006 rule for every `required` field.
     ///
-    /// Diagnostics, in order: per extension and per rule in declaration
-    /// order, W112 (the rule cannot work as declared, not registered); then
-    /// W023 for a code a later extension declares again. Pure.
+    /// Diagnostics, per extension and per rule in declaration order, W150,
+    /// W147 or W112 (the rule cannot work as declared, not registered). Pure.
     pub(crate) fn build(
         declarations: &[ExtensionDeclaration],
         registries: Registries<'_>,
     ) -> (Rules, Vec<Diagnostic>) {
         build::build(declarations, registries)
+    }
+
+    /// W023 for a code a later extension declares again, once per repeat
+    /// ([`Self::build`] does not report it: it is a collision of two
+    /// extensions, which the registry build reports after the rules').
+    pub(crate) fn duplicate_codes(declarations: &[ExtensionDeclaration]) -> Vec<Diagnostic> {
+        build::duplicate_codes(declarations)
     }
 
     /// Run every rule over `input`: each rule in order, its entities by id

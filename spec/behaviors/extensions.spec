@@ -50,7 +50,9 @@ behavior load_extension_manifests "Load Extension Manifests" {
     entity types, edge types, validation rules and optional peer
     dependencies, from the binary itself. Missing extensions or unloadable
     .wasm binaries MUST produce a diagnostic, not a crash. A builtin loads
-    from the binary. Any other entry names an installed extension by its
+    from the binary the host embeds; the builtins are one table, each by
+    the directory its crate lives in under extensions/ (specforge_component).
+    Any other entry names an installed extension by its
     bare name (a legacy name@version entry names the same extension): it
     MUST load from .specforge/extensions/<name>/extension.wasm under that
     name, on every surface, only when the binary's hash is the one its
@@ -64,7 +66,10 @@ behavior load_extension_manifests "Load Extension Manifests" {
     to the project root): it MUST load from that file, on every surface,
     under the name the component declares, the one rule the runtime and the
     environment both read an entry by; a name written before = MUST be the
-    declared one. A file that does not exist, does not load as a component,
+    declared one. Which extension each entry names is decided once (a
+    builtin's name before a lock entry; .wasm file entries after every named
+    entry), and the extension load and the lock plan of add, init and update
+    read that one decision. A file that does not exist, does not load as a component,
     declares another name than the one written, or declares an extension
     another entry already loads MUST produce E028 naming the entry. A
     specforge.json that is there and is not used as written MUST produce
@@ -75,12 +80,17 @@ behavior load_extension_manifests "Load Extension Manifests" {
     could not be read, not that no extensions are configured. A key of the
     wrong type (name, version or spec_root not a string, exclude not an
     array) is replaced by its default, and an extensions or exclude item
-    that is not a string is ignored; the rest of the file is used. A
+    that is not a string, or an exclude item that can match no source
+    (resolve_use_imports), is ignored; the rest of the file is used. A
     missing specforge.json is the default config and produces no E069.
     Before any source, the environment MUST report its own diagnostics —
-    E069, the load's failures and warnings, provider registration (W118,
+    E069, the extension load's entry by entry (an entry's failure, or what
+    it reported though it loaded: W149, W153, W138; the lock's E033 once,
+    before the first entry it left unloaded), provider registration (W118,
     E057), then I002 — and then the registry build's, in the build's one
-    order (build_registries_from_declarations).
+    order (build_registries_from_declarations). Each MUST say the part of
+    the setup it is about: the config, the lock, one entry, structural-only,
+    the providers, or the registry build's part.
     This behavior orchestrates: for each extension, it loads its
     binary and reads its declaration once. Once all declarations are loaded
     and the extension_manifests_loaded event is produced, the registry build
@@ -94,8 +104,10 @@ behavior load_extension_manifests "Load Extension Manifests" {
   verify integration "an extension installed from a registry loads through check"
   verify integration "an enabled extension with no installed binary produces E028 naming the command that installs it"
   verify integration "an entry naming a .wasm file loads that component from disk under the name it declares"
+  verify unit "the extension load and the lock plan resolve an entry by one rule"
   verify integration "a .wasm file entry that is missing, is not a component, names another extension or repeats a loaded one produces E028 naming the entry"
   verify unit "missing extension produces diagnostic"
+  verify unit "every builtin is listed once, by the directory its crate lives in"
   verify unit "a declaration declares entity types and validations"
   verify integration "two extensions loaded and registries populated without collision"
   verify unit "unloadable extension binary produces diagnostic instead of crash"
@@ -103,6 +115,7 @@ behavior load_extension_manifests "Load Extension Manifests" {
   verify unit "E069 names a mistyped key or a non-string item, and the rest of specforge.json is used"
   verify integration "a specforge.json that is there and can't be used produces E069 first and an I002 that names it"
   verify integration "the environment reports its own diagnostics, then the registry build's, before any source"
+  verify integration "the environment says what part of the setup each of its diagnostics is about, and reports an entry's load diagnostics together"
   verify contract "Load Extension Manifests: extension manifest loading holds — all_files_parsed, extensions_config_available, all_extensions_attempted, loaded_manifests_available, failed_extensions_diagnosed, loaded_event_fired, extension_isolation"
 }
 
@@ -162,7 +175,11 @@ behavior build_registries_from_declarations "Build Registries From Declarations"
     kept), the kind, field and edge registries, the rules, the surfaces and
     the graph inputs (registry_build_graph_inputs). It MUST report its
     diagnostics in one order: the declarations' own, the registries', the
-    custom rules' probes, then the surfaces'. A custom rule whose function
+    custom rules' probes, then the surfaces'. Each diagnostic MUST say what
+    it is about: a declaration (E030, W021, W145), the peers (E073, E027),
+    the registries (W019, W021, I004, W017), a rule (W150, W147, W112), a
+    surface (E055), or a collision of two contributions on one name (E026,
+    W018, W023, E039). A custom rule whose function
     its extension cannot answer through is W112, after the registries'
     diagnostics, once, when the build is probed in the runtime its
     extensions loaded in. It MUST be pure: the probe, through the
@@ -187,6 +204,7 @@ behavior build_registries_from_declarations "Build Registries From Declarations"
   verify unit "the declarations' own diagnostics come in a fixed order: E030, W021, the peers' E073 and E027, the cycles' E027, W145"
   verify unit "the registry build reports its diagnostics in one order: the declarations', the registries', the custom rules' probes, the surfaces'"
   verify unit "probing the build reports each custom rule whose function cannot answer once, as W112 after the registries' diagnostics"
+  verify unit "the registry build says what each of its diagnostics is about: a declaration, the peers, the registries, a rule, a surface or a collision"
   verify integration "every loaded declaration is registered before a compile checks anything"
 }
 
@@ -544,7 +562,7 @@ behavior management_operations_over_the_project_view "Management Operations over
   """
   verify unit "an operation that reads or writes the project on disk refuses a view without a root"
   verify unit "the extensions listing reads the config entries from the view, never specforge.json again"
-  verify unit "doctor reads the diagnostics its view reports"
+  verify unit "doctor reads the setup diagnostics of its view's environment, and E013 from what its view reports"
   verify unit "list, doctor and remove read the lock the compile read, once"
   verify unit "list, doctor and remove read one inventory of the project's extensions"
   verify integration "add, update and remove refuse an unusable specforge.json with one refusal, before they write"
@@ -681,12 +699,21 @@ behavior search_registry "Search Registry" {
   }
   contract   """
     When specforge search is invoked, the system MUST query all configured
-    registries with the search term. Results MUST be filterable by declared
-    category (--contributes, one of entities, edges, shared_fields,
-    enhancements, validation_rules, surfaces, collectors, analyzers, passes,
-    feature_flags): a registry lists only the packages whose stored
-    declaration declares something in that category, and an unknown
-    category is refused before any request. Results from multiple
+    registries with the search term. A search matches a package when the
+    query is an ASCII case-insensitive substring of its name, its
+    description or one of its keywords; % and _ in the query are text. The
+    server, the in-memory client and the in-memory registry MUST match by
+    this one rule (specforge_package::search::matches).
+    Each registry lists a package once,
+    when any of its versions matches the term, at the version specforge
+    add <name> would install from it (latest: the highest release, a
+    pre-release only when the package has none). Results MUST be
+    filterable by declared category (--contributes, one of entities,
+    edges, shared_fields, enhancements, validation_rules, surfaces,
+    collectors, analyzers, passes, feature_flags): a registry lists only
+    the packages whose listed version's stored declaration declares
+    something in that category, and an unknown category is refused before
+    any request. Results from multiple
     registries MUST be merged and deduplicated using a composite key of
     name + version — when the same name + version appears from multiple
     registries, the first registry in specforge.json declaration order
@@ -705,7 +732,9 @@ behavior search_registry "Search Registry" {
   verify unit "with no registry configured, search makes no network call and reports how to configure one"
   verify unit "an unusable specforge.json is refused with the refusal add gives, before any network call"
   verify unit "queries all configured registries"
+  verify unit "a search matches a case-insensitive substring of a package's name, description or one keyword, wildcards included as text"
   verify unit "filters by declared category"
+  verify unit "a registry lists each package at the version add installs from it"
   verify unit "each failed registry is reported once, and search fails when every registry failed"
   verify unit "deduplicates results across registries"
   verify unit "output is deterministic"
@@ -729,10 +758,13 @@ behavior publish_to_registry "Publish to Registry" {
     credentials_available     "Authentication credentials are available for the target registry"
   }
   ensures {
-    sha256_computed            "SHA256 hash of .wasm binary is computed and included in the upload"
-    duplicate_version_rejected "A version the registry already holds is refused (R007): a published version is immutable"
-    registry_url_returned      "Successful publish returns the registry URL for the published version"
-    published_event_emitted    "extension_published_to_registry event fires on successful publish"
+    sha256_computed             "SHA256 hash of .wasm binary is computed and included in the upload"
+    duplicate_version_rejected  "A version the registry already holds is refused (R007): a published version is immutable"
+    signature_checked_on_upload "The registry refuses an upload whose signature is missing (UNSIGNED_PACKAGE), isn't a package signature, or doesn't verify over its name, version, binary and exact manifest (INVALID_SIGNATURE), before storing anything"
+    refusal_reported            "A registry's refusal reaches the publisher as R008 with the registry's code and reason, not as a network error"
+    receipt_checked             "Publish checks the registry's receipt names the uploaded name, version, SHA-256, size and key id, else R009"
+    registry_url_returned       "Successful publish returns the registry URL for the published version"
+    published_event_emitted     "extension_published_to_registry event fires on successful publish"
   }
   contract   """
     When specforge publish is invoked with a registry target, the system
@@ -741,8 +773,22 @@ behavior publish_to_registry "Publish to Registry" {
     with the .wasm binary and its SHA256 hash, before any network call
     deciding whether to refuse; the request MUST be authenticated. The
     registry MUST refuse a manifest that is not an extension declaration,
-    and takes the description and keywords it shows from the declaration. A version the registry
+    and takes the description and keywords it shows from the declaration.
+    The registry MUST refuse an upload with no signature (UNSIGNED_PACKAGE),
+    or whose signature is not a package signature or does not verify over
+    the name and version in the upload path, the binary and the exact
+    manifest uploaded (INVALID_SIGNATURE), before it stores anything, so a
+    version it refuses stays publishable; it judges no key's trust
+    (ADR 0061). A version the registry
     already holds MUST be refused (R007): a published version is immutable.
+    On the registry server, the first accepted publish into a scope claims
+    the scope for its publisher; only that publisher publishes into it
+    after. A publish the registry refuses (an invalid upload, a duplicate
+    version, a storage failure) claims no scope: the claim and the version
+    are recorded together or not at all.
+    A registry's refusal MUST reach the publisher as R008 naming the
+    registry's code and reason. Publish MUST check that the registry's
+    receipt names what it uploaded.
     The package MUST go to the one registry that serves its name, the
     registry add and update fetch that name from (ADR 0045). The upload MUST
     be authenticated: with no credential for that registry
@@ -766,8 +812,14 @@ behavior publish_to_registry "Publish to Registry" {
   verify unit "publish refuses a binary whose declaration has errors before any network call"
   verify integration "the registry refuses a manifest that is not an extension declaration"
   verify integration "the registry takes a package's description and keywords from its declaration"
+  verify integration "the registry refuses a signature that is not a package signature, and the version stays publishable"
+  verify integration "the registry refuses a signature that does not verify over the upload"
+  verify unit "a registry's refusal reaches the publisher with its reason"
+  verify unit "publish checks the registry's receipt against what it uploaded"
   verify unit "SHA256 computed and included in upload"
   verify unit "a version already published is refused with R007"
+  verify integration "the first publish into a scope claims it, and only its publisher publishes there after"
+  verify integration "a publish the registry refuses claims no scope"
   verify unit "successful publish returns registry URL"
   verify unit "unauthenticated publish produces ExtensionError"
   verify unit "the registry refuses a name or version that is not a package name or version"
@@ -778,7 +830,7 @@ behavior publish_to_registry "Publish to Registry" {
   verify unit "publish asks the registry add fetches the same name from"
   verify unit "the declaration's warnings are reported even when publish is refused"
   verify unit "what publish uploads is what add installs"
-  verify contract "Publish to Registry: registry publishing holds — declaration_valid, wasm_binary_available, registry_client_available, credentials_available, sha256_computed, duplicate_version_rejected, registry_url_returned, published_event_emitted"
+  verify contract "Publish to Registry: registry publishing holds — declaration_valid, wasm_binary_available, registry_client_available, credentials_available, sha256_computed, duplicate_version_rejected, signature_checked_on_upload, refusal_reported, receipt_checked, registry_url_returned, published_event_emitted"
 }
 
 behavior verify_registry_integrity "Verify Registry Integrity" {
@@ -826,22 +878,23 @@ behavior check_registry_reply "Check Registry Reply" {
     reply_received "The registry answered a request for name@version and its download passed the SHA256 check"
   }
   ensures {
+    reply_readable         "A reply that isn't the registry protocol's JSON (a malformed publisher signature among them) is refused with R009, even with --allow-unsigned"
     reply_names_request    "A reply naming another package or version than the one requested is refused with R-TRUST-004"
-    key_id_consistent      "A reply whose key id differs from the key id inside its signature is refused with R-TRUST-004"
     manifest_names_request "A served manifest naming another package or version is refused with R-TRUST-004"
     manifest_fails_closed  "A missing or unreadable served manifest is refused with R-OPS-004, never read as declaring no peers"
     peers_from_manifest    "The peers the served declaration declares are the ones the ADR-0001 diamond gate checks"
     declaration_matches    "A binary whose declaration differs from the served one is refused with R-TRUST-004 naming the first differing category"
   }
   contract   """
+    A reply that isn't the registry protocol's JSON for the request (a
+    publisher signature that isn't one among them) MUST be refused (R009)
+    before anything else is checked: no flag accepts it.
     Before a registry package's signature is checked or its key pinned,
     the system MUST refuse the reply when it describes another package or
     version than the one requested, or when its manifest does: the
     signature covers the name and version the reply carries, and the pin
     is keyed by name, so an answer for another package would otherwise be
-    verified, pinned and installed in its place (R-TRUST-004). A reply
-    whose key id differs from the one inside its signature MUST be
-    refused (R-TRUST-004). The served manifest is the package's
+    verified, pinned and installed in its place (R-TRUST-004). The served manifest is the package's
     declaration, whose peers decide the diamond gate before anything is
     loaded: a missing manifest, or one that isn't a readable extension
     declaration (one published before declarations, carrying
@@ -851,8 +904,8 @@ behavior check_registry_reply "Check Registry Reply" {
     package is refused (R-TRUST-004) naming the first differing category.
     A refused reply pins no key and installs nothing.
   """
+  verify unit "a reply that is not the protocol's JSON is refused with R009, even with --allow-unsigned"
   verify integration "a reply for another package is refused and pins nothing"
-  verify integration "a key id the signature does not carry is refused"
   verify integration "a manifest that cannot be read is refused and pins nothing"
   verify integration "the peers the served manifest declares reach the package"
   verify unit "add refuses a package whose binary declares other than its published declaration"
@@ -870,7 +923,7 @@ behavior verify_publisher_signature "Verify Publisher Signature" {
     reply_checked "The registry reply passed the SHA256 check and names the package requested"
   }
   ensures {
-    broken_signature_refused "A signature that is malformed or doesn't verify is refused with R-TRUST-002, even with --allow-unsigned"
+    broken_signature_refused "A signature that doesn't verify is refused with R-TRUST-002, even with --allow-unsigned"
     unsigned_refused         "An unsigned package is refused with R-TRUST-001 unless --allow-unsigned is given"
     unsigned_pins_nothing    "An unsigned package accepted with --allow-unsigned pins no key"
     unsigned_reported        "An unsigned package accepted with --allow-unsigned is reported as W155"
@@ -880,16 +933,16 @@ behavior verify_publisher_signature "Verify Publisher Signature" {
     over the canonical payload {name, version, wasmSha256, manifestSha256,
     signedAt} re-derived from the downloaded Wasm bytes and the manifest
     the registry serves, with the public key carried in the signature
-    object. A malformed signature, or one that doesn't verify (tampered
-    binary or swapped manifest), MUST be refused with R-TRUST-002, and
-    --allow-unsigned MUST NOT bypass it. A package with no signature MUST
+    object. A signature that doesn't verify (tampered binary or swapped
+    manifest) MUST be refused with R-TRUST-002, and --allow-unsigned MUST
+    NOT bypass it; one that isn't a package signature makes the reply
+    unreadable (R009, check_registry_reply). A package with no signature MUST
     be refused with R-TRUST-001 unless the user passes --allow-unsigned;
     one accepted that way pins no key. Accepting it is reported as W155 on
     every surface; the check itself writes nothing to the terminal.
   """
   verify integration "a signature over other bytes is refused even with --allow-unsigned"
   verify integration "a swapped manifest breaks the signature"
-  verify integration "a malformed signature object is refused"
   verify integration "an unsigned package is refused without --allow-unsigned"
   verify integration "an unsigned package is accepted with --allow-unsigned and pins no key"
   verify integration "an unsigned package accepted with --allow-unsigned is reported as W155"
@@ -897,10 +950,10 @@ behavior verify_publisher_signature "Verify Publisher Signature" {
 
 behavior pin_publisher_key "Pin Publisher Key" {
   features   [extension_registry]
-  invariants [publisher_trust]
+  invariants [publisher_trust, extension_operation_atomicity]
   category   command
-  types      [PackageMetadata, LockFileEntry, ExtensionError]
-  ports      [FileSystem]
+  types      [PackageMetadata, LockFileEntry, TrustPolicy, KeyPin, ExtensionError]
+  ports      [FileSystem, Registry]
   requires {
     signature_verified "The package's publisher signature verified"
   }
@@ -910,24 +963,34 @@ behavior pin_publisher_key "Pin Publisher Key" {
     changed_key_refused "A key other than the pinned one is refused with R-TRUST-003 and both key ids, unless the user consents"
     consent_repins      "Consent to a key change (--yes, or yes at the prompt) re-pins the new key"
     denied_key_refused  "A key on denied_keys is refused with R-TRUST-005, even with consent"
-    repin_reported      "A re-pinned key is reported as W156 naming both key ids"
+    repin_reported      "A re-pinned key is reported as W156 naming both key ids, once it is saved"
     first_use_named     "A first-use pin is named in the operation's outcome (the publisher is pinned now)"
     surface_decides     "Whether to accept a key change is asked of the surface that can ask (the CLI's terminal); MCP and --format json refuse it"
+    pinned_when_written "A key is pinned only when the install that fetched it is written, after its lock entry: a refused or failed operation pins nothing"
+    store_fails_closed  "A known-keys store that can't be read refuses the install with R-TRUST-006 and is left as it was"
+    lock_key_pinned     "With no pin of the user's, the key specforge.lock records for the package is its pin; the user's own pin wins over it"
   }
   contract   """
-    Trust on first use: the first time a signed package verifies, its
-    publisher key id MUST be pinned for the package name in the user's
-    known-keys store, and later installs signed by that key MUST be
-    accepted. A package signed by another key MUST be refused with
-    R-TRUST-003 naming both key ids unless the user consents (--yes, an
+    Trust on first use: a signed package's publisher key id MUST be pinned
+    for the package name in the user's known-keys store, and later installs
+    signed by that key MUST be accepted. With no pin of the user's, the key
+    the project's specforge.lock records for the package is the pin; the
+    user's own pin wins over it. A package signed by another key MUST be
+    refused with R-TRUST-003 naming both key ids (and specforge.lock when
+    the lock's key is the one expected) unless the user consents (--yes, an
     interactive yes, or the key on trusted_keys); --allow-unsigned is not
-    consent. Consent MUST re-pin the new key. A key on denied_keys MUST be
-    refused with R-TRUST-005 whatever the consent. A refused package
-    leaves the pin as it was. A re-pin is reported as W156; a first-use
-    pin is part of the outcome. The decision on a key change belongs to
-    the surface: the CLI asks on its terminal (y or yes, in any case,
-    consents; any other answer refuses), and a surface nobody can be
-    asked on refuses.
+    consent. Consent MUST re-pin the new key. A key
+    on denied_keys MUST be refused with R-TRUST-005 whatever the consent.
+    Fetching a package only decides: its key is pinned when the
+    operation's lock plan commits, after the binaries, the lock and
+    specforge.json are written, and a pin that can't be saved puts all of
+    them back (R-TRUST-006). A refused or failed operation leaves every pin
+    as it was and reports no W156. A known-keys store that exists and can't
+    be read refuses the install (R-TRUST-006) and is never overwritten. A
+    re-pin is reported as W156 once it is saved; a first-use pin is part of
+    the outcome. The decision on a key change belongs to the surface: the
+    CLI asks on its terminal (y or yes, in any case, consents; any other
+    answer refuses), and a surface nobody can be asked on refuses.
   """
   verify integration "the key of the first verified install is pinned and accepted again"
   verify integration "a package signed by another key than the pinned one is refused"
@@ -936,6 +999,15 @@ behavior pin_publisher_key "Pin Publisher Key" {
   verify integration "consent to a key change is reported as W156"
   verify integration "a key change is decided by the surface that can ask"
   verify unit "the CLI asks its terminal about a key change: yes at the prompt consents, and with nobody to ask nothing is asked"
+  verify integration "a fetch pins nothing; its pins are recorded when the install is written"
+  verify unit "a lock plan pins the keys its fetches decided only when it commits"
+  verify integration "a refused install pins no key, so the locked version installs again"
+  verify integration "a refused update pins no key"
+  verify integration "an install refused when its binary loads pins no key"
+  verify integration "a refused add of several specifiers pins no key"
+  verify integration "a known-keys store that can't be read refuses the install and is left as it was"
+  verify integration "with no pin of the user's, the key specforge.lock records is the pin"
+  verify integration "a user's pin wins over the key specforge.lock records"
 }
 
 behavior configure_registries "Configure Registries" {

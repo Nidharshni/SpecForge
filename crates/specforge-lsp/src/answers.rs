@@ -14,18 +14,19 @@ use specforge_ops::navigate::{
 };
 use tower_lsp::jsonrpc::{Error, ErrorCode};
 use tower_lsp::lsp_types::{
-    ClientCapabilities, CodeActionOrCommand, CodeActionResponse, CompletionResponse, Diagnostic,
+    ClientCapabilities, CodeActionOrCommand, CodeActionResponse, CompletionResponse,
     DocumentSymbolResponse, FormattingOptions, GotoDefinitionResponse, Hover, HoverContents,
     Location, LocationLink, MarkupContent, MarkupKind, Position, PrepareRenameResponse, Range,
     SemanticTokens, SemanticTokensResult, SymbolInformation, TextEdit, Url, WorkspaceEdit,
 };
 
 use crate::document::{LineIndex, Target};
+use crate::files::Findings;
 use crate::navigation::{
     Compiled, fix_to_code_action, outline_to_document_symbols, symbol_kind_from_entity,
 };
 use crate::publish::diagnostic_to_lsp;
-use crate::{LspState, goto_import_definition, hover};
+use crate::{LspState, hover};
 
 /// What the client declared at initialize that shapes an answer or a
 /// reaction.
@@ -93,10 +94,10 @@ fn content_modified(file: &str) -> Error {
     }
 }
 
-/// The entity the cursor at `position` of the open document `uri` names
+/// The entity the cursor at `position` of the open document `key` names
 /// ([`Compiled::target`]): what references and rename act on.
-fn entity_under_cursor(compiled: &Compiled, uri: &Url, position: Position) -> Option<Sym> {
-    match compiled.target(uri, position)? {
+fn entity_under_cursor(compiled: &Compiled, key: &str, position: Position) -> Option<Sym> {
+    match compiled.target(key, position)? {
         Target::Entity { id, .. } => Some(id),
         _ => None,
     }
@@ -110,15 +111,22 @@ fn entity_under_cursor(compiled: &Compiled, uri: &Url, position: Position) -> Op
 /// joined by a rule. `None` for a document that is not open or a position
 /// with neither.
 pub fn hover(state: &LspState, uri: &Url, position: Position) -> Option<Hover> {
-    state.document(uri.as_str())?;
+    let key = state.key_of(uri);
+    let files = state.files();
+    let doc = files.document(&key)?;
     let compiled = Compiled::new(state);
-    let shown = compiled
-        .index_of(&compiled.key(uri))
-        .map(|index| hover::diagnostics_at(state.diagnostics(uri.as_str()), &index, position))
+    let mut shown = compiled
+        .index_of(&key)
+        .map(|index| hover::diagnostics_at(files.compile_diagnostics(&key), &index, position))
         .unwrap_or_default();
-    let published: Vec<specforge_common::Diagnostic> =
-        state.published_diagnostics().cloned().collect();
-    let about = match compiled.target(uri, position) {
+    // The formatter's findings are positions in the buffer it formatted, which is this one.
+    shown.extend(hover::diagnostics_at(
+        files.formatter_diagnostics(&key),
+        doc.index(),
+        position,
+    ));
+    let published: Vec<specforge_common::Diagnostic> = files.published().cloned().collect();
+    let about = match compiled.target(&key, position) {
         Some(Target::Entity { id, .. }) => {
             specforge_ops::inspect::inspect(&state.view().reporting(&published), id.as_str())
                 .ok()
@@ -144,7 +152,7 @@ pub fn hover(state: &LspState, uri: &Url, position: Position) -> Option<Hover> {
 
 /// What completes at the cursor (ADR 0023 D6).
 pub fn completion(state: &LspState, uri: &Url, position: Position) -> Option<CompletionResponse> {
-    let cursor = state.document(uri.as_str())?.at(position)?;
+    let cursor = state.document(uri)?.at(position)?;
     let items = crate::completion::items(
         &cursor.completion(),
         &cursor.word_edit(),
@@ -164,15 +172,18 @@ pub fn definition(
     position: Position,
 ) -> Option<GotoDefinitionResponse> {
     let compiled = Compiled::new(state);
-    match compiled.target(uri, position) {
+    let key = state.key_of(uri);
+    match compiled.target(&key, position) {
         Some(Target::Import { path }) => {
             if state.spec_root().as_os_str().is_empty() {
                 return None;
             }
-            // The imported file, from its first line: no text needed.
-            let span = goto_import_definition(&path, &compiled.key(uri), state.spec_root())?;
+            // The source the compile resolves the import to, from its
+            // first line: no text needed.
+            let sources = state.source_keys();
+            let target = specforge_resolver::import_target(&sources, &key, &path)?;
             Some(GotoDefinitionResponse::Scalar(Location {
-                uri: compiled.uri(span.file.as_str()),
+                uri: compiled.uri(target),
                 range: Range::default(),
             }))
         }
@@ -210,7 +221,7 @@ pub fn references(
     include_declaration: bool,
 ) -> Option<Vec<Location>> {
     let compiled = Compiled::new(state);
-    let id = entity_under_cursor(&compiled, uri, position)?;
+    let id = entity_under_cursor(&compiled, &state.key_of(uri), position)?;
     let query = ReferenceQuery {
         direction: Direction::Incoming,
         include_declaration,
@@ -235,14 +246,15 @@ pub fn prepare_rename(
     uri: &Url,
     position: Position,
 ) -> tower_lsp::jsonrpc::Result<Option<PrepareRenameResponse>> {
+    let file = state.key_of(uri);
     let Some(cursor) = state
-        .document(uri.as_str())
+        .files()
+        .document(&file)
         .and_then(|doc| doc.at(position))
     else {
         return Ok(None);
     };
     let compiled = Compiled::new(state);
-    let file = compiled.key(uri);
     // Any range it gives is a position in a text the editor no longer has
     // while the document is typed in (ADR 0023 D7).
     if compiled.is_stale(&file) {
@@ -268,12 +280,13 @@ pub fn rename(
     new_name: &str,
 ) -> tower_lsp::jsonrpc::Result<Option<WorkspaceEdit>> {
     let compiled = Compiled::new(state);
+    let key = state.key_of(uri);
     // The edits come from the compile: asked from a document typed in since,
     // the rename waits for it, whatever the cursor names (ADR 0023 D7).
-    if state.document(uri.as_str()).is_some() && compiled.is_stale(&compiled.key(uri)) {
-        return Err(content_modified(&compiled.key(uri)));
+    if state.files().document(&key).is_some() && compiled.is_stale(&key) {
+        return Err(content_modified(&key));
     }
-    let Some(id) = entity_under_cursor(&compiled, uri, position) else {
+    let Some(id) = entity_under_cursor(&compiled, &key, position) else {
         return Ok(None);
     };
 
@@ -330,10 +343,11 @@ pub fn rename(
 /// 0016: the fixes MCP suggest_fixes returns for the same diagnostics).
 pub fn code_actions(state: &LspState, uri: &Url, range: Range) -> Option<CodeActionResponse> {
     let compiled = Compiled::new(state);
-    let file = compiled.key(uri);
+    let file = state.key_of(uri);
     // The request's range is the editor's own: positions in its buffer.
     let within = state
-        .document(uri.as_str())
+        .files()
+        .document(&file)
         .map(|doc| doc.index().span(Sym::new(&file), range));
     let query = FixQuery {
         file: Some(&file),
@@ -342,7 +356,7 @@ pub fn code_actions(state: &LspState, uri: &Url, range: Range) -> Option<CodeAct
     };
     let fixes = compiled
         .navigator()
-        .fixes(state.diagnostics(uri.as_str()), &query);
+        .fixes(state.files().compile_diagnostics(&file), &query);
     // A fix that cannot be placed whole (see `fix_to_code_action`) is not
     // offered.
     let actions: Vec<CodeActionOrCommand> = fixes
@@ -359,7 +373,7 @@ pub fn code_actions(state: &LspState, uri: &Url, range: Range) -> Option<CodeAct
 /// flat otherwise.
 pub fn document_symbols(state: &LspState, uri: &Url) -> Option<DocumentSymbolResponse> {
     let compiled = Compiled::new(state);
-    let entries = outline(&compiled.navigator(), &compiled.key(uri));
+    let entries = outline(&compiled.navigator(), &state.key_of(uri));
     if entries.is_empty() {
         return None;
     }
@@ -403,23 +417,21 @@ pub fn workspace_symbols(state: &LspState, query: &str) -> Option<Vec<SymbolInfo
 
 /// The document's semantic tokens.
 pub fn semantic_tokens(state: &LspState, uri: &Url) -> Option<SemanticTokensResult> {
-    let doc = state.document(uri.as_str())?;
+    let doc = state.document(uri)?;
     Some(SemanticTokensResult::Tokens(SemanticTokens {
         result_id: None,
         data: doc.semantic_tokens(&state.view()),
     }))
 }
 
-/// What formatting the open document `uri` answers: its edits, the
-/// diagnostics to publish beside the compile's when formatting reported any,
-/// and the notice that the project's configuration overrode the editor's
-/// settings.
+/// What formatting the open document `uri` answers: its edits, what formatting
+/// reported (for the store to publish beside the compile's), and the notice
+/// that the project's configuration overrode the editor's settings.
 pub struct Formatted {
     pub edits: Vec<TextEdit>,
-    /// The document's whole list to publish now (a publish replaces it): the
-    /// compile's diagnostics and the formatter's, with the document's
-    /// version. `None`: nothing to publish.
-    pub publish: Option<(Vec<Diagnostic>, Option<i32>)>,
+    /// What formatting reported, positions in the document at its version
+    /// (`LspState::publish_formatting`).
+    pub findings: Findings,
     /// The configuration key and the message, sent once per configuration
     /// (`LspState::first_format_notice`).
     pub notice: Option<(String, String)>,
@@ -438,50 +450,42 @@ pub fn formatting(
         tab_size: options.tab_size as usize,
         insert_spaces: options.insert_spaces,
     };
-    let doc = state.document(uri.as_str())?;
-    let file = uri.to_file_path().ok();
+    let key = state.key_of(uri);
+    let doc = state.files().document(&key)?;
+    let file = crate::uri::file_path(uri);
     let place = file
         .as_deref()
         .map_or(format::Place::Detached, format::Place::File);
     let formatted = format::document(place, doc.text(), lines, Some(editor));
-    // A publish replaces the document's list: the formatter's diagnostics go
-    // alongside the compile ones, not in their place. The compile's are
-    // positions in the text it compiled, the formatter's in the document it
-    // formatted.
-    let publish = (!formatted.diagnostics.is_empty()).then(|| {
-        let compiled = Compiled::new(state);
-        let diagnostics: Vec<Diagnostic> = state
-            .diagnostics(uri.as_str())
+    // The formatter's diagnostics are positions in the document it formatted;
+    // the store publishes them beside the compile's, never in their place.
+    let findings = Findings {
+        version: doc.version(),
+        sent: formatted
+            .diagnostics
             .iter()
-            .map(|d| diagnostic_to_lsp(d, |span| compiled.range(span)))
-            .chain(
-                formatted
-                    .diagnostics
-                    .iter()
-                    .map(|d| diagnostic_to_lsp(d, |span| Some(doc.index().range(span)))),
-            )
-            .collect();
-        (diagnostics, doc.version())
-    });
+            .map(|d| diagnostic_to_lsp(d, |span| Some(doc.index().range(span))))
+            .collect(),
+        placed: formatted.diagnostics.clone(),
+        key,
+    };
     Some(Formatted {
-        edits: formatter_edits_to_lsp(formatted.edits(), doc.index()),
-        publish,
+        edits: lsp_edits(formatted.edits(), doc.index()),
+        findings,
         notice: overridden_editor_options(&formatted, editor),
     })
 }
 
-/// Formatter edits (0-based lines, byte columns of the formatted document)
-/// as LSP edits.
-fn formatter_edits_to_lsp(
-    edits: Vec<specforge_formatter::TextEdit>,
-    index: &LineIndex,
-) -> Vec<TextEdit> {
+/// A formatted document's edits (byte ranges of the open document's text,
+/// which `index` indexes) as LSP edits: its positions, UTF-16 columns
+/// (ADR 0023 D3).
+fn lsp_edits(edits: Vec<format::Edit>, index: &LineIndex) -> Vec<TextEdit> {
     edits
         .into_iter()
         .map(|e| TextEdit {
             range: Range {
-                start: index.position_at(e.start_line, e.start_col),
-                end: index.position_at(e.end_line, e.end_col),
+                start: index.position(e.range.start),
+                end: index.position(e.range.end),
             },
             new_text: e.new_text,
         })

@@ -289,8 +289,11 @@ fn a_declared_default_value_reaches_the_field_registry() {
         Some("Look for issue trackers")
     );
     let blocks = build.edges().get("blocks").expect("registered");
-    assert_eq!(blocks.declared.edge_style.as_deref(), Some("dashed"));
-    assert_eq!(blocks.source_extension, "@acme/tickets");
+    assert_eq!(
+        blocks.declared().unwrap().edge_style.as_deref(),
+        Some("dashed")
+    );
+    assert_eq!(blocks.source_extension(), "@acme/tickets");
 }
 
 /// A pass's handler that finds nothing.

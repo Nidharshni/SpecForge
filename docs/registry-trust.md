@@ -34,16 +34,20 @@ Every registry install performs four checks, in order:
 1. **Integrity** — the downloaded wasm bytes must match the `sha256` the
    registry reports (transfer-level check).
 2. **Publisher signature** — packages uploaded via `specforge publish` carry an
-   Ed25519 signature over the canonical payload
-   `{name, version, wasmSha256, manifestSha256, signedAt}`. The client
+   Ed25519 signature object `{sig, public_key, signed_at}` over the canonical payload
+   `{name, version, wasmSha256, manifestSha256, signedAt}`. The registry refuses an upload
+   whose signature isn't one or doesn't verify over it (`INVALID_SIGNATURE`), so a stored
+   package's signature verified once already. The client
    re-derives the payload from the **downloaded wasm bytes** and the
    **manifest the registry serves** (the package's extension declaration,
    which `specforge publish` derives from the binary; ADR 0012) and verifies the signature with the public
    key carried inside the signature object. A tampered binary *or* a swapped
    manifest breaks verification.
-3. **Key policy (TOFU)** — on the first verified install the publisher's key id
-   is **pinned** (recorded in `specforge.lock` and in
-   `~/.specforge/known-keys.json`). Later installs must present the same key.
+3. **Key policy (TOFU)** — a package must be signed by its pinned key: yours in
+   `~/.specforge/known-keys.json`, or, when you have none, the key the project's
+   `specforge.lock` records for it. With neither, the first verified key is
+   trusted on first use. The key is pinned in both places when the install is
+   written; an install that is refused or fails pins nothing.
 4. **Declaration** — once loaded, the binary's own declaration must equal the
    served one, field for field; the peers the served one declares are what the
    version-diamond check decided on before anything was loaded.
@@ -61,8 +65,11 @@ it can only replay previously signed packages (see [residual risks](#residual-ri
 | Manifest published before extension declarations (it carries `manifestVersion`) | **Always refused** ([R-OPS-004](diagnostics.md#r-ops-004)), suggesting to re-publish the package with this version of `specforge publish` |
 | Binary declares other than the served declaration | **Always refused** ([R-TRUST-004](diagnostics.md#r-trust-004)), naming the first category that differs |
 | Package unsigned | Refused. `--allow-unsigned` accepts the risk explicitly |
-| Signature invalid (tampered wasm/manifest) | **Always refused** — `--allow-unsigned` does not bypass a broken signature |
+| Signature doesn't verify (tampered wasm/manifest) | **Always refused** ([R-TRUST-002](diagnostics.md#r-trust-002)): `--allow-unsigned` does not bypass a broken signature |
+| Registry answer isn't the protocol's JSON (e.g. a signature that isn't one) | **Always refused** ([R009](diagnostics.md#r009)), before any key is pinned |
 | Key differs from the pinned key | Refused with both key ids; interactive re-pin offered (`y/N`); `--yes` accepts non-interactively for CI |
+| Key differs from the key `specforge.lock` records (no pin of yours) | Refused like a pinned key change, naming `specforge.lock`; `--yes` or a yes at the prompt accepts it |
+| `known-keys.json` can't be read | **Always refused** ([R-TRUST-006](diagnostics.md#r-trust-006)); the file is never overwritten |
 | Key on your `denied_keys` list | Refused outright (config-level revocation) |
 | Key on your `trusted_keys` allowlist | Accepted without a prior pin (pre-seeded trust) |
 
@@ -87,7 +94,8 @@ All publisher key state lives in `~/.specforge/known-keys.json`:
   air-gapped environments.
 
 `specforge.lock` records the key id beside the wasm hash for every signed
-registry install, so pins are auditable per project.
+registry install. It is the project's pin: a machine with no pins of its own (a
+new teammate, CI) holds the package to it.
 
 ## Namespace ownership
 
@@ -105,23 +113,27 @@ registry install, so pins are auditable per project.
 
 ## Residual risks (stated plainly)
 
-- **Registry-controlled version lists**: `specforge update` resolves the
-  newest version within the locked version's caret range (any version with
-  `--major`) from the registry, and a compromised registry can serve an *older*, still
-  validly signed version (a downgrade within the semver range you accept).
-  Version-list signatures (TUF-style) are deferred past v1. Pin exact versions
-  via `specforge.lock` when this matters.
+- **Registry-controlled version lists**: `specforge update` installs only a
+  version newer than the locked one (within its caret range, any newer one
+  with `--major`), so a registry cannot make an update install an older
+  version. A compromised registry can still withhold newer versions (a
+  freeze), or serve a newer, validly signed but malicious one. Version-list
+  signatures (TUF-style) are deferred past v1. `specforge add
+  <name>@<version>` installs exactly what it names, older included; pin exact
+  versions via `specforge.lock` when this matters.
 - **Replay**: a signed package stays signed forever. If a publisher's *old*
   release is vulnerable, its signature is still valid; review the version you
   install, not just the signature.
 - **TOFU first contact**: the first install trusts whichever key signs the
   first package you see. If your first install happens over a compromised
   channel, the pin anchors the wrong key. Pre-seed `trusted_keys` for
-  high-assurance setups.
+  high-assurance setups. A project's lock carries its pins, so only a machine
+  installing a package the lock doesn't yet hold trusts on first use.
 - **No key transparency**: v1 has no log proving a publisher uses one key
   consistently across all users. Compare pins with your team out of band.
-- **Unsigned packages**: registries may accept them (enforcement is a server
-  policy). `specforge add` refuses them unless you pass `--allow-unsigned`.
+- **Unsigned packages**: the reference registry refuses them, and refuses a
+  signature that doesn't verify; another registry may not. `specforge add`
+  refuses an unsigned package unless you pass `--allow-unsigned`.
 
 ## Runtime sandbox note
 

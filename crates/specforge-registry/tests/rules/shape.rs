@@ -2,6 +2,7 @@
 //! or W112 when it cannot work as declared.
 
 use specforge_common::Severity;
+use specforge_extension_sdk::prelude::FieldType;
 use specforge_protocol_types::{CheckKind, ValidationRuleDescriptor, ValidationSeverity};
 use specforge_test_macros::test as spec;
 
@@ -496,6 +497,11 @@ fn a_property_its_check_does_not_read_is_w147() {
         let mut declaration = crate::support::declare("@test", |c| {
             c.kind("Behavior", |k| {
                 k.keyword("behavior").supports_verify(true);
+                k.field("enforcing", |f| {
+                    f.field_type(FieldType::ReferenceList)
+                        .edge("enforces")
+                        .target_kind("behavior");
+                });
             });
             c.edge("enforces", |e| {
                 e.description("e");

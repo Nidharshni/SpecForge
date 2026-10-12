@@ -36,7 +36,16 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "AxiomAssumesInvariant",
       "source_extension": "@specforge/formal",
       "source_kind": "axiom",
-      "target_kind": "invariant"
+      "sources": [
+        "axiom"
+      ],
+      "target_kind": "invariant",
+      "targets": [
+        "invariant"
+      ],
+      "writers": [
+        "@specforge/formal axiom.assumes -> invariant"
+      ]
     },
     "BehaviorEnsuresInvariant": {
       "description": "Behavior ensures an invariant as postcondition",
@@ -46,7 +55,14 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "BehaviorEnsuresInvariant",
       "source_extension": "@specforge/formal",
       "source_kind": "behavior",
-      "target_kind": "invariant"
+      "sources": [
+        "behavior"
+      ],
+      "target_kind": "invariant",
+      "targets": [
+        "invariant"
+      ],
+      "writers": []
     },
     "BehaviorMaintainsInvariant": {
       "description": "Behavior maintains an invariant as frame invariant throughout execution",
@@ -56,7 +72,14 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "BehaviorMaintainsInvariant",
       "source_extension": "@specforge/formal",
       "source_kind": "behavior",
-      "target_kind": "invariant"
+      "sources": [
+        "behavior"
+      ],
+      "target_kind": "invariant",
+      "targets": [
+        "invariant"
+      ],
+      "writers": []
     },
     "BehaviorRefinesBehavior": {
       "description": "Concrete behavior refines an abstract behavior (specification layering)",
@@ -66,7 +89,14 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "BehaviorRefinesBehavior",
       "source_extension": "@specforge/formal",
       "source_kind": "behavior",
-      "target_kind": "behavior"
+      "sources": [
+        "behavior"
+      ],
+      "target_kind": "behavior",
+      "targets": [
+        "behavior"
+      ],
+      "writers": []
     },
     "BehaviorRequiresInvariant": {
       "description": "Behavior requires an invariant as precondition",
@@ -76,7 +106,14 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "BehaviorRequiresInvariant",
       "source_extension": "@specforge/formal",
       "source_kind": "behavior",
-      "target_kind": "invariant"
+      "sources": [
+        "behavior"
+      ],
+      "target_kind": "invariant",
+      "targets": [
+        "invariant"
+      ],
+      "writers": []
     },
     "BehaviorSatisfiesProperty": {
       "description": "Behavior satisfies a temporal property",
@@ -86,7 +123,14 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "BehaviorSatisfiesProperty",
       "source_extension": "@specforge/formal",
       "source_kind": "behavior",
-      "target_kind": "property"
+      "sources": [
+        "behavior"
+      ],
+      "target_kind": "property",
+      "targets": [
+        "property"
+      ],
+      "writers": []
     },
     "EventFollowsProtocol": {
       "description": "Event follows a synchronization protocol",
@@ -96,7 +140,14 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "EventFollowsProtocol",
       "source_extension": "@specforge/formal",
       "source_kind": "event",
-      "target_kind": "protocol"
+      "sources": [
+        "event"
+      ],
+      "target_kind": "protocol",
+      "targets": [
+        "protocol"
+      ],
+      "writers": []
     },
     "EventParticipatesInProcess": {
       "description": "Event participates in a process",
@@ -106,7 +157,14 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "EventParticipatesInProcess",
       "source_extension": "@specforge/formal",
       "source_kind": "event",
-      "target_kind": "process"
+      "sources": [
+        "event"
+      ],
+      "target_kind": "process",
+      "targets": [
+        "process"
+      ],
+      "writers": []
     },
     "ProcessComposesProcess": {
       "description": "Process composes sub-processes",
@@ -116,7 +174,16 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "ProcessComposesProcess",
       "source_extension": "@specforge/formal",
       "source_kind": "process",
-      "target_kind": "process"
+      "sources": [
+        "process"
+      ],
+      "target_kind": "process",
+      "targets": [
+        "process"
+      ],
+      "writers": [
+        "@specforge/formal process.sub_processes -> process"
+      ]
     },
     "PropertyDependsOnInvariant": {
       "description": "Property depends on an invariant",
@@ -126,7 +193,14 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "PropertyDependsOnInvariant",
       "source_extension": "@specforge/formal",
       "source_kind": "property",
-      "target_kind": "invariant"
+      "sources": [
+        "property"
+      ],
+      "target_kind": "invariant",
+      "targets": [
+        "invariant"
+      ],
+      "writers": []
     },
     "RefinementChainsToRefinement": {
       "description": "Chain of refinements",
@@ -136,7 +210,16 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "RefinementChainsToRefinement",
       "source_extension": "@specforge/formal",
       "source_kind": "refinement",
-      "target_kind": "refinement"
+      "sources": [
+        "refinement"
+      ],
+      "target_kind": "refinement",
+      "targets": [
+        "refinement"
+      ],
+      "writers": [
+        "@specforge/formal refinement.chains_to -> refinement"
+      ]
     },
     "RefinementRefinesAbstract": {
       "description": "Refinement maps from this abstract behavior",
@@ -146,7 +229,16 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "RefinementRefinesAbstract",
       "source_extension": "@specforge/formal",
       "source_kind": "refinement",
-      "target_kind": "behavior"
+      "sources": [
+        "refinement"
+      ],
+      "target_kind": "behavior",
+      "targets": [
+        "behavior"
+      ],
+      "writers": [
+        "@specforge/formal refinement.abstract_entity -> behavior"
+      ]
     },
     "RefinementRefinesConcrete": {
       "description": "Refinement maps to this concrete behavior",
@@ -156,7 +248,16 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "RefinementRefinesConcrete",
       "source_extension": "@specforge/formal",
       "source_kind": "refinement",
-      "target_kind": "behavior"
+      "sources": [
+        "refinement"
+      ],
+      "target_kind": "behavior",
+      "targets": [
+        "behavior"
+      ],
+      "writers": [
+        "@specforge/formal refinement.concrete_entity -> behavior"
+      ]
     }
   },
   "ext_short": {
@@ -670,7 +771,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "refinement.concrete_entity": "behavior"
     },
     "bidirectional_pairs": [],
-    "body_parser_kinds": [],
     "derived_references": [],
     "field_coercions": {
       "axiom.assumes": "List",
@@ -818,7 +918,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "no_incoming_edges",
       "code": "W123",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": null,
       "message_template": "property '{id}' is not referenced by any behavior — it may be unused",
@@ -835,7 +934,6 @@ expression: "digest(&load(&runtime, &[name]))"
         "pattern": "\\S",
         "values": []
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "description",
       "message_template": "property '{id}' has empty description",
@@ -856,7 +954,6 @@ expression: "digest(&load(&runtime, &[name]))"
           "fairness"
         ]
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "property_type",
       "message_template": "property '{id}' has invalid property_type '{value}' — expected one of: safety, liveness, fairness",
@@ -869,7 +966,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "no_incoming_edges",
       "code": "W126",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": null,
       "message_template": "axiom '{id}' is not referenced by any entity — it may be unused",
@@ -886,7 +982,6 @@ expression: "digest(&load(&runtime, &[name]))"
         "pattern": "\\S",
         "values": []
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "description",
       "message_template": "axiom '{id}' has empty description",
@@ -899,7 +994,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "no_incoming_edges",
       "code": "W128",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": null,
       "message_template": "protocol '{id}' is not referenced by any event — it may be unused",
@@ -916,7 +1010,6 @@ expression: "digest(&load(&runtime, &[name]))"
         "pattern": "\\S",
         "values": []
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "description",
       "message_template": "protocol '{id}' has empty description",
@@ -929,7 +1022,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "no_incoming_edges",
       "code": "W131",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": null,
       "message_template": "refinement '{id}' is not referenced by any entity — it may be unused",
@@ -946,7 +1038,6 @@ expression: "digest(&load(&runtime, &[name]))"
         "pattern": "\\S",
         "values": []
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "description",
       "message_template": "refinement '{id}' has empty description",
@@ -959,7 +1050,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "custom",
       "code": "W133",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": null,
       "message_template": "refinement '{id}' declares no invariant_deltas",
@@ -972,7 +1062,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "no_incoming_edges",
       "code": "W134",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": null,
       "message_template": "process '{id}' is not referenced by any entity — it may be unused",
@@ -989,7 +1078,6 @@ expression: "digest(&load(&runtime, &[name]))"
         "pattern": "\\S",
         "values": []
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "description",
       "message_template": "process '{id}' has empty description",
@@ -1006,7 +1094,6 @@ expression: "digest(&load(&runtime, &[name]))"
         "pattern": "\\S",
         "values": []
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "alphabet",
       "message_template": "process '{id}' has no alphabet (no events declared)",
@@ -1019,7 +1106,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "E006",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "expression",
       "message_template": "axiom '{id}' is missing required field 'expression'",
@@ -1032,7 +1118,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "E006",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "alphabet",
       "message_template": "process '{id}' is missing required field 'alphabet'",
@@ -1045,7 +1130,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "E006",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "initial_state",
       "message_template": "process '{id}' is missing required field 'initial_state'",
@@ -1058,7 +1142,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "E006",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "expression",
       "message_template": "property '{id}' is missing required field 'expression'",
@@ -1071,7 +1154,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "E006",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "property_type",
       "message_template": "property '{id}' is missing required field 'property_type'",
@@ -1084,7 +1166,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "E006",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "alphabet",
       "message_template": "protocol '{id}' is missing required field 'alphabet'",
@@ -1097,7 +1178,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "E006",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "initial_state",
       "message_template": "protocol '{id}' is missing required field 'initial_state'",
@@ -1110,7 +1190,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "E006",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "abstract_entity",
       "message_template": "refinement '{id}' is missing required field 'abstract_entity'",
@@ -1123,7 +1202,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "E006",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "concrete_entity",
       "message_template": "refinement '{id}' is missing required field 'concrete_entity'",

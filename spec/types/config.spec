@@ -14,8 +14,9 @@ type CompilerConfig {
   name                 string           @readonly
   version              string           @readonly
   spec_root            string           @optional
-  // Path substrings (not globs), relative to the spec root: a .spec file
-  // whose path contains one is not compiled on any surface.
+  // Gitignore-style patterns over a file's path relative to the spec root
+  // (resolve_use_imports): a .spec file one leaves out is no source on any
+  // surface, and no import names it.
   exclude              string[]         @optional
   strict               boolean          @optional
   namespace            string           @optional
@@ -74,21 +75,35 @@ type VersionList "Version List" {
 }
 
 // GET {base}/packages/{name}/{version}: what a registry stores for one
-// version. signature, key_id and manifest are absent when empty.
+// version. signature and manifest are absent when empty; a signature
+// that isn't a PackageSignature makes the reply unreadable (R009).
 type PackageMetadata "Package Metadata" {
   name         string
   version      string
   sha256       string
-  size_bytes   integer  @optional
-  description  string   @optional
-  keywords     string[] @optional
-  publisher    string   @optional
-  published_at string   @optional
+  size_bytes   integer          @optional
+  description  string           @optional
+  keywords     string[]         @optional
+  publisher    string           @optional
+  published_at string           @optional
   wasm_url     string
-  signature    string   @optional
-  key_id       string   @optional
-  manifest     string   @optional
+  signature    PackageSignature @optional
+  manifest     string           @optional
   verify unit "PackageMetadata is the JSON a registry serves for one version"
+}
+
+// A publisher's Ed25519 signature over a package's name and version as
+// declared and the SHA-256 of the exact binary and manifest uploaded,
+// with the public key and time that verify it offline
+// (specforge_registry_wire::PackageSignature, ADR 0061). sig is 128 hex,
+// public_key 64 hex (not a small-order key), signed_at RFC 3339; no other
+// key. Its key id is the first 16 hex of SHA-256 of the public key. Only a
+// well-formed one reads.
+type PackageSignature "Package Signature" {
+  sig        string
+  public_key string
+  signed_at  string
+  verify unit "PackageSignature is the JSON of a publisher signature, and only a well-formed one reads"
 }
 
 type SearchHit "Search Hit" {
@@ -108,20 +123,24 @@ type SearchQuery "Search Query" {
   verify unit "SearchQuery is the query string a registry search reads"
 }
 
-// GET {base}/search?q=&limit=&contributes=: the latest version of each
-// matching package; contributes keeps those whose declaration declares that
+// GET {base}/search?q=&limit=&contributes=: each package one of whose
+// versions matches q, at the version latest picks (the highest release, a
+// pre-release only when it has none: what specforge add <name> installs);
+// contributes keeps those whose listed version's declaration declares that
 // category.
 type SearchResults "Search Results" {
   results SearchHit[]
   verify unit "SearchResults is the JSON a registry answers a search with"
 }
 
-// PUT {base}/packages/{name}/{version}, answered 201.
+// PUT {base}/packages/{name}/{version}, answered 201: what the registry
+// stored, which the publishing client checks against what it sent.
 type PublishReceipt "Publish Receipt" {
   name       string
   version    string
   sha256     string
   size_bytes integer
+  // The key id of the signature the registry verified over the upload.
   key_id     string
   verify unit "PublishReceipt is the JSON a registry answers a publish with"
 }
@@ -135,9 +154,36 @@ type TokenVerified "Token Verified" {
   verify unit "TokenVerified is the JSON a registry answers a token check with"
 }
 
+// What a registry refused, named the same by server and client
+// (specforge_registry_wire::ErrorCode); a client reads a code it doesn't
+// know as UNKNOWN.
+type RegistryErrorCode = "NOT_FOUND"
+  | "UNAUTHORIZED"
+  | "FORBIDDEN"
+  | "ADMIN_REQUIRED"
+  | "SCOPE_OWNED"
+  | "RATE_LIMITED"
+  | "BAD_REQUEST"
+  | "INVALID_NAME"
+  | "INVALID_VERSION"
+  | "UNSIGNED_PACKAGE"
+  | "INVALID_SIGNATURE"
+  | "INVALID_WASM"
+  | "INVALID_MANIFEST"
+  | "NAME_MISMATCH"
+  | "DUPLICATE_VERSION"
+  | "INTEGRITY_VIOLATION"
+  | "DB_ERROR"
+  | "DB_TASK"
+  | "AUTH_TASK"
+  | "INTEGRITY_TASK"
+  | "STORAGE_ERROR"
+  | "STORAGE_TASK"
+  | "UNKNOWN"
+
 // Every error answer: {"error": {"code", "message"}}.
 type RegistryErrorBody "Registry Error Body" {
-  code    string
+  code    RegistryErrorCode
   message string
   verify unit "RegistryErrorBody is the JSON of every registry error"
 }
@@ -151,6 +197,26 @@ type RegistryPackage "Registry Package" {
   declaration ExtensionDeclaration
   key_id      string @optional
   verify unit "RegistryPackage is what a package that passed the fetch policy hands an operation"
+}
+
+// How a fetch decides a package's publisher (specforge_ops::registry::TrustPolicy):
+// the caller's choices and the key the project's lock records for the name,
+// which is the pin when the user has none of their own.
+type TrustPolicy "Trust Policy" {
+  allow_unsigned boolean
+  trust          string
+  locked_key     string @optional
+  verify unit "TrustPolicy is what a fetch decides a publisher by: the caller's choices and the key the lock records"
+}
+
+// A publisher key a committed lock plan pins for a package name
+// (specforge_ops::registry::KeyPin); replaces is the key a consented key
+// change replaced.
+type KeyPin "Key Pin" {
+  name     PackageName
+  key_id   string
+  replaces string @optional
+  verify unit "KeyPin is what a committed lock plan pins for a package name"
 }
 
 // What the Registry port's search answers (specforge_ops::registry::Searched):

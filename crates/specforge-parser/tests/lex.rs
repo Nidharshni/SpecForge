@@ -2,7 +2,8 @@
 //! checked against tree-sitter's grammar over the repository's spec.
 
 use specforge_parser::lex::{
-    Lexeme, LexemeKind, is_ref_id_prefix, lex, line_indent, runs_into_text, starts_top_level_form,
+    Lexeme, LexemeKind, form_starts, is_ref_id_prefix, lex, line_indent, runs_into_text,
+    starts_top_level_form,
 };
 use specforge_parser::parse_incremental;
 use specforge_test_macros::test as specforge_test;
@@ -584,4 +585,75 @@ fn the_grammars_scanner_reads_form_starts_as_the_lexer_does() {
         .map(|line| format!("{line:?}: lexer {}", starts_alone(line, 0)))
         .collect();
     assert!(disagree.is_empty(), "{disagree:#?}");
+}
+
+#[specforge_test(
+    behavior = "lex_spec_text",
+    verify = "a document's form starts are the grammar's top-level nodes, and stay so with every body left unclosed"
+)]
+fn a_documents_form_starts_are_its_top_level_nodes() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut files = Vec::new();
+    for corpus in ["spec", "integrations/rust/spec", "examples"] {
+        spec_files(&root.join(corpus), &mut files);
+    }
+    assert!(files.len() > 150);
+    for file in files {
+        let src = std::fs::read_to_string(&file).unwrap();
+        let (_, tree) = parse_incremental(&src, "c.spec", None);
+        let tree = tree.unwrap();
+        let root_node = tree.root_node();
+        let mut cursor = root_node.walk();
+        let nodes: Vec<tree_sitter::Node> = root_node
+            .named_children(&mut cursor)
+            .filter(|n| n.kind() != kind::COMMENT)
+            .collect();
+        let expected: Vec<usize> = nodes.iter().map(|n| n.start_byte()).collect();
+        let starts = |text: &str| {
+            let lexemes = lex(text);
+            form_starts(text, &lexemes)
+                .into_iter()
+                .map(|i| lexemes[i].start)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(starts(&src), expected, "{}", file.display());
+        // Every top-level `}` blanked: each body is left unclosed.
+        let mut bytes = src.clone().into_bytes();
+        for node in &nodes {
+            if bytes[node.end_byte() - 1] == b'}' {
+                bytes[node.end_byte() - 1] = b' ';
+            }
+        }
+        let unclosed = String::from_utf8(bytes).unwrap();
+        assert_eq!(starts(&unclosed), expected, "{} (unclosed)", file.display());
+    }
+}
+
+#[test]
+fn form_starts_close_every_bracket() {
+    let text = concat!(
+        "behavior a \"A\" {\n",   // a form
+        "  tags [x,\n",           //   a list left open
+        "  method m(p: T\n",      //   a parameter list left open
+        "  behavior b \"B\" {\n", // deeper than the last line begun with no bracket open: not a form
+        "type t = A | B\n",       // a form: closes all three
+        "  behavior c \"C\" {\n", // a form: no bracket is open
+        "}\n",
+        "// behavior d \"D\" {\n", // a comment: not a form
+        "use \"./x\"\n",           // a form
+    );
+    let lexemes = lex(text);
+    let at: Vec<&str> = form_starts(text, &lexemes)
+        .into_iter()
+        .map(|i| text[lexemes[i].start..].lines().next().unwrap())
+        .collect();
+    assert_eq!(
+        at,
+        [
+            "behavior a \"A\" {",
+            "type t = A | B",
+            "behavior c \"C\" {",
+            "use \"./x\""
+        ]
+    );
 }

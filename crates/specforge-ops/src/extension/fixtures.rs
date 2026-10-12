@@ -49,6 +49,16 @@ pub(super) fn entry(
     }
 }
 
+/// [`project`], with a `specforge.json` enabling every locked name: the extensions the project
+/// loads (ADR 0041: the peer set is what the entries load).
+pub(super) fn enabled_project(entries: Vec<LockFileEntry>) -> tempfile::TempDir {
+    let names: Vec<String> = entries.iter().map(|e| e.name.to_string()).collect();
+    let dir = project(entries);
+    let config = serde_json::json!({"name": "p", "version": "0.1.0", "extensions": names});
+    std::fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
+    dir
+}
+
 /// A project locking `entries`, each installed with the bytes `old`.
 pub(super) fn project(entries: Vec<LockFileEntry>) -> tempfile::TempDir {
     let dir = tempfile::tempdir().unwrap();

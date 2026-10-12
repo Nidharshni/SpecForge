@@ -8,6 +8,5 @@ crate-type = ["cdylib"]
 
 [dependencies]
 specforge-extension-sdk = { path = "../../crates/specforge-extension-sdk" }
-wit-bindgen = "0.30"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

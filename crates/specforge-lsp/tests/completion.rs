@@ -33,7 +33,10 @@ pub fn compiled(files: &[(&str, &str)]) -> (tempfile::TempDir, CompiledProject) 
         std::fs::write(dir.path().join(name), text).unwrap();
     }
     let runtime = specforge_component::ComponentRuntime::with_user_cache();
-    let project = CompiledProject::compile(dir.path(), Some(Arc::new(runtime)));
+    let project = CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        Some(Arc::new(runtime)),
+    );
     assert!(
         project.diagnostics().iter().all(|d| d.code != "I002"),
         "the extension did not load"
@@ -48,7 +51,7 @@ fn complete<'v>(
     character: u32,
     view: &ProjectView<'v>,
 ) -> (String, Vec<CompletionItem>) {
-    let doc = Document::new("file:///test.spec".into(), text.into());
+    let doc = Document::new(text.into());
     let cursor = doc.at(Position::new(line, character)).expect("a position");
     let site = cursor.completion();
     let found = items(&site, &cursor.word_edit(), false, view);
@@ -226,7 +229,7 @@ fn list_items_complete_ids_of_the_target_kind() {
 fn the_prefix_is_the_word_before_the_cursor() {
     let text = "behavior login \"Login\" {\n  invariants []\n}\n";
     // Inside `inv|ariants`: the prefix is `inv`, not the whole word.
-    let doc = Document::new("file:///t.spec".into(), text.into());
+    let doc = Document::new(text.into());
     let cursor = doc.at(Position::new(1, 5)).unwrap();
     assert_eq!(
         cursor.completion(),

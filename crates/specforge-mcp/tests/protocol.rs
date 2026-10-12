@@ -130,8 +130,8 @@ fn notifications_produce_no_response() {
     assert!(resp.is_none());
 }
 
-fn init_server() -> McpServer {
-    let mut server = McpServer::new();
+fn init_server() -> Logged {
+    let mut server = logged(McpServer::new());
     call(&mut server, "initialize", json!({}));
     server
 }
@@ -292,14 +292,12 @@ fn mcp_cancel_notification_gets_no_response() {
         "params": {"requestId": 7, "reason": "user aborted"}});
 
     assert!(server.handle_message(&note.to_string()).is_none());
-    let event = server
-        .state()
-        .events
-        .iter()
-        .find(|e| e.name == "mcp_request_cancelled")
+    let event = events(&server, "mcp_request_cancelled")
+        .into_iter()
+        .next()
         .expect("mcp_request_cancelled emitted");
-    assert_eq!(event.params["requestId"], "7");
-    assert_eq!(event.params["wasInProgress"], false);
+    assert_eq!(event["requestId"], "7");
+    assert_eq!(event["wasInProgress"], false);
 }
 
 #[specforge_test(

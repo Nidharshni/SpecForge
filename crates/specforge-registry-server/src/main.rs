@@ -79,8 +79,8 @@ enum TokenAction {
     },
     /// Revoke a token
     Revoke {
-        /// Token prefix (first 8 chars)
-        prefix: String,
+        /// Token id (the 8 hex digits `token list` shows)
+        id: String,
 
         /// Data directory
         #[arg(long, default_value = "./registry-data")]
@@ -171,7 +171,7 @@ async fn main() {
                 if tokens.is_empty() {
                     println!("No tokens found.");
                 } else {
-                    println!("{:<12} {:<20} {:<16} CREATED", "PREFIX", "LABEL", "SCOPE");
+                    println!("{:<12} {:<20} {:<16} CREATED", "ID", "LABEL", "SCOPE");
                     for t in &tokens {
                         println!(
                             "{:<12} {:<20} {:<16} {}",
@@ -183,13 +183,16 @@ async fn main() {
                     }
                 }
             }
-            TokenAction::Revoke { prefix, data_dir } => {
+            TokenAction::Revoke { id, data_dir } => {
                 let database =
                     Database::open(&data_dir.join("registry.db")).expect("failed to open database");
-                if auth::revoke_token(&database, &prefix) {
-                    println!("Token revoked.");
-                } else {
-                    println!("No token found with prefix '{}'.", prefix);
+                match auth::revoke_token(&database, &id) {
+                    Ok(true) => println!("Token revoked."),
+                    Ok(false) => println!("No token found with id '{id}'."),
+                    Err(refused) => {
+                        eprintln!("Token not revoked: {refused:?}");
+                        std::process::exit(1);
+                    }
                 }
             }
         },

@@ -6,15 +6,15 @@ C1 | specforge stats
 exit 2
 -- stdout:
 -- stderr:
-error[E045]: invalid test results ./specforge-report.json: EOF while parsing an object at line 1 column 1 (expected the RES-15 specforge-report.json shape)
+error[E045]: invalid test results [ROOT]/specforge-report.json: EOF while parsing an object at line 1 column 1 (expected the RES-15 specforge-report.json shape)
   hint: run `specforge collect` again to rewrite the report, or fix or remove the file
 
 C2 | specforge stats --format json
 exit 2
 -- stdout:
 {
+  "error": "invalid test results [ROOT]/specforge-report.json: EOF while parsing an object at line 1 column 1 (expected the RES-15 specforge-report.json shape)",
   "code": "E045",
-  "error": "invalid test results ./specforge-report.json: EOF while parsing an object at line 1 column 1 (expected the RES-15 specforge-report.json shape)",
   "suggestion": "run `specforge collect` again to rewrite the report, or fix or remove the file"
 }
 -- stderr:
@@ -23,8 +23,8 @@ C3 | specforge analyze --format json
 exit 2
 -- stdout:
 {
+  "error": "invalid test results [ROOT]/specforge-report.json: EOF while parsing an object at line 1 column 1 (expected the RES-15 specforge-report.json shape)",
   "code": "E045",
-  "error": "invalid test results ./specforge-report.json: EOF while parsing an object at line 1 column 1 (expected the RES-15 specforge-report.json shape)",
   "suggestion": "run `specforge collect` again to rewrite the report, or fix or remove the file"
 }
 -- stderr:
@@ -39,9 +39,8 @@ C5 | specforge trace nope --format json
 exit 1
 -- stdout:
 {
-  "code": "E003",
   "error": "unresolved entity 'nope' — not found in graph",
-  "suggestion": null
+  "code": "E003"
 }
 -- stderr:
 
@@ -56,8 +55,8 @@ C7 | specforge migrate --target-version 9.9 --format json
 exit 1
 -- stdout:
 {
-  "code": "E019",
   "error": "unsupported target version 9.9 (max supported: 1.0)",
+  "code": "E019",
   "suggestion": "Use a format version between 1.0 and 1.0."
 }
 -- stderr:
@@ -79,9 +78,8 @@ C10 | specforge init --name a --format json
 exit 1
 -- stdout:
 {
-  "code": "invalid_name",
   "error": "invalid project name 'a': it must be 2-60 characters, as the starter's spec ID must",
-  "suggestion": null
+  "code": "invalid_name"
 }
 -- stderr:
 
@@ -89,9 +87,8 @@ C11 | specforge collect --path . --format json
 exit 1
 -- stdout:
 {
-  "code": "no_project",
-  "error": "no specforge project at . (no specforge.json or specforge.spec)",
-  "suggestion": null
+  "error": "no specforge project at [ROOT] (no specforge.json at or above it)",
+  "code": "no_project"
 }
 -- stderr:
 
@@ -99,8 +96,8 @@ C12 | specforge add @specforge/nope --format json
 exit 1
 -- stdout:
 {
-  "code": "E063",
   "error": "no registry configured: `add` needs one, and SpecForge has no built-in registry",
+  "code": "E063",
   "suggestion": "add a \"registries\" array to specforge.json, e.g. \"registries\": [{\"alias\": \"main\", \"url\": \"<registry URL>\", \"default_registry\": true}]"
 }
 -- stderr:

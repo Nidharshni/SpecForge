@@ -1,5 +1,6 @@
 ---
 source: crates/specforge-mcp/tests/tool_arguments.rs
+assertion_line: 17
 expression: listing
 ---
 [
@@ -495,8 +496,8 @@ expression: listing
     "category": "core",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -545,8 +546,8 @@ expression: listing
     "category": "core",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -1007,8 +1008,8 @@ expression: listing
     "category": "core",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -1069,8 +1070,8 @@ expression: listing
     "category": "core",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -1258,8 +1259,8 @@ expression: listing
     "category": "core",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -1356,8 +1357,8 @@ expression: listing
     "category": "core",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -1466,8 +1467,8 @@ expression: listing
     "category": "core",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -1669,8 +1670,8 @@ expression: listing
     "category": "core",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -1736,8 +1737,8 @@ expression: listing
     "category": "core",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -1783,8 +1784,8 @@ expression: listing
     "category": "core",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -1886,8 +1887,8 @@ expression: listing
     "category": "core",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -1991,8 +1992,8 @@ expression: listing
     "category": "core",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -2058,8 +2059,8 @@ expression: listing
     "category": "core",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -2434,8 +2435,8 @@ expression: listing
     "category": "navigation",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -2533,8 +2534,8 @@ expression: listing
     "category": "navigation",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -2669,8 +2670,8 @@ expression: listing
     "category": "navigation",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -2799,8 +2800,8 @@ expression: listing
     "category": "navigation",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -2923,8 +2924,8 @@ expression: listing
     "category": "navigation",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -3348,10 +3349,10 @@ expression: listing
     "category": "mutation",
     "source": "core",
     "annotations": {
+      "readOnlyHint": false,
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": false,
-      "readOnlyHint": false
+      "openWorldHint": false
     }
   },
   {
@@ -3730,10 +3731,10 @@ expression: listing
     "category": "mutation",
     "source": "core",
     "annotations": {
+      "readOnlyHint": false,
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": false,
-      "readOnlyHint": false
+      "openWorldHint": false
     }
   },
   {
@@ -3812,10 +3813,10 @@ expression: listing
     "category": "mutation",
     "source": "core",
     "annotations": {
+      "readOnlyHint": false,
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": false,
-      "readOnlyHint": false
+      "openWorldHint": false
     }
   },
   {
@@ -3914,6 +3915,12 @@ expression: listing
                   "key_id": {
                     "type": "string"
                   },
+                  "peers_enabled": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
                   "publisher": {
                     "enum": [
                       "unsigned",
@@ -3942,7 +3949,8 @@ expression: listing
                   "extension",
                   "version",
                   "sha256",
-                  "source"
+                  "source",
+                  "peers_enabled"
                 ],
                 "type": "object"
               },
@@ -4053,10 +4061,10 @@ expression: listing
     "category": "mutation",
     "source": "core",
     "annotations": {
+      "readOnlyHint": false,
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true,
-      "readOnlyHint": false
+      "openWorldHint": true
     }
   },
   {
@@ -4145,10 +4153,10 @@ expression: listing
     "category": "mutation",
     "source": "core",
     "annotations": {
+      "readOnlyHint": false,
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": false,
-      "readOnlyHint": false
+      "openWorldHint": false
     }
   },
   {
@@ -4694,10 +4702,10 @@ expression: listing
     "category": "mutation",
     "source": "core",
     "annotations": {
+      "readOnlyHint": false,
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": false,
-      "readOnlyHint": false
+      "openWorldHint": false
     }
   },
   {
@@ -4800,8 +4808,8 @@ expression: listing
     "category": "management",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -5139,8 +5147,8 @@ expression: listing
     "category": "management",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -5273,9 +5281,9 @@ expression: listing
                   },
                   "status": {
                     "enum": [
-                      "ok",
+                      "error",
                       "warn",
-                      "error"
+                      "info"
                     ],
                     "type": "string"
                   }
@@ -5309,9 +5317,9 @@ expression: listing
                   },
                   "status": {
                     "enum": [
-                      "ok",
+                      "error",
                       "warn",
-                      "error"
+                      "info"
                     ],
                     "type": "string"
                   }
@@ -5396,9 +5404,9 @@ expression: listing
                   },
                   "status": {
                     "enum": [
-                      "ok",
+                      "error",
                       "warn",
-                      "error"
+                      "info"
                     ],
                     "type": "string"
                   }
@@ -5433,9 +5441,261 @@ expression: listing
                   },
                   "status": {
                     "enum": [
-                      "ok",
+                      "error",
                       "warn",
-                      "error"
+                      "info"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "check",
+                  "status",
+                  "code",
+                  "remediation",
+                  "about"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "about": {
+                    "enum": [
+                      "structural_only"
+                    ],
+                    "type": "string"
+                  },
+                  "check": {
+                    "type": "string"
+                  },
+                  "code": {
+                    "type": "string"
+                  },
+                  "remediation": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "enum": [
+                      "error",
+                      "warn",
+                      "info"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "check",
+                  "status",
+                  "code",
+                  "remediation",
+                  "about"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "about": {
+                    "enum": [
+                      "providers"
+                    ],
+                    "type": "string"
+                  },
+                  "check": {
+                    "type": "string"
+                  },
+                  "code": {
+                    "type": "string"
+                  },
+                  "remediation": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "enum": [
+                      "error",
+                      "warn",
+                      "info"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "check",
+                  "status",
+                  "code",
+                  "remediation",
+                  "about"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "about": {
+                    "enum": [
+                      "declaration"
+                    ],
+                    "type": "string"
+                  },
+                  "check": {
+                    "type": "string"
+                  },
+                  "code": {
+                    "type": "string"
+                  },
+                  "remediation": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "enum": [
+                      "error",
+                      "warn",
+                      "info"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "check",
+                  "status",
+                  "code",
+                  "remediation",
+                  "about"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "about": {
+                    "enum": [
+                      "peer"
+                    ],
+                    "type": "string"
+                  },
+                  "check": {
+                    "type": "string"
+                  },
+                  "code": {
+                    "type": "string"
+                  },
+                  "remediation": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "enum": [
+                      "error",
+                      "warn",
+                      "info"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "check",
+                  "status",
+                  "code",
+                  "remediation",
+                  "about"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "about": {
+                    "enum": [
+                      "registry"
+                    ],
+                    "type": "string"
+                  },
+                  "check": {
+                    "type": "string"
+                  },
+                  "code": {
+                    "type": "string"
+                  },
+                  "remediation": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "enum": [
+                      "error",
+                      "warn",
+                      "info"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "check",
+                  "status",
+                  "code",
+                  "remediation",
+                  "about"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "about": {
+                    "enum": [
+                      "rule"
+                    ],
+                    "type": "string"
+                  },
+                  "check": {
+                    "type": "string"
+                  },
+                  "code": {
+                    "type": "string"
+                  },
+                  "remediation": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "enum": [
+                      "error",
+                      "warn",
+                      "info"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "check",
+                  "status",
+                  "code",
+                  "remediation",
+                  "about"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "about": {
+                    "enum": [
+                      "surface"
+                    ],
+                    "type": "string"
+                  },
+                  "check": {
+                    "type": "string"
+                  },
+                  "code": {
+                    "type": "string"
+                  },
+                  "remediation": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "enum": [
+                      "error",
+                      "warn",
+                      "info"
                     ],
                     "type": "string"
                   }
@@ -5464,14 +5724,17 @@ expression: listing
                   "code": {
                     "type": "string"
                   },
+                  "keyword": {
+                    "type": "string"
+                  },
                   "remediation": {
                     "type": "string"
                   },
                   "status": {
                     "enum": [
-                      "ok",
+                      "error",
                       "warn",
-                      "error"
+                      "info"
                     ],
                     "type": "string"
                   }
@@ -5508,9 +5771,9 @@ expression: listing
                   },
                   "status": {
                     "enum": [
-                      "ok",
+                      "error",
                       "warn",
-                      "error"
+                      "info"
                     ],
                     "type": "string"
                   }
@@ -5522,42 +5785,6 @@ expression: listing
                   "remediation",
                   "about",
                   "keyword"
-                ],
-                "type": "object"
-              },
-              {
-                "additionalProperties": false,
-                "properties": {
-                  "about": {
-                    "enum": [
-                      "peer"
-                    ],
-                    "type": "string"
-                  },
-                  "check": {
-                    "type": "string"
-                  },
-                  "code": {
-                    "type": "string"
-                  },
-                  "remediation": {
-                    "type": "string"
-                  },
-                  "status": {
-                    "enum": [
-                      "ok",
-                      "warn",
-                      "error"
-                    ],
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "check",
-                  "status",
-                  "code",
-                  "remediation",
-                  "about"
                 ],
                 "type": "object"
               },
@@ -5581,9 +5808,9 @@ expression: listing
                   },
                   "status": {
                     "enum": [
-                      "ok",
+                      "error",
                       "warn",
-                      "error"
+                      "info"
                     ],
                     "type": "string"
                   }
@@ -5629,8 +5856,8 @@ expression: listing
     "category": "management",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -6011,10 +6238,10 @@ expression: listing
     "category": "management",
     "source": "core",
     "annotations": {
+      "readOnlyHint": false,
       "destructiveHint": true,
       "idempotentHint": false,
-      "openWorldHint": true,
-      "readOnlyHint": false
+      "openWorldHint": true
     }
   },
   {
@@ -6079,10 +6306,10 @@ expression: listing
     "category": "management",
     "source": "core",
     "annotations": {
+      "readOnlyHint": false,
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": false,
-      "readOnlyHint": false
+      "openWorldHint": false
     }
   },
   {
@@ -6180,8 +6407,8 @@ expression: listing
     "category": "core",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -6303,8 +6530,8 @@ expression: listing
     "category": "core",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -6396,10 +6623,10 @@ expression: listing
     "category": "mutation",
     "source": "core",
     "annotations": {
+      "readOnlyHint": false,
       "destructiveHint": true,
       "idempotentHint": false,
-      "openWorldHint": false,
-      "readOnlyHint": false
+      "openWorldHint": false
     }
   },
   {
@@ -6471,8 +6698,8 @@ expression: listing
     "category": "navigation",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -6560,8 +6787,8 @@ expression: listing
     "category": "navigation",
     "source": "core",
     "annotations": {
-      "openWorldHint": false,
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   }
 ]

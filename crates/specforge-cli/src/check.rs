@@ -5,15 +5,14 @@ use specforge_common::{Diagnostic, Severity, diagnostic_summary, render_diagnost
 use specforge_ops::check::{CacheRecord, CheckOptions, check};
 use specforge_ops::view::ProjectView;
 use specforge_ops::{OpError, OpErrorKind};
-use specforge_project::{CompiledProject, LintProfile, SharedRuntime};
+use specforge_project::{LintProfile, SharedRuntime};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 // `specforge check`'s command line.
 #[derive(clap::Args)]
 pub(crate) struct Args {
-    /// Path to the spec root directory
-    #[arg(default_value = ".")]
+    #[arg(default_value = ".", help = crate::project::PATH_HELP)]
     path: PathBuf,
 
     /// Promote warnings to errors
@@ -93,8 +92,11 @@ fn run_in(
             "note: --lint pedantic is the default: info diagnostics are always reported"
         );
     }
-    let compiled = CompiledProject::compile(path, Some(runtime));
-    let outcome = match check(&ProjectView::of(&compiled), compiled.diagnostics(), options) {
+    let compiled = match crate::project::compile_in(path, runtime) {
+        Ok(compiled) => compiled,
+        Err(error) => return Refusal::of(format).report(terminal, &error),
+    };
+    let outcome = match check(&ProjectView::of(&compiled), options) {
         Ok(outcome) => outcome,
         Err(error) => return Refusal::of(format).report(terminal, &error.into()),
     };
@@ -244,8 +246,11 @@ mod tests {
 
         // What check reports is the compile's diagnostics, the pass's
         // among them with its code and severity.
-        let reported = CompiledProject::compile(failing.path(), Some(Arc::new(audit_extension())))
-            .diagnostics();
+        let reported = specforge_project::CompiledProject::compile(
+            &specforge_common::ProjectRoot::of(failing.path()).unwrap(),
+            Some(Arc::new(audit_extension())),
+        )
+        .diagnostics();
         let audit: Vec<_> = reported.iter().filter(|d| d.code == "E951").collect();
         assert_eq!(audit.len(), 1, "{reported:?}");
         assert_eq!(audit[0].severity, specforge_common::Severity::Error);

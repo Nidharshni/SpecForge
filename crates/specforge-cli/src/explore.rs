@@ -1,5 +1,4 @@
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
-use crate::pipeline;
 use crate::terminal::{Terminal, errln, outln};
 use specforge_ops::explore::{Exploration, ExplorationRequest, explore};
 use specforge_ops::view::ProjectView;
@@ -11,8 +10,7 @@ pub(crate) struct Args {
     /// Entity ID to explore from (omit to explore the whole project)
     entity: Option<String>,
 
-    /// Path to the spec root directory
-    #[arg(long, default_value = ".")]
+    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
     path: PathBuf,
 
     /// Only entities of this kind
@@ -44,7 +42,10 @@ impl Args {
     /// the closest entity as its hint (exit 1).
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         let format = self.output.format;
-        let project = pipeline::compile_project(&self.path);
+        let project = match crate::project::compile(&self.path) {
+            Ok(project) => project,
+            Err(error) => return Refusal::of(format).report(terminal, &error),
+        };
         let view = ProjectView::of(&project);
         match explore(&view, &self.request()) {
             Ok(exploration) => {

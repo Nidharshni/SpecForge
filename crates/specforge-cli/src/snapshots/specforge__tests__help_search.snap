@@ -27,7 +27,7 @@ Options:
           - feature_flags:    feature flags
 
       --path <PATH>
-          Path to the project root (for registry config)
+          A path inside the project (the nearest directory at or above it holding specforge.json; none: the directory itself, with the default configuration)
           
           [default: .]
 

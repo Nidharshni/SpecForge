@@ -1,5 +1,4 @@
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
-use crate::pipeline;
 use crate::terminal::{Terminal, outln};
 use specforge_ops::stats::Stats;
 use specforge_ops::view::ProjectView;
@@ -8,8 +7,7 @@ use std::path::PathBuf;
 // `specforge stats`'s command line.
 #[derive(clap::Args)]
 pub(crate) struct Args {
-    /// Path to the spec root directory
-    #[arg(default_value = ".")]
+    #[arg(default_value = ".", help = crate::project::PATH_HELP)]
     path: PathBuf,
 
     #[command(flatten)]
@@ -23,7 +21,10 @@ impl Args {
     /// (exit 2), as in `analyze`.
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         let format = self.output.format;
-        let project = pipeline::compile_project(&self.path);
+        let project = match crate::project::compile(&self.path) {
+            Ok(project) => project,
+            Err(error) => return Refusal::measuring(self.output.format).report(terminal, &error),
+        };
         let stats = match specforge_ops::stats::stats(&ProjectView::of(&project)) {
             Ok(stats) => stats,
             Err(error) => return Refusal::measuring(format).report(terminal, &error),

@@ -94,3 +94,32 @@ or a dry run of an exact version, asks nothing and shows nothing.
 of every builtin") now holds for the protocol types themselves: the package names and the peer rule moved to
 `specforge-package`, which the wire crate depends on. `specforge_registry_wire::declares` is gone: a search
 filter reads `ExtensionDeclaration::declares`.
+
+## Amendment (architecture round 7, plan 12): the signature is part of the contract, and refusals are typed
+
+- **D1.** The crate also holds the package signature (`signature`: `PackageSignature`, `SignedContent`,
+  `sha256_hex`), its parse and its verification, which both ends run (ADR 0061). It therefore also depends on
+  `serde_json`, `sha2`, `hex`, `ed25519-dalek` and `chrono` (and on `specforge-package`, ADR 0050). D1's rejection of
+  "a module in the client" stands for its first reason: the registry would link the keyring and reqwest. It now links
+  ed25519 on purpose.
+- **D2.** "Anything else a network error" is narrowed: a 400 is `Refused` carrying the registry's `ErrorCode` and
+  message (R008), and a 2xx body that isn't the call's wire type is `InvalidReply` (R009). Other statuses read
+  as before. `PackageMetadata` carries the typed signature and no `key_id`; the error body's `code` is `ErrorCode`;
+  the client reads the publish receipt.
+- **D4.** The client contract gains K11: a publish whose signature does not verify is refused and stores nothing,
+  over HTTP and in memory.
+
+**Amended by ADR 0059 (2026-10-12), to D4:** `MemoryRegistry` decides a publisher against its own pins and the
+lock's key, and records pins through `pin`. The contract gains C8-C10, and C3 states that a fetch writes nothing.
+
+## Amendment (round 7, plan 16): one search rule; a claim and a revocation that cannot overreach
+
+- **Search matches by one rule**, `specforge_package::search::matches`: an ASCII case-insensitive
+  substring of the name, the description or one keyword; `%` and `_` are text. The server's SQL is
+  an escaped prefilter and the rule decides; `MemoryClient` and `MemoryRegistry` call the same
+  function, and `assert_client_contract` holds the server and `MemoryClient` to it.
+- **A scope is claimed by the publish that stores a package**: the claim and the version insert
+  are one transaction (`Database::publish`), after the whole upload validated. A refused upload,
+  a lost version race or a failed blob commit (`Database::withdraw`) leaves the scope as it was.
+- **An admin revokes a token by its id** (the 8 hex digits the listing shows); any other segment
+  is refused (400), and an id two live tokens share revokes neither (409).

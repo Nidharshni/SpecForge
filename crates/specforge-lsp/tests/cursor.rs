@@ -8,7 +8,7 @@ use tree_sitter_specforge::{field, kind};
 
 /// The document of `text`.
 fn doc(text: &str) -> Document {
-    Document::new("file:///test.spec".into(), text.into())
+    Document::new(text.into())
 }
 
 /// The cursor at (`line`, UTF-16 `character`) of `doc`, which must exist.

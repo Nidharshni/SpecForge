@@ -146,7 +146,10 @@ fn compile(
     root: &Path,
     runtime: &std::sync::Arc<InProcessRuntime>,
 ) -> (CompiledProject, Vec<Diagnostic>) {
-    let compiled = CompiledProject::compile(root, Some(runtime.clone()));
+    let compiled = CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(root).unwrap(),
+        Some(runtime.clone()),
+    );
     let diagnostics = compiled.diagnostics();
     (compiled, diagnostics)
 }

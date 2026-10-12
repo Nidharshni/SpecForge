@@ -732,7 +732,10 @@ fn a_mutation_on_another_project_reports_what_a_fresh_compile_reports() {
 
     let payload: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
     let runtime = ext.runtime();
-    let fresh = specforge_project::CompiledProject::compile(other.path(), Some(runtime.clone()));
+    let fresh = specforge_project::CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(other.path()).unwrap(),
+        Some(runtime.clone()),
+    );
     let expected =
         serde_json::to_value(specforge_common::diagnostics_json(&fresh.diagnostics())).unwrap();
     assert_eq!(payload["diagnostics"], expected);
@@ -767,7 +770,10 @@ fn an_extension_added_to_another_project_is_loaded_when_it_is_brought_up_to_date
     assert_eq!(resp["result"]["isError"], false, "{resp}");
     let payload: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
     let runtime = specforge_component::ComponentRuntime::with_user_cache();
-    let fresh = specforge_project::CompiledProject::compile(other.path(), Some(Arc::new(runtime)));
+    let fresh = specforge_project::CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(other.path()).unwrap(),
+        Some(Arc::new(runtime)),
+    );
     let expected =
         serde_json::to_value(specforge_common::diagnostics_json(&fresh.diagnostics())).unwrap();
     assert_eq!(payload["diagnostics"], expected);
@@ -1187,7 +1193,7 @@ fn every_core_entry_with_nothing_served_answers_or_refuses_as_its_target_declare
     assert_eq!(probed_tools, tools);
     let prompts: Vec<&str> = specforge_mcp::prompts::CORE_PROMPTS
         .iter()
-        .map(|prompt| prompt.name)
+        .map(|prompt| prompt.name())
         .collect();
     assert_eq!(probed(Entry::Prompt), prompts);
     for resource in specforge_mcp::resources::CORE_RESOURCES {
@@ -1285,6 +1291,28 @@ fn a_root_inside_a_project_serves_that_project() {
     assert_eq!(resp["result"]["isError"], false, "{resp}");
 }
 
+/// The project `specforge.json` enables software for; its spec root `spec/`
+/// holds a `specforge.spec` (a `spec` block) and `a.spec`.
+fn project_with_a_spec_block() -> TempDir {
+    let p = project(&["@specforge/software"], "");
+    fs::remove_file(p.path().join("main.spec")).unwrap();
+    fs::create_dir(p.path().join("spec")).unwrap();
+    fs::write(p.path().join("spec/specforge.spec"), "spec \"p\" {}\n").unwrap();
+    fs::write(p.path().join("spec/a.spec"), "behavior ok \"Ok\" {\n}\n").unwrap();
+    p
+}
+
+#[specforge_test(
+    behavior = "locate_project_root",
+    verify = "a server started in a spec root holding specforge.spec serves the project around it"
+)]
+fn a_server_started_in_a_spec_root_holding_specforge_spec_serves_the_project_around_it() {
+    let p = project_with_a_spec_block();
+    let mut server = McpServer::new();
+    initialize(&mut server, &p.path().join("spec"));
+    assert_eq!(served_root(&server), Some(canonical(p.path())));
+}
+
 #[specforge_test(
     invariant = "mcp_served_project_consistency",
     verify = "a path to a directory that is no project is read for that call and never served"
@@ -1320,4 +1348,44 @@ fn a_loose_path_is_opened_for_its_call_and_never_served() {
     );
     assert_eq!(resp["result"]["isError"], false, "{resp}");
     assert_eq!(served_root(&server), Some(canonical(&nested)));
+}
+
+/// A file discovery does not find (an excluded `drafts/x.spec`) is no
+/// source: creating it moves nothing, and a call reports what a fresh
+/// compile reports (ADR 0055).
+#[specforge_test(
+    invariant = "incremental_correctness",
+    verify = "a file discovery does not find changes nothing a compile or a session reports"
+)]
+fn validate_reports_what_check_reports_when_an_excluded_import_target_appears() {
+    let dir = project(&[], "use \"drafts/x\"\n\nterm a \"A\" {\n}\n");
+    let config =
+        json!({"name": "served", "version": "0.1.0", "extensions": [], "exclude": ["drafts/"]});
+    fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
+    let fresh_codes = |root: &Path| -> Vec<String> {
+        let compiled = specforge_project::CompiledProject::compile(
+            &specforge_common::ProjectRoot::of(root).unwrap(),
+            None,
+        );
+        let mut codes: Vec<String> = compiled
+            .diagnostics()
+            .iter()
+            .map(|d| d.code.to_string())
+            .collect();
+        codes.sort();
+        codes
+    };
+    let mut server = McpServer::new();
+    initialize(&mut server, dir.path());
+
+    let mut served = validate_codes(&mut server, json!({}));
+    assert!(served.contains(&"E025".to_string()), "{served:?}");
+
+    fs::create_dir_all(dir.path().join("drafts")).unwrap();
+    fs::write(dir.path().join("drafts/x.spec"), "term x \"X\" {\n}\n").unwrap();
+    served = validate_codes(&mut server, json!({}));
+    served.sort();
+    let fresh = fresh_codes(dir.path());
+    assert!(fresh.contains(&"E025".to_string()), "{fresh:?}");
+    assert_eq!(served, fresh);
 }

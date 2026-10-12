@@ -29,7 +29,10 @@ pub use crate::scan::ScanFailure;
 pub use gaps::{
     DirectoryGaps, GapItem, Gaps, GapsDocument, ScanFailureRow, SourceItem, directory_of, gaps,
 };
-pub use guide::{InferenceGuide, KindGuide, guide, kind_guide};
+pub use guide::{
+    GuideDocument, GuideField, GuideKind, InferenceGuide, KindGuide, KindGuideDocument, guide,
+    kind_guide,
+};
 pub use lint::lint;
 pub(crate) use manifest::read_manifest;
 pub use manifest::{
@@ -37,7 +40,8 @@ pub use manifest::{
     MANIFEST_WRITE_FAILED, SessionStatus, SourceFileEntry,
 };
 pub use plan::{
-    FilePage, InferencePlan, InferencePlanRequest, KindPriority, MAX_LISTED_FILES, inference_plan,
+    FilePage, InferencePlan, InferencePlanRequest, KindPriority, KindPriorityDocument,
+    MAX_LISTED_FILES, PlanDocument, inference_plan,
 };
 pub use progress::{
     Progress, ProgressDocument, ProgressSummary, SessionRow, UnanalyzedDirectory, progress,

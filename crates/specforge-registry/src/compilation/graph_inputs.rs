@@ -6,34 +6,17 @@
 use std::collections::{BTreeSet, HashMap, HashSet};
 
 use specforge_graph::{DerivedFrom, DerivedReference, FieldCoercion, GraphInputs};
-use specforge_protocol_types::ExtensionDeclaration;
 
-use super::populate::keyword;
 use crate::{FieldRegistry, FieldType, KindRegistry};
 
-pub(super) fn derive(
-    declarations: &[ExtensionDeclaration],
-    kinds: &KindRegistry,
-    fields: &FieldRegistry,
-) -> GraphInputs {
+pub(super) fn derive(kinds: &KindRegistry, fields: &FieldRegistry) -> GraphInputs {
     GraphInputs {
         bidirectional_pairs: bidirectional_pairs(fields),
-        body_parser_kinds: body_parser_kinds(declarations),
         single_reference_fields: single_reference_fields(kinds, fields),
         absent_reference_targets: absent_reference_targets(kinds, fields),
         field_coercions: field_coercions(fields),
         derived_references: derived_references(fields),
     }
-}
-
-/// Kinds a declaration says carry a body parser, by keyword.
-fn body_parser_kinds(declarations: &[ExtensionDeclaration]) -> HashSet<String> {
-    declarations
-        .iter()
-        .flat_map(|d| d.entities.iter())
-        .filter(|k| k.has_body_parser)
-        .map(|k| keyword(k).to_string())
-        .collect()
 }
 
 /// Every registered `reference` field, while some kind is registered.
@@ -68,18 +51,25 @@ fn absent_reference_targets(
         .collect()
 }
 
-/// Every `inverse_of` pair, written (lesser, greater), once each, sorted.
+/// Every pair of a reference field and one of its inverse fields
+/// ([`FieldRegistry::inverse_fields`]: fields of its target kind), written
+/// (lesser, greater), once each, sorted.
 fn bidirectional_pairs(fields: &FieldRegistry) -> Vec<(String, String)> {
     let pairs: BTreeSet<(String, String)> = fields
         .iter()
-        .filter_map(|(_, field, entry)| {
-            let inverse = entry.declared().inverse_of.as_ref()?;
-            let field = field.to_string();
-            Some(if field <= *inverse {
-                (field, inverse.clone())
+        .filter(|(_, _, entry)| entry.field_type().is_reference())
+        .flat_map(|(kind, field, _)| {
+            fields
+                .inverse_fields(kind, field)
+                .into_iter()
+                .map(move |inverse| (field, inverse))
+        })
+        .map(|(field, inverse)| {
+            if field <= inverse {
+                (field.to_string(), inverse.to_string())
             } else {
-                (inverse.clone(), field)
-            })
+                (inverse.to_string(), field.to_string())
+            }
         })
         .collect();
     pairs.into_iter().collect()

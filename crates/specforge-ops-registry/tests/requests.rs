@@ -5,7 +5,7 @@
 
 use sha2::{Digest, Sha256};
 use specforge_ops::extension::{Trust, resolve};
-use specforge_ops::registry::Registry;
+use specforge_ops::registry::{Registry, TrustPolicy};
 use specforge_ops_registry::{ConfiguredRegistry, User};
 use specforge_package::{PackageName, PackageRef, Version};
 use specforge_registry_server::testing::LocalRegistry;
@@ -60,7 +60,10 @@ fn name(text: &str) -> PackageName {
 fn the_adapter_requests_these_paths() {
     let served = serving(&["1.4.0", "2.0.0-beta.1"]);
     let dir = project_with(&default_registry(served.url()));
-    let registry = ConfiguredRegistry::for_project(dir.path(), "add");
+    let registry = ConfiguredRegistry::for_project(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        "add",
+    );
 
     // The registry is asked for the versions, and ops picks among them:
     // `1.x`, `1.2` and `latest` are no longer fetched as versions (§3 R1,
@@ -91,15 +94,18 @@ fn the_adapter_requests_these_paths() {
     let _ = registry.fetch(
         &name("@acme/tool"),
         &Version::new(1, 0, 0),
-        true,
-        Trust::Refuse,
+        TrustPolicy::new(true, Trust::Refuse),
     );
     assert_eq!(
         served.requests().last().map(String::as_str),
         Some("GET /v1/packages/@acme%2Ftool/1.0.0")
     );
     let build = "2.0.0+build.1".parse().unwrap();
-    let _ = registry.fetch(&name("@acme/tool"), &build, true, Trust::Refuse);
+    let _ = registry.fetch(
+        &name("@acme/tool"),
+        &build,
+        TrustPolicy::new(true, Trust::Refuse),
+    );
     assert_eq!(
         served.requests().last().map(String::as_str),
         Some("GET /v1/packages/@acme%2Ftool/2.0.0+build.1")
@@ -116,7 +122,10 @@ fn the_adapter_asks_no_registry_for_a_name_none_serves() {
         r#"{{"alias":"acme","url":"{}","scope_filter":"@acme"}}"#,
         served.url()
     ));
-    let registry = ConfiguredRegistry::for_project(dir.path(), "add");
+    let registry = ConfiguredRegistry::for_project(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        "add",
+    );
 
     let error = registry.versions(&name("@other/x")).unwrap_err();
     assert_eq!(error.code, "R-OPS-001", "{error:?}");
@@ -124,8 +133,7 @@ fn the_adapter_asks_no_registry_for_a_name_none_serves() {
         .fetch(
             &name("@other/x"),
             &Version::new(1, 0, 0),
-            true,
-            Trust::Refuse,
+            TrustPolicy::new(true, Trust::Refuse),
         )
         .unwrap_err();
     assert_eq!(error.code, "R-OPS-001", "{error:?}");
@@ -142,7 +150,11 @@ fn the_registry_is_chosen_once() {
     let served = serving(&["1.0.0"]);
     let dir = project_with(&default_registry(served.url()));
     let home = User::at(dir.path().join("home"), None);
-    let registry = ConfiguredRegistry::for_project(dir.path(), "add").as_user(home);
+    let registry = ConfiguredRegistry::for_project(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        "add",
+    )
+    .as_user(home);
 
     assert_eq!(
         registry.versions(&name("@acme/tool")).unwrap(),
@@ -155,8 +167,7 @@ fn the_registry_is_chosen_once() {
         .fetch(
             &name("@acme/tool"),
             &Version::new(1, 0, 0),
-            true,
-            Trust::Refuse,
+            TrustPolicy::new(true, Trust::Refuse),
         )
         .unwrap();
     assert_eq!(package.wasm, b"\0asm-acme-tool");

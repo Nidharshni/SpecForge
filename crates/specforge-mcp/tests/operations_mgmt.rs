@@ -59,12 +59,10 @@ fn listed_extensions(server: &mut McpServer) -> Vec<(String, String)> {
         .collect()
 }
 
-fn invoked(server: &McpServer, tool: &str) -> bool {
-    server
-        .state()
-        .events
+fn invoked(server: &impl Logs, tool: &str) -> bool {
+    events(server, "mcp_tool_invoked")
         .iter()
-        .any(|e| e.name == "mcp_tool_invoked" && e.params["toolName"] == tool)
+        .any(|e| e["toolName"] == tool)
 }
 
 // --- specforge.extensions ---
@@ -779,13 +777,9 @@ fn render_contract() {
     assert!(written.starts_with(out.path()), "{parsed}");
     assert!(std::fs::read_to_string(written).unwrap().contains("alpha"));
     assert!(
-        server
-            .state()
-            .events
+        events(&server, "mcp_tool_invoked")
             .iter()
-            .any(|e| e.name == "mcp_tool_invoked"
-                && e.params["toolName"] == "specforge.render"
-                && e.params["category"] == "management")
+            .any(|e| e["toolName"] == "specforge.render" && e["category"] == "management")
     );
 }
 

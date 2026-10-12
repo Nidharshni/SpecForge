@@ -2,20 +2,18 @@
 //! signed upload (ADR 0045). Each test runs the adapter over a recording in-memory client (ADR 0044) as a
 //! user whose files live in a temporary directory, never in `~/.specforge`.
 
-use sha2::{Digest, Sha256};
 use specforge_ops::OpErrorKind;
 use specforge_ops::extension::Trust;
 use specforge_ops::registry::testing::declaration;
-use specforge_ops::registry::{Registry, Upload};
+use specforge_ops::registry::{Registry, TrustPolicy, Upload};
 use specforge_ops_registry::{ConfiguredRegistry, User};
 use specforge_package::PackageName;
 use specforge_package::Version;
 use specforge_protocol_types::ExtensionDeclaration;
 use specforge_registry_client::credentials::{CredentialEntry, CredentialStore};
 use specforge_registry_client::testing::{CallKind, MemoryClient};
-use specforge_registry_client::{
-    PackageSignature, RegistryError, verify_signature, write_credentials,
-};
+use specforge_registry_client::{RegistryError, write_credentials};
+use specforge_registry_wire::SignedContent;
 use specforge_test_macros::test as specforge_test;
 use tempfile::TempDir;
 
@@ -48,9 +46,12 @@ impl World {
     }
 
     fn registry(&self, token: Option<&str>) -> ConfiguredRegistry {
-        ConfiguredRegistry::for_project(self.project.path(), "publish")
-            .as_user(User::at(self.home.path(), token.map(str::to_string)))
-            .with_client(self.client.clone())
+        ConfiguredRegistry::for_project(
+            &specforge_common::ProjectRoot::of(self.project.path()).unwrap(),
+            "publish",
+        )
+        .as_user(User::at(self.home.path(), token.map(str::to_string)))
+        .with_client(self.client.clone())
     }
 
     fn signing_key(&self) -> std::path::PathBuf {
@@ -97,13 +98,6 @@ impl Pkg {
     }
 }
 
-fn sha256(bytes: &[u8]) -> String {
-    Sha256::digest(bytes)
-        .iter()
-        .map(|b| format!("{b:02x}"))
-        .collect()
-}
-
 #[specforge_test(
     behavior = "publish_to_registry",
     verify = "publish refuses in one order, each refusal before anything after it is read or asked"
@@ -113,11 +107,14 @@ fn the_adapter_refuses_before_any_request_in_this_order() {
     let empty = TempDir::new().unwrap();
     let home = TempDir::new().unwrap();
     let client = MemoryClient::new().accepting("t");
-    let error = ConfiguredRegistry::for_project(empty.path(), "publish")
-        .as_user(User::at(home.path(), Some("t".into())))
-        .with_client(client.clone())
-        .publish(&pkg("@acme/x", "1.0.0").upload())
-        .unwrap_err();
+    let error = ConfiguredRegistry::for_project(
+        &specforge_common::ProjectRoot::of(empty.path()).unwrap(),
+        "publish",
+    )
+    .as_user(User::at(home.path(), Some("t".into())))
+    .with_client(client.clone())
+    .publish(&pkg("@acme/x", "1.0.0").upload())
+    .unwrap_err();
     assert!(
         error.is(specforge_ops::registry::NO_REGISTRY),
         "1: {error:?}"
@@ -302,7 +299,11 @@ fn publish_asks_the_registry_fetch_asks() {
     let acme = pkg("@acme/x", "1.0.0");
     registry.publish(&acme.upload()).unwrap();
     registry
-        .fetch(&acme.name, &acme.version, false, Trust::Refuse)
+        .fetch(
+            &acme.name,
+            &acme.version,
+            TrustPolicy::new(false, Trust::Refuse),
+        )
         .unwrap();
     let other = pkg("@other/y", "1.0.0");
     registry.publish(&other.upload()).unwrap();
@@ -336,16 +337,16 @@ fn a_package_is_signed_with_the_users_key() {
         .unwrap();
 
     let call = world.client.calls().remove(0);
-    let signature: PackageSignature = serde_json::from_str(&call.signature.unwrap()).unwrap();
-    assert_eq!(signature.key_id, published.key_id);
-    verify_signature(
-        "@acme/x",
-        "1.0.0",
-        &sha256(package.upload().wasm),
-        &sha256(call.manifest.unwrap().as_bytes()),
-        &signature,
-    )
-    .unwrap();
+    let signature = call.signature.unwrap();
+    assert_eq!(signature.key_id(), published.key_id);
+    signature
+        .verify(&SignedContent::of(
+            "@acme/x",
+            "1.0.0",
+            package.upload().wasm,
+            &call.manifest.unwrap(),
+        ))
+        .unwrap();
 }
 
 #[test]
@@ -402,8 +403,11 @@ fn a_retry_after_beyond_the_longest_backoff_is_not_waited_for() {
         window: std::time::Duration::from_secs(60),
     });
     let (project, home) = on_server(&server);
-    let registry = ConfiguredRegistry::for_project(project.path(), "publish")
-        .as_user(User::at(home.path(), Some(server.token().to_string())));
+    let registry = ConfiguredRegistry::for_project(
+        &specforge_common::ProjectRoot::of(project.path()).unwrap(),
+        "publish",
+    )
+    .as_user(User::at(home.path(), Some(server.token().to_string())));
 
     registry
         .publish(&pkg("@acme/x", "1.0.0").upload())
@@ -436,8 +440,11 @@ fn a_rate_limited_publish_is_sent_again_after_its_wait() {
         window: std::time::Duration::from_secs(1),
     });
     let (project, home) = on_server(&server);
-    let registry = ConfiguredRegistry::for_project(project.path(), "publish")
-        .as_user(User::at(home.path(), Some(server.token().to_string())));
+    let registry = ConfiguredRegistry::for_project(
+        &specforge_common::ProjectRoot::of(project.path()).unwrap(),
+        "publish",
+    )
+    .as_user(User::at(home.path(), Some(server.token().to_string())));
 
     registry
         .publish(&pkg("@acme/x", "1.0.0").upload())
@@ -470,15 +477,19 @@ fn an_unset_token_variable_is_r010_before_any_request() {
     let home = home_with_credentials(
         r#"{"registries":{"acme":{"token_env":"P16_UNSET_TOKEN_VARIABLE"}}}"#,
     );
-    let registry = ConfiguredRegistry::for_project(world.project.path(), "publish")
-        .as_user(User::at(home.path(), None))
-        .with_client(world.client.clone());
+    let registry = ConfiguredRegistry::for_project(
+        &specforge_common::ProjectRoot::of(world.project.path()).unwrap(),
+        "publish",
+    )
+    .as_user(User::at(home.path(), None))
+    .with_client(world.client.clone());
 
     let error = registry
         .publish(&pkg("@acme/x", "1.0.0").upload())
         .unwrap_err();
 
     assert_eq!(error.code, "R010", "{error:?}");
+    assert_eq!(error.kind, specforge_ops::OpErrorKind::PreconditionFailed);
     assert!(
         error.message.contains("P16_UNSET_TOKEN_VARIABLE"),
         "{error:?}"
@@ -495,9 +506,12 @@ fn a_token_variable_is_sent_as_the_bearer_token() {
     let home = home_with_credentials(r#"{"registries":{"acme":{"token_env":"P16_TOKEN_A"}}}"#);
     // SAFETY: the variable is named by this test only.
     unsafe { std::env::set_var("P16_TOKEN_A", "t") };
-    let registry = ConfiguredRegistry::for_project(world.project.path(), "publish")
-        .as_user(User::at(home.path(), None))
-        .with_client(world.client.clone());
+    let registry = ConfiguredRegistry::for_project(
+        &specforge_common::ProjectRoot::of(world.project.path()).unwrap(),
+        "publish",
+    )
+    .as_user(User::at(home.path(), None))
+    .with_client(world.client.clone());
 
     registry.publish(&pkg("@acme/x", "1.0.0").upload()).unwrap();
 
@@ -520,9 +534,12 @@ fn a_token_file_is_sent_as_the_bearer_token() {
     let home = home_with_credentials(
         &serde_json::json!({"registries": {"acme": {"token_file": file}}}).to_string(),
     );
-    let registry = ConfiguredRegistry::for_project(world.project.path(), "publish")
-        .as_user(User::at(home.path(), None))
-        .with_client(world.client.clone());
+    let registry = ConfiguredRegistry::for_project(
+        &specforge_common::ProjectRoot::of(world.project.path()).unwrap(),
+        "publish",
+    )
+    .as_user(User::at(home.path(), None))
+    .with_client(world.client.clone());
 
     registry.publish(&pkg("@acme/x", "1.0.0").upload()).unwrap();
 
@@ -538,14 +555,18 @@ fn an_unreadable_token_file_is_r011_before_any_request() {
     let world = World::acme();
     let home =
         home_with_credentials(r#"{"registries":{"acme":{"token_file":"/nonexistent/p16-token"}}}"#);
-    let registry = ConfiguredRegistry::for_project(world.project.path(), "publish")
-        .as_user(User::at(home.path(), None))
-        .with_client(world.client.clone());
+    let registry = ConfiguredRegistry::for_project(
+        &specforge_common::ProjectRoot::of(world.project.path()).unwrap(),
+        "publish",
+    )
+    .as_user(User::at(home.path(), None))
+    .with_client(world.client.clone());
 
     let error = registry
         .publish(&pkg("@acme/x", "1.0.0").upload())
         .unwrap_err();
 
     assert_eq!(error.code, "R011", "{error:?}");
+    assert_eq!(error.kind, specforge_ops::OpErrorKind::PreconditionFailed);
     assert!(world.client.calls().is_empty());
 }

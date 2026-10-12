@@ -5,6 +5,7 @@ pub mod changes;
 pub mod completion;
 mod document;
 pub mod editor;
+pub mod files;
 pub mod hover;
 mod navigation;
 pub mod publish;
@@ -21,5 +22,4 @@ pub use document::{
     SemanticToken, TOKEN_MODIFIERS, TOKEN_TYPES, Target, Word, WordEdit,
 };
 pub use hover::hover_field_info;
-pub use navigation::goto_import_definition;
 pub use state::LspState;

@@ -53,8 +53,10 @@ fn opened(runtime: &Arc<InProcessRuntime>) -> (TempDir, ProjectSession) {
     fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
     specforge_installed::testing::install(dir.path(), &[EXT]);
     fs::write(dir.path().join("a.spec"), ALPHA).unwrap();
-    let session =
-        ProjectSession::open_with_runtime(dir.path(), Some(Arc::clone(runtime) as SharedRuntime));
+    let session = ProjectSession::open_with_runtime(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        Some(Arc::clone(runtime) as SharedRuntime),
+    );
     (dir, session)
 }
 
@@ -200,7 +202,10 @@ fn releasing_a_buffer_that_did_not_parse_runs_the_skipped_checks() {
     let update = session.release(&[a]).expect("the skipped checks run");
     assert_eq!(update.kind, UpdateKind::Checks);
     assert!(reported(&session));
-    let fresh = CompiledProject::compile(dir.path(), Some(rt.clone()));
+    let fresh = CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        Some(rt.clone()),
+    );
     let codes = |d: Vec<specforge_common::Diagnostic>| -> Vec<String> {
         d.into_iter().map(|d| d.code).collect()
     };
@@ -242,7 +247,7 @@ fn opening_a_project_in_place_of_a_session_keeps_its_buffers() {
     .at_version(Some(4))]));
     let before = check_runs(&rt);
     let session = ProjectSession::begin_open(
-        dir.path(),
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
         RuntimeSource::Fixed(Some(Arc::clone(&rt) as SharedRuntime)),
     )
     .finish_holding(detached.into_buffers());
@@ -267,7 +272,10 @@ fn a_held_buffer_a_reload_brings_into_the_project_is_built_from_its_text() {
     fs::create_dir_all(dir.path().join("spec")).unwrap();
     fs::create_dir_all(dir.path().join("spec2")).unwrap();
     fs::write(dir.path().join("spec2/b.spec"), ZETA).unwrap();
-    let mut session = ProjectSession::open_with_runtime(dir.path(), None);
+    let mut session = ProjectSession::open_with_runtime(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        None,
+    );
 
     session.update(SourceChange::Hold(&[Buffer::new(
         dir.path().join("spec2/b.spec"),

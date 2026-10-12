@@ -1,9 +1,11 @@
-//! `spec/types/mcp.spec`'s reply types are the schemas the replies derive
-//! (ADR 0048 D8).
+//! `spec/types/mcp.spec`'s types are the schemas the documents MCP sends
+//! derive (ADR 0048 D8, ADR 0058).
 //!
 //! Each core tool names its reply's spec type (`CoreTool::SPEC`): an `Mcp*`
-//! type, a document specified elsewhere, or text. The spec types reached from a
-//! tool's type are compared with the schema its reply derives:
+//! type, a document specified elsewhere, or text. Every other document the
+//! server sends is a `Message` naming its spec type
+//! (`specforge_mcp::message::documents()`). The spec types reached from a
+//! document's type are compared with the schema it derives:
 //!
 //! 1. a name in [`SHARED`] is a domain type the reply embeds: its schema is a
 //!    reference to the document's one definition of that name (ADR 0051), not
@@ -21,7 +23,6 @@
 //! A mutation's `files_written` is the pipeline's and is removed first.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::Path;
 use std::sync::OnceLock;
 
 use serde_json::Value;
@@ -85,21 +86,24 @@ fn name_or_list(text: &str) -> Ty {
     }
 }
 
-/// Every `type` entity of `spec/types/*.spec`.
-fn spec_types() -> &'static BTreeMap<String, SpecType> {
-    static TYPES: OnceLock<BTreeMap<String, SpecType>> = OnceLock::new();
-    TYPES.get_or_init(|| {
-        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../spec/types");
+/// The `type` entities of `spec/types/*.spec` and the file each is
+/// declared in.
+struct Declared {
+    types: BTreeMap<String, SpecType>,
+    files: BTreeMap<String, String>,
+}
+
+fn declared() -> &'static Declared {
+    static DECLARED: OnceLock<Declared> = OnceLock::new();
+    DECLARED.get_or_init(|| {
         let mut types = BTreeMap::new();
-        let mut files: Vec<_> = std::fs::read_dir(&dir)
-            .expect("spec/types")
-            .map(|e| e.expect("an entry").path())
-            .filter(|p| p.extension().is_some_and(|e| e == "spec"))
-            .collect();
-        files.sort();
-        for path in files {
-            let source = std::fs::read_to_string(&path).expect("a spec file");
-            let file = specforge_parser::parse(&source, &path.display().to_string());
+        let mut files = BTreeMap::new();
+        for (path, file) in crate::support::spec::spec_files("types") {
+            let stem = path
+                .file_name()
+                .expect("a file name")
+                .to_string_lossy()
+                .into_owned();
             for entity in file
                 .entities
                 .iter()
@@ -125,11 +129,17 @@ fn spec_types() -> &'static BTreeMap<String, SpecType> {
                             .collect(),
                     ),
                 };
+                files.insert(name.clone(), stem.clone());
                 types.insert(name, spec);
             }
         }
-        types
+        Declared { types, files }
     })
+}
+
+/// Every `type` entity of `spec/types/*.spec`.
+fn spec_types() -> &'static BTreeMap<String, SpecType> {
+    &declared().types
 }
 
 // ── the comparison ──────────────────────────────────────────────────────────
@@ -452,11 +462,19 @@ fn shape(schema: &Value) -> String {
     }
 }
 
-/// One walk over every core tool: per spec type reached, its violations.
+/// One walk over every core tool's reply, every core prompt's payload and
+/// every message the server sends: per spec type reached, its violations.
 fn report() -> &'static Report {
     static REPORT: OnceLock<Report> = OnceLock::new();
     REPORT.get_or_init(|| {
         let mut report = Report::default();
+        for document in specforge_mcp::message::documents() {
+            check_type(document.spec, document.schema, document.schema, &mut report);
+        }
+        for prompt in specforge_mcp::prompts::CORE_PROMPTS {
+            let schema = prompt.payload_schema();
+            check_type(prompt.spec_payload(), schema, schema, &mut report);
+        }
         for tool in specforge_mcp::tools::CORE_TOOLS {
             let ReplySpec::Type(name) = tool.spec_reply() else {
                 continue;
@@ -476,12 +494,13 @@ fn report() -> &'static Report {
     })
 }
 
-/// `name` was reached from a core tool's reply and has no violation.
+/// `name` was reached from a core tool's reply or a message and has no
+/// violation.
 fn assert_reply_type(name: &str) {
     let report = report();
     assert!(
         report.reached.contains(name),
-        "{name} is reached from no core tool's reply"
+        "{name} is reached from no core tool's reply and no message"
     );
     let violations = report.violations.get(name).cloned().unwrap_or_default();
     assert!(
@@ -491,50 +510,126 @@ fn assert_reply_type(name: &str) {
     );
 }
 
-#[test]
-fn every_spec_reply_type_is_reached_and_none_is_unreached() {
-    // The record types the spec holds for replies, all reached.
+#[specforge_test(
+    behavior = "state_mcp_messages_as_spec_types",
+    verify = "every Mcp type of spec/types/mcp.spec is a tool reply, a prompt payload or a document the server sends"
+)]
+fn every_mcp_type_is_sent() {
+    // The types declared in spec/types/mcp.spec, all reached. The guest-wire
+    // types (ADR 0017) are declared in surface.spec and wasm.spec: received
+    // from extensions, never sent.
     let report = report();
-    let unreached: Vec<&String> = spec_types()
-        .keys()
-        .filter(|name| {
-            name.starts_with("Mcp")
+    let unreached: Vec<&String> = declared()
+        .files
+        .iter()
+        .filter(|(name, file)| {
+            file.as_str() == "mcp.spec"
+                && name.starts_with("Mcp")
                 && !report.reached.contains(*name)
-                && !PROTOCOL_AND_PROMPT_TYPES.contains(&name.as_str())
         })
+        .map(|(name, _)| name)
         .collect();
     assert!(
         unreached.is_empty(),
-        "Mcp types no core tool's reply reaches (nor protocol or prompt types): {unreached:?}"
+        "Mcp types of mcp.spec no tool reply, prompt payload or message reaches: {unreached:?}"
     );
 }
 
-/// `Mcp*` types that are no tool reply: the protocol's and the prompts'.
-const PROTOCOL_AND_PROMPT_TYPES: &[&str] = &[
-    "McpErrorCode",
-    "McpError",
-    "McpCapabilities",
-    "McpResourceDescriptor",
-    "McpToolDescriptor",
-    "McpToolAnnotations",
-    "McpSubscription",
-    "McpToolCategory",
-    "McpToolGroup",
-    "McpPromptDescriptor",
-    "McpPromptArgument",
-    "McpContextPromptResult",
-    "McpReviewPromptResult",
-    "McpReviewFinding",
-    "McpTracePromptResult",
-    "McpTraceGap",
-    "McpExplorePromptResult",
-    "McpRelationshipPath",
-    // The extension surfaces' (ADR 0017).
-    "McpResourceContent",
-    "McpResourceContribution",
-    "McpResourceRequest",
-    "McpToolContribution",
-];
+#[specforge_test(
+    behavior = "serve_mcp_prompt",
+    verify = "each prompt's payload is the spec type its module names"
+)]
+fn every_prompt_payload_is_its_spec_type() {
+    let report = report();
+    for prompt in specforge_mcp::prompts::CORE_PROMPTS {
+        let violations = report
+            .violations
+            .get(prompt.spec_payload())
+            .cloned()
+            .unwrap_or_default();
+        assert!(
+            report.reached.contains(prompt.spec_payload()) && violations.is_empty(),
+            "{}:\n  {}",
+            prompt.spec_payload(),
+            violations.join("\n  ")
+        );
+    }
+}
+
+#[specforge_test(
+    behavior = "state_mcp_messages_as_spec_types",
+    verify = "every document the server sends besides a tool reply is the schema its type derives, as its spec type states it"
+)]
+fn every_sent_document_is_its_spec_type() {
+    let report = report();
+    for document in specforge_mcp::message::documents() {
+        let violations = report
+            .violations
+            .get(document.spec)
+            .cloned()
+            .unwrap_or_default();
+        assert!(
+            report.reached.contains(document.spec) && violations.is_empty(),
+            "{}:\n  {}",
+            document.spec,
+            violations.join("\n  ")
+        );
+    }
+}
+
+macro_rules! message_type {
+    ($($test:ident => $name:literal, $verify:literal),* $(,)?) => {$(
+        #[specforge_test(type = $name, verify = $verify)]
+        fn $test() {
+            assert_reply_type($name)
+        }
+    )*};
+}
+
+message_type! {
+    mcp_initialize_result => "McpInitializeResult", "McpInitializeResult schema is valid",
+    mcp_discover_result => "McpDiscoverResult", "McpDiscoverResult schema is valid",
+    mcp_server_capabilities => "McpServerCapabilities", "McpServerCapabilities schema is valid",
+    mcp_list_changed => "McpListChanged", "McpListChanged schema is valid",
+    mcp_resources_capability => "McpResourcesCapability", "McpResourcesCapability schema is valid",
+    mcp_server_info => "McpServerInfo", "McpServerInfo schema is valid",
+    mcp_tool_descriptor => "McpToolDescriptor", "McpToolDescriptor schema is valid",
+    mcp_tool_annotations => "McpToolAnnotations", "McpToolAnnotations schema is valid",
+    mcp_resource_descriptor => "McpResourceDescriptor", "McpResourceDescriptor schema is valid",
+    mcp_resource_template_descriptor => "McpResourceTemplateDescriptor", "McpResourceTemplateDescriptor schema is valid",
+    mcp_prompt_descriptor => "McpPromptDescriptor", "McpPromptDescriptor schema is valid",
+    mcp_prompt_argument => "McpPromptArgument", "McpPromptArgument schema is valid",
+    mcp_context_prompt_result => "McpContextPromptResult", "Context Prompt Result conforms to schema",
+    mcp_context_constraint => "McpContextConstraint", "McpContextConstraint schema is valid",
+    mcp_review_prompt_result => "McpReviewPromptResult", "Review Prompt Result conforms to schema",
+    mcp_review_finding => "McpReviewFinding", "McpReviewFinding schema is valid",
+    mcp_trace_prompt_result => "McpTracePromptResult", "Trace Prompt Result conforms to schema",
+    mcp_trace_gap => "McpTraceGap", "McpTraceGap schema is valid",
+    mcp_explore_prompt_result => "McpExplorePromptResult", "Explore Prompt Result conforms to schema",
+    mcp_relationship_path => "McpRelationshipPath", "McpRelationshipPath schema is valid",
+    mcp_infer_overview => "McpInferOverview", "Infer Prompt Result conforms to schema",
+    mcp_infer_guide_kind => "McpInferGuideKind", "McpInferGuideKind schema is valid",
+    mcp_infer_kind_guide => "McpInferKindGuide", "McpInferKindGuide schema is valid",
+    mcp_infer_guide_field => "McpInferGuideField", "McpInferGuideField schema is valid",
+    mcp_infer_file_guide => "McpInferFileGuide", "McpInferFileGuide schema is valid",
+    mcp_infer_file_kind => "McpInferFileKind", "McpInferFileKind schema is valid",
+    mcp_infer_plan => "McpInferPlan", "McpInferPlan schema is valid",
+    mcp_infer_kind_priority => "McpInferKindPriority", "McpInferKindPriority schema is valid",
+    mcp_infer_workflow => "McpInferWorkflow", "McpInferWorkflow schema is valid",
+    graph_delta => "GraphDelta", "GraphDelta schema is valid",
+    node_change => "NodeChange", "NodeChange schema is valid",
+    modified_node_change => "ModifiedNodeChange", "ModifiedNodeChange schema is valid",
+    edge_change => "EdgeChange", "EdgeChange schema is valid",
+    diagnostics_delta => "DiagnosticsDelta", "DiagnosticsDelta schema is valid",
+}
+
+#[specforge_test(
+    type = "McpError",
+    verify = "MCP Structured Error Response conforms to schema"
+)]
+fn mcp_error() {
+    assert_reply_type("McpError")
+}
 
 macro_rules! reply_type {
     ($($test:ident => $name:literal, $verify:literal),* $(,)?) => {$(

@@ -163,3 +163,72 @@ fn a_missing_entity_is_one_refusal() {
         assert_eq!(error.entity.as_deref(), Some("logn"), "{surface}");
     }
 }
+
+/// A project that enables nothing, to add a registry package to.
+fn empty_project() -> tempfile::TempDir {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("specforge.json"),
+        r#"{"name":"p","version":"0.1.0","extensions":[]}"#,
+    )
+    .unwrap();
+    dir
+}
+
+fn add_package(
+    dir: &std::path::Path,
+    registry: &specforge_ops::registry::testing::MemoryRegistry,
+    specifier: &str,
+) -> specforge_ops::OpError {
+    use specforge_ops::extension::{self, AddRequest, Trust};
+    extension::add(
+        &AddRequest {
+            root: &specforge_common::ProjectRoot::of(dir).unwrap(),
+            extensions: vec![extension::parse(specifier).unwrap().into()],
+            allow_unsigned: false,
+            trust: Trust::Refuse,
+            dry_run: false,
+        },
+        registry,
+        &specforge_ops::testing::candidates(),
+    )
+    .unwrap_err()
+}
+
+#[specforge_test_macros::test(
+    invariant = "mcp_structured_error_responses",
+    verify = "a package the registry or the trust check refuses is never an internal_error"
+)]
+fn a_registry_refusal_is_never_an_internal_error() {
+    use specforge_ops::OpErrorKind;
+    use specforge_ops::extension::Trust;
+    use specforge_ops::registry::testing::{MemoryRegistry, Published, declaration};
+    use specforge_ops::registry::{Registry, TrustPolicy};
+    use specforge_package::{PackageName, Version};
+
+    let registry = MemoryRegistry::new()
+        .serving(Published::new(
+            b"bytes".to_vec(),
+            declaration("@acme/unsigned", "1.0.0", &[]),
+        ))
+        .listing_none("@acme/empty");
+    let dir = empty_project();
+
+    let unsigned = add_package(dir.path(), &registry, "@acme/unsigned");
+    assert_eq!(unsigned.code, "R-TRUST-001", "{unsigned:?}");
+    assert_eq!(unsigned.kind, OpErrorKind::PermissionDenied);
+
+    let empty = add_package(dir.path(), &registry, "@acme/empty");
+    assert_eq!(empty.code, "R-RES-002", "{empty:?}");
+    assert_eq!(empty.kind, OpErrorKind::ExtensionNotFound);
+
+    let missing = registry
+        .fetch(
+            &PackageName::parse("@acme/unsigned").unwrap(),
+            &Version::parse("9.9.9").unwrap(),
+            TrustPolicy::new(true, Trust::Refuse),
+        )
+        .unwrap_err();
+    assert_eq!(missing.code, "R006", "{missing:?}");
+    assert_eq!(missing.kind, OpErrorKind::ExtensionNotFound);
+}

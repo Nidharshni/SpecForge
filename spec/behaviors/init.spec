@@ -27,7 +27,7 @@ behavior scaffold_new_project "Scaffold New Project" {
   produces   [project_initialized]
   requires {
     filesystem_available "FileSystem port is available for writing project files"
-    no_existing_project  "No specforge.json or specforge.spec exists in the directory being initialized"
+    no_existing_project  "No specforge.json exists in the directory being initialized"
   }
   ensures {
     valid_config_created        "A syntactically valid specforge.json is created with the user-provided project name and version"
@@ -40,7 +40,7 @@ behavior scaffold_new_project "Scaffold New Project" {
     project name and version. The generated config MUST include the
     $schema field pointing to the SpecForge JSON schema URL to enable
     IDE autocomplete. The generated config MUST be syntactically valid
-    and parseable by the compiler. If a specforge.json or specforge.spec
+    and parseable by the compiler. If a specforge.json
     already exists in the directory being initialized, the system MUST
     reject the operation with an error message and exit code 1. Init only
     adds: a directory whose starter file (spec/hello.spec) already exists
@@ -181,7 +181,7 @@ behavior non_interactive_init "Non-Interactive Init" {
   requires {
     name_flag_provided   "--name flag is provided with a valid project name"
     filesystem_available "FileSystem port is available for writing project files"
-    no_existing_project  "No specforge.json or specforge.spec exists in the directory being initialized"
+    no_existing_project  "No specforge.json exists in the directory being initialized"
   }
   ensures {
     config_identical_to_interactive "Generated specforge.json is structurally identical to one created interactively with the same inputs"
@@ -203,12 +203,13 @@ behavior non_interactive_init "Non-Interactive Init" {
     When --version is specified, it MUST override the default version
     (0.1.0) in the generated specforge.json.
     --extensions takes builtins and local .wasm files, several to a flag
-    separated by commas: init enables a builtin after the builtins it
-    requires (its non-optional peers that are builtins, and theirs), as
-    add does, and installs its local files through the lock plan add
-    uses (ADR 0004 D3-e, ADR 0041), as one change and without reading
-    them again, so it never writes an entry specforge check cannot load
-    or whose required builtin peer is missing; their peers are judged
+    separated by commas: init enables, before each extension it enables or
+    installs, the builtins that extension requires (its non-optional peers
+    that are builtins, and theirs), as add does, and judges the project's
+    peer set through the lock plan add uses (ADR 0004 D3-e, ADR 0041), its
+    local files installed as one change without reading them again, so it
+    never writes an entry specforge check cannot load or a project whose
+    check reports an E027 for an extension it enabled; the set is judged
     before any file is written. Any other extension (a registry package,
     which needs a registry a new project has not configured yet) MUST be
     rejected with a diagnostic naming it and exit code 1. A project name
@@ -221,6 +222,7 @@ behavior non_interactive_init "Non-Interactive Init" {
   verify unit "non-interactive init with --extensions populates extensions list"
   verify unit "init enables a builtin after the builtins it requires, as add does"
   verify unit "init refuses local extensions the lock plan refuses before it writes anything"
+  verify unit "init enables the builtins a local file requires before it"
   verify integration "init with a builtin that requires another passes check"
   verify unit "non-interactive init with unknown extension rejects with diagnostic and exit code 1"
   verify unit "invalid project name is rejected with InitError::invalid_name"
@@ -249,14 +251,14 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
   ports      [FileSystem, RegistryClient]
   produces   [extension_added]
   requires {
-    existing_project_found "A specforge.json exists in the current directory or an ancestor directory as resolved by find_project_root()"
+    existing_project_found "A specforge.json exists at or above the path given (locate_project_root)"
     extension_resolvable   "Extension specifier can be resolved via registry, bundled index, or local cache"
   }
   ensures {
     extension_appended      "Each extension is added to the extensions list in specforge.json, all of them as one change or none"
     no_duplicate_added      "Already-installed extensions are not duplicated"
     other_fields_preserved  "No other fields in specforge.json are modified"
-    peer_deps_satisfied     "An install that leaves a locked peer requirement unsatisfied, or whose own peer range can't be read, is refused before anything is written"
+    peer_deps_satisfied     "An add that would leave a peer it touches unsatisfied in the project's peer set (the extensions its entries load: builtins, installed extensions and .wasm file entries), or whose peer range can't be read, is refused before anything is written; the builtins an install requires are enabled with it"
     extension_added_emitted "extension_added event is emitted after successful addition"
   }
   contract   """
@@ -283,33 +285,45 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
     source "registry", or "local:<path>" for a local .wasm file, so peer
     and diamond checks compare real versions and update never replaces a
     local build from a registry.
+    A local path may name an extension's crate directory: the component its
+    crate builds (target/wasm32-wasip2/release/<crate>.wasm) is installed
+    and locked by its own path, as publish reads it; a directory with no
+    built component is E040.
     The system MUST NOT duplicate an already-installed extension.
     A dry run reports what the add would do for each specifier and writes
     nothing; an extension already present answers as the add would,
     whatever its source.
     The system MUST NOT modify any other field in specforge.json.
-    When adding an extension, the system MUST judge its peers by the one
-    peer rule (ADR 0041) before anything is installed: a peer range that is
-    not a SemVer requirement is refused with E073. A peer the lock pins at
-    a version outside the new extension's range is a version diamond (ADR
-    0001): from a registry the operation MUST be rejected with R-RES-006
-    naming the version that would satisfy every requirer, or R-RES-005 when
-    no published version does; a local install, with no registry to
-    consult, MUST be rejected with E027. Installing a package at a version
-    a locked extension's peer range does not accept MUST be rejected the
-    same way, its message naming the extension it would break. The peers
-    are judged against the lock as the add leaves it: a package already
-    locked at another version is judged by its new declaration alone, its
-    previous lock entry replaced rather than counted as another requirer,
-    and a version diamond names each requirer once. A peer that is not
-    installed is not refused: specforge check reports it (E027).
-    A builtin is enabled after the builtins it requires (its non-optional
-    peers that are builtins, and theirs), dependencies first; a builtin
+    When adding an extension, the system MUST judge, by the one peer rule
+    (ADR 0041) and before anything is installed, the project's peer set as
+    the add leaves it: the extensions its specforge.json entries load,
+    resolved as the extension load resolves them (a builtin by the
+    declaration this specforge embeds, an installed extension by its lock
+    entry, a .wasm file entry by its file's declaration). A locked extension
+    no entry enables is not judged. Every declared peer whose dependent or
+    peer the add changes is judged: a peer range that is not a SemVer
+    requirement is refused with E073; a required peer no extension of the
+    set provides is refused with E027 (the message and suggestion specforge
+    check gives). A peer installed from a registry at a version outside a
+    requirer's range is a version diamond (ADR 0001): from a registry the
+    operation MUST be rejected with R-RES-006 naming the version that would
+    satisfy every requirer of the set, or R-RES-005 when no published
+    version does; a local install, with no registry to consult, MUST be
+    rejected with E027. A builtin or a .wasm file entry at a version outside
+    a range is E027 whatever the source: no install changes its version.
+    Installing or enabling an extension at a version an extension of the
+    set does not accept MUST be rejected the same way, its message naming
+    the extension it would break. The peers are judged against the lock as
+    the add leaves it: a package already locked at another version is
+    judged by its new declaration alone, and a version diamond names each
+    requirer once. Before it is judged, an add enables the builtins it
+    requires, whatever its source: each non-optional peer of what it adds
+    that is a builtin no entry enables, and theirs, dependencies first, so
+    specforge check never reports an E027 the add could have seen. A builtin
     whose declaration cannot be read refuses the operation (E028) before
-    anything is written, and a required builtin peer the builtin this
-    specforge embeds does not satisfy refuses it (E027).
-    If no specforge.json exists in the current directory or any ancestor
-    directory (as resolved by find_project_root()), the system MUST reject
+    anything is written.
+    If no specforge.json exists at or above the path given (the project
+    it is in, locate_project_root), the system MUST reject
     the operation with an error message and exit code 1. If the extension
     specifier cannot be resolved, the system MUST reject the operation with
     a diagnostic naming the unresolvable extension. A registry specifier
@@ -318,7 +332,9 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
     Its JSON output is the add document specforge.add_extension answers
     (McpAddExtensionResult: added, one entry per specifier in the order
     given, each naming its specifier, its action enabled, installed,
-    already_present, planned or duplicate; no note), with the files it
+    already_present, planned or duplicate; no note; an enabled builtin or
+    an installed package lists the required builtins the add enabled with
+    it as peers_enabled), with the files it
     wrote as files_written (empty when every extension was already
     enabled). A registry package's source is registry, and its key_id is
     present only when the package is signed.
@@ -351,7 +367,15 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
   verify unit "a peer no single version satisfies for every requirer fails R-RES-005"
   verify unit "an add that upgrades a locked package judges its peers against the lock as the add leaves it"
   verify unit "a version diamond names each requirer once"
+  verify unit "add judges the project's peer set as the add leaves it: its builtins, installed extensions and .wasm file entries"
+  verify unit "an install whose required peer is not installed is refused with E027 before anything is written"
+  verify unit "enabling a builtin that an enabled extension's peer range does not accept is refused with E027"
+  verify unit "an install that breaks a .wasm file entry, or that a .wasm file entry does not satisfy, is refused with E027"
+  verify unit "an install enables the builtins it requires first, whatever its source"
+  verify unit "an extension no specforge.json entry enables is not judged"
+  verify integration "add and check agree: an add check would report E027 or E073 for is refused, and an add that passes leaves none"
   verify integration "a local .wasm install is locked at its declared version with source local:<path> and enabled by its bare name"
+  verify unit "a local crate directory installs the component its crate builds"
   verify integration "add extension preserves all other config fields"
   verify contract "Add Extension to Existing Project: adding extension to existing project holds — existing_project_found, extension_resolvable, extension_appended, no_duplicate_added, other_fields_preserved, peer_deps_satisfied, extension_added_emitted"
 }
@@ -394,43 +418,65 @@ behavior graceful_zero_extension_init "Graceful Zero-Extension Init" {
   verify contract "Graceful Zero-Extension Init: zero-extension init holds — zero_extensions_selected, filesystem_available, empty_extensions_list, structural_starter_valid, valid_graph_exportable, project_initialized_emitted"
 }
 
-behavior find_project_root "Find Project Root" {
+behavior locate_project_root "Locate the Project a Path Is In" {
   features   [project_initialization]
   category   internal
+  invariants [spec_root_singleton]
+  types      [CompilerConfig]
+  ports      [FileSystem]
   requires {
     filesystem_available "FileSystem port is available for directory traversal and symlink resolution"
   }
   ensures {
-    closest_wins_enforced "The first directory containing specforge.json or specforge.spec (from cwd upward) is returned"
-    json_precedence       "Within a single directory, specforge.json takes precedence over specforge.spec"
-    symlinks_resolved     "Symlinks are resolved before path comparison to prevent infinite loops"
-    none_on_missing       "If neither file is found up to filesystem root, None is returned"
+    closest_wins_enforced "The first directory at or above the path holding specforge.json is the project root"
+    one_marker            "Only specforge.json marks a project; a specforge.spec file is a source like any other"
+    loose_root            "With no specforge.json at or above the path, the path's directory is a loose root read with the default configuration"
+    missing_path_refused  "A path that does not exist is refused as file_not_found, never read as an empty project"
+    symlinks_resolved     "The walk follows the path's resolved directories, and the root is spelled as the path spells it where that spelling reaches it"
+    every_surface_agrees  "Every command, watch, the LSP and MCP open the project a path is in by this rule; only init takes its directory as given"
   }
   contract   """
-    The system MUST locate the project root by walking from the current
-    directory upward to the filesystem root. At each directory level,
-    the system MUST check for both specforge.json and specforge.spec
-    before ascending to the parent. Within a single directory,
-    specforge.json takes precedence over specforge.spec. The first
-    directory containing either file wins (closest-wins semantics).
-    The system MUST resolve symlinks before path comparison to avoid
-    infinite loops caused by circular symlink chains. If neither file
-    is found in any directory up to the filesystem root, the function
-    MUST return None. The calling command decides how to handle a
-    missing project root (e.g., init may proceed, check may emit a
-    diagnostic). This function MUST NOT contain command-specific logic.
+    Any path inside a project (the directory itself, a subdirectory, a
+    file) names that project. The system MUST locate its root by walking
+    from the path's directory (a file's parent) upward, symlinks
+    resolved: the first directory holding specforge.json is the project
+    root, the nearest winning. Only specforge.json marks a project; a
+    specforge.spec file marks nothing and is a source like any other.
+    With no specforge.json at or above the path, the path's own directory
+    is a loose root: a project with the default configuration and no
+    extension, whose I002 says no project was found and suggests
+    specforge init. A path that does not exist MUST be refused as
+    file_not_found ("path not found: <path>"), never read as an empty
+    project. The root is spelled as the path spells it where that
+    spelling reaches it, else canonically; two roots are the same when
+    they are the same directory. Every core command that takes a path,
+    every extension command (--path), specforge watch, the LSP's
+    workspace root and MCP (its root and a call's path) MUST open the
+    project their path is in by this one rule; the project's spec root
+    is then read from its specforge.json (spec_root), and is never the
+    path given. A command's path help says it is a path inside the
+    project. Only init takes its directory as given: it creates the
+    project there. A session keeps the root it was opened at; an
+    environment reload does not locate it again.
   """
-  types      [CompilerConfig]
-  ports      [FileSystem]
-  invariants [spec_root_singleton]
-  verify unit "specforge.json found in current directory"
-  verify unit "specforge.json found in ancestor directory"
-  verify unit "specforge.spec found when specforge.json is absent at same level"
+  verify unit "specforge.json found in the path's own directory"
+  verify unit "specforge.json found in an ancestor directory"
   verify unit "closest directory wins over ancestor directory"
-  verify unit "specforge.json takes precedence over specforge.spec in same directory"
+  verify unit "a specforge.spec file marks no project"
+  verify unit "a path with no specforge.json at or above it is a loose root, its own directory"
+  verify unit "a file path is in the project of its directory"
+  verify unit "a path that does not exist is refused as file_not_found"
   verify unit "symlinks are resolved before path comparison"
+  verify unit "the root is spelled as the path spells it"
   verify unit "circular symlink chain does not cause infinite loop"
-  verify unit "no config found returns None"
   verify performance "directory traversal completes in under 100ms for 20-level deep hierarchy"
-  verify contract "Find Project Root: project root discovery holds — filesystem_available, closest_wins_enforced, json_precedence, symlinks_resolved, none_on_missing"
+  verify integration "every command run from a subdirectory of a project acts on that project"
+  verify integration "a command given a path that does not exist refuses it as file_not_found"
+  verify integration "an extension command run from a subdirectory is routed over the project it is in"
+  verify integration "watch run from a subdirectory watches the project it is in"
+  verify unit "every command's project path argument says it is a path inside the project"
+  verify unit "a server started in a spec root holding specforge.spec serves the project around it"
+  verify unit "a workspace root in a spec root holding specforge.spec opens the project around it"
+  verify unit "a loose root's I002 says no project was found and suggests init"
+  verify contract "Locate the Project a Path Is In: project root location holds — filesystem_available, closest_wins_enforced, one_marker, loose_root, missing_path_refused, symlinks_resolved, every_surface_agrees"
 }

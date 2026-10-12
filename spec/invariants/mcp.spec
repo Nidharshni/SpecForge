@@ -17,12 +17,16 @@ invariant mcp_structured_error_responses "MCP Structured Error Responses" {
     not in the graph) is -32002 in a handshake session and -32602 in a
     2026-07-28 request, and its data names the URI as uri. A refusal for a
     missing project names the path argument only where the entry takes one.
-    An operation's failure kind decides the McpError code.
+    An operation's failure kind decides the McpError code. An operation
+    states the kind where it raises the failure; no table maps a code to a
+    kind, and a package the registry or its trust check refuses is never
+    internal_error.
   """
   risk      medium
   verify unit "error response includes error code and message fields"
   verify unit "error response includes entity_id when applicable"
   verify unit "no MCP endpoint returns a plain string error"
+  verify unit "a package the registry or the trust check refuses is never an internal_error"
   verify unit "success responses never have error field"
   verify unit "a failed tool call is an isError result whose content is an McpError with a code"
   verify unit "a diagnostic code behind a failed tool call is in its McpError diagnostic"
@@ -77,7 +81,7 @@ invariant mcp_served_project_consistency "MCP Served Project Consistency" {
     it is on disk: an extension enabled since the last request is found by
     the next one, whether the request is a call, a read, a listing or a
     subscription (one freshness decision, owned by the request pipeline). Only a
-    project (a directory holding specforge.json or specforge.spec) is ever
+    project (a directory holding specforge.json) is ever
     served: the server serves the nearest one at or above its root (the
     client's projectRoot, else the path it was started with), and nothing
     when there is none. A call whose path names a project while none is
@@ -116,4 +120,21 @@ invariant mcp_served_project_consistency "MCP Served Project Consistency" {
   verify unit "with no project served, a read naming a file or an entity is the no-project refusal, an aggregate read answers over the empty session"
   verify unit "with no project served, every core tool, prompt and resource answers or refuses as its target declares"
   verify unit "with no project served, an entry that acts on the project is refused before its arguments are read"
+}
+
+invariant mcp_event_record "MCP Event Record" {
+  guarantee """
+    What an MCP server records it did (the events of spec/events/mcp.spec and
+    spec/events/surface-contributions.spec, and the extension_added and
+    project_initialized a mutation produces) is one typed value per event,
+    its payload the spec's field for field, recorded through the server's
+    one event sink. Events never leave the process: a server keeps none of
+    them, so what it holds does not grow with the requests it answered; a
+    test gives the server a sink that keeps them, to observe it. A sink that
+    keeps an event stamps it with the time it was recorded (timestamp).
+  """
+  risk      medium
+  verify unit "a server keeps no event: what it holds does not grow with the requests it answers"
+  verify unit "every event the server records is one an events spec declares, its payload exactly the declared fields"
+  verify unit "every event a recording sink keeps carries the time it was recorded"
 }

@@ -6,8 +6,7 @@ use std::path::PathBuf;
 // `specforge migrate`'s command line.
 #[derive(clap::Args)]
 pub(crate) struct Args {
-    /// Path to the spec root directory
-    #[arg(long, default_value = ".")]
+    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
     path: PathBuf,
 
     /// Show unified diff without modifying files
@@ -33,11 +32,15 @@ pub(crate) struct Args {
 impl Args {
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         let format = self.output.format;
-        let path = self.path.as_path();
+        let root = match crate::project::root(&self.path) {
+            Ok(root) => root,
+            Err(error) => return Refusal::of(format).report(terminal, &error),
+        };
+        let path = root.dir();
         let (dry_run, no_backup) = (self.dry_run, self.no_backup);
         // Handle rollback mode
         if self.rollback {
-            let outcome = migrate::rollback(path);
+            let outcome = migrate::rollback(&root);
             print_rollback(
                 &outcome.summary,
                 &outcome.writes.names_under(path),
@@ -57,7 +60,7 @@ impl Args {
         let runtime: specforge_project::SharedRuntime =
             std::sync::Arc::new(specforge_component::ComponentRuntime::with_user_cache());
         let request = Request {
-            root: path,
+            root: &root,
             target,
             dry_run,
             no_backup,
@@ -77,8 +80,8 @@ impl Args {
         for warning in &outcome.schema_warnings {
             errln!(terminal, "warning[{}]: {}", warning.code, warning.message);
         }
-        for d in &outcome.structural_differences {
-            errln!(terminal, "{}: {}", d.code, d.message);
+        for d in outcome.structural_differences() {
+            errln!(terminal, "warning[{}]: {}", d.code, d.message);
         }
         if outcome.rollback.is_some() {
             if outcome.hook_failures.is_empty() {

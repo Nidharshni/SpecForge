@@ -1,9 +1,10 @@
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use specforge_common::shape::Shape;
-use specforge_common::{Diagnostic, Severity, codes, load_project_config, project_root_of};
+use specforge_common::{Diagnostic, ProjectRoot, Severity, codes, load_project_config};
 use specforge_emitter::schema::{GraphProtocolSchema, SchemaMigration, diff_schemas};
 use specforge_formatter::unified_diff;
+use specforge_graph::{EdgeChange, GraphDelta, ModifiedNodeChange, NodeAspect};
 use specforge_parser::{FORMAT_HEADER_PREFIX, FormatVersion, detect_format_version};
 use std::path::{Path, PathBuf};
 
@@ -126,8 +127,6 @@ impl MigrationRecord {
         target: &FormatVersion,
         backups: &[MigrationBackup],
     ) -> std::io::Result<Self> {
-        let root = project_root_of(root);
-        let root = root.as_path();
         let files = backups
             .iter()
             .map(|backup| {
@@ -217,7 +216,7 @@ fn sha256_hash(content: &str) -> String {
 }
 
 // ---------------------------------------------------------------------------
-// Schema and Graph Comparison
+// Post-migration checks
 // ---------------------------------------------------------------------------
 
 /// Compare pre/post migration schemas and return breaking change diagnostics.
@@ -245,114 +244,74 @@ pub fn check_schema_compatibility(
     diagnostics
 }
 
-/// Compare two graphs for structural equivalence (entity IDs, edges, field values).
-/// Returns diagnostics for any differences found, excluding source spans.
-pub fn compare_graphs(
-    pre: &specforge_graph::Graph,
-    post: &specforge_graph::Graph,
-) -> Vec<Diagnostic> {
-    let mut diagnostics = Vec::new();
-
-    let pre_nodes = pre.nodes();
-    let post_nodes = post.nodes();
-
-    // Check entity IDs
-    let pre_ids: std::collections::BTreeSet<&str> =
-        pre_nodes.iter().map(|n| n.id.raw.as_str()).collect();
-    let post_ids: std::collections::BTreeSet<&str> =
-        post_nodes.iter().map(|n| n.id.raw.as_str()).collect();
-
-    for id in pre_ids.difference(&post_ids) {
-        diagnostics.push(Diagnostic::new(
-            codes::W054,
-            format!("entity '{id}' present before migration but missing after"),
-        ));
-    }
-
-    for id in post_ids.difference(&pre_ids) {
-        diagnostics.push(Diagnostic::new(
-            codes::W054,
-            format!("entity '{id}' appeared after migration but was not present before"),
-        ));
-    }
-
-    // Check edges
-    let pre_edges: std::collections::BTreeSet<(&str, &str, &str)> = pre
-        .edges()
-        .iter()
-        .map(|e| (e.source.as_str(), e.target.as_str(), e.label.as_str()))
-        .collect();
-    let post_edges: std::collections::BTreeSet<(&str, &str, &str)> = post
-        .edges()
-        .iter()
-        .map(|e| (e.source.as_str(), e.target.as_str(), e.label.as_str()))
-        .collect();
-
-    for edge in pre_edges.difference(&post_edges) {
-        diagnostics.push(Diagnostic::new(
-            codes::W054,
-            format!(
-                "edge {}-[{}]->{} present before migration but missing after",
-                edge.0, edge.2, edge.1
-            ),
-        ));
-    }
-
-    for edge in post_edges.difference(&pre_edges) {
-        diagnostics.push(Diagnostic::new(
-            codes::W054,
-            format!(
-                "edge {}-[{}]->{} appeared after migration but was not present before",
-                edge.0, edge.2, edge.1
-            ),
-        ));
-    }
-
-    // Field values of entities present on both sides, compared as the
-    // Graph Protocol exports them, without source positions.
-    let post_by_id: std::collections::HashMap<&str, _> =
-        post_nodes.iter().map(|n| (n.id.raw.as_str(), n)).collect();
-    for pre_node in pre_nodes.iter() {
-        let Some(post_node) = post_by_id.get(pre_node.id.raw.as_str()) else {
-            continue;
-        };
-        let before = comparable_fields(&pre_node.fields);
-        let after = comparable_fields(&post_node.fields);
-        let keys: std::collections::BTreeSet<&String> = before.keys().chain(after.keys()).collect();
-        for key in keys {
-            if before.get(key) != after.get(key) {
-                diagnostics.push(Diagnostic::new(
-                    codes::W054,
-                    format!(
-                        "field '{key}' of entity '{}' changed during migration",
-                        pre_node.id.raw.as_str()
-                    ),
-                ));
-            }
-        }
-    }
-
-    diagnostics
+/// What a migration changed in the graph, as W054 warnings, from the graph delta between the graph before it and the
+/// graph after (source positions ignored, ADR 0032): one per entity removed, one per entity added, one per entity
+/// whose content changed (naming its changed fields, then what else changed: `kind`, `title`, `methods` or `edges`),
+/// then one per edge removed and one per edge added. Empty exactly when `delta` is: a migration keeps the graph only
+/// then.
+pub fn structural_differences(delta: &GraphDelta) -> Vec<Diagnostic> {
+    let warn = |message: String| Diagnostic::new(codes::W054, message);
+    let edge = |e: &EdgeChange| format!("edge {}-[{}]->{}", e.source, e.label, e.target);
+    let removed = delta.removed_nodes.iter().map(|n| {
+        warn(format!(
+            "entity '{}' ({}) present before migration but missing after",
+            n.id, n.kind
+        ))
+    });
+    let added = delta.added_nodes.iter().map(|n| {
+        warn(format!(
+            "entity '{}' ({}) appeared after migration but was not present before",
+            n.id, n.kind
+        ))
+    });
+    let modified = delta.modified_nodes.iter().map(|n| {
+        warn(format!(
+            "entity '{}' changed during migration: {}",
+            n.id,
+            changed(n)
+        ))
+    });
+    let lost = delta.removed_edges.iter().map(|e| {
+        warn(format!(
+            "{} present before migration but missing after",
+            edge(e)
+        ))
+    });
+    let gained = delta.added_edges.iter().map(|e| {
+        warn(format!(
+            "{} appeared after migration but was not present before",
+            edge(e)
+        ))
+    });
+    removed
+        .chain(added)
+        .chain(modified)
+        .chain(lost)
+        .chain(gained)
+        .collect()
 }
 
-/// An entity's fields as exported JSON, with every source span removed:
-/// a format migration shifts positions without changing structure.
-fn comparable_fields(
-    fields: &specforge_graph::FieldMap,
-) -> std::collections::BTreeMap<String, serde_json::Value> {
-    fn strip_spans(value: &mut serde_json::Value) {
-        match value {
-            serde_json::Value::Object(map) => {
-                map.remove("span");
-                map.values_mut().for_each(strip_spans);
-            }
-            serde_json::Value::Array(items) => items.iter_mut().for_each(strip_spans),
-            _ => {}
+/// What changed in `node`: its fields by name, then its aspects. A field named like an aspect (`kind`, `methods`)
+/// is written `field 'kind'`, so the two read apart.
+fn changed(node: &ModifiedNodeChange) -> String {
+    let aspect = |a: &NodeAspect| match a {
+        NodeAspect::Kind => "kind",
+        NodeAspect::Title => "title",
+        NodeAspect::Methods => "methods",
+        NodeAspect::Edges => "edges",
+    };
+    let aspects: Vec<&str> = node.changed_aspects.iter().map(aspect).collect();
+    let fields = node.changed_fields.iter().map(|f| {
+        if ["kind", "title", "methods", "edges"].contains(&f.as_str()) {
+            format!("field '{f}'")
+        } else {
+            f.clone()
         }
-    }
-    let mut map = specforge_emitter::field_map_to_json(fields);
-    map.values_mut().for_each(strip_spans);
-    map
+    });
+    fields
+        .chain(aspects.iter().map(|a| a.to_string()))
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 // ---------------------------------------------------------------------------
@@ -369,20 +328,41 @@ fn diff_label(path: &Path, root: &Path) -> String {
         .join("/")
 }
 
-/// Run migration on a single file of the project at `root`. Returns the result,
-/// the backup it made and the diff, which labels the file with its path from
-/// `root` so that `patch -p1` applies it there.
+/// What migrating one file did.
+struct FileMigration {
+    result: MigrationResult,
+    backup: Option<MigrationBackup>,
+    diff: Option<MigrationDiff>,
+    /// The file as read, when this run rewrote it: what an automatic rollback restores.
+    original: Option<Original>,
+}
+
+impl FileMigration {
+    /// A file this run did not rewrite.
+    fn of(
+        result: MigrationResult,
+        backup: Option<MigrationBackup>,
+        diff: Option<MigrationDiff>,
+    ) -> Self {
+        Self {
+            result,
+            backup,
+            diff,
+            original: None,
+        }
+    }
+}
+
+/// Migrate one file of the project at `root`, reading it once: the version detected, the transform, the diff, the
+/// backup and what a rollback restores are all that one text. The diff labels the file with its path from `root`,
+/// so `patch -p1` applies it there.
 fn migrate_file(
     path: &Path,
     root: &Path,
     target_version: &FormatVersion,
     dry_run: bool,
     no_backup: bool,
-) -> (
-    MigrationResult,
-    Option<MigrationBackup>,
-    Option<MigrationDiff>,
-) {
+) -> FileMigration {
     let path_str = path.display().to_string();
     let label = diff_label(path, root);
 
@@ -390,7 +370,7 @@ fn migrate_file(
     let content = match std::fs::read_to_string(path) {
         Ok(c) => c,
         Err(e) => {
-            return (
+            return FileMigration::of(
                 MigrationResult {
                     file_path: path_str,
                     status: MigrationStatus::Failed,
@@ -412,7 +392,7 @@ fn migrate_file(
             .as_deref()
             .map(|s| format!(" — {s}"))
             .unwrap_or_default();
-        return (
+        return FileMigration::of(
             MigrationResult {
                 file_path: path_str,
                 status: MigrationStatus::Failed,
@@ -427,7 +407,7 @@ fn migrate_file(
 
     // Skip if already at target version
     if detected_version >= *target_version {
-        return (
+        return FileMigration::of(
             MigrationResult {
                 file_path: path_str,
                 status: MigrationStatus::Skipped,
@@ -462,7 +442,7 @@ fn migrate_file(
     };
 
     if dry_run {
-        return (
+        return FileMigration::of(
             MigrationResult {
                 file_path: path_str,
                 status: MigrationStatus::Migrated,
@@ -478,8 +458,8 @@ fn migrate_file(
     // Create backup
     let backup = if !no_backup {
         let backup_path = path.with_extension("spec.bak");
-        if let Err(e) = std::fs::copy(path, &backup_path) {
-            return (
+        if let Err(e) = std::fs::write(&backup_path, &content) {
+            return FileMigration::of(
                 MigrationResult {
                     file_path: path_str,
                     status: MigrationStatus::Failed,
@@ -502,7 +482,7 @@ fn migrate_file(
     // Atomic write: temp + rename
     let tmp_path = path.with_extension("spec.tmp");
     if let Err(e) = std::fs::write(&tmp_path, &transformed) {
-        return (
+        return FileMigration::of(
             MigrationResult {
                 file_path: path_str,
                 status: MigrationStatus::Failed,
@@ -518,7 +498,7 @@ fn migrate_file(
     if let Err(e) = std::fs::rename(&tmp_path, path) {
         // Clean up temp file on rename failure
         let _ = std::fs::remove_file(&tmp_path);
-        return (
+        return FileMigration::of(
             MigrationResult {
                 file_path: path_str,
                 status: MigrationStatus::Failed,
@@ -531,8 +511,8 @@ fn migrate_file(
         );
     }
 
-    (
-        MigrationResult {
+    FileMigration {
+        result: MigrationResult {
             file_path: path_str,
             status: MigrationStatus::Migrated,
             from_version: Some(detected_version),
@@ -541,7 +521,11 @@ fn migrate_file(
         },
         backup,
         diff,
-    )
+        original: Some(Original {
+            path: path.to_path_buf(),
+            text: content,
+        }),
+    }
 }
 
 /// Write `text` over `target` atomically (temp file, then rename).
@@ -597,13 +581,13 @@ pub fn restore(originals: &[Original]) -> RollbackSummary {
     }
 }
 
-/// Undo the recorded migration of the project `path` is in. Each recorded file that still hashes as
+/// Undo the recorded migration of the project at `root`. Each recorded file that still hashes as
 /// the migration left it is restored from its backup, atomically. One whose backup is missing is
 /// skipped with a warning naming the backup. One that changed since is skipped with a warning and
 /// left as it is. Backups are never removed. The record then keeps only the files not restored, and
 /// goes when none is left. With no record, nothing is restored and the one warning says so.
-pub fn run_rollback(path: &Path) -> RollbackSummary {
-    let root = project_root_of(path);
+pub fn run_rollback(root: &ProjectRoot) -> RollbackSummary {
+    let root = root.dir();
     let mut summary = RollbackSummary {
         restored_count: 0,
         skipped_count: 0,
@@ -612,7 +596,7 @@ pub fn run_rollback(path: &Path) -> RollbackSummary {
         warnings: Vec::new(),
         record: RecordChange::Unchanged,
     };
-    let record = match MigrationRecord::read(&root) {
+    let record = match MigrationRecord::read(root) {
         Ok(Some(record)) => record,
         Ok(None) => {
             summary.warnings.push(format!(
@@ -680,7 +664,7 @@ pub fn run_rollback(path: &Path) -> RollbackSummary {
     }
 
     if remaining.is_empty() {
-        if MigrationRecord::remove(&root).is_ok() {
+        if MigrationRecord::remove(root).is_ok() {
             summary.record = RecordChange::Removed;
         }
     } else if summary.restored_count > 0 {
@@ -688,7 +672,7 @@ pub fn run_rollback(path: &Path) -> RollbackSummary {
             target: record.target,
             files: remaining,
         };
-        if kept.write(&root).is_ok() {
+        if kept.write(root).is_ok() {
             summary.record = RecordChange::Rewritten;
         }
     }
@@ -702,15 +686,15 @@ fn project_sources(project_root: &Path) -> Vec<PathBuf> {
     load_project_config(project_root).spec_files(project_root)
 }
 
-/// Migrate every source of the project `path` is in.
+/// Migrate every source of the project at `root`.
 pub fn migrate_project(
-    path: &Path,
+    root: &ProjectRoot,
     target_version: &FormatVersion,
     dry_run: bool,
     no_backup: bool,
 ) -> MigrationSummary {
-    let project_root = project_root_of(path);
-    let targets = project_sources(&project_root);
+    let project_root = root.dir();
+    let targets = project_sources(project_root);
 
     let mut results = Vec::new();
     let mut backups = Vec::new();
@@ -721,41 +705,25 @@ pub fn migrate_project(
     let mut failed = 0;
 
     for target_path in &targets {
-        let before = if dry_run {
-            None
-        } else {
-            std::fs::read_to_string(target_path).ok()
-        };
-        let (result, backup, diff) = migrate_file(
+        let file = migrate_file(
             target_path,
-            &project_root,
+            project_root,
             target_version,
             dry_run,
             no_backup,
         );
 
-        match result.status {
+        match file.result.status {
             MigrationStatus::Migrated => migrated += 1,
             MigrationStatus::Skipped => skipped += 1,
             MigrationStatus::Failed => failed += 1,
             _ => {}
         }
 
-        if result.status == MigrationStatus::Migrated
-            && let Some(text) = before
-        {
-            originals.push(Original {
-                path: target_path.clone(),
-                text,
-            });
-        }
-        if let Some(d) = diff {
-            diffs.push(d);
-        }
-        if let Some(b) = backup {
-            backups.push(b);
-        }
-        results.push(result);
+        originals.extend(file.original);
+        diffs.extend(file.diff);
+        backups.extend(file.backup);
+        results.push(file.result);
     }
 
     MigrationSummary {

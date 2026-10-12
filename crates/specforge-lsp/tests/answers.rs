@@ -29,9 +29,11 @@ fn serving(dir: &TempDir, text: &str) -> (LspState, Url) {
     .unwrap();
     std::fs::write(dir.path().join("main.spec"), text).unwrap();
     let mut state = LspState::new();
-    state.set_session(ProjectSession::open(dir.path()));
+    state.set_session(ProjectSession::open(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+    ));
     let uri = Url::from_file_path(dir.path().join("main.spec")).unwrap();
-    state.open_document(uri.as_str(), text);
+    state.open_document(&uri, text, 1);
     (state, uri)
 }
 
@@ -117,7 +119,7 @@ fn client_support_reads_what_the_client_declared() {
 /// (`STALE_TYPED`): the stale window, before the compile.
 fn typed_since_the_compile(dir: &TempDir) -> (LspState, Url) {
     let (mut state, uri) = serving(dir, STALE_COMPILED);
-    state.apply_change(uri.as_str(), None, STALE_TYPED);
+    state.change_document(&uri, 2, &[crate::whole(STALE_TYPED)]);
     (state, uri)
 }
 
@@ -248,7 +250,7 @@ fn rename_waits_for_the_compile_of_its_document() {
 #[test]
 fn formatting_answers_its_edits_and_what_to_publish() {
     let text = "behavior login \"Login\" {\n  invariants [session_limit]\n}\n\n}}}\n";
-    let state = crate::served::buffers(&[("/buffer/format_keeps.spec", text)]);
+    let mut state = crate::served::buffers(&[("/buffer/format_keeps.spec", text)]);
     let uri = crate::served::uri_of_path("/buffer/format_keeps.spec");
     let options = tower_lsp::lsp_types::FormattingOptions {
         tab_size: 2,
@@ -257,18 +259,31 @@ fn formatting_answers_its_edits_and_what_to_publish() {
     };
 
     let formatted = answers::formatting(&state, &uri, &options, None).expect("an open document");
+    let codes_of = |list: &[tower_lsp::lsp_types::Diagnostic]| {
+        let mut codes: Vec<String> = list
+            .iter()
+            .filter_map(|d| match d.code.as_ref()? {
+                tower_lsp::lsp_types::NumberOrString::String(code) => Some(code.clone()),
+                tower_lsp::lsp_types::NumberOrString::Number(_) => None,
+            })
+            .collect();
+        codes.sort();
+        codes
+    };
+    assert_eq!(codes_of(&formatted.findings.sent), ["W142"]);
+    assert_eq!(formatted.findings.version, Some(1));
     // The formatter's W142 goes beside the compile's E001 and E003, which
     // a publish would otherwise erase.
-    let (published, _) = formatted.publish.expect("formatting reported something");
-    let mut codes: Vec<String> = published
-        .iter()
-        .filter_map(|d| match d.code.as_ref()? {
-            tower_lsp::lsp_types::NumberOrString::String(code) => Some(code.clone()),
-            tower_lsp::lsp_types::NumberOrString::Number(_) => None,
-        })
-        .collect();
-    codes.sort();
-    assert_eq!(codes, ["E001", "E003", "W142"], "{published:?}");
+    let send = state
+        .publish_formatting(formatted.findings.clone())
+        .expect("formatting reported something");
+    assert_eq!(codes_of(&send.diagnostics), ["E001", "E003", "W142"]);
+    assert_eq!((send.uri, send.version), (uri.clone(), Some(1)));
+    assert_eq!(
+        state.publish_formatting(formatted.findings),
+        None,
+        "nothing changed"
+    );
     // Outside a project the editor's settings are the ones that apply.
     assert_eq!(formatted.notice, None);
 
@@ -293,4 +308,36 @@ fn client_support_reads_what_steers_the_reaction() {
     let nothing = ClientSupport::of(&ClientCapabilities::default());
     assert!(!nothing.tokens_refresh);
     assert!(!nothing.relative_patterns);
+}
+
+/// A body left unclosed while a field's name is typed, then two types.
+const HALF_TYPED: &str =
+    "type alpha \"A\" {\n  note\n\ntype beta \"B\" {}\n\ntype gamma \"C\" {}\n";
+
+#[spec(
+    behavior = "go_to_definition",
+    verify = "the entity after a body being typed is navigated to"
+)]
+fn the_entity_after_a_half_typed_body_is_navigable() {
+    let dir = TempDir::new().unwrap();
+    let (mut state, uri) = serving(&dir, HALF_TYPED);
+    state.set_client(ClientSupport {
+        definition_links: true,
+        ..ClientSupport::default()
+    });
+    let on_beta = Position::new(3, 6);
+    let Some(GotoDefinitionResponse::Link(links)) = answers::definition(&state, &uri, on_beta)
+    else {
+        panic!("a link");
+    };
+    assert_eq!(quad(links[0].target_selection_range), (3, 5, 3, 9));
+    let hover = answers::hover(&state, &uri, on_beta).expect("a hover");
+    let tower_lsp::lsp_types::HoverContents::Markup(markup) = hover.contents else {
+        panic!("markup");
+    };
+    assert!(
+        markup.value.starts_with("**type** `beta`"),
+        "{}",
+        markup.value
+    );
 }

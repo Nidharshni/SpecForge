@@ -33,14 +33,16 @@ invariant peer_dependency_satisfaction "Peer Dependency Satisfaction" {
     satisfies its declared semver range. An optional peer may be absent.
     Unsatisfied peer dependencies MUST produce an error diagnostic (E-level), not
     a silent degradation. A range that is not a SemVer requirement satisfies
-    no version (E073). `check`, `doctor`, `add` and `update` judge a peer by
-    one rule (ADR 0041).
+    no version (E073). `check`, `doctor`, `add`, `init` and `update` judge a
+    peer by one rule over one set: the extensions the project's
+    specforge.json entries load (ADR 0041).
   """
   risk      high
   verify unit "satisfied peer dependencies pass validation"
   verify unit "unsatisfied peer dependency produces an error diagnostic"
   verify unit "peer with wrong version range produces an error diagnostic"
   verify unit "one rule judges a peer: its range read as SemVer, then the version its peer is installed at"
+  verify unit "add, init and update judge the set check judges: the extensions the project's entries load"
 }
 
 // -- Cache & Isolation Invariants ---------------------------------------------
@@ -151,7 +153,9 @@ invariant publisher_trust "Publisher Trust" {
     verifies over the downloaded bytes and the served manifest, or when it
     is unsigned and the user passed --allow-unsigned; a broken signature is
     never installed. The first verified key for a package is pinned, and a
-    package signed by another key is refused unless the user consents.
+    package signed by another key is refused unless the user consents. A
+    key is pinned only for an install that is written, and a store of pins
+    that can't be read trusts nothing.
   """
   risk      high
   verify integration "specforge add refuses an unsigned package without --allow-unsigned"
@@ -175,11 +179,13 @@ invariant extension_operation_atomicity "Extension Operation Atomicity" {
   guarantee """
     Extension install, uninstall, and update operations MUST be atomic.
     On failure, all changes MUST be rolled back — no partial installs,
-    no stray files, no inconsistent lock state.
+    no stray files, no inconsistent lock state, and no publisher key
+    pinned for an install that was not written.
   """
   risk      high
   verify unit "failed install rolls back to previous state"
   verify unit "interrupted upgrade preserves original extension"
+  verify unit "a pin that cannot be saved puts back everything the install wrote"
   verify integration "concurrent install and uninstall are serialized"
 }
 

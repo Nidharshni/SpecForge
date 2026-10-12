@@ -138,7 +138,10 @@ fn registry_diagnostics_keep_their_order() {
     // Compiled again and again, with fresh hash maps each time: the order
     // must not depend on them.
     for _ in 0..20 {
-        let ctx = specforge_project::CompiledProject::compile(dir.path(), Some(runtime.clone()));
+        let ctx = specforge_project::CompiledProject::compile(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            Some(runtime.clone()),
+        );
         let diagnostics = ctx.diagnostics();
         assert_eq!(render(&diagnostics), expected);
     }
@@ -155,7 +158,10 @@ fn the_environment_reports_before_the_sources() {
     let runtime = Arc::new(colliding_extensions_with(true, true));
 
     for _ in 0..20 {
-        let ctx = specforge_project::CompiledProject::compile(dir.path(), Some(runtime.clone()));
+        let ctx = specforge_project::CompiledProject::compile(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            Some(runtime.clone()),
+        );
         let diagnostics = ctx.diagnostics();
         let codes: Vec<&str> = diagnostics.iter().map(|d| d.code.as_str()).collect();
         // The environment's own first (provider registration), then the
@@ -171,4 +177,43 @@ fn the_environment_reports_before_the_sources() {
         let probe = diagnostics.iter().rfind(|d| d.code == "W112").unwrap();
         assert!(probe.message.contains("could not be resolved"), "{probe:?}");
     }
+}
+
+#[specforge_test_macros::test(
+    behavior = "load_extension_manifests",
+    verify = "the environment says what part of the setup each of its diagnostics is about, and reports an entry's load diagnostics together"
+)]
+fn the_environment_says_what_each_diagnostic_is_about() {
+    use specforge_project::SetupPart::{Collision, Peers, Providers, Rules};
+
+    let dir = project_with(true);
+    let runtime = Arc::new(colliding_extensions_with(true, true));
+
+    let ctx = specforge_project::CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        Some(runtime),
+    );
+    let setup = ctx.environment().setup_diagnostics();
+
+    let reported: Vec<_> = setup
+        .iter()
+        .map(|s| (s.part, s.diagnostic.code.as_str()))
+        .collect();
+    assert_eq!(
+        reported,
+        [
+            (Providers, "W118"),
+            (Peers, "E027"),
+            (Collision, "E026"),
+            (Collision, "W018"),
+            (Rules, "W112"),
+            (Rules, "W112"),
+            (Collision, "W023"),
+            (Rules, "W112"),
+            (Collision, "E039"),
+        ]
+    );
+    // `diagnostics()` is the same list without the parts.
+    let flat: Vec<_> = ctx.environment().diagnostics().collect();
+    assert_eq!(flat, setup.iter().map(|s| s.diagnostic).collect::<Vec<_>>());
 }

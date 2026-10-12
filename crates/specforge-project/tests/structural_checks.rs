@@ -26,8 +26,11 @@ fn project(extensions: &[&str], spec: &str) -> TempDir {
 /// The compile's diagnostics as `[code, message]` pairs, keeping only
 /// `codes`, in the order the compile reported them.
 fn reported(runtime: InProcessRuntime, dir: &TempDir, codes: &[&str]) -> Vec<[String; 2]> {
-    let diagnostics: Vec<Diagnostic> =
-        CompiledProject::compile(dir.path(), Some(std::sync::Arc::new(runtime))).diagnostics();
+    let diagnostics: Vec<Diagnostic> = CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        Some(std::sync::Arc::new(runtime)),
+    )
+    .diagnostics();
     diagnostics
         .into_iter()
         .filter(|d| codes.contains(&d.code.as_str()))

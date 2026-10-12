@@ -10,7 +10,6 @@ name = "specforge-registry"
 path = "src/main.rs"
 
 [dependencies]
-semver = { workspace = true }
 specforge-package = { path = "../specforge-package" }
 specforge-protocol-types = { path = "../specforge-protocol-types" }
 specforge-registry-wire = { path = "../specforge-registry-wire" }

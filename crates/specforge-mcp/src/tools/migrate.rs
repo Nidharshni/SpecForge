@@ -8,6 +8,7 @@ use crate::target::ProjectRef;
 use crate::target::{AnyProject, Project};
 use crate::tool::McpError;
 use crate::tool::{CoreTool, Effect, ReplySpec, WriteHints};
+use specforge_ops::OpError;
 
 /// `specforge.migrate`'s arguments.
 #[derive(Debug, Arguments)]
@@ -77,7 +78,7 @@ impl CoreTool for Tool {
         match outcome.failure() {
             None => Ok(Mutated::new(reply, Written::files(outcome.writes))),
             Some(failure) => Err(Failed::after(
-                McpError::from(failure)
+                McpError::from(OpError::from(failure))
                     .with_data(serde_json::to_value(&reply).expect("a reply serializes")),
                 outcome.writes,
             )),

@@ -2,12 +2,30 @@
 //! neighbourhood, or of the whole graph. It renders the review
 //! (`specforge_ops::review`).
 
-use specforge_ops::review::{DEFAULT_DEPTH, ReviewRequest, review};
+use specforge_ops::review::{DEFAULT_DEPTH, ReviewDocument, ReviewRequest, review};
 
 use crate::args::Arguments;
-use crate::prompt::{PromptOutcome, Rendered};
+use crate::prompt::{CorePrompt, Prompted};
 use crate::tool::McpError;
 use specforge_ops::view::ProjectView;
+
+/// The review prompt (`McpReviewPromptResult`).
+pub struct Prompt;
+
+impl CorePrompt for Prompt {
+    const NAME: &'static str = "specforge://prompts/review";
+    const DESCRIPTION: &'static str = "Analyze coverage gaps for an entity or the whole graph";
+    const SPEC: &'static str = "McpReviewPromptResult";
+    type Args = Args;
+    type Payload = ReviewDocument;
+
+    fn render(
+        view: ProjectView<'_>,
+        args: Args,
+    ) -> Result<Prompted<ReviewDocument>, Box<McpError>> {
+        render(view, args)
+    }
+}
 
 /// `specforge://prompts/review`'s arguments.
 #[derive(Debug, Arguments)]
@@ -21,7 +39,7 @@ pub struct Args {
     depth: usize,
 }
 
-pub fn render(view: ProjectView<'_>, args: Args) -> PromptOutcome {
+fn render(view: ProjectView<'_>, args: Args) -> Result<Prompted<ReviewDocument>, Box<McpError>> {
     let request = ReviewRequest {
         entity_id: args.entity_id.as_deref(),
         depth: args.depth,
@@ -34,8 +52,8 @@ pub fn render(view: ProjectView<'_>, args: Args) -> PromptOutcome {
          Identify the highest-priority gaps to address. \
          Focus on entities marked 'uncovered' and unconnected entities that may indicate missing relationships."
     );
-    Ok(Rendered {
+    Ok(Prompted {
         instruction,
-        payload: serde_json::to_value(review.document()).expect("a document serializes"),
+        payload: review.document(),
     })
 }

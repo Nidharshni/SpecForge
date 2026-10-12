@@ -4,6 +4,7 @@ use crate::target::{NewProject, NewProjectDir};
 use crate::tool::{CoreTool, Effect, ReplySpec, WriteHints};
 
 use crate::args::Arguments;
+use crate::events::ProjectInitialized;
 use crate::mutation::{
     Mutated, Mutation, MutationArgs, MutationEvent, MutationReply, NoDiagnostics, Written,
 };
@@ -66,16 +67,16 @@ impl CoreTool for Tool {
             version: &args.version,
             extensions,
         };
-        let outcome =
-            init::plan(&request, runtime.as_ref()).and_then(|plan| init::apply(path, plan))?;
+        let outcome = init::plan(&request, runtime.as_ref())
+            .and_then(|plan| init::apply(path, plan, runtime.as_ref()))?;
         let reply = outcome.document();
         // With no project served, the server serves the one it created (ADR
         // 0014 D5): `mutation::complete` does, once it wrote.
-        let event = MutationEvent::ProjectInitialized {
+        let event = MutationEvent::ProjectInitialized(ProjectInitialized {
             project_name: outcome.name.clone(),
             extension_count: outcome.extensions.len(),
             spec_file_path: init::STARTER_FILE.to_string(),
-        };
+        });
         Ok(Mutated::new(
             reply,
             Written::files(outcome.writes).with_event(event),

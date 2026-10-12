@@ -1,9 +1,9 @@
 pub mod ast;
+pub mod cst;
 pub mod expr;
 pub mod format_version;
 pub mod lex;
 mod parse;
-mod recovery;
 
 pub use ast::{
     Annotation, Entity, EntityId, EntityKind, FieldEntry, FieldMap, FieldValue, ImportBinding,

@@ -294,7 +294,10 @@ behavior apply_format_rules "Apply Format Rules" {
     The formatting rule engine MUST walk the CST and emit formatting
     decisions for each whitespace region: keep, replace, insert, or remove.
     Rules cover indentation, spacing, alignment, wrapping, blank lines,
-    comments and imports. String literals, triple-quoted ones included, are
+    comments and imports. The formatted text ends every line with LF
+    (CRLF line endings become LF, inside string literals too) and ends with
+    exactly one newline; no blank line opens or closes it, and a blank text
+    formats to the empty text. String literals, triple-quoted ones included, are
     kept byte-for-byte: their text is a field's value. Statements keep their source
     order; only runs of imports are sorted. Field keys align to the longest
     key plus one; annotations of single-line values align in one column;
@@ -321,6 +324,7 @@ behavior apply_format_rules "Apply Format Rules" {
   verify unit "comment rules normalize spacing around inline comments"
   verify unit "multiline string literals are kept byte-for-byte"
   verify property "two files differing only in whitespace produce identical output after formatting"
+  verify unit "the formatted text has LF line endings and exactly one final newline"
   verify contract "Apply Format Rules: format rule application holds — cst_available, format_config_loaded, contribution_registry_available, deterministic_output, no_domain_logic, extension_rules_applied"
 }
 
@@ -369,14 +373,19 @@ behavior lsp_format_document "LSP Format Document" {
   }
   ensures {
     textedit_list_returned  "a list of non-overlapping TextEdit operations is returned"
-    cli_parity_enforced     "the result is identical to running specforge format on the same file"
+    cli_parity_enforced     "applying the returned edits to the document gives exactly the text specforge format writes for the same file"
     format_complete_emitted "format_complete event is produced after successful formatting"
   }
   contract   """
     When the LSP server receives a textDocument/formatting request,
     it MUST format the full document using the formatting engine and
-    return a list of TextEdit operations. The result MUST be identical
-    to running specforge format on the same file.
+    return a list of TextEdit operations. Applied to the document, the
+    edits MUST give exactly the text specforge format writes for the
+    same file, byte for byte, in one pass: an edit may span line breaks,
+    so blank lines are removed, a missing final newline is added and CRLF
+    line endings become LF. An edit replaces only the text formatting
+    changes, so text the formatter keeps, and an editor's cursor in it,
+    stays where it is.
     The configuration is the one specforge format uses for that file: the
     .specforgefmt.toml nearest the document's directory within its project,
     else the defaults (see lsp_respect_editor_config). TextEdit coordinates
@@ -385,13 +394,22 @@ behavior lsp_format_document "LSP Format Document" {
     errors, the server MUST format well-formed regions and leave error
     regions unchanged, consistent with format_with_parse_errors.
     Diagnostics the formatter reports MUST be published alongside the
-    document's compile diagnostics, never in place of them.
+    document's compile diagnostics, never in place of them, and stay
+    published with them while the document is the text they were
+    reported on: a later publish of the document keeps them and an edit
+    drops them. A publish MUST carry diagnostics of one document version:
+    formatting a document typed since its last compile publishes its
+    findings with the compile of that text.
   """
   verify unit "formatting request returns TextEdit list"
   verify integration "formatting keeps the document's compile diagnostics published"
+  verify integration "the formatter's diagnostics stay published until the document changes"
+  verify unit "a formatting publish carries diagnostics of one document version"
   verify unit "TextEdit coordinates are 0-indexed lines and columns"
   verify unit "TextEdit operations in a response do not overlap"
   verify integration "LSP format produces same result as CLI format"
+  verify integration "editor formatting reaches the text specforge format writes in one pass: blank lines removed, final newline added, CRLF made LF"
+  verify property "applying the formatting edits to the document gives the formatted text byte for byte"
   verify integration "parse errors in document trigger format_with_parse_errors delegation"
   verify performance "formats document within 50ms for files under 1000 lines"
   verify contract "LSP Format Document: LSP document formatting holds — document_open, format_config_loaded, textedit_list_returned, cli_parity_enforced, format_complete_emitted"
@@ -427,11 +445,14 @@ behavior lsp_format_range "LSP Format Range" {
     TextEdit coordinates use 0-indexed lines and columns (LSP standard).
     TextEdit operations in a response MUST NOT overlap. The formatted
     range MUST produce the same result as full-document formatting for
-    the affected blocks. When the selected range contains parse errors,
+    the affected blocks, and every byte outside those blocks, line
+    endings included, MUST be left as it is. When the selected range
+    contains parse errors,
     error regions within the range MUST be left unchanged.
   """
   verify unit "range is expanded to block boundaries"
   verify unit "range formatting matches full formatting for affected blocks"
+  verify unit "range formatting changes no byte outside the blocks it touches"
   verify integration "parse errors within range are left unchanged per format_with_parse_errors"
   verify unit "a region left unformatted is reported at its document lines"
   verify performance "formats range within 20ms for ranges under 200 lines"
@@ -486,7 +507,7 @@ behavior format_with_parse_errors "Format Files with Parse Errors" {
   types      [FormatConfig, FormatDiff]
   ports      [FileSystem, LspProtocol]
   requires {
-    cst_with_errors "the .spec file has been parsed into a CST that contains tree-sitter ERROR or MISSING nodes"
+    cst_with_errors "the .spec file has been parsed into a CST that contains tree-sitter ERROR or MISSING nodes, or a string the parser's recovery ended"
   }
   ensures {
     no_crash                      "the formatter does not crash or produce corrupted output"
@@ -496,17 +517,19 @@ behavior format_with_parse_errors "Format Files with Parse Errors" {
   }
   contract   """
     When the formatter encounters a .spec file that contains parse errors,
-    it MUST NOT crash or produce corrupted output. The formatter MUST use
-    tree-sitter error recovery to format well-formed regions of the file
-    and leave error regions unchanged. An error region begins at the first
-    unparseable token (as identified by a tree-sitter ERROR or MISSING node)
-    and extends forward until the next token that begins a parseable
-    top-level statement (use directive, entity block, or comment). All
-    original whitespace within an error region MUST be preserved byte-for-byte.
-    A diagnostic MUST be emitted listing each file that could not be fully
-    formatted due to parse errors, including the line range of each error region.
-    The diagnostic MUST span the region it kept, from its first line's start
-    to its last line's end.
+    it MUST NOT crash or produce corrupted output. The formatter MUST read
+    the file's top-level forms as the parser reads them
+    (recover_from_syntax_errors: a string left unclosed, a body left
+    unclosed, a form start the grammar missed) and format every form the
+    parser reads whole. A form that holds a parse error (a tree-sitter ERROR
+    or MISSING node, or a string the parser's recovery ended) MUST be left
+    unchanged, from its first line to its last, blank lines after it
+    excluded; all original whitespace within it MUST be preserved
+    byte-for-byte, trailing whitespace aside. A diagnostic MUST be emitted
+    listing each file that could not be fully formatted due to parse errors,
+    one per form left unchanged (adjacent ones joined), including its line
+    range. The diagnostic MUST span the lines it kept, from its first line's
+    start to its last line's end, never past the document.
   """
   verify unit "file with syntax error is partially formatted without crash"
   verify unit "well-formed blocks in a file with errors are still formatted"
@@ -515,6 +538,8 @@ behavior format_with_parse_errors "Format Files with Parse Errors" {
   verify unit "error region ends before next parseable top-level statement"
   verify unit "whitespace within error regions is preserved byte-for-byte"
   verify unit "diagnostic lists files with parse errors and error line ranges"
+  verify unit "a form the parser could not read whole is kept as written and the forms after it are formatted"
+  verify unit "the diagnostic spans every line of the form it kept, never past the document"
   verify contract "Format Files with Parse Errors: formatting with parse errors holds — cst_with_errors, no_crash, well_formed_regions_formatted, error_regions_preserved, parse_error_diagnosed"
 }
 

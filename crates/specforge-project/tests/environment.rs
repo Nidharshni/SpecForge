@@ -7,7 +7,9 @@ use serde_json::json;
 use specforge_common::parse_project_config;
 use specforge_extension_sdk::prelude::*;
 use specforge_installed::Installed;
-use specforge_project::{EnabledExtension, Environment, ExtensionLoad, Loaded, SharedRuntime};
+use specforge_project::{
+    EnabledExtension, Environment, ExtensionLoad, Loaded, SetupPart, SharedRuntime,
+};
 use specforge_test::prelude::*;
 use specforge_wasm::testing::InProcessRuntime;
 use tempfile::TempDir;
@@ -61,7 +63,10 @@ fn an_environment_reports_its_config_its_load_its_providers_then_its_build() {
     specforge_installed::testing::install(root, &[RULES]);
     let rt: SharedRuntime = Arc::new(InProcessRuntime::new().with(rules));
 
-    let env = Environment::load(root, Some(rt.clone()));
+    let env = Environment::load(
+        &specforge_common::ProjectRoot::of(root).unwrap(),
+        Some(rt.clone()),
+    );
 
     let all: Vec<_> = env.diagnostics().collect();
     assert_eq!(
@@ -100,7 +105,7 @@ fn without_a_runtime_nothing_loads_and_each_entry_is_enabled_as_written() {
     )
     .unwrap();
 
-    let env = Environment::load(root, None);
+    let env = Environment::load(&specforge_common::ProjectRoot::of(root).unwrap(), None);
 
     assert!(env.runtime().is_none());
     assert!(env.registries().declarations().is_empty());
@@ -153,7 +158,6 @@ fn an_environment_assembles_from_the_parts_it_is_given() {
             loaded: Loaded {
                 enabled: vec![EnabledExtension::unloaded(RULES)],
                 declarations: vec![declaration],
-                diagnostics: vec![],
             },
         },
     );
@@ -195,5 +199,68 @@ fn an_environment_assembles_from_the_parts_it_is_given() {
     assert_eq!(
         messages,
         ["the configured extension did not load — operating in structural-only mode"]
+    );
+}
+
+#[specforge_test(
+    behavior = "load_extension_manifests",
+    verify = "the environment says what part of the setup each of its diagnostics is about, and reports an entry's load diagnostics together"
+)]
+fn an_entrys_load_diagnostics_come_together_in_entry_order() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path();
+    std::fs::write(
+        root.join("specforge.json"),
+        json!({"extensions": ["@acme/a", "@acme/missing", "@acme/b"]}).to_string(),
+    )
+    .unwrap();
+    specforge_installed::testing::install(root, &["@acme/a", "@acme/b"]);
+    // `@acme/b`'s lock entry pins no hash: it loads with W149.
+    let mut lock = match Installed::at(root).lock().clone() {
+        specforge_installed::LockState::Read(lock) => lock,
+        other => panic!("{other:?}"),
+    };
+    for entry in &mut lock.entries {
+        if entry.name.as_str() == "@acme/b" {
+            entry.wasm_hash = String::new();
+        }
+    }
+    specforge_installed::write_lock_file(&lock, &root.join("specforge.lock")).unwrap();
+    // `@acme/a` asks for more execution time than the host grants: W153.
+    let rt: SharedRuntime = Arc::new(
+        InProcessRuntime::new()
+            .with(|| {
+                let mut meta = ExtensionMeta::new("@acme/a", "1.0.0");
+                meta.sandbox_policy = Some(SandboxPolicy {
+                    max_execution_ms: Some(120_000),
+                    ..Default::default()
+                });
+                ContributionsBuilder::new(meta)
+            })
+            .with(|| ContributionsBuilder::new(ExtensionMeta::new("@acme/b", "1.0.0"))),
+    );
+
+    let env = Environment::load(&specforge_common::ProjectRoot::of(root).unwrap(), Some(rt));
+
+    // Each entry's diagnostics come right after the entry.
+    assert_eq!(
+        codes_among(&env, &["W153", "E028", "W149"]),
+        ["W153", "E028", "W149"],
+        "{:#?}",
+        env.diagnostics().collect::<Vec<_>>()
+    );
+    let parts: Vec<_> = env
+        .setup_diagnostics()
+        .into_iter()
+        .map(|s| (s.part, s.diagnostic.code.as_str()))
+        .filter(|(_, code)| ["W153", "E028", "W149"].contains(code))
+        .collect();
+    assert_eq!(
+        parts,
+        [
+            (SetupPart::Entry(0), "W153"),
+            (SetupPart::Entry(1), "E028"),
+            (SetupPart::Entry(2), "W149"),
+        ]
     );
 }

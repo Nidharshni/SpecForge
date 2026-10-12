@@ -21,6 +21,8 @@ Changed answers are marked *(amended)*.
   cycle changes nothing. W113's message and cycle order become deterministic.
 - **D1-b** `exclude` in `specforge.json` applies to `check`, watch, the LSP and MCP alike, relative to
   the spec root. The spec type and the JSON schema (which rejects the key today) gain it.
+  *(ADR 0055: each entry is a gitignore-style pattern relative to the spec root, not a substring; an
+  entry that can match no source is E069; an excluded file is no source, so no import names it.)*
 - **D1-c** One diagnostic type with **two presenters** for now: the CLI's JSON nests `span`, MCP's
   is flat. When they converge, it is one additive shape carrying both, so no reader breaks.
   *(Converged, recorded by ADR 0052: `specforge_common::DiagnosticJson` is that additive shape,

@@ -1,12 +1,13 @@
 //! `specforge://prompts/infer`: guidance for inferring spec entities from
 //! code, by scope.
 
-use serde_json::{Value, json};
-use specforge_ops::infer::{self, FilePage, InferencePlanRequest};
+use serde::Serialize;
+use specforge_common::shape::Shape;
+use specforge_ops::infer::{self, InferencePlanRequest, PlanDocument};
 use specforge_ops::navigate::{anchors_of_file, source_anchors};
 
 use crate::args::Arguments;
-use crate::prompt::{PromptOutcome, Rendered};
+use crate::prompt::{CorePrompt, Prompted};
 use crate::tool::CoreTool;
 use crate::tool::{ErrorCode, McpError};
 use crate::tools::find_spec_for_source::{Anchored, MatchMode};
@@ -22,6 +23,23 @@ const WORKFLOW_TOOLS: [&str; 6] = [
     search::Tool::NAME,
     schema::Tool::NAME,
 ];
+
+/// The infer prompt (`McpInferPromptResult`).
+pub struct Prompt;
+
+impl CorePrompt for Prompt {
+    const NAME: &'static str = "specforge://prompts/infer";
+    const DESCRIPTION: &'static str =
+        "Get inference guidance for discovering spec entities from code";
+    const SPEC: &'static str = "McpInferPromptResult";
+    const OPEN_VALUES: &'static [&'static str] = &["$.existing_entities"];
+    type Args = Args;
+    type Payload = Payload;
+
+    fn render(view: ProjectView<'_>, args: Args) -> Result<Prompted<Payload>, Box<McpError>> {
+        respond(&view, args)
+    }
+}
 
 /// `specforge://prompts/infer`'s arguments.
 #[derive(Debug, Arguments)]
@@ -78,25 +96,63 @@ impl Scope {
     }
 }
 
-/// A page of a file list with, when files follow it, a trailing "... and K
-/// more (use the cursor param)" marker (C9-08).
-fn page_json(page: &FilePage) -> Vec<Value> {
-    let mut files: Vec<Value> = page.files.iter().map(|f| Value::from(f.as_str())).collect();
-    if page.remaining > 0 {
-        files.push(Value::from(format!(
-            "... and {} more (use the cursor param)",
-            page.remaining
-        )));
-    }
-    files
+/// The infer prompt's payload, one per scope, tagged by it
+/// (`McpInferPromptResult`).
+#[derive(Debug, Serialize, Shape)]
+#[serde(tag = "scope", rename_all = "snake_case")]
+pub enum Payload {
+    Overview(Overview),
+    Kind(KindScope),
+    File(FileScope),
+    Plan(PlanDocument),
+    Workflow(Workflow),
 }
 
-pub fn render(view: ProjectView<'_>, args: Args) -> PromptOutcome {
-    respond(&view, args)
+/// The project's guide, as `specforge infer-guide --format json` prints it,
+/// then what the prompt adds.
+#[derive(Debug, Serialize, Shape)]
+pub struct Overview {
+    #[serde(flatten)]
+    pub guide: infer::GuideDocument,
+    pub output_format: String,
+    pub validation: String,
+}
+
+/// One kind's guide, then what the prompt adds.
+#[derive(Debug, Serialize, Shape)]
+pub struct KindScope {
+    #[serde(flatten)]
+    pub guide: infer::KindGuideDocument,
+    pub validation: String,
+}
+
+/// What a source file already has, and the guides to infer the rest.
+#[derive(Debug, Serialize, Shape)]
+pub struct FileScope {
+    pub file: String,
+    pub match_mode: MatchMode,
+    pub existing_entities_referencing_file: Vec<Anchored>,
+    pub kinds: Vec<FileKind>,
+    pub project_conventions: String,
+    pub validation: String,
+}
+
+/// One kind's guide in a file scope.
+#[derive(Debug, Serialize, Shape)]
+pub struct FileKind {
+    pub kind: String,
+    pub inference_guide: String,
+}
+
+/// The tools the workflow protocol names, and the kinds installed.
+#[derive(Debug, Serialize, Shape)]
+pub struct Workflow {
+    pub tools: Vec<&'static str>,
+    pub installed_kinds: Vec<String>,
 }
 
 /// The prompt over `project`.
-fn respond(project: &ProjectView, args: Args) -> PromptOutcome {
+fn respond(project: &ProjectView, args: Args) -> Outcome {
     match Scope::parse(args.scope.as_deref())? {
         Scope::Plan => get_plan(project, args.target_spec_directory.as_deref(), args.cursor),
         Scope::Workflow => Ok(get_workflow(project)),
@@ -107,21 +163,27 @@ fn respond(project: &ProjectView, args: Args) -> PromptOutcome {
 }
 
 /// A rendered prompt.
-fn rendered(instruction: impl Into<String>, payload: Value) -> Rendered {
-    Rendered {
+fn rendered(instruction: impl Into<String>, payload: Payload) -> Prompted<Payload> {
+    Prompted {
         instruction: instruction.into(),
         payload,
     }
 }
 
-fn get_overview(project: &ProjectView) -> Rendered {
+/// What the infer prompt answers: its instruction and its typed payload, or
+/// the refusal.
+type Outcome = Result<Prompted<Payload>, Box<McpError>>;
+
+fn get_overview(project: &ProjectView) -> Prompted<Payload> {
     let guide = infer::guide(project);
-    let mut payload = serde_json::to_value(guide.document()).expect("a document serializes");
-    payload["output_format"] = Value::from(format!(
-        "Write .spec files in the {} directory. Use `keyword entity_id \"Title\" {{ fields }}` syntax. Entity IDs are snake_case identifiers (letters, digits, underscores, 2-60 chars).",
-        guide.spec_directory
-    ));
-    payload["validation"] = Value::from(validation());
+    let payload = Payload::Overview(Overview {
+        output_format: format!(
+            "Write .spec files in the {} directory. Use `keyword entity_id \"Title\" {{ fields }}` syntax. Entity IDs are snake_case identifiers (letters, digits, underscores, 2-60 chars).",
+            guide.spec_directory
+        ),
+        validation: validation(),
+        guide: guide.document(),
+    });
 
     let instruction = format!(
         "You are inferring spec entities from this codebase. \
@@ -135,11 +197,13 @@ fn get_overview(project: &ProjectView) -> Rendered {
     rendered(instruction, payload)
 }
 
-fn get_kind_scoped(project: &ProjectView, kind_name: &str) -> PromptOutcome {
+fn get_kind_scoped(project: &ProjectView, kind_name: &str) -> Outcome {
     let guide = infer::kind_guide(project, kind_name)
         .map_err(|error| Box::new(McpError::from(error).with_argument("scope")))?;
-    let mut payload = serde_json::to_value(guide.document()).expect("a document serializes");
-    payload["validation"] = Value::from(validation());
+    let payload = Payload::Kind(KindScope {
+        guide: guide.document(),
+        validation: validation(),
+    });
 
     let instruction = format!(
         "You are inferring '{kind_name}' entities from this codebase. \
@@ -159,7 +223,7 @@ fn validation() -> String {
     )
 }
 
-fn get_file_scoped(project: &ProjectView, file_path: &str) -> PromptOutcome {
+fn get_file_scoped(project: &ProjectView, file_path: &str) -> Outcome {
     // The entities anchored to the file: the one file rule
     // (specforge_ops::navigate::anchors_of_file) over the anchors manifest,
     // the answer specforge.find_spec_for_source gives (C9-09). With no
@@ -174,19 +238,22 @@ fn get_file_scoped(project: &ProjectView, file_path: &str) -> PromptOutcome {
     let match_mode = MatchMode::from(found.mode);
 
     let guide = infer::guide(project);
-    let kinds_info: Vec<Value> = guide
+    let kinds = guide
         .kinds
         .iter()
-        .map(|kind| json!({ "kind": kind.keyword, "inference_guide": kind.guide }))
+        .map(|kind| FileKind {
+            kind: kind.keyword.to_string(),
+            inference_guide: kind.guide.clone(),
+        })
         .collect();
 
-    let result = json!({
-        "file": file_path,
-        "match_mode": match_mode,
-        "existing_entities_referencing_file": referencing_entities,
-        "kinds": kinds_info,
-        "project_conventions": guide.conventions.unwrap_or(""),
-        "validation": validation(),
+    let result = Payload::File(FileScope {
+        file: file_path.to_string(),
+        match_mode,
+        existing_entities_referencing_file: referencing_entities,
+        kinds,
+        project_conventions: guide.conventions.unwrap_or("").to_string(),
+        validation: validation(),
     });
 
     let instruction = format!(
@@ -199,46 +266,13 @@ fn get_file_scoped(project: &ProjectView, file_path: &str) -> PromptOutcome {
     Ok(rendered(instruction, result))
 }
 
-fn get_plan(
-    project: &ProjectView,
-    target_spec_directory: Option<&str>,
-    cursor: usize,
-) -> PromptOutcome {
+fn get_plan(project: &ProjectView, target_spec_directory: Option<&str>, cursor: usize) -> Outcome {
     let request = InferencePlanRequest {
         target_spec_directory,
         cursor,
     };
     let plan = infer::inference_plan(project, &request).map_err(McpError::from)?;
-    let summary = &plan.progress.summary;
-    let kind_priorities: Vec<Value> = plan
-        .kind_priorities
-        .iter()
-        .map(|priority| {
-            json!({
-                "kind": priority.kind,
-                "extension": priority.extension,
-                "existing_count": priority.existing,
-            })
-        })
-        .collect();
-
-    let result = json!({
-        "plan": {
-            "target_spec_directory": plan.target_spec_directory,
-            "progress": {
-                "files_total": summary.files_total,
-                "files_analyzed": summary.files_analyzed,
-                "entities_produced": summary.entities_produced,
-            },
-            "cursor": plan.cursor,
-            "next_cursor": plan.next_cursor,
-            "unanalyzed_files": page_json(&plan.unanalyzed),
-            "unanalyzed_total": plan.unanalyzed.total,
-            "stale_files": page_json(&plan.stale),
-            "stale_total": plan.stale.total,
-            "kind_priorities": kind_priorities,
-        }
-    });
+    let result = Payload::Plan(plan.document());
 
     let instruction = format!(
         "Create a prioritized inference plan. There are {} unanalyzed files and {} stale files. \
@@ -255,13 +289,13 @@ fn get_plan(
     Ok(rendered(instruction, result))
 }
 
-fn get_workflow(project: &ProjectView) -> Rendered {
+fn get_workflow(project: &ProjectView) -> Prompted<Payload> {
     let tool_names = WORKFLOW_TOOLS;
 
-    let installed_kinds: Vec<&str> = infer::guide(project)
+    let installed_kinds: Vec<String> = infer::guide(project)
         .kinds
         .iter()
-        .map(|kind| kind.keyword)
+        .map(|kind| kind.keyword.to_string())
         .collect();
 
     let [
@@ -272,9 +306,9 @@ fn get_workflow(project: &ProjectView) -> Rendered {
         search,
         _schema,
     ] = tool_names;
-    let result = json!({
-        "tools": tool_names,
-        "installed_kinds": installed_kinds,
+    let result = Payload::Workflow(Workflow {
+        tools: tool_names.to_vec(),
+        installed_kinds,
     });
 
     let workflow = format!(

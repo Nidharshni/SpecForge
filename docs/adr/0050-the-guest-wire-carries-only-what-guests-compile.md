@@ -92,3 +92,20 @@ wire accepts, and the SDK's raw categories and the host's load parse a category 
   not flags.
 - A guest that needs the package or peer rule (an SDK check of its own peers at build time): it would then link
   `specforge-package` knowingly, and that crate would join the guest crates.
+
+## Amendment (round 7, plan 16): a blob compiles no test code, and a guest depends on the SDK alone
+
+- **A blob's inputs hold no test code.** Every test module of a crate a builtin compiles (the
+  guests, the SDK and its macros, the protocol types, coverage) is declared out of line
+  (`#[cfg(test)] mod tests;`), which a release build never reads; the SDK's test helpers
+  (`testing`: `MockHost`, `call_every_command`) are behind its `testing` feature, which a guest
+  enables only in `[dev-dependencies]`. `build-builtins`' `a_builtin_compiles_no_test_code`
+  holds it. A test-only edit therefore re-vendors nothing.
+- **`component_guest!` carries its own bindings** (`wit-bindgen` through the SDK, its
+  `runtime_path` set), so a guest's only protocol dependency is the SDK.
+- **The builtins are listed once**, `specforge_component::builtins::BUILTINS` (name, crate
+  directory, artifact, bytes); `build-builtins` builds what it lists, and a test holds it to
+  `extensions/*/` and to the `@specforge/<dir>` naming rule.
+
+Rejected: hashing only non-test code in `inputs.json` (a Rust parser in xtask to keep a layout the
+compiler makes free).

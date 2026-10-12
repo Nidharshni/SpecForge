@@ -30,7 +30,7 @@ pub(crate) fn subscribe(
             resources::unknown_resource(revision.resource_not_found_code(), &uri),
         );
     }
-    state.subscriptions.subscribe(&uri, &mut state.events);
+    state.subscriptions.subscribe(&uri, &mut *state.events);
     JsonRpcResponse::success(id, json!({}))
 }
 
@@ -45,7 +45,7 @@ pub(crate) fn unsubscribe(
         Ok(invocation) => invocation.name,
         Err(error) => return JsonRpcResponse::from_error(id, error),
     };
-    state.subscriptions.unsubscribe(&uri, &mut state.events);
+    state.subscriptions.unsubscribe(&uri, &mut *state.events);
     JsonRpcResponse::success(id, json!({}))
 }
 
@@ -78,6 +78,6 @@ pub(crate) fn listen(
             uris.push(uri.to_string());
         }
     }
-    state.subscriptions.listen(id, uris, &mut state.events);
+    state.subscriptions.listen(id, uris, &mut *state.events);
     None
 }

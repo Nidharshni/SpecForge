@@ -13,21 +13,22 @@ mod layout;
 mod load;
 mod lock;
 mod module;
+mod resolve;
 #[cfg(feature = "testing")]
 pub mod testing;
 
 use std::path::{Path, PathBuf};
 
-use specforge_common::ExtensionEntry;
 use specforge_package::PackageName;
 
 pub use change::{Change, Committed, Failed, Pin};
 pub use declare::declaration_of;
 pub use health::Health;
 pub use layout::{LOCK_FILE, lock_path};
-pub use load::{Builtins, EnabledExtension, LoadFailure, LoadProblem, Loaded};
+pub use load::{Builtins, EnabledExtension, LoadFailure, LoadProblem, LoadSubject, Loaded};
 pub use lock::{LockFile, LockFileEntry, LockSource, LockState, read_lock_file, write_lock_file};
 pub use module::{Module, hex_sha256};
+pub use resolve::{FileEntry, Resolution, Resolved};
 
 /// A project's installed extensions: its root and what `specforge.lock`
 /// held when it was read, once. Every rule about installed extensions is
@@ -108,14 +109,27 @@ impl Installed {
     /// builtin or for a name that is no package name. The paths whose
     /// change reloads an environment (plan 03).
     pub fn modules(&self, entries: &[String], builtins: &Builtins) -> Vec<PathBuf> {
-        entries
+        let resolution = self.resolve(entries, builtins);
+        let path = |resolved: &Resolved| match resolved {
+            Resolved::Builtin { .. }
+            | Resolved::Unloadable {
+                problem: LoadProblem::NotAPackageName { .. },
+                ..
+            } => None,
+            Resolved::Locked { entry, .. } => Some(self.module_path(&entry.name)),
+            Resolved::Unloadable { name, .. } => PackageName::parse(name)
+                .ok()
+                .map(|name| self.module_path(&name)),
+            Resolved::File(file) => Some(file.file.clone()),
+            Resolved::Again { .. } => None,
+        };
+        resolution
+            .entries()
             .iter()
-            .filter_map(|entry| match ExtensionEntry::parse(entry) {
-                file @ ExtensionEntry::File { .. } => file.file(&self.root),
-                ExtensionEntry::Named(name) if builtins.contains(name) => None,
-                ExtensionEntry::Named(name) => PackageName::parse(name)
-                    .ok()
-                    .map(|name| self.module_path(&name)),
+            .filter_map(|resolved| match resolved {
+                // The same extension again names the same module.
+                Resolved::Again { first } => path(&resolution.entries()[*first]),
+                other => path(other),
             })
             .collect()
     }
@@ -137,6 +151,17 @@ impl Installed {
             None => name.to_string(),
         };
         format!("specforge add {specifier}")
+    }
+
+    /// The publisher key id the lock records for `name`'s registry install;
+    /// `None` when the lock holds no registry install of it, or holds one
+    /// without a key (unsigned, or locked before signing), or can't be read.
+    pub fn locked_key(&self, name: &PackageName) -> Option<&str> {
+        self.lock
+            .entries()
+            .iter()
+            .find(|e| e.name == *name && e.source.is_registry())
+            .and_then(|e| e.key_id.as_deref())
     }
 }
 
@@ -181,6 +206,44 @@ mod tests {
                 PathBuf::from("/p/tools/greet.wasm"),
             ],
             "a builtin has no module and a name that is no package has none either"
+        );
+    }
+
+    #[test]
+    fn the_lock_answers_the_key_of_a_registry_install_only() {
+        let entry = |name: &str, source: &str, key: Option<&str>| LockFileEntry {
+            name: PackageName::parse(name).unwrap(),
+            version: "1.0.0".to_string(),
+            source: LockSource::parse(source),
+            wasm_hash: "hash".to_string(),
+            key_id: key.map(str::to_string),
+            peer_dependencies: Vec::new(),
+        };
+        let lock = LockFile {
+            entries: vec![
+                entry("@a/signed", "registry", Some("k1")),
+                entry("@a/unsigned", "registry", None),
+                entry("@a/local", "local:a.wasm", Some("k2")),
+            ],
+            ..Default::default()
+        };
+        let installed = Installed::with_lock(Path::new("/p"), LockState::Read(lock));
+        let key = |name: &str| installed.locked_key(&PackageName::parse(name).unwrap());
+
+        assert_eq!(key("@a/signed"), Some("k1"));
+        assert_eq!(key("@a/unsigned"), None);
+        assert_eq!(key("@a/local"), None, "a local install has no publisher");
+        assert_eq!(key("@a/absent"), None);
+        let unreadable = Installed::with_lock(
+            Path::new("/p"),
+            LockState::Unreadable(specforge_common::Diagnostic::new(
+                specforge_common::codes::E033,
+                "x",
+            )),
+        );
+        assert_eq!(
+            unreadable.locked_key(&PackageName::parse("@a/signed").unwrap()),
+            None
         );
     }
 

@@ -7,7 +7,7 @@ use specforge_registry_client::testing::{Call, CallKind, MemoryClient, package};
 use specforge_registry_client::{
     RegistryClient, RegistryConfig, RegistryCredential, RegistryError, SigningKey,
 };
-use specforge_registry_wire::{PackageMetadata, path};
+use specforge_registry_wire::{PackageMetadata, PackageSignature, SignedContent, path};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -40,6 +40,11 @@ const TOKEN: &str = "publisher-token";
 
 fn accepted() -> RegistryCredential {
     RegistryCredential::new("default", TOKEN)
+}
+
+/// The publisher's signing key.
+fn key() -> SigningKey {
+    SigningKey::from_bytes(&[7; 32])
 }
 
 fn client() -> MemoryClient {
@@ -86,7 +91,7 @@ fn publish_computes_sha256() {
         &registry,
         Some(&accepted()),
         &client,
-        None,
+        &key(),
     )
     .unwrap();
     assert!(url.contains("@test"));
@@ -121,9 +126,10 @@ fn a_version_the_registry_holds_is_refused_with_r007() {
         &registry,
         Some(&accepted()),
         &client,
-        None,
+        &key(),
     )
-    .unwrap_err();
+    .unwrap_err()
+    .to_diagnostic();
     assert_eq!(err.severity, Severity::Error);
     assert_eq!(err.code, "R007");
     assert!(
@@ -156,7 +162,7 @@ fn publish_returns_registry_url_on_success() {
         &registry,
         Some(&accepted()),
         &client,
-        None,
+        &key(),
     )
     .unwrap();
     assert_eq!(url, expected);
@@ -176,7 +182,7 @@ fn publish_threads_credential_to_client() {
         &registry,
         Some(&credential),
         &client,
-        None,
+        &key(),
     )
     .unwrap();
     assert_eq!(
@@ -195,9 +201,10 @@ fn publish_threads_credential_to_client() {
         &registry,
         None,
         &anonymous,
-        None,
+        &key(),
     )
-    .unwrap_err();
+    .unwrap_err()
+    .to_diagnostic();
     assert_eq!(err.code, "R001");
     assert_eq!(
         publishes(&anonymous)
@@ -284,42 +291,154 @@ fn publish_signs_package_when_key_provided() {
         &registry,
         Some(&accepted()),
         &client,
-        Some(&key),
+        &key,
     )
     .unwrap();
 
-    let sigs: Vec<Option<String>> = publishes(&client)
-        .into_iter()
-        .map(|call| call.signature)
-        .collect();
-    assert_eq!(sigs.len(), 1);
-    let sig: specforge_registry_client::PackageSignature =
-        serde_json::from_str(sigs[0].as_deref().expect("signature present")).unwrap();
-    assert_eq!(sig.key_id, key.key_id());
-    assert_eq!(sig.public_key, key.public_key_hex());
+    let calls = publishes(&client);
+    assert_eq!(calls.len(), 1);
+    let sig: &PackageSignature = calls[0].signature.as_ref().expect("signature present");
+    let manifest_json = calls[0].manifest.as_deref().expect("manifest sent");
+    sig.verify(&SignedContent::of(
+        "@test/ext",
+        "1.0.0",
+        b"wasm-bytes",
+        manifest_json,
+    ))
+    .expect("the signature verifies over what was uploaded");
+    assert_eq!(sig.key_id(), key.key_id());
 }
 
-// B:publish_to_registry — verify unit "unsigned publish sends no signature"
 #[test]
-fn publish_without_key_sends_no_signature() {
+fn the_memory_client_refuses_a_signature_that_does_not_verify() {
     let registry = default_registry();
-    let manifest = minimal_manifest();
+    let declaration = minimal_manifest();
+    let manifest = serde_json::to_string(&declaration).unwrap();
+    let signature = key().sign(&SignedContent::of(
+        "@test/ext",
+        "1.0.0",
+        b"\0asm other",
+        &manifest,
+    ));
     let client = client();
 
-    publish_to_registry(
-        b"wasm-bytes",
-        &manifest,
-        &registry,
-        Some(&accepted()),
-        &client,
-        None,
-    )
-    .unwrap();
-    assert_eq!(
-        publishes(&client)
-            .into_iter()
-            .map(|call| call.signature)
-            .collect::<Vec<_>>(),
-        vec![None]
+    let error = client
+        .publish(
+            b"\0asm wasm",
+            &declaration,
+            &manifest,
+            &signature,
+            &registry,
+            Some(&accepted()),
+        )
+        .unwrap_err();
+    assert!(
+        matches!(
+            error,
+            RegistryError::Refused {
+                code: specforge_registry_wire::ErrorCode::InvalidSignature,
+                ..
+            }
+        ),
+        "{error:?}"
     );
+    let error = client
+        .metadata(
+            &PackageName::parse("@test/ext").unwrap(),
+            &Version::new(1, 0, 0),
+            &registry,
+            None,
+        )
+        .unwrap_err();
+    assert!(matches!(error, RegistryError::NotFound { .. }), "{error:?}");
+}
+
+/// A registry that answers every publish with a receipt for another binary, and everything else as `inner`.
+struct WrongReceipt(MemoryClient);
+
+impl RegistryClient for WrongReceipt {
+    fn versions(
+        &self,
+        name: &PackageName,
+        registry: &RegistryConfig,
+        credential: Option<&RegistryCredential>,
+    ) -> Result<Vec<String>, RegistryError> {
+        self.0.versions(name, registry, credential)
+    }
+
+    fn metadata(
+        &self,
+        name: &PackageName,
+        version: &Version,
+        registry: &RegistryConfig,
+        credential: Option<&RegistryCredential>,
+    ) -> Result<PackageMetadata, RegistryError> {
+        self.0.metadata(name, version, registry, credential)
+    }
+
+    fn download(
+        &self,
+        wasm_url: &str,
+        registry: &RegistryConfig,
+        credential: Option<&RegistryCredential>,
+    ) -> Result<Vec<u8>, RegistryError> {
+        self.0.download(wasm_url, registry, credential)
+    }
+
+    fn search(
+        &self,
+        query: &specforge_registry_wire::SearchQuery,
+        registry: &RegistryConfig,
+        credential: Option<&RegistryCredential>,
+    ) -> Result<Vec<specforge_registry_wire::SearchHit>, RegistryError> {
+        self.0.search(query, registry, credential)
+    }
+
+    fn publish(
+        &self,
+        package: &[u8],
+        declaration: &ExtensionDeclaration,
+        manifest_json: &str,
+        signature: &PackageSignature,
+        registry: &RegistryConfig,
+        credential: Option<&RegistryCredential>,
+    ) -> Result<specforge_registry_wire::PublishReceipt, RegistryError> {
+        let mut receipt = self.0.publish(
+            package,
+            declaration,
+            manifest_json,
+            signature,
+            registry,
+            credential,
+        )?;
+        receipt.sha256 = "0".repeat(64);
+        Ok(receipt)
+    }
+
+    fn authenticate(
+        &self,
+        registry: &RegistryConfig,
+        credential: &RegistryCredential,
+    ) -> Result<Option<String>, RegistryError> {
+        self.0.authenticate(registry, credential)
+    }
+}
+
+#[specforge_test_macros::test(
+    behavior = "publish_to_registry",
+    verify = "publish checks the registry's receipt against what it uploaded"
+)]
+fn a_receipt_for_another_upload_is_refused() {
+    let error = publish_to_registry(
+        b"fake-wasm-bytes",
+        &minimal_manifest(),
+        &default_registry(),
+        Some(&accepted()),
+        &WrongReceipt(client()),
+        &key(),
+    )
+    .unwrap_err()
+    .to_diagnostic();
+    assert_eq!(error.code, "R009", "{error:?}");
+    assert!(error.message.contains("receipt"), "{error:?}");
 }

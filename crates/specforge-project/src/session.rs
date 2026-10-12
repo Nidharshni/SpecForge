@@ -3,7 +3,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use specforge_common::{Diagnostic, ProjectConfig, read_project_config};
+use specforge_common::{Diagnostic, ProjectConfig, ProjectRoot, read_project_config};
 use specforge_graph::{Applied, GraphDelta};
 
 use crate::buffers::{Buffer, Held};
@@ -237,19 +237,19 @@ impl ProjectSession {
 
     /// Open the project at `root`, running its extensions in the project's
     /// own runtime ([`RuntimeSource::project`]).
-    pub fn open(root: &Path) -> Self {
+    pub fn open(root: &ProjectRoot) -> Self {
         Self::open_from(root, RuntimeSource::project())
     }
 
     /// Open the project at `root` with `runtime` (none: no extension
     /// loads). A reload keeps using the same runtime.
-    pub fn open_with_runtime(root: &Path, runtime: Option<SharedRuntime>) -> Self {
+    pub fn open_with_runtime(root: &ProjectRoot, runtime: Option<SharedRuntime>) -> Self {
         Self::open_from(root, RuntimeSource::Fixed(runtime))
     }
 
     /// Open the project at `root`, each environment load getting its
     /// runtime from `source`.
-    pub fn open_from(root: &Path, source: RuntimeSource) -> Self {
+    pub fn open_from(root: &ProjectRoot, source: RuntimeSource) -> Self {
         Self::begin_open(root, source).finish()
     }
 
@@ -259,16 +259,16 @@ impl ProjectSession {
     /// kinds and fields a keyword completion offers) is served from
     /// [`OpeningProject::environment`] while [`OpeningProject::finish`]
     /// reads and builds the sources.
-    pub fn begin_open(root: &Path, source: RuntimeSource) -> OpeningProject {
+    pub fn begin_open(root: &ProjectRoot, source: RuntimeSource) -> OpeningProject {
         // Everything is stamped before anything reads it (crate::freshness):
         // the config before its one read, the lock and the modules before
         // the runtime and the environment read them, the sources by `finish`.
         let mut snapshot = DiskSnapshot::default();
-        snapshot.stamp_config(&root.join("specforge.json"));
-        let read = read_project_config(root);
-        let inputs = SessionInputs::opened(root, &read.config);
+        snapshot.stamp_config(&root.config_file());
+        let read = read_project_config(root.dir());
+        let inputs = SessionInputs::opened(root.dir(), &read.config);
         snapshot.stamp_environment(&inputs);
-        let runtime = source.runtime_for(root, &read.config);
+        let runtime = source.runtime_for(root.dir(), &read.config);
         let env = Environment::from_read(root, read, runtime);
         let inputs = inputs.with_check_passes(env.registries().check_passes().next().is_some());
         OpeningProject {
@@ -297,10 +297,6 @@ impl ProjectSession {
 
     /// [`Self::update`], running the checks `mode` asks for.
     pub fn update_with(&mut self, change: SourceChange<'_>, mode: CheckMode) -> Update {
-        // A disk change always applies: what an import names is read from
-        // disk, so even a file left out may move an import's diagnostic. A
-        // hold of text the session already has changes nothing.
-        let skippable = matches!(change, SourceChange::Hold(_));
         let reads: Vec<(String, Read)> = match change {
             SourceChange::Disk(paths) => {
                 let mut keys: Vec<String> = paths
@@ -331,7 +327,7 @@ impl ProjectSession {
                 reads
             }
         };
-        self.applied(reads, mode, skippable)
+        self.applied(reads, mode)
     }
 
     /// The editor no longer holds the buffers of `paths` (absolute): each
@@ -368,7 +364,7 @@ impl ProjectSession {
         if reads.is_empty() && !self.checks_skipped {
             return None;
         }
-        Some(self.applied(reads, CheckMode::Full, true))
+        Some(self.applied(reads, CheckMode::Full))
     }
 
     /// The buffer the editor holds for source `key`, as the session last
@@ -399,10 +395,10 @@ impl ProjectSession {
 
     /// The one tail of every source update: apply `reads`, resolve the
     /// imports, then run or skip the checks. With nothing to apply it runs
-    /// the checks only if they were skipped, else it changes nothing (when
-    /// `skippable`: a disk change always applies, to see what imports name).
-    fn applied(&mut self, reads: Vec<(String, Read)>, mode: CheckMode, skippable: bool) -> Update {
-        if reads.is_empty() && skippable {
+    /// the checks only if they were skipped, else it changes nothing:
+    /// nothing an update reads besides its sources can have moved (ADR 0055).
+    fn applied(&mut self, reads: Vec<(String, Read)>, mode: CheckMode) -> Update {
+        if reads.is_empty() {
             return if self.checks_skipped {
                 self.recheck()
             } else {
@@ -445,7 +441,15 @@ impl ProjectSession {
                 self.project.diagnostics(),
             );
         }
-        let root = self.project.environment().root().to_path_buf();
+        // The session keeps the root it was opened at: it is never located again.
+        let Some(root) = self.project.environment().project_root().cloned() else {
+            return Update::of(
+                UpdateKind::Environment,
+                false,
+                Applied::default(),
+                self.project.diagnostics(),
+            );
+        };
         let buffers = std::mem::take(&mut self.held).into_buffers();
         let mut next = Self::begin_open(&root, self.source.clone()).finish_holding(buffers);
         next.project.set_verify(self.project.verifies());

@@ -5,20 +5,33 @@
 //! A file that can't be read or written is recorded and the run goes on, so
 //! a failure on one file never leaves the others half-done. The surfaces
 //! present what happened: the CLI prints it, MCP returns it, the LSP turns
-//! it into edits.
+//! its edits into positions.
 
 use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_common::{
-    Diagnostic, DiagnosticList, ProjectConfig, Sym, codes, find_project_root, is_project_root,
-    load_project_config, walk_spec_files,
+    Diagnostic, DiagnosticList, ProjectConfig, ProjectRoot, Sym, codes, load_project_config,
+    walk_spec_files,
 };
 use specforge_formatter::config::{find_config_path, read_config_file};
-use specforge_formatter::{FormatConfig, TextEdit, compute_edits, format_range, format_source};
+use specforge_formatter::{FormatConfig, format_range, format_source};
 use std::collections::HashMap;
+use std::ops::Range;
 use std::path::{Path, PathBuf};
 
 use crate::{OpError, OpErrorKind};
+
+mod edits;
+
+/// One change to a document: the source's bytes `range` become `new_text`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Edit {
+    /// Byte offsets into the source the document was formatted from. Both ends lie on char
+    /// boundaries, and neither falls between a `\r` and the `\n` after it (no editor can name that
+    /// position).
+    pub range: Range<usize>,
+    pub new_text: String,
+}
 
 /// Where a document's text belongs, which decides its format configuration.
 #[derive(Debug, Clone, Copy)]
@@ -93,10 +106,18 @@ impl FormattedDocument<'_> {
         self.formatted != self.source
     }
 
-    /// The edits that turn the source into `formatted`: 0-based lines, byte
-    /// columns, non-overlapping, in order. A surface converts the columns.
-    pub fn edits(&self) -> Vec<TextEdit> {
-        compute_edits(self.source, &self.formatted)
+    /// The edits that turn the source into [`formatted`](Self::formatted), byte for byte: applied to the
+    /// source as an editor applies a response's edits (every range read in the source, all at once),
+    /// they give exactly `formatted`. They are in order, none overlaps or touches the next, none is a
+    /// no-op, and there are none when nothing changed.
+    ///
+    /// A line diff of the source and `formatted` (Myers), each change trimmed to the bytes it alters.
+    /// Line breaks are text like any other: a removed blank line, an added final newline and a `\r\n`
+    /// made `\n` are edits. Text formatting keeps is never replaced, so an editor keeps its cursor and
+    /// marks there. For a range, only the blocks the range touches change (`format_range`), so every
+    /// edit lies inside them.
+    pub fn edits(&self) -> Vec<Edit> {
+        edits::between(self.source, &self.formatted)
     }
 
     /// Whether every region parsed (no W142): the text is in canonical form
@@ -178,7 +199,7 @@ impl Configs {
     fn project_of(&mut self, dir: &Path) -> Option<PathBuf> {
         self.projects
             .entry(dir.to_path_buf())
-            .or_insert_with(|| find_project_root(dir))
+            .or_insert_with(|| ProjectRoot::enclosing(dir).map(|r| r.dir().to_path_buf()))
             .clone()
     }
 
@@ -284,10 +305,10 @@ pub struct Request<'a> {
     /// sources are the default targets, and paths are shown relative to it.
     /// It does not bound configuration discovery: each file is formatted
     /// with the configuration of its own project (D2).
-    pub root: &'a Path,
+    pub root: &'a ProjectRoot,
     /// Files or directories to format; empty means the project's sources
     /// (`ProjectConfig::spec_files`). A named file is always formatted. A
-    /// named directory that is a project (`is_project_root`) is that
+    /// named directory that is a project (`ProjectRoot::is_root`) is that
     /// project's sources; any other named directory is walked as discovery
     /// walks (`specforge_common::walk_spec_files`), taking a nested
     /// project's sources where the walk reaches its root,
@@ -593,8 +614,8 @@ impl FileFailure {
 /// - no paths: the project's sources ([`ProjectConfig::spec_files`]);
 /// - a named `.spec` file: that file, even if excluded (the user named it);
 ///   any other named file is skipped;
-/// - a named directory that is a project root (`specforge.json` or
-///   `specforge.spec`): that project's sources;
+/// - a named directory that is a project root (it holds `specforge.json`):
+///   that project's sources;
 /// - any other named directory: its `.spec` files as discovery walks them
 ///   (`specforge_common::walk_spec_files`), taking a nested project's
 ///   sources where the walk reaches its root, without the files their
@@ -641,10 +662,10 @@ impl Projects {
 
     /// The `.spec` files of a named directory (see [`targets`]), sorted.
     fn walk(&mut self, dir: &Path) -> Vec<PathBuf> {
-        if is_project_root(dir) {
+        if ProjectRoot::is_root(dir) {
             return self.config(dir).spec_files(dir);
         }
-        let walked = walk_spec_files(dir, is_project_root);
+        let walked = walk_spec_files(dir, ProjectRoot::is_root);
         let mut files: Vec<PathBuf> = walked
             .files
             .into_iter()
@@ -667,7 +688,7 @@ impl Projects {
         let root = self
             .roots
             .entry(dir.clone())
-            .or_insert_with(|| find_project_root(&dir))
+            .or_insert_with(|| ProjectRoot::enclosing(&dir).map(|r| r.dir().to_path_buf()))
             .clone();
         root.is_some_and(|root| {
             let config = self.config(&root);
@@ -686,7 +707,7 @@ pub fn run(request: &Request) -> Outcome {
         mode: request.mode,
         ..Outcome::default()
     };
-    for target in targets(request.root, request.paths) {
+    for target in targets(request.root.dir(), request.paths) {
         let source = match std::fs::read_to_string(&target) {
             Ok(source) => source,
             Err(e) => {
@@ -740,7 +761,7 @@ mod tests {
         dir
     }
 
-    fn request(root: &Path, mode: Mode) -> Request<'_> {
+    fn request(root: &ProjectRoot, mode: Mode) -> Request<'_> {
         Request {
             root,
             paths: &[],
@@ -752,7 +773,10 @@ mod tests {
     fn check_mode_reports_every_change_and_writes_nothing() {
         let dir = project();
 
-        let outcome = run(&request(dir.path(), Mode::Check));
+        let outcome = run(&request(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            Mode::Check,
+        ));
 
         assert_eq!(outcome.checked, 2);
         assert_eq!(outcome.changes.len(), 2);
@@ -767,8 +791,14 @@ mod tests {
     fn write_mode_rewrites_and_a_second_run_is_clean() {
         let dir = project();
 
-        let first = run(&request(dir.path(), Mode::Write));
-        let second = run(&request(dir.path(), Mode::Write));
+        let first = run(&request(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            Mode::Write,
+        ));
+        let second = run(&request(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            Mode::Write,
+        ));
 
         assert!(first.changes.iter().all(|c| c.written));
         assert_eq!(first.written().count(), 2);
@@ -780,7 +810,13 @@ mod tests {
     #[test]
     fn ok_fails_only_a_check_on_a_change() {
         let dir = project();
-        let ok = |mode| run(&request(dir.path(), mode)).ok();
+        let ok = |mode| {
+            run(&request(
+                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                mode,
+            ))
+            .ok()
+        };
 
         assert!(!ok(Mode::Check), "a check that finds a change fails");
         assert!(ok(Mode::Preview), "a preview of a change passes");
@@ -794,7 +830,14 @@ mod tests {
             &[("spec/a.spec", "behavior a \"A\" {\n  @@@ ]]\n}\n")],
         );
         for mode in [Mode::Write, Mode::Check, Mode::Preview] {
-            assert!(!run(&request(region.path(), mode)).ok(), "{mode:?}");
+            assert!(
+                !run(&request(
+                    &specforge_common::ProjectRoot::of(region.path()).unwrap(),
+                    mode
+                ))
+                .ok(),
+                "{mode:?}"
+            );
         }
     }
 
@@ -803,18 +846,27 @@ mod tests {
         let canonical = "behavior messy \"Messy\" {\n  contract \"The system MUST work\"\n}\n";
         // Canonical: clean.
         let dir = project_with("{}", &[("spec/a.spec", canonical)]);
-        let outcome = run(&request(dir.path(), Mode::Check));
+        let outcome = run(&request(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            Mode::Check,
+        ));
         assert!(outcome.clean() && outcome.complete() && outcome.succeeded());
 
         // A change: not clean, though complete and succeeded.
         let dir = project_with("{}", &[("spec/a.spec", MESSY)]);
-        let outcome = run(&request(dir.path(), Mode::Check));
+        let outcome = run(&request(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            Mode::Check,
+        ));
         assert!(!outcome.clean() && outcome.complete() && outcome.succeeded());
 
         // A region left unformatted: not complete, so not clean.
         let broken = format!("{canonical}\n}}}}}}\n");
         let dir = project_with("{}", &[("spec/a.spec", &broken)]);
-        let outcome = run(&request(dir.path(), Mode::Check));
+        let outcome = run(&request(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            Mode::Check,
+        ));
         assert!(outcome.changes.is_empty(), "{:?}", outcome.changes);
         assert!(!outcome.complete() && !outcome.clean() && outcome.succeeded());
 
@@ -822,7 +874,7 @@ mod tests {
         let dir = project_with("{}", &[("spec/a.spec", canonical)]);
         let missing = [dir.path().join("spec/missing.spec")];
         let outcome = run(&Request {
-            root: dir.path(),
+            root: &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
             paths: &missing,
             mode: Mode::Check,
         });
@@ -848,7 +900,10 @@ mod tests {
         let locked = dir.path().join("spec/a.spec");
         std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o444)).unwrap();
 
-        let outcome = run(&request(dir.path(), Mode::Write));
+        let outcome = run(&request(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            Mode::Write,
+        ));
         std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o644)).unwrap();
 
         let change = outcome.changes.iter().find(|c| c.path == locked).unwrap();
@@ -873,7 +928,7 @@ mod tests {
         std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o000)).unwrap();
         let named = [locked.clone(), missing.clone()];
         let outcome = run(&Request {
-            root: dir.path(),
+            root: &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
             paths: &named,
             mode: Mode::Check,
         });
@@ -943,11 +998,14 @@ mod tests {
 
     /// The changed files of a check run over `root`, relative to it.
     fn changed(root: &Path) -> Vec<String> {
-        run(&request(root, Mode::Check))
-            .changes
-            .iter()
-            .map(|c| relative(root, &c.path))
-            .collect()
+        run(&request(
+            &specforge_common::ProjectRoot::of(root).unwrap(),
+            Mode::Check,
+        ))
+        .changes
+        .iter()
+        .map(|c| relative(root, &c.path))
+        .collect()
     }
 
     /// `path` relative to `root`, with `/` separators.
@@ -962,7 +1020,7 @@ mod tests {
     fn check_paths(root: &Path, paths: &[&str]) -> Outcome {
         let paths: Vec<PathBuf> = paths.iter().map(|p| root.join(p)).collect();
         run(&Request {
-            root,
+            root: &specforge_common::ProjectRoot::of(root).unwrap(),
             paths: &paths,
             mode: Mode::Check,
         })
@@ -1164,7 +1222,12 @@ mod tests {
 
         let sources: Vec<PathBuf> = CI_GATE
             .iter()
-            .flat_map(|(_, dir)| specforge_common::discover_spec_files(&workspace.join(dir), &[]))
+            .flat_map(|(_, dir)| {
+                specforge_common::discover_spec_files(
+                    &workspace.join(dir),
+                    &specforge_common::Exclude::default(),
+                )
+            })
             .collect();
         for target in &found {
             assert!(
@@ -1175,7 +1238,7 @@ mod tests {
         }
         assert_eq!(found.len(), sources.len());
         let outcome = run(&Request {
-            root: &workspace,
+            root: &specforge_common::ProjectRoot::of(&workspace).unwrap(),
             paths: &paths,
             mode: Mode::Check,
         });
@@ -1219,7 +1282,10 @@ mod tests {
             ],
         );
 
-        let outcome = run(&request(dir.path(), Mode::Check));
+        let outcome = run(&request(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            Mode::Check,
+        ));
 
         assert_eq!(outcome.checked, 2);
         let w141: Vec<_> = outcome
@@ -1276,11 +1342,9 @@ mod tests {
         insert_spaces: true,
     };
 
-    /// Whether `edits` are in order and none overlaps the next.
-    fn in_order_without_overlap(edits: &[TextEdit]) -> bool {
-        edits
-            .windows(2)
-            .all(|w| (w[1].start_line, w[1].start_col) >= (w[0].end_line, w[0].end_col))
+    /// Whether `edits` are in order and none overlaps or touches the next.
+    fn in_order_without_overlap(edits: &[Edit]) -> bool {
+        edits.windows(2).all(|w| w[0].range.end < w[1].range.start)
     }
 
     /// The W142 diagnostics of `doc`.
@@ -1304,33 +1368,76 @@ mod tests {
         let doc = document(Place::Detached, MISINDENTED, None, None);
 
         assert!(doc.changed());
+        // Only the four extra spaces of line 1, which starts at byte 21.
         assert_eq!(
             doc.edits(),
-            [TextEdit {
-                start_line: 1,
-                start_col: 0,
-                end_line: 1,
-                // The whole misindented line, in bytes.
-                end_col: 27,
-                new_text: "  contract \"does stuff\"".into(),
+            [Edit {
+                range: 23..27,
+                new_text: String::new()
             }]
         );
     }
 
     #[specforge_test(
         behavior = "lsp_format_document",
-        verify = "TextEdit coordinates are 0-indexed lines and columns"
+        verify = "applying the formatting edits to the document gives the formatted text byte for byte"
     )]
-    fn edit_coordinates_are_zero_based_lines_and_byte_columns() {
-        let edits = document(Place::Detached, MISINDENTED, None, None).edits();
-        assert_eq!((edits[0].start_line, edits[0].start_col), (1, 0));
-
-        // A multibyte line: the end column counts bytes, not characters.
+    fn edits_rebuild_the_formatted_text() {
+        let blank = |range: Range<usize>| Edit {
+            range,
+            new_text: String::new(),
+        };
+        let expected: [(&str, Vec<Edit>); 6] = [
+            (
+                "behavior a \"A\" {\n\n  contract \"x\"\n}\n",
+                vec![blank(17..18)],
+            ),
+            (
+                "\n\n\nbehavior a \"A\" {\n  contract \"x\"\n}\n",
+                vec![blank(0..3)],
+            ),
+            (
+                "behavior a \"A\" {\n  contract \"x\"\n}\n\n\n",
+                vec![blank(34..36)],
+            ),
+            (
+                "behavior a \"A\" {\n  contract \"x\"\n}",
+                vec![Edit {
+                    range: 33..33,
+                    new_text: "\n".into(),
+                }],
+            ),
+            (
+                "behavior a \"A\" {\r\n  contract \"x\"\r\n}\r\n",
+                vec![Edit {
+                    range: 16..37,
+                    new_text: "\n  contract \"x\"\n}\n".into(),
+                }],
+            ),
+            (
+                "behavior a \"A\" {\n      contract \"x\"\n}\n",
+                vec![blank(19..23)],
+            ),
+        ];
+        for (text, edits) in expected {
+            let doc = document(Place::Detached, text, None, None);
+            assert_eq!(doc.edits(), edits, "{text:?}");
+            assert_eq!(
+                edits::tests::apply(text, &doc.edits()),
+                doc.formatted,
+                "{text:?}"
+            );
+        }
+        // Two blank lines between blocks: which of the two goes is the diff's choice; the text is not.
+        let between = "behavior a \"A\" {\n  contract \"x\"\n}\n\n\nbehavior b \"B\" {\n  contract \"y\"\n}\n";
+        let doc = document(Place::Detached, between, None, None);
+        assert_eq!(edits::tests::apply(between, &doc.edits()), doc.formatted);
+        // A multibyte line: offsets count bytes, on char boundaries.
         let text = "behavior foo \"Foo\" {\n      contract \"é\"\n}\n";
-        let edits = document(Place::Detached, text, None, None).edits();
-        let line = text.lines().nth(1).unwrap();
-        assert_eq!(edits[0].end_col, line.len());
-        assert_ne!(line.len(), line.chars().count());
+        assert_eq!(
+            document(Place::Detached, text, None, None).edits(),
+            [blank(23..27)]
+        );
     }
 
     #[specforge_test(
@@ -1377,12 +1484,22 @@ mod tests {
         }
 
         let start = std::time::Instant::now();
-        document(Place::Detached, &source, None, None);
+        document(Place::Detached, &source, None, None).edits();
         let elapsed = start.elapsed();
-
         assert!(
             elapsed.as_millis() < 50,
             "formatting took {}ms",
+            elapsed.as_millis()
+        );
+
+        // The worst case for the line diff: every line differs.
+        let crlf = source.replace('\n', "\r\n");
+        let start = std::time::Instant::now();
+        document(Place::Detached, &crlf, None, None).edits();
+        let elapsed = start.elapsed();
+        assert!(
+            elapsed.as_millis() < 50,
+            "formatting a CRLF document took {}ms",
             elapsed.as_millis()
         );
     }
@@ -1407,8 +1524,15 @@ mod tests {
         assert!(!edits.is_empty());
         assert!(in_order_without_overlap(&edits), "{edits:?}");
         // cli_parity_enforced: what `specforge format` writes for the file.
-        let outcome = run(&request(dir.path(), Mode::Check));
+        let outcome = run(&request(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            Mode::Check,
+        ));
         assert_eq!(outcome.changes[0].after, doc.formatted);
+        assert_eq!(
+            edits::tests::apply(MISINDENTED, &edits),
+            outcome.changes[0].after
+        );
         assert!(doc.complete());
     }
 
@@ -1421,12 +1545,17 @@ mod tests {
 
         let edits = document(Place::Detached, TWO_BLOCKS, Some(lines), None).edits();
 
-        assert_eq!(edits.len(), 1, "{edits:?}");
-        assert_eq!(edits[0].start_line, 6);
-        assert_eq!(edits[0].new_text, "  contract \"b\"");
+        let line = |n: usize| TWO_BLOCKS.match_indices('\n').nth(n - 1).unwrap().0 + 1;
+        assert_eq!(
+            edits,
+            [Edit {
+                range: line(6) + 2..line(6) + 6,
+                new_text: String::new()
+            }]
+        );
         // The whole document would also realign `foo` (lines 0–4).
         let full = document(Place::Detached, TWO_BLOCKS, None, None).edits();
-        assert!(full.iter().any(|e| e.start_line < 5), "{full:?}");
+        assert!(full.iter().any(|e| e.range.start < line(5)), "{full:?}");
     }
 
     #[specforge_test(
@@ -1518,7 +1647,8 @@ mod tests {
         assert_eq!(range.config.indent_width, 4);
         // range_expanded, textedit_list_returned: one block's edits, in order.
         let edits = range.edits();
-        assert!(edits.iter().all(|e| e.start_line >= 5), "{edits:?}");
+        let line = |n: usize| TWO_BLOCKS.match_indices('\n').nth(n - 1).unwrap().0 + 1;
+        assert!(edits.iter().all(|e| e.range.start >= line(5)), "{edits:?}");
         assert!(in_order_without_overlap(&edits), "{edits:?}");
         // full_format_parity: the block reads as full formatting has it.
         let tail = |text: &str| text.lines().skip(5).collect::<Vec<_>>().join("\n");
@@ -1656,7 +1786,10 @@ mod tests {
         let dir = project_with("{}", &[("sub/a.spec", MESSY)]);
         std::fs::create_dir_all(dir.path().join("sub/archive.spec")).unwrap();
 
-        let outcome = run(&request(dir.path(), Mode::Check));
+        let outcome = run(&request(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            Mode::Check,
+        ));
         assert!(outcome.failures.is_empty(), "{:?}", outcome.failures);
         assert_eq!(outcome.checked, 1);
 
@@ -1687,11 +1820,11 @@ mod tests {
         behavior = "discover_format_targets",
         verify = "a named directory that is a project formats that project's sources"
     )]
-    fn a_walk_reads_a_specforge_spec_directory_as_a_project() {
+    fn a_walk_reads_a_nested_project_directory_as_a_project() {
         let dir = project_with(
             "{}",
             &[
-                ("sub/N/specforge.spec", ""),
+                ("sub/N/specforge.json", "{}"),
                 ("sub/N/n.spec", MESSY),
                 ("sub/N/inner/specforge.json", r#"{"exclude": ["drafts"]}"#),
                 ("sub/N/inner/drafts/d.spec", MESSY),
@@ -1700,7 +1833,7 @@ mod tests {
 
         let outcome = check_paths(dir.path(), &["sub"]);
 
-        // N is a project (its `specforge.spec` marks it), so its sources are
+        // N is a project (its `specforge.json` marks it), so its sources are
         // N's own discovery, which does not stop at `inner`.
         assert_eq!(
             changed_in(dir.path(), &outcome),
@@ -1714,7 +1847,10 @@ mod tests {
     )]
     fn the_document_is_the_run_both_surfaces_print() {
         let dir = project();
-        let mut outcome = run(&request(dir.path(), Mode::Check));
+        let mut outcome = run(&request(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            Mode::Check,
+        ));
 
         let plain = serde_json::to_value(outcome.document(false)).unwrap();
         assert_eq!(plain["total_checked"], 2);

@@ -162,6 +162,33 @@ fn every_core_output_schema_is_closed() {
     );
 }
 
+#[specforge_test(
+    behavior = "state_mcp_messages_as_spec_types",
+    verify = "a sent document's schema closes every object it holds but its listed open values, and repeats no object schema"
+)]
+fn every_sent_document_is_closed() {
+    for document in crate::support::documents::sent() {
+        let mut paths = BTreeSet::new();
+        open_paths(
+            document.schema,
+            document.schema,
+            "$",
+            &mut Vec::new(),
+            &mut paths,
+        );
+        let listed: BTreeSet<String> = document
+            .open_values
+            .iter()
+            .map(|path| (*path).to_string())
+            .collect();
+        assert_eq!(
+            paths, listed,
+            "{}: open paths (left) against its listed open values (right)",
+            document.owner
+        );
+    }
+}
+
 /// The reply of `tool` on the fixture, whole: the call's `result`.
 fn result_of(tool: &str, arguments: Value) -> Value {
     let mut served = crate::support::replies::reading();

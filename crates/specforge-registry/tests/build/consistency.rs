@@ -517,3 +517,42 @@ fn a_rules_target_extension_resolves_its_kind_and_edge_type() {
         ]
     );
 }
+
+#[spec(
+    behavior = "registry_build_declaration_consistency",
+    verify = "an edge label the extension declares no edge type for is a W021 warning"
+)]
+fn a_shared_or_enhancement_fields_undeclared_edge_label_is_w021() {
+    let build = build([declare("@test/ext", |c| {
+        c.kind("Task", |k| {
+            k.keyword("task");
+        });
+        c.shared_field("see_also", |f| {
+            f.field_type(FieldType::ReferenceList)
+                .edge("SeeAlso")
+                .target_kind("task");
+        });
+        c.enhance("task", "@test/ext", |e| {
+            e.field("pins", |f| {
+                f.field_type(FieldType::ReferenceList)
+                    .edge("Pins")
+                    .target_kind("task");
+            });
+        });
+    })]);
+
+    let messages: Vec<&str> = coded(&build, "W021")
+        .iter()
+        .map(|d| d.message.as_str())
+        .collect();
+    assert_eq!(
+        messages,
+        [
+            "extension '@test/ext': shared field 'see_also' references edge label 'SeeAlso' not declared among its edges",
+            "extension '@test/ext': enhancement field 'pins' on kind 'task' references edge label 'Pins' not declared among its edges",
+        ]
+    );
+    // Both labels are still edge types of their writers.
+    assert!(build.edges().contains("SeeAlso"));
+    assert!(build.edges().contains("Pins"));
+}

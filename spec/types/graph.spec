@@ -160,17 +160,19 @@ type SchemaCompatibility {
 
 // ── Graph Delta Types ────────────────────────────────────────
 
-// GraphDelta is used for incremental compilation and MCP delta notifications.
-// It is NOT part of the stable Graph Protocol schema (not included in
-// embed_schema_in_export output). Its structure may evolve between compiler
-// versions without requiring a Graph Protocol major version bump.
-// Arrays MUST be sorted by EntityId.raw (lexicographic) for deterministic output
+// GraphDelta is what an update changed in the graph: watch prints it
+// (watch --format json) and MCP sends it whole as specforge/graphChanged's
+// params. It is NOT part of the stable Graph Protocol schema (not included
+// in embed_schema_in_export output); its structure may evolve between
+// compiler versions without a Graph Protocol major version bump.
+// Node arrays are sorted by id, edge arrays by (source, target, label).
 type GraphDelta {
   added_nodes    NodeChange[]
   removed_nodes  NodeChange[]
   modified_nodes ModifiedNodeChange[]
-  added_edges    Edge[]
-  removed_edges  Edge[]
+  added_edges    EdgeChange[]
+  removed_edges  EdgeChange[]
+  /// The files of the added, removed and modified nodes, sorted.
   affected_files string[]
   verify unit "GraphDelta schema is valid"
 }
@@ -178,20 +180,36 @@ type GraphDelta {
 type NodeChange {
   id   string  @readonly
   kind string  @readonly
-  file string  @optional
-  line integer @optional
+  file string  @readonly
+  line integer @readonly
   verify unit "NodeChange schema is valid"
 }
 
 type ModifiedNodeChange {
-  id             string  @readonly
-  // What changed (sorted): field names, or kind, title, methods, edges
-  changed_fields string[]
-  file           string  @optional
-  line           integer @optional
+  id              string  @readonly
+  /// The fields whose values differ, by name, sorted: a field named kind or
+  /// methods is a field here.
+  changed_fields  string[]
+  /// What else differs, sorted: its kind, title, methods or outgoing edges.
+  changed_aspects NodeAspect[]
+  file            string  @readonly
+  line            integer @readonly
   verify unit "ModifiedNodeChange schema is valid"
 }
 
+type NodeAspect = "kind" | "title" | "methods" | "edges"
+
+/// One edge in a GraphDelta, as the graph export writes an edge.
+type EdgeChange {
+  source string @readonly
+  target string @readonly
+  label  string @readonly
+  verify unit "EdgeChange schema is valid"
+}
+
+// The diagnostics one update added and removed, each as every surface
+// presents a diagnostic (present_diagnostics_as_json); MCP computes it and
+// sends it as specforge/diagnosticsChanged's params.
 type DiagnosticsDelta {
   added   Diagnostic[]
   removed Diagnostic[]

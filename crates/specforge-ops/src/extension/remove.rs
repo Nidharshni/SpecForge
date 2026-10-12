@@ -195,7 +195,10 @@ fn nothing_named(name: &str, lock: &LockState) -> OpError {
         .with_data(serde_json::json!({ "extension": name }));
     }
     if let Err(why) = PackageName::parse(name) {
-        return OpError::from(specforge_common::package::invalid(&why));
+        return OpError::of(
+            OpErrorKind::InvalidInput,
+            specforge_common::package::invalid(&why),
+        );
     }
     let why = match lock {
         LockState::Absent => Some("no lock file found"),
@@ -249,10 +252,17 @@ fn remove_named(req: &Removing, extension: &ProjectExtension) -> Result<RemoveOu
         // the lock read validated (ADR 0036): nothing outside
         // `.specforge/extensions` can be deleted.
         Some(locked) => {
-            let mut change = req.installed.change().map_err(OpError::from)?;
+            let mut change = req
+                .installed
+                .change()
+                .map_err(|why| OpError::of(OpErrorKind::SchemaMismatch, why))?;
             change.uninstall(&locked.name);
             let committed = change
-                .commit_with(&config_file, drop_entry)
+                .commit_with(
+                    Some(&config_file),
+                    || drop_entry().map(|_| ()),
+                    |why| OpError::of(OpErrorKind::Internal, why),
+                )
                 .map_err(|failed| failed.error.with_writes(Writes::of(failed.left)))?;
             outcome.writes = Writes::of(committed.changed);
         }
@@ -303,7 +313,8 @@ fn refuse_if_required(req: &Removing, extension: &ProjectExtension) -> Result<()
     if dependents.is_empty() {
         return Ok(());
     }
-    Err(OpError::diagnostic(
+    Err(OpError::coded(
+        crate::OpErrorKind::Conflict,
         codes::E027,
         format!(
             "cannot uninstall '{}': required by {}",
@@ -448,6 +459,7 @@ mod tests {
                 name: "@sdk/greet".into(),
                 file: Some("greet.wasm".into()),
                 failure: None,
+                warnings: Vec::new(),
             },
         ]);
         write_config(&fixture, r#"{"extensions": ["@sdk/greet", "greet.wasm"]}"#);
@@ -510,7 +522,7 @@ mod tests {
             let removed = remove(&fixture.view(), &removing("@acme/x")).unwrap_err();
             let added = add(
                 &AddRequest {
-                    root: fixture.dir.path(),
+                    root: &specforge_common::ProjectRoot::of(fixture.dir.path()).unwrap(),
                     extensions: vec![Source::Builtin("@specforge/product").into()],
                     allow_unsigned: false,
                     trust: Trust::Refuse,
@@ -522,9 +534,9 @@ mod tests {
             .unwrap_err();
             let updated = update(
                 &UpdateRequest {
-                    root: fixture.dir.path(),
+                    root: &specforge_common::ProjectRoot::of(fixture.dir.path()).unwrap(),
                     name: None,
-                    major: false,
+                    reach: specforge_package::Reach::Compatible,
                     allow_unsigned: true,
                     trust: Trust::Refuse,
                 },
@@ -730,6 +742,7 @@ mod tests {
                 name: "@sdk/greet".into(),
                 file: Some("greet.wasm".into()),
                 failure: None,
+                warnings: Vec::new(),
             }])
             .declarations(vec![Fixture::declaration("@sdk/greet", "0.1.0")]);
         write_config(&fixture, r#"{"extensions": ["@sdk/greet=greet.wasm"]}"#);

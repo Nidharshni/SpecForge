@@ -1,5 +1,4 @@
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
-use crate::pipeline;
 use crate::terminal::{Terminal, outln};
 use specforge_ops::OpErrorKind;
 use specforge_ops::coverage::STATUS;
@@ -13,8 +12,7 @@ pub(crate) struct Args {
     /// Entity ID to review (omit to review the whole project)
     entity: Option<String>,
 
-    /// Path to the spec root directory
-    #[arg(long, default_value = ".")]
+    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
     path: PathBuf,
 
     /// Hops around the entity
@@ -41,7 +39,10 @@ impl Args {
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         let format = self.output.format;
         let request = self.request();
-        let project = pipeline::compile_project(&self.path);
+        let project = match crate::project::compile(&self.path) {
+            Ok(project) => project,
+            Err(error) => return Refusal::measuring(format).report(terminal, &error),
+        };
         match review(&ProjectView::of(&project), &request) {
             Ok(review) => {
                 match format {

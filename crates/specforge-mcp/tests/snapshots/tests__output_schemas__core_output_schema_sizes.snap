@@ -1,5 +1,6 @@
 ---
 source: crates/specforge-mcp/tests/output_schemas.rs
+assertion_line: 213
 expression: "lines.join(\"\\n\")"
 ---
 specforge.query 4559
@@ -19,12 +20,12 @@ specforge.suggest_fixes 943
 specforge.format 3513
 specforge.rename 3096
 specforge.init 434
-specforge.add_extension 1848
+specforge.add_extension 1923
 specforge.remove_extension 500
 specforge.migrate 5140
 specforge.extensions 931
 specforge.providers 2922
-specforge.doctor 4186
+specforge.doctor 6084
 specforge.collect 3187
 specforge.render 251
 specforge.infer_progress 864
@@ -32,4 +33,4 @@ specforge.infer_gaps 1101
 specforge.infer_session 295
 specforge.find_implementation 502
 specforge.find_spec_for_source 642
-total 51445
+total 53418

@@ -1524,7 +1524,7 @@ fn new_extension_scaffolds_sdk_project() {
     let cargo = fs::read_to_string(project.join("Cargo.toml")).unwrap();
     assert!(cargo.contains(r#"name = "my-ext""#));
     assert!(cargo.contains("specforge-extension-sdk"));
-    assert!(cargo.contains("wit-bindgen"));
+    assert!(!cargo.contains("wit-bindgen"));
 
     let config = fs::read_to_string(project.join(".cargo/config.toml")).unwrap();
     assert!(config.contains("wasm32-wasip2"));
@@ -1963,7 +1963,11 @@ fn doctor_without_specforge_json_says_so() {
         .iter()
         .map(|f| (f["code"].as_str().unwrap(), f["status"].as_str().unwrap()))
         .collect();
-    assert_eq!(codes, [("config_missing", "warn")], "{report}");
+    assert_eq!(
+        codes,
+        [("config_missing", "warn"), ("I002", "info")],
+        "{report}"
+    );
 
     let (human, code) = doctor_human(dir.path());
     assert_eq!(code, 0, "{human}");
@@ -1993,7 +1997,9 @@ fn doctor_reports_a_corrupt_lock_as_an_error_finding() {
 
     assert_eq!(code, 1, "{report}");
     let findings = project_findings(&report);
-    assert_eq!(findings.len(), 1, "{report}");
+    // The lock, then the I002 of a project that enables nothing.
+    assert_eq!(findings.len(), 2, "{report}");
+    assert_eq!(findings[1]["code"], "I002", "{report}");
     assert_eq!(findings[0]["code"], "lock_unreadable", "{report}");
     assert_eq!(findings[0]["status"], "error", "{report}");
     assert!(
@@ -2331,4 +2337,48 @@ fn doctor_json_is_one_report_on_both_surfaces() {
         assert_eq!(load[0]["code"], "E028", "{report}");
     }
     assert_eq!(cli["findings"], mcp["findings"]);
+}
+
+// ===============================================================
+// Behavior: add_extension_to_existing_project
+// ===============================================================
+
+#[specforge_test(
+    behavior = "add_extension_to_existing_project",
+    verify = "a local crate directory installs the component its crate builds"
+)]
+fn add_of_a_crate_directory_installs_its_component() {
+    let dir = TempDir::new().unwrap();
+    specforge_cmd()
+        .args(["init", "--name", "demo"])
+        .current_dir(dir.path())
+        .assert()
+        .success();
+    let release = dir.path().join("myext/target/wasm32-wasip2/release");
+    fs::create_dir_all(&release).unwrap();
+    fs::write(
+        dir.path().join("myext/Cargo.toml"),
+        "[package]\nname = \"my-ext\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    let greet = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../fixtures/greet-extension/greet.wasm");
+    fs::copy(greet, release.join("my_ext.wasm")).unwrap();
+
+    let out = specforge_cmd()
+        .args(["add", "./myext", "--format", "json"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    let document: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(document["added"][0]["action"], "installed", "{document}");
+    assert!(
+        document["added"][0]["source"]
+            .as_str()
+            .unwrap()
+            .starts_with("local:"),
+        "{document}"
+    );
 }

@@ -6,6 +6,8 @@
 use serde_json::{Value, json};
 use specforge_mcp::McpServer;
 
+use crate::support::{Logged, events, logged};
+
 /// The project the prompts read: product, software and testing loaded,
 /// a four-hop chain `alpha - feat_login - beta - inv_session - delta`,
 /// `alpha` anchored to `src/login.rs`, and four source files.
@@ -78,8 +80,8 @@ behavior delta "Delta" {
 }
 
 /// A server for `dir`, as `specforge mcp <dir>` starts it, initialized.
-fn server(dir: &tempfile::TempDir) -> McpServer {
-    let mut server = McpServer::with_project_root(dir.path().to_path_buf());
+fn server(dir: &tempfile::TempDir) -> Logged {
+    let mut server = logged(McpServer::with_project_root(dir.path().to_path_buf()));
     send(&mut server, "initialize", json!({}));
     server
 }
@@ -180,6 +182,43 @@ fn pin(cases: &[(&str, &str, Value)]) {
     for (name, prompt, arguments) in cases {
         let reply = get(&mut server, prompt, arguments.clone());
         insta::assert_json_snapshot!(*name, shape(&reply, dir.path()));
+    }
+}
+
+/// Every prompt's payload is valid against the schema its type derives
+/// (unlinked: the reflection test holds that schema to the spec).
+#[test]
+fn every_rendered_payload_conforms_to_its_derived_schema() {
+    let dir = project();
+    let mut server = server(&dir);
+    let cases: &[(&str, Value)] = &[
+        (
+            "context",
+            json!({"entity_id": "alpha", "structural_constraints": "beta"}),
+        ),
+        ("review", json!({})),
+        ("review", json!({"entity_id": "alpha"})),
+        ("trace", json!({"entity_id": "alpha"})),
+        ("explore", json!({})),
+        ("infer", json!({})),
+        ("infer", json!({"scope": "kind:behavior"})),
+        ("infer", json!({"scope": "file:src/login.rs"})),
+        ("infer", json!({"scope": "plan"})),
+        ("infer", json!({"scope": "workflow"})),
+    ];
+    for (prompt, arguments) in cases {
+        let spec = specforge_mcp::prompts::core_prompt(&format!("specforge://prompts/{prompt}"))
+            .expect("a core prompt");
+        let reply = get(&mut server, prompt, arguments.clone());
+        let text = reply["result"]["messages"][1]["content"]["text"]
+            .as_str()
+            .unwrap_or_else(|| panic!("{prompt} {arguments}: {reply}"));
+        let payload: Value = serde_json::from_str(text).unwrap();
+        let violations = specforge_common::shape::violations(spec.payload_schema(), &payload);
+        assert!(
+            violations.is_empty(),
+            "{prompt} {arguments}: {violations:#?}"
+        );
     }
 }
 
@@ -368,16 +407,6 @@ fn prompt_golden_events() {
         "prompts/get",
         json!({"name": "specforge://prompts/nope"}),
     );
-    let invoked: Vec<Value> = server
-        .state()
-        .events
-        .iter()
-        .filter(|e| e.name == "mcp_prompt_invoked")
-        .map(|e| {
-            let mut params = e.params.clone();
-            params.as_object_mut().map(|o| o.remove("timestamp"));
-            params
-        })
-        .collect();
+    let invoked = events(&server, "mcp_prompt_invoked");
     insta::assert_json_snapshot!("39_invocation_events", invoked);
 }

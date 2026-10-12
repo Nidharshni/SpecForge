@@ -2,6 +2,7 @@ use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use crate::terminal::{Terminal, errln, outln};
 use specforge_ops::extension::{self, UpdateRequest};
 use specforge_ops_registry::ConfiguredRegistry;
+use specforge_package::Reach;
 use std::path::PathBuf;
 
 // `specforge update`'s command line.
@@ -10,15 +11,15 @@ pub(crate) struct Args {
     /// Extension name (updates all if omitted)
     name: Option<String>,
 
-    /// Path to the project root
-    #[arg(long, default_value = ".")]
+    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
     path: PathBuf,
 
     #[command(flatten)]
     output: OutputArg,
 
     /// Allow new major versions (otherwise each extension stays within
-    /// its locked version's caret range)
+    /// its locked version's caret range); an update never moves an
+    /// extension to a lower version
     #[arg(long, default_value_t = false)]
     major: bool,
 
@@ -37,14 +38,21 @@ impl Args {
     /// applied).
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         let format = self.output.format;
-        let path = self.path.as_path();
+        let root = match crate::project::root(&self.path) {
+            Ok(root) => root,
+            Err(error) => return Refusal::of(format).report(terminal, &error),
+        };
         let registry =
-            ConfiguredRegistry::for_project(path, "update").asking(crate::trust::asker(terminal));
+            ConfiguredRegistry::for_project(&root, "update").asking(crate::trust::asker(terminal));
         let runtime = specforge_component::ComponentRuntime::with_user_cache();
         let request = UpdateRequest {
-            root: path,
+            root: &root,
             name: self.name.as_deref(),
-            major: self.major,
+            reach: if self.major {
+                Reach::Major
+            } else {
+                Reach::Compatible
+            },
             allow_unsigned: self.allow_unsigned,
             trust: format.trust(self.yes),
         };

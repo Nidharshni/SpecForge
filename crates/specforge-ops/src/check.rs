@@ -188,14 +188,10 @@ pub fn parse_lint_profiles<S: AsRef<str>>(names: &[S]) -> Result<Vec<LintProfile
         .collect()
 }
 
-/// Report `reported` (what the compile of `view` reported) under
+/// Report what the compile of `view` reported (`view.reported()`) under
 /// `options`: the policy applied, the verdict taken over all of it, and the
 /// build cache recorded when asked and the check passed.
-pub fn check(
-    view: &ProjectView<'_>,
-    reported: Vec<Diagnostic>,
-    options: &CheckOptions,
-) -> Result<CheckOutcome, CheckError> {
+pub fn check(view: &ProjectView<'_>, options: &CheckOptions) -> Result<CheckOutcome, CheckError> {
     let needs_root = options.record_cache || !options.lint_profiles.is_empty();
     let root = match view.root() {
         Some(root) => root,
@@ -206,7 +202,7 @@ pub fn check(
         strict: options.strict,
         lint_profiles: options.lint_profiles.clone(),
     };
-    let reported = policy.apply(reported, |profile| match profile {
+    let reported = policy.apply(view.reported(), |profile| match profile {
         LintProfile::Inferred => crate::infer::lint(view),
         LintProfile::Pedantic => Vec::new(),
     });
@@ -265,11 +261,14 @@ mod tests {
 
     fn compile(dir: &TempDir) -> CompiledProject {
         let runtime = specforge_component::ComponentRuntime::with_user_cache();
-        CompiledProject::compile(dir.path(), Some(std::sync::Arc::new(runtime)))
+        CompiledProject::compile(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            Some(std::sync::Arc::new(runtime)),
+        )
     }
 
     fn run(compiled: &CompiledProject, options: &CheckOptions) -> CheckOutcome {
-        check(&ProjectView::of(compiled), compiled.diagnostics(), options).unwrap()
+        check(&ProjectView::of(compiled), options).unwrap()
     }
 
     fn severities(diagnostics: &[&Diagnostic]) -> Vec<Severity> {
@@ -445,8 +444,8 @@ mod tests {
         let graph = Graph::new();
         let env = specforge_project::Environment::with_registries(RegistryBuild::default(), None);
         let recorded = RecordedCoverage::over(&graph, &env);
-        let view = ProjectView::new(&graph, &env, None, &recorded);
         let reported = vec![Diagnostic::untyped("W002", Severity::Warning, "unused")];
+        let view = ProjectView::new(&graph, &env, None, &recorded).reporting(&reported);
 
         for options in [
             CheckOptions {
@@ -459,12 +458,12 @@ mod tests {
             },
         ] {
             assert_eq!(
-                check(&view, reported.clone(), &options).unwrap_err(),
+                check(&view, &options).unwrap_err(),
                 CheckError::NoProjectRoot
             );
         }
         // Nothing that needs the root: a rootless view checks fine.
-        let outcome = check(&view, reported, &CheckOptions::default()).unwrap();
+        let outcome = check(&view, &CheckOptions::default()).unwrap();
         assert_eq!(
             outcome.counts,
             Counts {

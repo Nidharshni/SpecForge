@@ -30,9 +30,11 @@ type JsonSchema "JSON Schema Object" {
   verify unit "JSON Schema Object conforms to schema"
 }
 
-// A failed tool call is an isError result whose content is an McpError
-// (MCP 2025-11-25, SEP-1303). It carries no timestamp: the same failing
-// call returns the same error (mcp_tool_idempotency).
+// A refusal: the content of a failed tool call's isError result (MCP
+// 2025-11-25, SEP-1303), and the data of a prompt's or a resource read's
+// JSON-RPC error. One definition serializes it everywhere. It carries no
+// timestamp: the same failing call returns the same error
+// (mcp_tool_idempotency).
 type McpError "MCP Structured Error Response" {
   code       McpErrorCode
   message    string
@@ -50,59 +52,103 @@ type McpError "MCP Structured Error Response" {
   /// diagnostic.code, never only text in the message.
   diagnostic Diagnostic @optional
   /// More about the failure: the renderers available, a failed run's report.
+  /// An open value: its shape is the failure's own.
   data       object     @optional
   verify unit "MCP Structured Error Response conforms to schema"
 }
 
-type McpCapabilities "MCP Server Capabilities" {
-  tools                  McpToolDescriptor[]
-  resources              McpResourceDescriptor[]
-  prompts                McpPromptDescriptor[]
-  subscriptions          boolean
-  server_name            string
-  server_version         string
-  graph_protocol_version string
-  verify unit "MCP Server Capabilities conforms to schema"
+// What initialize answers (MCP's InitializeResult, 2025-03-26 to
+// 2025-11-25), under MCP's wire names. Tools, resources and prompts are
+// discovered by their list methods, never by initialize.
+type McpInitializeResult "MCP Initialize Result" {
+  protocolVersion string
+  capabilities    McpServerCapabilities
+  serverInfo      McpServerInfo
+  /// What the server tells the client's model about itself, naming tools as
+  /// tools/list names them; server/discover gives the same text.
+  instructions    string
+  verify unit "McpInitializeResult schema is valid"
 }
 
+// What server/discover answers (MCP 2026-07-28), beside the revision's
+// resultType and _meta.
+type McpDiscoverResult "MCP Discover Result" {
+  supportedVersions string[]
+  capabilities      McpServerCapabilities
+  instructions      string
+  verify unit "McpDiscoverResult schema is valid"
+}
+
+type McpServerCapabilities {
+  tools     McpListChanged
+  resources McpResourcesCapability
+  prompts   McpListChanged
+  verify unit "McpServerCapabilities schema is valid"
+}
+
+type McpListChanged {
+  listChanged boolean
+  verify unit "McpListChanged schema is valid"
+}
+
+type McpResourcesCapability {
+  subscribe   boolean
+  listChanged boolean
+  verify unit "McpResourcesCapability schema is valid"
+}
+
+type McpServerInfo {
+  name    string @readonly
+  version string @readonly
+  verify unit "McpServerInfo schema is valid"
+}
+
+// A resource as resources/list lists it (MCP Resource).
 type McpResourceDescriptor {
   uri         string @readonly
   name        string
   description string @optional
-  mime_type   string @optional
+  mimeType    string
   verify unit "McpResourceDescriptor schema is valid"
 }
 
+// A templated resource as resources/templates/list lists it (MCP
+// ResourceTemplate).
+type McpResourceTemplateDescriptor {
+  uriTemplate string @readonly
+  name        string
+  description string @optional
+  mimeType    string
+  verify unit "McpResourceTemplateDescriptor schema is valid"
+}
+
+// A tool as tools/list lists it (MCP Tool, with SpecForge's category and
+// source). inputSchema and outputSchema are JSON Schema documents: open
+// values. outputSchema is listed from 2025-06-18, for a tool with one.
 type McpToolDescriptor {
-  name          string          @readonly
-  description   string
-  input_schema  JsonSchema
-  output_schema JsonSchema      @optional
+  name         string @readonly
+  description  string
+  inputSchema  object
+  outputSchema object @optional
   /// The tool's role, never where it comes from.
-  category      McpToolCategory @optional
-  /// "core" for built-in tools, extension name for contributed tools
-  source        string          @optional
+  category     McpToolCategory
+  /// "core" for built-in tools, the extension's name for contributed tools.
+  source       string
   /// MCP ToolAnnotations: what the tool does to its environment.
-  annotations   McpToolAnnotations
+  annotations  McpToolAnnotations
   verify unit "McpToolDescriptor schema is valid"
 }
 
-// MCP's ToolAnnotations (wire names readOnlyHint, destructiveHint,
-// idempotentHint, openWorldHint). A core tool's derive from what its tool
-// spec declares it does; an extension tool's say it only reads, since the
-// host grants an extension no capability.
+// MCP's ToolAnnotations. A core tool's derive from what its tool spec
+// declares it does: a read is readOnlyHint and not openWorldHint; a tool
+// that writes states all four. An extension tool's say it only reads,
+// since the host grants an extension no capability.
 type McpToolAnnotations {
-  read_only_hint   boolean @optional
-  destructive_hint boolean @optional
-  idempotent_hint  boolean @optional
-  open_world_hint  boolean @optional
+  readOnlyHint    boolean
+  destructiveHint boolean @optional
+  idempotentHint  boolean @optional
+  openWorldHint   boolean
   verify unit "McpToolAnnotations schema is valid"
-}
-
-type McpSubscription {
-  uri             string @readonly
-  subscription_id string @readonly @optional
-  verify unit "McpSubscription schema is valid"
 }
 
 // Tool categories: "management" corresponds to the "Project Management Tools"
@@ -110,11 +156,6 @@ type McpSubscription {
 // specforge.collect, specforge.render). The short name is used in the protocol
 // for brevity; UIs and documentation may display "project management".
 type McpToolCategory = "core" | "navigation" | "mutation" | "management"
-
-// The categories a tool that is no mutation is listed in, and the ones an
-// extension tool may declare: only a core tool that writes its target's
-// project files is a mutation.
-type McpToolGroup = "core" | "navigation" | "management"
 
 type McpPromptDescriptor {
   name        string @readonly
@@ -368,15 +409,17 @@ type McpProviderInfo {
 }
 
 type McpDoctorFinding {
-  /// What the finding is about: config, lock, binary, load, conflict, shadowing, peer or toolchain.
-  about       "config" | "lock" | "binary" | "load" | "conflict" | "shadowing" | "peer" | "toolchain"
+  /// What the finding is about: config, lock, binary, load, structural_only, providers,
+  /// declaration, peer, registry, rule, surface, conflict, shadowing or toolchain.
+  about       "config" | "lock" | "binary" | "load" | "structural_only" | "providers" | "declaration" | "peer" | "registry" | "rule" | "surface" | "conflict" | "shadowing" | "toolchain"
   check       string
-  status      "ok" | "warn" | "error"
+  /// The diagnostic's severity; the disk checks' own are error or warn.
+  status      "error" | "warn" | "info"
   code        string
   remediation string
   /// A binary finding's issue (missing_binary or stale_hash and its fields).
   issue       object @optional
-  /// A shadowing finding's keyword.
+  /// The keyword a shadowing finding (E013) or a kind conflict (E026) names.
   keyword     string @optional
   verify unit "McpDoctorFinding schema is valid"
 }
@@ -397,9 +440,9 @@ type McpDoctorExtension {
 type McpDoctorReport {
   /// The report's verdict: no error-level finding (specforge doctor exits 1 without it).
   ok              boolean
-  /// Every installed binary is healthy, every enabled extension loaded and every peer requirement met.
+  /// No error-level finding about an installed binary, an extension load or a peer requirement.
   extensions_ok   boolean
-  /// The check of each finding where two contributions collide.
+  /// The check of each conflict finding: two contributions claiming one name (E026, W018, W023, E039, E057).
   conflicts       string[]
   /// "stale" when an installed binary is missing or its hash drifted.
   cache_status    "ok" | "stale"
@@ -741,24 +784,26 @@ type McpAddExtensionEnabled "A builtin extension enabled" {
   source        "builtin" @literal
   /// False when the builtin was already enabled: nothing changed.
   changed       boolean
-  /// The required builtin peers enabled first.
+  /// The required builtins the add enabled with it, dependencies first.
   peers_enabled string[]
   verify unit "McpAddExtensionEnabled schema is valid"
 }
 
 type McpAddExtensionInstalled "A package installed and locked" {
-  action    "installed"         @literal
+  action        "installed"         @literal
   /// The specifier as the call gave it.
-  specifier string
-  extension string              @readonly
-  version   string
-  sha256    string
+  specifier     string
+  extension     string              @readonly
+  version       string
+  sha256        string
   /// "registry", or "local:<path>" for a local file.
-  source    string
+  source        string
   /// The publisher key id; absent for an unsigned package or a local file.
-  key_id    string              @optional
+  key_id        string              @optional
   /// Absent for a local file.
-  publisher PublisherAcceptance @optional
+  publisher     PublisherAcceptance @optional
+  /// The required builtins the add enabled with it, dependencies first.
+  peers_enabled string[]
   verify unit "McpAddExtensionInstalled schema is valid"
 }
 
@@ -951,39 +996,49 @@ type McpSpecForSourceEntity {
   verify unit "McpSpecForSourceEntity schema is valid"
 }
 
-// The implement prompt provides structured context for agents, NOT generated
-// code or instructions. Per vision: "SpecForge provides context, agents
-// produce output." The structural_constraints field contains graph-derived structural
-// hints (invariants to satisfy, edge constraints, field expectations) — never
-// implementation directives or code suggestions.
+// The context prompt's payload: structured context for an agent, NOT
+// generated code or instructions ("SpecForge provides context, agents
+// produce output").
 type McpContextPromptResult "Context Prompt Result" {
-  entity_id              string   @readonly
-  kind                   string   @readonly
-  // The field the extension declares headline and normative (a behavior's
-  // contract); empty when the entity's kind declares none.
-  contract_text          string
-  upstream_entities      string[]
-  downstream_entities    string[]
-  verify_expectations    string[]
-  // Graph-derived structural constraints: invariants, edge constraints, field
-  // expectations — NOT implementation directives or code suggestions.
-  structural_constraints string[] @optional
-  affected_entities      string[] @optional
+  entity_id                      string @readonly
+  kind                           string @readonly
+  /// The field the extension declares headline and normative (a behavior's
+  /// contract); empty when the entity's kind declares none.
+  contract_text                  string
+  /// Every field the entity declares, by name (an open value: an
+  /// extension's fields).
+  fields                         object
+  upstream_entities              string[]
+  downstream_entities            string[]
+  verify_expectations            string[]
+  /// The entity IDs the request named as structural constraints.
+  structural_constraints         string[]
+  /// Each of them, whether or not an edge connects it to entity_id.
+  structural_constraint_entities McpContextConstraint[]
   verify unit "Context Prompt Result conforms to schema"
 }
 
+type McpContextConstraint "An entity a context request names as a structural constraint" {
+  entity_id string @readonly
+  kind      string @readonly
+  title     string
+  /// Every field it declares, by name (an open value).
+  fields    object
+  verify unit "McpContextConstraint schema is valid"
+}
+
 type McpReviewPromptResult "Review Prompt Result" {
-  entity_id        string              @readonly
+  entity_id        string @readonly
   findings         McpReviewFinding[]
-  coverage_summary McpCoverageResult[] @optional
+  /// The coverage view's rows of the reviewed entities, as specforge.coverage lists them.
+  coverage_summary McpCoverageResult[]
   verify unit "Review Prompt Result conforms to schema"
 }
 
 type McpReviewFinding {
-  entity_id   string @readonly
-  severity    string
-  message     string
-  gap_context string @optional
+  entity_id string @readonly
+  severity  string
+  message   string
   verify unit "McpReviewFinding schema is valid"
 }
 
@@ -1028,4 +1083,103 @@ type McpRelationshipPath {
   edge_types  string[]
   path_length integer
   verify unit "McpRelationshipPath schema is valid"
+}
+
+// The infer prompt's payload, one per scope, tagged by it.
+type McpInferPromptResult = McpInferOverview
+  | McpInferKindGuide
+  | McpInferFileGuide
+  | McpInferPlan
+  | McpInferWorkflow
+
+type McpInferOverview "Infer prompt, no scope: every kind's guide" {
+  scope                "overview" @literal
+  installed_extensions string[]
+  /// Entities per kind, every kind entities are written with.
+  existing_entities    object
+  kinds                McpInferGuideKind[]
+  project_conventions  string
+  spec_directory       string
+  output_format        string
+  validation           string
+  verify unit "Infer Prompt Result conforms to schema"
+}
+
+type McpInferGuideKind {
+  kind            string @readonly
+  extension       string @readonly
+  description     string @optional
+  /// Field names; a required one is followed by *.
+  fields          string[]
+  inference_guide string
+  verify unit "McpInferGuideKind schema is valid"
+}
+
+type McpInferKindGuide "Infer prompt, scope kind:<name>: one kind's guide" {
+  scope               "kind" @literal
+  kind                string @readonly
+  extension           string @readonly
+  description         string @optional
+  existing_entity_ids string[]
+  fields              McpInferGuideField[]
+  inference_guide     string
+  example             string
+  validation          string
+  verify unit "McpInferKindGuide schema is valid"
+}
+
+type McpInferGuideField {
+  name        string @readonly
+  type        string
+  required    boolean
+  description string @optional
+  verify unit "McpInferGuideField schema is valid"
+}
+
+type McpInferFileGuide "Infer prompt, scope file:<path>: what a source file already has" {
+  scope                              "file" @literal
+  file                               string @readonly
+  match_mode                         "exact" | "directory" | "suffix_path" | "none"
+  existing_entities_referencing_file McpSpecForSourceEntity[]
+  kinds                              McpInferFileKind[]
+  project_conventions                string
+  validation                         string
+  verify unit "McpInferFileGuide schema is valid"
+}
+
+type McpInferFileKind {
+  kind            string @readonly
+  inference_guide string
+  verify unit "McpInferFileKind schema is valid"
+}
+
+type McpInferPlan "Infer prompt, scope plan: the prioritized inference plan" {
+  scope                 "plan"  @literal
+  target_spec_directory string
+  progress              McpInferSummary
+  cursor                integer
+  /// The cursor of the next page of either file list; absent on the last.
+  next_cursor           integer @optional
+  /// At most 50 unanalyzed files from cursor; files only.
+  unanalyzed_files      string[]
+  unanalyzed_total      integer
+  stale_files           string[]
+  stale_total           integer
+  kind_priorities       McpInferKindPriority[]
+  verify unit "McpInferPlan schema is valid"
+}
+
+type McpInferKindPriority "One kind in the inference plan's order" {
+  kind           string @readonly
+  extension      string @readonly
+  existing_count integer
+  verify unit "McpInferKindPriority schema is valid"
+}
+
+type McpInferWorkflow "Infer prompt, scope workflow: the tools the protocol names" {
+  scope           "workflow" @literal
+  /// The tools the protocol names, as tools/list names them.
+  tools           string[]
+  installed_kinds string[]
+  verify unit "McpInferWorkflow schema is valid"
 }

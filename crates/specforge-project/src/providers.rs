@@ -9,6 +9,8 @@ use serde_json::{Map, Value};
 use specforge_common::{Diagnostic, codes};
 use specforge_protocol_types::ExtensionDeclaration;
 
+use crate::SetupPart;
+
 /// Why a configured provider's scheme is registered or not.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, specforge_common::shape::Shape)]
 #[serde(rename_all = "snake_case")]
@@ -52,11 +54,16 @@ pub struct Provider {
 #[derive(Debug, Clone, Default)]
 pub struct Providers {
     providers: Vec<Provider>,
-    diagnostics: Vec<Diagnostic>,
+    /// Each with the setup part it is about: W118 is about the providers,
+    /// E057 a collision.
+    diagnostics: Vec<(SetupPart, Diagnostic)>,
 }
 
-fn warning(message: String, suggestion: &str) -> Diagnostic {
-    Diagnostic::new(codes::W118, message).with_suggestion(suggestion.to_string())
+fn warning(message: String, suggestion: &str) -> (SetupPart, Diagnostic) {
+    (
+        SetupPart::Providers,
+        Diagnostic::new(codes::W118, message).with_suggestion(suggestion.to_string()),
+    )
 }
 
 impl Providers {
@@ -102,7 +109,8 @@ impl Providers {
                     .find(|(scheme, _, _)| *scheme == entry.scheme)
                 {
                     Some((_, first_alias, first_extension)) => {
-                        diagnostics.push(
+                        diagnostics.push((
+                            SetupPart::Collision,
                             Diagnostic::new(
                                 codes::E057,
                                 format!(
@@ -117,7 +125,7 @@ impl Providers {
                             .with_suggestion(
                                 "give each provider instance its own scheme".to_string(),
                             ),
-                        );
+                        ));
                         ProviderStatus::SchemeTaken
                     }
                     None => {
@@ -154,15 +162,22 @@ impl Providers {
     }
 
     /// What reading and registering the providers reported (W118, E057).
-    pub fn diagnostics(&self) -> &[Diagnostic] {
-        &self.diagnostics
+    pub fn diagnostics(&self) -> impl Iterator<Item = &Diagnostic> {
+        self.diagnostics.iter().map(|(_, diagnostic)| diagnostic)
+    }
+
+    /// [`Self::diagnostics`] with the setup part each is about.
+    pub fn reported(&self) -> impl Iterator<Item = (SetupPart, &Diagnostic)> {
+        self.diagnostics
+            .iter()
+            .map(|(part, diagnostic)| (*part, diagnostic))
     }
 }
 
 /// The well-formed entries of the `providers` array, each needing `scheme`,
 /// `alias` and `extension` (`settings` is optional), and W118 for what was
 /// left out. Their `status` is a placeholder until they are registered.
-fn read(config: Option<&Value>) -> (Vec<Provider>, Vec<Diagnostic>) {
+fn read(config: Option<&Value>) -> (Vec<Provider>, Vec<(SetupPart, Diagnostic)>) {
     let mut providers = Vec::new();
     let mut diagnostics = Vec::new();
 

@@ -8,7 +8,7 @@ Usage: specforge model [OPTIONS] [PATH]
 
 Arguments:
   [PATH]
-          Path to the spec root directory
+          A path inside the project (the nearest directory at or above it holding specforge.json; none: the directory itself, with the default configuration)
           
           [default: .]
 

@@ -4,8 +4,8 @@
 //! The change is staged in memory. Committing it moves every module aside
 //! under `.specforge/extensions/.staging` before it places the new one, so a
 //! previous binary is never deleted before its replacement is in place,
-//! writes the lock once, runs the caller's `specforge.json` edit, and, on
-//! any failure, puts every file back as it was.
+//! writes the lock once, runs the caller's last step (the `specforge.json` edit,
+//! the publisher-key pins), and, on any failure, puts every file back as it was.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -84,6 +84,12 @@ impl Installed {
 }
 
 impl Change<'_> {
+    /// The project's installed extensions as this change leaves them: the same root, and the lock
+    /// it will write (what the lock plan's peer set resolves entries against).
+    pub fn installed(&self) -> Installed {
+        Installed::with_lock(self.installed.root(), LockState::Read(self.lock.clone()))
+    }
+
     /// The lock as the change will write it (the diamond gate and the
     /// dependents check read it).
     pub fn lock(&self) -> &LockFile {
@@ -124,27 +130,32 @@ impl Change<'_> {
     /// Write the change: every binary placed or moved aside, then the lock
     /// once. All or nothing (see [`Self::commit_with`]).
     pub fn commit(self) -> Result<Committed, Failed<Diagnostic>> {
-        self.run(None, || Ok(false))
+        self.run(None, || Ok(()), std::convert::identity)
     }
 
-    /// [`Self::commit`], then `edit`, the `specforge.json` write that goes
-    /// with it (at `config`; `Ok(changed)`). A failure at any step, `edit`'s
-    /// included, puts every file back as it was: each binary, the lock, and
-    /// `config`'s bytes before `edit`. E032 for a binary that can't be
-    /// placed or moved aside, E033 for a lock that can't be written,
-    /// `edit`'s own error for the config.
-    pub fn commit_with<E: From<Diagnostic>>(
-        self,
-        config: &Path,
-        edit: impl FnOnce() -> Result<bool, E>,
-    ) -> Result<Committed, Failed<E>> {
-        self.run(Some(config), edit)
-    }
-
-    fn run<E: From<Diagnostic>>(
+    /// [`Self::commit`], then `last`: what goes with the change outside its
+    /// binaries and lock, run after the lock is written. That is the
+    /// `specforge.json` edit at `config`, and anything kept for the user such
+    /// as publisher-key pins (ADR 0059). A failure at any step, `last`'s
+    /// included, puts every binary, the lock and `config`'s bytes back. `last`
+    /// must itself leave nothing when it fails, since only `config` is
+    /// restored for it. `config` is in [`Committed::changed`] when its bytes
+    /// changed. E032 for a binary that can't be placed or moved aside, E033
+    /// for a lock that can't be written (as `own` makes them an `E`), `last`'s own error otherwise.
+    pub fn commit_with<E>(
         self,
         config: Option<&Path>,
-        edit: impl FnOnce() -> Result<bool, E>,
+        last: impl FnOnce() -> Result<(), E>,
+        own: impl FnOnce(Diagnostic) -> E,
+    ) -> Result<Committed, Failed<E>> {
+        self.run(config, last, own)
+    }
+
+    fn run<E>(
+        self,
+        config: Option<&Path>,
+        last: impl FnOnce() -> Result<(), E>,
+        own: impl FnOnce(Diagnostic) -> E,
     ) -> Result<Committed, Failed<E>> {
         let Change {
             installed,
@@ -167,18 +178,15 @@ impl Change<'_> {
         let outcome: Result<(), Cause<E>> = placed
             .map_err(Cause::Diagnostic)
             .and_then(|()| write_lock_file(&lock, &lock_path).map_err(Cause::Diagnostic))
-            .and_then(|()| match edit() {
-                Ok(edited) => {
-                    if let (true, Some(config)) = (edited, config) {
-                        changed.insert(config.to_path_buf());
-                    }
-                    Ok(())
-                }
-                Err(error) => Err(Cause::Edit(error)),
-            });
+            .and_then(|()| last().map_err(Cause::Last));
 
         match outcome {
             Ok(()) => {
+                if let Some(config) = config
+                    && std::fs::read(config).ok() != config_before
+                {
+                    changed.insert(config.to_path_buf());
+                }
                 if std::fs::read(&lock_path).ok() != lock_before {
                     changed.insert(lock_path);
                 }
@@ -200,8 +208,8 @@ impl Change<'_> {
                     let _ = std::fs::remove_dir_all(&staging);
                 }
                 let error = match cause {
-                    Cause::Edit(error) => error,
-                    Cause::Diagnostic(diagnostic) => E::from(says_what_is_left(diagnostic, &left)),
+                    Cause::Last(error) => error,
+                    Cause::Diagnostic(diagnostic) => own(says_what_is_left(diagnostic, &left)),
                 };
                 Err(Failed { error, left })
             }
@@ -213,8 +221,8 @@ impl Change<'_> {
 enum Cause<E> {
     /// A step of the change itself (E032, E033).
     Diagnostic(Diagnostic),
-    /// The caller's `specforge.json` edit.
-    Edit(E),
+    /// The caller's last step (the `specforge.json` edit, the pins).
+    Last(E),
 }
 
 /// `diagnostic`, saying what the rollback could not put back.

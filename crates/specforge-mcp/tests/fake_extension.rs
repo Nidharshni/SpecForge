@@ -12,7 +12,7 @@ use serde_json::{Value, json};
 use specforge_extension_sdk::{ContributionsBuilder, DeclaredCategory, ExtensionMeta};
 use specforge_mcp::McpServer;
 
-use crate::support::TestProject;
+use crate::support::{Logged, TestProject, logged};
 use specforge_wasm::runtime::{WasmCallResult, WasmRuntime};
 use specforge_wasm::testing::InProcessRuntime;
 use std::sync::{Arc, OnceLock};
@@ -228,15 +228,14 @@ fn cmds_project() -> TestProject {
         .file("main.spec", "")
 }
 
-/// A server whose extensions run in `ext`; not yet initialized.
-pub fn server_with(ext: &Arc<FakeExtension>) -> McpServer {
-    let mut server = McpServer::new();
-    server.state_mut().extension_runtime = Some(ext.runtime() as Arc<dyn WasmRuntime>);
-    server
+/// A server whose extensions run in `ext`, its events logged; not yet
+/// initialized.
+pub fn server_with(ext: &Arc<FakeExtension>) -> Logged {
+    logged(McpServer::new().with_extension_runtime(ext.runtime() as Arc<dyn WasmRuntime>))
 }
 
 /// A server initialized over [`project`] with `ext` as its runtime.
-pub fn initialized(ext: FakeExtension) -> (McpServer, Arc<FakeExtension>, tempfile::TempDir) {
+pub fn initialized(ext: FakeExtension) -> (Logged, Arc<FakeExtension>, tempfile::TempDir) {
     let ext = Arc::new(ext);
     let (server, dir) = cmds_project()
         .serve_in(ext.runtime() as Arc<dyn WasmRuntime>)

@@ -12,7 +12,7 @@
 
 ## Overview
 
-An extension is a Rust crate compiled to `wasm32-wasip2`, depending on `specforge-extension-sdk` and `wit-bindgen`.
+An extension is a Rust crate compiled to `wasm32-wasip2`, depending on `specforge-extension-sdk` alone (`component_guest!` brings its own bindings).
 The SDK provides:
 
 - **Protocol types** -- re-exported from `specforge-protocol-types`, shared with the host
@@ -68,7 +68,6 @@ crate-type = ["cdylib"]
 
 [dependencies]
 specforge-extension-sdk = "1.0.0"
-wit-bindgen = "0.30"
 ```
 
 ### Compile Target
@@ -230,6 +229,8 @@ c.meta.peer_dependencies.push(PeerDependency {
 });
 ```
 
+`specforge add` and `init` enable a required peer that is a builtin along with your extension; a required peer that is not installed, or an installed one at a version your range does not accept (a builtin's included), refuses the install with E027, as `specforge check` would report it.
+
 ## Contribution Surface Reference
 
 Every contribution is a builder call. The SDK adds the matching Wasm exports and metadata descriptors.
@@ -239,7 +240,7 @@ Every contribution is a builder call. The SDK adds the matching Wasm exports and
 | `c.kind(name, \|k\| ..)` | an entity kind; `k.field(..)` its fields | `entities` |
 | `c.edge(label, \|e\| ..)` | an edge type (`source_kind`, `target_kind`, DOT style) | `edges` |
 | `c.shared_field(name, \|f\| ..)` | a field every kind of the extension has | `shared_fields` |
-| `c.enhance(kind, owner, \|e\| ..)` | fields and edge types on another extension's kind | `enhancements` |
+| `c.enhance(kind, owner, \|e\| ..)` | fields and verify kinds on another extension's kind | `enhancements` |
 | `c.rule(code, \|r\| ..)` | a declarative rule, or a custom one with `r.validate(..)` | `validation_rules` |
 | `c.command(id, \|cmd\| ..)` | a CLI command (also an MCP tool) and its handler | `surfaces` |
 | `c.mcp_tool(..)`, `c.mcp_resource(..)` | an MCP tool or resource and its handler | `surfaces` |
@@ -259,7 +260,7 @@ Every contribution is a builder call. The SDK adds the matching Wasm exports and
 - `description(..)`, `keyword(..)` (the DSL keyword, default the name)
 - `testable(bool)`, `singleton(bool)`, `supports_verify(bool)`, `incremental(bool)`
 - `open_fields(bool)` -- unknown fields are accepted
-- `has_body_parser()` -- the kind's body syntax is its own: parse errors inside its entities are not reported
+- `has_body_parser()` -- declares that the kind's body carries syntax of its own; the core grammar reads every body and reports its parse errors whatever the flag says
 - `contract_target()`, `declares_types()`, `lifecycle_field(field)`, `verify_kinds(&[..])`, `inference_guide(..)`
 - LSP and DOT metadata, requested by the host only where it needs them: `semantic_token(..)`, `lsp_icon(..)`, `dot_shape(..)`, `dot_color(..)`, `dot_fillcolor(..)`
 - `field(name, |f| ..)` -- a field of the kind
@@ -532,6 +533,7 @@ An extension is tested natively (`cargo test`, no wasm build) at three depths:
 
 ```toml
 [dev-dependencies]
+specforge-extension-sdk = { version = "0.1", features = ["testing"] }   # MockHost, call_every_command
 specforge-wasm = { version = "0.1", features = ["testing"] }
 specforge-protocol-types = "0.1"
 specforge-test = "0.1"   # to link a test to the obligation it proves

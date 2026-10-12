@@ -16,6 +16,12 @@ wit-bindgen = "0.30"
 serde = { workspace = true }
 serde_json = { workspace = true }
 
+[features]
+# `testing`: MockHost and call_every_command, for an extension's own tests. A guest enables it in
+# [dev-dependencies] only, so no blob compiles it (ADR 0050).
+testing = []
+
 [dev-dependencies]
+specforge-extension-sdk = { path = ".", features = ["testing"] }
 specforge-test = { workspace = true }
 specforge-test-macros = { workspace = true }

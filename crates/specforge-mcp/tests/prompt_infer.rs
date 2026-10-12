@@ -180,7 +180,8 @@ fn plan_scope_returns_kind_priorities() {
     let mut state = state_with_my_behavior();
     let resp = infer(&mut state, json!({"scope": "plan"}));
     let content: Value = prompt_payload(&resp);
-    let priorities = content["plan"]["kind_priorities"].as_array().unwrap();
+    assert_eq!(content["scope"], "plan");
+    let priorities = content["kind_priorities"].as_array().unwrap();
     assert!(!priorities.is_empty());
     // Kinds with no entity come first: the one kind of the test extension
     // that has an entity is last.
@@ -197,7 +198,7 @@ fn plan_scope_respects_target_directory() {
         json!({"scope": "plan", "target_spec_directory": "specs/"}),
     );
     let content: Value = prompt_payload(&resp);
-    assert_eq!(content["plan"]["target_spec_directory"], "specs/");
+    assert_eq!(content["target_spec_directory"], "specs/");
 }
 
 #[test]
@@ -205,7 +206,7 @@ fn plan_scope_includes_progress() {
     let mut state = make_state_with_kind("behavior", Some("guide text"));
     let resp = infer(&mut state, json!({"scope": "plan"}));
     let content: Value = prompt_payload(&resp);
-    assert!(content["plan"]["progress"]["files_total"].is_number());
+    assert!(content["progress"]["files_total"].is_number());
 }
 
 #[specforge_test(
@@ -262,22 +263,40 @@ fn workflow_scope_lists_tools_and_kinds() {
 fn plan_scope_caps_file_lists_at_50() {
     let mut state = plan_state_with_sources(60);
     let content = plan_payload(&mut state, json!({"scope": "plan"}));
-    let files = content["plan"]["unanalyzed_files"].as_array().unwrap();
-    assert_eq!(
-        files.len(),
-        51,
-        "50 files plus the trailing truncation marker"
-    );
+    let files = content["unanalyzed_files"].as_array().unwrap();
+    assert_eq!(files.len(), 50, "50 files, files only");
     assert!(
-        files[50]
-            .as_str()
-            .unwrap()
-            .contains("... and 10 more (use the cursor param)"),
-        "marker must name the withheld count: {}",
-        files[50]
+        files.iter().all(|f| f.as_str().unwrap().ends_with(".rs")),
+        "a page lists only files: {files:?}"
     );
-    assert_eq!(content["plan"]["unanalyzed_total"], 60);
-    assert_eq!(content["plan"]["next_cursor"], 50);
+    assert_eq!(content["unanalyzed_total"], 60);
+    assert_eq!(content["next_cursor"], 50);
+}
+
+#[specforge_test(
+    behavior = "provide_infer_plan_scope",
+    verify = "the last page of a plan has no next cursor, and a page lists only files"
+)]
+fn the_last_plan_page_has_no_next_cursor() {
+    let mut state = plan_state_with_sources(60);
+    let first = plan_payload(&mut state, json!({"scope": "plan"}));
+    assert_eq!(first["scope"], "plan");
+    assert_eq!(first["next_cursor"], 50);
+    let last = plan_payload(&mut state, json!({"scope": "plan", "cursor": 50}));
+    assert_eq!(last["scope"], "plan");
+    assert!(last.get("next_cursor").is_none(), "{last}");
+    assert_eq!(last["unanalyzed_files"].as_array().unwrap().len(), 10);
+    assert_eq!(last["unanalyzed_total"], 60);
+    for page in [&first, &last] {
+        assert!(
+            page["unanalyzed_files"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|f| f.as_str().unwrap().ends_with(".rs")),
+            "a page lists only files: {page}"
+        );
+    }
 }
 
 #[test]

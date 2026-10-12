@@ -10,9 +10,9 @@
 use specforge_common::{Code, Diagnostic, codes};
 use specforge_ops::extension::Trust;
 use specforge_ops::registry::{
-    Found, METADATA_MISMATCH, NO_REGISTRY, NO_REGISTRY_FOR_NAME, NOT_AUTHENTICATED, Package,
-    Published, Publisher, Registry, Searched, UNREADABLE_MANIFEST, UNUSABLE_SIGNING_KEY, Upload,
-    no_registry,
+    Found, KeyPin, METADATA_MISMATCH, NO_REGISTRY, NO_REGISTRY_FOR_NAME, NOT_AUTHENTICATED,
+    Package, Published, Publisher, Registry, Searched, TrustPolicy, UNREADABLE_MANIFEST,
+    UNUSABLE_SIGNING_KEY, Upload, no_registry,
 };
 use specforge_ops::{OpError, OpErrorKind};
 use specforge_package::PackageName;
@@ -21,12 +21,12 @@ use specforge_protocol_types::{DeclaredCategory, ExtensionDeclaration};
 use specforge_registry_client::credentials::{read_credentials, user_dir};
 use specforge_registry_client::signing::load_or_create_signing_key_at;
 use specforge_registry_client::{
-    Accepted, HttpRegistryClient, KeyChange, RegistryClient, RegistryConfig, RegistryCredential,
-    RegistryError, Retrying, SigningKey, parse_registries_from_config, publish_to_registry,
-    verify_registry_integrity,
+    Accepted, HttpRegistryClient, KeyChange, NewPin, PublishError, RegistryClient, RegistryConfig,
+    RegistryCredential, RegistryError, Retrying, SigningKey, parse_registries_from_config,
+    publish_to_registry, verify_registry_integrity,
 };
 use specforge_registry_wire::{PackageMetadata, SearchQuery};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 
 /// Whom a key change is asked of.
@@ -181,11 +181,14 @@ const INVALID_CONFIG: Code = codes::E067;
 /// one that is there and unusable fails as `add` fails (`config_invalid`).
 /// When `registries` has entries but none can be read, it fails with E067
 /// naming them.
-pub fn configured(root: &Path, operation: &str) -> Result<Configured, OpError> {
+pub fn configured(
+    root: &specforge_common::ProjectRoot,
+    operation: &str,
+) -> Result<Configured, OpError> {
     // `specforge.json` is read the way `add`, `update` and `remove` read
     // it: one that is there and unusable is refused as they refuse it
     // (`config_invalid`, E069), not as a missing registry.
-    let read = specforge_ops::config::usable(root)?;
+    let read = specforge_ops::config::usable(root.dir())?;
     let Some(raw) = read.config.raw.as_ref().filter(|_| read.found) else {
         return Err(no_registry(operation));
     };
@@ -222,13 +225,15 @@ pub fn configured(root: &Path, operation: &str) -> Result<Configured, OpError> {
 /// 2. the binary hashes to the reply's SHA-256 (R-OPS-002);
 /// 3. the manifest reads as an extension declaration (R-OPS-004; a `manifest.json` from before ADR 0012 is
 ///    refused with a re-publish suggestion) naming the package and version asked for (R-TRUST-004);
-/// 4. the publisher signature verifies and the key matches its pin, or is pinned (R-TRUST-001..006).
+/// 4. the publisher signature verifies and the key matches the one expected for the name: the user's
+///    pin, else the key the project's lock records, else any (trust on first use) (R-TRUST-001..006).
+///    The decision is the package's publisher; [`Registry::pin`] writes it once the install is.
 ///
-/// A refused package pins no key. The policy runs over any [`RegistryClient`]: HTTP unless
+/// A fetch writes nothing. The policy runs over any [`RegistryClient`]: HTTP unless
 /// [`ConfiguredRegistry::with_client`] gives another. Built without reading, touching the network or
 /// failing: with no registry configured, each call fails with E063 before any request.
 pub struct ConfiguredRegistry {
-    root: PathBuf,
+    root: specforge_common::ProjectRoot,
     operation: String,
     /// Read once, on the first call that needs a registry.
     registries: OnceLock<Result<Configured, OpError>>,
@@ -237,22 +242,22 @@ pub struct ConfiguredRegistry {
     user: User,
     /// Whom a key change is asked of when a fetch is `Trust::Prompt`ed; nobody by default.
     asker: Option<Asker>,
-    /// What the fetch policy reported (W155, W156), in fetch order.
-    fetched: Mutex<Vec<Diagnostic>>,
+    /// What the fetch policy reported (W155 at a fetch, W156 at a pin), in order.
+    reported_by_policy: Mutex<Vec<Diagnostic>>,
 }
 
 impl ConfiguredRegistry {
     /// The registries `root`'s `specforge.json` configures, over HTTP. Reads nothing yet; `operation`
     /// names the command in E063.
-    pub fn for_project(root: &Path, operation: &str) -> Self {
+    pub fn for_project(root: &specforge_common::ProjectRoot, operation: &str) -> Self {
         Self {
-            root: root.to_path_buf(),
+            root: root.clone(),
             operation: operation.to_string(),
             registries: OnceLock::new(),
             client: Box::new(Retrying::new(HttpRegistryClient::new())),
             user: User::current(),
             asker: None,
-            fetched: Mutex::new(Vec::new()),
+            reported_by_policy: Mutex::new(Vec::new()),
         }
     }
 
@@ -279,15 +284,14 @@ impl ConfiguredRegistry {
     /// What this registry reported, once an operation has asked it anything: the registry
     /// configuration's diagnostics (E067 for an entry it skipped, W140 for a duplicate alias, I003
     /// when none is the default; nothing when reading failed outright, each call then failing with
-    /// that error), then the fetch policy's (W155 for an unsigned package accepted, W156 for a key
-    /// change accepted) in fetch order. A surface shows these after the operation, whatever its
-    /// result.
+    /// that error), then the fetch policy's W155 in fetch order, then a W156 for each re-pin a
+    /// committed operation saved. A surface shows these after the operation, whatever its result.
     pub fn reported(&self) -> Vec<Diagnostic> {
         let mut reported = match self.registries.get() {
             Some(Ok(configured)) => configured.diagnostics.clone(),
             _ => Vec::new(),
         };
-        reported.extend(self.fetched.lock().unwrap().iter().cloned());
+        reported.extend(self.reported_by_policy.lock().unwrap().iter().cloned());
         reported
     }
 
@@ -320,8 +324,7 @@ impl Registry for ConfiguredRegistry {
         &self,
         name: &PackageName,
         version: &Version,
-        allow_unsigned: bool,
-        trust: Trust,
+        policy: TrustPolicy<'_>,
     ) -> Result<Package, OpError> {
         let registry = self.registry_for(name)?;
         let credential = self.read_credential(registry)?; // R-AUTH-020/021, R010, R011, R012
@@ -334,7 +337,8 @@ impl Registry for ConfiguredRegistry {
             .client
             .download(&metadata.wasm_url, registry, credential.as_ref())
             .map_err(failure)?;
-        verify_registry_integrity(&wasm, &metadata.sha256).map_err(OpError::from)?; // 2
+        verify_registry_integrity(&wasm, &metadata.sha256)
+            .map_err(|why| OpError::of(OpErrorKind::SchemaMismatch, why))?; // 2
 
         // The served manifest is the package's declaration (ADR 0012): the
         // peers the diamond gate (ADR 0001) decides on, and what the binary
@@ -346,16 +350,20 @@ impl Registry for ConfiguredRegistry {
         declaration_names(name, version, &declaration)?; // 3
 
         // Publisher signature and the TOFU pin policy.
-        let trusted = specforge_registry_client::trust_flow::check_and_pin(
+        let trusted = specforge_registry_client::trust_flow::check(
             &metadata.name,
             &metadata,
             &wasm,
-            allow_unsigned,
-            &self.decider(trust),
+            policy.allow_unsigned,
+            &self.decider(policy.trust),
             &self.user.known_keys(),
+            policy.locked_key,
         )
-        .map_err(OpError::from)?; // 4
-        self.fetched.lock().unwrap().extend(trusted.diagnostics);
+        .map_err(refused_by_trust)?; // 4: R-TRUST-001..006, writes nothing
+        self.reported_by_policy
+            .lock()
+            .unwrap()
+            .extend(trusted.diagnostics); // W155
 
         Ok(Package {
             name: name.clone(),
@@ -365,13 +373,25 @@ impl Registry for ConfiguredRegistry {
             declaration,
             publisher: match trusted.accepted {
                 Accepted::Unsigned => Publisher::Unsigned,
-                Accepted::Signed { key_id, pinned_now } => Publisher::Signed {
-                    key_id,
-                    first_use: pinned_now,
-                },
+                Accepted::Signed { key_id, first_use } => Publisher::Signed { key_id, first_use },
                 Accepted::Repinned { key_id, previous } => Publisher::Repinned { key_id, previous },
             },
         })
+    }
+
+    fn pin(&self, pins: &[KeyPin]) -> Result<(), OpError> {
+        let new: Vec<NewPin<'_>> = pins
+            .iter()
+            .map(|p| NewPin {
+                package: p.name.as_str(),
+                key_id: &p.key_id,
+                replaces: p.replaces.as_deref(),
+            })
+            .collect();
+        let repinned = specforge_registry_client::trust_flow::record(&new, &self.user.known_keys())
+            .map_err(refused_by_trust)?; // R-TRUST-006, nothing saved
+        self.reported_by_policy.lock().unwrap().extend(repinned); // W156, one per re-pin
+        Ok(())
     }
 
     fn versions(&self, name: &PackageName) -> Result<Vec<Version>, OpError> {
@@ -381,7 +401,8 @@ impl Registry for ConfiguredRegistry {
             .client
             .versions(name, registry, credential.as_ref())
             .map_err(|error| match error {
-                RegistryError::NotFound { .. } => OpError::from(
+                RegistryError::NotFound { .. } => OpError::of(
+                    OpErrorKind::ExtensionNotFound,
                     Diagnostic::new(
                         codes::R_RES_001,
                         format!(
@@ -463,9 +484,12 @@ impl Registry for ConfiguredRegistry {
             registry,
             Some(&credential),
             &*self.client,
-            Some(&key),
+            &key,
         )
-        .map_err(OpError::from)?; // R007, R001, R002, R004, R005
+        .map_err(|error| match error {
+            PublishError::Invalid(diagnostic) => OpError::of(OpErrorKind::InvalidInput, diagnostic),
+            PublishError::Registry(error) => failure(error),
+        })?; // R007, R001, R002, R004, R005
         Ok(Published {
             registry: registry.alias.clone(),
             url,
@@ -485,7 +509,8 @@ impl ConfiguredRegistry {
         &self,
         registry: &RegistryConfig,
     ) -> Result<Option<RegistryCredential>, OpError> {
-        self.stored_credential(registry).map_err(OpError::from)
+        self.stored_credential(registry)
+            .map_err(unusable_credential)
     }
 
     /// [`ConfiguredRegistry::read_credential`] as the diagnostic that refuses it.
@@ -503,10 +528,10 @@ impl ConfiguredRegistry {
         if let Some(token) = self.user.token() {
             return Ok(RegistryCredential::new(registry.alias.clone(), token));
         }
-        let store = read_credentials(&self.user.credentials()).map_err(OpError::from)?;
+        let store = read_credentials(&self.user.credentials()).map_err(unusable_credential)?;
         store
             .credential(&registry.alias)
-            .map_err(OpError::from)?
+            .map_err(unusable_credential)?
             .ok_or_else(|| {
                 OpError::coded(
                     OpErrorKind::PreconditionFailed,
@@ -533,9 +558,33 @@ impl ConfiguredRegistry {
     }
 }
 
-/// A client failure as ops reports it.
-fn failure(error: RegistryError) -> OpError {
-    OpError::from(error.to_diagnostic())
+/// A package registry's failure as an operation reports it: its kind is the failure's, decided by
+/// variant (a new variant is a compile error here).
+pub fn failure(error: RegistryError) -> OpError {
+    let kind = match &error {
+        RegistryError::Unauthorized { .. } | RegistryError::Forbidden { .. } => {
+            OpErrorKind::PermissionDenied
+        }
+        RegistryError::RateLimited { .. } | RegistryError::Timeout { .. } => OpErrorKind::Timeout,
+        RegistryError::NetworkError { .. } => OpErrorKind::Internal,
+        RegistryError::NotFound { .. } => OpErrorKind::ExtensionNotFound,
+        RegistryError::DuplicateVersion { .. } => OpErrorKind::Conflict,
+        RegistryError::InvalidPackage { .. } | RegistryError::Refused { .. } => {
+            OpErrorKind::InvalidInput
+        }
+        RegistryError::InvalidReply { .. } => OpErrorKind::SchemaMismatch,
+    };
+    OpError::of(kind, error.to_diagnostic())
+}
+
+/// The trust check's refusal (R-TRUST-001..006): the package is not allowed.
+fn refused_by_trust(diagnostic: Diagnostic) -> OpError {
+    OpError::of(OpErrorKind::PermissionDenied, diagnostic)
+}
+
+/// A stored credential that cannot be used (R010, R011, R012, R-AUTH-020/021).
+pub fn unusable_credential(diagnostic: Diagnostic) -> OpError {
+    OpError::of(OpErrorKind::PreconditionFailed, diagnostic)
 }
 
 /// The signature covers the name and version the registry answers
@@ -620,17 +669,75 @@ fn read_declaration(
 mod tests {
     use super::*;
 
+    #[specforge_test_macros::test(
+        invariant = "mcp_structured_error_responses",
+        verify = "an operation's failure kind decides its McpError code, never its code text"
+    )]
+    fn a_registry_failure_has_the_kind_of_its_variant() {
+        let s = || "x".to_string();
+        for (error, kind) in [
+            (
+                RegistryError::Unauthorized { guidance: s() },
+                OpErrorKind::PermissionDenied,
+            ),
+            (
+                RegistryError::Forbidden { guidance: s() },
+                OpErrorKind::PermissionDenied,
+            ),
+            (
+                RegistryError::RateLimited { retry_after_ms: 1 },
+                OpErrorKind::Timeout,
+            ),
+            (RegistryError::Timeout { url: s() }, OpErrorKind::Timeout),
+            (
+                RegistryError::NetworkError { message: s() },
+                OpErrorKind::Internal,
+            ),
+            (
+                RegistryError::NotFound { specifier: s() },
+                OpErrorKind::ExtensionNotFound,
+            ),
+            (
+                RegistryError::DuplicateVersion {
+                    name: s(),
+                    version: s(),
+                },
+                OpErrorKind::Conflict,
+            ),
+            (
+                RegistryError::InvalidPackage { message: s() },
+                OpErrorKind::InvalidInput,
+            ),
+            (
+                RegistryError::InvalidReply {
+                    subject: s(),
+                    message: s(),
+                },
+                OpErrorKind::SchemaMismatch,
+            ),
+        ] {
+            assert_eq!(failure(error.clone()).kind, kind, "{error:?}");
+        }
+    }
+
     #[test]
     fn an_unconfigured_project_fails_each_call_with_e063_before_any_request() {
         let dir = tempfile::tempdir().unwrap();
-        let registry = ConfiguredRegistry::for_project(dir.path(), "update");
+        let registry = ConfiguredRegistry::for_project(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            "update",
+        );
         assert!(registry.reported().is_empty());
         let sdk = PackageName::parse("@sdk/greet").unwrap();
         let error = registry.versions(&sdk).unwrap_err();
         assert!(error.is(specforge_ops::registry::NO_REGISTRY), "{error:?}");
         assert!(error.message.contains("`update`"), "{error:?}");
         let error = registry
-            .fetch(&sdk, &Version::new(0, 1, 0), false, Trust::Refuse)
+            .fetch(
+                &sdk,
+                &Version::new(0, 1, 0),
+                TrustPolicy::new(false, Trust::Refuse),
+            )
             .unwrap_err();
         assert!(error.is(specforge_ops::registry::NO_REGISTRY), "{error:?}");
         assert!(registry.reported().is_empty());

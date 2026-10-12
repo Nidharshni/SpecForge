@@ -1,6 +1,6 @@
 # One MCP request pipeline; resources read through the view
 
-**Status:** accepted (2026-10-06); D6 amended and D8 added (2026-10-08, architecture plan 12); a tool spec declares what it does once (2026-10-09, architecture plan 10, last section); A1's tool spec is one module implementing `CoreTool` (ADR 0049). Amends
+**Status:** accepted (2026-10-06); D6 amended and D8 added (2026-10-08, architecture plan 12); a tool spec declares what it does once (2026-10-09, architecture plan 10, last section); A1's tool spec is one module implementing `CoreTool` (ADR 0049). D1's "record its events" step is a handler recording through the call's event sink; `Ran` is gone (ADR 0057). D6 amended by ADR 0058 (the deltas are sent whole). Amends
 ADR 0004 "MCP tool table" (D4-e) and ADR 0017 D6 and D14's resource code.
 
 `tools/call`, `resources/read` and `prompts/get` ran the same steps in three functions: read the
@@ -94,8 +94,9 @@ stream the same way, each removal recorded. `resources/subscribe` refuses an uns
 `resources/read` does (not found); `unsubscribe` never refuses.
 
 **D7. Operations fail with a kind.** `specforge_ops::OpErrorKind` is set where a failure is raised;
-MCP maps it totally to its McpErrorCode. Diagnostic codes map through one table in ops
-(`OpErrorKind::of_diagnostic`). The code stays what the CLI prints.
+MCP maps it totally to its McpErrorCode. A catalogued code is raised with its kind
+(`OpError::coded`), and a lower crate's diagnostic crosses with the kind its boundary states (`OpError::of`);
+no table maps a code to a kind (amended by ADR 0054). The code stays what the CLI prints.
 
 **D8. A request carries its revision.** *(Added 2026-10-08.)* The revision a request is served under,
 `lifecycle::Revision` (the one `initialize` negotiated, or the stateless one its `_meta` names), is

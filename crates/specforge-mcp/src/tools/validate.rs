@@ -57,7 +57,7 @@ impl CoreTool for Tool {
             severity,
             record_cache: false,
         };
-        let outcome = match check(&project.view(), project.diagnostics(), &options) {
+        let outcome = match check(&project.view(), &options) {
             Ok(outcome) => outcome,
             Err(error) => return Err(refused(error, "path")),
         };

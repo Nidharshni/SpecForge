@@ -23,7 +23,7 @@ mod new;
 mod options;
 mod outcome;
 mod outline;
-mod pipeline;
+mod project;
 mod providers;
 mod publish;
 mod query;
@@ -161,7 +161,11 @@ fn main() {
 /// of the project in the current directory contribute (`specforge product
 /// ...`).
 fn completions(shell: Shell, terminal: &Terminal) -> Exit {
-    let mut cmd = extension_command::with_extension_commands(Cli::command(), Path::new("."));
+    // A working directory that can't be resolved (deleted) lists the built-ins only.
+    let mut cmd = Cli::command();
+    if let Ok(root) = specforge_common::ProjectRoot::of(Path::new(".")) {
+        cmd = extension_command::with_extension_commands(cmd, &root);
+    }
     clap_complete::generate(
         shell,
         &mut cmd,
@@ -243,6 +247,61 @@ mod tests {
         let mut root = Cli::command();
         root.build();
         pin_help(&root, &[]);
+    }
+
+    /// The commands whose `path` is not a project path: a directory taken as
+    /// given (`new`, an extension crate) or `mcp`'s own sentence.
+    const AS_GIVEN: [&str; 5] = [
+        "new",
+        "extension init",
+        "extension build",
+        "extension validate",
+        "mcp",
+    ];
+
+    /// Every `path` argument of `command` and of each subcommand under it,
+    /// by the command's path from the root.
+    fn path_arguments(command: &clap::Command, at: &str, found: &mut Vec<(String, clap::Arg)>) {
+        for argument in command.get_arguments() {
+            if argument.get_id() == "path" {
+                found.push((at.to_string(), argument.clone()));
+            }
+        }
+        for sub in command.get_subcommands() {
+            let name = if at.is_empty() {
+                sub.get_name().to_string()
+            } else {
+                format!("{at} {}", sub.get_name())
+            };
+            path_arguments(sub, &name, found);
+        }
+    }
+
+    #[specforge_test_macros::test(
+        behavior = "locate_project_root",
+        verify = "every command's project path argument says it is a path inside the project"
+    )]
+    fn every_project_path_argument_has_the_one_help() {
+        let mut root = Cli::command();
+        root.build();
+        let mut found = Vec::new();
+        path_arguments(&root, "", &mut found);
+        for name in AS_GIVEN {
+            assert!(
+                found.iter().any(|(command, _)| command == name),
+                "AS_GIVEN names `{name}`, which takes no path"
+            );
+        }
+        for (command, argument) in &found {
+            if AS_GIVEN.contains(&command.as_str()) {
+                continue;
+            }
+            assert_eq!(
+                argument.get_help().map(ToString::to_string).as_deref(),
+                Some(crate::project::PATH_HELP),
+                "`specforge {command}`'s path says something else"
+            );
+        }
     }
 
     /// Every argument of `command` and of each subcommand under it.

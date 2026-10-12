@@ -26,6 +26,8 @@ and five places.
   it, and the session stamps and discovers through it. `Environment::{inputs, check_inputs,
   named_files, referenced_files}`, `EnvironmentInputs`, the classifier and the session's own
   `classify`/`changes`/`watch_roots` are gone.
+  *(ADR 0055: complete. Import resolution reads no file, so a `.spec` file discovery does not find is no
+  input of any kind.)*
 - **D2. When it changes.** It is made when the environment loads and renewed each time the checks
   run. The checks' reads define the check inputs, so an update that skips the checks keeps the
   previous set. `Update::inputs_changed` says the value changed. Watch re-arms and the LSP registers

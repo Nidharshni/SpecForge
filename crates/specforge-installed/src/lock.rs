@@ -22,9 +22,10 @@ pub struct LockFileEntry {
     pub version: String,
     pub source: LockSource,
     pub wasm_hash: String,
-    /// Publisher key id recorded at install from a signed registry package.
-    /// `None` for local installs and for lock files written before signed
-    /// publishing existed (field defaults on deserialize for compatibility).
+    /// The publisher key id the registry install was signed by: the
+    /// project's pin for the name, which a fetch expects when the user has
+    /// none of their own (ADR 0059). `None` for a local install, an unsigned
+    /// one, or a lock written before signing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub key_id: Option<String>,
     /// Peer requirements recorded at install from the extension's manifest

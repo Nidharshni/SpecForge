@@ -4,7 +4,7 @@ use specforge_mcp::McpServer;
 use specforge_test::prelude::*;
 
 /// The params of the one `event_name` event.
-fn only_event(server: &McpServer, event_name: &str) -> Value {
+fn only_event(server: &impl Logs, event_name: &str) -> Value {
     let params = events(server, event_name);
     assert_eq!(params.len(), 1, "{event_name}: {params:?}");
     params.into_iter().next().unwrap()
@@ -108,7 +108,7 @@ fn event_mcp_initialization_failed() {
     verify = "emits mcp_protocol_error_handled with correct errorCode for each error type"
 )]
 fn event_mcp_protocol_error_handled() {
-    let mut server = McpServer::new();
+    let mut server = logged(McpServer::new());
     server.handle_message("not valid json");
     server.handle_message(r#"{"id": 2}"#);
     call(&mut server, "initialize", json!({}));
@@ -404,40 +404,11 @@ fn event_mcp_subscription_removed() {
     );
 }
 
-/// Each event `spec/events/mcp.spec` declares, with its payload fields as
-/// `(name, optional)`.
-fn declared_payloads() -> std::collections::BTreeMap<String, Vec<(String, bool)>> {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../spec/events/mcp.spec");
-    let spec = std::fs::read_to_string(&path).unwrap();
-    let mut events = std::collections::BTreeMap::new();
-    let mut current: Option<String> = None;
-    let mut in_payload = false;
-    for line in spec.lines().map(str::trim) {
-        if let Some(rest) = line.strip_prefix("event ") {
-            let name = rest.split_whitespace().next().unwrap().to_string();
-            events.insert(name.clone(), Vec::new());
-            current = Some(name);
-        } else if line.starts_with("payload {") {
-            in_payload = true;
-        } else if in_payload && line == "}" {
-            in_payload = false;
-        } else if in_payload && !line.is_empty() {
-            let field = line.split_whitespace().next().unwrap().to_string();
-            let optional = line.contains("@optional");
-            let event = current.as_ref().unwrap();
-            events.get_mut(event).unwrap().push((field, optional));
-        }
-    }
-    events
-}
-
-/// A session touching every MCP event: each payload carries every field
-/// the spec requires and none it does not declare.
-#[test]
-fn every_event_in_a_session_carries_exactly_its_declared_payload() {
-    let declared = declared_payloads();
-    assert_eq!(declared.len(), 13, "{declared:?}");
-
+/// A session touching every MCP event: initialize (twice), subscribe,
+/// the listings, a read, a tool, a prompt, a rename (a mutation and a
+/// graph delta), a protocol error, a cancel and shutdown. The project's
+/// directory lives as long as the returned value.
+fn core_session() -> (Logged, tempfile::TempDir) {
     let dir = tempfile::TempDir::new().unwrap();
     let config = json!({"name":"t","version":"0.1.0","extensions":[]});
     std::fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
@@ -447,7 +418,7 @@ fn every_event_in_a_session_carries_exactly_its_declared_payload() {
     )
     .unwrap();
 
-    let mut server = McpServer::new();
+    let mut server = logged(McpServer::new());
     call(
         &mut server,
         "initialize",
@@ -486,31 +457,134 @@ fn every_event_in_a_session_carries_exactly_its_declared_payload() {
     call(&mut server, "no/such/method", json!({}));
     call(&mut server, "$/cancelRequest", json!({"id": 7}));
     call(&mut server, "shutdown", json!({}));
+    (server, dir)
+}
 
-    let events = &server.state().events;
+/// The core session records every event `spec/events/mcp.spec` declares,
+/// and each recorded event serializes to the shape `McpEvent` derives.
+#[specforge_test(
+    behavior = "mcp_event_record",
+    verify = "every event the server records is one an events spec declares, its payload exactly the declared fields"
+)]
+fn a_session_records_every_mcp_event() {
+    let (server, _dir) = core_session();
+    let events = recorded(&server);
     let emitted: std::collections::BTreeSet<&str> =
-        events.iter().map(|e| e.name.as_str()).collect();
-    let all: std::collections::BTreeSet<&str> = declared.keys().map(String::as_str).collect();
-    assert_eq!(emitted, all, "the session emits every MCP event");
+        events.iter().map(|(name, _)| name.as_str()).collect();
+    let spec = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../spec/events/mcp.spec"),
+    )
+    .unwrap();
+    let declared: std::collections::BTreeSet<&str> = spec
+        .lines()
+        .filter_map(|line| line.strip_prefix("event "))
+        .filter_map(|rest| rest.split_whitespace().next())
+        .collect();
+    assert_eq!(declared.len(), 13, "{declared:?}");
+    assert_eq!(emitted, declared, "the session emits every MCP event");
 
-    for event in events {
-        let fields = &declared[&event.name];
-        let payload = event.params.as_object().unwrap();
-        for key in payload.keys() {
-            assert!(
-                fields.iter().any(|(name, _)| name == key),
-                "{} carries undeclared field {key}: {}",
-                event.name,
-                event.params
-            );
-        }
-        for (name, optional) in fields {
-            assert!(
-                *optional || payload.contains_key(name),
-                "{} lacks required field {name}: {}",
-                event.name,
-                event.params
-            );
-        }
+    let document = specforge_common::shape::document::<specforge_mcp::events::McpEvent>();
+    for recorded in server.log().recorded() {
+        let value = serde_json::to_value(&recorded.event).unwrap();
+        let violations = specforge_common::shape::violations(document, &value);
+        assert!(violations.is_empty(), "{}: {violations:?}", recorded.name());
     }
+}
+
+/// Every event `server` recorded, oldest first: its name and payload.
+fn recorded(server: &impl Logs) -> Vec<(String, Value)> {
+    server
+        .log()
+        .recorded()
+        .iter()
+        .map(|recorded| (recorded.name(), recorded.payload()))
+        .collect()
+}
+
+/// Each recorded `(name, payload)` as `{"event": name, "payload": payload}`,
+/// in order, its `timestamp` removed and every `durationMs` read as
+/// `"[ms]"`: what the snapshot pins.
+fn sequence(recorded: impl IntoIterator<Item = (String, Value)>) -> Vec<Value> {
+    recorded
+        .into_iter()
+        .map(|(name, mut payload)| {
+            if let Some(object) = payload.as_object_mut() {
+                object.remove("timestamp");
+                if object.contains_key("durationMs") {
+                    object.insert("durationMs".into(), json!("[ms]"));
+                }
+            }
+            json!({"event": name, "payload": payload})
+        })
+        .collect()
+}
+
+/// The events two sessions record, in order: the core session above, and
+/// `@test/cmds`'s three surfaces dispatched (an explicit tool, a promoted
+/// command, a resource). A characterization pin: the payloads and their
+/// order stay as they are while the recorder changes.
+#[test]
+fn the_recorded_sequence_of_a_session() {
+    use crate::fake_extension::{self, FakeExtension};
+
+    let (core, _dir) = core_session();
+    let core = sequence(recorded(&core));
+
+    let (mut surfaces, _ext, _dir) = fake_extension::initialized(
+        FakeExtension::new()
+            .with_output("mcp__check", json!({"checked": true}))
+            .with_output(
+                "cmd__report",
+                json!({"exit_code": 0, "stdout": "3 of 4 covered", "stderr": ""}),
+            )
+            .with_output(
+                "mcp__summary",
+                json!({"content": "{}", "mime_type": "application/json"}),
+            ),
+    );
+    call_tool(&mut surfaces, "specforge.cmds.check", json!({}));
+    call_tool(
+        &mut surfaces,
+        "specforge.cmds.report",
+        json!({"style": "md"}),
+    );
+    read_resource(&mut surfaces, "specforge://ext/cmds/summary");
+    let surfaces = sequence(recorded(&surfaces));
+
+    insta::assert_json_snapshot!(json!({"core": core, "surfaces": surfaces}));
+}
+
+#[specforge_test(
+    behavior = "mcp_event_record",
+    verify = "every event a recording sink keeps carries the time it was recorded"
+)]
+fn a_log_stamps_each_event_with_the_time_it_was_recorded() {
+    let before = chrono::Utc::now();
+    let mut server = init_server();
+    call(&mut server, "tools/list", json!({}));
+    call_tool(&mut server, "specforge.stats", json!({}));
+    call(&mut server, "ping", json!({}));
+    let after = chrono::Utc::now();
+
+    let recorded = server.log().recorded();
+    assert!(recorded.len() >= 3, "{recorded:?}");
+    for event in &recorded {
+        assert!(
+            before <= event.timestamp && event.timestamp <= after,
+            "{event:?} was not recorded during the session"
+        );
+        let payload = event.payload();
+        let stamp = payload["timestamp"].as_str().unwrap_or_default();
+        assert!(
+            chrono::DateTime::parse_from_rfc3339(stamp).is_ok(),
+            "{}: {payload}",
+            event.name()
+        );
+    }
+    assert!(
+        recorded
+            .windows(2)
+            .all(|pair| pair[0].timestamp <= pair[1].timestamp),
+        "the stamps go forward: {recorded:?}"
+    );
 }

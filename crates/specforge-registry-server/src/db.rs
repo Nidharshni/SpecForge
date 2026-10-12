@@ -1,5 +1,10 @@
 use rusqlite::{Connection, params};
+use specforge_registry_wire::PackageSignature;
 use std::path::Path;
+
+/// The schema this registry reads and writes (`PRAGMA user_version`). A data directory written before the
+/// signature was typed (ADR 0061) has none and is refused.
+const SCHEMA: i64 = 1;
 use std::sync::Mutex;
 
 pub struct Database {
@@ -17,6 +22,31 @@ impl Database {
     }
 }
 
+/// The length of a token id: the first hex digits of its hash, as the listing shows.
+pub const TOKEN_ID_LEN: usize = 8;
+
+/// Why a token was not revoked ([`Database::revoke_token`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RevokeRefused {
+    /// The segment is not a token id (8 lowercase hex digits).
+    NotAnId,
+    /// Two live tokens share the id; neither is revoked.
+    Ambiguous,
+    /// The database failed.
+    Storage(String),
+}
+
+/// Why a publish was not recorded ([`Database::publish`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PublishRefused {
+    /// The scope is owned by another publisher (its account).
+    ScopeOwned { account: String },
+    /// The version is already stored (the message says so).
+    DuplicateVersion(String),
+    /// The database failed.
+    Storage(String),
+}
+
 #[derive(Debug, Clone)]
 pub struct PackageVersion {
     pub name: String,
@@ -27,10 +57,9 @@ pub struct PackageVersion {
     pub keywords: String,
     pub publisher: String,
     pub published_at: String,
-    /// Wire signature object (JSON with sig/keyId/pubkey/signedAt); empty when unsigned.
-    pub signature: String,
-    /// Short publisher key id; empty when unsigned.
-    pub key_id: String,
+    /// The publisher signature, stored as its JSON; `None` only for what `testing::LocalRegistry::store` stores
+    /// unsigned. Its key id is `signature.key_id()`.
+    pub signature: Option<PackageSignature>,
     /// Exact manifest JSON uploaded with the package; served so clients can
     /// verify manifest_sha256 offline.
     pub manifest: String,
@@ -48,23 +77,6 @@ pub struct TokenRecord {
     pub admin: bool,
 }
 
-/// Sort key for a version string: SemVer when parseable (pre-release
-/// ordering included), lexicographic fallback for legacy rows.
-fn semver_key(version: &str) -> (u64, u64, u64, u8, String) {
-    match semver::Version::parse(version) {
-        // the empty pre-release flag ranks a release above its own
-        // pre-releases; identifiers otherwise compare as strings (v1)
-        Ok(v) => (
-            v.major,
-            v.minor,
-            v.patch,
-            u8::from(v.pre.is_empty()),
-            v.pre.to_string(),
-        ),
-        Err(_) => (0, 0, 0, 1, version.to_string()),
-    }
-}
-
 impl Database {
     pub fn open(path: &Path) -> Result<Self, String> {
         let conn = Connection::open(path).map_err(|e| format!("failed to open database: {}", e))?;
@@ -73,6 +85,24 @@ impl Database {
             "PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;",
         )
         .map_err(|e| format!("failed to set pragmas: {e}"))?;
+
+        let version: i64 = conn
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .map_err(|e| format!("failed to read the schema version: {e}"))?;
+        let has_packages: bool = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'packages'",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .map(|n| n > 0)
+            .map_err(|e| format!("failed to read the schema: {e}"))?;
+        if has_packages && version != SCHEMA {
+            return Err(format!(
+                "the registry data in {} was written by an earlier specforge-registry (schema {version}); this one reads schema {SCHEMA}: serve from a new --data-dir",
+                path.display()
+            ));
+        }
 
         let db = Self {
             conn: Mutex::new(conn),
@@ -95,6 +125,8 @@ impl Database {
                 publisher TEXT NOT NULL DEFAULT '',
                 published_at TEXT NOT NULL DEFAULT (datetime('now')),
                 yanked INTEGER NOT NULL DEFAULT 0,
+                signature TEXT,
+                manifest TEXT NOT NULL DEFAULT '',
                 UNIQUE(name, version)
             );
 
@@ -123,45 +155,16 @@ impl Database {
         )
         .map_err(|e| format!("migration failed: {}", e))?;
 
-        // Signature columns arrived after the initial schema: add them to
-        // databases created before signed publishing existed.
-        for (column, ddl) in [
-            (
-                "signature",
-                "ALTER TABLE packages ADD COLUMN signature TEXT NOT NULL DEFAULT ''",
-            ),
-            (
-                "key_id",
-                "ALTER TABLE packages ADD COLUMN key_id TEXT NOT NULL DEFAULT ''",
-            ),
-            (
-                "manifest",
-                "ALTER TABLE packages ADD COLUMN manifest TEXT NOT NULL DEFAULT ''",
-            ),
-        ] {
-            let present: bool = conn
-                .query_row(
-                    &format!(
-                        "SELECT COUNT(*) FROM pragma_table_info('packages') WHERE name = '{column}'"
-                    ),
-                    [],
-                    |row| row.get::<_, i64>(0),
-                )
-                .map(|n| n > 0)
-                .unwrap_or(false);
-            if !present {
-                conn.execute_batch(ddl)
-                    .map_err(|e| format!("migration failed ({column}): {}", e))?;
-            }
-        }
+        conn.execute_batch(&format!("PRAGMA user_version = {SCHEMA}"))
+            .map_err(|e| format!("migration failed (schema version): {e}"))?;
         Ok(())
     }
 
     pub fn insert_package(&self, pkg: &PackageVersion) -> Result<(), String> {
         let conn = self.conn();
         conn.execute(
-            "INSERT INTO packages (name, version, sha256, size_bytes, description, keywords, publisher, published_at, signature, key_id, manifest)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            "INSERT INTO packages (name, version, sha256, size_bytes, description, keywords, publisher, published_at, signature, manifest)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 pkg.name,
                 pkg.version,
@@ -171,8 +174,7 @@ impl Database {
                 pkg.keywords,
                 pkg.publisher,
                 pkg.published_at,
-                pkg.signature,
-                pkg.key_id,
+                pkg.signature.as_ref().map(PackageSignature::to_json),
                 pkg.manifest,
             ],
         ).map_err(|e| {
@@ -188,7 +190,7 @@ impl Database {
     pub fn get_package_version(&self, name: &str, version: &str) -> Option<PackageVersion> {
         let conn = self.conn();
         conn.query_row(
-            "SELECT name, version, sha256, size_bytes, description, keywords, publisher, published_at, signature, key_id, manifest
+            "SELECT name, version, sha256, size_bytes, description, keywords, publisher, published_at, signature, manifest
              FROM packages WHERE name = ?1 AND version = ?2 AND yanked = 0",
             params![name, version],
             |row| {
@@ -201,9 +203,19 @@ impl Database {
                     keywords: row.get(5)?,
                     publisher: row.get(6)?,
                     published_at: row.get(7)?,
-                    signature: row.get(8)?,
-                    key_id: row.get(9)?,
-                    manifest: row.get(10)?,
+                    signature: row
+                        .get::<_, Option<String>>(8)?
+                        .map(|text| {
+                            PackageSignature::parse(&text).map_err(|why| {
+                                rusqlite::Error::FromSqlConversionFailure(
+                                    8,
+                                    rusqlite::types::Type::Text,
+                                    Box::new(why),
+                                )
+                            })
+                        })
+                        .transpose()?,
+                    manifest: row.get(9)?,
                 })
             },
         )
@@ -225,23 +237,34 @@ impl Database {
         Ok(rows)
     }
 
-    /// The latest version of each package matching `query`, sorted by name; with `contributes`, only
-    /// those whose stored declaration declares that category (an unreadable manifest is not kept).
+    /// Each package one of whose versions matches `query`, at the version `specforge add <name>`
+    /// installs (`latest`), sorted by name; with `contributes`, only those whose listed version's
+    /// stored declaration declares that category (an unreadable manifest is not kept).
     pub fn search(
         &self,
         query: &str,
         limit: u32,
         contributes: Option<specforge_protocol_types::DeclaredCategory>,
     ) -> Result<Vec<PackageVersion>, String> {
-        use std::collections::HashMap;
+        use specforge_package::{Version, VersionRequirement};
+        use std::collections::BTreeMap;
 
         let conn = self.conn();
-        let pattern = format!("%{query}%");
+        // An escaped prefilter (`%`, `_` and `\` are text); `specforge_package::search::matches`
+        // decides, as the in-memory registries do.
+        let escaped = query
+            .replace('\\', "\\\\")
+            .replace('%', "\\%")
+            .replace('_', "\\_");
+        let pattern = format!("%{escaped}%");
+        // Every non-yanked version of each package one of whose versions matches the term.
         let mut stmt = conn
             .prepare(
                 "SELECT name, version, sha256, size_bytes, description, keywords, publisher, published_at, manifest
                  FROM packages
-                 WHERE yanked = 0 AND (name LIKE ?1 OR description LIKE ?1 OR keywords LIKE ?1)",
+                 WHERE yanked = 0 AND name IN (
+                   SELECT name FROM packages
+                   WHERE yanked = 0 AND (name LIKE ?1 ESCAPE '\\' OR description LIKE ?1 ESCAPE '\\' OR keywords LIKE ?1 ESCAPE '\\'))",
             )
             .map_err(|e| format!("search query failed: {e}"))?;
         let rows: Vec<PackageVersion> = stmt
@@ -255,54 +278,112 @@ impl Database {
                     keywords: row.get(5)?,
                     publisher: row.get(6)?,
                     published_at: row.get(7)?,
-                    signature: String::new(),
-                    key_id: String::new(),
+                    signature: None,
                     manifest: row.get(8)?,
                 })
             })
             .map_err(|e| format!("search query failed: {e}"))?
             .filter_map(|r| r.ok())
             .collect();
+        // The one rule decides which of a package's versions' terms match: the prefilter spans
+        // the joined keyword column, so `a,b` passes it and fails here.
+        let matching: std::collections::BTreeSet<String> = rows
+            .iter()
+            .filter(|p| {
+                let keywords: Vec<&str> = p.keywords.split(',').filter(|k| !k.is_empty()).collect();
+                specforge_package::search::matches(query, &p.name, &p.description, &keywords)
+            })
+            .map(|p| p.name.clone())
+            .collect();
+        let rows: Vec<PackageVersion> = rows
+            .into_iter()
+            .filter(|p| matching.contains(&p.name))
+            .collect();
 
-        // Latest per name by SemVer order — SQL MAX(version) is
-        // lexicographic and would rank 9.0.0 above 10.0.0.
-        let mut latest: HashMap<String, PackageVersion> = HashMap::new();
-        for p in rows {
-            match latest.get(&p.name) {
-                Some(current) if semver_key(&current.version) >= semver_key(&p.version) => {}
-                _ => {
-                    latest.insert(p.name.clone(), p);
-                }
-            }
+        // Each package at what `latest` picks, by SemVer (SQL MAX(version) is lexicographic and
+        // would rank 9.0.0 above 10.0.0); the map yields the names in order.
+        let mut by_name: BTreeMap<String, Vec<PackageVersion>> = BTreeMap::new();
+        for row in rows {
+            by_name.entry(row.name.clone()).or_default().push(row);
         }
-        let mut out: Vec<PackageVersion> = latest.into_values().collect();
+        let mut out: Vec<PackageVersion> = by_name
+            .into_values()
+            .filter_map(|versions| {
+                VersionRequirement::Latest.pick_from(versions, |p| Version::parse(&p.version).ok())
+            })
+            .collect();
         if let Some(category) = contributes {
             out.retain(|p| {
                 serde_json::from_str::<specforge_protocol_types::ExtensionDeclaration>(&p.manifest)
                     .is_ok_and(|d| d.declares(category))
             });
         }
-        out.sort_by(|a, b| a.name.cmp(&b.name));
         out.truncate(limit as usize);
         Ok(out)
     }
 
-    /// Claim a namespace scope on first publish. Returns `true` when this
-    /// call claimed it, `false` when it was already owned (by anyone).
-    pub fn claim_scope(
+    /// Record `pkg` as `owner_token_hash` (account `account_id`) publishes it into `scope`, in one
+    /// transaction: claim the scope for the publisher when nobody owns it, refuse when another
+    /// token owns it, insert the version (`UNIQUE(name, version)` refuses a duplicate). A refusal
+    /// leaves the scope as it was. `Ok(true)` when this publish claimed the scope.
+    pub fn publish(
         &self,
+        pkg: &PackageVersion,
         scope: &str,
         owner_token_hash: &str,
         account_id: &str,
-    ) -> Result<bool, String> {
-        let conn = self.conn();
-        let rows = conn
+    ) -> Result<bool, PublishRefused> {
+        let mut conn = self.conn();
+        let storage =
+            |e: rusqlite::Error| PublishRefused::Storage(format!("failed to publish: {e}"));
+        let tx = conn.transaction().map_err(storage)?;
+        let claimed = tx
             .execute(
                 "INSERT OR IGNORE INTO scopes (scope, owner_token_hash, account_id) VALUES (?1, ?2, ?3)",
                 params![scope, owner_token_hash, account_id],
             )
-            .map_err(|e| format!("failed to claim scope: {}", e))?;
-        Ok(rows > 0)
+            .map_err(storage)?
+            > 0;
+        if !claimed {
+            let (owner, account): (String, String) = tx
+                .query_row(
+                    "SELECT owner_token_hash, account_id FROM scopes WHERE scope = ?1",
+                    params![scope],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )
+                .map_err(storage)?;
+            if owner != owner_token_hash {
+                return Err(PublishRefused::ScopeOwned { account });
+            }
+        }
+        let inserted = tx.execute(
+            "INSERT INTO packages (name, version, sha256, size_bytes, description, keywords, publisher, published_at, signature, manifest)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            params![
+                pkg.name,
+                pkg.version,
+                pkg.sha256,
+                pkg.size_bytes,
+                pkg.description,
+                pkg.keywords,
+                pkg.publisher,
+                pkg.published_at,
+                pkg.signature.as_ref().map(PackageSignature::to_json),
+                pkg.manifest,
+            ],
+        );
+        if let Err(e) = inserted {
+            return Err(if e.to_string().contains("UNIQUE constraint") {
+                PublishRefused::DuplicateVersion(format!(
+                    "version {} already exists for {}",
+                    pkg.version, pkg.name
+                ))
+            } else {
+                storage(e)
+            });
+        }
+        tx.commit().map_err(storage)?;
+        Ok(claimed)
     }
 
     /// The owner (token hash) and registry-assigned account id of a claimed
@@ -317,16 +398,26 @@ impl Database {
         .ok()
     }
 
-    /// Compensating delete for a publish whose blob commit failed after
-    /// the row landed. Returns true when a row was removed.
-    pub fn delete_package(&self, name: &str, version: &str) -> bool {
+    /// Withdraw a version whose blob could not be committed, and the scope claim the same publish
+    /// made (`claimed`) unless a package of the scope has been stored since: the compensation of
+    /// [`Self::publish`]. True when a row was removed.
+    pub fn withdraw(&self, name: &str, version: &str, scope: &str, claimed: bool) -> bool {
         let conn = self.conn();
-        conn.execute(
-            "DELETE FROM packages WHERE name = ?1 AND version = ?2",
-            params![name, version],
-        )
-        .map(|n| n > 0)
-        .unwrap_or(false)
+        let removed = conn
+            .execute(
+                "DELETE FROM packages WHERE name = ?1 AND version = ?2",
+                params![name, version],
+            )
+            .map(|n| n > 0)
+            .unwrap_or(false);
+        if claimed {
+            let _ = conn.execute(
+                "DELETE FROM scopes WHERE scope = ?1 AND NOT EXISTS (
+                   SELECT 1 FROM packages WHERE substr(name, 1, length(?1) + 1) = ?1 || '/')",
+                params![scope],
+            );
+        }
+        removed
     }
 
     pub fn yank_version(&self, name: &str, version: &str) -> bool {
@@ -401,16 +492,38 @@ impl Database {
         Ok(rows)
     }
 
-    pub fn revoke_token_by_prefix(&self, prefix: &str) -> bool {
+    /// Revoke the token whose id (the first 8 hex digits of its hash, as the listing shows) is
+    /// `id`: `Ok(true)` when exactly one live token had it, `Ok(false)` when none did. An id is
+    /// never a pattern.
+    pub fn revoke_token(&self, id: &str) -> Result<bool, RevokeRefused> {
+        if id.len() != TOKEN_ID_LEN || !id.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')) {
+            return Err(RevokeRefused::NotAnId);
+        }
         let conn = self.conn();
-        let pattern = format!("{}%", prefix);
-        let rows = conn
-            .execute(
-                "UPDATE tokens SET revoked = 1 WHERE token_hash LIKE ?1 AND revoked = 0",
-                params![pattern],
+        let storage =
+            |e: rusqlite::Error| RevokeRefused::Storage(format!("token revocation failed: {e}"));
+        let mut stmt = conn
+            .prepare(
+                "SELECT token_hash FROM tokens WHERE substr(token_hash, 1, 8) = ?1 AND revoked = 0",
             )
-            .unwrap_or(0);
-        rows > 0
+            .map_err(storage)?;
+        let hashes: Vec<String> = stmt
+            .query_map(params![id], |row| row.get(0))
+            .map_err(storage)?
+            .filter_map(|r| r.ok())
+            .collect();
+        match hashes.as_slice() {
+            [] => Ok(false),
+            [hash] => {
+                conn.execute(
+                    "UPDATE tokens SET revoked = 1 WHERE token_hash = ?1",
+                    params![hash],
+                )
+                .map_err(storage)?;
+                Ok(true)
+            }
+            _ => Err(RevokeRefused::Ambiguous),
+        }
     }
 }
 
@@ -428,10 +541,34 @@ mod tests {
             keywords: String::new(),
             publisher: "tester".to_string(),
             published_at: "2026-01-01".to_string(),
-            signature: String::new(),
-            key_id: String::new(),
+            signature: None,
             manifest: String::new(),
         }
+    }
+
+    #[test]
+    fn an_older_data_directory_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("old.db");
+        {
+            let conn = Connection::open(&path).unwrap();
+            conn.execute_batch("CREATE TABLE packages (id INTEGER PRIMARY KEY, name TEXT)")
+                .unwrap();
+        }
+        let error = Database::open(&path)
+            .err()
+            .expect("an older file is refused");
+        assert!(error.contains("--data-dir"), "{error}");
+
+        // An empty file opens and carries the schema version.
+        let fresh = dir.path().join("fresh.db");
+        drop(Database::open(&fresh).unwrap());
+        let version: i64 = Connection::open(&fresh)
+            .unwrap()
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, SCHEMA);
+        Database::open(&fresh).expect("a current file reopens");
     }
 
     // C8-08: committed data survives an unclean shutdown — the leaked
@@ -462,20 +599,89 @@ mod tests {
         assert_eq!(hits[0].version, "10.0.0", "10.0.0 must outrank 9.0.0");
     }
 
-    #[test]
-    fn search_orders_by_semver_including_prerelease() {
-        // SemVer: 2.0.0-beta.1 > 1.9.0 (major compare first; pre-release
-        // only breaks ties within the same version triple).
+    /// The version a search of `published` (all `pkg`) lists.
+    fn listed(published: &[&str]) -> String {
         let dir = tempfile::tempdir().unwrap();
         let db = Database::open(&dir.path().join("t.db")).unwrap();
-        db.insert_package(&pv("pkg", "2.0.0-beta.1")).unwrap();
-        db.insert_package(&pv("pkg", "1.9.0")).unwrap();
+        for version in published {
+            db.insert_package(&pv("pkg", version)).unwrap();
+        }
         let hits = db.search("pkg", 10, None).unwrap();
-        assert_eq!(hits[0].version, "2.0.0-beta.1");
+        assert_eq!(hits.len(), 1, "one row per package name: {published:?}");
+        hits[0].version.clone()
+    }
 
-        // ...but a pre-release never outranks its own release triple.
-        db.insert_package(&pv("pkg", "2.0.0")).unwrap();
-        let hits = db.search("pkg", 10, None).unwrap();
-        assert_eq!(hits[0].version, "2.0.0");
+    #[specforge_test_macros::test(
+        behavior = "search_registry",
+        verify = "a registry lists each package at the version add installs from it"
+    )]
+    fn search_lists_the_version_add_installs() {
+        assert_eq!(listed(&["9.0.0", "10.0.0"]), "10.0.0");
+        // The highest release, not a pre-release of a higher version.
+        assert_eq!(listed(&["2.0.0-beta.1", "1.9.0"]), "1.9.0");
+        assert_eq!(listed(&["2.0.0-beta.1", "1.9.0", "2.0.0"]), "2.0.0");
+        // A pre-release only when there is no release; identifiers compare as SemVer, not text.
+        assert_eq!(listed(&["2.0.0-beta.9", "2.0.0-beta.10"]), "2.0.0-beta.10");
+    }
+
+    #[specforge_test_macros::test(
+        behavior = "publish_to_registry",
+        verify = "a publish the registry refuses claims no scope"
+    )]
+    fn a_refused_publish_leaves_the_scope_unclaimed() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = Database::open(&dir.path().join("t.db")).unwrap();
+        // The lost race: the version is stored between the handler's check and the transaction.
+        db.insert_package(&pv("@fresh/x", "1.0.0")).unwrap();
+        let refused = db.publish(&pv("@fresh/x", "1.0.0"), "@fresh", "tok-a", "acct-a");
+        assert!(
+            matches!(refused, Err(PublishRefused::DuplicateVersion(_))),
+            "{refused:?}"
+        );
+        assert_eq!(db.get_scope_owner("@fresh"), None);
+
+        // A publish that stores claims; another token's is refused and the owner stays.
+        assert_eq!(
+            db.publish(&pv("@fresh/y", "1.0.0"), "@fresh", "tok-a", "acct-a"),
+            Ok(true)
+        );
+        assert_eq!(
+            db.publish(&pv("@fresh/z", "1.0.0"), "@fresh", "tok-a", "acct-a"),
+            Ok(false)
+        );
+        assert_eq!(
+            db.publish(&pv("@fresh/w", "1.0.0"), "@fresh", "tok-b", "acct-b"),
+            Err(PublishRefused::ScopeOwned {
+                account: "acct-a".to_string()
+            })
+        );
+        assert_eq!(
+            db.get_scope_owner("@fresh"),
+            Some(("tok-a".to_string(), "acct-a".to_string()))
+        );
+    }
+
+    #[test]
+    fn withdrawing_a_claiming_publish_releases_the_scope() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = Database::open(&dir.path().join("t.db")).unwrap();
+        assert_eq!(
+            db.publish(&pv("@fresh/y", "1.0.0"), "@fresh", "tok-a", "acct-a"),
+            Ok(true)
+        );
+        assert!(db.withdraw("@fresh/y", "1.0.0", "@fresh", true));
+        assert_eq!(db.get_scope_owner("@fresh"), None);
+
+        // A scope that holds another package keeps its claim.
+        assert_eq!(
+            db.publish(&pv("@fresh/y", "1.0.0"), "@fresh", "tok-a", "acct-a"),
+            Ok(true)
+        );
+        assert_eq!(
+            db.publish(&pv("@fresh/z", "1.0.0"), "@fresh", "tok-a", "acct-a"),
+            Ok(false)
+        );
+        db.withdraw("@fresh/y", "1.0.0", "@fresh", true);
+        assert!(db.get_scope_owner("@fresh").is_some());
     }
 }

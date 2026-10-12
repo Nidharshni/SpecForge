@@ -37,7 +37,6 @@ expression: "digest(&load(&runtime, &[\"@sdk/greet\"]))"
   "graph_inputs": {
     "absent_reference_targets": {},
     "bidirectional_pairs": [],
-    "body_parser_kinds": [],
     "derived_references": [],
     "field_coercions": {
       "greeting.style": "Text"
@@ -101,7 +100,6 @@ expression: "digest(&load(&runtime, &[\"@sdk/greet\"]))"
         "pattern": "^(warm|formal)$",
         "values": []
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "style",
       "message_template": "greeting '{id}' has unknown style",
@@ -114,7 +112,6 @@ expression: "digest(&load(&runtime, &[\"@sdk/greet\"]))"
       "check": "missing_required_field",
       "code": "E006",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "style",
       "message_template": "greeting '{id}' is missing required field 'style'",

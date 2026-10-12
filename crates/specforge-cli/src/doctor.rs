@@ -1,9 +1,9 @@
-use crate::outcome::{Exit, OutputArg, OutputFormat};
+use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use crate::terminal::{Terminal, out};
 use serde::Serialize;
 use specforge_common::codes;
 use specforge_ops::doctor::{
-    About, BinaryIssue, DoctorDocument, DoctorReport, FindingStatus, Part, diagnose,
+    About, BinaryIssue, DoctorDocument, DoctorReport, Finding, FindingStatus, Part, diagnose,
 };
 use specforge_ops::extension::Status;
 use specforge_ops::view::ProjectView;
@@ -15,8 +15,7 @@ use std::path::PathBuf;
 // `specforge doctor`'s command line.
 #[derive(clap::Args)]
 pub(crate) struct Args {
-    /// Path to the project root
-    #[arg(long, default_value = ".")]
+    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
     path: PathBuf,
 
     #[command(flatten)]
@@ -39,7 +38,10 @@ impl Args {
     /// binaries) plus registry credential health. Exit 1 on any
     /// error-level finding or credential failure.
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
-        let project = crate::pipeline::compile_project(&self.path);
+        let project = match crate::project::compile(&self.path) {
+            Ok(project) => project,
+            Err(error) => return Refusal::of(self.output.format).report(terminal, &error),
+        };
         let report = diagnose(&ProjectView::of(&project));
         let credentials = user_credential_health();
 
@@ -73,13 +75,7 @@ fn render_human(report: &DoctorReport, credentials: &CredentialHealth) -> String
     if !config.is_empty() {
         line!("Configuration:");
         for finding in config {
-            let tag = match finding.status {
-                FindingStatus::Error => "ERROR",
-                FindingStatus::Warn => "WARN",
-                FindingStatus::Ok => "ok",
-            };
-            line!("  [{tag}] [{}] {}", finding.code, finding.check);
-            line!("    fix: {}", finding.remediation);
+            finding_lines(&mut out, finding);
         }
         line!();
     }
@@ -89,8 +85,7 @@ fn render_human(report: &DoctorReport, credentials: &CredentialHealth) -> String
     if !lock.is_empty() {
         line!("Lock file:");
         for finding in lock {
-            line!("  [ERROR] [{}] {}", finding.code, finding.check);
-            line!("    fix: {}", finding.remediation);
+            finding_lines(&mut out, finding);
         }
         line!();
     }
@@ -141,20 +136,16 @@ fn render_human(report: &DoctorReport, credentials: &CredentialHealth) -> String
         line!("  none");
     }
     for conflict in conflicts {
-        line!("  [{}] {}", conflict.code, conflict.check);
-        line!("    fix: {}", conflict.remediation);
+        finding_lines(&mut out, conflict);
     }
 
     line!();
     line!("Shadowed constructs:");
-    let mut shadowed = report.about(Part::Shadowing).peekable();
+    let mut shadowed = report.shadowed().peekable();
     if shadowed.peek().is_none() {
         line!("  none");
     }
-    for shadow in shadowed {
-        let About::Shadowing { keyword } = &shadow.about else {
-            continue;
-        };
+    for (keyword, shadow) in shadowed {
         line!("  '{keyword}' [{}] {}", shadow.code, shadow.check);
     }
 
@@ -165,8 +156,7 @@ fn render_human(report: &DoctorReport, credentials: &CredentialHealth) -> String
         line!("  all satisfied");
     }
     for problem in peers {
-        line!("  [{}] {}", problem.code, problem.check);
-        line!("    fix: {}", problem.remediation);
+        finding_lines(&mut out, problem);
     }
 
     line!();
@@ -205,15 +195,36 @@ fn render_human(report: &DoctorReport, credentials: &CredentialHealth) -> String
     }
 
     line!();
-    line!("Extension load failures:");
+    line!("Extension load:");
     // A missing or changed binary is listed above, once, with its remedy.
-    let mut failures = report.about(Part::Load).peekable();
-    if failures.peek().is_none() {
+    let mut loads = report
+        .about(Part::Load)
+        .chain(report.about(Part::StructuralOnly))
+        .peekable();
+    if loads.peek().is_none() {
         line!("  none");
     }
-    for failure in failures {
-        line!("  [{}] {}", failure.code, failure.check);
-        line!("    fix: {}", failure.remediation);
+    for finding in loads {
+        finding_lines(&mut out, finding);
+    }
+
+    // What the registry build and the providers say about the setup.
+    for (title, part) in [
+        ("Providers", Part::Providers),
+        ("Declarations", Part::Declaration),
+        ("Registries", Part::Registry),
+        ("Rules", Part::Rule),
+        ("Surfaces", Part::Surface),
+    ] {
+        let mut findings = report.about(part).peekable();
+        if findings.peek().is_none() {
+            continue;
+        }
+        line!();
+        line!("{title}:");
+        for finding in findings {
+            finding_lines(&mut out, finding);
+        }
     }
     if !report.z3_available {
         line!();
@@ -255,53 +266,62 @@ fn render_human(report: &DoctorReport, credentials: &CredentialHealth) -> String
     out
 }
 
+/// A finding as two lines: `  [TAG] [CODE] check`, then its remedy.
+fn finding_lines(out: &mut String, finding: &Finding) {
+    let tag = match finding.status {
+        FindingStatus::Error => "ERROR",
+        FindingStatus::Warn => "WARN",
+        FindingStatus::Info => "INFO",
+    };
+    out.push_str(&format!("  [{tag}] [{}] {}\n", finding.code, finding.check));
+    out.push_str(&format!("    fix: {}\n", finding.remediation));
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use specforge_common::{Diagnostic, Severity};
     use specforge_test_macros::test as specforge_test;
 
-    fn conflict(
-        code: &str,
-        severity: Severity,
-        message: &str,
-        suggestion: Option<&str>,
-    ) -> Diagnostic {
-        let mut diagnostic = Diagnostic::untyped(code, severity, message);
-        diagnostic.suggestion = suggestion.map(String::from);
-        diagnostic
+    /// An extension of `name` declaring the kind `feature` and the edge type
+    /// `uses`.
+    fn declaring_feature_and_uses(name: &str) -> specforge_protocol_types::ExtensionDeclaration {
+        specforge_protocol_types::ExtensionDeclaration {
+            handshake: specforge_protocol_types::HandshakeResponse {
+                name: name.into(),
+                version: "1.0.0".into(),
+                ..Default::default()
+            },
+            entities: vec![specforge_protocol_types::EntityKindDescriptor {
+                name: "feature".into(),
+                ..Default::default()
+            }],
+            edges: vec![specforge_protocol_types::EdgeTypeDescriptor {
+                label: "uses".into(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        }
     }
 
     // No shipped builtin set produces an extension conflict (all nine
-    // together compile clean), so the conflicts come in at the shared
-    // report's seam: the diagnostics a compile hands `diagnose`.
+    // together compile clean), so the conflicts come in at the registry
+    // build's seam: two declarations that claim one kind and one edge type.
     #[specforge_test(
         behavior = "run_doctor_check",
         verify = "doctor reports conflicts with resolution suggestions"
     )]
     fn doctor_reports_conflicts_with_a_resolution_suggestion() {
         let dir = tempfile::TempDir::new().unwrap();
-        let diagnostics = [
-            conflict(
-                "E026",
-                Severity::Error,
-                "entity kind 'feature' registered by 'acme' conflicts with '@specforge/product' (first registration wins)",
-                None,
-            ),
-            conflict(
-                "W018",
-                Severity::Warning,
-                "edge type 'uses' declared by both 'acme' and '@specforge/software'",
-                Some("rename one of the edge types"),
-            ),
-            conflict("W001", Severity::Warning, "an unrelated warning", None),
-        ];
-
         let graph = specforge_graph::Graph::new();
-        let env = specforge_project::Environment::with_registries(Default::default(), None);
+        let env = specforge_project::Environment::with_registries(
+            specforge_registry::build_registries(vec![
+                declaring_feature_and_uses("acme"),
+                declaring_feature_and_uses("@specforge/product"),
+            ]),
+            None,
+        );
         let recorded = specforge_project::coverage::RecordedCoverage::over(&graph, &env);
-        let view =
-            ProjectView::new(&graph, &env, Some(dir.path()), &recorded).reporting(&diagnostics);
+        let view = ProjectView::new(&graph, &env, Some(dir.path()), &recorded);
         let report = specforge_ops::doctor::diagnose_with(&view, true);
 
         let conflicts: Vec<_> = report.about(Part::Conflict).collect();
@@ -316,7 +336,13 @@ mod tests {
             conflicts[0]
         );
         // The diagnostic's own suggestion wins.
-        assert_eq!(conflicts[1].remediation, "rename one of the edge types");
+        assert!(
+            conflicts[1]
+                .remediation
+                .starts_with("Two extensions register an edge type"),
+            "{:?}",
+            conflicts[1]
+        );
         assert!(!report.ok(), "an error-level conflict fails doctor");
 
         let none = CredentialHealth {
@@ -326,14 +352,17 @@ mod tests {
         };
         let human = render_human(&report, &none);
         let section = &human[human.find("Conflicts:").expect("conflicts section")..];
-        assert!(section.contains("[E026] entity kind 'feature'"), "{human}");
+        assert!(
+            section.contains("[ERROR] [E026] entity kind 'feature'"),
+            "{human}"
+        );
         assert!(
             section.contains("fix: Two extensions register the same entity kind keyword"),
             "{human}"
         );
-        assert!(section.contains("[W018]"), "{human}");
+        assert!(section.contains("[WARN] [W018]"), "{human}");
         assert!(
-            section.contains("fix: rename one of the edge types"),
+            section.contains("fix: Two extensions register an edge type"),
             "{human}"
         );
         assert!(human.contains("1 issue(s) found."), "{human}");

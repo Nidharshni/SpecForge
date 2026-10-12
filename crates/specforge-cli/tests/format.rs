@@ -132,13 +132,19 @@ fn format_prints_changed_file_names() {
         "bad.spec",
         "behavior foo \"Foo\" {\n      contract \"stuff\"\n}\n",
     );
+    write_spec(
+        root,
+        "good.spec",
+        "behavior bar \"Bar\" {\n  contract \"stuff\"\n}\n",
+    );
 
     Command::cargo_bin("specforge")
         .unwrap()
         .args(["format", "--path", root.to_str().unwrap()])
         .assert()
         .success()
-        .stdout(predicate::str::contains("bad.spec"));
+        .stdout(predicate::str::contains("bad.spec"))
+        .stdout(predicate::str::contains("good.spec").not());
 }
 
 // --- Slice 9: check_formatting ---
@@ -759,13 +765,8 @@ fn json_prints_the_format_document_and_the_files_written() {
 
     assert_eq!(code, Some(0), "{document}");
     assert_eq!(stderr, "", "JSON output writes nothing on stderr");
-    // Shown under the project root `--path` resolves to.
-    let changed = root
-        .canonicalize()
-        .unwrap()
-        .join("spec/bad.spec")
-        .display()
-        .to_string();
+    // Shown under the project root `--path` names, as it spells it.
+    let changed = root.join("spec/bad.spec").display().to_string();
     assert_eq!(document["changed_files"], serde_json::json!([changed]));
     assert_eq!(document["total_checked"], 2);
     assert_eq!(document["ok"], true);
@@ -852,7 +853,7 @@ fn json_names_a_file_that_cannot_be_read_in_the_document() {
 
     assert_eq!(code, Some(1), "{document}");
     assert_eq!(stderr, "");
-    let shown = locked.canonicalize().unwrap().display().to_string();
+    let shown = locked.display().to_string();
     assert_eq!(document["failed_files"], serde_json::json!([shown]));
     assert_eq!(document["failures"][0]["operation"], "read");
     assert_eq!(document["failures"][0]["code"], "permission_denied");
@@ -902,4 +903,47 @@ fn stdin_refuses_json_with_the_error_document() {
     assert_eq!(String::from_utf8_lossy(&output.stderr), "");
     let document: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(document["code"], "invalid_input", "{document}");
+}
+
+#[specforge_test(
+    behavior = "format_spec_files",
+    verify = "summary count reflects actual changes"
+)]
+fn format_prints_how_many_files_it_formatted_and_changed() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    setup_project(root);
+    write_spec(root, "a.spec", "behavior a \"A\" {\n  contract \"x\"\n}\n");
+    write_spec(
+        root,
+        "b.spec",
+        "behavior b \"B\" {\n      contract   \"y\"\n}\n",
+    );
+    write_spec(root, "c.spec", "behavior c \"C\" {\n  contract \"z\"\n}\n");
+    let run = || {
+        Command::cargo_bin("specforge")
+            .unwrap()
+            .args(["format", "--path", root.to_str().unwrap()])
+            .output()
+            .unwrap()
+    };
+
+    let first = run();
+    let stdout = String::from_utf8(first.stdout).unwrap();
+    assert!(stdout.contains("b.spec"), "{stdout}");
+    assert!(
+        !stdout.contains("a.spec") && !stdout.contains("c.spec"),
+        "{stdout}"
+    );
+    let stderr = String::from_utf8(first.stderr).unwrap();
+    assert!(
+        stderr.contains("Formatted 3 file(s), 1 changed"),
+        "{stderr}"
+    );
+
+    let second = String::from_utf8(run().stderr).unwrap();
+    assert!(
+        second.contains("Formatted 3 file(s), 0 changed"),
+        "{second}"
+    );
 }

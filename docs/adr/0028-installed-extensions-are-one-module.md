@@ -139,8 +139,23 @@ module: the listing and remove must not pay for it); one row per entry (the list
 extensions by name, and remove's ambiguity rule needs the entries of one name together).
 
 Consequences: `specforge doctor` and `specforge.doctor` list every extension the listing lists, by
-name, with `status`; their load findings are in extension-name order. A `.wasm` file entry that did
+name, with `status`; their load findings are in the environment's order, entry by entry (amended by ADR 0054). A `.wasm` file entry that did
 not load has no version. A builtin is `builtin` even when a stray lock entry names it, and an
 extension a named entry loads is never `file:` because a refused `.wasm` file entry declares the same
 name. `specforge remove` and `specforge.remove_extension` remove an entry the project cannot load,
 by its name.
+
+## Amendment (2026-10-12): the change's last step
+
+**Amended by ADR 0059:** `commit_with(config, last)` runs `last` after the lock: the `specforge.json` edit and
+the user's publisher-key pins. A failure there puts every file back; `config` is changed when its bytes are.
+
+## Amendment (round 7): one entry rule; the lock plan enables required builtins
+
+- **D3:** which extension each `specforge.json` entry names is decided once, `Installed::resolve` (a
+  builtin's name before a lock entry; `.wasm` file entries after every named entry; a file declaring a
+  name already loaded refused). The extension load, the watched module paths (`Installed::modules`) and
+  the lock plan's project peer set read it (ADR 0041, amendment round 7).
+- **D7**, first bullet: enabling the builtins an extension requires is the lock plan's (ADR 0041 B3),
+  for a builtin, a local file and a registry package alike, in `add` and `init`; `candidate::
+  required_builtins` is gone. A builtin that does not load still refuses the operation (E028).

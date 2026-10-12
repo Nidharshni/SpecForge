@@ -159,6 +159,10 @@ behavior compute_traceability_chain "Compute Traceability Chain" {
     in an extension manifest that is NOT instantiated between the two
     entities in the current graph. This distinguishes from broken
     references (E003), which are caught during resolution.
+    An expected link already declared from the other side, an edge from an
+    entity of the target kind through one of the field's inverse fields
+    (the field its inverse_of names on the target kind, and every field of
+    the target kind naming it inverse_of), is not missing.
     The JSON trace output MUST carry the Graph Protocol schema_version.
     Tracing an entity the graph does not have MUST be E003, naming the
     closest entity when one is near.
@@ -166,6 +170,7 @@ behavior compute_traceability_chain "Compute Traceability Chain" {
   verify unit "trace from entity shows upstream and downstream connections"
   verify unit "trace shows full chain depth"
   verify unit "missing link in chain is flagged"
+  verify unit "an expected link declared from the other side, through an inverse field of the target kind, is not missing"
   verify unit "trace output includes schema version"
   verify unit "tracing an entity the graph lacks is E003 naming the closest entity"
   verify contract "Compute Traceability Chain: traceability chain computation holds — validation_complete_fired, full_chain_traversed, missing_links_flagged, trace_chain_computed_emitted"
@@ -453,6 +458,37 @@ behavior name_enumerated_options_once "Name Enumerated Options Once" {
   verify integration "the analysis passes the CLI accepts are the project's"
 }
 
+behavior explain_diagnostic_code "Explain a Diagnostic Code" {
+  features   [diagnostic_reporting]
+  invariants [diagnostic_determinism, zero_domain_knowledge_core]
+  category   query
+  types      [McpExplainResult]
+  requires {
+    code_given "The caller names a diagnostic code"
+  }
+  ensures {
+    entry_printed   "The catalogued entry, or the retired code and its replacement, is printed with its docs link"
+    one_document    "Under --format json the CLI prints the document specforge.explain answers"
+    unknown_refused "A code the catalog neither has nor retired is refused with unknown_code"
+  }
+  contract   """
+    specforge explain <code> and specforge.explain MUST be one operation
+    (specforge_ops::explain) over the diagnostic catalog: the code is read
+    in any case with surrounding whitespace ignored; a catalogued code
+    answers its code, title, owner, level, explanation and docs link; a
+    retired code answers retired true and the entry of the code that
+    replaced it, if any. The CLI MUST print the entry as text, its last
+    line the docs link, and under --format json the document
+    specforge.explain answers (McpExplainResult), nothing else. A code the
+    catalog neither has nor retired MUST be refused with unknown_code
+    (invalid input) and the code forms as its suggestion, on both surfaces.
+  """
+  verify unit "specforge explain prints the catalogued entry with its docs link, and a retired code with the entry that replaced it"
+  verify integration "specforge explain --format json prints the document specforge.explain answers"
+  verify unit "specforge explain reads the code as specforge.explain does: any case, surrounding whitespace ignored"
+  verify unit "an uncatalogued code is refused with unknown_code on both surfaces"
+}
+
 behavior print_diagnostics_structured "Print Diagnostics Structured" {
   features   [diagnostic_reporting]
   invariants [multi_error_collection, diagnostic_determinism, zero_domain_knowledge_core]
@@ -547,8 +583,9 @@ behavior report_command_outcome "Report a Command's Outcome" {
     as error[CODE]: message, then "  hint: " and the suggestion when there
     is one, then "  wrote: " and each file the failed operation left
     written; under --format json it MUST instead be the
-    error document {error, code, suggestion} (and files_written when files
-    were left written) on stdout, with nothing on stderr. A command run
+    error document {error, code}, with suggestion when the refusal has one
+    and files_written when files were left written, on stdout, with
+    nothing on stderr. A command run
     outside any project where it needs one MUST refuse with no_project.
     Every core command whose output has a human and a JSON form MUST take
     --format human|json (human by default; trace's is json); no core
@@ -819,15 +856,16 @@ behavior present_diagnostics_as_json "Present Diagnostics as JSON" {
     diagnostics_collected "the diagnostics to present have been collected"
   }
   ensures {
-    one_shape_everywhere "specforge check --format json, MCP validate, the specforge://diagnostics resource and tool _meta present diagnostics in one shape"
+    one_shape_everywhere "specforge check --format json, MCP validate, the specforge://diagnostics resource, tool _meta, the diagnosticsChanged notification and McpError present diagnostics in one shape"
     location_both_ways   "each entry carries its span nested under span and the span's start flat as file, line and column"
     data_only_when_typed "an entry carries data, the diagnostic's typed payload, only when the diagnostic has one"
   }
   contract   """
     Wherever SpecForge prints diagnostics as JSON (specforge check
     --format json, specforge collect and specforge watch --format json,
-    the MCP specforge.validate tool, the specforge://diagnostics resource and the
-    diagnostics in a tool result's _meta), it MUST present them in one
+    the MCP specforge.validate tool, the specforge://diagnostics resource, the
+    diagnostics in a tool result's _meta, the specforge/diagnosticsChanged
+    notification and an McpError's diagnostic), it MUST present them in one
     shape: an array of
     entries with code, severity, message and suggestion (null when there
     is none), the span nested under span (file, start_line, start_col,

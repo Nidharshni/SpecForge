@@ -27,7 +27,6 @@ crate-type = ["cdylib"]
 
 [dependencies]
 specforge-extension-sdk = "0.1"
-wit-bindgen = "0.30"
 serde_json = "1.0"
 ```
 
@@ -86,7 +85,8 @@ crate compiles.
   from that one call, and declaring one without its handler panics when the
   extension is built.
 - **Runtime-free testing**: build your contributions in a unit test and assert
-  on the describe output (the `testing` module).
+  on the describe output (the `testing` module, feature `testing`; enable it in
+  `[dev-dependencies]` only).
 
 ## Not modeled yet?
 

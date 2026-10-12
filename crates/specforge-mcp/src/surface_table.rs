@@ -23,9 +23,10 @@ use specforge_common::{Code, Diagnostic, codes};
 use specforge_ops::command::{ExtensionCommand, ExtensionCommands};
 use specforge_registry::RegistryBuild;
 
+use crate::lifecycle::Revision;
+use crate::registry::{Listed, ToolDescriptor};
 use crate::resources::ResourceSpec;
 use crate::tool::{Category, ToolGroup, ToolSpec, read_only_annotations};
-use crate::types::{McpResourceDescriptor, McpToolDescriptor};
 
 /// The code reporting an extension contribution MCP does not serve under
 /// its name.
@@ -100,18 +101,20 @@ pub struct ResourceEntry {
 
 impl ToolEntry {
     /// The tool as `tools/list` describes it.
-    pub fn descriptor(&self) -> McpToolDescriptor {
+    pub fn descriptor(&self, revision: Revision) -> ToolDescriptor<'_> {
         let input_schema = match &self.kind {
             ToolKind::McpTool { input_schema, .. } => input_schema.clone(),
             ToolKind::Command(command) => command.input_schema(),
         };
-        McpToolDescriptor {
+        ToolDescriptor {
             name: self.name.clone(),
             description: self.description.clone(),
             input_schema,
-            output_schema: self.output_schema().cloned(),
-            category: Some(Category::from(self.group).as_str().into()),
-            source: Some(self.extension.clone()),
+            output_schema: self
+                .output_schema()
+                .filter(|_| revision.sends_structured_content()),
+            category: Category::from(self.group),
+            source: self.extension.clone(),
             annotations: read_only_annotations(),
         }
     }
@@ -129,13 +132,13 @@ impl ToolEntry {
 impl ResourceEntry {
     /// The resource as `resources/list` (or `resources/templates/list`)
     /// describes it.
-    pub fn descriptor(&self) -> McpResourceDescriptor {
-        McpResourceDescriptor {
-            uri: self.uri_template.clone(),
-            name: self.name.clone(),
-            description: self.description.clone(),
-            mime_type: Some(self.mime_type.clone()),
-        }
+    pub fn descriptor(&self) -> Listed {
+        Listed::of(
+            &self.uri_template,
+            &self.name,
+            self.description.as_deref(),
+            &self.mime_type,
+        )
     }
 
     /// Whether its template names `uri`, by the one rule core resources

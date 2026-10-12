@@ -1,14 +1,14 @@
-use specforge_common::{Diagnostic, ProjectConfig};
+use specforge_common::{Diagnostic, ProjectConfig, ProjectRoot};
 use specforge_graph::Graph;
 use specforge_project::{ProjectSession, RuntimeSource, SharedRuntime, Update, UpdateKind};
 use specforge_registry::RegistryBuild;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use crate::events::{Discard, EventSink, McpEvent};
 use crate::lifecycle::Revision;
 use crate::subscriptions::{Changes, Subscriptions};
 use crate::surface_table::ExtensionSurfaceTable;
-use crate::types::McpEvent;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ServerPhase {
@@ -18,13 +18,13 @@ pub enum ServerPhase {
 }
 
 pub struct McpState {
-    pub phase: ServerPhase,
+    pub(crate) phase: ServerPhase,
     /// The protocol revision `initialize` negotiated (the latest one the
     /// server speaks until then).
-    pub protocol_version: &'static str,
+    pub(crate) protocol_version: &'static str,
     /// Whether a project (or the empty default surface) is being served:
     /// set by `initialize`, or by the first stateless request.
-    pub served: bool,
+    pub(crate) served: bool,
     /// The served project: its root, environment (config, spec root,
     /// registries, rules, manifests, surfaces), graph, diagnostics and
     /// extension runtime: always opened from disk (ADR 0025). Detached
@@ -40,8 +40,11 @@ pub struct McpState {
     surfaces: ExtensionSurfaceTable,
     /// Project compiled when the client's `initialize` names no `projectRoot`
     /// (the `specforge mcp <path>` argument).
-    pub default_project_root: Option<PathBuf>,
-    pub events: Vec<McpEvent>,
+    pub(crate) default_project_root: Option<PathBuf>,
+    /// Where the server's events go (ADR 0057): [`Discard`] unless the host
+    /// gave another sink ([`crate::McpServer::with_events`]). Every module
+    /// records through it.
+    pub(crate) events: Box<dyn EventSink>,
     /// Who hears about what (ADR 0024 D6). Read through
     /// [`Self::subscriptions`]; changed only by the subscription requests,
     /// an update of the served project, cancellation, disconnect and
@@ -50,17 +53,11 @@ pub struct McpState {
     /// The Wasm runtime extensions run in, when the host supplies one; by
     /// default the served project's session builds the project's runtime
     /// (`specforge_component::ComponentRuntime::with_user_cache`) each time it loads.
-    pub extension_runtime: Option<SharedRuntime>,
-}
-
-impl Default for McpState {
-    fn default() -> Self {
-        Self::new()
-    }
+    pub(crate) extension_runtime: Option<SharedRuntime>,
 }
 
 impl McpState {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             phase: ServerPhase::Uninitialized,
             protocol_version: crate::lifecycle::LATEST_PROTOCOL_VERSION,
@@ -70,7 +67,7 @@ impl McpState {
             last_update: None,
             surfaces: ExtensionSurfaceTable::empty(),
             default_project_root: None,
-            events: Vec::new(),
+            events: Box::new(Discard),
             subscriptions: Subscriptions::new(),
             extension_runtime: None,
         }
@@ -138,6 +135,11 @@ impl McpState {
         &self.surfaces
     }
 
+    /// The protocol revision `initialize` negotiated (the latest the server speaks until then).
+    pub fn protocol_version(&self) -> &'static str {
+        self.protocol_version
+    }
+
     /// The revision a request without `_meta` is served under: the one
     /// `initialize` negotiated.
     pub fn negotiated(&self) -> Revision {
@@ -156,12 +158,6 @@ impl McpState {
             && self.protocol_version == crate::lifecycle::BATCHING_PROTOCOL_VERSION
     }
 
-    /// Record an event. Object payloads without a `timestamp` get one (RFC
-    /// 3339, UTC) — except `mcp_initialized`, whose spec payload has none.
-    pub fn push_event(&mut self, name: impl Into<String>, params: serde_json::Value) {
-        self.events.push(McpEvent::new(name, params));
-    }
-
     /// Serve the project at `root` as it is on disk now, its config and
     /// extensions included: the served session reloads its environment
     /// and rebuilds from the sources (a fresh compile), or a session is
@@ -173,12 +169,12 @@ impl McpState {
     /// Subscribed clients learn what changed. The one place the served
     /// project is replaced (initialize, adopting a call's path, the
     /// directory `init` created). Only a project (a directory holding
-    /// `specforge.json` or `specforge.spec`) is ever served.
-    pub fn serve(&mut self, root: &Path) {
+    /// `specforge.json`) is ever served.
+    pub(crate) fn serve(&mut self, root: &ProjectRoot) {
         debug_assert!(
-            specforge_common::is_project_root(root),
-            "only a project is served: {} holds no specforge.json or specforge.spec",
-            root.display()
+            root.is_configured(),
+            "only a project is served: {} holds no specforge.json",
+            root.dir().display()
         );
         let before = self.heard_diagnostics();
         // The served session reloads when it is the project on disk at
@@ -186,7 +182,7 @@ impl McpState {
         let canonical = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
         let reloads = self
             .project_root()
-            .is_some_and(|served| canonical(served) == canonical(root));
+            .is_some_and(|served| canonical(served) == root.canonical());
         let update = if reloads {
             self.session.reload_environment()
         } else {
@@ -201,7 +197,7 @@ impl McpState {
     /// host's runtime when the server has one, else in the project's own,
     /// built for each environment load (ADR 0030 D3): how the served project
     /// and another project a call names are opened.
-    pub(crate) fn open(&self, root: &Path) -> ProjectSession {
+    pub(crate) fn open(&self, root: &ProjectRoot) -> ProjectSession {
         let source = match &self.extension_runtime {
             Some(runtime) => RuntimeSource::Fixed(Some(Arc::clone(runtime))),
             None => RuntimeSource::project(),
@@ -216,7 +212,7 @@ impl McpState {
     /// changed `specforge.json`, `specforge.lock` or extension module, a
     /// re-check for a changed check input. Subscribed clients learn what
     /// changed. `None` when nothing did.
-    pub fn ensure_fresh(&mut self) -> Option<&Update> {
+    pub(crate) fn ensure_fresh(&mut self) -> Option<&Update> {
         let before = self.heard_diagnostics();
         let update = self.session.ensure_fresh()?;
         self.applied(update, before);
@@ -248,13 +244,10 @@ impl McpState {
             );
             let stats = self.surfaces.stats();
             if stats.declared > 0 {
-                self.push_event(
-                    "commands_auto_promoted",
-                    serde_json::json!({
-                        "promotedCount": stats.promoted,
-                        "conflictCount": stats.conflicts,
-                    }),
-                );
+                self.events.record(McpEvent::CommandsAutoPromoted {
+                    promoted_count: stats.promoted,
+                    conflict_count: stats.conflicts,
+                });
             }
         }
         // Subscribers hear what changed (ADR 0024 D6), here because every
@@ -262,16 +255,16 @@ impl McpState {
         let after = before.as_ref().map(|_| self.diagnostics());
         let diagnostics = before.as_deref().zip(after.as_deref());
         self.subscriptions
-            .updated(&Changes::of(&update, diagnostics), &mut self.events);
+            .updated(&Changes::of(&update, diagnostics), &mut *self.events);
         self.last_update = Some(update);
     }
 
     /// Every subscription and stream ends, each recorded; the session
     /// detaches. How many subscriptions ended.
-    pub fn shutdown(&mut self) -> usize {
+    pub(crate) fn shutdown(&mut self) -> usize {
         self.phase = ServerPhase::ShuttingDown;
         // The queue stays: the host sends it after the shutdown response.
-        let released = self.subscriptions.disconnect(&mut self.events);
+        let released = self.subscriptions.disconnect(&mut *self.events);
         self.session = ProjectSession::detached();
         self.generation += 1;
         self.surfaces = ExtensionSurfaceTable::empty();
@@ -287,5 +280,48 @@ pub(crate) fn assert_converged(update: &Update, project: &str) {
             false,
             "an update of {project} diverged from a cold rebuild: {divergence}"
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use crate::McpServer;
+    use crate::events::testing::EventLog;
+
+    /// The replies to `initialize`, `ping` and a listing.
+    fn replies(server: &mut McpServer) -> Vec<String> {
+        [
+            json!({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}),
+            json!({"jsonrpc": "2.0", "id": 2, "method": "ping"}),
+            json!({"jsonrpc": "2.0", "id": 3, "method": "prompts/list"}),
+        ]
+        .iter()
+        .map(|request| {
+            server
+                .handle_message(&request.to_string())
+                .expect("a request has a reply")
+        })
+        .collect()
+    }
+
+    #[test]
+    fn a_server_records_into_discard_unless_given_a_sink() {
+        let log = EventLog::new();
+        let mut logging = McpServer::new().with_events(log.clone());
+        let mut call = |method: &str| {
+            let request = json!({"jsonrpc": "2.0", "id": 1, "method": method, "params": {}});
+            logging.handle_message(&request.to_string());
+        };
+        call("initialize");
+        assert_eq!(log.names(), ["mcp_initialized"]);
+        call("prompts/list");
+        assert_eq!(log.names(), ["mcp_initialized", "mcp_discovery_invoked"]);
+
+        // A server given no sink answers the same, and keeps nothing.
+        let mut discarding = McpServer::new();
+        let mut logged = McpServer::new().with_events(EventLog::new());
+        assert_eq!(replies(&mut discarding), replies(&mut logged));
     }
 }

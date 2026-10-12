@@ -36,7 +36,10 @@ fn load(runtime: &std::sync::Arc<ComponentRuntime>, extensions: &[&str]) -> Envi
     if extensions.contains(&"@sdk/greet") {
         specforge_installed::testing::install_module(dir.path(), "@sdk/greet", &greet());
     }
-    Environment::load(dir.path(), Some(runtime.clone()))
+    Environment::load(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        Some(runtime.clone()),
+    )
 }
 
 fn diagnostics<'a>(diagnostics: impl IntoIterator<Item = &'a Diagnostic>) -> Value {
@@ -120,7 +123,6 @@ fn graph_inputs(env: &Environment) -> Value {
         })
         .collect();
     json!({
-        "body_parser_kinds": sorted(config.body_parser_kinds.iter().map(|k| json!(k)).collect()),
         "single_reference_fields": sorted(
             config.single_reference_fields.iter().map(|(k, f)| json!([k, f])).collect()
         ),
@@ -193,18 +195,25 @@ fn digest(env: &Environment) -> Value {
     let edges: BTreeMap<&str, Value> = r
         .edges()
         .iter()
-        .map(|(label, e)| {
+        .map(|e| {
+            let declared = e.declared().cloned().unwrap_or_default();
             (
-                label.as_str(),
+                e.label(),
                 json!({
-                    "label": e.declared.label,
-                    "description": e.declared.description,
-                    "source_kind": e.declared.source_kind,
-                    "target_kind": e.declared.target_kind,
-                    "source_extension": e.source_extension,
-                    "edge_style": e.declared.edge_style,
-                    "edge_color": e.declared.edge_color,
-                    "edge_arrowhead": e.declared.edge_arrowhead,
+                    "label": e.label(),
+                    "description": declared.description,
+                    "source_kind": declared.source_kind,
+                    "target_kind": declared.target_kind,
+                    "source_extension": e.source_extension(),
+                    "sources": e.sources(),
+                    "targets": e.targets(),
+                    "writers": e.writers().iter().map(|w| match &w.target_kind {
+                        Some(target) => format!("{} {}.{} -> {target}", w.extension, w.kind, w.field),
+                        None => format!("{} {}.{}", w.extension, w.kind, w.field),
+                    }).collect::<Vec<_>>(),
+                    "edge_style": declared.edge_style,
+                    "edge_color": declared.edge_color,
+                    "edge_arrowhead": declared.edge_arrowhead,
                 }),
             )
         })

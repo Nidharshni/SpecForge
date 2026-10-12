@@ -38,6 +38,9 @@ order that nothing outside it read.
   W113 and W027; `resolve_import` names one import's file for go-to-definition. File scopes, re-exports
   and the import order stay inside it, where W027 and W113 need them. Path aliases are removed:
   `specforge.json` never could set one, so `@scope/name` is always an extension import (I004).
+  *(ADR 0055: `resolve_imports(parsed, unreadable)` over the sources' keys, with no spec root and no
+  `exists`; `resolve_import` is `import_target(sources, importing, path)`. Nothing the resolver does reads
+  the disk.)*
 - A session reports graph-build diagnostics in build order, the order `specforge check` reports them.
 - Rename's text edits (`RenameEdit`) live with the rename operation in `specforge-ops`.
 
@@ -64,8 +67,38 @@ build, computed for one caller (`Environment::graph_config`); two (`field_coerci
   depends on the registry). `specforge-project`'s `field_types` module is gone, and so are the four
   fields.
 - **Deterministic.** Inverse pairs are written (lesser, greater) and sorted; the graph reads a pair
-  symmetrically, so no graph changes.
+  symmetrically, so no graph changes. *(ADR 0060: a pair is a reference field and one of its inverse
+  fields, fields of its target kind, `FieldRegistry::inverse_fields`.)*
 
 Rejected: the registry build taking the provider schemes (`graph_config(schemes)`), which ADR 0031 D7
 rejected for `build_registries`; the graph crate reading the registries, which would make every graph
 test build one.
+
+## Migrate's check is the delta; the verification keeps its positions (amendment, architecture round 7, plan 15)
+
+`specforge migrate` judged "the migration kept the graph" with a comparison of its own
+(`specforge_migrate::compare_graphs`): entity IDs, edges and field values. It missed a changed kind, title or method
+set, which the delta already compared, so such a migration was kept and recorded, against
+`migration_semantic_preservation`. It was latent only because the one core transform is the format header and a
+hook's sandbox has no directory.
+
+- **Migrate reads the delta.** The post-migration check is `compute_graph_delta(pre, post)`: the run keeps the
+  migration exactly when it is empty (`migrate::Outcome::graph_delta`), and W054 is rendered from it
+  (`specforge_migrate::structural_differences`), one warning per entity removed, added or changed and per edge
+  removed or added. `compare_graphs` is gone.
+- **The verification's comparison stays its own.** `GraphBuild::verify` compares the incremental graph with a cold
+  build including positions (each node's file, line and column, and the spans in its expressions and methods): an
+  incremental build that misplaces a node is wrong even when nothing changed, and the delta ignores positions by
+  contract. It is the delta's comparison plus positions; a node that only moved is no delta and a divergence.
+- **Migrate reads each file once.** Its backup, its diff and the text an automatic rollback restores are one read.
+  The run still reads after the pre-migration compile, on purpose: migrating the compile's texts instead would
+  overwrite a save made in between with no warning, since the graphs would then agree.
+
+**Rejected.** A position mode on the delta for the verification (a mode with one caller that every other reader must
+never use, against "source positions are ignored"); expressing the verification as "delta empty, then a position walk"
+(a walk over every node, expression and method span: no less code, and the message no longer shows both nodes);
+carrying the delta in `MigrateDocument` (the W054 list names every change, and any change rolls the run back).
+
+**What would reopen it.** A node attribute added to `Node`: the delta's `changes` and the verification's signature
+must both compare it (the verification serializes fields and methods whole, so only a new top-level attribute
+needs both).

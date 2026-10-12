@@ -20,8 +20,7 @@ use std::path::{Path, PathBuf};
 // `specforge collect`'s command line.
 #[derive(clap::Args)]
 pub(crate) struct Args {
-    /// Path to the project root
-    #[arg(long, default_value = ".")]
+    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
     path: PathBuf,
 
     /// Collector to use (e.g. cargo-test). Detected from project files if omitted.
@@ -53,9 +52,12 @@ impl Args {
 fn collect_at(options: &Args, terminal: &Terminal) -> Exit {
     let format = options.output.format;
     // The project the path is in (ADR 0029 D6); collect refuses one that is none.
-    let root = specforge_common::project_root_of(&options.path);
+    let root = match crate::project::root(&options.path) {
+        Ok(root) => root,
+        Err(error) => return Refusal::of(format).report(terminal, &error),
+    };
 
-    let project = crate::pipeline::compile_project(&root);
+    let project = crate::project::compile_at(&root);
 
     let mode = if !options.reports.is_empty() {
         Mode::Reports(&options.reports)
@@ -67,8 +69,9 @@ fn collect_at(options: &Args, terminal: &Terminal) -> Exit {
     } else {
         Mode::Run(RunnerOutput::Inherit)
     };
-    let mut prompt =
-        |collector: &Collector, argv: &[String]| terminal.ask(&question(collector, argv, &root));
+    let mut prompt = |collector: &Collector, argv: &[String]| {
+        terminal.ask(&question(collector, argv, root.dir()))
+    };
     let consent = match asks(options.yes, format, terminal.facts()) {
         Asks::Nobody => Consent::Yes,
         Asks::ApprovedOnly => Consent::Approved,

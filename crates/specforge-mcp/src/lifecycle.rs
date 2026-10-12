@@ -1,15 +1,67 @@
+use serde::Serialize;
 use serde_json::Value;
-use specforge_common::find_project_root;
+use specforge_common::ProjectRoot;
+use specforge_common::shape::Shape;
 use std::path::PathBuf;
 
+use crate::events::{InitFailure, McpEvent};
 use crate::protocol::{JsonRpcResponse, error_codes};
 use crate::state::{McpState, ServerPhase};
 use crate::tool::CoreTool;
 use crate::tools::{inspect, query, search, validate};
-use crate::types::{
-    McpCapabilities, McpCapabilityFlags, McpPromptCapability, McpResourceCapability, McpServerInfo,
-    McpToolCapability,
-};
+
+/// What `initialize` answers: MCP's InitializeResult (2025-03-26 to
+/// 2025-11-25). Tools, resources and prompts are discovered by their list
+/// methods, under the revision of the request that lists them.
+#[derive(Debug, Clone, Serialize, Shape)]
+#[serde(rename_all = "camelCase")]
+pub struct InitializeResult {
+    pub protocol_version: String,
+    pub capabilities: ServerCapabilities,
+    pub server_info: ServerInfo,
+    pub instructions: String,
+}
+
+/// What `server/discover` answers (MCP 2026-07-28), beside the revision's
+/// `resultType` and `_meta` (`modern::decorate`).
+#[derive(Debug, Clone, Serialize, Shape)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoverResult {
+    pub supported_versions: Vec<String>,
+    pub capabilities: ServerCapabilities,
+    pub instructions: String,
+}
+
+/// The capabilities the server offers, in either era.
+#[derive(Debug, Clone, Serialize, Shape)]
+pub struct ServerCapabilities {
+    pub tools: ListChanged,
+    pub resources: ResourcesCapability,
+    pub prompts: ListChanged,
+}
+
+/// A capability that may announce its list changing.
+#[derive(Debug, Clone, Copy, Serialize, Shape)]
+#[serde(rename_all = "camelCase")]
+#[shape(define)]
+pub struct ListChanged {
+    pub list_changed: bool,
+}
+
+/// The resources capability: subscriptions, and the list changing.
+#[derive(Debug, Clone, Copy, Serialize, Shape)]
+#[serde(rename_all = "camelCase")]
+pub struct ResourcesCapability {
+    pub subscribe: bool,
+    pub list_changed: bool,
+}
+
+/// The server's name and version, as `serverInfo` gives them.
+#[derive(Debug, Clone, Serialize, Shape)]
+pub struct ServerInfo {
+    pub name: String,
+    pub version: String,
+}
 
 /// The stateless revisions the server speaks, latest first: a request
 /// names one in its `_meta` and needs no `initialize` (MCP 2026-07-28).
@@ -84,13 +136,10 @@ pub fn handle_initialize(
     id: Option<Value>,
 ) -> JsonRpcResponse {
     if state.phase == ServerPhase::Initialized {
-        state.push_event(
-            "mcp_initialization_failed",
-            serde_json::json!({
-                "error_kind": "already_initialized",
-                "message": "Server already initialized",
-            }),
-        );
+        state.events.record(McpEvent::McpInitializationFailed {
+            error_kind: InitFailure::AlreadyInitialized,
+            message: "Server already initialized".to_string(),
+        });
         return JsonRpcResponse::error(
             id,
             error_codes::INVALID_REQUEST,
@@ -110,15 +159,6 @@ pub fn handle_initialize(
     state.protocol_version =
         negotiate_protocol_version(params.get("protocolVersion").and_then(Value::as_str));
 
-    let capabilities = McpCapabilities {
-        protocol_version: state.protocol_version.into(),
-        capabilities: capability_flags(),
-        server_info: server_info(),
-        tools: crate::registry::listed_tools(state).collect(),
-        resources: crate::registry::listed_resources(state).collect(),
-        prompts: crate::prompts::descriptors(),
-    };
-
     // The extension surfaces are the table's entries.
     let surfaces = state.surfaces();
     let surface_tools = surfaces.tools().len();
@@ -128,26 +168,31 @@ pub fn handle_initialize(
         .iter()
         .filter(|tool| matches!(tool.kind, crate::surface_table::ToolKind::Command(_)))
         .count();
-    state.push_event(
-        "mcp_initialized",
-        serde_json::json!({
-            "tools_registered": crate::tools::CORE_TOOLS.len() + surface_tools,
-            "resources_registered": crate::resources::CORE_RESOURCES.len() + surface_resources,
-            "prompts_registered": crate::prompts::CORE_PROMPTS.len(),
-            "extensions_loaded": state.registries().extension_info().count(),
-            "surface_tools_registered": surface_tools,
-            "surface_resources_registered": surface_resources,
-            "auto_promoted_tools": auto_promoted_tools,
-        }),
-    );
+    let extensions_loaded = state.registries().extension_info().count();
+    state.events.record(McpEvent::McpInitialized {
+        tools_registered: crate::tools::CORE_TOOLS.len() + surface_tools,
+        resources_registered: crate::resources::CORE_RESOURCES.len() + surface_resources,
+        prompts_registered: crate::prompts::CORE_PROMPTS.len(),
+        extensions_loaded,
+        surface_tools_registered: surface_tools,
+        surface_resources_registered: surface_resources,
+        auto_promoted_tools,
+    });
 
-    let value = serde_json::to_value(capabilities).unwrap();
-    JsonRpcResponse::success(id, value)
+    JsonRpcResponse::sent(
+        id,
+        &InitializeResult {
+            protocol_version: state.protocol_version.to_string(),
+            capabilities: capabilities(),
+            server_info: server_info(),
+            instructions: instructions(),
+        },
+    )
 }
 
 /// Serve the project at or above `start` (the server's PATH, or the
-/// client's `projectRoot`): the nearest directory holding `specforge.json`
-/// or `specforge.spec`, `start` included (`find_project_root`). Its
+/// client's `projectRoot`): the nearest directory holding `specforge.json`,
+/// `start` included (`ProjectRoot::enclosing`, canonical). Its
 /// registries, and the core tools, resources and prompts plus what its
 /// extensions contribute are served; the core surface alone when there is
 /// none. With none, nothing is served: what reads only the project view
@@ -155,34 +200,50 @@ pub fn handle_initialize(
 /// a project later (ADR 0014 D5). Subscribed clients learn what it
 /// changed (C9-01).
 pub fn serve_project(state: &mut McpState, start: Option<PathBuf>) {
-    if let Some(root) = start.as_deref().and_then(find_project_root) {
+    if let Some(root) = start
+        .as_deref()
+        .and_then(ProjectRoot::enclosing)
+        .map(ProjectRoot::canonicalized)
+    {
         state.serve(&root);
     }
     state.served = true;
 }
 
 /// The capabilities the server offers, in either era.
-fn capability_flags() -> McpCapabilityFlags {
-    McpCapabilityFlags {
-        tools: McpToolCapability {
+pub fn capabilities() -> ServerCapabilities {
+    ServerCapabilities {
+        tools: ListChanged {
             list_changed: false,
         },
-        resources: McpResourceCapability {
+        resources: ResourcesCapability {
             subscribe: true,
             list_changed: false,
         },
-        prompts: McpPromptCapability {
+        prompts: ListChanged {
             list_changed: false,
         },
     }
 }
 
 /// The server's name and version, as `serverInfo` gives them.
-pub fn server_info() -> McpServerInfo {
-    McpServerInfo {
+pub fn server_info() -> ServerInfo {
+    ServerInfo {
         name: "specforge-mcp".into(),
         version: env!("CARGO_PKG_VERSION").into(),
     }
+}
+
+/// What the server tells a client's model about itself: `initialize`'s and
+/// `server/discover`'s `instructions`, naming tools as the tool table does.
+pub fn instructions() -> String {
+    format!(
+        "SpecForge compiles .spec files into a graph of entities. Query it with {}, {} and {}; check it with {}.",
+        query::Tool::NAME,
+        search::Tool::NAME,
+        inspect::Tool::NAME,
+        validate::Tool::NAME,
+    )
 }
 
 /// `server/discover` (MCP 2026-07-28): the stateless revisions the server
@@ -190,20 +251,16 @@ pub fn server_info() -> McpServerInfo {
 /// handshake revisions are not listed: a client reaches them through
 /// `initialize`, never through per-request `_meta`.
 pub fn handle_discover(id: Option<Value>) -> JsonRpcResponse {
-    let instructions = format!(
-        "SpecForge compiles .spec files into a graph of entities. Query it with {}, {} and {}; check it with {}.",
-        query::Tool::NAME,
-        search::Tool::NAME,
-        inspect::Tool::NAME,
-        validate::Tool::NAME,
-    );
-    JsonRpcResponse::success(
+    JsonRpcResponse::sent(
         id,
-        serde_json::json!({
-            "supportedVersions": MODERN_PROTOCOL_VERSIONS,
-            "capabilities": capability_flags(),
-            "instructions": instructions,
-        }),
+        &DiscoverResult {
+            supported_versions: MODERN_PROTOCOL_VERSIONS
+                .iter()
+                .map(ToString::to_string)
+                .collect(),
+            capabilities: capabilities(),
+            instructions: instructions(),
+        },
     )
 }
 
@@ -221,21 +278,18 @@ pub fn handle_shutdown(state: &mut McpState, id: Option<Value>) -> JsonRpcRespon
     // outlives shutdown.
     let engines = usize::from(state.session().runtime().is_some());
     let subscriptions = state.shutdown();
-    state.push_event(
-        "mcp_server_shutdown",
-        serde_json::json!({
-            "pending_notifications_flushed": pending_notifications,
-            "subscriptions_released": subscriptions,
-            "wasm_engines_released": engines,
-        }),
-    );
+    state.events.record(McpEvent::McpServerShutdown {
+        pending_notifications_flushed: pending_notifications,
+        subscriptions_released: subscriptions,
+        wasm_engines_released: engines,
+    });
     JsonRpcResponse::success(id, serde_json::json!({}))
 }
 
 pub fn handle_cancel(state: &mut McpState, params: Value, id: Option<Value>) -> JsonRpcResponse {
     // Cancelling a subscriptions/listen request ends its stream.
     if let Some(listened) = params.get("requestId") {
-        state.subscriptions.end(listened, &mut state.events);
+        state.subscriptions.end(listened, &mut *state.events);
     }
     // JSON-RPC ids are strings or numbers; the event names either as a string.
     let request_id = params
@@ -245,13 +299,10 @@ pub fn handle_cancel(state: &mut McpState, params: Value, id: Option<Value>) -> 
         .unwrap_or_default();
     // Requests run one at a time, so the one named has already completed:
     // it was never in progress, and cancelling it changes nothing.
-    state.push_event(
-        "mcp_request_cancelled",
-        serde_json::json!({
-            "requestId": request_id,
-            "wasInProgress": false,
-        }),
-    );
+    state.events.record(McpEvent::McpRequestCancelled {
+        request_id,
+        was_in_progress: false,
+    });
     JsonRpcResponse::success(id, serde_json::json!({}))
 }
 

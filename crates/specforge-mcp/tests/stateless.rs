@@ -6,7 +6,7 @@ use serde_json::{Value, json};
 use specforge_mcp::McpServer;
 use specforge_test::prelude::*;
 
-use crate::support::events;
+use crate::support::{Logged, events, logged};
 
 const REVISION: &str = "2026-07-28";
 
@@ -27,8 +27,8 @@ fn project() -> tempfile::TempDir {
 }
 
 /// A server for `dir` as `specforge mcp <dir>` starts it: nothing sent yet.
-fn server(dir: &tempfile::TempDir) -> McpServer {
-    McpServer::with_project_root(dir.path().to_path_buf())
+fn server(dir: &tempfile::TempDir) -> Logged {
+    logged(McpServer::with_project_root(dir.path().to_path_buf()))
 }
 
 /// The `_meta` a stateless request carries.
@@ -240,7 +240,7 @@ fn a_stateless_request_after_initialize_keeps_its_revision() {
         "{legacy}"
     );
     assert!(legacy["result"].get("resultType").is_none(), "{legacy}");
-    assert_eq!(server.state().protocol_version, "2025-03-26");
+    assert_eq!(server.state().protocol_version(), "2025-03-26");
 }
 
 /// How many of the listed tools carry an `outputSchema`.
@@ -430,12 +430,9 @@ fn cancelling_the_listen_request_ends_the_stream() {
     assert!(server.handle_message(&cancel.to_string()).is_none());
     assert!(server.state().subscriptions().is_empty());
     assert!(
-        server
-            .state()
-            .events
+        events(&server, "mcp_subscription_removed")
             .iter()
-            .any(|e| e.name == "mcp_subscription_removed"
-                && e.params["resourceUri"] == "specforge://graph"),
+            .any(|e| e["resourceUri"] == "specforge://graph"),
         "no mcp_subscription_removed"
     );
 

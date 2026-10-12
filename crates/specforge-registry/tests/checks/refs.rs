@@ -36,7 +36,7 @@ fn a_referenced_ref_suppresses_w012() {
         EntityRecord::new("behavior", "alpha", span("main.spec")),
         EntityRecord::new("ref", "gh.issue:42", span("main.spec")).with_edges(
             Direction::Incoming,
-            "behavior",
+            Some("References"),
             1,
         ),
     ]);
@@ -96,7 +96,7 @@ fn the_orphan_refs_contract_holds() {
         EntityRecord::new("behavior", "alpha", span("main.spec")),
         EntityRecord::new("ref", "gh.issue:42", span("main.spec")).with_edges(
             Direction::Incoming,
-            "behavior",
+            Some("References"),
             1,
         ),
     ]);

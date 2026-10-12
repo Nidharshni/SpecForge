@@ -6,7 +6,7 @@
 
 The `spec` block is the **project root configuration** — a singleton that declares the project identity, format version, and optional configuration for test coverage and code generation.
 
-Every SpecForge project has exactly one `spec` block, located in the root `specforge.spec` file. It answers: **"What project is this?"**
+Every SpecForge project has exactly one `spec` block, written in any source file (by convention `specforge.spec` under the spec root); it is a graph entity: the project's configuration is `specforge.json`. It answers: **"What project is this?"**
 
 ## ID Pattern
 
@@ -157,7 +157,7 @@ It provides project-level configuration including optional `namespace` for cross
 
 ## File Location
 
-The `spec` block must be in `specforge.spec` at the project root. This file also serves as the spec root for import path resolution — `use invariants/data` resolves relative to the directory containing `specforge.spec`.
+The spec root is `spec_root` in `specforge.json` (else the project root); a `specforge.spec` file marks nothing.
 
 ## Related Entities
 

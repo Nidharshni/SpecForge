@@ -1,4 +1,7 @@
-// MCP Server events — signals emitted during MCP protocol interactions
+// MCP Server events — what an MCP server records it did. Each is one variant of
+// specforge_mcp::events::McpEvent, recorded through the server's event sink: a
+// production server keeps none (events never leave the process), a test's sink
+// keeps each one stamped with the time it was recorded (timestamp).
 
 use "types/diagnostics"
 use "types/graph"
@@ -34,7 +37,7 @@ event mcp_tool_invoked "MCP Tool Invoked" {
     toolName  string
     category  McpToolCategory
     entityId  string @optional
-    params    string @optional
+    params    string
     timestamp timestamp
   }
   verify integration "emits mcp_tool_invoked with correct toolName, category, and parameters for any tool call"
@@ -73,9 +76,10 @@ event mcp_initialized "MCP Initialized" {
     resources_registered         integer
     prompts_registered           integer
     extensions_loaded            integer
-    surface_tools_registered     integer @optional
-    surface_resources_registered integer @optional
-    auto_promoted_tools          integer @optional
+    surface_tools_registered     integer
+    surface_resources_registered integer
+    auto_promoted_tools          integer
+    timestamp                    timestamp
   }
   verify integration "mcp initialization emits event with tool counts"
 }

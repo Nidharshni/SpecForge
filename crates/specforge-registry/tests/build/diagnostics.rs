@@ -2,11 +2,12 @@
 //! custom rules' probes itself.
 
 use specforge_extension_sdk::prelude::*;
-use specforge_protocol_types::ExtensionDeclaration;
+use specforge_protocol_types::{ExtensionDeclaration, McpToolDescriptor};
+use specforge_registry::BuildPart;
 use specforge_registry::rules::{CustomCall, NoVerdicts, Verdict, VerdictError};
 use specforge_test_macros::test as spec;
 
-use crate::support::{build, codes, declare};
+use crate::support::{build, codes, declare, peer};
 
 /// `name`, declaring the kind `dup`, the rule `W900` and the command
 /// `hello`; `first` also a field targeting a kind nobody declares and a
@@ -97,4 +98,56 @@ fn a_probe_is_w112_after_the_registries_and_probing_again_reports_it_once() {
     // A source that cannot answer reports nothing.
     build.probe(&NoVerdicts);
     assert_eq!(codes(&build), ["W021", "E026", "W023", "E039"]);
+}
+
+#[spec(
+    behavior = "build_registries_from_declarations",
+    verify = "the registry build says what each of its diagnostics is about: a declaration, the peers, the registries, a rule, a surface or a collision"
+)]
+fn the_build_says_what_each_diagnostic_is_about() {
+    let mut build = build([
+        colliding("@t/a", true),
+        colliding("@t/b", false),
+        declare("", |_| {}),
+    ]);
+    build.probe(&failing);
+    let parts: Vec<_> = build
+        .reported()
+        .map(|(p, d)| (p, d.code.as_str()))
+        .collect();
+    assert_eq!(
+        parts,
+        [
+            (BuildPart::Declaration, "E030"),
+            (BuildPart::Declaration, "W021"),
+            (BuildPart::Collision, "E026"),
+            (BuildPart::Collision, "W023"),
+            (BuildPart::Rules, "W112"),
+            (BuildPart::Collision, "E039"),
+        ]
+    );
+
+    // A tool whose schema is no object is about a surface; a peer nobody
+    // loaded is about the peers.
+    let mut tools = declare("@t/tools", |_| {});
+    tools.surfaces.mcp_tools.push(McpToolDescriptor {
+        name: "bad".into(),
+        description: "bad".into(),
+        category: None,
+        export: "mcp__bad".into(),
+        input_schema: serde_json::json!("not an object"),
+        output_schema: None,
+    });
+    let needy = declare("@t/needy", |c| {
+        c.meta.peer_dependencies = vec![peer("@t/absent", "^1")];
+    });
+    let build = crate::support::build([tools, needy]);
+    let parts: Vec<_> = build
+        .reported()
+        .map(|(p, d)| (p, d.code.as_str()))
+        .collect();
+    assert_eq!(
+        parts,
+        [(BuildPart::Peers, "E027"), (BuildPart::Surfaces, "E055")]
+    );
 }

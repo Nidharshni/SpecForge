@@ -69,6 +69,30 @@ fn server_with_greet_installed() -> (McpServer, tempfile::TempDir) {
     (server, root)
 }
 
+/// A relative local path in `specforge.add_extension` is read from the project's root, not the
+/// server process's working directory.
+#[test]
+fn add_extension_reads_a_relative_local_path_from_the_project_root() {
+    let (mut server, root) =
+        server_over(json!({"name": "t", "version": "0.1.0", "extensions": []}));
+    std::fs::create_dir(root.path().join("ext")).unwrap();
+    std::fs::copy(greet_blob(), root.path().join("ext/greet.wasm")).unwrap();
+
+    let resp = call_tool(
+        &mut server,
+        "specforge.add_extension",
+        json!({"specifiers": ["./ext/greet.wasm"]}),
+    );
+
+    assert_eq!(resp["result"]["isError"], false, "{resp}");
+    assert!(
+        root.path()
+            .join(".specforge/extensions")
+            .join(GREET)
+            .exists()
+    );
+}
+
 /// Doctor's findings, without the z3 probe's (it depends on PATH).
 fn project_findings(report: &Value) -> Vec<Value> {
     report["findings"]
@@ -77,6 +101,14 @@ fn project_findings(report: &Value) -> Vec<Value> {
         .iter()
         .filter(|f| f["code"] != "z3_missing")
         .cloned()
+        .collect()
+}
+
+/// The codes of [`project_findings`].
+fn project_codes(report: &Value) -> Vec<String> {
+    project_findings(report)
+        .iter()
+        .map(|f| f["code"].as_str().unwrap().to_string())
         .collect()
 }
 
@@ -157,6 +189,31 @@ fn stats_and_validate_count_the_served_projects_surface_conflicts() {
         .map(|d| d["code"].as_str().unwrap())
         .collect();
     assert!(codes.contains(&"I017"), "{validated}");
+}
+
+#[test]
+fn validate_reports_the_served_projects_notices() {
+    let (mut server, _ext, _dir) = fake_extension::initialized(
+        FakeExtension::new().with_output("mcp__check", json!({"checked": true})),
+    );
+    let resp = call_tool(&mut server, "specforge.validate", json!({}));
+    let listed = answer(&resp);
+    let notices = listed
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|d| d["code"] == "I017")
+        .count();
+    assert!(notices > 0, "{listed}");
+    let verdict = &resp["result"]["_meta"]["specforge/check"];
+    let infos = listed
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|d| d["severity"] == "Info")
+        .count();
+    assert_eq!(verdict["infos"], infos, "{resp}");
+    assert_eq!(verdict["shown"], listed.as_array().unwrap().len(), "{resp}");
 }
 
 // R2 (plan 05): remove_extension with an unreadable specforge.json refuses
@@ -321,7 +378,7 @@ fn validate_and_doctor_report_an_unusable_config() {
         .filter(|f| f["code"] != "z3_missing")
         .map(|f| (f["code"].as_str().unwrap(), f["status"].as_str().unwrap()))
         .collect();
-    assert_eq!(findings, [("E069", "error")], "{report}");
+    assert_eq!(findings, [("E069", "error"), ("I002", "info")], "{report}");
 }
 
 // A lock file that is there and cannot be read: the served project's
@@ -335,19 +392,24 @@ fn doctor_reports_a_corrupt_lock_as_an_error_finding() {
     let (mut server, root) =
         server_over(json!({"name": "t", "version": "0.1.0", "extensions": []}));
     assert_eq!(
-        project_findings(&answer(&call_tool(
+        project_codes(&answer(&call_tool(
             &mut server,
             "specforge.doctor",
             json!({})
         ))),
-        Vec::<Value>::new()
+        ["I002"]
     );
 
     std::fs::write(root.path().join("specforge.lock"), "not valid json {{{").unwrap();
 
     let report = answer(&call_tool(&mut server, "specforge.doctor", json!({})));
     let findings = project_findings(&report);
-    assert_eq!(findings.len(), 1, "{report}");
+    // The lock, then the I002 of a project that enables nothing.
+    assert_eq!(
+        project_codes(&report),
+        ["lock_unreadable", "I002"],
+        "{report}"
+    );
     assert_eq!(findings[0]["code"], "lock_unreadable", "{report}");
     assert_eq!(findings[0]["status"], "error", "{report}");
     assert!(

@@ -2,14 +2,18 @@
 //! and the MCP `specforge.doctor` tool so both surfaces say the same thing.
 //!
 //! The report is built from what a compile already produced (the loaded
-//! declarations and the diagnostics) plus the project's lock file on disk:
-//! the project's extensions, each with its status and enhancement count, enhancements grouped
-//! by the entity kind they target, and one list of findings (extension
-//! conflicts with a resolution suggestion, keywords that shadow an entity
-//! kind, unsatisfied peers, extensions that failed to load, installed-binary
-//! integrity, and whether the z3 solver is on PATH). Each problem is one
-//! finding that says what it is about; the report's sections are filters of
-//! that list ([`DoctorReport::about`]) and its verdict is [`DoctorReport::ok`].
+//! declarations and the environment's diagnostics) plus the project's lock
+//! file on disk: the project's extensions, each with its status and
+//! enhancement count, enhancements grouped by the entity kind they target,
+//! and one list of findings. Every diagnostic the environment reports before
+//! any source is one finding, about the part of the setup the environment
+//! says it is about ([`specforge_project::SetupPart`]); doctor reads no
+//! diagnostic code to decide that. Beside them: the disk checks only doctor
+//! makes (the config file, the lock, installed binaries), the one source
+//! diagnostic about the setup (E013, an entity id that is a keyword) and
+//! whether the z3 solver is on PATH. The report's sections are filters of
+//! that list ([`DoctorReport::about`]) and its verdict is
+//! [`DoctorReport::ok`].
 //!
 //! Registry credential health is the user's, not the project's, and lives
 //! with the credential store (`specforge_registry_client::credential_health`):
@@ -18,28 +22,13 @@
 
 use serde::Serialize;
 use specforge_common::shape::Shape;
-use specforge_common::{Code, Diagnostic, DiagnosticData, Severity, codes};
+use specforge_common::{Diagnostic, DiagnosticData, Severity, codes};
 use specforge_installed::Health;
+use specforge_project::{Environment, SetupPart};
 use std::collections::BTreeMap;
 
 use crate::extension::Status;
 use crate::view::ProjectView;
-
-/// Diagnostic codes that mean two contributions collide.
-const CONFLICT_CODES: [Code; 3] = [codes::E026, codes::E057, codes::W018];
-
-/// Codes that mean a name shadows a grammar-level construct: E013 (a project
-/// entity ID is a structural keyword or an extension's kind keyword) and E026
-/// (a kind keyword is registered twice, which is also a conflict).
-const SHADOWING_CODES: [Code; 2] = [codes::E013, codes::E026];
-
-/// Codes that mean `specforge.json` is not used as written: E069 (it can't
-/// be read, isn't a JSON object, or has a mistyped key or item).
-const CONFIG_CODES: [Code; 1] = [codes::E069];
-
-/// Codes the compile reports a peer requirement by (ADR 0041): E027 (unsatisfied, or a cycle among
-/// required peers) and E073 (a range that is not SemVer).
-const PEER_CODES: [Code; 2] = [codes::E027, codes::E073];
 
 /// The finding code of a project root without `specforge.json`.
 const CONFIG_MISSING: &str = "config_missing";
@@ -108,12 +97,25 @@ pub enum CacheStatus {
     Stale,
 }
 
+/// A finding's status: its diagnostic's severity (the disk checks' own are
+/// error or warn).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Shape)]
 #[serde(rename_all = "snake_case")]
 pub enum FindingStatus {
-    Ok,
-    Warn,
     Error,
+    Warn,
+    Info,
+}
+
+impl FindingStatus {
+    /// The status of a finding about a diagnostic of `severity`.
+    pub fn of(severity: Severity) -> Self {
+        match severity {
+            Severity::Error => FindingStatus::Error,
+            Severity::Warning => FindingStatus::Warn,
+            Severity::Info => FindingStatus::Info,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Shape)]
@@ -127,38 +129,87 @@ pub struct Finding {
     pub remediation: String,
 }
 
+impl Finding {
+    /// The finding `diagnostic` is, about `about`: its message, code and
+    /// severity; its own suggestion, else the catalogue's explanation, else
+    /// how to read more.
+    fn of(about: About, diagnostic: &Diagnostic) -> Finding {
+        let code = &diagnostic.code;
+        let fallback = match about {
+            About::Conflict { .. } => format!(
+                "uninstall or reconfigure one of the conflicting extensions \
+                 (`specforge explain {code}`)"
+            ),
+            _ => format!("run `specforge explain {code}`"),
+        };
+        Finding {
+            status: FindingStatus::of(diagnostic.severity),
+            check: diagnostic.message.clone(),
+            code: code.clone(),
+            remediation: remediation(diagnostic, || fallback),
+            about,
+        }
+    }
+}
+
 /// What a doctor finding is about: the report's sections.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Shape)]
 #[serde(tag = "about", rename_all = "snake_case")]
 pub enum About {
     /// `specforge.json`: E069, or none at the root (`config_missing`).
     Config,
-    /// `specforge.lock` exists and cannot be read (`lock_unreadable`).
+    /// `specforge.lock` exists and cannot be read (`lock_unreadable`; E033
+    /// without a root).
     Lock,
     /// An installed binary does not match the lock.
     Binary { issue: BinaryIssue },
-    /// An enabled extension the compile could not load (not a binary problem).
+    /// One `extensions` entry: why it did not load (not a binary problem),
+    /// or what it reported though it loaded (W149, W153, W138).
     Load,
-    /// Two contributions collide (E026, E057, W018).
-    Conflict,
-    /// A name shadows a grammar-level construct (E013, E026).
-    Shadowing { keyword: String },
+    /// No extension loaded (I002).
+    StructuralOnly,
+    /// A configured provider (W118).
+    Providers,
+    /// One extension declaration on its own (E030, W021, W145).
+    Declaration,
     /// A peer requirement the compile reports unsatisfied (E027, E073).
     Peer,
+    /// What the registries hold (W019, W021, I004, W017).
+    Registry,
+    /// A declared rule (W150, W147, W112).
+    Rule,
+    /// An extension's surfaces (E055).
+    Surface,
+    /// Two contributions claim one name (E026, W018, W023, E039, E057); a
+    /// kind keyword registered twice names the keyword it shadows.
+    Conflict {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        keyword: Option<String>,
+    },
+    /// An entity id that is a structural keyword or an extension's kind
+    /// keyword (E013).
+    Shadowing { keyword: String },
     /// The z3 solver is not on PATH.
     Toolchain,
 }
 
-/// The parts of a report, to select findings by ([`DoctorReport::about`]).
+/// The parts of a report, to select findings by ([`DoctorReport::about`]):
+/// one per [`About`] variant.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Part {
     Config,
     Lock,
     Binary,
     Load,
+    StructuralOnly,
+    Providers,
+    Declaration,
+    Peer,
+    Registry,
+    Rule,
+    Surface,
     Conflict,
     Shadowing,
-    Peer,
     Toolchain,
 }
 
@@ -170,10 +221,25 @@ impl About {
             About::Lock => Part::Lock,
             About::Binary { .. } => Part::Binary,
             About::Load => Part::Load,
-            About::Conflict => Part::Conflict,
-            About::Shadowing { .. } => Part::Shadowing,
+            About::StructuralOnly => Part::StructuralOnly,
+            About::Providers => Part::Providers,
+            About::Declaration => Part::Declaration,
             About::Peer => Part::Peer,
+            About::Registry => Part::Registry,
+            About::Rule => Part::Rule,
+            About::Surface => Part::Surface,
+            About::Conflict { .. } => Part::Conflict,
+            About::Shadowing { .. } => Part::Shadowing,
             About::Toolchain => Part::Toolchain,
+        }
+    }
+
+    /// The keyword a shadowing, or a kind conflict, names.
+    pub fn keyword(&self) -> Option<&str> {
+        match self {
+            About::Shadowing { keyword } => Some(keyword),
+            About::Conflict { keyword } => keyword.as_deref(),
+            _ => None,
         }
     }
 }
@@ -181,20 +247,21 @@ impl About {
 impl DoctorReport {
     /// The report's verdict: no error-level finding. `specforge doctor`
     /// exits by it (with the user's credentials); `specforge.doctor`
-    /// returns it as `ok`.
+    /// returns it as `ok`. Every error the environment reports, E013, a
+    /// binary that does not match the lock and an unreadable lock fail it.
     pub fn ok(&self) -> bool {
         self.findings
             .iter()
             .all(|f| f.status != FindingStatus::Error)
     }
 
-    /// Every installed binary is healthy, every enabled extension loaded
-    /// and every peer requirement is met.
+    /// No error-level finding about an installed binary, an extension load
+    /// or a peer requirement.
     pub fn extensions_ok(&self) -> bool {
-        !self
-            .findings
-            .iter()
-            .any(|f| matches!(f.about.part(), Part::Binary | Part::Load | Part::Peer))
+        !self.findings.iter().any(|f| {
+            f.status == FindingStatus::Error
+                && matches!(f.about.part(), Part::Binary | Part::Load | Part::Peer)
+        })
     }
 
     /// `stale` when an installed binary is missing or its hash drifted.
@@ -210,15 +277,17 @@ impl DoctorReport {
         self.findings.iter().filter(move |f| f.about.part() == part)
     }
 
-    /// The findings where two contributions collide: those about a conflict,
-    /// and a shadowing that is also a collision (E026, a kind registered
-    /// twice).
+    /// The findings where two contributions collide.
     pub fn conflicts(&self) -> impl Iterator<Item = &Finding> {
-        self.findings.iter().filter(|f| match f.about {
-            About::Conflict => true,
-            About::Shadowing { .. } => CONFLICT_CODES.iter().any(|code| code.matches(&f.code)),
-            _ => false,
-        })
+        self.about(Part::Conflict)
+    }
+
+    /// The findings that name a shadowed keyword: E013's, and a kind
+    /// keyword registered twice (E026).
+    pub fn shadowed(&self) -> impl Iterator<Item = (&str, &Finding)> {
+        self.findings
+            .iter()
+            .filter_map(|f| f.about.keyword().map(|keyword| (keyword, f)))
     }
 
     /// The one document both surfaces return: `{ok, extensions_ok,
@@ -259,7 +328,7 @@ pub struct DoctorDocument {
 }
 
 /// The health report of the project the view was compiled from: its
-/// loaded declarations, the diagnostics its surface reports, and, with a
+/// loaded declarations, the diagnostics its environment reports, and, with a
 /// root, its lock and installed binaries. Without a root the installation
 /// checks are skipped (`installed_count: 0`).
 pub fn diagnose(view: &ProjectView) -> DoctorReport {
@@ -269,7 +338,7 @@ pub fn diagnose(view: &ProjectView) -> DoctorReport {
 /// [`diagnose`] with the z3 probe supplied, so tests do not depend on PATH.
 pub fn diagnose_with(view: &ProjectView, z3_available: bool) -> DoctorReport {
     let declarations = view.registries().declarations();
-    let diagnostics = view.reported();
+    let env = view.env();
 
     // The project's extensions: the listing's rows, in its order.
     let inventory = crate::extension::inventory(view);
@@ -294,11 +363,7 @@ pub fn diagnose_with(view: &ProjectView, z3_available: bool) -> DoctorReport {
                 .push(EnhancementEntry {
                     extension: declaration.name().to_string(),
                     fields: enhancement.fields.iter().map(|f| f.name.clone()).collect(),
-                    edge_types: enhancement
-                        .edge_types
-                        .iter()
-                        .map(|e| e.label.clone())
-                        .collect(),
+                    edge_types: written_edge_types(&enhancement.fields),
                     verify_kinds: enhancement.verify_kinds.clone(),
                 });
         }
@@ -306,27 +371,12 @@ pub fn diagnose_with(view: &ProjectView, z3_available: bool) -> DoctorReport {
 
     let mut findings = Vec::new();
 
-    // The config itself: a `specforge.json` the compile could not use as
-    // written (E069, an error: `check` fails on it, so doctor does too),
-    // or none at the project root (a warning: the default config is a
-    // valid project, but rarely the one meant).
-    for diag in diagnostics
-        .iter()
-        .filter(|d| CONFIG_CODES.iter().any(|code| d.is(*code)))
-    {
-        findings.push(Finding {
-            about: About::Config,
-            check: diag.message.clone(),
-            status: match diag.severity {
-                Severity::Error => FindingStatus::Error,
-                _ => FindingStatus::Warn,
-            },
-            code: diag.code.clone(),
-            remediation: remediation(diag, || format!("run `specforge explain {}`", diag.code)),
-        });
-    }
+    // 1. The disk, which only doctor checks (with a root).
+    //
+    // No `specforge.json` at the project root (a warning: the default config
+    // is a valid project, but rarely the one meant).
     if let Some(root) = view.root()
-        && !view.env().config_found()
+        && !env.config_found()
     {
         findings.push(Finding {
             about: About::Config,
@@ -389,80 +439,28 @@ pub fn diagnose_with(view: &ProjectView, z3_available: bool) -> DoctorReport {
         });
     }
 
-    // Extensions the compile could not load: `check` fails on them, so
-    // doctor does too. A missing or changed binary is its binary finding
-    // above.
-    for failure in inventory
-        .rows()
-        .iter()
-        .flat_map(|extension| extension.failures())
-    {
-        if failure.problem.is_module_health() {
+    // 2. The setup, as `check` reports it before any source: one finding per
+    // environment diagnostic, in `check`'s order, about the part the
+    // environment says it is about; except what step 1 already states.
+    let rooted = view.root().is_some();
+    for setup in env.setup_diagnostics() {
+        if rooted && stated_on_disk(env, setup.part) {
             continue;
         }
-        let diag = &failure.diagnostic;
-        findings.push(Finding {
-            about: About::Load,
-            check: diag.message.clone(),
-            status: match diag.severity {
-                Severity::Error => FindingStatus::Error,
-                _ => FindingStatus::Warn,
-            },
-            code: diag.code.clone(),
-            remediation: remediation(diag, || format!("run `specforge explain {}`", diag.code)),
-        });
+        findings.push(Finding::of(
+            about(setup.part, setup.diagnostic),
+            setup.diagnostic,
+        ));
     }
 
-    // Conflicts and shadowed keywords the compile reported. A kind registered
-    // twice (E026) that names the keyword it shadows is one finding, about
-    // the shadowing.
-    for diag in &diagnostics {
-        let conflict = CONFLICT_CODES.iter().any(|code| diag.is(*code));
-        let shadowing = SHADOWING_CODES.iter().any(|code| diag.is(*code));
-        if !conflict && !shadowing {
-            continue;
-        }
-        // The keyword is the diagnostic's data, not a quoted word of its
-        // message.
-        let about = match diag.data.as_deref() {
-            Some(DiagnosticData::ShadowedKeyword { keyword }) if shadowing => About::Shadowing {
-                keyword: keyword.clone(),
-            },
-            _ => About::Conflict,
-        };
-        findings.push(Finding {
-            about,
-            check: diag.message.clone(),
-            status: match diag.severity {
-                Severity::Error => FindingStatus::Error,
-                _ => FindingStatus::Warn,
-            },
-            code: diag.code.clone(),
-            remediation: remediation(diag, || {
-                format!(
-                    "uninstall or reconfigure one of the conflicting extensions \
-                     (`specforge explain {}`)",
-                    diag.code
-                )
-            }),
-        });
+    // 3. The one source diagnostic about the setup: an entity id a keyword
+    // shadows (E013).
+    for diagnostic in view.reported().iter().filter(|d| d.is(codes::E013)) {
+        let keyword = keyword_of(diagnostic).unwrap_or_default();
+        findings.push(Finding::of(About::Shadowing { keyword }, diagnostic));
     }
 
-    // The peer requirements the compile reports unsatisfied: one rule, so doctor and
-    // check cannot disagree (ADR 0041).
-    for diag in diagnostics
-        .iter()
-        .filter(|d| PEER_CODES.iter().any(|code| d.is(*code)))
-    {
-        findings.push(Finding {
-            about: About::Peer,
-            check: diag.message.clone(),
-            status: FindingStatus::Error,
-            code: diag.code.clone(),
-            remediation: remediation(diag, || format!("run `specforge explain {}`", diag.code)),
-        });
-    }
-
+    // 4. The toolchain.
     if !z3_available {
         findings.push(Finding {
             about: About::Toolchain,
@@ -482,6 +480,60 @@ pub fn diagnose_with(view: &ProjectView, z3_available: bool) -> DoctorReport {
         z3_available,
         findings,
     }
+}
+
+/// What a finding about a diagnostic of `part` is about: one arm per part,
+/// so a new part is a compile error here.
+fn about(part: SetupPart, diagnostic: &Diagnostic) -> About {
+    match part {
+        SetupPart::Config => About::Config,
+        SetupPart::Lock => About::Lock,
+        SetupPart::Entry(_) => About::Load,
+        SetupPart::StructuralOnly => About::StructuralOnly,
+        SetupPart::Providers => About::Providers,
+        SetupPart::Declaration => About::Declaration,
+        SetupPart::Peers => About::Peer,
+        SetupPart::Registries => About::Registry,
+        SetupPart::Rules => About::Rule,
+        SetupPart::Surfaces => About::Surface,
+        SetupPart::Collision => About::Conflict {
+            keyword: keyword_of(diagnostic),
+        },
+    }
+}
+
+/// Whether a disk check states this diagnostic already (with a root, ADR
+/// 0028): the lock's E033 is the lock finding, and an entry whose module is
+/// missing or changed is its binary finding.
+fn stated_on_disk(env: &Environment, part: SetupPart) -> bool {
+    match part {
+        SetupPart::Lock => true,
+        SetupPart::Entry(i) => env.enabled()[i]
+            .failure
+            .as_ref()
+            .is_some_and(|failure| failure.problem.is_module_health()),
+        _ => false,
+    }
+}
+
+/// The keyword a diagnostic's data names (E013, E026): never a word of its
+/// message.
+fn keyword_of(diagnostic: &Diagnostic) -> Option<String> {
+    match diagnostic.data.as_deref() {
+        Some(DiagnosticData::ShadowedKeyword { keyword }) => Some(keyword.clone()),
+        _ => None,
+    }
+}
+
+/// The distinct edge types the fields write, in field order.
+fn written_edge_types(fields: &[specforge_protocol_types::FieldDescriptor]) -> Vec<String> {
+    let mut edge_types: Vec<String> = Vec::new();
+    for edge in fields.iter().filter_map(|f| f.edge.as_deref()) {
+        if !edge_types.iter().any(|seen| seen == edge) {
+            edge_types.push(edge.to_string());
+        }
+    }
+    edge_types
 }
 
 fn z3_on_path() -> bool {
@@ -517,57 +569,110 @@ mod tests {
         diagnostic
     }
 
+    /// A declaration of `name` that contributes the entity kind `keyword`.
+    fn declaring_kind(name: &str, keyword: &str) -> specforge_protocol_types::ExtensionDeclaration {
+        let mut declaration = Fixture::declaration(name, "1.0.0");
+        declaration.entities = vec![specforge_protocol_types::EntityKindDescriptor {
+            name: keyword.into(),
+            keyword: Some(keyword.into()),
+            ..Default::default()
+        }];
+        declaration
+    }
+
+    /// A declaration of `name` that contributes the edge type `label`.
+    fn declaring_edge(name: &str, label: &str) -> specforge_protocol_types::ExtensionDeclaration {
+        let mut declaration = Fixture::declaration(name, "1.0.0");
+        declaration.edges = vec![specforge_protocol_types::EdgeTypeDescriptor {
+            label: label.into(),
+            ..Default::default()
+        }];
+        declaration
+    }
+
+    #[test]
+    fn enhancements_list_the_edge_types_their_fields_write() {
+        use specforge_protocol_types::{EntityEnhancementDescriptor, FieldDescriptor};
+        let field = |name: &str, edge: Option<&str>| FieldDescriptor {
+            name: name.into(),
+            edge: edge.map(str::to_string),
+            ..Default::default()
+        };
+        let mut declaration = Fixture::declaration("@acme/a", "1.0.0");
+        declaration.enhancements = vec![EntityEnhancementDescriptor {
+            target_kind: "behavior".into(),
+            source_extension: "@acme/a".into(),
+            fields: vec![
+                field("requires", Some("Requires")),
+                field("note", None),
+                field("also_requires", Some("Requires")),
+                field("ensures", Some("Ensures")),
+            ],
+            ..Default::default()
+        }];
+        let fixture = Fixture::new().declarations(vec![declaration]);
+
+        let report = diagnose_with(&fixture.view(), true);
+
+        let entry = &report.enhancements["behavior"][0];
+        assert_eq!(entry.edge_types, ["Requires", "Ensures"]);
+    }
+
     #[specforge_test(
         behavior = "run_doctor_check",
         verify = "doctor detects shadowed grammar-level constructs"
     )]
-    fn an_e026_with_a_keyword_is_one_shadowing_finding() {
-        // What the registry build reports for a kind two extensions declare,
-        // worded so that no quoted word of it is the keyword: only the data
-        // names it.
-        let mut e026 = diag(
-            "E026",
-            "extension 'acme': its entity kind is registered by another extension",
-            Some("choose a different keyword for this entity kind"),
-        );
-        e026.data = Some(Box::new(DiagnosticData::ShadowedKeyword {
-            keyword: "memo".into(),
-        }));
-        let diagnostics = [e026];
+    fn a_kind_registered_twice_is_one_conflict_naming_the_keyword() {
+        // What the registry build reports for a kind two extensions declare:
+        // the keyword is the diagnostic's data, not a word of its message.
+        let fixture = Fixture::new().declarations(vec![
+            declaring_kind("@acme/a", "memo"),
+            declaring_kind("@acme/b", "memo"),
+        ]);
 
-        let fixture = Fixture::new().reporting(diagnostics.to_vec());
         let report = diagnose_with(&fixture.view(), true);
 
         assert_eq!(report.findings.len(), 1, "{:?}", report.findings);
         let finding = &report.findings[0];
         assert_eq!(
             finding.about,
-            About::Shadowing {
-                keyword: "memo".into()
+            About::Conflict {
+                keyword: Some("memo".into())
             }
         );
         assert_eq!(finding.code, "E026");
-        assert_eq!(
-            finding.remediation,
-            "choose a different keyword for this entity kind"
+        assert!(
+            finding
+                .remediation
+                .ends_with("Rename the conflicting kind keyword."),
+            "the catalogued explanation: {}",
+            finding.remediation
         );
-        assert_eq!(report.about(Part::Conflict).count(), 0);
+        assert_eq!(
+            report.shadowed().map(|(k, _)| k).collect::<Vec<_>>(),
+            ["memo"]
+        );
+        assert_eq!(report.conflicts().count(), 1);
+        assert_eq!(report.about(Part::Shadowing).count(), 0);
         assert!(!report.ok());
     }
 
     #[test]
     fn a_non_shadowing_conflict_is_listed_but_not_shadowed() {
-        let diagnostics = [
-            diag("W018", "edge type 'uses' declared twice", None),
-            diag("W001", "unrelated", None),
-        ];
+        let fixture = Fixture::new()
+            .declarations(vec![
+                declaring_edge("@acme/a", "uses"),
+                declaring_edge("@acme/b", "uses"),
+            ])
+            .reporting(vec![diag("W001", "unrelated", None)]);
 
-        let fixture = Fixture::new().reporting(diagnostics.to_vec());
         let report = diagnose_with(&fixture.view(), true);
 
-        let conflicts: Vec<&Finding> = report.about(Part::Conflict).collect();
-        assert_eq!(conflicts.len(), 1);
-        assert_eq!(report.about(Part::Shadowing).count(), 0);
+        let conflicts: Vec<&Finding> = report.conflicts().collect();
+        assert_eq!(conflicts.len(), 1, "{:?}", report.findings);
+        assert_eq!(conflicts[0].code, "W018");
+        assert_eq!(conflicts[0].about, About::Conflict { keyword: None });
+        assert_eq!(report.shadowed().count(), 0);
         // W018 offers no suggestion: the catalogue's explanation stands in.
         assert!(
             conflicts[0]
@@ -576,6 +681,8 @@ mod tests {
             "{}",
             conflicts[0].remediation
         );
+        // A source diagnostic that is not E013 is no finding.
+        assert!(report.findings.iter().all(|f| f.code != "W001"));
     }
 
     /// An entry the load could not load, as the environment records it.
@@ -618,6 +725,7 @@ mod tests {
                     name: "@sdk/greet".into(),
                     file: Some("greet.wasm".into()),
                     failure: None,
+                    warnings: Vec::new(),
                 },
                 failing_entry("@acme/missing", LoadProblem::NotInstalled),
                 failing_entry(
@@ -711,7 +819,7 @@ mod tests {
     }
 
     #[test]
-    fn doctor_lists_load_failures_by_extension_name() {
+    fn doctor_lists_load_failures_in_check_order() {
         use specforge_installed::LoadProblem;
         let fixture = Fixture::new().enabled(vec![
             failing_entry("@z/z", LoadProblem::NotInstalled),
@@ -721,7 +829,7 @@ mod tests {
         let report = diagnose_with(&fixture.view(), true);
 
         let checks: Vec<&str> = report.about(Part::Load).map(|f| f.check.as_str()).collect();
-        assert_eq!(checks, ["@a/a did not load", "@z/z did not load"]);
+        assert_eq!(checks, ["@z/z did not load", "@a/a did not load"]);
     }
 
     #[specforge_test(
@@ -797,22 +905,27 @@ mod tests {
             }
         );
         assert_eq!(shadowed[0].remediation, "rename the entity");
-        assert_eq!(report.findings[0].code, "E013");
+        assert!(report.findings.iter().any(|f| f.code == "E013"));
     }
 
     #[test]
     fn a_missing_z3_is_a_warning_not_an_error() {
         let fixture = Fixture::new();
         let report = diagnose_with(&fixture.view(), false);
-        assert_eq!(report.findings.len(), 1);
-        assert_eq!(report.findings[0].code, "z3_missing");
+        assert_eq!(
+            finding_codes(&report),
+            [
+                ("I002", FindingStatus::Info),
+                ("z3_missing", FindingStatus::Warn)
+            ]
+        );
         assert!(report.ok());
         assert_eq!(report.cache_status(), CacheStatus::Ok);
     }
 
     #[specforge_test(
         behavior = "management_operations_over_the_project_view",
-        verify = "doctor reads the diagnostics its view reports"
+        verify = "doctor reads the setup diagnostics of its view's environment, and E013 from what its view reports"
     )]
     fn doctor_reads_the_diagnostics_its_view_reports() {
         let e028 = diag("E028", "extension '@acme/x' is not installed", None);
@@ -871,7 +984,10 @@ mod tests {
 
         assert_eq!(
             finding_codes(&report),
-            [(CONFIG_MISSING, FindingStatus::Warn)]
+            [
+                (CONFIG_MISSING, FindingStatus::Warn),
+                ("I002", FindingStatus::Info)
+            ]
         );
         assert!(report.ok(), "a warning: doctor stays healthy");
         assert!(
@@ -885,7 +1001,10 @@ mod tests {
 
         // A project with specforge.json gets no such finding.
         let found = Fixture::new();
-        assert!(finding_codes(&diagnose_with(&found.view(), true)).is_empty());
+        assert_eq!(
+            finding_codes(&diagnose_with(&found.view(), true)),
+            [("I002", FindingStatus::Info)]
+        );
     }
 
     #[specforge_test(
@@ -897,7 +1016,12 @@ mod tests {
 
         let report = diagnose_with(&fixture.rootless_view(), true);
 
-        assert!(finding_codes(&report).is_empty(), "{:?}", report.findings);
+        assert_eq!(
+            finding_codes(&report),
+            [("I002", FindingStatus::Info)],
+            "{:?}",
+            report.findings
+        );
     }
 
     /// A project with `@sdk/greet` installed from a file in a second
@@ -915,7 +1039,7 @@ mod tests {
         std::fs::write(&blob, crate::testing::GREET).unwrap();
         crate::extension::add(
             &crate::extension::AddRequest {
-                root: dir.path(),
+                root: &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
                 extensions: vec![crate::extension::Source::Local(blob).into()],
                 allow_unsigned: false,
                 trust: crate::extension::Trust::Refuse,
@@ -941,8 +1065,10 @@ mod tests {
     fn doctor_reports_a_changed_binary_once() {
         let (dir, _files) = project_with_a_changed_greet();
         let runtime = std::sync::Arc::new(crate::testing::candidates());
-        let compiled =
-            specforge_project::CompiledProject::compile(dir.path(), Some(runtime.clone()));
+        let compiled = specforge_project::CompiledProject::compile(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            Some(runtime.clone()),
+        );
 
         let report = diagnose_with(&ProjectView::of(&compiled), true);
 
@@ -984,7 +1110,7 @@ mod tests {
             .unwrap();
         crate::extension::add(
             &crate::extension::AddRequest {
-                root: dir.path(),
+                root: &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
                 extensions: vec![crate::extension::Source::Local(command.into()).into()],
                 allow_unsigned: false,
                 trust: crate::extension::Trust::Refuse,
@@ -994,7 +1120,10 @@ mod tests {
             runtime.as_ref(),
         )
         .unwrap();
-        let compiled = specforge_project::CompiledProject::compile(dir.path(), Some(runtime));
+        let compiled = specforge_project::CompiledProject::compile(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            Some(runtime),
+        );
         let report = diagnose_with(&ProjectView::of(&compiled), true);
         assert!(report.findings.is_empty(), "{:?}", report.findings);
     }
@@ -1004,16 +1133,22 @@ mod tests {
         verify = "specforge.doctor reports an unusable specforge.json (E069) as a finding"
     )]
     fn an_unusable_config_is_an_error_finding() {
-        let e069 = diag(
-            "E069",
-            "specforge.json can't be used: ./specforge.json is not valid JSON: expected value at line 1 column 41; no extension is loaded",
-            Some("fix specforge.json; `specforge explain E069` says what it must be"),
-        );
-        let fixture = Fixture::new().reporting(vec![e069]);
+        // What the environment reports for a specforge.json that is not JSON.
+        let fixture =
+            Fixture::new().config_problems(vec![specforge_common::ConfigProblem::NotJson {
+                path: "./specforge.json".into(),
+                error: "expected value at line 1 column 41".into(),
+            }]);
 
         let report = diagnose_with(&fixture.view(), true);
 
-        assert_eq!(finding_codes(&report), [("E069", FindingStatus::Error)]);
+        assert_eq!(
+            finding_codes(&report),
+            [
+                ("E069", FindingStatus::Error),
+                ("I002", FindingStatus::Info)
+            ]
+        );
         assert!(!report.ok());
         assert_eq!(
             report.findings[0].remediation,
@@ -1024,6 +1159,56 @@ mod tests {
             report.about(Part::Load).count(),
             0,
             "E069 is about the config, not an extension"
+        );
+    }
+
+    #[specforge_test(
+        behavior = "run_doctor_check",
+        verify = "doctor reports every diagnostic the environment reports as one finding, with the part of the setup it is about and the diagnostic's severity"
+    )]
+    fn a_load_warning_is_a_finding_but_leaves_extensions_ok() {
+        let fixture = Fixture::new()
+            .enabled(vec![specforge_project::EnabledExtension {
+                warnings: vec![Diagnostic::new(codes::W153, "its sandbox asks for more")],
+                ..specforge_project::EnabledExtension::unloaded("@acme/x")
+            }])
+            .declarations(vec![Fixture::declaration("@acme/x", "1.0.0")]);
+
+        let report = diagnose_with(&fixture.view(), true);
+
+        assert_eq!(finding_codes(&report), [("W153", FindingStatus::Warn)]);
+        assert_eq!(report.findings[0].about, About::Load);
+        assert!(report.ok() && report.extensions_ok());
+    }
+
+    #[specforge_test(
+        behavior = "run_doctor_check",
+        verify = "doctor reports a missing or changed installed binary once, with the remedy its load gives"
+    )]
+    fn without_a_root_a_missing_module_is_a_load_finding() {
+        use specforge_installed::LoadProblem;
+        let fixture = Fixture::new().enabled(vec![failing_entry(
+            "@acme/gone",
+            LoadProblem::ModuleMissing {
+                path: "gone.wasm".into(),
+            },
+        )]);
+
+        // With a root the lock's binary check states it (no lock entry here,
+        // so nothing); without one nothing is checked on disk, so the
+        // environment's own diagnostic is the finding.
+        let report = diagnose_with(&fixture.rootless_view(), true);
+
+        assert_eq!(report.about(Part::Binary).count(), 0);
+        let loads: Vec<&str> = report.about(Part::Load).map(|f| f.code.as_str()).collect();
+        assert_eq!(loads, ["E028"]);
+        assert!(!report.ok() && !report.extensions_ok());
+
+        let rooted = diagnose_with(&fixture.view(), true);
+        assert_eq!(
+            rooted.about(Part::Load).count(),
+            0,
+            "a module-health failure is its binary finding when there is a root"
         );
     }
 }

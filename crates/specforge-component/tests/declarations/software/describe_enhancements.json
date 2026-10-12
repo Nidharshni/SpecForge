@@ -2,7 +2,6 @@
   "category": "enhancements",
   "items": [
     {
-      "edge_types": [],
       "fields": [
         {
           "default_value": null,
@@ -31,7 +30,6 @@
       "target_kind": "module"
     },
     {
-      "edge_types": [],
       "fields": [
         {
           "default_value": null,

@@ -158,6 +158,24 @@ impl crate::shape::Shape for DiagnosticList {
     }
 }
 
+/// One diagnostic as every surface prints it ([`diagnostics_json`]), owned so
+/// a document can hold it: serializes as one [`DiagnosticJson`], and its
+/// schema refers to the named `Diagnostic` shape.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DiagnosticDocument(pub Diagnostic);
+
+impl Serialize for DiagnosticDocument {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        diagnostics_json(std::slice::from_ref(&self.0))[0].serialize(serializer)
+    }
+}
+
+impl crate::shape::Shape for DiagnosticDocument {
+    fn body(defs: &mut crate::shape::Definitions) -> serde_json::Value {
+        <DiagnosticJson<'static> as crate::shape::Shape>::schema(defs)
+    }
+}
+
 impl From<Vec<Diagnostic>> for DiagnosticList {
     fn from(diagnostics: Vec<Diagnostic>) -> Self {
         DiagnosticList(diagnostics)

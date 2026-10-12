@@ -58,20 +58,3 @@ feature editor_query_files "Editor Query Files" {
     without requiring an LSP server.
   """
 }
-
-feature extension_body_parsing "Extension Body Parsing" {
-  status   done
-  problem  """
-    Some extensions give their entity kinds body syntax the core grammar
-    does not parse (software's type field types and port method
-    signatures). Reporting each such line as a parse error would bury
-    real errors.
-  """
-  solution """
-    A kind's extension declares has_body_parser to own its body syntax:
-    E001 parse errors inside entities of that kind are not reported
-    (extension_owned_body_syntax). The rest of the entity is parsed by
-    the core field parser. Extensions cannot plug in their own body
-    parsers or grammars.
-  """
-}

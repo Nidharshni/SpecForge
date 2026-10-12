@@ -129,3 +129,62 @@ builtin's or a `.wasm` file entry's version, today `check`'s), or a resolver for
 
 **Amended by ADR 0050 (2026-10-11):** D1's module is `specforge_package::peers`, beside the package types in the
 host-side crate `specforge-package`; `PeerDependency`, the wire's text, stays in the protocol types.
+
+**Amended by ADR 0059 (2026-10-12), to amendment A1:** the plan also owns the trust pins its fetches decided: it
+pins them through the registry port as the last step of its change, and a refused plan pins nothing.
+
+## Amendment (round 7): the gate judges the project's peer set
+
+The round-6 lock plan applied the rule once per change, but to its own set: the lock's entries, every
+one of them, a missing peer dropped. "Not done" bullets 1 and 2 left the rest to `check`. Three sets
+met the one rule: the lock plan's, `required_builtins`' walk of the embedded builtins (run only when
+the thing added was a builtin, with its own E027), and the registry build's loaded declarations. They
+disagreed:
+
+- `add ./x.wasm` requiring `@specforge/software ^9` succeeded and every `check` failed E027; so did a
+  registry package, `init --extensions`, MCP's `add_extension`, and an install requiring a builtin no
+  entry enabled ("which is not installed").
+- `add @specforge/software` succeeded though an installed extension's range rejected it: a builtin's
+  add judged nothing.
+- An install that broke a `.wasm` file entry's peer, or that a file entry did not satisfy, succeeded.
+- An install that "broke" a locked extension no entry enables was refused, though no compile loads it.
+
+Bullet 2's reason, "their versions are not installable choices, so there is nothing to unify", mixed
+unifying with judging: a local install has nothing to unify either, and the gate refused it with E027.
+
+- **B1. One set.** The project peer set is the extensions a project's `specforge.json` entries load,
+  each entry resolved by the extension load's one rule (`Installed::resolve`, ADR 0028): a builtin by
+  its embedded declaration, an installed extension by its lock entry (the version and peers its pinned
+  module declares), a `.wasm` file entry by its file's declaration. An entry that loads nothing and a
+  locked extension no entry enables are not members. The registry build judges the set as loaded (its
+  input, unchanged); the lock plan judges it as the change leaves it (`ProjectPeers`), before anything is
+  written.
+- **B2. Judged whole, a missing peer included.** Every declared peer whose dependent or peer the change
+  touches (a staged install, an appended entry) is judged: E073 for an unreadable range; E027 for a
+  required peer no member provides, with `check`'s message and suggestion; a peer installed from a
+  registry, out of range, unified against the registry the touching install came from (R-RES-006/005),
+  its requirers the set's members; any other out of range (a local install, a builtin, a `.wasm` file
+  entry) E027. A member a change breaks is named: "installing|updating|enabling '<name>' <version>
+  breaks '<dependent>': ...".
+- **B3. `add` and `init` enable the builtins a change requires.** Before judging, a verb that enables
+  appends each required peer of what it adds that is a builtin no entry enables, and theirs,
+  dependencies first, from any source (ADR 0028 D7's builtin-only walk is gone). `update` enables
+  nothing: an upgrade's missing peer is refused, and the refusal names the `add` that enables it.
+- **B4. A plan that only enables accepts any lock.** It opens no change; an unreadable lock hides the
+  installed extensions from the set, as from the compile.
+- **B5. Every specifier of an add is one plan** (A1 as amended 2026-10-11): a builtin one specifier
+  enables is judged with the installs the others stage, and with what the project already loads.
+
+Supersedes "Not done" bullet 2 and, for a missing peer, bullet 1: a missing peer is refused, a
+builtin one enabled; a missing registry or local peer is still not installed for the user.
+
+Rejected: a dependency resolver for `add` (a missing registry peer has a version, a trust decision
+and a source to choose; still the trigger below); refusing a missing builtin rather than enabling it
+(`add` of a builtin already enables its peers, and a builtin's version is no choice); keeping the lock
+as the set and adding builtins and file entries to it (it judges extensions no compile loads); the
+round-6 extension inventory as the set (it needs a compiled project, which `add` would have to load
+into the caller's runtime, ADR 0028 D7); the registry build judging the predicted set (members that
+failed to load would add E027s beside their E028).
+
+**What would reopen it:** a dependency resolver for `add`; an operation that must change a builtin's
+version; a peer whose installed module may declare other peers than its lock entry records.

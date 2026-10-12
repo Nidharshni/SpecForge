@@ -6,6 +6,7 @@ use serde::Serialize;
 use specforge_common::shape::Shape;
 
 use crate::args::{Arguments, NonEmpty};
+use crate::events::ExtensionAdded;
 use crate::mutation::{
     Failed, Mutated, Mutation, MutationArgs, MutationEvent, MutationReply, NoDiagnostics, Written,
 };
@@ -76,15 +77,20 @@ impl CoreTool for Tool {
 
         // The project the call installs into: the served one, or the one
         // `path` names.
-        let root = project.root.to_path_buf();
-        let extensions = extension::specified(&args.specifiers.0)?;
+        let root = project.root;
+        // A relative local path is read from the project's root: the server has no working
+        // directory of its own to mean it.
+        let extensions = extension::specified(&args.specifiers.0)?
+            .into_iter()
+            .map(|specified| specified.relative_to(root.dir()))
+            .collect();
 
         let registry =
-            specforge_ops_registry::ConfiguredRegistry::for_project(&root, "add_extension");
+            specforge_ops_registry::ConfiguredRegistry::for_project(root, "add_extension");
         // The shared operation `specforge add` runs. An agent can't be asked,
         // so a publisher key change is refused rather than re-pinned.
         let request = AddRequest {
-            root: &root,
+            root,
             extensions,
             allow_unsigned: args.allow_unsigned,
             trust: Trust::Refuse,
@@ -116,11 +122,11 @@ impl CoreTool for Tool {
         let written = added.added.iter().fold(
             Written::files(added.writes.clone()),
             |written, extension| {
-                written.with_event(MutationEvent::ExtensionAdded {
-                    specifier: extension.specifier.clone(),
+                written.with_event(MutationEvent::ExtensionAdded(ExtensionAdded {
+                    extension_specifier: extension.specifier.clone(),
                     total_extensions: added.extensions_enabled,
                     was_duplicate: extension.outcome.is_duplicate(),
-                })
+                }))
             },
         );
         Ok(Mutated::new(answer, written))

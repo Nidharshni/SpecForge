@@ -668,11 +668,21 @@ behavior run_doctor_check "Run Doctor Check" {
     and additional checks (shadowed fields, unknown target entities,
     edge label conflicts). An enabled extension that fails to load (E028:
     not installed; E070: its binary is not the one the lock pins) MUST be
-    reported as an error. Each problem MUST be one finding that says what it
-    is about (the config, the lock, a binary, a load, a conflict, a
-    shadowing, a peer, the toolchain); a missing or changed installed binary
+    reported as an error. Every diagnostic the environment reports (what
+    specforge check reports before any source) MUST be one finding, at its
+    severity (error, warn or info), saying the part of the setup it is about
+    as the environment says it: the config, the lock, an extension load,
+    structural-only, the providers, a declaration, a peer, the registries, a
+    rule, a surface, or a conflict (two contributions claiming one name: a
+    kind keyword, an edge label, a rule code, a command, tool or resource,
+    a provider scheme); doctor MUST NOT decide that part from the code. The
+    one source diagnostic doctor reports is E013, an entity id that is a
+    keyword, as a shadowing finding. A missing or changed installed binary
     is one binary finding, whose remediation is the command that reinstalls
-    it as its lock entry records it. The report MUST carry its verdict (no
+    it as its lock entry records it, and an unreadable lock one lock finding;
+    the load diagnostics they cause are not listed again. So doctor fails
+    whenever check fails on a diagnostic of the project's setup. The report
+    MUST carry its verdict (no
     error-level finding), and specforge doctor --format json and
     specforge.doctor MUST return the same report (the CLI adds the user's
     credentials). Each peer requirement the compile reports unsatisfied
@@ -697,6 +707,8 @@ behavior run_doctor_check "Run Doctor Check" {
   verify unit "doctor lists all enhancements grouped by entity kind"
   verify unit "doctor reports conflicts with resolution suggestions"
   verify unit "doctor detects shadowed grammar-level constructs"
+  verify unit "doctor reports every diagnostic the environment reports as one finding, with the part of the setup it is about and the diagnostic's severity"
+  verify integration "doctor fails whenever check fails on a diagnostic of the project's setup"
   verify unit "doctor --format json produces valid JSON output"
   verify unit "doctor reports an extension that fails to load (E028, E070) as an error"
   verify unit "doctor reports a missing or changed installed binary once, with the remedy its load gives"
@@ -857,23 +869,36 @@ behavior update_all_extensions "Update All Extensions" {
   }
   ensures {
     batch_update_completed_emitted "batch_update_completed event is emitted after all upgrades are applied"
-    semver_constraints_respected   "upgrades respect semver constraints, major bumps skipped without --major"
+    semver_constraints_respected   "an upgrade moves only to a newer version, within the locked version's caret range unless --major, never to the locked version or below"
     lock_hashes_refreshed          "updated lock entries record the new binary hashes"
     atomic_rollback_on_failure     "if any upgrade fails, all changes are rolled back"
   }
   contract   """
     When specforge update is invoked, the system MUST check all installed
     extensions for newer versions by querying their configured registries.
-    The system MUST upgrade each extension to the latest compatible version
-    respecting semver constraints. Major version bumps MUST be skipped unless
-    --major is specified. After upgrading, the system MUST refresh the lock
-    file with the new binary hashes. Peer dependency
+    What an extension moves to is one rule, its upgrade target: the
+    highest published version newer than the locked one, within the
+    locked version's caret range, or any newer version with --major. A
+    pre-release is a target only on the locked version's own
+    MAJOR.MINOR.PATCH when the locked version is a pre-release of it
+    (2.0.0-beta.1 moves to 2.0.0-beta.2 or 2.0.0, never to 3.0.0-alpha.1),
+    and a release never moves to a pre-release. An update MUST NOT move an
+    extension to its locked version or below: an extension with nothing
+    newer is up_to_date, also when its locked version is no longer
+    published. A lock entry whose version is not SemVer moves to the
+    version specforge add <name> installs. After upgrading, the system
+    MUST refresh the lock file with the new binary hashes. Peer dependency
     conflicts introduced by upgrades MUST be detected and reported before
     applying changes. Every upgrade is judged against the lock as the
     whole update leaves it, whatever order the lock lists the extensions
     in: an upgraded extension's peer ranges against the versions its peers
     are left at, those this update moves included, and every locked
-    extension's ranges against the versions this update locks. If any
+    extension's ranges against the versions this update locks.
+    The peers judged are those of the project's peer set (the extensions
+    its specforge.json entries load: builtins, installed extensions and
+    .wasm file entries): an upgraded extension's required peer that no
+    entry enables, a builtin included, refuses that upgrade (E027, the
+    message specforge check gives); update enables nothing. If any
     upgrade fails, the system MUST roll back all
     changes and report the failure. A write that fails while the checked
     upgrades are applied is the update's own failure, naming the file it
@@ -899,9 +924,12 @@ behavior update_all_extensions "Update All Extensions" {
   verify unit "newer versions detected from registry"
   verify unit "semver-compatible upgrades applied"
   verify unit "major version skipped without --major flag"
+  verify unit "an update never moves an extension to its locked version or below, and a locked version no longer published is up to date"
+  verify integration "update --major on a pre-release lock never installs a lower release"
   verify unit "lock file records new binary hashes after update"
   verify unit "peer dependency conflicts detected before applying"
   verify unit "every upgrade is judged against the lock as the whole update leaves it, whatever order the lock lists them in"
+  verify unit "an upgrade whose required peer no entry enables is refused, and update enables nothing"
   verify unit "failed upgrade rolls back all changes"
   verify unit "a write that fails while applying fails the update, naming what it could not write, and nothing is applied"
   verify integration "update never replaces a locally installed extension from a registry"

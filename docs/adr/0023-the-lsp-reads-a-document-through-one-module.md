@@ -35,7 +35,8 @@ split and reject it. A test pins what they share on the repository's expressions
 version, its `LineIndex` and its syntax (lexemes with roles, and the entity bodies, blocks and lists they
 open). Its interface: `at(position) -> Cursor`, `tokens(view)`, `index()`, `apply_change`. It lives in
 the LSP, not in ops: UTF-16 is the protocol's unit and no MCP tool asks about a position (ADR 0016's
-"editor-only navigation need").
+"editor-only navigation need"). (ADR 0056: the document no longer holds its URI; the store keys it by its
+file's session key.)
 
 **D3. One line index.** `LineIndex` is the only conversion between byte offsets and UTF-16 positions,
 both ways. A span of the graph or of a diagnostic is a position in the text the project was compiled

@@ -11,7 +11,6 @@ use std::path::{Path, PathBuf};
 use specforge_common::{Diagnostic, codes};
 use specforge_installed::{Module, declaration_of};
 use specforge_package::PackageName;
-use specforge_package::peers::{Verdict, verdict};
 use specforge_protocol_types::{ExtensionDeclaration, PeerDependency};
 use specforge_wasm::WasmRuntime;
 
@@ -33,7 +32,8 @@ impl Candidate {
     /// when they are no extension. `publish` and `extension validate` read a
     /// binary through it.
     pub fn read(runtime: &dyn WasmRuntime, bytes: &[u8]) -> Result<Candidate, OpError> {
-        let loaded = declaration_of(bytes, runtime)?;
+        let loaded = declaration_of(bytes, runtime)
+            .map_err(|why| OpError::of(OpErrorKind::InvalidInput, why))?;
         Ok(Candidate {
             declaration: loaded.declaration,
             warnings: loaded.warnings,
@@ -53,7 +53,8 @@ impl Candidate {
             ));
         };
         let loaded = declaration_of(bytes, runtime).map_err(|why| {
-            OpError::diagnostic(
+            OpError::coded(
+                crate::OpErrorKind::Internal,
                 codes::E028,
                 format!("the builtin '{name}' does not load: {}", why.message),
             )
@@ -143,8 +144,12 @@ impl Installable {
     /// Its declared name as the package name it installs under: E072 when it
     /// is none, before anything is written (ADR 0036).
     pub fn package(&self) -> Result<PackageName, OpError> {
-        PackageName::declared_by(&self.candidate.declaration)
-            .map_err(|why| OpError::from(specforge_common::package::invalid(&why)))
+        PackageName::declared_by(&self.candidate.declaration).map_err(|why| {
+            OpError::of(
+                OpErrorKind::InvalidInput,
+                specforge_common::package::invalid(&why),
+            )
+        })
     }
 }
 
@@ -158,107 +163,139 @@ pub struct LocalFile {
 }
 
 impl LocalFile {
-    /// Read the file at `path` — E054 "file not found: …" when it is not
-    /// there, "cannot read …: …" when it cannot be read — and what it
-    /// declares, as [`Installable::read`] checks it.
+    /// Read the extension `path` names — a `.wasm` file, or a crate
+    /// directory's built component ([`binary_at`]) — and what it declares,
+    /// as [`Installable::read`] checks it. E054 "file not found: …" when
+    /// nothing is at `path`; E040 when a directory holds no built
+    /// component; "cannot read …: …" (E054) when the file cannot be read.
+    /// `path` is the component read, so the lock records `local:<that
+    /// component>`.
     pub fn read(runtime: &dyn WasmRuntime, path: &Path) -> Result<LocalFile, OpError> {
-        let module = Module::read(path).map_err(|e| {
-            let message = if path.exists() {
-                format!("cannot read {}: {e}", path.display())
-            } else {
-                format!("file not found: {}", path.display())
-            };
-            OpError::diagnostic(codes::E054, message)
+        if !path.exists() {
+            return Err(OpError::coded(
+                crate::OpErrorKind::FileNotFound,
+                codes::E054,
+                format!("file not found: {}", path.display()),
+            ));
+        }
+        let path = binary_at(path)?;
+        let module = Module::read(&path).map_err(|e| {
+            OpError::coded(
+                crate::OpErrorKind::InvalidInput,
+                codes::E054,
+                format!("cannot read {}: {e}", path.display()),
+            )
         })?;
         Ok(LocalFile {
-            path: path.to_path_buf(),
             binary: Installable::read(runtime, module)?,
+            path,
         })
     }
 }
 
-/// The builtins to enable before the builtin `name`, dependencies first:
-/// its non-optional peers that are builtins, and theirs, each read once from
-/// its embedded binary. E028 when one does not load; E027 when a required
-/// peer is not satisfied by the builtin this specforge embeds, judged by the
-/// one peer rule (ADR 0041; E073 for a range that can't be read). A cycle
-/// among required builtins stops the walk; the registry build reports it.
-pub(crate) fn required_builtins(
-    runtime: &dyn WasmRuntime,
-    name: &'static str,
-) -> Result<Vec<&'static str>, OpError> {
-    let mut walk = Walk {
-        runtime,
-        read: Vec::new(),
-        visiting: Vec::new(),
-        order: Vec::new(),
-    };
-    walk.visit(name)?;
-    walk.order.retain(|builtin| *builtin != name);
-    Ok(walk.order)
-}
-
-struct Walk<'r> {
-    runtime: &'r dyn WasmRuntime,
-    /// Each builtin read so far, once.
-    read: Vec<(&'static str, Candidate)>,
-    visiting: Vec<&'static str>,
-    /// Dependencies first.
-    order: Vec<&'static str>,
-}
-
-impl Walk<'_> {
-    fn candidate(&mut self, name: &'static str) -> Result<&Candidate, OpError> {
-        if let Some(i) = self.read.iter().position(|(read, _)| *read == name) {
-            return Ok(&self.read[i].1);
+/// The binary `path` names: a `.wasm` component as given, or, for a
+/// crate directory, the component its crate builds
+/// (`target/wasm32-wasip2/release/<crate>.wasm`, the only `.wasm` there
+/// when the crate's name can't be read). E040 when there is none (no file,
+/// not built, several components and none the crate's).
+pub fn binary_at(path: &Path) -> Result<PathBuf, OpError> {
+    if !path.is_dir() {
+        if path.is_file() {
+            return Ok(path.to_path_buf());
         }
-        let candidate = Candidate::builtin(self.runtime, name)?;
-        self.read.push((name, candidate));
-        Ok(&self.read.last().expect("just pushed").1)
+        return Err(OpError::coded(
+            OpErrorKind::PreconditionFailed,
+            codes::E040,
+            format!("no extension binary at {}", path.display()),
+        )
+        .with_suggestion("name a .wasm component, or the extension's crate directory"));
     }
+    let release = path.join("target/wasm32-wasip2/release");
+    let not_built = || {
+        OpError::coded(
+            OpErrorKind::PreconditionFailed,
+            codes::E040,
+            format!(
+                "no built component in {}: build the extension first",
+                release.display()
+            ),
+        )
+        .with_suggestion("cargo build --release --target wasm32-wasip2")
+    };
+    if let Some(name) = crate_name(&path.join("Cargo.toml")) {
+        let built = release.join(format!("{}.wasm", name.replace('-', "_")));
+        if built.is_file() {
+            return Ok(built);
+        }
+    }
+    let mut built: Vec<PathBuf> = std::fs::read_dir(&release)
+        .map_err(|_| not_built())?
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.extension().is_some_and(|e| e == "wasm"))
+        .collect();
+    built.sort();
+    match built.len() {
+        0 => Err(not_built()),
+        1 => Ok(built.remove(0)),
+        _ => Err(OpError::coded(
+            OpErrorKind::PreconditionFailed,
+            codes::E040,
+            format!(
+                "{} holds several components ({}): name the one to publish",
+                release.display(),
+                built
+                    .iter()
+                    .filter_map(|p| p.file_name()?.to_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        )),
+    }
+}
 
-    fn visit(&mut self, name: &'static str) -> Result<(), OpError> {
-        // A cycle among required builtins stops here; the registry build
-        // reports it.
-        if self.order.contains(&name) || self.visiting.contains(&name) {
-            return Ok(());
+/// The `[package]` name of the crate whose manifest is `cargo_toml`.
+fn crate_name(cargo_toml: &Path) -> Option<String> {
+    let text = std::fs::read_to_string(cargo_toml).ok()?;
+    let mut in_package = false;
+    for line in text.lines() {
+        let line = line.trim();
+        if line.starts_with('[') {
+            in_package = line == "[package]";
+            continue;
         }
-        self.visiting.push(name);
-        let peers: Vec<(&'static str, PeerDependency)> = self
-            .candidate(name)?
-            .peers()
-            .iter()
-            .filter(|peer| !peer.optional)
-            .filter_map(|peer| Some((builtin_name(&peer.name)?, peer.clone())))
-            .collect();
-        for (peer, declared) in peers {
-            // The builtin this specforge embeds is the one that gets
-            // enabled: it must satisfy the requirement (ADR 0041).
-            let embedded = self.candidate(peer)?.version().to_string();
-            match verdict(&declared, Some(&embedded)) {
-                Verdict::Satisfied | Verdict::Missing => {}
-                Verdict::Unreadable(why) => {
-                    return Err(OpError::from(specforge_common::peers::unreadable(
-                        name, &declared, &why,
-                    )));
-                }
-                Verdict::OutOfRange { .. } | Verdict::NotSemver { .. } => {
-                    return Err(OpError::diagnostic(
-                        codes::E027,
-                        format!(
-                            "the builtin '{name}' requires '{peer}' {}, but this specforge embeds {peer} {embedded}",
-                            declared.version
-                        ),
-                    )
-                    .with_suggestion(
-                        "this specforge build's builtin extensions disagree: reinstall specforge",
-                    ));
-                }
-            }
-            self.visit(peer)?;
+        if in_package
+            && let Some(value) = line.strip_prefix("name")
+            && let Some(value) = value.trim_start().strip_prefix('=')
+        {
+            return Some(value.trim().trim_matches('"').to_string());
         }
-        self.visiting.pop();
-        self.order.push(name);
-        Ok(())
+    }
+    None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn a_crate_directory_names_its_built_component() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("Cargo.toml"),
+            "[package]\nname = \"my-ext\"\nversion = \"0.1.0\"\n",
+        )
+        .unwrap();
+        let error = binary_at(dir.path()).unwrap_err();
+        assert!(
+            error.message.contains("build the extension first"),
+            "{error:?}"
+        );
+        let release = dir.path().join("target/wasm32-wasip2/release");
+        std::fs::create_dir_all(&release).unwrap();
+        std::fs::write(release.join("other.wasm"), b"x").unwrap();
+        std::fs::write(release.join("my_ext.wasm"), b"x").unwrap();
+        assert_eq!(binary_at(dir.path()).unwrap(), release.join("my_ext.wasm"));
+        let file = release.join("other.wasm");
+        assert_eq!(binary_at(&file).unwrap(), file);
+        assert!(binary_at(&dir.path().join("missing.wasm")).is_err());
     }
 }

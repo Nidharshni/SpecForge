@@ -29,6 +29,7 @@ pub mod passes;
 mod policy;
 pub mod providers;
 mod session;
+mod setup;
 pub mod snapshot;
 mod sources;
 mod verdicts;
@@ -41,17 +42,15 @@ use sources::SourceCache;
 
 use snapshot::EntitySnapshot;
 use specforge_common::{
-    ConfigProblem, ConfigRead, Diagnostic, ProjectConfig, codes, discover_spec_files,
-    is_discovered, read_project_config,
+    ConfigProblem, ConfigRead, Diagnostic, ProjectConfig, ProjectRoot, codes, discover_spec_files,
+    read_project_config,
 };
 use specforge_graph::{Graph, GraphBuild, GraphConfig};
 use specforge_installed::{Builtins, Installed};
-use specforge_parser::SpecFile;
 use specforge_registry::{
     RegistryBuild, build_registries,
     rules::{CustomVerdicts, NoVerdicts},
 };
-use specforge_resolver::resolve_imports;
 use specforge_wasm::WasmRuntime;
 use verdicts::WasmVerdicts;
 
@@ -62,10 +61,11 @@ pub use inputs::{Changes, InputRole, SessionInputs, UpdateKind, WatchRoot, Watch
 pub use policy::{DiagnosticPolicy, LINT_PROFILE_NAMES, LintProfile, UnknownLintProfile};
 pub use providers::Providers;
 pub use session::{CheckMode, OpeningProject, ProjectSession, RuntimeSource, SourceChange, Update};
+pub use setup::{SetupDiagnostic, SetupPart};
 pub use specforge_graph::{
-    EdgeChange, GraphDelta, ModifiedNodeChange, NodeChange, compute_graph_delta,
+    EdgeChange, GraphDelta, ModifiedNodeChange, NodeAspect, NodeChange, compute_graph_delta,
 };
-pub use specforge_installed::{EnabledExtension, Loaded};
+pub use specforge_installed::{EnabledExtension, LoadSubject, Loaded};
 
 /// The runtime a project's extensions run in (every [`WasmRuntime`] is
 /// `Send + Sync`).
@@ -121,10 +121,9 @@ pub struct Environment {
     /// the loaded declarations (ADR 0004 D3-c): with any scheme registered,
     /// a ref with another scheme is I005.
     providers: Providers,
-    /// One E069 per config problem, then the extension load's diagnostics:
-    /// the runtime's load failures (E028/E033) in load order, then the
-    /// declarations' unknown keys (W138).
-    load_diagnostics: Vec<Diagnostic>,
+    /// One E069 per config problem. The extension load's diagnostics are on
+    /// [`Self::enabled`] ([`Installed::load_diagnostics`] orders them).
+    config_diagnostics: Vec<Diagnostic>,
     /// I002, when no extension loaded.
     structural_only: Option<Diagnostic>,
     /// The runtime the extensions were loaded in: every extension call an
@@ -133,6 +132,11 @@ pub struct Environment {
     /// without one, so no extension loaded ([`Self::empty`] has none;
     /// [`Self::with_registries`] has the one it is given).
     runtime: Option<SharedRuntime>,
+    /// The project root it was loaded from ([`Self::from_read`]); `None` for one
+    /// assembled in memory ([`Self::assemble`], [`Self::empty`],
+    /// [`Self::with_registries`]). For a loaded environment, [`Self::root`] is its
+    /// `dir()`.
+    root: Option<ProjectRoot>,
 }
 
 impl Environment {
@@ -145,9 +149,10 @@ impl Environment {
             spec_root: PathBuf::new(),
             registries: RegistryBuild::default(),
             providers: Providers::default(),
-            load_diagnostics: Vec::new(),
+            config_diagnostics: Vec::new(),
             structural_only: None,
             runtime: None,
+            root: None,
         }
     }
 
@@ -162,11 +167,11 @@ impl Environment {
         }
     }
 
-    /// Read the project's config and load its extensions into `runtime`
-    /// (none without one), which the environment then holds, then build the
-    /// registries from them.
-    pub fn load(root: &Path, runtime: Option<SharedRuntime>) -> Self {
-        Self::from_read(root, read_project_config(root), runtime)
+    /// Read the config of the project at `root` and load its extensions into
+    /// `runtime` (none without one), which the environment then holds, then
+    /// build the registries from them. The environment keeps `root`.
+    pub fn load(root: &ProjectRoot, runtime: Option<SharedRuntime>) -> Self {
+        Self::from_read(root, read_project_config(root.dir()), runtime)
     }
 
     /// The environment of the config `read`, the installed extensions
@@ -187,7 +192,7 @@ impl Environment {
     /// Reads nothing from disk. Its one effect is the probe's calls in the
     /// runtime it is given (the `WasmRuntime` port).
     pub fn assemble(read: ConfigRead, installed: Installed, load: ExtensionLoad) -> Self {
-        let mut load_diagnostics: Vec<Diagnostic> = read
+        let config_diagnostics: Vec<Diagnostic> = read
             .problems
             .iter()
             .map(config_problem_diagnostic)
@@ -199,9 +204,7 @@ impl Environment {
         let Loaded {
             enabled,
             declarations,
-            diagnostics,
         } = loaded;
-        load_diagnostics.extend(diagnostics);
         let mut registries = build_registries(declarations);
         // A custom rule's wasm_function is resolved against its extension
         // now, so a name it does not export is reported once (W112).
@@ -209,10 +212,14 @@ impl Environment {
             registries.probe(&WasmVerdicts::probe_only(runtime));
         }
         let providers = Providers::register(read.config.raw.as_ref(), registries.declarations());
-        let structural_only = registries
-            .declarations()
-            .is_empty()
-            .then(|| structural_only_notice(&read.config.extensions, &read.problems));
+        let structural_only = registries.declarations().is_empty().then(|| {
+            structural_only_notice(
+                read.found,
+                installed.root(),
+                &read.config.extensions,
+                &read.problems,
+            )
+        });
         let spec_root = read.config.spec_root_in(installed.root());
         Environment {
             read,
@@ -221,18 +228,24 @@ impl Environment {
             spec_root,
             registries,
             providers,
-            load_diagnostics,
+            config_diagnostics,
             structural_only,
             runtime,
+            root: None,
         }
     }
 
     /// The environment of the config `read` (the one read of
     /// `specforge.json`): the lock read at `root` once, the extensions
     /// loaded into `runtime` through the production policy, then
-    /// [`Self::assemble`]d. The disk adapter of the assembly.
-    pub fn from_read(root: &Path, read: ConfigRead, runtime: Option<SharedRuntime>) -> Self {
-        let installed = Installed::at(root);
+    /// [`Self::assemble`]d. The disk adapter of the assembly; the session's
+    /// open and [`Self::load`] are its callers.
+    pub(crate) fn from_read(
+        root: &ProjectRoot,
+        read: ConfigRead,
+        runtime: Option<SharedRuntime>,
+    ) -> Self {
+        let installed = Installed::at(root.dir());
         let load = match runtime {
             Some(runtime) => ExtensionLoad::In {
                 loaded: installed.load(&read.config.extensions, &builtins(), runtime.as_ref()),
@@ -240,7 +253,15 @@ impl Environment {
             },
             None => ExtensionLoad::NoRuntime,
         };
-        Self::assemble(read, installed, load)
+        Environment {
+            root: Some(root.clone()),
+            ..Self::assemble(read, installed, load)
+        }
+    }
+
+    /// The project root it was loaded from; `None` for one assembled in memory.
+    pub fn project_root(&self) -> Option<&ProjectRoot> {
+        self.root.as_ref()
     }
 
     /// The project root (where `specforge.json` lives); empty with no project.
@@ -341,26 +362,55 @@ impl Environment {
         diagnostics
     }
 
-    /// The diagnostics reported before any source, in this order: the
-    /// environment's own (why `specforge.json` is not used as written
-    /// (E069), the extension load's failures (E033, then E028/E070/W149 per
-    /// entry) and warnings (W153, W138), provider registration (W118/E057),
-    /// I002), then the registry build's, in its order
-    /// ([`specforge_registry::RegistryBuild::diagnostics`]).
-    pub fn diagnostics(&self) -> impl Iterator<Item = &Diagnostic> {
-        self.load_diagnostics
+    /// The diagnostics reported before any source, each with the part of
+    /// the setup it is about, in `specforge check`'s order: why
+    /// `specforge.json` is not used as written (E069), the extension load's
+    /// entry by entry (an entry's failure, or what it reported though it
+    /// loaded; the lock's E033 once, before the first entry it left
+    /// unloaded), provider registration (W118; E057 is a collision), I002,
+    /// then the registry build's, in its order
+    /// ([`specforge_registry::RegistryBuild::reported`]).
+    pub fn setup_diagnostics(&self) -> Vec<SetupDiagnostic<'_>> {
+        let of = |part, diagnostic| SetupDiagnostic { part, diagnostic };
+        let mut all: Vec<SetupDiagnostic<'_>> = self
+            .config_diagnostics
             .iter()
-            .chain(self.providers.diagnostics())
-            .chain(&self.structural_only)
-            .chain(self.registries.diagnostics())
+            .map(|d| of(SetupPart::Config, d))
+            .collect();
+        all.extend(
+            self.installed
+                .load_diagnostics(&self.enabled)
+                .into_iter()
+                .map(|(subject, d)| {
+                    of(
+                        match subject {
+                            LoadSubject::Lock => SetupPart::Lock,
+                            LoadSubject::Entry(i) => SetupPart::Entry(i),
+                        },
+                        d,
+                    )
+                }),
+        );
+        all.extend(self.providers.reported().map(|(part, d)| of(part, d)));
+        all.extend(
+            self.structural_only
+                .iter()
+                .map(|d| of(SetupPart::StructuralOnly, d)),
+        );
+        all.extend(
+            self.registries
+                .reported()
+                .map(|(part, d)| of(part.into(), d)),
+        );
+        all
     }
 
-    /// Whether a file (its path relative to the spec root) is left out of
-    /// the project, as discovery leaves it out: not a `.spec` file, under a
-    /// skipped directory (`target`, `node_modules`, ...) or matched by an
-    /// `exclude` entry.
-    pub fn excludes(&self, relative: &str) -> bool {
-        !is_discovered(relative, &self.read.config.exclude)
+    /// [`Self::setup_diagnostics`] without the parts: what `specforge check`
+    /// reports before any source.
+    pub fn diagnostics(&self) -> impl Iterator<Item = &Diagnostic> {
+        self.setup_diagnostics()
+            .into_iter()
+            .map(|setup| setup.diagnostic)
     }
 
     /// The project sources discovery finds now (`exclude` and the skipped
@@ -383,31 +433,12 @@ impl Environment {
     ) -> SourceBuild {
         let (sources, files) = SourceCache::read_all(&self.spec_root, discovered, held);
         let graph = GraphBuild::of(files, self.graph_config());
-        let imports = self.import_diagnostics(&sources, &graph);
+        let imports = sources.import_diagnostics(&graph);
         SourceBuild {
             sources,
             graph,
             imports,
         }
-    }
-
-    /// The import diagnostics of what `sources` and `graph` hold: E025 for
-    /// each source that could not be read, then the resolver's (E025,
-    /// I004, W113, W027). The same function after a cold read and after
-    /// every update.
-    pub(crate) fn import_diagnostics(
-        &self,
-        sources: &SourceCache,
-        graph: &GraphBuild,
-    ) -> Vec<Diagnostic> {
-        let files: Vec<(&str, &SpecFile)> = graph.files().collect();
-        sources
-            .unreadable()
-            .cloned()
-            .chain(resolve_imports(&self.spec_root, &files, &|path: &Path| {
-                path.is_file()
-            }))
-            .collect()
     }
 }
 
@@ -438,11 +469,30 @@ fn config_problem_diagnostic(problem: &ConfigProblem) -> Diagnostic {
 /// kind, field or rule checks). Reported after the errors that caused it,
 /// if any: the config problems (E069) that left nothing to load, or the
 /// load errors (E028).
-fn structural_only_notice(configured: &[String], problems: &[ConfigProblem]) -> Diagnostic {
+fn structural_only_notice(
+    found: bool,
+    root: &Path,
+    configured: &[String],
+    problems: &[ConfigProblem],
+) -> Diagnostic {
     let (message, suggestion) = if problems.iter().any(ConfigProblem::loads_nothing) {
         (
             "specforge.json could not be read — operating in structural-only mode".to_string(),
             format!("fix specforge.json ({} above)", codes::E069),
+        )
+    } else if !found && root.as_os_str().is_empty() {
+        (
+            "no project — operating in structural-only mode".to_string(),
+            "create a project with: specforge init".to_string(),
+        )
+    } else if !found {
+        // A loose root: no specforge.json at or above the path.
+        (
+            format!(
+                "no specforge.json at or above {} — operating in structural-only mode",
+                root.display()
+            ),
+            "create a project here with: specforge init".to_string(),
         )
     } else if configured.is_empty() {
         (

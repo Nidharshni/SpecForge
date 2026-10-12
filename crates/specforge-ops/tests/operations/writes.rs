@@ -117,7 +117,7 @@ const MODULE: &str = ".specforge/extensions/@sdk/greet/extension.wasm";
 fn add(root: &Path, source: Source) -> Result<extension::Added, specforge_ops::OpError> {
     extension::add(
         &AddRequest {
-            root,
+            root: &specforge_common::ProjectRoot::of(root).unwrap(),
             extensions: vec![source.into()],
             allow_unsigned: false,
             trust: Trust::Refuse,
@@ -130,14 +130,20 @@ fn add(root: &Path, source: Source) -> Result<extension::Added, specforge_ops::O
 
 /// The project at `root`, compiled in process with [`candidates`].
 fn compiled(root: &Path) -> CompiledProject {
-    CompiledProject::compile(root, Some(Arc::new(candidates())))
+    CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(root).unwrap(),
+        Some(Arc::new(candidates())),
+    )
 }
 
 /// The project at `root`, compiled with the component runtime that loads
 /// the builtins.
 fn compiled_with_builtins(root: &Path) -> CompiledProject {
     let runtime = specforge_component::ComponentRuntime::with_user_cache();
-    CompiledProject::compile(root, Some(Arc::new(runtime)))
+    CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(root).unwrap(),
+        Some(Arc::new(runtime)),
+    )
 }
 
 fn remove(root: &Path, name: &str, dry_run: bool) -> extension::RemoveOutcome {
@@ -175,7 +181,7 @@ fn format_writes_are_the_files_it_rewrote() {
     let before = files_under(root);
 
     let outcome = format::run(&Request {
-        root,
+        root: &specforge_common::ProjectRoot::of(root).unwrap(),
         paths: &[],
         mode: Mode::Write,
     });
@@ -188,7 +194,7 @@ fn format_writes_are_the_files_it_rewrote() {
 
     // A check writes nothing.
     let outcome = format::run(&Request {
-        root,
+        root: &specforge_common::ProjectRoot::of(root).unwrap(),
         paths: &[],
         mode: Mode::Check,
     });
@@ -243,7 +249,7 @@ fn init(dir: &Path, extensions: &[String]) -> specforge_ops::init::Outcome {
         extensions,
     };
     let plan = init::plan(&request, &candidates()).unwrap();
-    init::apply(dir, plan).unwrap()
+    init::apply(dir, plan, &candidates()).unwrap()
 }
 
 #[test]
@@ -422,7 +428,7 @@ fn a_failed_init_puts_back_what_was_there() {
     };
 
     let plan = init::plan(&request, &candidates()).unwrap();
-    let error = init::apply(&dir, plan).unwrap_err();
+    let error = init::apply(&dir, plan, &candidates()).unwrap_err();
 
     assert_eq!(error.code, "E032", "{error:?}");
     assert!(error.writes.is_empty(), "{:?}", error.writes);
@@ -698,7 +704,10 @@ fn stranded_lists_the_entities_by_id() {
 
 const OLD: &str = "// specforge-format: 0.9\nbehavior gamma \"Gamma\" {\n}\n";
 
-fn migration(root: &Path, dry_run: bool) -> specforge_ops::migrate::Request<'_> {
+fn migration(
+    root: &specforge_common::ProjectRoot,
+    dry_run: bool,
+) -> specforge_ops::migrate::Request<'_> {
     specforge_ops::migrate::Request {
         root,
         target: specforge_parser::CURRENT_FORMAT_VERSION,
@@ -720,11 +729,17 @@ fn a_migration_writes_each_file_and_its_backup() {
     let root = dir.path();
     let before = files_under(root);
 
-    let preview = specforge_ops::migrate::run(&migration(root, true), None);
+    let preview = specforge_ops::migrate::run(
+        &migration(&specforge_common::ProjectRoot::of(root).unwrap(), true),
+        None,
+    );
     assert!(preview.writes.is_empty());
     assert_eq!(changed_since(root, &before), Vec::<String>::new());
 
-    let outcome = specforge_ops::migrate::run(&migration(root, false), None);
+    let outcome = specforge_ops::migrate::run(
+        &migration(&specforge_common::ProjectRoot::of(root).unwrap(), false),
+        None,
+    );
 
     let written = [
         ".specforge/migration.json",
@@ -751,8 +766,10 @@ fn a_rolled_back_migration_keeps_only_its_backups() {
         c
     });
 
-    let outcome =
-        specforge_ops::migrate::run(&migration(root, false), Some(std::sync::Arc::new(runtime)));
+    let outcome = specforge_ops::migrate::run(
+        &migration(&specforge_common::ProjectRoot::of(root).unwrap(), false),
+        Some(std::sync::Arc::new(runtime)),
+    );
 
     assert!(outcome.rollback.is_some());
     assert_eq!(listed(&outcome.writes, root), ["old.spec.bak"]);
@@ -893,10 +910,105 @@ fn init_reads_a_local_file_once() {
     let plan = init::plan(&request, &runtime).unwrap();
     assert_eq!(handshakes(&runtime), 1);
 
-    init::apply(&dir, plan).unwrap();
+    init::apply(&dir, plan, &runtime).unwrap();
     assert_eq!(
         handshakes(&runtime),
         1,
         "apply installs without reading again"
+    );
+}
+
+#[specforge_test_macros::test(
+    behavior = "add_extension_to_existing_project",
+    verify = "add extension appends to extensions list"
+)]
+fn add_from_a_subdirectory_adds_to_the_project_it_is_in() {
+    let dir = project(&[], &[]);
+    let root = dir.path();
+    let sub = root.join("spec/docs");
+    std::fs::create_dir_all(&sub).unwrap();
+    let before = files_under(root);
+
+    // The project the sub-path is in is the one that gains the extension.
+    let added = add(&sub, Source::Builtin("@specforge/product")).unwrap();
+
+    assert!(matches!(
+        added.added[0].outcome,
+        AddOutcome::Builtin { changed: true, .. }
+    ));
+    assert_eq!(listed(&added.writes, root), ["specforge.json"]);
+    assert_eq!(changed_since(root, &before), ["specforge.json"]);
+    assert!(!sub.join("specforge.json").exists());
+}
+
+#[specforge_test_macros::test(
+    behavior = "non_interactive_init",
+    verify = "init refuses local extensions the lock plan refuses before it writes anything"
+)]
+fn init_refuses_a_local_file_the_embedded_builtin_does_not_satisfy() {
+    use specforge_ops::init;
+    let scratch = TempDir::new().unwrap();
+    let needs = scratch.path().join("needs.wasm");
+    std::fs::write(&needs, testing::NEEDS_SOFTWARE_9).unwrap();
+    let dir = scratch.path().join("never");
+    let extensions = vec![
+        needs.display().to_string(),
+        "@specforge/software".to_string(),
+    ];
+    let request = init::Request {
+        dir: &dir,
+        name: Some("demo"),
+        version: init::DEFAULT_VERSION,
+        extensions: &extensions,
+    };
+
+    let error = init::plan(&request, &testing::probes()).unwrap_err();
+
+    assert_eq!(error.code, "E027", "{error:?}");
+    assert_eq!(
+        error.message,
+        "extension '@probe/needs-software' requires peer dependency '@specforge/software' ^9.0 but version 1.0.0 is installed"
+    );
+    assert!(!dir.join("specforge.json").exists());
+}
+
+#[specforge_test_macros::test(
+    behavior = "non_interactive_init",
+    verify = "init enables the builtins a local file requires before it"
+)]
+fn init_enables_the_builtins_a_local_file_requires() {
+    use specforge_ops::init;
+    let scratch = TempDir::new().unwrap();
+    let needs = scratch.path().join("needs.wasm");
+    std::fs::write(&needs, testing::NEEDS_SOFTWARE_1).unwrap();
+    let dir = scratch.path().join("proj");
+    let extensions = vec![needs.display().to_string()];
+    let request = init::Request {
+        dir: &dir,
+        name: Some("demo"),
+        version: init::DEFAULT_VERSION,
+        extensions: &extensions,
+    };
+    let runtime = testing::probes();
+
+    let plan = init::plan(&request, &runtime).unwrap();
+
+    assert_eq!(
+        plan.extensions,
+        [
+            "@specforge/software",
+            "@probe/needs-software",
+            "@specforge/testing"
+        ]
+    );
+    init::apply(&dir, plan, &runtime).unwrap();
+    let compiled = CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(&dir).unwrap(),
+        Some(Arc::new(runtime)),
+    );
+    assert!(
+        !compiled.diagnostics().iter().any(|d| d.code == "E027"),
+        "{:?}",
+        compiled.diagnostics()
     );
 }

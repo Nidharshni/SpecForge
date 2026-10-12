@@ -54,7 +54,7 @@ expression: result.entities
     "raw_body": "\n    status done\n",
     "span": {
       "file": "test.spec",
-      "start_line": 6,
+      "start_line": 10,
       "start_col": 1,
       "end_line": 12,
       "end_col": 2

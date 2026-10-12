@@ -39,7 +39,7 @@ fn fresh_project_dir() -> tempfile::TempDir {
     tempfile::TempDir::new().unwrap()
 }
 
-fn invoked(server: &McpServer, tool: &str) -> bool {
+fn invoked(server: &impl Logs, tool: &str) -> bool {
     events(server, "mcp_tool_invoked")
         .iter()
         .any(|p| p["toolName"] == tool && p["category"] == "mutation")
@@ -532,12 +532,14 @@ fn rename_recompiles_files_it_did_not_edit() {
         codes
     };
     let runtime = specforge_component::ComponentRuntime::with_user_cache();
-    let fresh: Vec<Value> =
-        specforge_project::CompiledProject::compile(&root, Some(Arc::new(runtime)))
-            .diagnostics()
-            .iter()
-            .map(|d| serde_json::to_value(d).unwrap())
-            .collect();
+    let fresh: Vec<Value> = specforge_project::CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(&root).unwrap(),
+        Some(Arc::new(runtime)),
+    )
+    .diagnostics()
+    .iter()
+    .map(|d| serde_json::to_value(d).unwrap())
+    .collect();
     let returned = parsed["diagnostics"].as_array().unwrap();
     assert_eq!(codes(returned), codes(&fresh), "{parsed}");
     let e003 = returned
@@ -588,7 +590,8 @@ fn rename_edits_the_files_under_a_configured_spec_root() {
         r#"{"name":"t","version":"0.1.0","extensions":["@specforge/software"],"spec_root":"spec"}"#,
     )
     .unwrap();
-    server.state_mut().serve(&root);
+    // The next call brings the served project up to date with the config just written.
+    call_tool(&mut server, "specforge.validate", json!({}));
     assert!(server.state().graph().node("token_unique").is_some());
 
     let parsed = rename(
@@ -709,14 +712,12 @@ fn rename_contract() {
         "{diagnostics:?}"
     );
     assert_eq!(references(&server, "login"), ["token_distinct"]);
-    let events: Vec<&str> = server
-        .state()
-        .events
-        .iter()
-        .map(|e| e.name.as_str())
-        .collect();
-    assert!(events.contains(&"mcp_tool_invoked"), "{events:?}");
-    assert!(events.contains(&"mcp_mutation_completed"), "{events:?}");
+    let events = server.log().names();
+    assert!(events.iter().any(|e| e == "mcp_tool_invoked"), "{events:?}");
+    assert!(
+        events.iter().any(|e| e == "mcp_mutation_completed"),
+        "{events:?}"
+    );
 }
 
 // --- specforge.init ---
@@ -1768,6 +1769,35 @@ fn format_contract() {
         })]
     );
     assert!(invoked(&server, "specforge.format"));
+}
+
+#[specforge_test(
+    behavior = "provide_mcp_add_extension_tool",
+    verify = "specforge.add_extension adds extension to config"
+)]
+fn add_extension_adds_the_extension_to_config() {
+    // Enables nothing; the module is a local .wasm, so the add is offline.
+    let mut server = components_server();
+    let root = server.root().to_path_buf();
+    assert!(config_extensions(&root).is_empty());
+
+    let added = tool(
+        &mut server,
+        "specforge.add_extension",
+        json!({"specifiers": [greet_blob().to_str().unwrap()]}),
+    );
+
+    // One specifier, one entry in `added`.
+    assert_eq!(added["added"][0]["extension"], GREET, "{added}");
+    assert_eq!(added["added"][0]["action"], "installed", "{added}");
+    // specforge.json lists it, and its module is where the compile loads it.
+    assert_eq!(config_extensions(&root), [GREET]);
+    assert!(
+        root.join(".specforge/extensions")
+            .join(GREET)
+            .join("extension.wasm")
+            .is_file()
+    );
 }
 
 // B:provide_mcp_add_extension_tool — verify contract

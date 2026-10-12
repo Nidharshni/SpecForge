@@ -24,9 +24,9 @@ pub struct EntityRecord {
     pub references: Vec<(String, Vec<String>)>,
     /// Its `verify` statements, in order: what it declares it will prove.
     pub obligations: Vec<ObligationRecord>,
-    /// Edges into it, in total and by the kind of the entity they come from.
+    /// Edges into it, in total and by edge type.
     pub incoming: EdgeCounts,
-    /// Edges out of it, in total and by the kind of the entity they reach.
+    /// Edges out of it, in total and by edge type.
     pub outgoing: EdgeCounts,
     /// What exempts it from obligations of its own whatever its kind, if
     /// anything: decided from its structure and the registries, never from
@@ -106,15 +106,21 @@ pub struct ObligationRecord {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct EdgeCounts {
     pub total: usize,
-    pub by_peer_kind: BTreeMap<String, usize>,
+    /// By edge type: the edges whose field writes one
+    /// ([`crate::EdgeRegistry::written_by`]); an edge of no type counts in
+    /// `total` only.
+    pub by_type: BTreeMap<String, usize>,
 }
 
-/// One graph edge (label = the field that declared it).
+/// One graph edge (label = the field that wrote it) and its edge type.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EdgeRecord {
     pub source: String,
     pub target: String,
     pub label: String,
+    /// The edge type the field `label` writes from the kind `source` is,
+    /// when it writes one.
+    pub edge_type: Option<String>,
 }
 
 /// Why an entity owes no obligations of its own whatever its kind.
@@ -249,18 +255,22 @@ impl EntityRecord {
         self
     }
 
-    /// `count` more edges in `direction`, to or from an entity of
-    /// `peer_kind`.
-    pub fn with_edges(mut self, direction: Direction, peer_kind: &str, count: usize) -> Self {
+    /// `count` more edges in `direction`, of `edge_type` when given (an
+    /// edge of no type otherwise).
+    pub fn with_edges(
+        mut self,
+        direction: Direction,
+        edge_type: Option<&str>,
+        count: usize,
+    ) -> Self {
         let counts = match direction {
             Direction::Incoming => &mut self.incoming,
             Direction::Outgoing => &mut self.outgoing,
         };
         counts.total += count;
-        *counts
-            .by_peer_kind
-            .entry(peer_kind.to_string())
-            .or_default() += count;
+        if let Some(edge_type) = edge_type {
+            *counts.by_type.entry(edge_type.to_string()).or_default() += count;
+        }
         self
     }
 
@@ -290,14 +300,14 @@ impl EntityRecord {
         self.fields.iter().map(|f| f.key.as_str())
     }
 
-    /// Edges in `direction`, only those to or from `peer_kind` when set.
-    pub fn edges(&self, direction: Direction, peer_kind: Option<&str>) -> usize {
+    /// Edges in `direction`, only those of `edge_type` when set.
+    pub fn edges(&self, direction: Direction, edge_type: Option<&str>) -> usize {
         let counts = match direction {
             Direction::Incoming => &self.incoming,
             Direction::Outgoing => &self.outgoing,
         };
-        match peer_kind {
-            Some(kind) => counts.by_peer_kind.get(kind).copied().unwrap_or(0),
+        match edge_type {
+            Some(edge_type) => counts.by_type.get(edge_type).copied().unwrap_or(0),
             None => counts.total,
         }
     }
@@ -342,9 +352,10 @@ mod tests {
             .with_field("empty", "")
             .with_list("tags", &["x, y", "z"])
             .with_field("status", "final")
-            .with_edges(Direction::Outgoing, "feature", 2)
-            .with_edges(Direction::Outgoing, "event", 1)
-            .with_edges(Direction::Incoming, "item", 1);
+            .with_edges(Direction::Outgoing, Some("Implements"), 2)
+            .with_edges(Direction::Outgoing, Some("Emits"), 1)
+            .with_edges(Direction::Outgoing, None, 1)
+            .with_edges(Direction::Incoming, Some("Contains"), 1);
 
         // A name written twice reads as its last text; both stay listed.
         assert_eq!(record.field("status"), Some("final"));
@@ -365,12 +376,14 @@ mod tests {
             tags.items.as_deref(),
             Some(&["x, y".to_string(), "z".to_string()][..])
         );
-        // Edge counts, in total and by peer kind.
-        assert_eq!(record.edges(Direction::Outgoing, None), 3);
-        assert_eq!(record.edges(Direction::Outgoing, Some("feature")), 2);
-        assert_eq!(record.edges(Direction::Outgoing, Some("type")), 0);
+        // Edge counts, in total and by edge type; an edge of no type counts
+        // in the total only.
+        assert_eq!(record.edges(Direction::Outgoing, None), 4);
+        assert_eq!(record.edges(Direction::Outgoing, Some("Implements")), 2);
+        assert_eq!(record.edges(Direction::Outgoing, Some("Emits")), 1);
+        assert_eq!(record.edges(Direction::Outgoing, Some("Other")), 0);
         assert_eq!(record.edges(Direction::Incoming, None), 1);
-        assert_eq!(record.edges(Direction::Incoming, Some("item")), 1);
+        assert_eq!(record.edges(Direction::Incoming, Some("Contains")), 1);
     }
 
     #[test]

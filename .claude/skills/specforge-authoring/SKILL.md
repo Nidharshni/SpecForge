@@ -53,7 +53,7 @@ Canonical `.spec` file structure for a SpecForge project. Example layout with `@
 
 ```
 specforge.json           # project config (preferred) -- created by `specforge init`
-specforge.spec           # spec block (legacy config) -- only if specforge.json is absent
+specforge.spec           # spec block (a graph entity; config is specforge.json)
 invariants/
   data.spec              # invariant blocks grouped by domain
   auth.spec
@@ -104,7 +104,7 @@ use "types/user"
 ### Resolution Rules
 
 - `use invariants/data` resolves to `<spec_root>/invariants/data.spec`
-- The spec root is the directory containing `specforge.spec`
+- The spec root is `spec_root` in `specforge.json`, else the project root
 - Paths use forward slashes (platform-independent)
 - The `.spec` extension is implicit -- never include it
 - All top-level declarations in a file are public by default

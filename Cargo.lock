@@ -1188,6 +1188,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "glob"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e4eba85ea1d0a966a983acd07deee566e67395d2d96b6fb39e62b5a833f1eb0b"
+
+[[package]]
 name = "half"
 version = "2.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2792,6 +2798,7 @@ dependencies = [
  "specforge-parser",
  "specforge-project",
  "specforge-protocol-types",
+ "specforge-registry",
  "specforge-registry-client",
  "specforge-registry-server",
  "specforge-test",
@@ -2808,6 +2815,7 @@ name = "specforge-common"
 version = "0.1.0"
 dependencies = [
  "ariadne",
+ "glob",
  "lasso",
  "serde",
  "serde_json",
@@ -2889,6 +2897,7 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+ "specforge-extension-sdk",
  "specforge-extension-sdk-macros",
  "specforge-protocol-types",
  "specforge-test",
@@ -2968,7 +2977,6 @@ dependencies = [
  "specforge-component",
  "specforge-diagnostics",
  "specforge-extension-sdk",
- "specforge-formatter",
  "specforge-graph",
  "specforge-installed",
  "specforge-ops",
@@ -3003,6 +3011,7 @@ dependencies = [
  "specforge-formatter",
  "specforge-graph",
  "specforge-installed",
+ "specforge-mcp",
  "specforge-mcp-macros",
  "specforge-ops",
  "specforge-ops-registry",
@@ -3053,6 +3062,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "similar",
  "specforge-common",
  "specforge-component",
  "specforge-diagnostics",
@@ -3218,7 +3228,6 @@ dependencies = [
  "rand 0.9.4",
  "reqwest",
  "rusqlite",
- "semver",
  "serde",
  "serde_json",
  "sha2",
@@ -3241,9 +3250,13 @@ dependencies = [
 name = "specforge-registry-wire"
 version = "0.1.0"
 dependencies = [
+ "chrono",
+ "ed25519-dalek",
  "form_urlencoded",
+ "hex",
  "serde",
  "serde_json",
+ "sha2",
  "specforge-package",
  "specforge-protocol-types",
  "specforge-test",
@@ -3258,7 +3271,6 @@ dependencies = [
  "specforge-parser",
  "specforge-test",
  "specforge-test-macros",
- "tempfile",
 ]
 
 [[package]]
@@ -3314,6 +3326,7 @@ version = "0.1.0"
 dependencies = [
  "notify",
  "serde_json",
+ "specforge-common",
  "specforge-project",
  "specforge-test",
  "specforge-test-macros",

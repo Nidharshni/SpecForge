@@ -60,19 +60,14 @@ fn tool_error(response: &Value) -> Value {
 }
 
 /// The names of every event recorded so far.
-fn event_names(server: &McpServer) -> Vec<String> {
-    server
-        .state()
-        .events
-        .iter()
-        .map(|e| e.name.clone())
-        .collect()
+fn event_names(server: &impl Logs) -> Vec<String> {
+    server.log().names()
 }
 
 /// The names of the events `act` records, `mcp_protocol_error_handled`
 /// (the report of any JSON-RPC error) left out.
-fn recorded(server: &mut McpServer, act: impl FnOnce(&mut McpServer)) -> Vec<String> {
-    let before = server.state().events.len();
+fn recorded(server: &mut Served, act: impl FnOnce(&mut McpServer)) -> Vec<String> {
+    let before = server.log().len();
     act(server);
     event_names(server)
         .split_off(before)
@@ -281,7 +276,10 @@ fn export_takes_a_schema_version() {
     let root = server.root().to_path_buf();
     let expected = {
         let runtime = specforge_component::ComponentRuntime::with_user_cache();
-        let project = CompiledProject::compile(&root, Some(Arc::new(runtime)));
+        let project = CompiledProject::compile(
+            &specforge_common::ProjectRoot::of(&root).unwrap(),
+            Some(Arc::new(runtime)),
+        );
         specforge_ops::export::export(
             &ProjectView::of(&project),
             &Request {
@@ -558,7 +556,10 @@ fn a_read_names_the_uri_the_client_read() {
 /// What `specforge export` writes for `request`, over the project at `root`.
 fn exported(root: &std::path::Path, request: &Request) -> String {
     let runtime = specforge_component::ComponentRuntime::with_user_cache();
-    let project = CompiledProject::compile(root, Some(Arc::new(runtime)));
+    let project = CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(root).unwrap(),
+        Some(Arc::new(runtime)),
+    );
     specforge_ops::export::export(&ProjectView::of(&project), request).unwrap()
 }
 

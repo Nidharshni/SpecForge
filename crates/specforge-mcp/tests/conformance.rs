@@ -201,7 +201,11 @@ fn core_tool_annotations_follow_what_each_tool_does() {
         let listed = tools.iter().find(|t| t["name"] == spec.name()).unwrap();
         // One declaration: the listing is what the effect derives.
         assert_eq!(listed["category"], spec.category().as_str(), "{listed}");
-        assert_eq!(listed["annotations"], spec.annotations(), "{listed}");
+        assert_eq!(
+            listed["annotations"],
+            serde_json::to_value(spec.annotations()).unwrap(),
+            "{listed}"
+        );
         match spec.effect() {
             Effect::Reads { .. } => {
                 assert_eq!(spec.annotations(), read_only_annotations(), "{listed}");

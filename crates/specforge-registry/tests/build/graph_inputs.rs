@@ -109,14 +109,20 @@ fn a_derived_reference_needs_a_target_kind_and_a_known_source() {
     );
 }
 
-/// `kind` with the field `name` inverse of `inverse`.
-fn inverse_pair(extension: &str, kind: &str, name: &str, inverse: &str) -> ExtensionDeclaration {
+/// `kind` with the field `name` to `target`, inverse of `inverse`.
+fn inverse_pair(
+    extension: &str,
+    kind: &str,
+    name: &str,
+    target: &str,
+    inverse: &str,
+) -> ExtensionDeclaration {
     declare(extension, |c| {
         c.kind(kind, |k| {
             k.keyword(kind);
             k.field(name, |f| {
                 f.field_type(FieldType::ReferenceList)
-                    .target_kind(kind)
+                    .target_kind(target)
                     .inverse_of(inverse);
             });
         });
@@ -130,10 +136,10 @@ fn inverse_pair(extension: &str, kind: &str, name: &str, inverse: &str) -> Exten
 fn inverse_pairs_are_written_lesser_first_and_sorted() {
     let declared = || {
         [
-            inverse_pair("@t/z", "zed", "z", "m"),
-            inverse_pair("@t/b", "bee", "b_field", "a_field"),
-            inverse_pair("@t/a", "ay", "a_field", "b_field"),
-            inverse_pair("@t/m", "em", "m", "z"),
+            inverse_pair("@t/z", "zed", "z", "em", "m"),
+            inverse_pair("@t/b", "bee", "b_field", "ay", "a_field"),
+            inverse_pair("@t/a", "ay", "a_field", "bee", "b_field"),
+            inverse_pair("@t/m", "em", "m", "zed", "z"),
         ]
     };
     let expected = vec![
@@ -148,6 +154,73 @@ fn inverse_pairs_are_written_lesser_first_and_sorted() {
     let mut reversed: Vec<_> = declared().into_iter().collect();
     reversed.reverse();
     assert_eq!(build(reversed).graph_inputs().bidirectional_pairs, expected);
+}
+
+#[spec(
+    behavior = "registry_build_graph_inputs",
+    verify = "an inverse field is a field of the target kind: the one inverse_of names, and every one naming the field inverse_of"
+)]
+fn inverse_fields_are_fields_of_the_target_kind() {
+    let declared = declare("@t/tree", |c| {
+        c.kind("Parent", |k| {
+            k.keyword("parent");
+            // Names `parent_ref`, which child registers.
+            k.field("children", |f| {
+                f.field_type(FieldType::ReferenceList)
+                    .target_kind("child")
+                    .inverse_of("parent_ref");
+            });
+            // Names `nope`, which child does not register.
+            k.field("dangling", |f| {
+                f.field_type(FieldType::ReferenceList)
+                    .target_kind("child")
+                    .inverse_of("nope");
+            });
+            k.field("no_target", |f| {
+                f.field_type(FieldType::ReferenceList).inverse_of("nope");
+            });
+        });
+        c.kind("Child", |k| {
+            k.keyword("child");
+            k.field("parent_ref", |f| {
+                f.field_type(FieldType::ReferenceList).target_kind("parent");
+            });
+            // Names `children`; and `parent_ref` is named by it too.
+            k.field("other", |f| {
+                f.field_type(FieldType::ReferenceList)
+                    .target_kind("parent")
+                    .inverse_of("children");
+            });
+        });
+    });
+    let build = build([declared]);
+    let fields = build.fields();
+
+    // The field `inverse_of` names, and every field of the target kind
+    // naming this one: `children` names `parent_ref` and `other` names it.
+    assert_eq!(
+        fields.inverse_fields("parent", "children"),
+        ["other", "parent_ref"]
+    );
+    // `parent_ref` names none; `children` names it.
+    assert_eq!(fields.inverse_fields("child", "parent_ref"), ["children"]);
+    // `other` names `children`, and nothing else names `other`.
+    assert_eq!(fields.inverse_fields("child", "other"), ["children"]);
+    // An inverse_of the target kind lacks is no inverse; nor is a field
+    // with no target kind, or one that is not registered.
+    assert!(fields.inverse_fields("parent", "dangling").is_empty());
+    assert!(fields.inverse_fields("parent", "no_target").is_empty());
+    assert!(fields.inverse_fields("parent", "missing").is_empty());
+    assert!(fields.inverse_fields("nobody", "children").is_empty());
+
+    // The graph's pairs are the same relation: no pair for `dangling`.
+    assert_eq!(
+        build.graph_inputs().bidirectional_pairs,
+        [
+            ("children".to_string(), "other".to_string()),
+            ("children".to_string(), "parent_ref".to_string())
+        ]
+    );
 }
 
 #[spec(
@@ -187,10 +260,6 @@ fn the_graph_inputs_contract_holds() {
     let inputs = build.graph_inputs();
 
     // registries_populated, registries_agree: each input says what the build holds.
-    assert_eq!(
-        inputs.body_parser_kinds,
-        ["doc".to_string()].into_iter().collect()
-    );
     assert!(
         inputs
             .single_reference_fields

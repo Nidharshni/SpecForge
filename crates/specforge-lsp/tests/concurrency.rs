@@ -5,10 +5,12 @@ use specforge_lsp::LspState;
 use specforge_project::{Buffer, SourceChange};
 use specforge_test_macros::test as spec;
 
+use crate::{change, url};
+
 /// Helper: create an `Arc<RwLock<LspState>>` pre-loaded with a single document.
 fn shared_state_with_document() -> Arc<RwLock<LspState>> {
     let mut state = LspState::new();
-    state.open_document("file:///test.spec", "behavior foo \"test\" {}\n");
+    state.open_document(&url("file:///test.spec"), "behavior foo \"test\" {}\n", 1);
     Arc::new(RwLock::new(state))
 }
 
@@ -29,7 +31,10 @@ async fn concurrent_reads_complete() {
         let other = state.clone();
         let second = tokio::spawn(async move {
             let s = other.read().await;
-            s.document("file:///test.spec").unwrap().text().to_string()
+            s.document(&url("file:///test.spec"))
+                .unwrap()
+                .text()
+                .to_string()
         });
         let content = tokio::time::timeout(std::time::Duration::from_secs(5), second)
             .await
@@ -51,15 +56,15 @@ async fn concurrent_reads_complete() {
             let s = state.read().await;
             all_in.wait().await;
             assert!(
-                s.is_open("file:///test.spec"),
+                s.document(&url("file:///test.spec")).is_some(),
                 "reader {i} must see open doc"
             );
-            let doc = s.document("file:///test.spec").unwrap();
+            let doc = s.document(&url("file:///test.spec")).unwrap();
             assert!(
                 doc.text().contains("behavior foo"),
                 "reader {i} content mismatch"
             );
-            s.open_uris().len()
+            usize::from(s.document(&url("file:///test.spec")).is_some())
         }));
     }
 
@@ -86,7 +91,7 @@ async fn concurrent_reads_see_consistent_state() {
     let state = Arc::new(RwLock::new(LspState::new()));
     {
         let mut s = state.write().await;
-        s.open_document(URI, &text(1));
+        s.open_document(&url(URI), &text(1), 1);
         s.session_mut()
             .unwrap()
             .update(SourceChange::Hold(&[Buffer::new(PATH, text(1))]));
@@ -97,7 +102,7 @@ async fn concurrent_reads_see_consistent_state() {
     async fn observe(state: &RwLock<LspState>) -> (usize, Vec<usize>) {
         let s = state.read().await;
         let version = |id: &str| id.trim_start_matches("entity_").parse::<usize>().unwrap();
-        let content = s.document(URI).unwrap().text().to_string();
+        let content = s.document(&url(URI)).unwrap().text().to_string();
         let doc = version(content.split_whitespace().nth(1).unwrap());
         let graph = s
             .graph()
@@ -129,7 +134,7 @@ async fn concurrent_reads_see_consistent_state() {
             for v in 2..=30 {
                 let mut session = {
                     let mut s = state.write().await;
-                    s.open_document(URI, &text(v));
+                    s.open_document(&url(URI), &text(v), v as i32);
                     s.take_session().expect("no other update is running")
                 };
                 // A reader during the recompile.
@@ -173,10 +178,10 @@ async fn read_write_interleaving_no_deadlock() {
     for i in 0..10 {
         let state = state.clone();
         handles.push(tokio::spawn(async move {
-            let uri = format!("file:///doc_{i}.spec");
+            let uri = url(&format!("file:///doc_{i}.spec"));
             let content = format!("behavior doc_{i} \"Doc {i}\" {{}}\n");
             let mut s = state.write().await;
-            s.open_document(&uri, &content);
+            s.open_document(&uri, &content, 1);
         }));
     }
 
@@ -187,7 +192,9 @@ async fn read_write_interleaving_no_deadlock() {
             let s = state.read().await;
             // We don't assert exact counts since writes happen concurrently.
             // The key assertion: we got the lock and didn't deadlock.
-            let _count = s.open_uris().len();
+            let _count = (0..10)
+                .filter(|i| s.document(&url(&format!("file:///doc_{i}.spec"))).is_some())
+                .count();
         }));
     }
 
@@ -198,10 +205,9 @@ async fn read_write_interleaving_no_deadlock() {
 
     // After all tasks, verify final state is consistent
     let s = state.read().await;
-    assert_eq!(s.open_uris().len(), 10, "all 10 documents must be open");
     for i in 0..10 {
-        let uri = format!("file:///doc_{i}.spec");
-        assert!(s.is_open(&uri), "document {uri} must be open");
+        let uri = url(&format!("file:///doc_{i}.spec"));
+        assert!(s.document(&uri).is_some(), "document {uri} must be open");
     }
 }
 
@@ -221,19 +227,22 @@ async fn rapid_open_close_no_corruption() {
     for i in 0..20 {
         let state = state.clone();
         handles.push(tokio::spawn(async move {
-            let uri = format!("file:///rapid_{i}.spec");
+            let uri = url(&format!("file:///rapid_{i}.spec"));
             let content = format!("behavior rapid_{i} \"Rapid {i}\" {{}}\n");
 
             // Open
             {
                 let mut s = state.write().await;
-                s.open_document(&uri, &content);
+                s.open_document(&uri, &content, 1);
             }
 
             // Read and verify
             {
                 let s = state.read().await;
-                assert!(s.is_open(&uri), "document must be open after open_document");
+                assert!(
+                    s.document(&uri).is_some(),
+                    "document must be open after open_document"
+                );
                 let doc = s.document(&uri).unwrap();
                 assert!(doc.text().contains(&format!("rapid_{i}")));
             }
@@ -242,7 +251,11 @@ async fn rapid_open_close_no_corruption() {
             {
                 let mut s = state.write().await;
                 // Replace the title text (starts after the first quote)
-                s.apply_change(&uri, Some(crate::lsp_range(0, 0, 0, 0)), "// edited\n");
+                s.change_document(
+                    &uri,
+                    2,
+                    &[change(Some(crate::lsp_range(0, 0, 0, 0)), "// edited\n")],
+                );
             }
 
             // Read the change
@@ -264,7 +277,10 @@ async fn rapid_open_close_no_corruption() {
             // Verify closed
             {
                 let s = state.read().await;
-                assert!(!s.is_open(&uri), "document must not be open after close");
+                assert!(
+                    s.document(&uri).is_none(),
+                    "document must not be open after close"
+                );
             }
         }));
     }
@@ -275,7 +291,10 @@ async fn rapid_open_close_no_corruption() {
 
     // Final state: all documents closed
     let s = state.read().await;
-    assert_eq!(s.open_uris().len(), 0, "no documents should remain open");
+    for i in 0..20 {
+        let uri = url(&format!("file:///rapid_{i}.spec"));
+        assert!(s.document(&uri).is_none(), "{uri} should not remain open");
+    }
 }
 
 #[spec(
@@ -291,10 +310,10 @@ async fn concurrent_writes_to_different_documents() {
     for i in 0..10 {
         let state = state.clone();
         handles.push(tokio::spawn(async move {
-            let uri = format!("file:///cw_{i}.spec");
+            let uri = url(&format!("file:///cw_{i}.spec"));
             let content = format!("behavior cw_{i} \"CW {i}\" {{}}\n");
             let mut s = state.write().await;
-            s.open_document(&uri, &content);
+            s.open_document(&uri, &content, 1);
         }));
     }
     for handle in handles {
@@ -306,9 +325,13 @@ async fn concurrent_writes_to_different_documents() {
     for i in 0..10 {
         let state = state.clone();
         handles.push(tokio::spawn(async move {
-            let uri = format!("file:///cw_{i}.spec");
+            let uri = url(&format!("file:///cw_{i}.spec"));
             let mut s = state.write().await;
-            s.apply_change(&uri, Some(crate::lsp_range(0, 0, 0, 0)), "// header\n");
+            s.change_document(
+                &uri,
+                2,
+                &[change(Some(crate::lsp_range(0, 0, 0, 0)), "// header\n")],
+            );
         }));
     }
     for handle in handles {
@@ -317,9 +340,8 @@ async fn concurrent_writes_to_different_documents() {
 
     // Phase 3: verify all documents got their changes
     let s = state.read().await;
-    assert_eq!(s.open_uris().len(), 10);
     for i in 0..10 {
-        let uri = format!("file:///cw_{i}.spec");
+        let uri = url(&format!("file:///cw_{i}.spec"));
         let doc = s.document(&uri).expect("document must exist");
         assert!(
             doc.text().starts_with("// header\n"),

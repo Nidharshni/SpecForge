@@ -68,11 +68,14 @@ port RegistryClient {
   // the in-memory client (tests); both keep one contract suite.
   // A read carries the credential the user keeps for the registry, when
   // there is one; a download carries it only to the registry's own origin.
+  // A publish is always signed; a registry refuses a signature that isn't
+  // one or doesn't verify over the upload (INVALID_SIGNATURE), and the
+  // in-memory client refuses it the same way.
   method versions(name: PackageName, registry: RegistryConfig, credential: RegistryCredential) -> Result<string[], RegistryError>
   method metadata(name: PackageName, version: string, registry: RegistryConfig, credential: RegistryCredential) -> Result<PackageMetadata, RegistryError>
   method download(wasmUrl: string, registry: RegistryConfig, credential: RegistryCredential) -> Result<u8[], RegistryError>
   method search(query: SearchQuery, registry: RegistryConfig, credential: RegistryCredential) -> Result<SearchHit[], RegistryError>
-  method publish(wasm: u8[], declaration: ExtensionDeclaration, manifest: string, signature: string, registry: RegistryConfig, credential: RegistryCredential) -> Result<string, RegistryError>
+  method publish(wasm: u8[], declaration: ExtensionDeclaration, manifest: string, signature: PackageSignature, registry: RegistryConfig, credential: RegistryCredential) -> Result<PublishReceipt, RegistryError>
   method authenticate(registry: RegistryConfig, credential: RegistryCredential) -> Result<string, RegistryError>
   verify integration "RegistryClient contract is satisfied"
 }
@@ -81,12 +84,16 @@ port Registry {
   direction outbound
   category  "io/registry"
   // What operations reach a package registry through (ADR 0010, 0036,
-  // 0044, 0045): it lists a package's versions, fetches one that passed the
-  // fetch policy and publishes one, each to the one registry that serves
-  // the name. Its adapters are the configured registry (production) and
-  // the in-memory registry (tests); both keep one contract suite.
+  // 0044, 0045, 0059): it lists a package's versions, fetches one that
+  // passed the fetch policy, pins the publisher keys a committed install
+  // accepted, and publishes one, each to the one registry that serves the
+  // name. A fetch decides its publisher and writes nothing; the lock plan
+  // pins what it accepted as the last step of its change. Its adapters are
+  // the configured registry (production) and the in-memory registry
+  // (tests); both keep one contract suite.
   method versions(name: PackageName) -> Result<string[], ExtensionError>
-  method fetch(name: PackageName, version: string, allowUnsigned: boolean, trust: string) -> Result<RegistryPackage, ExtensionError>
+  method fetch(name: PackageName, version: string, policy: TrustPolicy) -> Result<RegistryPackage, ExtensionError>
+  method pin(pins: KeyPin[]) -> Result<void, ExtensionError>
   method publish(name: PackageName, version: string, wasm: u8[], declaration: ExtensionDeclaration) -> Result<RegistryPublished, ExtensionError>
   method search(query: string, contributes: string) -> Result<RegistrySearched, ExtensionError>
   verify integration "Registry contract is satisfied"
