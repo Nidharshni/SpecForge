@@ -904,3 +904,46 @@ fn stdin_refuses_json_with_the_error_document() {
     let document: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(document["code"], "invalid_input", "{document}");
 }
+
+#[specforge_test(
+    behavior = "format_spec_files",
+    verify = "summary count reflects actual changes"
+)]
+fn format_prints_how_many_files_it_formatted_and_changed() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    setup_project(root);
+    write_spec(root, "a.spec", "behavior a \"A\" {\n  contract \"x\"\n}\n");
+    write_spec(
+        root,
+        "b.spec",
+        "behavior b \"B\" {\n      contract   \"y\"\n}\n",
+    );
+    write_spec(root, "c.spec", "behavior c \"C\" {\n  contract \"z\"\n}\n");
+    let run = || {
+        Command::cargo_bin("specforge")
+            .unwrap()
+            .args(["format", "--path", root.to_str().unwrap()])
+            .output()
+            .unwrap()
+    };
+
+    let first = run();
+    let stdout = String::from_utf8(first.stdout).unwrap();
+    assert!(stdout.contains("b.spec"), "{stdout}");
+    assert!(
+        !stdout.contains("a.spec") && !stdout.contains("c.spec"),
+        "{stdout}"
+    );
+    let stderr = String::from_utf8(first.stderr).unwrap();
+    assert!(
+        stderr.contains("Formatted 3 file(s), 1 changed"),
+        "{stderr}"
+    );
+
+    let second = String::from_utf8(run().stderr).unwrap();
+    assert!(
+        second.contains("Formatted 3 file(s), 0 changed"),
+        "{second}"
+    );
+}
