@@ -12,8 +12,7 @@ pub(crate) struct Args {
     /// Entity ID to review (omit to review the whole project)
     entity: Option<String>,
 
-    /// Path to the spec root directory
-    #[arg(long, default_value = ".")]
+    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
     path: PathBuf,
 
     /// Hops around the entity

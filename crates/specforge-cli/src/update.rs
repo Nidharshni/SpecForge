@@ -10,8 +10,7 @@ pub(crate) struct Args {
     /// Extension name (updates all if omitted)
     name: Option<String>,
 
-    /// Path to the project root
-    #[arg(long, default_value = ".")]
+    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
     path: PathBuf,
 
     #[command(flatten)]

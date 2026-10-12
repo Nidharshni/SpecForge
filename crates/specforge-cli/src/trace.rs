@@ -10,8 +10,7 @@ pub(crate) struct Args {
     /// Entity ID to trace (omit to trace every entity)
     entity: Option<String>,
 
-    /// Path to the spec root directory
-    #[arg(long, default_value = ".")]
+    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
     path: PathBuf,
 
     /// Output format: json or human

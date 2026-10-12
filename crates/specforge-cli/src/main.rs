@@ -249,6 +249,61 @@ mod tests {
         pin_help(&root, &[]);
     }
 
+    /// The commands whose `path` is not a project path: a directory taken as
+    /// given (`new`, an extension crate) or `mcp`'s own sentence.
+    const AS_GIVEN: [&str; 5] = [
+        "new",
+        "extension init",
+        "extension build",
+        "extension validate",
+        "mcp",
+    ];
+
+    /// Every `path` argument of `command` and of each subcommand under it,
+    /// by the command's path from the root.
+    fn path_arguments(command: &clap::Command, at: &str, found: &mut Vec<(String, clap::Arg)>) {
+        for argument in command.get_arguments() {
+            if argument.get_id() == "path" {
+                found.push((at.to_string(), argument.clone()));
+            }
+        }
+        for sub in command.get_subcommands() {
+            let name = if at.is_empty() {
+                sub.get_name().to_string()
+            } else {
+                format!("{at} {}", sub.get_name())
+            };
+            path_arguments(sub, &name, found);
+        }
+    }
+
+    #[specforge_test_macros::test(
+        behavior = "locate_project_root",
+        verify = "every command's project path argument says it is a path inside the project"
+    )]
+    fn every_project_path_argument_has_the_one_help() {
+        let mut root = Cli::command();
+        root.build();
+        let mut found = Vec::new();
+        path_arguments(&root, "", &mut found);
+        for name in AS_GIVEN {
+            assert!(
+                found.iter().any(|(command, _)| command == name),
+                "AS_GIVEN names `{name}`, which takes no path"
+            );
+        }
+        for (command, argument) in &found {
+            if AS_GIVEN.contains(&command.as_str()) {
+                continue;
+            }
+            assert_eq!(
+                argument.get_help().map(ToString::to_string).as_deref(),
+                Some(crate::project::PATH_HELP),
+                "`specforge {command}`'s path says something else"
+            );
+        }
+    }
+
     /// Every argument of `command` and of each subcommand under it.
     fn all_arguments(command: &clap::Command, found: &mut Vec<(String, clap::Arg)>) {
         for argument in command.get_arguments() {

@@ -9,8 +9,7 @@ use std::path::PathBuf;
 // `specforge export`'s command line.
 #[derive(clap::Args)]
 pub(crate) struct Args {
-    /// Path to the spec root directory
-    #[arg(default_value = ".")]
+    #[arg(default_value = ".", help = crate::project::PATH_HELP)]
     path: PathBuf,
 
     /// Output format
@@ -123,8 +122,7 @@ impl Args {
 // `specforge schema`'s command line.
 #[derive(clap::Args)]
 pub(crate) struct SchemaArgs {
-    /// Path to the spec root directory
-    #[arg(default_value = ".")]
+    #[arg(default_value = ".", help = crate::project::PATH_HELP)]
     path: PathBuf,
 
     /// That entity kind and the edge types that can start or end at it

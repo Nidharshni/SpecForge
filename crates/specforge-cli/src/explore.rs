@@ -10,8 +10,7 @@ pub(crate) struct Args {
     /// Entity ID to explore from (omit to explore the whole project)
     entity: Option<String>,
 
-    /// Path to the spec root directory
-    #[arg(long, default_value = ".")]
+    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
     path: PathBuf,
 
     /// Only entities of this kind

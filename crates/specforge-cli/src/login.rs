@@ -33,8 +33,7 @@ pub(crate) struct Args {
     #[arg(long)]
     token_file: Option<PathBuf>,
 
-    /// Path to the project root (for registry config)
-    #[arg(long, default_value = ".")]
+    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
     path: PathBuf,
 
     #[command(flatten)]
@@ -48,9 +47,7 @@ pub(crate) struct LogoutArgs {
     #[arg(long)]
     registry: Option<String>,
 
-    /// The project whose specforge.json names the default registry (when
-    /// --registry is not given)
-    #[arg(long, default_value = ".")]
+    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
     path: PathBuf,
 
     #[command(flatten)]

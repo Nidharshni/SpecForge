@@ -16,8 +16,7 @@ pub(crate) struct Args {
     /// Defaults to the --path directory
     extension: Option<PathBuf>,
 
-    /// The project whose specforge.json configures the registries
-    #[arg(long, default_value = ".")]
+    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
     path: PathBuf,
 
     #[command(flatten)]

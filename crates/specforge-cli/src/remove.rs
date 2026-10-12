@@ -10,8 +10,7 @@ pub(crate) struct Args {
     /// Extension name
     name: String,
 
-    /// Path to the project root
-    #[arg(long, default_value = ".")]
+    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
     path: PathBuf,
 
     /// Force removal even if other extensions depend on it

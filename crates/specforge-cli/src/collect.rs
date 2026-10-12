@@ -20,8 +20,7 @@ use std::path::{Path, PathBuf};
 // `specforge collect`'s command line.
 #[derive(clap::Args)]
 pub(crate) struct Args {
-    /// Path to the project root
-    #[arg(long, default_value = ".")]
+    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
     path: PathBuf,
 
     /// Collector to use (e.g. cargo-test). Detected from project files if omitted.

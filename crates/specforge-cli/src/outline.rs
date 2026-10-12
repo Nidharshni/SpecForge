@@ -8,8 +8,7 @@ use std::path::PathBuf;
 // `specforge outline`'s command line.
 #[derive(clap::Args)]
 pub(crate) struct Args {
-    /// Path to the spec root directory
-    #[arg(default_value = ".")]
+    #[arg(default_value = ".", help = crate::project::PATH_HELP)]
     path: PathBuf,
 
     /// Output format

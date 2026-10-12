@@ -22,8 +22,7 @@ pub(crate) struct Args {
     /// an extension declares (`<extension>:<pass>`)
     pass: Option<String>,
 
-    /// Project directory
-    #[arg(long, default_value = ".")]
+    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
     path: PathBuf,
 
     #[command(flatten)]

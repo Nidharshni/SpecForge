@@ -9,6 +9,9 @@ use specforge_component::ComponentRuntime;
 use specforge_ops::OpError;
 use specforge_project::{CompiledProject, SharedRuntime};
 
+/// The help of every path argument that names a project.
+pub(crate) const PATH_HELP: &str = "A path inside the project (the nearest directory at or above it holding specforge.json; none: the directory itself, with the default configuration)";
+
 /// The project `path` is in; `file_not_found` when it does not exist.
 pub(crate) fn root(path: &Path) -> Result<ProjectRoot, OpError> {
     ProjectRoot::of(path).map_err(OpError::from)

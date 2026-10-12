@@ -11,7 +11,7 @@ Options:
           Registry alias (defaults to the default registry)
 
       --path <PATH>
-          The project whose specforge.json names the default registry (when --registry is not given)
+          A path inside the project (the nearest directory at or above it holding specforge.json; none: the directory itself, with the default configuration)
           
           [default: .]
 

@@ -13,8 +13,7 @@ pub(crate) struct Args {
     #[arg()]
     paths: Vec<PathBuf>,
 
-    /// Path to the spec root directory
-    #[arg(long, default_value = ".")]
+    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
     path: PathBuf,
 
     /// Check formatting without modifying files (exit 1 if unformatted)

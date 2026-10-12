@@ -10,8 +10,7 @@ pub(crate) struct Args {
     /// Entity kind (omit for every declared kind)
     kind: Option<String>,
 
-    /// Path to the spec root directory
-    #[arg(long, default_value = ".")]
+    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
     path: PathBuf,
 
     #[command(flatten)]

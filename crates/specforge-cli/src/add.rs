@@ -11,8 +11,7 @@ pub(crate) struct Args {
     #[arg(required = true, num_args = 1..)]
     specifiers: Vec<String>,
 
-    /// Path to the project root
-    #[arg(long, default_value = ".")]
+    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
     path: PathBuf,
 
     #[command(flatten)]

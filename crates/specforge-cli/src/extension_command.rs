@@ -406,7 +406,7 @@ fn command_line(ext: &str, commands: &[&ExtensionCommand]) -> Command {
                     .long(PATH)
                     .value_name("PATH")
                     .default_value(".")
-                    .help("Path to the project"),
+                    .help(crate::project::PATH_HELP),
             )
             .arg(
                 Arg::new(FORMAT)
@@ -562,6 +562,21 @@ mod tests {
 
     fn parse(argv: &[&str]) -> Result<Map<String, Value>, clap::Error> {
         parse_with_format(argv).map(|(args, _)| args)
+    }
+
+    #[specforge_test(
+        behavior = "locate_project_root",
+        verify = "every command's project path argument says it is a path inside the project"
+    )]
+    fn the_host_path_option_has_the_one_help() {
+        let command = ExtensionCommand::new("@acme/x", "x", &contribution());
+        let line = command_line("x", &[&command]);
+        let sub = line.find_subcommand(command.cli_name()).unwrap();
+        let path = sub.get_arguments().find(|a| a.get_id() == PATH).unwrap();
+        assert_eq!(
+            path.get_help().map(ToString::to_string).as_deref(),
+            Some(crate::project::PATH_HELP)
+        );
     }
 
     #[test]

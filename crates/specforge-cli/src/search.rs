@@ -17,8 +17,7 @@ pub(crate) struct Args {
     #[arg(long, value_parser = options::choice(&specforge_ops::registry::CONTRIBUTES))]
     contributes: Option<DeclaredCategory>,
 
-    /// Path to the project root (for registry config)
-    #[arg(long, default_value = ".")]
+    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
     path: PathBuf,
 
     #[command(flatten)]

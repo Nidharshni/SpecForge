@@ -7,8 +7,7 @@ use std::path::PathBuf;
 // `specforge extensions`'s command line.
 #[derive(clap::Args)]
 pub(crate) struct Args {
-    /// Path to the project root
-    #[arg(long, default_value = ".")]
+    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
     path: PathBuf,
 
     #[command(flatten)]

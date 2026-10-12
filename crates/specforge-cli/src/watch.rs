@@ -21,8 +21,7 @@ use specforge_watch::{Applied, DEFAULT_DEBOUNCE_WINDOW, Notify, SessionWatch, Wa
 // `specforge watch`'s command line.
 #[derive(clap::Args)]
 pub(crate) struct Args {
-    /// Project directory
-    #[arg(long, default_value = ".")]
+    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
     path: PathBuf,
 
     #[command(flatten)]
