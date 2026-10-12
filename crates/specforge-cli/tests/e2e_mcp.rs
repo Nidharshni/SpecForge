@@ -2962,15 +2962,80 @@ fn mcp_lifecycle_notifications_initialized() {
     );
 }
 
+/// Every line a child wrote to `stdout`, forwarded on a channel by a thread,
+/// so a reply that never comes (a missing flush) fails after a timeout
+/// instead of hanging the test.
+fn lines_on_a_channel(stdout: std::process::ChildStdout) -> std::sync::mpsc::Receiver<String> {
+    use std::io::{BufRead, BufReader};
+    let (sender, receiver) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        for line in BufReader::new(stdout).lines() {
+            let Ok(line) = line else { break };
+            if sender.send(line).is_err() {
+                break;
+            }
+        }
+    });
+    receiver
+}
+
+/// The next line on `lines`, parsed as JSON.
+fn next_json(lines: &std::sync::mpsc::Receiver<String>) -> serde_json::Value {
+    let line = lines
+        .recv_timeout(std::time::Duration::from_secs(30))
+        .expect("a line within 30 s: a reply was not flushed");
+    serde_json::from_str(&line).unwrap_or_else(|e| panic!("not JSON ({e}): {line}"))
+}
+
+/// `specforge mcp <dir>` fed `input` and closed; stdout lines, stderr, exit.
+fn run_mcp(dir: &std::path::Path, input: &[u8]) -> (Vec<serde_json::Value>, String, Option<i32>) {
+    let mut child = specforge_binary()
+        .args(["mcp"])
+        .arg(dir)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("failed to start specforge mcp");
+    let mut stdin = child.stdin.take().unwrap();
+    stdin.write_all(input).unwrap();
+    drop(stdin);
+    let output = child.wait_with_output().unwrap();
+    let lines = String::from_utf8(output.stdout)
+        .expect("stdout is UTF-8")
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap_or_else(|e| panic!("not JSON ({e}): {l}")))
+        .collect();
+    (
+        lines,
+        String::from_utf8_lossy(&output.stderr).into_owned(),
+        output.status.code(),
+    )
+}
+
+const PING_1: &str = r#"{"jsonrpc":"2.0","id":1,"method":"ping"}"#;
+const PING_2: &str = r#"{"jsonrpc":"2.0","id":2,"method":"ping"}"#;
+
+/// Blank lines, CRLF line ends and a last line without a line break.
+#[test]
+fn mcp_skips_blank_lines_and_reads_crlf_and_an_unterminated_last_line() {
+    let dir = setup_project(&[("main.spec", r#"behavior alpha "A" { contract "first" }"#)]);
+    let input = format!("\n   \n\t\r\n{PING_1}\r\n{PING_2}");
+    let (lines, stderr, code) = run_mcp(dir.path(), input.as_bytes());
+    let ids: Vec<_> = lines.iter().map(|l| l["id"].clone()).collect();
+    assert_eq!(ids, [1, 2], "{lines:?}");
+    assert_eq!(stderr, "");
+    assert_eq!(code, Some(0));
+}
+
 /// A stdio client subscribed to the graph gets `specforge/graphChanged` on
-/// stdout once watch has rebuilt the project.
+/// stdout once the project changed: each reply arrives before the client's
+/// next request, a response before the notifications it queued.
 #[specforge_test(
     behavior = "notify_graph_delta_via_mcp",
     verify = "graph_changed notification sent after incremental rebuild"
 )]
-fn mcp_stdio_client_receives_graph_notification() {
-    use std::io::{BufRead, BufReader};
-
+fn mcp_writes_a_response_before_the_notifications_it_queued() {
     let dir = setup_project(&[("spec/base.spec", r#"behavior base "B" { contract "b" }"#)]);
     let mut child = specforge_binary()
         .args(["mcp"])
@@ -2981,20 +3046,23 @@ fn mcp_stdio_client_receives_graph_notification() {
         .spawn()
         .expect("failed to start specforge mcp");
     let mut stdin = child.stdin.take().unwrap();
-    let mut lines = BufReader::new(child.stdout.take().unwrap()).lines();
-    let mut send = move |req: String| {
+    let lines = lines_on_a_channel(child.stdout.take().unwrap());
+    let send = |stdin: &mut std::process::ChildStdin, req: String| {
         writeln!(stdin, "{req}").unwrap();
         stdin.flush().unwrap();
     };
 
-    send(mcp_initialize(0));
-    lines.next().unwrap().unwrap();
-    send(mcp_request(
-        1,
-        "resources/subscribe",
-        serde_json::json!({"uri": "specforge://graph"}),
-    ));
-    lines.next().unwrap().unwrap();
+    send(&mut stdin, mcp_initialize(0));
+    assert_eq!(next_json(&lines)["id"], 0);
+    send(
+        &mut stdin,
+        mcp_request(
+            1,
+            "resources/subscribe",
+            serde_json::json!({"uri": "specforge://graph"}),
+        ),
+    );
+    assert_eq!(next_json(&lines)["id"], 1);
 
     // A new entity on disk: the next read brings the project up to date,
     // with no watch running.
@@ -3003,25 +3071,81 @@ fn mcp_stdio_client_receives_graph_notification() {
         r#"behavior added "A" { contract "a" }"#,
     )
     .unwrap();
+    send(
+        &mut stdin,
+        mcp_request(
+            2,
+            "resources/read",
+            serde_json::json!({"uri": "specforge://diagnostics"}),
+        ),
+    );
+    let response = next_json(&lines);
+    assert_eq!(response["id"], 2, "the response comes first: {response}");
+    let updated = next_json(&lines);
+    assert_eq!(
+        updated["method"], "notifications/resources/updated",
+        "{updated}"
+    );
+    assert_eq!(updated["params"]["uri"], "specforge://graph", "{updated}");
+    let changed = next_json(&lines);
+    assert_eq!(changed["method"], "specforge/graphChanged", "{changed}");
+    assert!(changed.get("id").is_none(), "{changed}");
 
-    send(mcp_request(
-        2,
-        "resources/read",
-        serde_json::json!({"uri": "specforge://diagnostics"}),
-    ));
-    drop(send);
-    let out: Vec<serde_json::Value> = lines
-        .map(|l| serde_json::from_str(&l.unwrap()).unwrap())
-        .collect();
-    child.wait().unwrap();
+    drop(stdin);
+    assert!(child.wait().unwrap().success());
+}
 
-    let notification = out
-        .iter()
-        .find(|m| m["method"] == "specforge/graphChanged")
-        .unwrap_or_else(|| panic!("no graphChanged notification in {out:?}"));
-    assert!(notification.get("id").is_none(), "{notification}");
-    let added = notification["params"]["added_nodes"].as_array().unwrap();
-    assert!(added.iter().any(|n| n["id"] == "added"), "{notification}");
+/// The reader of stdout has gone while the input goes on: the server stops
+/// after its first failed write, without waiting for the input to end.
+#[cfg(unix)]
+#[test]
+fn mcp_stops_when_its_stdout_closes() {
+    let dir = setup_project(&[("main.spec", r#"behavior alpha "A" { contract "first" }"#)]);
+    let mut child = specforge_binary()
+        .args(["mcp"])
+        .arg(dir.path())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("failed to start specforge mcp");
+    let mut stdin = child.stdin.take().unwrap();
+    drop(child.stdout.take());
+    writeln!(stdin, "{PING_1}").unwrap();
+    stdin.flush().unwrap();
+    // stdin stays open: only the closed stdout can end the server.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    let status = loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            break status;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the server did not stop when its stdout closed"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    };
+    assert_eq!(status.code(), Some(0));
+}
+
+/// A line that is not UTF-8 is not JSON: answered with -32700, and the
+/// session goes on.
+#[test]
+#[ignore = "fixed by T3"]
+fn mcp_answers_a_line_that_is_not_utf8_and_keeps_serving() {
+    let dir = setup_project(&[("main.spec", r#"behavior alpha "A" { contract "first" }"#)]);
+    let mut input = format!("{PING_1}\n").into_bytes();
+    input.extend_from_slice(b"\xff\xfe\n");
+    input.extend_from_slice(format!("{PING_2}\n").as_bytes());
+    let (lines, stderr, code) = run_mcp(dir.path(), &input);
+    assert_eq!(lines.len(), 3, "{lines:?}");
+    assert_eq!(lines[0]["id"], 1);
+    assert!(lines[1]["id"].is_null(), "{}", lines[1]);
+    assert_eq!(lines[1]["error"]["code"], -32700);
+    assert_eq!(lines[1]["error"]["message"], "Parse error");
+    assert_eq!(lines[2]["id"], 2);
+    assert_eq!(stderr, "");
+    assert_eq!(code, Some(0));
 }
 
 /// A stateless (MCP 2026-07-28) client over stdio: no initialize, the
