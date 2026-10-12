@@ -28,7 +28,7 @@ A second pass (tier 3, strengthening weak tests) settled more:
 - **MCP delta notification names.** The spec now says `specforge/graphChanged` and
   `specforge/diagnosticsChanged`, what the server sends: MCP reserves `notifications/` for
   protocol messages.
-- **MCP event payloads** follow `spec/events/mcp.spec` field for field, with a timestamp.
+- **MCP event payloads** follow `spec/events/mcp.spec` field for field, with a timestamp (stamped by the sink that keeps the event, ADR 0057).
 - **Built:** extension starter templates for `specforge init`, colour-coded diagnostics on a
   terminal (plain when piped or under `NO_COLOR`), unknown-kind reports from the MCP query and
   search tools, and auto-promotion of extension CLI commands to MCP tools.

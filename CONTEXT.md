@@ -577,8 +577,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Surface call**: one MCP request that invokes a named tool, resource or prompt (`tools/call`,
   `resources/read`, `prompts/get`), run through one pipeline: read the request, find the entry (the
   core table, then, with the served project brought up to date, the extension surface table), record
-  the invocation, resolve the call target, run the handler, record its events, answer with the kind's
-  envelope. Each kind is one adapter; a refusal without `isError` (resources, prompts) is a JSON-RPC
+  the invocation, resolve the call target, run the handler (which records its own events), record the
+  completion, answer with the kind's envelope; every record goes through the server's event sink. Each kind is one adapter; a refusal without `isError` (resources, prompts) is a JSON-RPC
   error whose data is its McpError (`specforge_mcp::surface_call`, ADR 0024).
 - **Resource spec**: the single definition of a core MCP resource: its URI or template, descriptor
   and its read of the project view. A graph view (`graph`, `context`, `brief`, scoped or not, and `graph/{entity_id}`)
@@ -601,6 +601,17 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   diagnostics then hears the delta (`specforge/graphChanged`, `specforge/diagnosticsChanged`).
   Subscriptions belong to the connection and end with it or at shutdown
   (`specforge_mcp::subscriptions::Subscriptions`, ADR 0024 D6).
+- **MCP event**: what an MCP server records it did — a tool, prompt or listing invoked, a resource
+  read, a mutation completed, a subscription made or ended, a delta notified, an extension surface
+  dispatched, the server initialized or shut down, a protocol error answered, a cancel acknowledged —
+  one typed value per event the spec declares for it, its payload the spec's field for field
+  (`specforge_mcp::events::McpEvent`; `spec/events/mcp.spec`, `surface-contributions.spec`, and the
+  `extension_added` and `project_initialized` a mutation produces). Every module records through the
+  server's one **event sink** (`EventSink`): a production server's keeps nothing (`Discard`), so what
+  a server holds never grows with the requests it answered; a test's keeps every event in order,
+  stamped with the time it was recorded (`events::testing::EventLog`, given with
+  `McpServer::with_events`). Events never leave the process: a client learns what a call wrote from
+  its reply (ADR 0022 D7, ADR 0057). The CLI, the LSP and the operations keep no event.
 - **Diagnostic catalog**: the one table of diagnostic codes (`specforge_diagnostics`'s `catalog!`):
   each code's title, owner, level and explanation. It generates `CATALOG`, which `specforge explain`,
   MCP `specforge.explain`, diagnostics JSON titles, doctor and the LSP hover read and from which

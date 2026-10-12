@@ -1,4 +1,7 @@
-// MCP Server events — signals emitted during MCP protocol interactions
+// MCP Server events — what an MCP server records it did. Each is one variant of
+// specforge_mcp::events::McpEvent, recorded through the server's event sink: a
+// production server keeps none (events never leave the process), a test's sink
+// keeps each one stamped with the time it was recorded (timestamp).
 
 use "types/diagnostics"
 use "types/graph"

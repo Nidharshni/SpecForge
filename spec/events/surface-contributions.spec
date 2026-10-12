@@ -1,6 +1,7 @@
-// Surface contribution events — what MCP records about extension surfaces.
-// The registry build that registers and checks surfaces is pure: its
-// diagnostics are its record, and it emits no event (ADR 0011).
+// Surface contribution events — what MCP records about extension surfaces,
+// through its event sink like every MCP event (spec/events/mcp.spec). The
+// registry build that registers and checks surfaces is pure: its diagnostics
+// are its record, and it emits no event (ADR 0011).
 
 use "types/mcp"
 use "types/surface"
