@@ -1,7 +1,8 @@
 use crate::config::FormatConfig;
 use specforge_common::{Diagnostic, SourceSpan, Sym, codes};
+use specforge_parser::cst::{Cst, Piece};
 use specforge_parser::lex::lex;
-use tree_sitter::{Node, Parser};
+use tree_sitter::Node;
 use tree_sitter_specforge::{field, kind};
 
 /// Result of formatting a source string.
@@ -11,44 +12,25 @@ pub struct FormatResult {
     pub diagnostics: Vec<Diagnostic>,
 }
 
-/// Format a complete .spec source string.
+/// Format a complete .spec source string: every top-level form as the
+/// parser reads it (`specforge_parser::cst`), a form the parser could not
+/// read whole kept as written, with one W142 spanning its lines.
 pub fn format_source(source: &str, config: &FormatConfig) -> FormatResult {
-    let mut parser = Parser::new();
-    parser
-        .set_language(&tree_sitter_specforge::LANGUAGE.into())
-        .expect("failed to load specforge grammar");
-
-    let tree = match parser.parse(source, None) {
-        Some(t) => t,
-        None => {
+    let cst = match Cst::read(source, None) {
+        Ok(cst) => cst,
+        Err(_) => {
             return FormatResult {
                 formatted: source.to_string(),
                 diagnostics: vec![Diagnostic::new(codes::E001, "Failed to parse source")],
             };
         }
     };
-
-    let root = tree.root_node();
-
-    // Check for parse errors
-    let error_regions = collect_error_regions(root);
-    let has_errors = !error_regions.is_empty();
-
-    let mut diagnostics = Vec::new();
-    if has_errors {
-        let lines: Vec<&str> = source.lines().collect();
-        for &(start_row, end_row) in &error_regions {
-            let last_line_len = lines.get(end_row).map_or(0, |line| line.len());
-            diagnostics.push(kept_region(start_row, end_row, last_line_len));
-        }
+    let source_lines: Vec<&str> = source.lines().collect();
+    let mut emitter = Emitter::new(&source_lines, config);
+    for piece in cst.pieces() {
+        emitter.piece(piece);
     }
-
-    let formatted = format_tree(root, source, config, &error_regions);
-
-    FormatResult {
-        formatted,
-        diagnostics,
-    }
+    emitter.finish()
 }
 
 /// Format a range of lines within a source string.
@@ -61,14 +43,9 @@ pub fn format_range(
     end_line: usize,
     config: &FormatConfig,
 ) -> FormatResult {
-    let mut parser = Parser::new();
-    parser
-        .set_language(&tree_sitter_specforge::LANGUAGE.into())
-        .expect("failed to load specforge grammar");
-
-    let tree = match parser.parse(source, None) {
-        Some(t) => t,
-        None => {
+    let cst = match Cst::read(source, None) {
+        Ok(cst) => cst,
+        Err(_) => {
             return FormatResult {
                 formatted: source.to_string(),
                 diagnostics: vec![],
@@ -76,10 +53,8 @@ pub fn format_range(
         }
     };
 
-    let root = tree.root_node();
-
     // Find the blocks that overlap with the requested range
-    let (expanded_start, expanded_end) = expand_to_block_boundaries(root, start_line, end_line);
+    let (expanded_start, expanded_end) = expand_to_block_boundaries(&cst, start_line, end_line);
 
     let lines: Vec<&str> = source.lines().collect();
     // Blank lines at either end of the range lie between blocks: they stay
@@ -205,26 +180,23 @@ fn in_error_region(line: usize, error_regions: &[(usize, usize)]) -> bool {
         .any(|(start, end)| line >= *start && line <= *end)
 }
 
-/// Expand a line range to complete block boundaries.
-fn expand_to_block_boundaries(root: Node, start_line: usize, end_line: usize) -> (usize, usize) {
+/// Expand a line range to complete block boundaries (the top-level items of
+/// every piece, at their document rows).
+fn expand_to_block_boundaries(cst: &Cst, start_line: usize, end_line: usize) -> (usize, usize) {
     let mut expanded_start = start_line;
     let mut expanded_end = end_line;
 
-    let mut cursor = root.walk();
-    if cursor.goto_first_child() {
-        loop {
-            let node = cursor.node();
-            let node_start = node.start_position().row;
-            let node_end = node.end_position().row;
+    for piece in cst.pieces() {
+        let root = piece.root();
+        let mut cursor = root.walk();
+        for node in root.children(&mut cursor) {
+            let node_start = piece.row() + node.start_position().row;
+            let node_end = piece.row() + node.end_position().row;
 
             // If the block overlaps with our range, expand to include the full block
             if node_end >= start_line && node_start <= end_line {
                 expanded_start = expanded_start.min(node_start);
                 expanded_end = expanded_end.max(node_end);
-            }
-
-            if !cursor.goto_next_sibling() {
-                break;
             }
         }
     }
@@ -232,7 +204,9 @@ fn expand_to_block_boundaries(root: Node, start_line: usize, end_line: usize) ->
     (expanded_start, expanded_end)
 }
 
-/// Main formatting: emit every top-level item in source order.
+/// The output being built over a source's pieces: the lines so far, the
+/// class and last source row (absolute) of the previous top-level item, and
+/// the rows kept verbatim (absolute, inclusive), one W142 each.
 ///
 /// Nothing is reordered except runs of consecutive imports, which are
 /// sorted. Comments stay where they are: a comment on the line of a node
@@ -241,80 +215,165 @@ fn expand_to_block_boundaries(root: Node, start_line: usize, end_line: usize) ->
 /// between two comments, or between a comment and a block, is kept (one),
 /// since it tells a standalone comment from a block's doc comment. Inside
 /// blocks blank lines are removed.
-fn format_tree(
-    root: Node,
-    source: &str,
-    config: &FormatConfig,
-    error_regions: &[(usize, usize)],
-) -> String {
-    let source_lines: Vec<&str> = source.lines().collect();
-    let mut cursor = root.walk();
-    let items: Vec<Node> = root.children(&mut cursor).collect();
+struct Emitter<'a> {
+    source_lines: &'a [&'a str],
+    config: &'a FormatConfig,
+    out: Vec<String>,
+    prev: Option<(Item, usize)>,
+    kept: Vec<(usize, usize)>,
+}
 
-    let mut out: Vec<String> = Vec::new();
-    // The class and last source row of the previous top-level item.
-    let mut prev: Option<(Item, usize)> = None;
-    let mut i = 0;
-    while i < items.len() {
-        let node = items[i];
-        let class = Item::of(node);
-        let (start, end) = (node.start_position().row, node.end_position().row);
-
-        // A comment on the line where the previous item ends stays there.
-        if class == Item::Comment
-            && prev.is_some_and(|(_, prev_end)| prev_end == start)
-            && let Some(last) = out.last_mut()
-        {
-            last.push(' ');
-            last.push_str(&comment_text(node, source));
-            prev = Some((Item::Comment, end));
-            i += 1;
-            continue;
+impl<'a> Emitter<'a> {
+    fn new(source_lines: &'a [&'a str], config: &'a FormatConfig) -> Self {
+        Emitter {
+            source_lines,
+            config,
+            out: Vec::new(),
+            prev: None,
+            kept: Vec::new(),
         }
+    }
 
-        if let Some((prev_class, prev_end)) = prev {
-            let gap = start.saturating_sub(prev_end + 1);
-            if needs_blank_line(prev_class, class, gap) {
-                out.push(String::new());
-            }
-        }
+    /// Emit one piece's top-level items. An item is kept verbatim when it
+    /// overlaps an error region of the piece's tree or holds the piece's
+    /// unclosed string.
+    fn piece(&mut self, piece: &Piece<'_>) {
+        let text = piece.text();
+        let base = piece.row();
+        let root = piece.root();
+        let error_regions = collect_error_regions(root);
+        let broken = |node: Node| overlaps(node, &error_regions) || piece.holds_unclosed(node);
+        let mut cursor = root.walk();
+        let items: Vec<Node> = root.children(&mut cursor).collect();
 
-        // A run of imports (blank lines allowed, no comments) is sorted.
-        if class == Item::Import {
-            let mut run = Vec::new();
-            let mut last_end = end;
-            while i < items.len() && Item::of(items[i]) == Item::Import {
-                let import = items[i];
-                last_end = import.end_position().row;
-                if overlaps(import, error_regions) || holds_comment(import) {
-                    run.push(verbatim(import, &source_lines).join("\n"));
-                } else {
-                    run.push(one_line(import, source));
-                }
+        let mut i = 0;
+        while i < items.len() {
+            let node = items[i];
+            let class = Item::of(node);
+            let start = base + node.start_position().row;
+            let end = base + node.end_position().row;
+
+            // A comment on the line where the previous item ends stays there.
+            if class == Item::Comment
+                && self.prev.is_some_and(|(_, prev_end)| prev_end == start)
+                && let Some(last) = self.out.last_mut()
+            {
+                last.push(' ');
+                last.push_str(&comment_text(node, text));
+                self.prev = Some((Item::Comment, end));
                 i += 1;
+                continue;
             }
-            run.sort();
-            out.extend(run);
-            prev = Some((Item::Import, last_end));
-            continue;
-        }
 
-        if overlaps(node, error_regions) {
-            out.extend(verbatim(node, &source_lines));
-        } else if class == Item::Comment {
-            out.push(comment_text(node, source));
-        } else {
-            out.extend(format_block(node, source, config));
+            if let Some((prev_class, prev_end)) = self.prev {
+                let gap = start.saturating_sub(prev_end + 1);
+                if needs_blank_line(prev_class, class, gap) {
+                    self.out.push(String::new());
+                }
+            }
+
+            // A run of imports (blank lines allowed, no comments) is sorted.
+            if class == Item::Import {
+                let mut run = Vec::new();
+                let mut last_end = end;
+                while i < items.len() && Item::of(items[i]) == Item::Import {
+                    let import = items[i];
+                    last_end = base + import.end_position().row;
+                    if broken(import) {
+                        run.push(self.keep(piece, import).join("\n"));
+                    } else if holds_comment(import) {
+                        let (first, last) = self.rows(piece, import);
+                        run.push(self.lines(first, last).join("\n"));
+                    } else {
+                        run.push(one_line(import, text));
+                    }
+                    i += 1;
+                }
+                run.sort();
+                self.out.extend(run);
+                self.prev = Some((Item::Import, last_end));
+                continue;
+            }
+
+            let mut end = end;
+            if broken(node) {
+                let kept = self.keep(piece, node);
+                end = self.rows(piece, node).1;
+                self.out.extend(kept);
+            } else if class == Item::Comment {
+                self.out.push(comment_text(node, text));
+            } else {
+                self.out.extend(format_block(node, text, self.config));
+            }
+            self.prev = Some((class, end));
+            i += 1;
         }
-        prev = Some((class, end));
-        i += 1;
     }
 
-    let mut result = out.join("\n");
-    if !result.is_empty() {
-        result.push('\n');
+    /// The rows (absolute, inclusive) of `node` of `piece` as source lines:
+    /// from its first row to its last row in the piece's source (the
+    /// appended delimiter excluded), trailing blank lines dropped.
+    fn rows(&self, piece: &Piece<'_>, node: Node<'_>) -> (usize, usize) {
+        let base = piece.row();
+        let source_part = &piece.text()[..piece.source_len()];
+        let piece_last = base + source_part.trim_end_matches('\n').matches('\n').count();
+        let first = (base + node.start_position().row).min(piece_last);
+        let mut last = (base + node.end_position().row).min(piece_last);
+        while last > first
+            && self
+                .source_lines
+                .get(last)
+                .is_none_or(|l| l.trim().is_empty())
+        {
+            last -= 1;
+        }
+        (first, last)
     }
-    result
+
+    /// The source lines `first..=last`, trailing whitespace trimmed.
+    fn lines(&self, first: usize, last: usize) -> Vec<String> {
+        (first..=last)
+            .filter_map(|row| self.source_lines.get(row).map(|l| l.trim_end().to_string()))
+            .collect()
+    }
+
+    /// Keep `node` verbatim: its lines, with its rows noted for a W142.
+    fn keep(&mut self, piece: &Piece<'_>, node: Node<'_>) -> Vec<String> {
+        let (first, last) = self.rows(piece, node);
+        self.kept.push((first, last));
+        self.lines(first, last)
+    }
+
+    /// The text (`out` joined, final newline) and one W142 per kept range
+    /// (adjacent ranges merged), spanned from its first line's start to its
+    /// last line's end.
+    fn finish(self) -> FormatResult {
+        let mut merged: Vec<(usize, usize)> = Vec::new();
+        for (first, last) in self.kept {
+            if let Some(previous) = merged.last_mut()
+                && first <= previous.1 + 1
+            {
+                previous.1 = previous.1.max(last);
+                continue;
+            }
+            merged.push((first, last));
+        }
+        let diagnostics = merged
+            .into_iter()
+            .map(|(first, last)| {
+                let last_line_len = self.source_lines.get(last).map_or(0, |line| line.len());
+                kept_region(first, last, last_line_len)
+            })
+            .collect();
+        let mut formatted = self.out.join("\n");
+        if !formatted.is_empty() {
+            formatted.push('\n');
+        }
+        FormatResult {
+            formatted,
+            diagnostics,
+        }
+    }
 }
 
 /// What a top-level item is, for the blank-line rules.
@@ -354,13 +413,6 @@ fn node_text<'s>(node: Node, source: &'s str) -> &'s str {
 fn overlaps(node: Node, error_regions: &[(usize, usize)]) -> bool {
     (node.start_position().row..=node.end_position().row)
         .any(|row| in_error_region(row, error_regions))
-}
-
-/// The node's source lines, unchanged.
-fn verbatim(node: Node, source_lines: &[&str]) -> Vec<String> {
-    (node.start_position().row..=node.end_position().row)
-        .filter_map(|row| source_lines.get(row).map(|l| l.trim_end().to_string()))
-        .collect()
 }
 
 /// Whether a comment sits between `node`'s tokens, outside the values the
@@ -1137,7 +1189,8 @@ mod tests {
             .find(|d| d.code == "W142")
             .and_then(|d| d.span.clone())
             .expect("a spanned W142");
-        assert!(span.end_line > span.start_line, "{span:?}");
+        // The kept form `bar` is reported from its first line to its last.
+        assert_eq!((span.start_line, span.end_line), (5, 7), "{span:?}");
         let last = input.lines().nth(span.end_line - 1).unwrap();
         assert_eq!(span.end_col, last.len() + 1, "{span:?}");
     }
@@ -2531,32 +2584,46 @@ mod emitter_tests {
         assert!(out.contains("@since \"a  b\""), "{out}");
     }
 
-    // --- Plan 14 T0: what a broken document reads as today ---
+    // --- Plan 14: a broken document reads as the parser reads it ---
 
     const UNCLOSED_STRING: &str = "behavior a1 \"A\" {\n  contract \"x\n}\n\nbehavior b1 \"B\" {\n  contract    \"y\"\n}\n\nbehavior c1 \"C\" {\n  contract \"z\"\n}\n";
 
-    #[test]
-    fn an_unclosed_string_keeps_the_whole_file_verbatim() {
+    #[specforge_test_macros::test(
+        behavior = "format_with_parse_errors",
+        verify = "a form the parser could not read whole is kept as written and the forms after it are formatted"
+    )]
+    fn an_unclosed_string_keeps_only_its_form() {
         let result = format_source(UNCLOSED_STRING, &FormatConfig::default());
-        assert_eq!(result.formatted, UNCLOSED_STRING);
+        assert_eq!(
+            result.formatted,
+            "behavior a1 \"A\" {\n  contract \"x\n}\n\nbehavior b1 \"B\" {\n  contract \"y\"\n}\n\nbehavior c1 \"C\" {\n  contract \"z\"\n}\n"
+        );
         let w142: Vec<_> = result
             .diagnostics
             .iter()
             .filter(|d| d.is(codes::W142))
             .collect();
-        assert_eq!(w142.len(), 1);
+        assert_eq!(w142.len(), 1, "{:?}", result.diagnostics);
         assert!(
-            w142[0].message.starts_with("Parse error at lines 1-12,"),
+            w142[0].message.starts_with("Parse error at lines 1-3,"),
             "{}",
             w142[0].message
+        );
+        let span = w142[0].span.as_ref().expect("a spanned W142");
+        assert_eq!(
+            (span.start_line, span.start_col, span.end_line, span.end_col),
+            (1, 1, 3, 2)
         );
     }
 
     const UNCLOSED_BODY: &str =
         "behavior a1 \"A\" {\n  contract    \"x\"\n\nbehavior b1 \"B\" {\n  contract    \"y\"\n}\n";
 
-    #[test]
-    fn a_kept_unclosed_body_is_reported_at_its_error_line_only() {
+    #[specforge_test_macros::test(
+        behavior = "format_with_parse_errors",
+        verify = "the diagnostic spans every line of the form it kept, never past the document"
+    )]
+    fn a_kept_form_is_reported_at_its_lines() {
         let result = format_source(UNCLOSED_BODY, &FormatConfig::default());
         assert!(
             result
@@ -2570,6 +2637,38 @@ mod emitter_tests {
             .find(|d| d.is(codes::W142))
             .and_then(|d| d.span.clone())
             .unwrap();
-        assert_eq!((span.start_line, span.end_line), (2, 2));
+        assert_eq!((span.start_line, span.end_line), (1, 2));
+    }
+
+    #[specforge_test_macros::test(
+        behavior = "format_with_parse_errors",
+        verify = "a form the parser could not read whole is kept as written and the forms after it are formatted"
+    )]
+    fn formatting_a_broken_document_twice_changes_nothing() {
+        let texts = [
+            // R1: an unclosed body, then two blocks
+            "behavior a1 \"A\" {\n  contract    \"x\"\n\nbehavior b1 \"B\" {\n  contract    \"y\"\n}\n\n\nbehavior c1 \"C\" {\n    contract \"z\"\n}\n",
+            // R2: a field name typed without its value
+            "behavior a1 \"A\" {\n  contract \"x\"\n  st\n\nbehavior b1 \"B\" {\n  contract \"y\"\n}\n\nbehavior c1 \"C\" {\n  contract \"z\"\n}\n",
+            // R3: a method header without its parameter list
+            "port pay \"Pay\" {\n  direction inbound\n  method charge\n\nbehavior settle \"Settle\" {\n  contract    \"Settles.\"\n}\n",
+            // R5: an unclosed string in a port body
+            "port pay \"Pay\" {\n  direction inbound\n  description \"Takes payments\n  method charge(amount: String) -> String\n}\n\nbehavior settle \"Settle\" {\n  contract    \"Settles.\"\n}\n",
+            // R6: an unclosed string, then two blocks
+            UNCLOSED_STRING,
+        ];
+        let ids = |text: &str| {
+            specforge_parser::parse(text, "t.spec")
+                .entities
+                .iter()
+                .map(|e| e.id.raw.to_string())
+                .collect::<Vec<_>>()
+        };
+        for text in texts {
+            let once = format_source(text, &FormatConfig::default());
+            let twice = format_source(&once.formatted, &FormatConfig::default());
+            assert_eq!(twice.formatted, once.formatted, "{text}");
+            assert_eq!(ids(&once.formatted), ids(text), "{text}");
+        }
     }
 }
