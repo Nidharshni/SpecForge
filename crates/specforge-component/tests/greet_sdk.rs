@@ -2,7 +2,7 @@
 //! host's protocol (handshake + describe) end to end through the component
 //! runtime. The fixture's component blob is vendored at
 //! `fixtures/greet-extension/greet.wasm` (refresh:
-//! `cd fixtures/greet-extension && cargo build --release --target wasm32-wasip2`).
+//! `cargo run -p xtask --bin revendor`).
 
 use std::path::{Path, PathBuf};
 

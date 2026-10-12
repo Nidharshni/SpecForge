@@ -168,6 +168,7 @@ report() {
             printf '%-14s %5ss  ok\n' "$name" "$secs"
         else
             printf '%-14s %5ss  FAILED (see %s/%s.log)\n' "$name" "$secs" "$LOGS" "$name"
+            [ "$name" = builtins ] && echo "                         re-vendor: cargo run -p xtask --bin revendor"
             failed=1
         fi
     done
@@ -204,7 +205,7 @@ run_full() {
 }
 
 run_quick() {
-    local changed pkgs=() exts=() specs=0 builtins=0 file dir name
+    local changed pkgs=() exts=() specs=0 builtins=0 links=0 file dir name
     changed=$( { git diff --name-only HEAD; git ls-files --others --exclude-standard; } | sort -u)
     [ -n "$changed" ] || { echo "nothing changed"; return 0; }
     for file in $changed; do
@@ -225,6 +226,11 @@ run_quick() {
             # the extensions' rules and the config decide what check reports
             specforge.json|scripts/gate*|extensions/*|crates/specforge-emitter/*) specs=1 ;;
         esac
+        # a test's verify text must match its spec entity (A016, statically)
+        case $file in
+            *.spec|spec/*) links=1 ;;
+            *.rs) if [[ $file == tests/* || $file == */tests/* ]] || grep -q 'verify *=' "$file" 2>/dev/null; then links=1; fi ;;
+        esac
     done
     # Deduplicate (no mapfile: macOS ships bash 3.2).
     local unique=()
@@ -238,6 +244,7 @@ run_quick() {
     echo "crates: ${pkgs[*]:-none}; extensions: ${exts[*]:-none}; specs: $specs"
 
     step fmt fmt_check &
+    [ "$links" = 1 ] && step links cargo run -q -p xtask --bin check-links &
     [ "$builtins" = 1 ] && step builtins cargo run -q -p xtask --bin build-builtins -- --check &
     [ ${#exts[@]} -gt 0 ] && step extensions extensions_check "${exts[@]}" &
     if [ ${#pkgs[@]} -gt 0 ]; then

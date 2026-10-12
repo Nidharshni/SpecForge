@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# The fast checks, on the staged files only. Install once: scripts/setup-hooks.sh
+# Skip in an emergency: git commit --no-verify (CI runs the same checks).
+set -u
+cd "$(git rev-parse --show-toplevel)" || exit 1
+
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+failed=0
+fail() { echo "pre-commit: $1"; echo "    fix: $2"; failed=1; }
+
+pending=$(echo "$staged" | grep '\.snap\.new$' || true)
+[ -n "$pending" ] && fail "pending insta snapshots are staged: $(echo $pending)" "cargo insta review, then unstage them"
+
+rs=$(echo "$staged" | grep '\.rs$' || true)
+specs=$(echo "$staged" | grep '\.spec$' || true)
+
+if [ -n "$rs" ]; then
+    cargo fmt --all -- --check 2>&1 | head -20 | sed 's/^/    /'
+    [ "${PIPESTATUS[0]}" = 0 ] \
+        || fail "rustfmt would change staged Rust" "cargo fmt --all"
+fi
+
+if [ -n "$specs" ]; then
+    # shellcheck disable=SC2086
+    cargo run -q -p specforge-cli -- format --check $specs 2>&1 | head -20 | sed 's/^/    /'
+    [ "${PIPESTATUS[0]}" = 0 ] \
+        || fail "a staged .spec file is not formatted" "cargo run -q -p specforge-cli -- format $(echo $specs)"
+fi
+
+links=0
+[ -n "$specs" ] && links=1
+for f in $rs; do
+    case "$f" in tests/*|*/tests/*) links=1 ;; *) grep -q 'verify *=' "$f" 2>/dev/null && links=1 ;; esac
+done
+if [ "$links" = 1 ]; then
+    out=$(cargo run -q -p xtask --bin check-links 2>&1) \
+        || { echo "$out"; fail "a test links a verify text or entity the spec does not declare" "edit the test's verify text to match the spec (or the spec), then re-stage"; }
+fi
+
+exit $failed
