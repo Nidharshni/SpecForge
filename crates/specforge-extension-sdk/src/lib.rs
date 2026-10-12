@@ -46,7 +46,8 @@ use std::collections::BTreeMap;
 /// The categories an extension gave as raw items, by name.
 type RawCategories = BTreeMap<&'static str, serde_json::Value>;
 
-/// Runtime-free testing of an extension's contributions.
+/// Runtime-free testing of an extension's contributions (feature `testing`).
+#[cfg(any(test, feature = "testing"))]
 pub mod testing;
 
 /// Surface contributions (commands, MCP tools, MCP resources) declared with

@@ -533,6 +533,7 @@ An extension is tested natively (`cargo test`, no wasm build) at three depths:
 
 ```toml
 [dev-dependencies]
+specforge-extension-sdk = { version = "0.1", features = ["testing"] }   # MockHost, call_every_command
 specforge-wasm = { version = "0.1", features = ["testing"] }
 specforge-protocol-types = "0.1"
 specforge-test = "0.1"   # to link a test to the obligation it proves

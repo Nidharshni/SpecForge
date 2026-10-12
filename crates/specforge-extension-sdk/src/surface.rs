@@ -38,7 +38,7 @@
 //! # assert_eq!(out.exit_code, 0);
 //! ```
 //!
-//! [`crate::testing::call_every_command`] runs every declared command once
+//! `testing::call_every_command` (feature `testing`) runs every declared command once
 //! with every arg set, so a test catches a handler reading an arg its
 //! command does not declare.
 

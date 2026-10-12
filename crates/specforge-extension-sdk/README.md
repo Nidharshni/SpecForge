@@ -85,7 +85,8 @@ crate compiles.
   from that one call, and declaring one without its handler panics when the
   extension is built.
 - **Runtime-free testing**: build your contributions in a unit test and assert
-  on the describe output (the `testing` module).
+  on the describe output (the `testing` module, feature `testing`; enable it in
+  `[dev-dependencies]` only).
 
 ## Not modeled yet?
 

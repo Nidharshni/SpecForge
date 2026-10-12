@@ -14,6 +14,8 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
 [dev-dependencies]
+# MockHost and call_every_command (feature `testing`): never compiled into the blob.
+specforge-extension-sdk = { path = "../../crates/specforge-extension-sdk", features = ["testing"] }
 # The command suites (src/tests/) call each command as the host does:
 # `ExtensionCalls::run_command` over the in-process runtime, which serves
 # this crate's own declaration through the guest's routing (ADR 0013 D8).
