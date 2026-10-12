@@ -94,7 +94,7 @@ fn main() {
     if failed {
         if check {
             eprintln!(
-                "declaration snapshots are stale: cargo run -p xtask --bin snapshot-builtins"
+                "declaration snapshots are stale: cargo run -p xtask --bin revendor"
             );
         }
         std::process::exit(1);

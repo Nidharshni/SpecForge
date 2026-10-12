@@ -86,8 +86,8 @@ fn builtin_declarations_match_their_snapshots() {
     assert!(
         stale.is_empty(),
         "these wire answers differ from their pinned snapshots: {stale:?}. \
-         If the change is intended, regenerate them with \
-         `cargo run -p xtask --bin snapshot-builtins` and review the diff"
+         If the change is intended, re-vendor with \
+         `cargo run -p xtask --bin revendor` and review the diff"
     );
     assert_eq!(compared, 10 * (1 + DECLARED_CATEGORIES.len()));
 }

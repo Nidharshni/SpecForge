@@ -168,6 +168,7 @@ report() {
             printf '%-14s %5ss  ok\n' "$name" "$secs"
         else
             printf '%-14s %5ss  FAILED (see %s/%s.log)\n' "$name" "$secs" "$LOGS" "$name"
+            [ "$name" = builtins ] && echo "                         re-vendor: cargo run -p xtask --bin revendor"
             failed=1
         fi
     done

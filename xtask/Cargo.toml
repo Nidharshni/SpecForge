@@ -13,6 +13,10 @@ name = "snapshot-builtins"
 path = "src/snapshot_builtins.rs"
 
 [[bin]]
+name = "revendor"
+path = "src/revendor.rs"
+
+[[bin]]
 name = "check-links"
 path = "src/check_links.rs"
 

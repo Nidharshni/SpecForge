@@ -83,9 +83,9 @@ fn main() {
     }
     if failed && mode == Mode::Check {
         eprintln!(
-            "\nVendored builtin blobs are stale. Rebuild them with\n  \
-             cargo run -p xtask --bin build-builtins -- --install\n\
-             and commit extensions/*/wasm/."
+            "\nVendored builtin blobs are stale. Re-vendor with\n  \
+             cargo run -p xtask --bin revendor\n\
+             (docs/agents/revendor.md) and commit what it prints."
         );
     }
     std::process::exit(i32::from(failed));
