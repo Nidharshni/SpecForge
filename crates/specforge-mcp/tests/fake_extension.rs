@@ -231,9 +231,7 @@ fn cmds_project() -> TestProject {
 /// A server whose extensions run in `ext`, its events logged; not yet
 /// initialized.
 pub fn server_with(ext: &Arc<FakeExtension>) -> Logged {
-    let mut server = McpServer::new();
-    server.state_mut().extension_runtime = Some(ext.runtime() as Arc<dyn WasmRuntime>);
-    logged(server)
+    logged(McpServer::new().with_extension_runtime(ext.runtime() as Arc<dyn WasmRuntime>))
 }
 
 /// A server initialized over [`project`] with `ext` as its runtime.

@@ -240,7 +240,7 @@ fn a_stateless_request_after_initialize_keeps_its_revision() {
         "{legacy}"
     );
     assert!(legacy["result"].get("resultType").is_none(), "{legacy}");
-    assert_eq!(server.state().protocol_version, "2025-03-26");
+    assert_eq!(server.state().protocol_version(), "2025-03-26");
 }
 
 /// How many of the listed tools carry an `outputSchema`.

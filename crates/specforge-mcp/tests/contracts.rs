@@ -1385,8 +1385,7 @@ fn contract_dispatch_surface_command() {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     listener.set_nonblocking(true).unwrap();
     let port = listener.local_addr().unwrap().port();
-    let mut server = logged(McpServer::new());
-    server.state_mut().extension_runtime = Some(std::sync::Arc::new(runtime));
+    let mut server = logged(McpServer::new().with_extension_runtime(std::sync::Arc::new(runtime)));
     let init = call(
         &mut server,
         "initialize",

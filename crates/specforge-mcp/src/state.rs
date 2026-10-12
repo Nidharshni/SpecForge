@@ -18,13 +18,13 @@ pub enum ServerPhase {
 }
 
 pub struct McpState {
-    pub phase: ServerPhase,
+    pub(crate) phase: ServerPhase,
     /// The protocol revision `initialize` negotiated (the latest one the
     /// server speaks until then).
-    pub protocol_version: &'static str,
+    pub(crate) protocol_version: &'static str,
     /// Whether a project (or the empty default surface) is being served:
     /// set by `initialize`, or by the first stateless request.
-    pub served: bool,
+    pub(crate) served: bool,
     /// The served project: its root, environment (config, spec root,
     /// registries, rules, manifests, surfaces), graph, diagnostics and
     /// extension runtime: always opened from disk (ADR 0025). Detached
@@ -40,7 +40,7 @@ pub struct McpState {
     surfaces: ExtensionSurfaceTable,
     /// Project compiled when the client's `initialize` names no `projectRoot`
     /// (the `specforge mcp <path>` argument).
-    pub default_project_root: Option<PathBuf>,
+    pub(crate) default_project_root: Option<PathBuf>,
     /// Where the server's events go (ADR 0057): [`Discard`] unless the host
     /// gave another sink ([`crate::McpServer::with_events`]). Every module
     /// records through it.
@@ -53,17 +53,11 @@ pub struct McpState {
     /// The Wasm runtime extensions run in, when the host supplies one; by
     /// default the served project's session builds the project's runtime
     /// (`specforge_component::ComponentRuntime::with_user_cache`) each time it loads.
-    pub extension_runtime: Option<SharedRuntime>,
-}
-
-impl Default for McpState {
-    fn default() -> Self {
-        Self::new()
-    }
+    pub(crate) extension_runtime: Option<SharedRuntime>,
 }
 
 impl McpState {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             phase: ServerPhase::Uninitialized,
             protocol_version: crate::lifecycle::LATEST_PROTOCOL_VERSION,
@@ -141,6 +135,11 @@ impl McpState {
         &self.surfaces
     }
 
+    /// The protocol revision `initialize` negotiated (the latest the server speaks until then).
+    pub fn protocol_version(&self) -> &'static str {
+        self.protocol_version
+    }
+
     /// The revision a request without `_meta` is served under: the one
     /// `initialize` negotiated.
     pub fn negotiated(&self) -> Revision {
@@ -171,7 +170,7 @@ impl McpState {
     /// project is replaced (initialize, adopting a call's path, the
     /// directory `init` created). Only a project (a directory holding
     /// `specforge.json`) is ever served.
-    pub fn serve(&mut self, root: &ProjectRoot) {
+    pub(crate) fn serve(&mut self, root: &ProjectRoot) {
         debug_assert!(
             root.is_configured(),
             "only a project is served: {} holds no specforge.json",
@@ -213,7 +212,7 @@ impl McpState {
     /// changed `specforge.json`, `specforge.lock` or extension module, a
     /// re-check for a changed check input. Subscribed clients learn what
     /// changed. `None` when nothing did.
-    pub fn ensure_fresh(&mut self) -> Option<&Update> {
+    pub(crate) fn ensure_fresh(&mut self) -> Option<&Update> {
         let before = self.heard_diagnostics();
         let update = self.session.ensure_fresh()?;
         self.applied(update, before);
@@ -262,7 +261,7 @@ impl McpState {
 
     /// Every subscription and stream ends, each recorded; the session
     /// detaches. How many subscriptions ended.
-    pub fn shutdown(&mut self) -> usize {
+    pub(crate) fn shutdown(&mut self) -> usize {
         self.phase = ServerPhase::ShuttingDown;
         // The queue stays: the host sends it after the shutdown response.
         let released = self.subscriptions.disconnect(&mut *self.events);

@@ -210,8 +210,12 @@ impl McpServer {
         self.state.subscriptions.disconnect(&mut *self.state.events);
     }
 
-    pub fn state_mut(&mut self) -> &mut McpState {
-        &mut self.state
+    /// The same server, its projects' extensions running in `runtime` instead of the runtime each
+    /// project builds for itself (`specforge_component::ComponentRuntime::with_user_cache`): how a
+    /// test serves extensions in process (`specforge_wasm::testing::InProcessRuntime`).
+    pub fn with_extension_runtime(mut self, runtime: specforge_project::SharedRuntime) -> Self {
+        self.state.extension_runtime = Some(runtime);
+        self
     }
 }
 
