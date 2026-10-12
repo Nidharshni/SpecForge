@@ -510,7 +510,7 @@ mod tests {
             let removed = remove(&fixture.view(), &removing("@acme/x")).unwrap_err();
             let added = add(
                 &AddRequest {
-                    root: fixture.dir.path(),
+                    root: &specforge_common::ProjectRoot::of(fixture.dir.path()).unwrap(),
                     extensions: vec![Source::Builtin("@specforge/product").into()],
                     allow_unsigned: false,
                     trust: Trust::Refuse,
@@ -522,7 +522,7 @@ mod tests {
             .unwrap_err();
             let updated = update(
                 &UpdateRequest {
-                    root: fixture.dir.path(),
+                    root: &specforge_common::ProjectRoot::of(fixture.dir.path()).unwrap(),
                     name: None,
                     reach: specforge_package::Reach::Compatible,
                     allow_unsigned: true,

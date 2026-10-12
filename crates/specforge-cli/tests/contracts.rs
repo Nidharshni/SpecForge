@@ -7,65 +7,6 @@ fn specforge_cmd() -> Command {
     assert_cmd::cargo_bin_cmd!("specforge")
 }
 
-// B:find_project_root — verify contract "requires/ensures consistency for project root discovery"
-#[specforge_test(
-    behavior = "find_project_root",
-    verify = "Find Project Root: project root discovery holds — filesystem_available, closest_wins_enforced, json_precedence, symlinks_resolved, none_on_missing"
-)]
-fn find_project_root_contract() {
-    assert_find_project_root_contract();
-}
-
-/// Every clause of the find_project_root contract, on one directory tree.
-pub(crate) fn assert_find_project_root_contract() {
-    use specforge_common::{find_project_root, load_project_config};
-
-    // filesystem_available: a real directory tree to walk.
-    let dir = TempDir::new().unwrap();
-    let top = dir.path().canonicalize().unwrap();
-    fs::write(top.join("specforge.json"), r#"{"name":"outer"}"#).unwrap();
-    let inner = top.join("inner");
-    let deep = inner.join("a").join("b");
-    fs::create_dir_all(&deep).unwrap();
-    fs::write(inner.join("specforge.spec"), "").unwrap();
-
-    // closest_wins_enforced: the nearest config wins, even a specforge.spec
-    // under an ancestor's specforge.json; outside `inner` the ancestor wins.
-    assert_eq!(find_project_root(&deep), Some(inner.clone()));
-    let sibling = top.join("sibling");
-    fs::create_dir_all(&sibling).unwrap();
-    assert_eq!(find_project_root(&sibling), Some(top.clone()));
-
-    // json_precedence: with both files in one directory, that directory is
-    // the root and its configuration comes from specforge.json.
-    fs::write(inner.join("specforge.json"), r#"{"name":"inner-json"}"#).unwrap();
-    assert_eq!(find_project_root(&deep), Some(inner.clone()));
-    assert_eq!(
-        load_project_config(&inner).name.as_deref(),
-        Some("inner-json")
-    );
-
-    // symlinks_resolved: a link to `deep` placed directly under `top`
-    // resolves to `inner`; walking the link's own path would reach `top`.
-    #[cfg(unix)]
-    {
-        let link = top.join("link");
-        std::os::unix::fs::symlink(&deep, &link).unwrap();
-        assert_eq!(find_project_root(&link), Some(inner.clone()));
-    }
-
-    // none_on_missing: a tree with no config up to the filesystem root.
-    let empty = TempDir::new().unwrap();
-    let empty_dir = empty.path().canonicalize().unwrap().join("nothing");
-    fs::create_dir_all(&empty_dir).unwrap();
-    let config_above = empty_dir
-        .ancestors()
-        .any(|a| a.join("specforge.json").exists() || a.join("specforge.spec").exists());
-    if !config_above {
-        assert_eq!(find_project_root(&empty_dir), None);
-    }
-}
-
 // B:scaffold_new_project — verify contract "requires/ensures consistency for new project scaffolding"
 #[specforge_test(
     behavior = "scaffold_new_project",

@@ -121,7 +121,10 @@ fn project(source: &str) -> TempDir {
 /// The compile of `root` with the extension declaring `rules`.
 fn compile_with(root: &Path, rules: Value, required_owner: bool) -> CompiledProject {
     let runtime = InProcessRuntime::new().with_handler(extension(rules, required_owner), x007);
-    CompiledProject::compile(root, Some(Arc::new(runtime)))
+    CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(root).unwrap(),
+        Some(Arc::new(runtime)),
+    )
 }
 
 /// The diagnostics of compiling `source` with the extension declaring `rules`.

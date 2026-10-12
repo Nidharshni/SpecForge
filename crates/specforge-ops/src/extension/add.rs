@@ -12,7 +12,7 @@ use specforge_installed::{Installed, LockSource};
 use specforge_package::SpecifierError;
 use specforge_package::{PackageName, PackageRef};
 use specforge_wasm::WasmRuntime;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 /// Where an extension to add comes from.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -164,7 +164,7 @@ pub enum Trust {
 /// What to add, and where.
 #[derive(Debug, Clone)]
 pub struct AddRequest<'a> {
-    pub root: &'a Path,
+    pub root: &'a specforge_common::ProjectRoot,
     /// The extensions to add, in the order given: one change.
     pub extensions: Vec<Specified>,
     /// Accept a registry package with no publisher signature.
@@ -406,7 +406,7 @@ impl Added {
     }
 }
 
-/// Add the extensions `req` names to the project at `req.root`, as one change.
+/// Add the extensions `req` names to the project at `req.root.dir()`, as one change.
 ///
 /// - A builtin is enabled in `specforge.json`, after the builtins it
 ///   requires as non-optional peers.
@@ -437,12 +437,12 @@ pub fn add(
     // The project must exist, with a config the writer can edit, before
     // anything is installed into it: the refusal `update` and `remove`
     // give an unusable specforge.json too (`config_invalid`).
-    let config = crate::config::required(req.root)?.config;
+    let config = crate::config::required(req.root.dir())?.config;
     if req.extensions.is_empty() {
         return Err(no_specifier());
     }
     let several = req.extensions.len() > 1;
-    let installed = Installed::at(req.root);
+    let installed = Installed::at(req.root.dir());
     // A specforge.lock that can't be read refuses before a file is read or a registry asked.
     let plan = if req.extensions.iter().any(|e| e.source.installs()) {
         Some(LockPlan::new(&installed, Verb::Install)?)
@@ -532,7 +532,7 @@ impl<'a> Resolver<'_, 'a> {
             Source::Builtin(name) => self.builtin(wanted, name),
             Source::Local(path) => {
                 let local = LocalFile::read(self.runtime, path)?;
-                self.local(wanted, Install::local(self.req.root, local)?)
+                self.local(wanted, Install::local(self.req.root.dir(), local)?)
             }
             Source::Registry(package) => self.package(before, wanted, package),
             Source::Git { url } => Err(Resolved::Refused(OpError::diagnostic(
@@ -753,7 +753,7 @@ fn apply<'a>(
     }
 
     let names: Vec<&str> = names.iter().map(String::as_str).collect();
-    let config_path = req.root.join(crate::config::CONFIG_FILE);
+    let config_path = req.root.dir().join(crate::config::CONFIG_FILE);
     let mut enabled = None;
     let writes = match plan {
         Some(mut plan) if !installs.is_empty() => {
@@ -772,14 +772,14 @@ fn apply<'a>(
                 named(several, specifier(at), error)
             })?;
             checked.commit_with(&config_path, || {
-                let edit = crate::config::enable(req.root, &names)?;
+                let edit = crate::config::enable(req.root.dir(), &names)?;
                 let changed = !edit.appended.is_empty();
                 enabled = Some(edit);
                 Ok(changed)
             })?
         }
         _ => {
-            let edit = crate::config::enable(req.root, &names)?;
+            let edit = crate::config::enable(req.root.dir(), &names)?;
             let mut writes = Writes::none();
             writes.record_if(!edit.appended.is_empty(), &config_path);
             enabled = Some(edit);
@@ -834,6 +834,7 @@ mod tests {
     use specforge_protocol_types::ExtensionDeclaration;
     use specforge_registry::PeerDependency;
     use specforge_test_macros::test as specforge_test;
+    use std::path::Path;
 
     use crate::testing::{self, GREET, declaring, serving_builtin};
     use specforge_wasm::testing::InProcessRuntime;
@@ -952,7 +953,7 @@ mod tests {
             ] {
                 for dry_run in [false, true] {
                     let request = AddRequest {
-                        root: dir.path(),
+                        root: &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
                         extensions: vec![source.clone().into()],
                         allow_unsigned: false,
                         trust: Trust::Refuse,
@@ -983,7 +984,7 @@ mod tests {
         let greet = files.path().join("greet.wasm");
         std::fs::write(&greet, GREET).unwrap();
         let request = AddRequest {
-            root: dir.path(),
+            root: &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
             extensions: vec![Source::Local(greet).into()],
             allow_unsigned: false,
             trust: Trust::Refuse,
@@ -1026,7 +1027,7 @@ mod tests {
 
     const EMPTY_PROJECT: &str = r#"{"name": "p", "version": "0.1.0", "extensions": []}"#;
 
-    fn local_request<'a>(root: &'a Path, file: &Path) -> AddRequest<'a> {
+    fn local_request<'a>(root: &'a specforge_common::ProjectRoot, file: &Path) -> AddRequest<'a> {
         AddRequest {
             root,
             extensions: vec![Source::Local(file.to_path_buf()).into()],
@@ -1036,7 +1037,10 @@ mod tests {
         }
     }
 
-    fn builtin_request<'a>(root: &'a Path, name: &'static str) -> AddRequest<'a> {
+    fn builtin_request<'a>(
+        root: &'a specforge_common::ProjectRoot,
+        name: &'static str,
+    ) -> AddRequest<'a> {
         AddRequest {
             root,
             extensions: vec![Source::Builtin(name).into()],
@@ -1060,7 +1064,10 @@ mod tests {
         let before = files_under(dir.path());
 
         let error = add(
-            &local_request(dir.path(), &wasm),
+            &local_request(
+                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                &wasm,
+            ),
             &crate::registry::Unconfigured("add"),
             &impostor,
         )
@@ -1090,7 +1097,15 @@ mod tests {
 
         let before = files_under(dir.path());
         let missing = dir.path().join("missing.wasm");
-        let error = add(&local_request(dir.path(), &missing), &registry, &runtime()).unwrap_err();
+        let error = add(
+            &local_request(
+                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                &missing,
+            ),
+            &registry,
+            &runtime(),
+        )
+        .unwrap_err();
         assert_eq!(error.code, "E054");
         assert_eq!(
             error.message,
@@ -1102,7 +1117,10 @@ mod tests {
         let directory = scratch.path().join("a-directory");
         std::fs::create_dir(&directory).unwrap();
         let error = add(
-            &local_request(dir.path(), &directory),
+            &local_request(
+                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                &directory,
+            ),
             &registry,
             &runtime(),
         )
@@ -1128,7 +1146,10 @@ mod tests {
         let before = files_under(dir.path());
 
         let error = add(
-            &local_request(dir.path(), &wasm),
+            &local_request(
+                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                &wasm,
+            ),
             &crate::registry::Unconfigured("add"),
             &InProcessRuntime::new(),
         )
@@ -1162,7 +1183,10 @@ mod tests {
         let missing = dir.path().join("missing.wasm");
 
         let error = add(
-            &local_request(dir.path(), &missing),
+            &local_request(
+                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                &missing,
+            ),
             &crate::registry::Unconfigured("add"),
             &runtime(),
         )
@@ -1201,7 +1225,10 @@ mod tests {
         let dir = project_with(EMPTY_PROJECT);
 
         let added = add(
-            &builtin_request(dir.path(), "@specforge/cargo-test"),
+            &builtin_request(
+                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                "@specforge/cargo-test",
+            ),
             &crate::registry::Unconfigured("add"),
             &runtime_with_cargo_test(),
         )
@@ -1230,7 +1257,8 @@ mod tests {
         let dir =
             project_with(r#"{"name":"p","version":"0.1.0","extensions":[1,"@specforge/rust"]}"#);
         let registry = crate::registry::Unconfigured("add");
-        let request = builtin_request(dir.path(), "@specforge/product");
+        let project = specforge_common::ProjectRoot::of(dir.path()).unwrap();
+        let request = builtin_request(&project, "@specforge/product");
         let runtime = serving_builtin(
             runtime(),
             "@specforge/product",
@@ -1261,7 +1289,10 @@ mod tests {
         let runtime = runtime();
 
         add(
-            &local_request(dir.path(), &greet),
+            &local_request(
+                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                &greet,
+            ),
             &crate::registry::Unconfigured("add"),
             &runtime,
         )
@@ -1289,7 +1320,10 @@ mod tests {
         let before = files_under(dir.path());
 
         let error = add(
-            &builtin_request(dir.path(), "@specforge/cargo-test"),
+            &builtin_request(
+                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                "@specforge/cargo-test",
+            ),
             &crate::registry::Unconfigured("add"),
             &InProcessRuntime::new(),
         )
@@ -1336,7 +1370,10 @@ mod tests {
         );
 
         let added = add(
-            &builtin_request(dir.path(), "@specforge/formal"),
+            &builtin_request(
+                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                "@specforge/formal",
+            ),
             &registry,
             &chain,
         )
@@ -1383,7 +1420,10 @@ mod tests {
             ),
         );
         let added = add(
-            &builtin_request(cyclic_dir.path(), "@specforge/formal"),
+            &builtin_request(
+                &specforge_common::ProjectRoot::of(cyclic_dir.path()).unwrap(),
+                "@specforge/formal",
+            ),
             &registry,
             &cycle,
         )
@@ -1418,7 +1458,10 @@ mod tests {
         );
 
         let error = add(
-            &builtin_request(dir.path(), "@specforge/formal"),
+            &builtin_request(
+                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                "@specforge/formal",
+            ),
             &crate::registry::Unconfigured("add"),
             &runtime,
         )
@@ -1459,7 +1502,10 @@ mod tests {
         std::fs::write(&greet, GREET).unwrap();
 
         let added = add(
-            &local_request(dir.path(), &greet),
+            &local_request(
+                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                &greet,
+            ),
             &crate::registry::Unconfigured("add"),
             &runtime(),
         )
@@ -1491,7 +1537,10 @@ mod tests {
         let before = std::fs::read(&config).unwrap();
 
         let error = add(
-            &builtin_request(dir.path(), "@specforge/cargo-test"),
+            &builtin_request(
+                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                "@specforge/cargo-test",
+            ),
             &crate::registry::Unconfigured("add"),
             &runtime_with_cargo_test(),
         )
@@ -1507,7 +1556,7 @@ mod tests {
     fn a_missing_config_is_config_not_found_with_the_hint_to_init() {
         let dir = tempfile::tempdir().unwrap();
         let request = AddRequest {
-            root: dir.path(),
+            root: &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
             extensions: vec![Source::Builtin("@specforge/product").into()],
             allow_unsigned: false,
             trust: Trust::Refuse,
@@ -1535,7 +1584,7 @@ mod tests {
     fn add_greet(root: &Path, registry: &MemoryRegistry) -> Result<AddOutcome, OpError> {
         add(
             &AddRequest {
-                root,
+                root: &specforge_common::ProjectRoot::of(root).unwrap(),
                 extensions: vec![
                     Source::Registry(PackageRef::parse("@sdk/greet@0.1.0").unwrap()).into(),
                 ],
@@ -1678,7 +1727,7 @@ mod tests {
 
         let error = add(
             &AddRequest {
-                root: dir.path(),
+                root: &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
                 extensions: vec![Source::Registry(PackageRef::parse("@x/a@2.0.0").unwrap()).into()],
                 allow_unsigned: true,
                 trust: Trust::Refuse,
@@ -1752,13 +1801,15 @@ mod tests {
         verify = "a dry run of an extension already present answers as the add would, whatever its source"
     )]
     fn a_dry_run_of_a_present_extension_answers_as_the_add_would() {
-        let dry = |root, source: Source| AddRequest {
-            root,
-            extensions: vec![source.into()],
-            allow_unsigned: true,
-            trust: Trust::Refuse,
-            dry_run: true,
-        };
+        fn dry(root: &specforge_common::ProjectRoot, source: Source) -> AddRequest<'_> {
+            AddRequest {
+                root,
+                extensions: vec![source.into()],
+                allow_unsigned: true,
+                trust: Trust::Refuse,
+                dry_run: true,
+            }
+        }
 
         // A registry install, present: already present first.
         let dir = add_project(Vec::new());
@@ -1766,9 +1817,16 @@ mod tests {
             MemoryRegistry::new().serving(Published::new(greet(), declaration_of(&greet())));
         add_greet(dir.path(), &registry).unwrap();
         let source = Source::Registry(PackageRef::parse("@sdk/greet@0.1.0").unwrap());
-        let outcome = add(&dry(dir.path(), source), &registry, &runtime())
-            .unwrap()
-            .added[0]
+        let outcome = add(
+            &dry(
+                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                source,
+            ),
+            &registry,
+            &runtime(),
+        )
+        .unwrap()
+        .added[0]
             .outcome
             .clone();
         assert_eq!(
@@ -1785,9 +1843,20 @@ mod tests {
         let wasm = files.path().join("greet.wasm");
         std::fs::write(&wasm, GREET).unwrap();
         let unconfigured = crate::registry::Unconfigured("add");
-        add(&local_request(dir.path(), &wasm), &unconfigured, &runtime()).unwrap();
+        add(
+            &local_request(
+                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                &wasm,
+            ),
+            &unconfigured,
+            &runtime(),
+        )
+        .unwrap();
         let outcome = add(
-            &dry(dir.path(), Source::Local(wasm)),
+            &dry(
+                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                Source::Local(wasm),
+            ),
             &unconfigured,
             &runtime(),
         )
@@ -1808,7 +1877,15 @@ mod tests {
             project_with(r#"{"name":"p","version":"0.1.0","extensions":["@specforge/product"]}"#);
         let source = Source::Builtin("@specforge/product");
         let before = crate::config::testing::files_under(dir.path());
-        let added = add(&dry(dir.path(), source), &unconfigured, &runtime()).unwrap();
+        let added = add(
+            &dry(
+                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                source,
+            ),
+            &unconfigured,
+            &runtime(),
+        )
+        .unwrap();
         assert_eq!(
             added.added[0].outcome,
             AddOutcome::Builtin {
@@ -1929,7 +2006,11 @@ mod tests {
     }
 
     /// An add of `extensions` into `root`.
-    fn several(root: &Path, extensions: Vec<Specified>, dry_run: bool) -> AddRequest<'_> {
+    fn several(
+        root: &specforge_common::ProjectRoot,
+        extensions: Vec<Specified>,
+        dry_run: bool,
+    ) -> AddRequest<'_> {
         AddRequest {
             root,
             extensions,
@@ -1967,7 +2048,11 @@ mod tests {
         let extensions = specified(&["@specforge/product", shown.as_str()]).unwrap();
 
         let added = add(
-            &several(dir.path(), extensions, false),
+            &several(
+                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                extensions,
+                false,
+            ),
             &crate::registry::Unconfigured("add"),
             &runtime_with_product(),
         )
@@ -2027,7 +2112,11 @@ mod tests {
             ],
         ] {
             let error = add(
-                &several(dir.path(), extensions, false),
+                &several(
+                    &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                    extensions,
+                    false,
+                ),
                 &crate::registry::Unconfigured("add"),
                 &runtime_with_product(),
             )
@@ -2048,7 +2137,7 @@ mod tests {
         // One specifier: its refusal is the add's, as it was.
         let error = add(
             &several(
-                dir.path(),
+                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
                 vec![Source::Local(missing.clone()).into()],
                 false,
             ),
@@ -2101,7 +2190,11 @@ mod tests {
         assert_eq!(none.message, "no extension specifier");
         let dir = project_with(EMPTY_PROJECT);
         let error = add(
-            &several(dir.path(), Vec::new(), false),
+            &several(
+                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                Vec::new(),
+                false,
+            ),
             &crate::registry::Unconfigured("add"),
             &runtime(),
         )
@@ -2154,7 +2247,11 @@ mod tests {
         // `@x/a` 2.0.0 alone wants `@x/b` ^2, and 1.0.0 is locked.
         let dir = add_project(vec![entry("@x/b", "1.0.0", "registry", &[])]);
         let error = add(
-            &several(dir.path(), vec![registry_specified("@x/a@2.0.0")], false),
+            &several(
+                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                vec![registry_specified("@x/a@2.0.0")],
+                false,
+            ),
             &coupled_registry(&runtime),
             &runtime,
         )
@@ -2168,7 +2265,11 @@ mod tests {
             let dir = add_project(vec![entry("@x/b", "1.0.0", "registry", &[])]);
             let extensions = order.iter().map(|r| registry_specified(r)).collect();
             let added = add(
-                &several(dir.path(), extensions, false),
+                &several(
+                    &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                    extensions,
+                    false,
+                ),
                 &coupled_registry(&runtime),
                 &runtime,
             )
@@ -2198,7 +2299,11 @@ mod tests {
             let before = files_under(dir.path());
             let extensions = order.iter().map(|r| registry_specified(r)).collect();
             let error = add(
-                &several(dir.path(), extensions, false),
+                &several(
+                    &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                    extensions,
+                    false,
+                ),
                 &coupled_registry(&runtime),
                 &runtime,
             )
@@ -2224,7 +2329,11 @@ mod tests {
         let dir = project_with(EMPTY_PROJECT);
         let extensions = specified(&["@specforge/product", "@specforge/product@latest"]).unwrap();
         let added = add(
-            &several(dir.path(), extensions, false),
+            &several(
+                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                extensions,
+                false,
+            ),
             &crate::registry::Unconfigured("add"),
             &runtime_with_product(),
         )
@@ -2254,7 +2363,11 @@ mod tests {
             registry_specified("@sdk/greet@0.1.0"),
         ];
         let added = add(
-            &several(dir.path(), extensions, false),
+            &several(
+                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                extensions,
+                false,
+            ),
             &registry,
             &runtime(),
         )
@@ -2286,7 +2399,11 @@ mod tests {
             registry_specified("@x/b@2.0.0"),
         ];
         let error = add(
-            &several(dir.path(), extensions, false),
+            &several(
+                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                extensions,
+                false,
+            ),
             &coupled_registry(&runtime),
             &runtime,
         )
@@ -2317,7 +2434,11 @@ mod tests {
         ];
 
         let added = add(
-            &several(dir.path(), extensions, true),
+            &several(
+                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                extensions,
+                true,
+            ),
             &crate::registry::Unconfigured("add"),
             &runtime_with_product(),
         )
@@ -2348,7 +2469,11 @@ mod tests {
             Source::Local(missing).into(),
         ];
         let error = add(
-            &several(dir.path(), extensions, true),
+            &several(
+                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                extensions,
+                true,
+            ),
             &crate::registry::Unconfigured("add"),
             &runtime_with_product(),
         )

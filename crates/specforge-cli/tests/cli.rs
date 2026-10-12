@@ -52,14 +52,14 @@ fn self_check_runs_without_crashing() {
             .unwrap()
     };
 
-    // The repository's own specs, which CI checks: clean, exit 0, the
-    // summary on stderr and nothing on stdout. `spec/` alone has no
-    // specforge.json, so it is checked structurally and says so (I002).
+    // The repository's own specs, which CI checks: exit 0, the summary on
+    // stderr and nothing on stdout. `spec/` is in the repository's project,
+    // so it is that project that is checked, extensions and all.
     let output = ci_check(&[], &spec_dir);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert_eq!(output.status.code(), Some(0), "{stderr}");
     assert!(output.stdout.is_empty());
-    assert!(stderr.contains("0 errors, 0 warnings, 1 info"), "{stderr}");
+    assert!(stderr.contains("0 errors, "), "{stderr}");
     assert!(!stderr.contains('\x1b'), "no terminal escapes: {stderr:?}");
 
     let output = ci_check(&["--format=json"], &spec_dir);
@@ -71,7 +71,15 @@ fn self_check_runs_without_crashing() {
         .iter()
         .map(|d| d["code"].as_str().unwrap())
         .collect();
-    assert_eq!(codes, ["I002"]);
+    assert!(!codes.contains(&"I002"), "the project's extensions loaded");
+    assert!(
+        diagnostics
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|d| d["severity"] != "Error"),
+        "{diagnostics}"
+    );
 
     // A broken project fails the CI step with exit 1 and says why on stderr.
     let dir = setup_project(&[(

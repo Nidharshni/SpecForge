@@ -374,7 +374,10 @@ mod the_views_runtime {
         let dir = project();
         let rt = Arc::new(extension());
         let shared: SharedRuntime = rt.clone();
-        let compiled = CompiledProject::compile(dir.path(), Some(shared));
+        let compiled = CompiledProject::compile(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            Some(shared),
+        );
         let view = ProjectView::of(&compiled);
 
         let outcome = analyze(&view, &AnalyzeOptions::default()).unwrap();
@@ -401,11 +404,17 @@ mod the_views_runtime {
         let dir = project();
         // Compiled with a runtime only to learn the command the project's
         // extension declares; the environment under test has none.
-        let declared = CompiledProject::compile(dir.path(), Some(Arc::new(extension())));
+        let declared = CompiledProject::compile(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            Some(Arc::new(extension())),
+        );
         let commands = ExtensionCommands::build(ProjectView::of(&declared).registries());
         let hello = commands.all().iter().find(|c| c.id() == "hello").unwrap();
 
-        let bare = CompiledProject::compile(dir.path(), None);
+        let bare = CompiledProject::compile(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            None,
+        );
         let view = ProjectView::of(&bare);
         let RunError::Call(error) =
             run(&view, hello, &Map::new(), CommandFormat::Json).unwrap_err()

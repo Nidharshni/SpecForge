@@ -22,7 +22,6 @@ use specforge_installed::{Installed, LockState};
 use specforge_package::PackageName;
 use specforge_package::{LockedVersion, Reach};
 use specforge_wasm::WasmRuntime;
-use std::path::Path;
 
 /// The code `update` reports when the project has no lock file.
 pub const NO_LOCK: Code = codes::E033;
@@ -30,7 +29,7 @@ pub const NO_LOCK: Code = codes::E033;
 /// What to update, and how.
 #[derive(Debug, Clone)]
 pub struct UpdateRequest<'a> {
-    pub root: &'a Path,
+    pub root: &'a specforge_common::ProjectRoot,
     /// One extension by name; every locked extension when `None`.
     pub name: Option<&'a str>,
     /// How far each extension may move: within its locked version's caret range, or to any
@@ -285,7 +284,7 @@ pub struct BatchUpdateCompleted {
     pub skipped_count: usize,
 }
 
-/// Update the extensions `req` names in the project at `req.root`.
+/// Update the extensions `req` names in the project at `req.root.dir()`.
 ///
 /// Fails outright (nothing asked, nothing written) with `config_invalid`
 /// when `specforge.json` cannot be used, with E033 when the
@@ -301,8 +300,8 @@ pub fn update(
 ) -> Result<UpdateOutcome, OpError> {
     // A project whose specforge.json cannot be used is refused before
     // anything is read or written, as `add` and `remove` refuse it.
-    crate::config::usable(req.root)?;
-    let installed = Installed::at(req.root);
+    crate::config::usable(req.root.dir())?;
+    let installed = Installed::at(req.root.dir());
     let lock = match installed.lock() {
         LockState::Read(lock) => lock.clone(),
         LockState::Absent => {
@@ -432,7 +431,7 @@ mod tests {
         Published::new(b"\0asm old".to_vec(), declaration(name, version, &[]))
     }
 
-    fn request(root: &Path, reach: Reach) -> UpdateRequest<'_> {
+    fn request(root: &specforge_common::ProjectRoot, reach: Reach) -> UpdateRequest<'_> {
         UpdateRequest {
             root,
             name: None,
@@ -461,7 +460,15 @@ mod tests {
             .serving(old("@sdk/greet", "0.0.9"))
             .serving(greet_published());
 
-        let outcome = update(&request(dir.path(), Reach::Major), &registry, &runtime()).unwrap();
+        let outcome = update(
+            &request(
+                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                Reach::Major,
+            ),
+            &registry,
+            &runtime(),
+        )
+        .unwrap();
 
         assert!(outcome.applied(), "{outcome:?}");
         assert_eq!(
@@ -496,7 +503,10 @@ mod tests {
             .serving(greet_published());
 
         let outcome = update(
-            &request(dir.path(), Reach::Compatible),
+            &request(
+                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                Reach::Compatible,
+            ),
             &registry,
             &runtime(),
         )
@@ -538,7 +548,15 @@ mod tests {
                 declaration("@acme/liar", "1.1.0", &[]),
             ));
 
-        let outcome = update(&request(dir.path(), Reach::Major), &registry, &runtime()).unwrap();
+        let outcome = update(
+            &request(
+                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                Reach::Major,
+            ),
+            &registry,
+            &runtime(),
+        )
+        .unwrap();
 
         assert!(!outcome.applied());
         let failures: Vec<(&str, &str)> = outcome
@@ -577,7 +595,15 @@ mod tests {
         let lock_before = std::fs::read(lock_path(dir.path())).unwrap();
         let registry = MemoryRegistry::new().serving(greet_published());
 
-        let outcome = update(&request(dir.path(), Reach::Major), &registry, &runtime()).unwrap();
+        let outcome = update(
+            &request(
+                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                Reach::Major,
+            ),
+            &registry,
+            &runtime(),
+        )
+        .unwrap();
 
         assert!(!outcome.applied());
         let (name, error) = outcome.failures().next().unwrap();
@@ -610,7 +636,14 @@ mod tests {
             return;
         }
 
-        let result = update(&request(dir.path(), Reach::Major), &registry, &runtime());
+        let result = update(
+            &request(
+                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                Reach::Major,
+            ),
+            &registry,
+            &runtime(),
+        );
         std::fs::set_permissions(dir.path(), mode(0o755)).unwrap();
 
         let error = result.unwrap_err();
@@ -646,7 +679,14 @@ mod tests {
             return;
         }
 
-        let result = update(&request(dir.path(), Reach::Major), &registry, &runtime());
+        let result = update(
+            &request(
+                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                Reach::Major,
+            ),
+            &registry,
+            &runtime(),
+        );
         std::fs::set_permissions(&probe_dir, mode(0o755)).unwrap();
 
         let error = result.unwrap_err();
@@ -683,7 +723,15 @@ mod tests {
             .serving(greet_published())
             .serving(old("@sdk/greet", "0.2.0-beta.1"));
 
-        let outcome = update(&request(dir.path(), Reach::Major), &registry, &runtime()).unwrap();
+        let outcome = update(
+            &request(
+                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                Reach::Major,
+            ),
+            &registry,
+            &runtime(),
+        )
+        .unwrap();
 
         assert_eq!(
             status_of(&outcome, "@sdk/greet"),
@@ -707,7 +755,15 @@ mod tests {
             let lock_before = std::fs::read(lock_path(dir.path())).unwrap();
             let registry = MemoryRegistry::new().serving(greet_published());
 
-            let outcome = update(&request(dir.path(), reach), &registry, &runtime()).unwrap();
+            let outcome = update(
+                &request(
+                    &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                    reach,
+                ),
+                &registry,
+                &runtime(),
+            )
+            .unwrap();
 
             assert!(outcome.applied(), "{reach:?}: {outcome:?}");
             assert_eq!(
@@ -739,7 +795,10 @@ mod tests {
             .serving(old("@x/gone", "1.0.0"));
 
         let outcome = update(
-            &request(dir.path(), Reach::Compatible),
+            &request(
+                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                Reach::Compatible,
+            ),
             &registry,
             &runtime(),
         )
@@ -794,7 +853,15 @@ mod tests {
                 .serving(greet_published())
                 .serving(old("@sdk/greet", "0.2.0-beta.1"));
 
-            let outcome = update(&request(dir.path(), reach), &registry, &runtime()).unwrap();
+            let outcome = update(
+                &request(
+                    &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                    reach,
+                ),
+                &registry,
+                &runtime(),
+            )
+            .unwrap();
 
             assert!(outcome.applied(), "{reach:?}: {outcome:?}");
             assert_eq!(
@@ -824,7 +891,15 @@ mod tests {
                 .serving(served(&runtime, T1_5))
                 .serving(served(&runtime, T2));
 
-            let outcome = update(&request(dir.path(), reach), &registry, &runtime).unwrap();
+            let outcome = update(
+                &request(
+                    &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                    reach,
+                ),
+                &registry,
+                &runtime,
+            )
+            .unwrap();
 
             assert!(outcome.applied(), "{reach:?}: {outcome:?}");
             assert_eq!(
@@ -849,7 +924,15 @@ mod tests {
                 .serving(old("@x/p", "2.0.0-beta.1"))
                 .serving(served(&runtime, P_BETA_2));
 
-            let outcome = update(&request(dir.path(), reach), &registry, &runtime).unwrap();
+            let outcome = update(
+                &request(
+                    &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                    reach,
+                ),
+                &registry,
+                &runtime,
+            )
+            .unwrap();
 
             assert!(outcome.applied(), "{reach:?}: {outcome:?}");
             assert_eq!(
@@ -865,7 +948,15 @@ mod tests {
         let dir = project(vec![entry("@sdk/greet", "0.0.9", "local:greet.wasm", &[])]);
         let registry = MemoryRegistry::new().serving(old("@sdk/greet", "9.9.9"));
 
-        let outcome = update(&request(dir.path(), Reach::Major), &registry, &runtime()).unwrap();
+        let outcome = update(
+            &request(
+                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                Reach::Major,
+            ),
+            &registry,
+            &runtime(),
+        )
+        .unwrap();
 
         assert!(registry.asked().is_empty());
         assert_eq!(
@@ -880,7 +971,10 @@ mod tests {
     fn no_lock_and_no_registry_fail_outright() {
         let empty = tempfile::tempdir().unwrap();
         let error = update(
-            &request(empty.path(), Reach::Compatible),
+            &request(
+                &specforge_common::ProjectRoot::of(empty.path()).unwrap(),
+                Reach::Compatible,
+            ),
             &MemoryRegistry::new(),
             &runtime(),
         )
@@ -890,7 +984,10 @@ mod tests {
         let dir = project(vec![entry("@sdk/greet", "0.0.9", "registry", &[])]);
         let unconfigured = crate::registry::Unconfigured("update");
         let error = update(
-            &request(dir.path(), Reach::Compatible),
+            &request(
+                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                Reach::Compatible,
+            ),
             &unconfigured,
             &runtime(),
         )
@@ -920,7 +1017,10 @@ mod tests {
 
                 let unconfigured = crate::registry::Unconfigured("update");
                 let error = update(
-                    &request(dir.path(), Reach::Compatible),
+                    &request(
+                        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                        Reach::Compatible,
+                    ),
                     &unconfigured,
                     &runtime(),
                 )
@@ -976,8 +1076,15 @@ mod tests {
                     .serving(served(&runtime, B2))
             };
             let dir = coupled(a_first);
-            let outcome =
-                update(&request(dir.path(), Reach::Major), &together(), &runtime).unwrap();
+            let outcome = update(
+                &request(
+                    &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                    Reach::Major,
+                ),
+                &together(),
+                &runtime,
+            )
+            .unwrap();
             assert!(outcome.applied(), "a first: {a_first}: {outcome:?}");
             let lock = specforge_installed::read_lock_file(&lock_path(dir.path())).unwrap();
             let locked: Vec<(&str, &str)> = lock
@@ -998,7 +1105,15 @@ mod tests {
                 .serving(served(&runtime, B2));
             let dir = coupled(a_first);
             let lock_before = std::fs::read(lock_path(dir.path())).unwrap();
-            let outcome = update(&request(dir.path(), Reach::Major), &apart, &runtime).unwrap();
+            let outcome = update(
+                &request(
+                    &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                    Reach::Major,
+                ),
+                &apart,
+                &runtime,
+            )
+            .unwrap();
             assert!(!outcome.applied(), "a first: {a_first}: {outcome:?}");
             let failures: Vec<(&str, &str, &str)> = outcome
                 .failures()

@@ -133,6 +133,31 @@ fn a_workspace_root_inside_a_project_opens_the_enclosing_project() {
     assert_eq!(found, ["alpha", "beta"]);
 }
 
+#[spec(
+    behavior = "locate_project_root",
+    verify = "a workspace root in a spec root holding specforge.spec opens the project around it"
+)]
+fn a_workspace_root_in_a_spec_root_holding_specforge_spec_opens_the_project_around_it() {
+    let served = Served::new(&[
+        ("spec/specforge.spec", "spec \"p\" {}\n"),
+        ("spec/a.spec", "behavior alpha \"Alpha\" {}\n"),
+    ])
+    .extension("@specforge/software", |c| {
+        c.kind("behavior", |_| {});
+    })
+    .open_in("spec", &[]);
+    let root = served.root().to_str().unwrap().to_string();
+    let logs = logs(served.opening());
+    assert!(
+        logs.contains(&format!("specforge-lsp: indexed 2 .spec files from {root}")),
+        "{logs:?}"
+    );
+    assert!(
+        logs.iter().any(|m| m.contains("loaded 1 extension(s)")),
+        "{logs:?}"
+    );
+}
+
 #[test]
 fn a_workspace_root_in_no_project_is_opened_as_given() {
     let dir = tempfile::TempDir::new().unwrap();

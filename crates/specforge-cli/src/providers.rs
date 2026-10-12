@@ -1,4 +1,4 @@
-use crate::outcome::{Exit, OutputArg, OutputFormat};
+use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use crate::terminal::{Terminal, errln, outln};
 use specforge_ops::extension;
 use specforge_ops::view::ProjectView;
@@ -7,8 +7,7 @@ use std::path::PathBuf;
 // `specforge providers`'s command line.
 #[derive(clap::Args)]
 pub(crate) struct Args {
-    /// Path to the project root
-    #[arg(long, default_value = ".")]
+    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
     path: PathBuf,
 
     #[command(flatten)]
@@ -21,7 +20,10 @@ impl Args {
     /// the loaded extensions gives it.
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         let format = self.output.format;
-        let project = crate::pipeline::compile_project(&self.path);
+        let project = match crate::project::compile(&self.path) {
+            Ok(project) => project,
+            Err(error) => return Refusal::of(format).report(terminal, &error),
+        };
         let listing = extension::providers(&ProjectView::of(&project));
         let (providers, diagnostics) = (&listing.providers, &listing.diagnostics);
 

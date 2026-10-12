@@ -503,7 +503,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(dir.path().join("specforge.json"), r#"{"name": "v"}"#).unwrap();
         std::fs::write(dir.path().join("a.spec"), "behavior a \"A\" {\n}\n").unwrap();
-        let compiled = CompiledProject::compile(dir.path(), None);
+        let compiled = CompiledProject::compile(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            None,
+        );
         let view = ProjectView::of(&compiled);
         assert!(std::ptr::eq(view.entities(), compiled.entities()));
         assert!(std::ptr::eq(
@@ -554,8 +557,14 @@ mod tests {
             "behavior a \"A\" {\n  invariants [ghost]\n}\n",
         )
         .unwrap();
-        let opened = ProjectSession::open_with_runtime(dir.path(), None);
-        let compiled = CompiledProject::compile(dir.path(), None);
+        let opened = ProjectSession::open_with_runtime(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            None,
+        );
+        let compiled = CompiledProject::compile(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            None,
+        );
         let (held, of) = (
             ProjectView::of(opened.project()),
             ProjectView::of(&compiled),
@@ -609,7 +618,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(dir.path().join("specforge.json"), r#"{"extensions": []}"#).unwrap();
         std::fs::write(dir.path().join("main.spec"), "behavior b \"B\" {\n}\n").unwrap();
-        let compiled = CompiledProject::compile(dir.path(), None);
+        let compiled = CompiledProject::compile(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            None,
+        );
         let of = ProjectView::of(&compiled);
         assert_eq!(of.reported(), compiled.diagnostics());
         assert_eq!(of.root(), Some(dir.path()));

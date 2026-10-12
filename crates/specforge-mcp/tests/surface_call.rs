@@ -276,7 +276,10 @@ fn export_takes_a_schema_version() {
     let root = server.root().to_path_buf();
     let expected = {
         let runtime = specforge_component::ComponentRuntime::with_user_cache();
-        let project = CompiledProject::compile(&root, Some(Arc::new(runtime)));
+        let project = CompiledProject::compile(
+            &specforge_common::ProjectRoot::of(&root).unwrap(),
+            Some(Arc::new(runtime)),
+        );
         specforge_ops::export::export(
             &ProjectView::of(&project),
             &Request {
@@ -553,7 +556,10 @@ fn a_read_names_the_uri_the_client_read() {
 /// What `specforge export` writes for `request`, over the project at `root`.
 fn exported(root: &std::path::Path, request: &Request) -> String {
     let runtime = specforge_component::ComponentRuntime::with_user_cache();
-    let project = CompiledProject::compile(root, Some(Arc::new(runtime)));
+    let project = CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(root).unwrap(),
+        Some(Arc::new(runtime)),
+    );
     specforge_ops::export::export(&ProjectView::of(&project), request).unwrap()
 }
 

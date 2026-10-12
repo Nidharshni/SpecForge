@@ -11,8 +11,7 @@ pub(crate) struct Args {
     #[arg(required = true, num_args = 1..)]
     specifiers: Vec<String>,
 
-    /// Path to the project root
-    #[arg(long, default_value = ".")]
+    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
     path: PathBuf,
 
     #[command(flatten)]
@@ -31,7 +30,11 @@ impl Args {
     /// `specforge add`: the shared add operation, presented.
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         let format = self.output.format;
-        let path = self.path.as_path();
+        let root = match crate::project::root(&self.path) {
+            Ok(root) => root,
+            Err(error) => return Refusal::of(format).report(terminal, &error),
+        };
+        let path = root.dir();
         let extensions = match extension::specified(&self.specifiers) {
             Ok(extensions) => extensions,
             Err(error) => {
@@ -39,10 +42,10 @@ impl Args {
             }
         };
         let registry =
-            ConfiguredRegistry::for_project(path, "add").asking(crate::trust::asker(terminal));
+            ConfiguredRegistry::for_project(&root, "add").asking(crate::trust::asker(terminal));
         let runtime = specforge_component::ComponentRuntime::with_user_cache();
         let request = AddRequest {
-            root: path,
+            root: &root,
             extensions,
             allow_unsigned: self.allow_unsigned,
             trust: format.trust(self.yes),

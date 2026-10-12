@@ -26,7 +26,11 @@ fn an_unusable_specforge_json_is_refused_as_add_refuses_it() {
         let refused = specforge_ops::config::required(dir.path()).unwrap_err();
 
         for operation in ["search", "login", "publish", "add"] {
-            let error = configured(dir.path(), operation).unwrap_err();
+            let error = configured(
+                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                operation,
+            )
+            .unwrap_err();
 
             assert_eq!(error, refused, "{config}: {operation}");
             assert_eq!(error.code, "config_invalid");
@@ -37,25 +41,47 @@ fn an_unusable_specforge_json_is_refused_as_add_refuses_it() {
 #[test]
 fn a_usable_config_without_registries_is_e063_and_an_unreadable_entry_is_e067() {
     let none = project(r#"{"name": "p", "extensions": []}"#);
-    assert_eq!(configured(none.path(), "search").unwrap_err().code, "E063");
+    assert_eq!(
+        configured(
+            &specforge_common::ProjectRoot::of(none.path()).unwrap(),
+            "search"
+        )
+        .unwrap_err()
+        .code,
+        "E063"
+    );
 
     // Not a project at all: no registry, as before.
     let nothing = TempDir::new().unwrap();
     assert_eq!(
-        configured(nothing.path(), "search").unwrap_err().code,
+        configured(
+            &specforge_common::ProjectRoot::of(nothing.path()).unwrap(),
+            "search"
+        )
+        .unwrap_err()
+        .code,
         "E063"
     );
 
     let unreadable = project(r#"{"registries": [{"url": "https://r.example"}]}"#);
     assert_eq!(
-        configured(unreadable.path(), "search").unwrap_err().code,
+        configured(
+            &specforge_common::ProjectRoot::of(unreadable.path()).unwrap(),
+            "search"
+        )
+        .unwrap_err()
+        .code,
         "E067"
     );
 
     let good = project(
         r#"{"registries": [{"alias": "main", "url": "https://r.example", "default": true}]}"#,
     );
-    let found = configured(good.path(), "search").unwrap();
+    let found = configured(
+        &specforge_common::ProjectRoot::of(good.path()).unwrap(),
+        "search",
+    )
+    .unwrap();
     assert_eq!(found.registries.len(), 1);
     assert_eq!(found.registries[0].alias, "main");
 }
@@ -65,7 +91,11 @@ fn configured_with(registries: &str) -> specforge_ops_registry::Configured {
     let dir = project(&format!(
         r#"{{"name":"p","version":"0.1.0","extensions":[],"registries":{registries}}}"#
     ));
-    configured(dir.path(), "add").unwrap()
+    configured(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        "add",
+    )
+    .unwrap()
 }
 
 fn name(text: &str) -> specforge_package::PackageName {
@@ -199,8 +229,11 @@ fn the_configuration_is_reported_once_the_registry_is_asked() {
             {"alias": "main", "url": "memory://other"}
         ]}"#,
     );
-    let registry =
-        ConfiguredRegistry::for_project(dir.path(), "add").with_client(MemoryClient::new());
+    let registry = ConfiguredRegistry::for_project(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        "add",
+    )
+    .with_client(MemoryClient::new());
     assert!(registry.reported().is_empty(), "nothing asked yet");
 
     let tool = PackageName::parse("@acme/tool").unwrap();

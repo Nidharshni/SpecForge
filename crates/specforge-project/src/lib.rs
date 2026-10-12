@@ -41,7 +41,7 @@ use sources::SourceCache;
 
 use snapshot::EntitySnapshot;
 use specforge_common::{
-    ConfigProblem, ConfigRead, Diagnostic, ProjectConfig, codes, discover_spec_files,
+    ConfigProblem, ConfigRead, Diagnostic, ProjectConfig, ProjectRoot, codes, discover_spec_files,
     is_discovered, read_project_config,
 };
 use specforge_graph::{Graph, GraphBuild, GraphConfig};
@@ -133,6 +133,11 @@ pub struct Environment {
     /// without one, so no extension loaded ([`Self::empty`] has none;
     /// [`Self::with_registries`] has the one it is given).
     runtime: Option<SharedRuntime>,
+    /// The project root it was loaded from ([`Self::from_read`]); `None` for one
+    /// assembled in memory ([`Self::assemble`], [`Self::empty`],
+    /// [`Self::with_registries`]). For a loaded environment, [`Self::root`] is its
+    /// `dir()`.
+    root: Option<ProjectRoot>,
 }
 
 impl Environment {
@@ -148,6 +153,7 @@ impl Environment {
             load_diagnostics: Vec::new(),
             structural_only: None,
             runtime: None,
+            root: None,
         }
     }
 
@@ -162,11 +168,11 @@ impl Environment {
         }
     }
 
-    /// Read the project's config and load its extensions into `runtime`
-    /// (none without one), which the environment then holds, then build the
-    /// registries from them.
-    pub fn load(root: &Path, runtime: Option<SharedRuntime>) -> Self {
-        Self::from_read(root, read_project_config(root), runtime)
+    /// Read the config of the project at `root` and load its extensions into
+    /// `runtime` (none without one), which the environment then holds, then
+    /// build the registries from them. The environment keeps `root`.
+    pub fn load(root: &ProjectRoot, runtime: Option<SharedRuntime>) -> Self {
+        Self::from_read(root, read_project_config(root.dir()), runtime)
     }
 
     /// The environment of the config `read`, the installed extensions
@@ -209,10 +215,14 @@ impl Environment {
             registries.probe(&WasmVerdicts::probe_only(runtime));
         }
         let providers = Providers::register(read.config.raw.as_ref(), registries.declarations());
-        let structural_only = registries
-            .declarations()
-            .is_empty()
-            .then(|| structural_only_notice(&read.config.extensions, &read.problems));
+        let structural_only = registries.declarations().is_empty().then(|| {
+            structural_only_notice(
+                read.found,
+                installed.root(),
+                &read.config.extensions,
+                &read.problems,
+            )
+        });
         let spec_root = read.config.spec_root_in(installed.root());
         Environment {
             read,
@@ -224,15 +234,21 @@ impl Environment {
             load_diagnostics,
             structural_only,
             runtime,
+            root: None,
         }
     }
 
     /// The environment of the config `read` (the one read of
     /// `specforge.json`): the lock read at `root` once, the extensions
     /// loaded into `runtime` through the production policy, then
-    /// [`Self::assemble`]d. The disk adapter of the assembly.
-    pub fn from_read(root: &Path, read: ConfigRead, runtime: Option<SharedRuntime>) -> Self {
-        let installed = Installed::at(root);
+    /// [`Self::assemble`]d. The disk adapter of the assembly; the session's
+    /// open and [`Self::load`] are its callers.
+    pub(crate) fn from_read(
+        root: &ProjectRoot,
+        read: ConfigRead,
+        runtime: Option<SharedRuntime>,
+    ) -> Self {
+        let installed = Installed::at(root.dir());
         let load = match runtime {
             Some(runtime) => ExtensionLoad::In {
                 loaded: installed.load(&read.config.extensions, &builtins(), runtime.as_ref()),
@@ -240,7 +256,15 @@ impl Environment {
             },
             None => ExtensionLoad::NoRuntime,
         };
-        Self::assemble(read, installed, load)
+        Environment {
+            root: Some(root.clone()),
+            ..Self::assemble(read, installed, load)
+        }
+    }
+
+    /// The project root it was loaded from; `None` for one assembled in memory.
+    pub fn project_root(&self) -> Option<&ProjectRoot> {
+        self.root.as_ref()
     }
 
     /// The project root (where `specforge.json` lives); empty with no project.
@@ -438,11 +462,30 @@ fn config_problem_diagnostic(problem: &ConfigProblem) -> Diagnostic {
 /// kind, field or rule checks). Reported after the errors that caused it,
 /// if any: the config problems (E069) that left nothing to load, or the
 /// load errors (E028).
-fn structural_only_notice(configured: &[String], problems: &[ConfigProblem]) -> Diagnostic {
+fn structural_only_notice(
+    found: bool,
+    root: &Path,
+    configured: &[String],
+    problems: &[ConfigProblem],
+) -> Diagnostic {
     let (message, suggestion) = if problems.iter().any(ConfigProblem::loads_nothing) {
         (
             "specforge.json could not be read — operating in structural-only mode".to_string(),
             format!("fix specforge.json ({} above)", codes::E069),
+        )
+    } else if !found && root.as_os_str().is_empty() {
+        (
+            "no project — operating in structural-only mode".to_string(),
+            "create a project with: specforge init".to_string(),
+        )
+    } else if !found {
+        // A loose root: no specforge.json at or above the path.
+        (
+            format!(
+                "no specforge.json at or above {} — operating in structural-only mode",
+                root.display()
+            ),
+            "create a project here with: specforge init".to_string(),
         )
     } else if configured.is_empty() {
         (

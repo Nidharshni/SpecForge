@@ -16,8 +16,7 @@ pub(crate) struct Args {
     /// Defaults to the --path directory
     extension: Option<PathBuf>,
 
-    /// The project whose specforge.json configures the registries
-    #[arg(long, default_value = ".")]
+    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
     path: PathBuf,
 
     #[command(flatten)]
@@ -35,7 +34,11 @@ impl Args {
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         let format = self.output.format;
         let extension = self.extension.as_deref().unwrap_or(&self.path);
-        let registry = ConfiguredRegistry::for_project(&self.path, "publish");
+        let root = match crate::project::root(&self.path) {
+            Ok(root) => root,
+            Err(error) => return Refusal::of(format).report(terminal, &error),
+        };
+        let registry = ConfiguredRegistry::for_project(&root, "publish");
         let runtime = ComponentRuntime::with_user_cache();
         let report = publish::publish(extension, &registry, &runtime);
         terminal.diagnostics(&report.warnings);

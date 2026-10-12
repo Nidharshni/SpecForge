@@ -1,6 +1,6 @@
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal, Written};
 use crate::terminal::{Terminal, errln, outln};
-use specforge_common::find_project_root;
+use specforge_common::ProjectRoot;
 use specforge_ops::init;
 use std::path::{Path, PathBuf};
 
@@ -61,14 +61,14 @@ fn init_at(
         Ok(plan) => plan,
         Err(error) => return Refusal::of(format).report(terminal, &error),
     };
-    if let Some(enclosing) = path.parent().and_then(find_project_root)
+    if let Some(enclosing) = path.parent().and_then(ProjectRoot::enclosing)
         && format != OutputFormat::Json
     {
         errln!(
             terminal,
             "note: {} is inside the project at {}; the new project is separate",
             path.display(),
-            enclosing.display()
+            enclosing.dir().display()
         );
     }
     let outcome = match init::apply(path, plan) {

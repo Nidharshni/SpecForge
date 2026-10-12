@@ -3318,6 +3318,7 @@ version = "0.1.0"
 dependencies = [
  "notify",
  "serde_json",
+ "specforge-common",
  "specforge-project",
  "specforge-test",
  "specforge-test-macros",

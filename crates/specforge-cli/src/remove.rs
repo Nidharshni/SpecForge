@@ -10,8 +10,7 @@ pub(crate) struct Args {
     /// Extension name
     name: String,
 
-    /// Path to the project root
-    #[arg(long, default_value = ".")]
+    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
     path: PathBuf,
 
     /// Force removal even if other extensions depend on it
@@ -28,8 +27,12 @@ impl Args {
     /// depend on the one removed.
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         let format = self.output.format;
-        let path = self.path.as_path();
-        let project = crate::pipeline::compile_project(path);
+        let root = match crate::project::root(&self.path) {
+            Ok(root) => root,
+            Err(error) => return Refusal::of(format).report(terminal, &error),
+        };
+        let path = root.dir();
+        let project = crate::project::compile_at(&root);
         let request = RemoveRequest {
             name: &self.name,
             force: self.force,

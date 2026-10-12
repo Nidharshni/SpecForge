@@ -303,7 +303,7 @@ async fn the_cli_and_the_editor_agree_on_a_nested_project() {
     let edits = session.formatting(&uri, 4).await["result"].clone();
     assert_eq!(edits, serde_json::json!([]));
     let outcome = specforge_ops::format::run(&specforge_ops::format::Request {
-        root: &root,
+        root: &specforge_common::ProjectRoot::of(&root).unwrap(),
         paths: &[root.join("inner")],
         mode: specforge_ops::format::Mode::Check,
     });
@@ -327,7 +327,7 @@ async fn lsp_format_matches_cli_format() {
     let edited = apply_edits(messy, edits.as_array().expect("an edit list"));
 
     let outcome = specforge_ops::format::run(&specforge_ops::format::Request {
-        root: &root,
+        root: &specforge_common::ProjectRoot::of(&root).unwrap(),
         paths: &[],
         mode: specforge_ops::format::Mode::Check,
     });

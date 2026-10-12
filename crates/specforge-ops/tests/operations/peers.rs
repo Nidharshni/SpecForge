@@ -73,7 +73,10 @@ fn a_peer_a_builtin_satisfies_is_not_reported_by_doctor() {
     specforge_installed::testing::install(dir.path(), &["@acme/app"]);
     locked_peers(dir.path(), "@acme/app", &[("@specforge/software", "^1.0")]);
 
-    let compiled = CompiledProject::compile(dir.path(), Some(Arc::new(runtime)));
+    let compiled = CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        Some(Arc::new(runtime)),
+    );
     assert!(
         !compiled.diagnostics().iter().any(|d| d.code == "E027"),
         "{:?}",
@@ -104,7 +107,10 @@ fn doctor_reports_the_peer_requirements_check_reports() {
     specforge_installed::testing::install(dir.path(), &["@acme/base", "@acme/bad"]);
     locked_peers(dir.path(), "@acme/bad", &[("@acme/base", "one-ish")]);
 
-    let compiled = CompiledProject::compile(dir.path(), Some(Arc::new(runtime)));
+    let compiled = CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        Some(Arc::new(runtime)),
+    );
     let all = compiled.diagnostics();
     let reported: Vec<_> = all
         .iter()
@@ -134,7 +140,10 @@ fn doctor_reports_the_peer_requirements_check_reports() {
         .with(served("@acme/base", "1.0.0", &[]))
         .with(served("@acme/app", "1.0.0", &[("@acme/base", "^2.0")]));
     specforge_installed::testing::install(dir.path(), &["@acme/base", "@acme/app"]);
-    let compiled = CompiledProject::compile(dir.path(), Some(Arc::new(runtime)));
+    let compiled = CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        Some(Arc::new(runtime)),
+    );
     let all = compiled.diagnostics();
     let e027: Vec<_> = all.iter().filter(|d| d.code == "E027").collect();
     assert_eq!(e027.len(), 1, "{e027:?}");
@@ -156,7 +165,10 @@ fn check_reports_a_cycle_among_required_peers() {
         .with(served("@acme/b", "1.0.0", &[("@acme/a", "^1")]));
     specforge_installed::testing::install(dir.path(), &["@acme/a", "@acme/b"]);
 
-    let compiled = CompiledProject::compile(dir.path(), Some(Arc::new(runtime)));
+    let compiled = CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        Some(Arc::new(runtime)),
+    );
     let all = compiled.diagnostics();
     let cycles: Vec<_> = all.iter().filter(|d| d.code == "E027").collect();
     assert_eq!(cycles.len(), 1, "{cycles:?}");

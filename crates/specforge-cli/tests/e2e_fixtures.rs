@@ -7,7 +7,7 @@ use tempfile::TempDir;
 pub fn setup_project(files: &[(&str, &str)]) -> TempDir {
     let dir = TempDir::new().unwrap();
     // A real project: specforge.json is what makes the directory a project
-    // (find_project_root) — management ops require it.
+    // (ProjectRoot) — management ops require it.
     if !files.iter().any(|(p, _)| *p == "specforge.json") {
         fs::write(
             dir.path().join("specforge.json"),

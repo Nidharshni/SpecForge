@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
-use specforge_common::{Diagnostic, codes};
+use specforge_common::{Diagnostic, ProjectRoot, codes};
 use specforge_graph::{Applied, FileChange, Graph, GraphBuild, GraphConfig, compute_graph_delta};
 
 use crate::coverage::RecordedCoverage;
@@ -58,7 +58,7 @@ impl CompiledProject {
     /// Compile the project at `root`, its extensions loaded into `runtime`
     /// (without one no extension loads), which its environment holds. It
     /// keeps no stamp (ADR 0030).
-    pub fn compile(root: &Path, runtime: Option<SharedRuntime>) -> Self {
+    pub fn compile(root: &ProjectRoot, runtime: Option<SharedRuntime>) -> Self {
         Self::of(Environment::load(root, runtime))
     }
 
@@ -84,6 +84,12 @@ impl CompiledProject {
     /// replaces this project.
     pub fn shared_environment(&self) -> Arc<Environment> {
         Arc::clone(&self.env)
+    }
+
+    /// The project root it was compiled from, as the environment holds it;
+    /// `None` for a detached project.
+    pub fn project_root(&self) -> Option<&ProjectRoot> {
+        self.on_disk.then(|| self.env.project_root()).flatten()
     }
 
     /// The root it was compiled from; `None` for a detached project.
@@ -299,7 +305,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(dir.path().join("specforge.json"), r#"{"extensions": []}"#).unwrap();
         std::fs::write(dir.path().join("a.spec"), MISSING_IMPORT).unwrap();
-        let compiled = CompiledProject::compile(dir.path(), None);
+        let compiled = CompiledProject::compile(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            None,
+        );
         assert!(
             !imports(&compiled).is_empty(),
             "{:?}",
@@ -320,7 +329,10 @@ mod tests {
         .unwrap();
         std::fs::write(dir.path().join("a.spec"), "behavior alpha \"A\" {\n}\n").unwrap();
         let runtime = specforge_component::ComponentRuntime::with_user_cache();
-        let mut project = CompiledProject::compile(dir.path(), Some(Arc::new(runtime)));
+        let mut project = CompiledProject::compile(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            Some(Arc::new(runtime)),
+        );
         let checked = project.diagnostics();
         assert!(checked.iter().any(|d| d.code == "W006"), "{checked:?}");
 

@@ -36,7 +36,10 @@ fn load(runtime: &std::sync::Arc<ComponentRuntime>, extensions: &[&str]) -> Envi
     if extensions.contains(&"@sdk/greet") {
         specforge_installed::testing::install_module(dir.path(), "@sdk/greet", &greet());
     }
-    Environment::load(dir.path(), Some(runtime.clone()))
+    Environment::load(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        Some(runtime.clone()),
+    )
 }
 
 fn diagnostics<'a>(diagnostics: impl IntoIterator<Item = &'a Diagnostic>) -> Value {

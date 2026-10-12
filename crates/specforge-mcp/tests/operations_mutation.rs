@@ -532,12 +532,14 @@ fn rename_recompiles_files_it_did_not_edit() {
         codes
     };
     let runtime = specforge_component::ComponentRuntime::with_user_cache();
-    let fresh: Vec<Value> =
-        specforge_project::CompiledProject::compile(&root, Some(Arc::new(runtime)))
-            .diagnostics()
-            .iter()
-            .map(|d| serde_json::to_value(d).unwrap())
-            .collect();
+    let fresh: Vec<Value> = specforge_project::CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(&root).unwrap(),
+        Some(Arc::new(runtime)),
+    )
+    .diagnostics()
+    .iter()
+    .map(|d| serde_json::to_value(d).unwrap())
+    .collect();
     let returned = parsed["diagnostics"].as_array().unwrap();
     assert_eq!(codes(returned), codes(&fresh), "{parsed}");
     let e003 = returned
@@ -588,7 +590,9 @@ fn rename_edits_the_files_under_a_configured_spec_root() {
         r#"{"name":"t","version":"0.1.0","extensions":["@specforge/software"],"spec_root":"spec"}"#,
     )
     .unwrap();
-    server.state_mut().serve(&root);
+    server
+        .state_mut()
+        .serve(&specforge_common::ProjectRoot::of(&root).unwrap());
     assert!(server.state().graph().node("token_unique").is_some());
 
     let parsed = rename(

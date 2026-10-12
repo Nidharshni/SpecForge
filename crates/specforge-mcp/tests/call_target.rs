@@ -732,7 +732,10 @@ fn a_mutation_on_another_project_reports_what_a_fresh_compile_reports() {
 
     let payload: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
     let runtime = ext.runtime();
-    let fresh = specforge_project::CompiledProject::compile(other.path(), Some(runtime.clone()));
+    let fresh = specforge_project::CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(other.path()).unwrap(),
+        Some(runtime.clone()),
+    );
     let expected =
         serde_json::to_value(specforge_common::diagnostics_json(&fresh.diagnostics())).unwrap();
     assert_eq!(payload["diagnostics"], expected);
@@ -767,7 +770,10 @@ fn an_extension_added_to_another_project_is_loaded_when_it_is_brought_up_to_date
     assert_eq!(resp["result"]["isError"], false, "{resp}");
     let payload: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
     let runtime = specforge_component::ComponentRuntime::with_user_cache();
-    let fresh = specforge_project::CompiledProject::compile(other.path(), Some(Arc::new(runtime)));
+    let fresh = specforge_project::CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(other.path()).unwrap(),
+        Some(Arc::new(runtime)),
+    );
     let expected =
         serde_json::to_value(specforge_common::diagnostics_json(&fresh.diagnostics())).unwrap();
     assert_eq!(payload["diagnostics"], expected);
@@ -1283,6 +1289,28 @@ fn a_root_inside_a_project_serves_that_project() {
         json!({"path": p.path().to_str().unwrap()}),
     );
     assert_eq!(resp["result"]["isError"], false, "{resp}");
+}
+
+/// The project `specforge.json` enables software for; its spec root `spec/`
+/// holds a `specforge.spec` (a `spec` block) and `a.spec`.
+fn project_with_a_spec_block() -> TempDir {
+    let p = project(&["@specforge/software"], "");
+    fs::remove_file(p.path().join("main.spec")).unwrap();
+    fs::create_dir(p.path().join("spec")).unwrap();
+    fs::write(p.path().join("spec/specforge.spec"), "spec \"p\" {}\n").unwrap();
+    fs::write(p.path().join("spec/a.spec"), "behavior ok \"Ok\" {\n}\n").unwrap();
+    p
+}
+
+#[specforge_test(
+    behavior = "locate_project_root",
+    verify = "a server started in a spec root holding specforge.spec serves the project around it"
+)]
+fn a_server_started_in_a_spec_root_holding_specforge_spec_serves_the_project_around_it() {
+    let p = project_with_a_spec_block();
+    let mut server = McpServer::new();
+    initialize(&mut server, &p.path().join("spec"));
+    assert_eq!(served_root(&server), Some(canonical(p.path())));
 }
 
 #[specforge_test(

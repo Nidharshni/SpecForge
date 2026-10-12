@@ -29,7 +29,7 @@ fn project() -> tempfile::TempDir {
     dir
 }
 
-fn request(root: &Path) -> Request<'_> {
+fn request(root: &specforge_common::ProjectRoot) -> Request<'_> {
     Request {
         root,
         target: CURRENT_FORMAT_VERSION,
@@ -88,7 +88,10 @@ fn a_migration_that_changes_the_graph_is_rolled_back() {
         let migrated = std::fs::read_to_string(file).map_err(|e| e.to_string())?;
         std::fs::write(file, migrated.replace("alpha", "beta")).map_err(|e| e.to_string())
     }));
-    let outcome = run(&request(dir.path()), Some(runtime.clone()));
+    let outcome = run(
+        &request(&specforge_common::ProjectRoot::of(dir.path()).unwrap()),
+        Some(runtime.clone()),
+    );
 
     assert_eq!(outcome.hooks_invoked, ["@acme/x:migrate_acme"]);
     assert!(outcome.validated);
@@ -114,7 +117,10 @@ fn a_migration_whose_hook_fails_is_rolled_back() {
     let dir = project_with_extension();
     let runtime = Arc::new(hooked(|_| Err("the data cannot be migrated".into())));
 
-    let outcome = run(&request(dir.path()), Some(runtime.clone()));
+    let outcome = run(
+        &request(&specforge_common::ProjectRoot::of(dir.path()).unwrap()),
+        Some(runtime.clone()),
+    );
 
     assert!(!outcome.validated, "no validation after a failed hook");
     assert_eq!(
@@ -140,7 +146,10 @@ fn a_migration_whose_hook_fails_is_rolled_back() {
 fn a_failed_migration_names_its_kind() {
     // Applied: nothing failed, no failure.
     let dir = project();
-    let outcome = run(&request(dir.path()), None);
+    let outcome = run(
+        &request(&specforge_common::ProjectRoot::of(dir.path()).unwrap()),
+        None,
+    );
     assert!(outcome.ok());
     assert_eq!(outcome.failure(), None);
 
@@ -151,7 +160,10 @@ fn a_failed_migration_names_its_kind() {
         "// specforge-format: 99.0\nbehavior bad \"Bad\" {\n}\n",
     )
     .unwrap();
-    let outcome = run(&request(dir.path()), None);
+    let outcome = run(
+        &request(&specforge_common::ProjectRoot::of(dir.path()).unwrap()),
+        None,
+    );
     let failure = outcome.failure().expect("a file failed to migrate");
     assert!(!outcome.ok());
     assert_eq!(
@@ -170,7 +182,10 @@ fn a_failed_migration_names_its_kind() {
     // A hook that fails: rolled back, the project never compiled again.
     let dir = project_with_extension();
     let runtime = Arc::new(hooked(|_| Err("trapped".into())));
-    let outcome = run(&request(dir.path()), Some(runtime.clone()));
+    let outcome = run(
+        &request(&specforge_common::ProjectRoot::of(dir.path()).unwrap()),
+        Some(runtime.clone()),
+    );
     assert!(outcome.rollback.is_some() && !outcome.ok());
     assert_eq!(outcome.failure().unwrap().kind, OpErrorKind::Internal);
 
@@ -180,7 +195,10 @@ fn a_failed_migration_names_its_kind() {
     let runtime = Arc::new(hooked(|input| {
         std::fs::write(&input.files[0], "behavior {\n").map_err(|e| e.to_string())
     }));
-    let outcome = run(&request(dir.path()), Some(runtime.clone()));
+    let outcome = run(
+        &request(&specforge_common::ProjectRoot::of(dir.path()).unwrap()),
+        Some(runtime.clone()),
+    );
     assert!(outcome.post_errors().next().is_some(), "{outcome:?}");
     assert!(outcome.rollback.is_some());
     let failure = outcome.failure().expect("rolled back");
@@ -200,7 +218,10 @@ fn a_failed_migration_names_its_kind() {
 fn a_header_only_migration_is_checked_after_it_runs() {
     let dir = project();
 
-    let outcome = run(&request(dir.path()), None);
+    let outcome = run(
+        &request(&specforge_common::ProjectRoot::of(dir.path()).unwrap()),
+        None,
+    );
 
     assert!(outcome.migrated(), "{outcome:?}");
     assert!(
@@ -218,7 +239,10 @@ fn nothing_pending_runs_nothing() {
     std::fs::write(dir.path().join("old.spec"), "behavior alpha \"A\" {\n}\n").unwrap();
     let runtime = Arc::new(hooked(|_| Ok(())));
 
-    let outcome = run(&request(dir.path()), Some(runtime.clone()));
+    let outcome = run(
+        &request(&specforge_common::ProjectRoot::of(dir.path()).unwrap()),
+        Some(runtime.clone()),
+    );
 
     assert!(!outcome.pending && !outcome.applied && !outcome.validated);
     assert!(
@@ -257,7 +281,12 @@ fn migrate_reads_the_project_sources() {
         std::fs::write(root.join(file), OLD).unwrap();
     }
 
-    let summary = migrate_project(root, &CURRENT_FORMAT_VERSION, true, true);
+    let summary = migrate_project(
+        &specforge_common::ProjectRoot::of(root).unwrap(),
+        &CURRENT_FORMAT_VERSION,
+        true,
+        true,
+    );
 
     let visited: Vec<&str> = summary
         .results
@@ -267,7 +296,7 @@ fn migrate_reads_the_project_sources() {
     assert_eq!(visited.len(), 1, "{visited:?}");
     assert!(visited[0].ends_with("specs/a.spec"), "{visited:?}");
     // A dry run records nothing, so there is nothing to roll back.
-    let rollback = rollback(root).summary;
+    let rollback = rollback(&specforge_common::ProjectRoot::of(root).unwrap()).summary;
     assert!(rollback.results.is_empty(), "{rollback:?}");
     assert_eq!(rollback.warnings.len(), 1, "{rollback:?}");
     assert!(
@@ -283,11 +312,14 @@ fn migrate_reads_the_project_sources() {
 fn a_rollback_reports_the_files_it_restored_as_written() {
     let dir = project();
     let root = dir.path();
-    let migrated = run(&request(root), None);
+    let migrated = run(
+        &request(&specforge_common::ProjectRoot::of(root).unwrap()),
+        None,
+    );
     assert!(migrated.ok(), "{migrated:?}");
     assert_ne!(std::fs::read_to_string(root.join("old.spec")).unwrap(), OLD);
 
-    let outcome = rollback(root);
+    let outcome = rollback(&specforge_common::ProjectRoot::of(root).unwrap());
 
     assert!(outcome.ok(), "{outcome:?}");
     assert_eq!(std::fs::read_to_string(root.join("old.spec")).unwrap(), OLD);
@@ -318,7 +350,10 @@ fn the_hook_an_extension_declares_in_its_handshake_runs_on_migrate() {
     let dir = project_with_extension();
     let runtime = Arc::new(hooked(|_| Ok(())));
 
-    let outcome = run(&request(dir.path()), Some(runtime.clone()));
+    let outcome = run(
+        &request(&specforge_common::ProjectRoot::of(dir.path()).unwrap()),
+        Some(runtime.clone()),
+    );
 
     assert!(outcome.migrated(), "{outcome:?}");
     assert_eq!(outcome.hooks_invoked, ["@acme/x:migrate_acme"]);
@@ -334,7 +369,10 @@ fn an_extension_whose_handshake_names_no_hook_is_skipped_silently() {
     let dir = project_with_extension();
     let runtime = Arc::new(unhooked());
 
-    let outcome = run(&request(dir.path()), Some(runtime.clone()));
+    let outcome = run(
+        &request(&specforge_common::ProjectRoot::of(dir.path()).unwrap()),
+        Some(runtime.clone()),
+    );
 
     assert!(outcome.migrated(), "{outcome:?}");
     assert!(outcome.hooks_invoked.is_empty() && outcome.hook_failures.is_empty());
@@ -556,7 +594,10 @@ fn the_schema_before_the_hooks_holds_their_kinds_edges_and_fields() {
     let dir = schema_project();
     let runtime = Arc::new(schema_runtime());
 
-    let outcome = run(&request(dir.path()), Some(runtime.clone()));
+    let outcome = run(
+        &request(&specforge_common::ProjectRoot::of(dir.path()).unwrap()),
+        Some(runtime.clone()),
+    );
 
     assert!(outcome.validated, "{outcome:?}");
     assert!(outcome.rollback.is_none(), "{outcome:?}");
@@ -618,7 +659,10 @@ fn a_required_peer_cycle_does_not_stop_the_hooks() {
             .with(extension("@acme/b", "migrate_b", &["@acme/a"], |_| Ok(()))),
     );
 
-    let outcome = run(&request(dir.path()), Some(runtime.clone()));
+    let outcome = run(
+        &request(&specforge_common::ProjectRoot::of(dir.path()).unwrap()),
+        Some(runtime.clone()),
+    );
 
     assert!(
         outcome.hook_failures.is_empty(),
@@ -684,14 +728,20 @@ fn a_diagnostic_the_migration_introduces_is_reported() {
         )
         .map_err(|e| e.to_string())
     }));
-    let before = specforge_project::CompiledProject::compile(dir.path(), Some(runtime.clone()));
+    let before = specforge_project::CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        Some(runtime.clone()),
+    );
     assert!(
         !before.diagnostics().iter().any(|d| d.code == "E003"),
         "{:?}",
         before.diagnostics()
     );
 
-    let outcome = run(&request(dir.path()), Some(runtime.clone()));
+    let outcome = run(
+        &request(&specforge_common::ProjectRoot::of(dir.path()).unwrap()),
+        Some(runtime.clone()),
+    );
 
     assert!(
         outcome
@@ -713,7 +763,10 @@ fn the_schema_is_compared_once_after_the_hooks() {
     let dir = schema_project();
     let runtime = Arc::new(schema_runtime());
 
-    let outcome = run(&request(dir.path()), Some(runtime.clone()));
+    let outcome = run(
+        &request(&specforge_common::ProjectRoot::of(dir.path()).unwrap()),
+        Some(runtime.clone()),
+    );
 
     // The comparison saw the hook's change to the enabled extensions...
     assert!(!outcome.schema_warnings.is_empty(), "{outcome:?}");
@@ -758,7 +811,10 @@ fn a_hook_that_answers_an_error_is_recorded_and_the_next_one_runs() {
             .with(extension("@acme/b", "migrate_b", &[], |_| Ok(()))),
     );
 
-    let outcome = run(&request(dir.path()), Some(runtime.clone()));
+    let outcome = run(
+        &request(&specforge_common::ProjectRoot::of(dir.path()).unwrap()),
+        Some(runtime.clone()),
+    );
 
     assert_eq!(outcome.hooks_invoked, ["@acme/b:migrate_b"]);
     assert_eq!(
@@ -793,7 +849,10 @@ fn hooks_run_in_dependency_order_every_time() {
                 .with(extension("@acme/b", "migrate_b", &["@acme/a"], |_| Ok(())))
                 .with(extension("@acme/a", "migrate_a", &[], |_| Ok(()))),
         );
-        let outcome = run(&request(dir.path()), Some(runtime.clone()));
+        let outcome = run(
+            &request(&specforge_common::ProjectRoot::of(dir.path()).unwrap()),
+            Some(runtime.clone()),
+        );
         (outcome.hooks_invoked, hooks_called(&runtime))
     };
 
@@ -827,7 +886,10 @@ fn an_extension_that_failed_to_load_runs_no_hook() {
             ),
     );
 
-    let outcome = run(&request(dir.path()), Some(runtime.clone()));
+    let outcome = run(
+        &request(&specforge_common::ProjectRoot::of(dir.path()).unwrap()),
+        Some(runtime.clone()),
+    );
 
     assert_eq!(outcome.hooks_invoked, ["@acme/ok:migrate_ok"]);
     assert_eq!(hooks_called(&runtime), ["migrate_ok"]);
@@ -879,7 +941,10 @@ fn a_hook_over_its_deadline_is_a_trap_and_the_next_one_runs() {
             ),
     );
 
-    let outcome = run(&request(dir.path()), Some(runtime.clone()));
+    let outcome = run(
+        &request(&specforge_common::ProjectRoot::of(dir.path()).unwrap()),
+        Some(runtime.clone()),
+    );
 
     assert!(
         runtime
@@ -921,7 +986,10 @@ fn the_project_is_checked_once_after_the_files_and_the_hooks() {
         std::fs::write(file, format!("{text}// migrated by @acme/x\n")).map_err(|e| e.to_string())
     }));
 
-    let outcome = run(&request(dir.path()), Some(runtime.clone()));
+    let outcome = run(
+        &request(&specforge_common::ProjectRoot::of(dir.path()).unwrap()),
+        Some(runtime.clone()),
+    );
 
     assert!(
         outcome.validated && outcome.rollback.is_none(),
@@ -948,7 +1016,10 @@ fn the_project_is_checked_once_after_the_files_and_the_hooks() {
 fn an_automatic_rollback_restores_only_what_its_run_migrated() {
     let dir = project_with_extension();
     let root = dir.path();
-    let first = run(&request(root), Some(Arc::new(unhooked())));
+    let first = run(
+        &request(&specforge_common::ProjectRoot::of(root).unwrap()),
+        Some(Arc::new(unhooked())),
+    );
     assert!(first.ok(), "{first:?}");
     let old = root.join("old.spec");
     let migrated = std::fs::read_to_string(&old).unwrap();
@@ -957,7 +1028,7 @@ fn an_automatic_rollback_restores_only_what_its_run_migrated() {
     std::fs::write(root.join("second.spec"), OLD).unwrap();
 
     let second = run(
-        &request(root),
+        &request(&specforge_common::ProjectRoot::of(root).unwrap()),
         Some(Arc::new(hooked(|_| Err("trapped".into())))),
     );
 
@@ -988,7 +1059,8 @@ fn an_automatic_rollback_restores_only_what_its_run_migrated() {
 fn an_automatic_rollback_restores_a_run_without_backups() {
     let dir = project_with_extension();
     let root = dir.path();
-    let mut req = request(root);
+    let project = specforge_common::ProjectRoot::of(root).unwrap();
+    let mut req = request(&project);
     req.no_backup = true;
 
     let outcome = run(&req, Some(Arc::new(hooked(|_| Err("trapped".into())))));
@@ -1006,7 +1078,10 @@ fn a_kept_migration_records_what_a_rollback_undoes() {
     let dir = project_with_extension();
     let root = dir.path();
 
-    let outcome = run(&request(root), Some(Arc::new(unhooked())));
+    let outcome = run(
+        &request(&specforge_common::ProjectRoot::of(root).unwrap()),
+        Some(Arc::new(unhooked())),
+    );
 
     assert!(outcome.ok(), "{outcome:?}");
     let record = specforge_migrate::MigrationRecord::read(root)
@@ -1034,14 +1109,18 @@ fn a_kept_migration_records_what_a_rollback_undoes() {
 fn a_migration_without_backups_removes_the_record() {
     let dir = project_with_extension();
     let root = dir.path();
-    run(&request(root), Some(Arc::new(unhooked())));
+    run(
+        &request(&specforge_common::ProjectRoot::of(root).unwrap()),
+        Some(Arc::new(unhooked())),
+    );
     assert!(
         specforge_migrate::MigrationRecord::read(root)
             .unwrap()
             .is_some()
     );
     std::fs::write(root.join("newer.spec"), OLD).unwrap();
-    let mut req = request(root);
+    let project = specforge_common::ProjectRoot::of(root).unwrap();
+    let mut req = request(&project);
     req.no_backup = true;
 
     let outcome = run(&req, Some(Arc::new(unhooked())));

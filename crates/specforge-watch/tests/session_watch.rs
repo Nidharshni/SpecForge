@@ -100,8 +100,11 @@ impl Fixture {
 
     fn watch(&self) -> (SessionWatch<Recorder>, Recorder) {
         let recorder = Recorder::default();
-        let watch = SessionWatch::start(ProjectSession::open(&self.root), recorder.clone())
-            .expect("the project is watched");
+        let watch = SessionWatch::start(
+            ProjectSession::open(&specforge_common::ProjectRoot::of(&self.root).unwrap()),
+            recorder.clone(),
+        )
+        .expect("the project is watched");
         (watch, recorder)
     }
 }
@@ -285,7 +288,7 @@ fn a_failed_rearm_with_nothing_stale_ends_on_the_report() {
 )]
 fn what_was_written_before_the_watchers_is_applied_at_the_start() {
     let fixture = Fixture::new(PLAIN);
-    let session = ProjectSession::open(&fixture.root);
+    let session = ProjectSession::open(&specforge_common::ProjectRoot::of(&fixture.root).unwrap());
     fixture.write("spec/b.spec", &PLAIN.replace("gadget_one", "gadget_two"));
     let mut watch = SessionWatch::start(session, Recorder::default()).unwrap();
 
@@ -341,8 +344,13 @@ fn start_refuses_a_session_built_from_no_directory() {
     assert!(e.starts_with("failed to watch directory: "), "{e}");
     assert!(e.ends_with(" does not exist"), "{e}");
 
-    let missing = TempDir::new().unwrap().path().join("gone");
-    let Err(e) = SessionWatch::start(ProjectSession::open(&missing), Recorder::default()) else {
+    // A project root that was removed after it was opened.
+    let dir = TempDir::new().unwrap();
+    let missing = dir.path().join("gone");
+    std::fs::create_dir(&missing).unwrap();
+    let session = ProjectSession::open(&specforge_common::ProjectRoot::of(&missing).unwrap());
+    std::fs::remove_dir(&missing).unwrap();
+    let Err(e) = SessionWatch::start(session, Recorder::default()) else {
         panic!("a missing project root is watched");
     };
     assert_eq!(

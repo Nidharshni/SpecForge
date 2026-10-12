@@ -292,7 +292,7 @@ fn what_publish_uploads_is_what_add_installs() {
     .unwrap();
     let added = add(
         &AddRequest {
-            root: project.path(),
+            root: &specforge_common::ProjectRoot::of(project.path()).unwrap(),
             extensions: vec![specforge_ops::extension::Specified {
                 specifier: "@acme/greet@1.0.0".into(),
                 source: parse("@acme/greet@1.0.0").unwrap(),

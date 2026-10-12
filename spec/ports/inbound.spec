@@ -59,7 +59,7 @@ port LspProtocol {
   method formatting(path: string, content: string) -> Result<TextEdit[], never>
   method rangeFormatting(path: string, content: string, startLine: integer, endLine: integer) -> Result<TextEdit[], never>
   requires {
-    root_uri_valid "initialize rootUri points to a directory containing specforge.json or specforge.spec"
+    root_uri_valid "initialize rootUri, when given, names an existing directory; the project it is in is opened (locate_project_root)"
     path_non_empty "didOpen and didChange path arguments are non-empty and resolve within the project root"
   }
   ensures {

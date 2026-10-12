@@ -7,7 +7,7 @@ use std::path::PathBuf;
 #[derive(clap::Args)]
 pub(crate) struct Args {
     /// Where to find the project to serve: the nearest directory at or above it holding
-    /// specforge.json or specforge.spec (none: nothing is served until a call names a
+    /// specforge.json (none: nothing is served until a call names a
     /// project or init creates one)
     #[arg(default_value = ".")]
     path: PathBuf,

@@ -1,4 +1,4 @@
-use specforge_common::{Diagnostic, ProjectConfig};
+use specforge_common::{Diagnostic, ProjectConfig, ProjectRoot};
 use specforge_graph::Graph;
 use specforge_project::{ProjectSession, RuntimeSource, SharedRuntime, Update, UpdateKind};
 use specforge_registry::RegistryBuild;
@@ -170,12 +170,12 @@ impl McpState {
     /// Subscribed clients learn what changed. The one place the served
     /// project is replaced (initialize, adopting a call's path, the
     /// directory `init` created). Only a project (a directory holding
-    /// `specforge.json` or `specforge.spec`) is ever served.
-    pub fn serve(&mut self, root: &Path) {
+    /// `specforge.json`) is ever served.
+    pub fn serve(&mut self, root: &ProjectRoot) {
         debug_assert!(
-            specforge_common::is_project_root(root),
-            "only a project is served: {} holds no specforge.json or specforge.spec",
-            root.display()
+            root.is_configured(),
+            "only a project is served: {} holds no specforge.json",
+            root.dir().display()
         );
         let before = self.heard_diagnostics();
         // The served session reloads when it is the project on disk at
@@ -183,7 +183,7 @@ impl McpState {
         let canonical = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
         let reloads = self
             .project_root()
-            .is_some_and(|served| canonical(served) == canonical(root));
+            .is_some_and(|served| canonical(served) == root.canonical());
         let update = if reloads {
             self.session.reload_environment()
         } else {
@@ -198,7 +198,7 @@ impl McpState {
     /// host's runtime when the server has one, else in the project's own,
     /// built for each environment load (ADR 0030 D3): how the served project
     /// and another project a call names are opened.
-    pub(crate) fn open(&self, root: &Path) -> ProjectSession {
+    pub(crate) fn open(&self, root: &ProjectRoot) -> ProjectSession {
         let source = match &self.extension_runtime {
             Some(runtime) => RuntimeSource::Fixed(Some(Arc::clone(runtime))),
             None => RuntimeSource::project(),

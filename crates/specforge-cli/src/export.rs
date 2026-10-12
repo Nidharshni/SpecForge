@@ -1,6 +1,5 @@
 use crate::options;
 use crate::outcome::{Exit, OutputFormat, Refusal};
-use crate::pipeline;
 use crate::terminal::{Terminal, errln, outln};
 use specforge_ops::export;
 use specforge_ops::schema::SchemaRequest;
@@ -10,8 +9,7 @@ use std::path::PathBuf;
 // `specforge export`'s command line.
 #[derive(clap::Args)]
 pub(crate) struct Args {
-    /// Path to the spec root directory
-    #[arg(default_value = ".")]
+    #[arg(default_value = ".", help = crate::project::PATH_HELP)]
     path: PathBuf,
 
     /// Output format
@@ -90,7 +88,10 @@ impl Args {
     /// export that schema replaces the cache, so the next export compares
     /// against it. The export is written whatever the comparison finds.
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
-        let project = pipeline::compile_project(&self.path);
+        let project = match crate::project::compile(&self.path) {
+            Ok(project) => project,
+            Err(error) => return Refusal::of(OutputFormat::Human).report(terminal, &error),
+        };
         let view = ProjectView::of(&project);
 
         // The export goes to stdout: there is no output directory holding
@@ -121,8 +122,7 @@ impl Args {
 // `specforge schema`'s command line.
 #[derive(clap::Args)]
 pub(crate) struct SchemaArgs {
-    /// Path to the spec root directory
-    #[arg(default_value = ".")]
+    #[arg(default_value = ".", help = crate::project::PATH_HELP)]
     path: PathBuf,
 
     /// That entity kind and the edge types that can start or end at it
@@ -168,7 +168,10 @@ impl SchemaArgs {
     /// format conforms to. An unknown kind is refused with the closest one
     /// (exit 1).
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
-        let project = pipeline::compile_project(&self.path);
+        let project = match crate::project::compile(&self.path) {
+            Ok(project) => project,
+            Err(error) => return Refusal::of(OutputFormat::Human).report(terminal, &error),
+        };
         let view = ProjectView::of(&project);
         let output = if self.publish {
             specforge_ops::schema::json_schema(&view, self.format)

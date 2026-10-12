@@ -56,7 +56,7 @@ impl CoreTool for Tool {
             report: match args.test_results {
                 // A relative path names a file under the call's project, as the
                 // paths of `specforge.format` do; an absolute one is itself.
-                Some(named) => ReportSource::File(project.root.join(named)),
+                Some(named) => ReportSource::File(project.root.dir().join(named)),
                 None => ReportSource::Recorded,
             },
             min: args.min,

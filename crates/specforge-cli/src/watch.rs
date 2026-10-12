@@ -21,8 +21,7 @@ use specforge_watch::{Applied, DEFAULT_DEBOUNCE_WINDOW, Notify, SessionWatch, Wa
 // `specforge watch`'s command line.
 #[derive(clap::Args)]
 pub(crate) struct Args {
-    /// Project directory
-    #[arg(long, default_value = ".")]
+    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
     path: PathBuf,
 
     #[command(flatten)]
@@ -52,7 +51,11 @@ fn watch_project(
 ) -> Exit {
     // A debug build checks every rebuild (ProjectSession); a release build
     // only when asked (the check costs a cold rebuild per change).
-    let mut session = ProjectSession::open(path);
+    let root = match crate::project::root(path) {
+        Ok(root) => root,
+        Err(error) => return Refusal::of(format).report(terminal, &error),
+    };
+    let mut session = ProjectSession::open(&root);
     if verify_incremental {
         session.set_verify_incremental(true);
     }

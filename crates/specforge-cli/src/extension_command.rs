@@ -23,6 +23,8 @@ use clap::builder::PossibleValuesParser;
 use clap::parser::ValueSource;
 use clap::{Arg, ArgAction, ArgMatches, Command};
 use serde_json::{Map, Value};
+use specforge_common::ProjectRoot;
+use specforge_ops::OpError;
 use specforge_ops::command::{
     ArgShape, ArgValue, CommandFormat, ExtensionArg, ExtensionCommand, ExtensionCommands, RunError,
 };
@@ -30,7 +32,7 @@ use specforge_ops::view::ProjectView;
 use specforge_project::{CompiledProject, Environment};
 use specforge_protocol_types::command_args::{ArgError, normalize_arg};
 use specforge_protocol_types::{CommandError, CommandOutput};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 /// The host's own option on every extension command: where the project is.
@@ -61,7 +63,19 @@ pub fn run(argv: &[String], builtins: &[String], terminal: &Terminal) -> i32 {
         None => (first.clone(), rest.to_vec()),
     };
 
-    let root = project_path(&rest);
+    let root = match ProjectRoot::of(&project_path(&rest)) {
+        Ok(root) => root,
+        Err(error) => {
+            let error = OpError::from(error);
+            if asks_for_json(&rest) {
+                let line = serde_json::json!({"code": error.code, "message": error.message});
+                errln!(terminal, "{line}");
+            } else {
+                errln!(terminal, "error[{}]: {}", error.code, error.message);
+            }
+            return Exit::Failed.code();
+        }
+    };
     let env = Environment::load(
         &root,
         Some(Arc::new(
@@ -74,7 +88,7 @@ pub fn run(argv: &[String], builtins: &[String], terminal: &Terminal) -> i32 {
         errln!(
             terminal,
             "error: unrecognized subcommand '{ext}': no built-in command, and no extension of the project at {} with that name contributes commands",
-            root.display()
+            root.dir().display()
         );
         let mut names: Vec<&str> = builtins.iter().map(String::as_str).collect();
         names.extend(routed.shorts());
@@ -215,7 +229,7 @@ fn written(error: &RunError, format: CommandFormat) -> String {
 /// completions are generated from. An extension whose short name is a
 /// built-in command's is left out (the built-in wins), and so is any
 /// command the host refuses.
-pub fn with_extension_commands(mut cli: Command, root: &Path) -> Command {
+pub fn with_extension_commands(mut cli: Command, root: &ProjectRoot) -> Command {
     let env = Environment::load(
         root,
         Some(Arc::new(
@@ -392,7 +406,7 @@ fn command_line(ext: &str, commands: &[&ExtensionCommand]) -> Command {
                     .long(PATH)
                     .value_name("PATH")
                     .default_value(".")
-                    .help("Path to the project"),
+                    .help(crate::project::PATH_HELP),
             )
             .arg(
                 Arg::new(FORMAT)
@@ -548,6 +562,21 @@ mod tests {
 
     fn parse(argv: &[&str]) -> Result<Map<String, Value>, clap::Error> {
         parse_with_format(argv).map(|(args, _)| args)
+    }
+
+    #[specforge_test(
+        behavior = "locate_project_root",
+        verify = "every command's project path argument says it is a path inside the project"
+    )]
+    fn the_host_path_option_has_the_one_help() {
+        let command = ExtensionCommand::new("@acme/x", "x", &contribution());
+        let line = command_line("x", &[&command]);
+        let sub = line.find_subcommand(command.cli_name()).unwrap();
+        let path = sub.get_arguments().find(|a| a.get_id() == PATH).unwrap();
+        assert_eq!(
+            path.get_help().map(ToString::to_string).as_deref(),
+            Some(crate::project::PATH_HELP)
+        );
     }
 
     #[test]

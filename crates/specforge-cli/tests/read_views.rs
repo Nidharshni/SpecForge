@@ -614,18 +614,14 @@ fn analyze_and_stats_read_the_report_at_the_compiled_root() {
     let tmp = rv1_with_a_malformed_report();
     let sub: PathBuf = tmp.path().join("spec");
 
-    // A sub-path compiles without the project's config, and reads the
-    // report at the root it compiled: there is none.
-    let stats = cli(&["stats", s(&sub), "--format", "json"]);
-    assert_eq!(stats.code, Some(0), "{}", stats.stderr);
-    let analyze = cli(&["analyze", "--path", s(&sub), "--format", "json"]);
-    assert_eq!(analyze.code, Some(0), "{}", analyze.stderr);
-
-    // At the root both refuse the report: exit 2, and under JSON output
-    // the error document on stdout and nothing on stderr.
+    // At the root, and from a sub-path (which is the project it is in),
+    // both refuse the report: exit 2, and under JSON output the error
+    // document on stdout and nothing on stderr.
     for args in [
         vec!["stats", s(tmp.path()), "--format", "json"],
         vec!["analyze", "--path", s(tmp.path()), "--format", "json"],
+        vec!["stats", s(&sub), "--format", "json"],
+        vec!["analyze", "--path", s(&sub), "--format", "json"],
     ] {
         let run = cli(&args);
         assert_eq!(run.code, Some(2), "{args:?}: {}", run.stdout);
@@ -660,14 +656,17 @@ fn export_of_a_sub_path_leaves_the_project_cache_alone() {
     assert_eq!(first.code, Some(0), "{}", first.stderr);
     assert_eq!(cached_kinds(root), 5);
 
-    // The sub-path compiles without the project's config (no extension):
-    // it versions against, and records in, its own cache.
+    // The sub-path is the project it is in: it versions against, and records
+    // in, the project's cache, and writes none of its own.
     let sub = root.join("spec");
     let run = cli(&["export", s(&sub), "--format", "graph"]);
     assert_eq!(run.code, Some(0), "{}", run.stderr);
     assert!(!run.stderr.contains("W053"), "{}", run.stderr);
-    assert_eq!(cached_kinds(root), 5, "the project's cache is untouched");
-    assert_eq!(cached_kinds(&sub), 0);
+    assert_eq!(cached_kinds(root), 5);
+    assert!(
+        !sub.join(".specforge").exists(),
+        "nothing is cached under the sub-path"
+    );
 }
 
 #[specforge_test_macros::test(
@@ -786,7 +785,7 @@ fn contract_read_views() {
     );
 
     // one_report_rule: a report at the root that cannot be read is an
-    // error on every view of the root, and no view of a sub-path reads it.
+    // error on every view of the project, from its root or from a sub-path.
     std::fs::write(root.join("specforge-report.json"), "{not json").unwrap();
     assert_eq!(cli(&["stats", s(root)]).code, Some(2));
     let refused = mcp_calls(
@@ -800,13 +799,13 @@ fn contract_read_views() {
         assert_eq!(result["isError"]["diagnostic"]["code"], "E045", "{result}");
     }
     let sub = root.join("spec");
-    assert_eq!(cli(&["stats", s(&sub)]).code, Some(0));
+    assert_eq!(cli(&["stats", s(&sub)]).code, Some(2));
     assert_eq!(
         cli(&["analyze", "--path", s(&sub), "--format", "json"]).code,
-        Some(0)
+        Some(2)
     );
-    // ...and the schema cache likewise: the sub-path's export leaves the
-    // root's cache as the root's export wrote it.
+    // ...and the schema cache likewise: the sub-path's export is the
+    // project's, and keeps the root's cache.
     assert_eq!(cli(&["export", s(root)]).code, Some(0));
     assert_eq!(cli(&["export", s(&sub)]).code, Some(0));
     assert_eq!(cached_kinds(root), 5);

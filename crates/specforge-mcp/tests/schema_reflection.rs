@@ -175,7 +175,7 @@ fn operation_tools_advertise_path() {
             .unwrap_or_else(|| panic!("{name} advertised"));
         assert!(
             props.iter().any(|p| p == "path"),
-            "{name} resolves its root via project_root_of (reads 'path') but does not advertise it"
+            "{name} resolves its root via ProjectRoot::of (reads 'path') but does not advertise it"
         );
     }
 }

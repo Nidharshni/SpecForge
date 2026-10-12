@@ -45,6 +45,7 @@ mod parity;
 mod pipeline;
 mod product_commands;
 mod product_rules;
+mod project_from_path;
 mod publish;
 #[allow(dead_code)]
 mod published;

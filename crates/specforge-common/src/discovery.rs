@@ -203,14 +203,14 @@ mod tests {
             fs::write(root.join(path), text).unwrap();
         }
 
-        let walked = walk_spec_files(root, crate::is_project_root);
+        let walked = walk_spec_files(root, crate::ProjectRoot::is_root);
         assert_eq!(
             walked.files,
             vec![root.join("a.spec"), root.join("q/c.spec")]
         );
         assert_eq!(walked.stopped, vec![root.join("p")]);
         // A root `stop` would hold for is still walked.
-        let inside = walk_spec_files(&root.join("p"), crate::is_project_root);
+        let inside = walk_spec_files(&root.join("p"), crate::ProjectRoot::is_root);
         assert_eq!(inside.files, vec![root.join("p/b.spec")]);
     }
 }

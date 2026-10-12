@@ -169,7 +169,7 @@ fn contract_initialize() {
 
     // compiler_api_available: the project root was located and used.
     // The project at the given root is served as its canonical path
-    // (`find_project_root`).
+    // (`ProjectRoot::of`, canonicalized).
     assert_eq!(
         server.state().project_root().map(canonical_path),
         Some(canonical_path(dir.path())),

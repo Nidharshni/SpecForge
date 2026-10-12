@@ -33,8 +33,7 @@ pub(crate) struct Args {
     #[arg(long)]
     token_file: Option<PathBuf>,
 
-    /// Path to the project root (for registry config)
-    #[arg(long, default_value = ".")]
+    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
     path: PathBuf,
 
     #[command(flatten)]
@@ -48,9 +47,7 @@ pub(crate) struct LogoutArgs {
     #[arg(long)]
     registry: Option<String>,
 
-    /// The project whose specforge.json names the default registry (when
-    /// --registry is not given)
-    #[arg(long, default_value = ".")]
+    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
     path: PathBuf,
 
     #[command(flatten)]
@@ -116,7 +113,11 @@ fn login(
 
     // The token is validated against a configured registry; with none,
     // fail before any network call (ADR 0004 N1).
-    let configured = match specforge_ops_registry::configured(path, "login") {
+    let root = match crate::project::root(path) {
+        Ok(root) => root,
+        Err(error) => return refuse(&error),
+    };
+    let configured = match specforge_ops_registry::configured(&root, "login") {
         Ok(configured) => configured,
         Err(error) => return refuse(&error),
     };
@@ -215,7 +216,9 @@ fn logout(
     let refuse = |error: &OpError| Refusal::of(format).report(terminal, error);
     let alias = match registry_alias {
         Some(alias) => alias.to_string(),
-        None => match specforge_ops_registry::configured(path, "logout") {
+        None => match crate::project::root(path)
+            .and_then(|root| specforge_ops_registry::configured(&root, "logout"))
+        {
             Ok(configured) => {
                 terminal.diagnostics(&configured.diagnostics);
                 match configured.named(None) {

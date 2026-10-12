@@ -97,7 +97,7 @@ None. Refs are leaf nodes -- they do not reference other spec entities.
 2. **One-line for most refs** -- block syntax is only needed for provider-specific metadata.
 3. **Declare refs at the file level** -- then reference them in entity `refs` fields.
 4. **Use inline `[gh.issue:42]` in prose** -- for in-context navigation.
-5. **Configure providers in `specforge.spec`** -- refs using `gh.*` require a `gh` provider configuration.
+5. **Configure providers in `specforge.json` (`providers`)** -- refs using `gh.*` require a `gh` provider configuration.
 6. **Ref IDs are globally unique** -- no two refs share the same scheme.kind:identifier.
 
 ## Validation Rules
@@ -169,5 +169,5 @@ ref gh.issue:99 "Performance regression in search" {
 - Do not use raw URLs instead of scheme-based IDs -- use `gh.issue:42` not `https://github.com/...`
 - Do not use refs for internal cross-references between spec entities -- use entity IDs directly
 - Do not declare refs without referencing them from at least one entity -- or `W012` orphan warning fires
-- Do not use schemes without configuring the provider in `specforge.spec` -- unknown schemes emit `I005`
+- Do not use schemes without configuring the provider in `specforge.json` (`providers`) -- unknown schemes emit `I005`
 - Do not put the kind in the identifier -- `gh.issue:42` not `gh:issue-42`

@@ -10,7 +10,7 @@
 //! readers meanwhile see the session's last complete graph (`LspState`'s stand-in). It must not
 //! be called from an async task.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use tokio::sync::RwLock;
@@ -52,7 +52,7 @@ impl<E: Editor> Reaction<E> {
     }
 
     /// The workspace opens (`initialized`) at `root`, or with no root: the project `root` is in
-    /// (`specforge_common::enclosing_project_root`), else `root` itself. The editor watches every
+    /// (`specforge_common::ProjectRoot::of`), else nothing opens (a path that does not exist). The editor watches every
     /// `.spec`, config and lock file, is shown the indexing's progress while the project opens
     /// ([`Change::Open`], with everything [`Self::react`] does after it: the project opened
     /// holding the open buffers, the project's diagnostics published, its watchers followed), and is told how
@@ -75,7 +75,17 @@ impl<E: Editor> Reaction<E> {
         };
         // A folder inside a project opens that project, as the CLI and MCP find it, spelled as
         // the editor spells its files; a folder in no project opens as given.
-        let root = specforge_common::enclosing_project_root(&root).unwrap_or(root);
+        let root = match specforge_common::ProjectRoot::of(&root) {
+            Ok(root) => root,
+            Err(e) => {
+                self.editor.log(
+                    MessageType::WARNING,
+                    format!("specforge-lsp: no project opened: {e}"),
+                );
+                self.editor.progress(WorkDone::End { message: None });
+                return;
+            }
+        };
         let opened = self.react(Change::Open(root)).is_some();
         let (ext_count, kind_count, file_count, spec_root) = {
             let st = self.state.blocking_read();
@@ -156,7 +166,7 @@ impl<E: Editor> Reaction<E> {
         // Opening a project loads its environment first and shows it to readers before the
         // sources are read: the kinds and fields keyword completion offers need no `.spec`
         // file, so they are answered while indexing runs (CONTEXT: Environment).
-        let opening = match plan.root().map(Path::to_path_buf) {
+        let opening = match plan.root().cloned() {
             Some(root) => {
                 let runtime = self.runtime.clone();
                 match unwinding(move || ProjectSession::begin_open(&root, runtime)) {

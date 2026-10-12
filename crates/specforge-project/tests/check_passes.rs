@@ -156,7 +156,10 @@ fn a_check_pass_runs_on_every_compile() {
     let dir = project(SPEC);
     let ext = Arc::new(passes_extension());
 
-    let compiled = CompiledProject::compile(dir.path(), Some(ext.clone()));
+    let compiled = CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        Some(ext.clone()),
+    );
 
     let diagnostics = compiled.diagnostics();
     let audit = with_code(&diagnostics, "E951");
@@ -174,7 +177,11 @@ fn a_check_pass_runs_on_every_compile() {
 
     // A second compile runs it again.
     ext.clear_calls();
-    let again = CompiledProject::compile(dir.path(), Some(ext.clone())).diagnostics();
+    let again = CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        Some(ext.clone()),
+    )
+    .diagnostics();
     assert_eq!(with_code(&again, "E951").len(), 1, "{again:?}");
     assert!(called(&ext).contains(&"__pass_audit".to_string()));
 }
@@ -186,7 +193,11 @@ fn a_check_pass_runs_on_every_compile() {
 fn a_pass_diagnostic_naming_an_entity_carries_it_as_data() {
     let dir = project(SPEC);
     let ext = Arc::new(passes_extension());
-    let diagnostics = CompiledProject::compile(dir.path(), Some(ext.clone())).diagnostics();
+    let diagnostics = CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        Some(ext.clone()),
+    )
+    .diagnostics();
 
     let audit = with_code(&diagnostics, "E951")[0];
     assert_eq!(
@@ -217,7 +228,7 @@ fn a_session_reports_check_pass_diagnostics_after_an_update() {
     let dir = project("gadget good \"Good\" {\n}\n");
     let ext = Arc::new(passes_extension());
     let mut session = ProjectSession::open_with_runtime(
-        dir.path(),
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
         Some(Arc::clone(&ext) as specforge_project::SharedRuntime),
     );
     assert!(with_code(&session.project().diagnostics(), "E951").is_empty());
@@ -236,7 +247,11 @@ fn a_session_reports_check_pass_diagnostics_after_an_update() {
         "gadget good \"Good\" {\n}\n\ngadget bad_two \"Bad\" {\n}\n",
     )
     .unwrap();
-    let fresh = CompiledProject::compile(dir.path(), Some(ext.clone())).diagnostics();
+    let fresh = CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        Some(ext.clone()),
+    )
+    .diagnostics();
     assert_eq!(as_set(&update.diagnostics), as_set(&fresh));
 }
 
@@ -258,7 +273,10 @@ fn a_pass_without_the_check_phase_runs_only_under_analyze() {
     let dir = project(SPEC);
     let ext = Arc::new(passes_extension());
 
-    let compiled = CompiledProject::compile(dir.path(), Some(ext.clone()));
+    let compiled = CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        Some(ext.clone()),
+    );
     assert!(
         !called(&ext).contains(&"__pass_report".to_string()),
         "{:?}",
@@ -297,7 +315,10 @@ fn check_passes_run_in_their_declared_order() {
     let dir = project(SPEC);
     let ext = Arc::new(passes_extension());
 
-    CompiledProject::compile(dir.path(), Some(ext.clone()));
+    CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        Some(ext.clone()),
+    );
 
     // `second` is declared first but runs after `first`; the others keep
     // their declaration order.
@@ -320,7 +341,11 @@ fn a_trapping_check_pass_is_a_diagnostic() {
     let dir = project(SPEC);
     let ext = Arc::new(passes_extension());
 
-    let diagnostics = CompiledProject::compile(dir.path(), Some(ext.clone())).diagnostics();
+    let diagnostics = CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        Some(ext.clone()),
+    )
+    .diagnostics();
 
     let failures: Vec<&Diagnostic> = with_code(&diagnostics, "E028")
         .into_iter()
@@ -348,7 +373,10 @@ fn a_pass_diagnostic_naming_an_entity_gets_its_span() {
     let dir = project(SPEC);
     let ext = Arc::new(passes_extension());
 
-    let compiled = CompiledProject::compile(dir.path(), Some(ext.clone()));
+    let compiled = CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        Some(ext.clone()),
+    );
 
     let diagnostics = compiled.diagnostics();
     let audit = with_code(&diagnostics, "E951");
@@ -385,7 +413,11 @@ fn check_passes_receive_the_cached_statuses() {
     );
     let ext = Arc::new(passes_extension());
 
-    let diagnostics = CompiledProject::compile(dir.path(), Some(ext.clone())).diagnostics();
+    let diagnostics = CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        Some(ext.clone()),
+    )
+    .diagnostics();
 
     let expected = json!({
         "statuses": {
@@ -404,7 +436,7 @@ fn check_passes_receive_the_cached_statuses() {
     // A session reads it too, and sees a cache written after it opened.
     let ext = Arc::new(passes_extension());
     let mut session = ProjectSession::open_with_runtime(
-        dir.path(),
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
         Some(Arc::clone(&ext) as specforge_project::SharedRuntime),
     );
     assert_eq!(last_input(&ext, "__pass_audit")["previous"], expected);
@@ -427,7 +459,11 @@ fn without_a_cache_previous_is_absent() {
     let dir = project(SPEC);
     let ext = Arc::new(passes_extension());
 
-    let diagnostics = CompiledProject::compile(dir.path(), Some(ext.clone())).diagnostics();
+    let diagnostics = CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        Some(ext.clone()),
+    )
+    .diagnostics();
 
     let input = last_input(&ext, "__pass_audit");
     assert!(input.get("previous").is_none(), "{input}");
@@ -451,7 +487,11 @@ fn an_invalid_cache_is_w144() {
         write_cache(&dir, text);
         let ext = Arc::new(passes_extension());
 
-        let diagnostics = CompiledProject::compile(dir.path(), Some(ext.clone())).diagnostics();
+        let diagnostics = CompiledProject::compile(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            Some(ext.clone()),
+        )
+        .diagnostics();
 
         let warnings = with_code(&diagnostics, "W144");
         assert_eq!(warnings.len(), 1, "{text}: {diagnostics:?}");
@@ -470,7 +510,11 @@ fn an_invalid_cache_is_w144() {
     let dir = TempDir::new().unwrap();
     fs::write(dir.path().join("a.spec"), SPEC).unwrap();
     write_cache(&dir, "{ not json");
-    let diagnostics = CompiledProject::compile(dir.path(), None).diagnostics();
+    let diagnostics = CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        None,
+    )
+    .diagnostics();
     assert!(
         with_code(&diagnostics, "W144").is_empty(),
         "{diagnostics:?}"
@@ -537,7 +581,10 @@ fn the_pass_input_carries_each_entitys_exemption() {
     .unwrap();
     let runtime = InProcessRuntime::new().with(extension);
 
-    CompiledProject::compile(dir.path(), Some(Arc::new(runtime)));
+    CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        Some(Arc::new(runtime)),
+    );
 
     let mut seen = SEEN.with(|seen| seen.borrow().clone());
     seen.sort();

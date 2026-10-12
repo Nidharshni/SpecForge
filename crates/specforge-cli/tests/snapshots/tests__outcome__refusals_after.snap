@@ -6,7 +6,7 @@ C1 | specforge stats
 exit 2
 -- stdout:
 -- stderr:
-error[E045]: invalid test results ./specforge-report.json: EOF while parsing an object at line 1 column 1 (expected the RES-15 specforge-report.json shape)
+error[E045]: invalid test results [ROOT]/specforge-report.json: EOF while parsing an object at line 1 column 1 (expected the RES-15 specforge-report.json shape)
   hint: run `specforge collect` again to rewrite the report, or fix or remove the file
 
 C2 | specforge stats --format json
@@ -14,7 +14,7 @@ exit 2
 -- stdout:
 {
   "code": "E045",
-  "error": "invalid test results ./specforge-report.json: EOF while parsing an object at line 1 column 1 (expected the RES-15 specforge-report.json shape)",
+  "error": "invalid test results [ROOT]/specforge-report.json: EOF while parsing an object at line 1 column 1 (expected the RES-15 specforge-report.json shape)",
   "suggestion": "run `specforge collect` again to rewrite the report, or fix or remove the file"
 }
 -- stderr:
@@ -24,7 +24,7 @@ exit 2
 -- stdout:
 {
   "code": "E045",
-  "error": "invalid test results ./specforge-report.json: EOF while parsing an object at line 1 column 1 (expected the RES-15 specforge-report.json shape)",
+  "error": "invalid test results [ROOT]/specforge-report.json: EOF while parsing an object at line 1 column 1 (expected the RES-15 specforge-report.json shape)",
   "suggestion": "run `specforge collect` again to rewrite the report, or fix or remove the file"
 }
 -- stderr:
@@ -90,7 +90,7 @@ exit 1
 -- stdout:
 {
   "code": "no_project",
-  "error": "no specforge project at . (no specforge.json or specforge.spec)",
+  "error": "no specforge project at [ROOT] (no specforge.json at or above it)",
   "suggestion": null
 }
 -- stderr:

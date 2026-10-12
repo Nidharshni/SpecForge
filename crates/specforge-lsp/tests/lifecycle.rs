@@ -293,7 +293,7 @@ fn shutdown_frees_the_wasm_runtime() {
     let engine = std::sync::Arc::downgrade(&runtime);
     let mut state = specforge_lsp::LspState::new();
     state.set_session(specforge_project::ProjectSession::open_with_runtime(
-        project.path(),
+        &specforge_common::ProjectRoot::of(project.path()).unwrap(),
         Some(runtime),
     ));
     assert!(state.session().unwrap().runtime().is_some());
@@ -324,7 +324,7 @@ fn a_stand_in_reads_the_snapshot_of_its_own_graph() {
     std::fs::write(project.path().join("a.spec"), "behavior a \"A\" {\n}\n").unwrap();
     let mut state = specforge_lsp::LspState::new();
     state.set_session(specforge_project::ProjectSession::open_with_runtime(
-        project.path(),
+        &specforge_common::ProjectRoot::of(project.path()).unwrap(),
         None,
     ));
 
@@ -366,7 +366,10 @@ fn file_watchers_follow_what_the_session_is_built_from() {
         r#"{"name":"w","version":"0.1.0","extensions":["@acme/local=ext/local.wasm"]}"#,
     )
     .unwrap();
-    let session = specforge_project::ProjectSession::open_with_runtime(dir.path(), None);
+    let session = specforge_project::ProjectSession::open_with_runtime(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        None,
+    );
     let root = dir.path().to_string_lossy().into_owned();
 
     let absolute: Vec<String> = specforge_lsp::watchers::file_watchers(session.inputs(), false)
@@ -472,7 +475,7 @@ fn the_watchers_cover_what_the_session_classifies() {
         .to_string(),
     )
     .unwrap();
-    let session = ProjectSession::open(root);
+    let session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
 
     let globs: Vec<String> = specforge_lsp::watchers::file_watchers(session.inputs(), false)
         .into_iter()

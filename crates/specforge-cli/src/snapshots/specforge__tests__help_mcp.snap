@@ -8,7 +8,7 @@ Usage: specforge mcp [PATH]
 
 Arguments:
   [PATH]
-          Where to find the project to serve: the nearest directory at or above it holding specforge.json or specforge.spec (none: nothing is served until a call names a project or init creates one)
+          Where to find the project to serve: the nearest directory at or above it holding specforge.json (none: nothing is served until a call names a project or init creates one)
           
           [default: .]
 

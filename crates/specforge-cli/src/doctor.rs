@@ -1,4 +1,4 @@
-use crate::outcome::{Exit, OutputArg, OutputFormat};
+use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use crate::terminal::{Terminal, out};
 use serde::Serialize;
 use specforge_common::codes;
@@ -15,8 +15,7 @@ use std::path::PathBuf;
 // `specforge doctor`'s command line.
 #[derive(clap::Args)]
 pub(crate) struct Args {
-    /// Path to the project root
-    #[arg(long, default_value = ".")]
+    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
     path: PathBuf,
 
     #[command(flatten)]
@@ -39,7 +38,10 @@ impl Args {
     /// binaries) plus registry credential health. Exit 1 on any
     /// error-level finding or credential failure.
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
-        let project = crate::pipeline::compile_project(&self.path);
+        let project = match crate::project::compile(&self.path) {
+            Ok(project) => project,
+            Err(error) => return Refusal::of(self.output.format).report(terminal, &error),
+        };
         let report = diagnose(&ProjectView::of(&project));
         let credentials = user_credential_health();
 

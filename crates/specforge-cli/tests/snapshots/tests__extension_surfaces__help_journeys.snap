@@ -33,7 +33,7 @@ Options:
           Skip this many first (default 0)
 
       --path <PATH>
-          Path to the project
+          A path inside the project (the nearest directory at or above it holding specforge.json; none: the directory itself, with the default configuration)
           
           [default: .]
 

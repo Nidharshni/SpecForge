@@ -166,7 +166,10 @@ fn the_providers_listing_reports_what_the_environment_registered() {
         ],
     });
     std::fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
-    let compiled = specforge_project::CompiledProject::compile(dir.path(), None);
+    let compiled = specforge_project::CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        None,
+    );
 
     let listing = extension::providers(&ProjectView::of(&compiled));
 
@@ -211,7 +214,10 @@ fn the_providers_listing_reads_the_registration() {
         "providers": [{"scheme": "gh", "alias": "work", "extension": "@acme/issues"}],
     });
     std::fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
-    let compiled = specforge_project::CompiledProject::compile(dir.path(), None);
+    let compiled = specforge_project::CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        None,
+    );
 
     // specforge.json now says something else entirely.
     std::fs::write(
@@ -232,9 +238,11 @@ fn the_providers_listing_reads_the_registration() {
 )]
 fn collect_at_a_root_that_is_no_project_is_no_project() {
     let project = project();
-    let recorded = RecordedCoverage::over(&project.graph, &project.env);
+    // A project whose environment found no specforge.json.
+    let env = specforge_project::Environment::empty();
+    let recorded = RecordedCoverage::over(&project.graph, &env);
     let bare = tempfile::TempDir::new().unwrap();
-    let view = ProjectView::new(&project.graph, &project.env, Some(bare.path()), &recorded);
+    let view = ProjectView::new(&project.graph, &env, Some(bare.path()), &recorded);
 
     let error = specforge_ops::collect::collect(
         &view,

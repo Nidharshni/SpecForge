@@ -501,7 +501,10 @@ fn the_builtin_extensions_rules_register_cleanly() {
     std::fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
     let runtime = specforge_component::ComponentRuntime::with_user_cache();
 
-    let env = specforge_project::Environment::load(dir.path(), Some(Arc::new(runtime)));
+    let env = specforge_project::Environment::load(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        Some(Arc::new(runtime)),
+    );
 
     assert_eq!(env.registries().declarations().len(), 9);
     assert!(

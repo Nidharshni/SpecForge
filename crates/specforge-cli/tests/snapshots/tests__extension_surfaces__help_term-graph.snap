@@ -15,7 +15,7 @@ Options:
           How many see_also hops to follow (default 1; above 5 counts as 5)
 
       --path <PATH>
-          Path to the project
+          A path inside the project (the nearest directory at or above it holding specforge.json; none: the directory itself, with the default configuration)
           
           [default: .]
 

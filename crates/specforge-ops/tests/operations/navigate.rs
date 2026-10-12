@@ -29,7 +29,10 @@ pub fn compile(extensions: &[&str], files: &[(&str, &str)]) -> Compiled {
         std::fs::write(path, text).unwrap();
     }
     let runtime = specforge_component::ComponentRuntime::with_user_cache();
-    let project = CompiledProject::compile(dir.path(), Some(Arc::new(runtime)));
+    let project = CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        Some(Arc::new(runtime)),
+    );
     let unloaded: Vec<_> = project
         .diagnostics()
         .into_iter()
@@ -896,7 +899,10 @@ fn an_untargeted_obligation_rule_stubs_every_kind_that_accepts_verify() {
     .unwrap();
     specforge_installed::testing::install(dir.path(), &["@pin/untargeted"]);
     let runtime = specforge_wasm::testing::InProcessRuntime::new().with(untargeted_rule);
-    let project = CompiledProject::compile(dir.path(), Some(Arc::new(runtime)));
+    let project = CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        Some(Arc::new(runtime)),
+    );
     let reported: Vec<String> = project
         .diagnostics()
         .into_iter()

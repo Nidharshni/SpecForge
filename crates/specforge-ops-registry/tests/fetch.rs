@@ -127,9 +127,12 @@ impl Project {
     }
 
     fn registry(&self) -> ConfiguredRegistry {
-        ConfiguredRegistry::for_project(self.dir.path(), "add")
-            .with_client(self.client.clone())
-            .as_user(User::at(self.dir.path().join("home"), None))
+        ConfiguredRegistry::for_project(
+            &specforge_common::ProjectRoot::of(self.dir.path()).unwrap(),
+            "add",
+        )
+        .with_client(self.client.clone())
+        .as_user(User::at(self.dir.path().join("home"), None))
     }
 
     fn fetch(
@@ -555,12 +558,15 @@ fn an_expired_stored_credential_refuses_a_read() {
 #[test]
 fn the_environment_token_is_not_sent_on_a_read() {
     let project = Project::on(Reply::unsigned());
-    let registry = ConfiguredRegistry::for_project(project.dir.path(), "add")
-        .with_client(project.client.clone())
-        .as_user(User::at(
-            project.dir.path().join("home"),
-            Some("env".to_string()),
-        ));
+    let registry = ConfiguredRegistry::for_project(
+        &specforge_common::ProjectRoot::of(project.dir.path()).unwrap(),
+        "add",
+    )
+    .with_client(project.client.clone())
+    .as_user(User::at(
+        project.dir.path().join("home"),
+        Some("env".to_string()),
+    ));
 
     registry
         .versions(&PackageName::parse(NAME).unwrap())

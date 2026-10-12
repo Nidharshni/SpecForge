@@ -1,5 +1,5 @@
 use serde_json::Value;
-use specforge_common::find_project_root;
+use specforge_common::ProjectRoot;
 use std::path::PathBuf;
 
 use crate::events::{InitFailure, McpEvent};
@@ -142,8 +142,8 @@ pub fn handle_initialize(
 }
 
 /// Serve the project at or above `start` (the server's PATH, or the
-/// client's `projectRoot`): the nearest directory holding `specforge.json`
-/// or `specforge.spec`, `start` included (`find_project_root`). Its
+/// client's `projectRoot`): the nearest directory holding `specforge.json`,
+/// `start` included (`ProjectRoot::enclosing`, canonical). Its
 /// registries, and the core tools, resources and prompts plus what its
 /// extensions contribute are served; the core surface alone when there is
 /// none. With none, nothing is served: what reads only the project view
@@ -151,7 +151,11 @@ pub fn handle_initialize(
 /// a project later (ADR 0014 D5). Subscribed clients learn what it
 /// changed (C9-01).
 pub fn serve_project(state: &mut McpState, start: Option<PathBuf>) {
-    if let Some(root) = start.as_deref().and_then(find_project_root) {
+    if let Some(root) = start
+        .as_deref()
+        .and_then(ProjectRoot::enclosing)
+        .map(ProjectRoot::canonicalized)
+    {
         state.serve(&root);
     }
     state.served = true;

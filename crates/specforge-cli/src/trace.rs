@@ -1,5 +1,4 @@
 use crate::outcome::{Exit, OutputFormat, Refusal};
-use crate::pipeline;
 use crate::terminal::{Terminal, out};
 use specforge_ops::trace::Target;
 use specforge_ops::view::ProjectView;
@@ -11,8 +10,7 @@ pub(crate) struct Args {
     /// Entity ID to trace (omit to trace every entity)
     entity: Option<String>,
 
-    /// Path to the spec root directory
-    #[arg(long, default_value = ".")]
+    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
     path: PathBuf,
 
     /// Output format: json or human
@@ -26,7 +24,10 @@ impl Args {
     /// is named. Expected edges come from the loaded extensions'
     /// registries; the ones a chain lacks are reported as missing.
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
-        let project = pipeline::compile_project(&self.path);
+        let project = match crate::project::compile(&self.path) {
+            Ok(project) => project,
+            Err(error) => return Refusal::of(self.format).report(terminal, &error),
+        };
         let target = self.entity.as_deref().map_or(Target::Every, Target::Entity);
         let outcome = match specforge_ops::trace::trace(&ProjectView::of(&project), target) {
             Ok(outcome) => outcome,

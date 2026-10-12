@@ -38,8 +38,11 @@ fn the_configured_registry_over_http_keeps_the_registry_contract() {
         server.store(&stored(p, &key), &p.wasm);
     }
     let dir = project(server.config_entry());
-    let registry = ConfiguredRegistry::for_project(dir.path(), "add")
-        .as_user(User::at(dir.path(), Some(server.token().to_string())));
+    let registry = ConfiguredRegistry::for_project(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        "add",
+    )
+    .as_user(User::at(dir.path(), Some(server.token().to_string())));
 
     assert_registry_contract(&registry, &published);
 }
@@ -61,9 +64,12 @@ fn the_configured_registry_over_memory_keeps_the_registry_contract() {
     let dir = project(serde_json::json!([
         { "alias": "local", "url": "memory://local", "default_registry": true }
     ]));
-    let registry = ConfiguredRegistry::for_project(dir.path(), "add")
-        .with_client(client)
-        .as_user(User::at(dir.path(), Some("token".to_string())));
+    let registry = ConfiguredRegistry::for_project(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        "add",
+    )
+    .with_client(client)
+    .as_user(User::at(dir.path(), Some("token".to_string())));
 
     assert_registry_contract(&registry, &published);
 }

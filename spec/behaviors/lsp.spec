@@ -43,9 +43,10 @@ behavior lsp_initialize "LSP Initialize" {
     hardcode any domain-specific capabilities — all capabilities beyond
     structural defaults MUST derive from loaded extensions. The workspace
     (rootUri, else the first workspace folder) MUST open the project it is
-    in: the nearest directory at or above it holding specforge.json or
-    specforge.spec, as the CLI and MCP find it, spelled as the client
-    spells the workspace; a workspace in no project opens as given.
+    in (locate_project_root): the nearest directory at or above it holding
+    specforge.json, as the CLI and MCP find it, spelled as the client
+    spells the workspace; a workspace in no project opens as a loose
+    root, and a workspace path that does not exist opens no project.
   """
   verify unit "initialize response includes semantic token legend"
   verify unit "initialize response advertises incremental sync"

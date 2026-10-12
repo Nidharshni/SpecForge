@@ -19,8 +19,8 @@
 # compiles (nextest build, clippy) never overlap.
 #
 # `specforge check` runs on each corpus's project, so its extensions load
-# (`.` is this repository's own spec; `spec/` alone has no specforge.json
-# and loads none). Any error fails. Warnings are ratcheted per code against
+# (`.` is this repository's own project; `check` run anywhere inside a project
+# checks that project). Any error fails. Warnings are ratcheted per code against
 # scripts/gate-baseline.json: a count above its baseline fails, and so does
 # one below it until the baseline is lowered in the same commit.
 set -uo pipefail

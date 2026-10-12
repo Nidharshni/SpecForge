@@ -57,7 +57,10 @@ fn load(runtime: InProcessRuntime, extensions: &[&str]) -> Environment {
     });
     fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
     specforge_installed::testing::install_configured(dir.path(), &specforge_project::builtins());
-    Environment::load(dir.path(), Some(std::sync::Arc::new(runtime)))
+    Environment::load(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        Some(std::sync::Arc::new(runtime)),
+    )
 }
 
 fn w021(env: &Environment) -> Vec<Diagnostic> {
@@ -314,7 +317,10 @@ fn population_completes_before_any_validation() {
     )
     .unwrap();
 
-    let project = specforge_project::CompiledProject::compile(dir.path(), Some(Arc::new(runtime)));
+    let project = specforge_project::CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        Some(Arc::new(runtime)),
+    );
 
     let loaded: Vec<&str> = project
         .environment()

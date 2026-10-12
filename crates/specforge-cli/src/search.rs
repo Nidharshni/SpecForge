@@ -17,8 +17,7 @@ pub(crate) struct Args {
     #[arg(long, value_parser = options::choice(&specforge_ops::registry::CONTRIBUTES))]
     contributes: Option<DeclaredCategory>,
 
-    /// Path to the project root (for registry config)
-    #[arg(long, default_value = ".")]
+    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
     path: PathBuf,
 
     #[command(flatten)]
@@ -34,7 +33,11 @@ impl Args {
             self.output.format,
         );
         // No registry configured: fail before any network call (ADR 0004 N1).
-        let registry = ConfiguredRegistry::for_project(path, "search");
+        let root = match crate::project::root(path) {
+            Ok(root) => root,
+            Err(error) => return Refusal::of(format).report(terminal, &error),
+        };
+        let registry = ConfiguredRegistry::for_project(&root, "search");
         let searched = registry.search(query, contributes);
         terminal.diagnostics(&registry.reported());
         let searched = match searched {

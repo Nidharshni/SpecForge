@@ -12,7 +12,7 @@ Arguments:
 
 Options:
       --path <PATH>
-          Path to the project root
+          A path inside the project (the nearest directory at or above it holding specforge.json; none: the directory itself, with the default configuration)
           
           [default: .]
 

@@ -12,7 +12,7 @@ Arguments:
 
 Options:
       --path <PATH>
-          The project whose specforge.json configures the registries
+          A path inside the project (the nearest directory at or above it holding specforge.json; none: the directory itself, with the default configuration)
           
           [default: .]
 

@@ -27,6 +27,8 @@ across MCP and the LSP and no MCP source.
 - **D1. MCP serves only a project opened from disk.** *(Round 6 plan 12: a project is a directory
   holding `specforge.json` or `specforge.spec`, found at or above the root the server is given; a
   directory that is no project is never served, and `McpState::serve` asserts it in debug builds.)*
+  *(Round 7 plan 01: "a directory holding `specforge.json`"; `specforge.spec` no longer marks a project,
+  ADR 0053 D2.)*
   `McpState::serve` (initialize, adopting a call's
   `path`) is the one way a project becomes served. The five in-memory methods, the lazy runtime,
   the in-memory refresh arms and the working-directory fallbacks are deleted. A served session always
