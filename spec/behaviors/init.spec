@@ -434,3 +434,66 @@ behavior find_project_root "Find Project Root" {
   verify performance "directory traversal completes in under 100ms for 20-level deep hierarchy"
   verify contract "Find Project Root: project root discovery holds — filesystem_available, closest_wins_enforced, json_precedence, symlinks_resolved, none_on_missing"
 }
+
+behavior locate_project_root "Locate the Project a Path Is In" {
+  features   [project_initialization]
+  category   internal
+  invariants [spec_root_singleton]
+  types      [CompilerConfig]
+  ports      [FileSystem]
+  requires {
+    filesystem_available "FileSystem port is available for directory traversal and symlink resolution"
+  }
+  ensures {
+    closest_wins_enforced "The first directory at or above the path holding specforge.json is the project root"
+    one_marker            "Only specforge.json marks a project; a specforge.spec file is a source like any other"
+    loose_root            "With no specforge.json at or above the path, the path's directory is a loose root read with the default configuration"
+    missing_path_refused  "A path that does not exist is refused as file_not_found, never read as an empty project"
+    symlinks_resolved     "The walk follows the path's resolved directories, and the root is spelled as the path spells it where that spelling reaches it"
+    every_surface_agrees  "Every command, watch, the LSP and MCP open the project a path is in by this rule; only init takes its directory as given"
+  }
+  contract   """
+    Any path inside a project (the directory itself, a subdirectory, a
+    file) names that project. The system MUST locate its root by walking
+    from the path's directory (a file's parent) upward, symlinks
+    resolved: the first directory holding specforge.json is the project
+    root, the nearest winning. Only specforge.json marks a project; a
+    specforge.spec file marks nothing and is a source like any other.
+    With no specforge.json at or above the path, the path's own directory
+    is a loose root: a project with the default configuration and no
+    extension, whose I002 says no project was found and suggests
+    specforge init. A path that does not exist MUST be refused as
+    file_not_found ("path not found: <path>"), never read as an empty
+    project. The root is spelled as the path spells it where that
+    spelling reaches it, else canonically; two roots are the same when
+    they are the same directory. Every core command that takes a path,
+    every extension command (--path), specforge watch, the LSP's
+    workspace root and MCP (its root and a call's path) MUST open the
+    project their path is in by this one rule; the project's spec root
+    is then read from its specforge.json (spec_root), and is never the
+    path given. A command's path help says it is a path inside the
+    project. Only init takes its directory as given: it creates the
+    project there. A session keeps the root it was opened at; an
+    environment reload does not locate it again.
+  """
+  verify unit "specforge.json found in the path's own directory"
+  verify unit "specforge.json found in an ancestor directory"
+  verify unit "closest directory wins over ancestor directory"
+  verify unit "a specforge.spec file marks no project"
+  verify unit "a path with no specforge.json at or above it is a loose root, its own directory"
+  verify unit "a file path is in the project of its directory"
+  verify unit "a path that does not exist is refused as file_not_found"
+  verify unit "symlinks are resolved before path comparison"
+  verify unit "the root is spelled as the path spells it"
+  verify unit "circular symlink chain does not cause infinite loop"
+  verify performance "directory traversal completes in under 100ms for 20-level deep hierarchy"
+  verify integration "every command run from a subdirectory of a project acts on that project"
+  verify integration "a command given a path that does not exist refuses it as file_not_found"
+  verify integration "an extension command run from a subdirectory is routed over the project it is in"
+  verify integration "watch run from a subdirectory watches the project it is in"
+  verify unit "every command's project path argument says it is a path inside the project"
+  verify unit "a server started in a spec root holding specforge.spec serves the project around it"
+  verify unit "a workspace root in a spec root holding specforge.spec opens the project around it"
+  verify unit "a loose root's I002 says no project was found and suggests init"
+  verify contract "Locate the Project a Path Is In: project root location holds — filesystem_available, closest_wins_enforced, one_marker, loose_root, missing_path_refused, symlinks_resolved, every_surface_agrees"
+}

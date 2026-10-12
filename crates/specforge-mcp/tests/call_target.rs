@@ -1285,6 +1285,28 @@ fn a_root_inside_a_project_serves_that_project() {
     assert_eq!(resp["result"]["isError"], false, "{resp}");
 }
 
+/// The project `specforge.json` enables software for; its spec root `spec/`
+/// holds a `specforge.spec` (a `spec` block) and `a.spec`.
+fn project_with_a_spec_block() -> TempDir {
+    let p = project(&["@specforge/software"], "");
+    fs::remove_file(p.path().join("main.spec")).unwrap();
+    fs::create_dir(p.path().join("spec")).unwrap();
+    fs::write(p.path().join("spec/specforge.spec"), "spec \"p\" {}\n").unwrap();
+    fs::write(p.path().join("spec/a.spec"), "behavior ok \"Ok\" {\n}\n").unwrap();
+    p
+}
+
+#[test]
+fn a_server_started_in_a_spec_root_holding_specforge_spec_serves_that_directory_today() {
+    let p = project_with_a_spec_block();
+    let mut server = McpServer::new();
+    initialize(&mut server, &p.path().join("spec"));
+    assert_eq!(
+        served_root(&server),
+        Some(canonical(&p.path().join("spec")))
+    );
+}
+
 #[specforge_test(
     invariant = "mcp_served_project_consistency",
     verify = "a path to a directory that is no project is read for that call and never served"

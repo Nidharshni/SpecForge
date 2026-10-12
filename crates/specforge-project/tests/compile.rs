@@ -88,6 +88,20 @@ fn the_context_view_keeps_the_spec_root_and_the_resolved_files() {
 
 /// No extension configured: the compile still runs, structurally, and
 /// says so once, with an I002 info.
+#[test]
+fn a_loose_root_suggests_add_today() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("a.spec"), "thing alpha \"A\" {\n}\n").unwrap();
+
+    let diagnostics = compile(dir.path()).diagnostics();
+
+    assert_eq!(codes(&diagnostics), ["I002"], "{diagnostics:?}");
+    assert_eq!(
+        diagnostics[0].suggestion.as_deref(),
+        Some("enable kind-specific checks with: specforge add @specforge/software")
+    );
+}
+
 #[specforge_test(
     behavior = "graceful_degradation_without_extensions",
     verify = "no extensions installed emits I002 info"

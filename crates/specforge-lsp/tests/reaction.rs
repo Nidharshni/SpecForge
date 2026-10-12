@@ -134,6 +134,29 @@ fn a_workspace_root_inside_a_project_opens_the_enclosing_project() {
 }
 
 #[test]
+fn a_workspace_root_in_a_spec_root_holding_specforge_spec_opens_that_directory_today() {
+    let served = Served::new(&[
+        ("spec/specforge.spec", "spec \"p\" {}\n"),
+        ("spec/a.spec", "behavior alpha \"Alpha\" {}\n"),
+    ])
+    .extension("@specforge/software", |c| {
+        c.kind("behavior", |_| {});
+    })
+    .open_in("spec", &[]);
+    let spec = served.root().join("spec").to_str().unwrap().to_string();
+    let logs = logs(served.opening());
+    assert!(
+        logs.contains(&format!("specforge-lsp: indexed 2 .spec files from {spec}")),
+        "{logs:?}"
+    );
+    // `spec/` holds no specforge.json: nothing is loaded there.
+    assert!(
+        !logs.iter().any(|m| m.contains("loaded 1 extension(s)")),
+        "{logs:?}"
+    );
+}
+
+#[test]
 fn a_workspace_root_in_no_project_is_opened_as_given() {
     let dir = tempfile::TempDir::new().unwrap();
     std::fs::create_dir_all(dir.path().join("loose")).unwrap();
