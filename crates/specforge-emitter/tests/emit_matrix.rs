@@ -5,9 +5,8 @@
 use specforge_emitter::{
     EmitFormat, EmitOptions, GraphProtocolSchema, estimate_tokens, generate_schema,
 };
-use specforge_registry::{
-    EdgeRegistry, EdgeRegistryEntry, FieldRegistry, KindRegistry, KindRegistryEntry,
-};
+use specforge_protocol_types::{EdgeTypeDescriptor, EntityKindDescriptor, ExtensionDeclaration};
+use specforge_registry::{FieldRegistry, build_registries};
 
 use crate::support::headline_registry;
 
@@ -32,36 +31,39 @@ feature hub "Hub" {
 }
 "#;
 
-fn kind(name: &str, ext: &str, testable: bool) -> KindRegistryEntry {
-    KindRegistryEntry {
-        kind_name: name.to_string(),
-        source_extension: ext.to_string(),
+/// The kind `name` (its keyword), declared by `ext`.
+fn kind(name: &str, testable: bool) -> EntityKindDescriptor {
+    EntityKindDescriptor {
+        name: name.to_string(),
+        keyword: Some(name.to_string()),
         testable,
         supports_verify: testable,
-        allowed_verify_kinds: vec![],
-        lifecycle_field: None,
         ..Default::default()
     }
 }
 
+fn declaration(name: &str) -> ExtensionDeclaration {
+    let mut declaration = ExtensionDeclaration::default();
+    declaration.handshake.name = name.to_string();
+    declaration.handshake.version = "1.0.0".to_string();
+    declaration
+}
+
 fn schema(fields: &FieldRegistry) -> GraphProtocolSchema {
-    let mut kinds = KindRegistry::new();
-    kinds.register(kind("behavior", "@specforge/software", true));
-    kinds.register(kind("feature", "@specforge/product", false));
-    let mut edges = EdgeRegistry::new();
-    edges.register(EdgeRegistryEntry {
-        source_extension: "@specforge/product".to_string(),
-        declared: specforge_registry::EdgeTypeDescriptor {
-            label: "behaviors".to_string(),
-            source_kind: Some("feature".to_string()),
-            target_kind: Some("behavior".to_string()),
-            ..Default::default()
-        },
-        writers: Vec::new(),
-    });
+    let mut software = declaration("@specforge/software");
+    software.entities = vec![kind("behavior", true)];
+    let mut product = declaration("@specforge/product");
+    product.entities = vec![kind("feature", false)];
+    product.edges = vec![EdgeTypeDescriptor {
+        label: "behaviors".to_string(),
+        source_kind: Some("feature".to_string()),
+        target_kind: Some("behavior".to_string()),
+        ..Default::default()
+    }];
+    let build = build_registries(vec![software, product]);
     generate_schema(
-        &kinds,
-        &edges,
+        build.kinds(),
+        build.edges(),
         fields,
         &[
             ("@specforge/software".to_string(), "1.0.0".to_string()),
