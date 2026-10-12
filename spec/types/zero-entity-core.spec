@@ -360,21 +360,23 @@ type KeywordExtensionMapping {
   verify unit "KeywordExtensionMapping schema is valid"
 }
 
+// One edge type as the registry build resolved it (registry_build_edges)
 type EdgeRegistryEntry {
-  label            string @readonly
-  source_kind      string @optional
-  target_kind      string @optional
-  source_extension string @readonly
-  edge_style       string @optional
-  edge_color       string @optional
-  edge_arrowhead   string @optional
+  label            string             @readonly
+  source_extension string             @readonly
+  // Its declaration; absent for an edge type only fields name
+  declared         EdgeTypeDescriptor @optional
+  // Every field that writes it, by extension in load order, then kind and field
   writers          EdgeWriter[]
+  // The declared source kind, else its writers' kinds; sorted
+  sources          string[]
+  // The declared target kind, else its writers' target kinds; sorted
+  targets          string[]
   verify unit "EdgeRegistryEntry schema is valid"
 }
 
-// EdgeWriter is a field that writes an edge label no loaded extension
-// declares; an undeclared edge type's entry lists every writer in load
-// order, and its ends are theirs (registry_build_edges).
+// A field that writes an edge type: entities of kind write, through
+// field, edges of the type (to target_kind when the field declares one).
 type EdgeWriter {
   extension   string @readonly
   kind        string @readonly

@@ -183,8 +183,8 @@ fn cycle_detection_follows_every_field_that_writes_its_edge_type() {
     assert!(built.diagnostics.is_empty(), "{:?}", built.diagnostics);
     let rule = built.rules.iter().next().unwrap();
     assert_eq!(
-        rule.describe()["edge_fields"],
-        serde_json::json!(["depends_on", "needs"])
+        rule.describe()["edge_writers"],
+        serde_json::json!(["module.depends_on", "service.needs"])
     );
     let entities = [
         entity("m1", "module", 0, 0),

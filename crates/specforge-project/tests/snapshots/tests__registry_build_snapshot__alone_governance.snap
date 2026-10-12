@@ -14,7 +14,16 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "ConstraintConstrainsBehavior",
       "source_extension": "@specforge/governance",
       "source_kind": "constraint",
-      "target_kind": "behavior"
+      "sources": [
+        "constraint"
+      ],
+      "target_kind": "behavior",
+      "targets": [
+        "behavior"
+      ],
+      "writers": [
+        "@specforge/governance constraint.constrains -> behavior"
+      ]
     },
     "ConstraintEnforcedByBehavior": {
       "description": "Constraint is enforced by a behavior",
@@ -24,7 +33,16 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "ConstraintEnforcedByBehavior",
       "source_extension": "@specforge/governance",
       "source_kind": "constraint",
-      "target_kind": "behavior"
+      "sources": [
+        "constraint"
+      ],
+      "target_kind": "behavior",
+      "targets": [
+        "behavior"
+      ],
+      "writers": [
+        "@specforge/governance constraint.enforced_by -> behavior"
+      ]
     },
     "ConstraintGovernsFeature": {
       "description": "Constraint governs a product feature",
@@ -34,7 +52,16 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "ConstraintGovernsFeature",
       "source_extension": "@specforge/governance",
       "source_kind": "constraint",
-      "target_kind": "feature"
+      "sources": [
+        "constraint"
+      ],
+      "target_kind": "feature",
+      "targets": [
+        "feature"
+      ],
+      "writers": [
+        "@specforge/governance constraint.governs_features -> feature"
+      ]
     },
     "ConstraintProtectsInvariant": {
       "description": "Constraint protects an invariant",
@@ -44,7 +71,16 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "ConstraintProtectsInvariant",
       "source_extension": "@specforge/governance",
       "source_kind": "constraint",
-      "target_kind": "invariant"
+      "sources": [
+        "constraint"
+      ],
+      "target_kind": "invariant",
+      "targets": [
+        "invariant"
+      ],
+      "writers": [
+        "@specforge/governance constraint.protects -> invariant"
+      ]
     },
     "DecisionAffectsFeature": {
       "description": "Decision affects a product feature",
@@ -54,7 +90,16 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "DecisionAffectsFeature",
       "source_extension": "@specforge/governance",
       "source_kind": "decision",
-      "target_kind": "feature"
+      "sources": [
+        "decision"
+      ],
+      "target_kind": "feature",
+      "targets": [
+        "feature"
+      ],
+      "writers": [
+        "@specforge/governance decision.affects_features -> feature"
+      ]
     },
     "DecisionImposesConstraint": {
       "description": "Decision imposes a constraint on the system",
@@ -64,7 +109,16 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "DecisionImposesConstraint",
       "source_extension": "@specforge/governance",
       "source_kind": "decision",
-      "target_kind": "constraint"
+      "sources": [
+        "decision"
+      ],
+      "target_kind": "constraint",
+      "targets": [
+        "constraint"
+      ],
+      "writers": [
+        "@specforge/governance decision.constraints -> constraint"
+      ]
     },
     "DecisionProtectsInvariant": {
       "description": "Decision protects an invariant",
@@ -74,7 +128,16 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "DecisionProtectsInvariant",
       "source_extension": "@specforge/governance",
       "source_kind": "decision",
-      "target_kind": "invariant"
+      "sources": [
+        "decision"
+      ],
+      "target_kind": "invariant",
+      "targets": [
+        "invariant"
+      ],
+      "writers": [
+        "@specforge/governance decision.invariants -> invariant"
+      ]
     },
     "DecisionSupersedesDecision": {
       "description": "Decision supersedes a previous decision",
@@ -84,7 +147,16 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "DecisionSupersedesDecision",
       "source_extension": "@specforge/governance",
       "source_kind": "decision",
-      "target_kind": "decision"
+      "sources": [
+        "decision"
+      ],
+      "target_kind": "decision",
+      "targets": [
+        "decision"
+      ],
+      "writers": [
+        "@specforge/governance decision.superseded_by -> decision"
+      ]
     },
     "FailureModeAffectsBehavior": {
       "description": "Failure mode identifies a behavior as a failure vector",
@@ -94,7 +166,16 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "FailureModeAffectsBehavior",
       "source_extension": "@specforge/governance",
       "source_kind": "failure_mode",
-      "target_kind": "behavior"
+      "sources": [
+        "failure_mode"
+      ],
+      "target_kind": "behavior",
+      "targets": [
+        "behavior"
+      ],
+      "writers": [
+        "@specforge/governance failure_mode.affected_behaviors -> behavior"
+      ]
     },
     "FailureModeTargetsInvariant": {
       "description": "Failure mode targets an invariant",
@@ -104,7 +185,16 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "FailureModeTargetsInvariant",
       "source_extension": "@specforge/governance",
       "source_kind": "failure_mode",
-      "target_kind": "invariant"
+      "sources": [
+        "failure_mode"
+      ],
+      "target_kind": "invariant",
+      "targets": [
+        "invariant"
+      ],
+      "writers": [
+        "@specforge/governance failure_mode.invariant -> invariant"
+      ]
     },
     "FailureModeThreatensFeature": {
       "description": "Failure mode threatens a product feature",
@@ -114,7 +204,16 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "FailureModeThreatensFeature",
       "source_extension": "@specforge/governance",
       "source_kind": "failure_mode",
-      "target_kind": "feature"
+      "sources": [
+        "failure_mode"
+      ],
+      "target_kind": "feature",
+      "targets": [
+        "feature"
+      ],
+      "writers": [
+        "@specforge/governance failure_mode.threatens_features -> feature"
+      ]
     }
   },
   "ext_short": {
@@ -1025,7 +1124,6 @@ expression: "digest(&load(&runtime, &[name]))"
           "superseded"
         ]
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "status",
       "message_template": "decision '{id}' has invalid status '{value}' — expected one of: proposed, accepted, deprecated, superseded",
@@ -1047,7 +1145,6 @@ expression: "digest(&load(&runtime, &[name]))"
           "low"
         ]
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "severity",
       "message_template": "failure_mode '{id}' has invalid severity '{value}' — expected one of: critical, high, medium, low",
@@ -1069,7 +1166,6 @@ expression: "digest(&load(&runtime, &[name]))"
           "low"
         ]
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "post_severity",
       "message_template": "failure_mode '{id}' has invalid post_severity '{value}' — expected one of: critical, high, medium, low",
@@ -1092,7 +1188,6 @@ expression: "digest(&load(&runtime, &[name]))"
           "rare"
         ]
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "occurrence",
       "message_template": "failure_mode '{id}' has invalid occurrence '{value}' — expected one of: certain, likely, occasional, unlikely, rare",
@@ -1115,7 +1210,6 @@ expression: "digest(&load(&runtime, &[name]))"
           "rare"
         ]
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "post_occurrence",
       "message_template": "failure_mode '{id}' has invalid post_occurrence '{value}' — expected one of: certain, likely, occasional, unlikely, rare",
@@ -1138,7 +1232,6 @@ expression: "digest(&load(&runtime, &[name]))"
           "undetectable"
         ]
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "detection",
       "message_template": "failure_mode '{id}' has invalid detection '{value}' — expected one of: certain, likely, moderate, unlikely, undetectable",
@@ -1161,7 +1254,6 @@ expression: "digest(&load(&runtime, &[name]))"
           "undetectable"
         ]
       },
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "post_detection",
       "message_template": "failure_mode '{id}' has invalid post_detection '{value}' — expected one of: certain, likely, moderate, unlikely, undetectable",
@@ -1174,7 +1266,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "E006",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "description",
       "message_template": "constraint '{id}' is missing required field 'description'",
@@ -1187,7 +1278,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "E006",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "context",
       "message_template": "decision '{id}' is missing required field 'context'",
@@ -1200,7 +1290,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "E006",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "decision",
       "message_template": "decision '{id}' is missing required field 'decision'",
@@ -1213,7 +1302,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "E006",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "status",
       "message_template": "decision '{id}' is missing required field 'status'",
@@ -1226,7 +1314,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "E006",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "cause",
       "message_template": "failure_mode '{id}' is missing required field 'cause'",
@@ -1239,7 +1326,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "E006",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "effect",
       "message_template": "failure_mode '{id}' is missing required field 'effect'",
@@ -1252,7 +1338,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "E006",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "severity",
       "message_template": "failure_mode '{id}' is missing required field 'severity'",

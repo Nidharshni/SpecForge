@@ -49,9 +49,11 @@ behavior generate_schema_from_registries "Generate Schema From Registries" {
     Each registered entity kind MUST produce a SchemaEntityKind entry with
     its fields, testable flag, and singleton flag. Each registered edge type
     MUST produce a SchemaEdgeType entry.
-    An edge type that declares no source kind or no target kind MUST
-    name, on that side, the kinds whose fields write it and the target
-    kinds those fields declare, sorted; a side it declares is kept.
+    Each SchemaEdgeType names the ends the registry build resolved for
+    its edge type (registry_build_edges): the declared kind on a side it
+    declares, else the kinds of the fields that write it (sources) and
+    the target kinds they declare (targets), sorted; a side nothing
+    resolves is absent.
     The schema MUST be generated once
     per compilation and cached for reuse by embed_schema_in_export and
     serve_schema_resource. In watch mode or LSP mode, the schema MUST be

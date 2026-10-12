@@ -415,54 +415,18 @@ pub fn generate_schema(
         .collect();
     entity_kinds.sort_by(|a, b| a.name.cmp(&b.name));
 
+    // The ends the registry build resolved (ADR 0060): the declared kind on
+    // a side it declares, else the kinds of the fields that write the edge
+    // type; a side nothing resolves is absent.
     let mut edge_types: Vec<SchemaEdgeType> = edges
         .iter()
-        .map(|(_, entry)| SchemaEdgeType {
-            label: entry.declared.label.clone(),
-            source_extension: entry.source_extension.clone(),
-            source_kinds: entry.declared.source_kind.as_ref().map(|k| vec![k.clone()]),
-            target_kinds: entry.declared.target_kind.as_ref().map(|k| vec![k.clone()]),
+        .map(|entry| SchemaEdgeType {
+            label: entry.label().to_string(),
+            source_extension: entry.source_extension().to_string(),
+            source_kinds: (!entry.sources().is_empty()).then(|| entry.sources().to_vec()),
+            target_kinds: (!entry.targets().is_empty()).then(|| entry.targets().to_vec()),
         })
         .collect();
-
-    // Infer missing source/target kinds from field-level edge mappings.
-    // When an edge type has no sourceKind/targetKind in the registry, scan
-    // all entity fields for matching edge labels to discover the actual
-    // source and target kinds. This handles polymorphic edges like References.
-    for edge_type in &mut edge_types {
-        if edge_type.source_kinds.is_some() && edge_type.target_kinds.is_some() {
-            continue;
-        }
-        let mut sources: Vec<String> = edge_type.source_kinds.clone().unwrap_or_default();
-        let mut targets: Vec<String> = edge_type.target_kinds.clone().unwrap_or_default();
-
-        for (_, kind_entry) in kinds.iter() {
-            for field in fields.fields_for_kind(&kind_entry.kind_name) {
-                if field.declared().edge.as_deref() == Some(&edge_type.label) {
-                    if !sources.contains(&kind_entry.kind_name) {
-                        sources.push(kind_entry.kind_name.clone());
-                    }
-                    if let Some(tk) = field
-                        .declared()
-                        .target_kind
-                        .as_ref()
-                        .filter(|tk| !targets.contains(tk))
-                    {
-                        targets.push(tk.clone());
-                    }
-                }
-            }
-        }
-
-        if edge_type.source_kinds.is_none() && !sources.is_empty() {
-            sources.sort();
-            edge_type.source_kinds = Some(sources);
-        }
-        if edge_type.target_kinds.is_none() && !targets.is_empty() {
-            targets.sort();
-            edge_type.target_kinds = Some(targets);
-        }
-    }
 
     edge_types.sort_by(|a, b| a.label.cmp(&b.label));
 

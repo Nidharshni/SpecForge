@@ -1,11 +1,13 @@
 use super::build::{BuildPart, Reported};
+use super::edge_types;
 use crate::{
-    EdgeRegistry, EdgeRegistryEntry, EdgeWriter, FieldRegistry, FieldRegistryEntry, KindRegistry,
-    KindRegistryEntry, UnknownFieldType,
+    EdgeRegistry, FieldRegistry, FieldRegistryEntry, KindRegistry, KindRegistryEntry,
+    UnknownFieldType,
 };
 use specforge_common::{Diagnostic, DiagnosticData, codes};
 use specforge_protocol_types::{
-    EntityEnhancementDescriptor, EntityKindDescriptor, ExtensionDeclaration, FieldDescriptor,
+    EdgeTypeDescriptor, EntityEnhancementDescriptor, EntityKindDescriptor, ExtensionDeclaration,
+    FieldDescriptor,
 };
 
 /// The keyword a kind's entities are written with: its declared keyword,
@@ -21,18 +23,13 @@ pub(crate) fn populate(
 ) -> (KindRegistry, FieldRegistry, EdgeRegistry, Vec<Reported>) {
     let mut kind_reg = KindRegistry::new();
     let mut field_reg = FieldRegistry::new();
-    let mut edge_reg = EdgeRegistry::new();
+    let mut declared_edges = Vec::new();
     let mut diagnostics = Vec::new();
 
     for declaration in declarations {
         register_entity_kinds(&mut kind_reg, declaration, &mut diagnostics);
         register_fields(&mut field_reg, declaration, &mut diagnostics);
-        register_edge_types(&mut edge_reg, declaration, &mut diagnostics);
-    }
-    // Once every declared edge type is in: a label any extension declares
-    // is that declaration, whichever field wrote it first.
-    for declaration in declarations {
-        register_implicit_edges(&mut edge_reg, declaration);
+        collect_edge_types(&mut declared_edges, declaration, &mut diagnostics);
     }
 
     // After every extension, apply the entity enhancements.
@@ -48,6 +45,16 @@ pub(crate) fn populate(
     let enh_diags =
         apply_entity_enhancements(&all_enhancements, &loaded, &mut kind_reg, &mut field_reg);
     diagnostics.extend(enh_diags);
+
+    // Once every kind, field and enhancement is registered: each edge type
+    // with every field that writes it (ADR 0060).
+    let (edge_reg, edge_diagnostics) =
+        edge_types::resolve(declarations, declared_edges, &field_reg);
+    diagnostics.extend(
+        edge_diagnostics
+            .into_iter()
+            .map(|d| Reported::new(BuildPart::Registries, d)),
+    );
 
     (kind_reg, field_reg, edge_reg, diagnostics)
 }
@@ -261,20 +268,17 @@ fn lifecycle_field(
     None
 }
 
-/// Register a declaration's explicit edge types.
-fn register_edge_types(
-    registry: &mut EdgeRegistry,
+/// Collect a declaration's explicit edge types into `declared` (the
+/// declaring extension with each): the first declaration of a label wins, a
+/// later one is W018.
+fn collect_edge_types(
+    declared: &mut Vec<(String, EdgeTypeDescriptor)>,
     declaration: &ExtensionDeclaration,
     diagnostics: &mut Vec<Reported>,
 ) {
     for edge in &declaration.edges {
-        let entry = EdgeRegistryEntry {
-            source_extension: declaration.name().to_string(),
-            declared: edge.clone(),
-            writers: Vec::new(),
-        };
-        if let Some(existing) = registry.register(entry) {
-            diagnostics.push(Reported::new(
+        match declared.iter().find(|(_, first)| first.label == edge.label) {
+            Some((first_extension, first)) => diagnostics.push(Reported::new(
                 BuildPart::Collision,
                 Diagnostic::new(
                     codes::W018,
@@ -282,41 +286,12 @@ fn register_edge_types(
                         "edge type '{}' from '{}' duplicates '{}' from '{}' (first wins)",
                         edge.label,
                         declaration.name(),
-                        existing.declared.label,
-                        existing.source_extension
+                        first.label,
+                        first_extension
                     ),
                 ),
-            ));
-            // Restore first registration
-            registry.register(existing);
-        }
-    }
-}
-
-/// Record each field of a declaration's kinds that writes an edge label no
-/// extension declares as one of that edge type's writers: per kind, its
-/// shared fields (those it does not declare again) then its own, as the
-/// field registry registers them.
-fn register_implicit_edges(registry: &mut EdgeRegistry, declaration: &ExtensionDeclaration) {
-    for kind in &declaration.entities {
-        let shared = declaration
-            .shared_fields
-            .iter()
-            .filter(|s| !kind.fields.iter().any(|f| f.name == s.name));
-        for field in shared.chain(&kind.fields) {
-            let Some(label) = &field.edge else { continue };
-            if registry.get(label).is_some_and(|e| e.writers.is_empty()) {
-                continue; // declared
-            }
-            registry.record_writer(
-                label,
-                EdgeWriter {
-                    extension: declaration.name().to_string(),
-                    kind: keyword(kind).to_string(),
-                    field: field.name.clone(),
-                    target_kind: field.target_kind.clone(),
-                },
-            );
+            )),
+            None => declared.push((declaration.name().to_string(), edge.clone())),
         }
     }
 }

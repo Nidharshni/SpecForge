@@ -2109,10 +2109,23 @@ fn an_open_edge_type_takes_the_kinds_of_the_fields_writing_it() {
     let relates = edge("relates");
     assert_eq!(relates.source_kinds, Some(vec!["a".into(), "b".into()]));
     assert_eq!(relates.target_kinds, Some(vec!["a".into(), "c".into()]));
-    // A side the edge type declares is kept; the open side is inferred, sorted.
+    // A side the edge type declares is kept; the open side is the writers',
+    // sorted. `b.w` writes `owns` from outside its declared source `a`: it
+    // is W021 and writes no `owns` edge, so `b` is no target of it.
     let owns = edge("owns");
     assert_eq!(owns.source_kinds, Some(vec!["a".into()]));
-    assert_eq!(owns.target_kinds, Some(vec!["b".into(), "c".into()]));
+    assert_eq!(owns.target_kinds, Some(vec!["c".into()]));
+    let w021: Vec<&str> = build
+        .diagnostics()
+        .filter(|d| d.code == "W021")
+        .map(|d| d.message.as_str())
+        .collect();
+    assert_eq!(
+        w021,
+        [
+            "extension '@specforge/software': field 'w' on kind 'b' writes edge type 'owns', whose declared source_kind is 'a' — its edges are not of that type"
+        ]
+    );
 }
 
 #[specforge_test(

@@ -63,6 +63,11 @@ fn implementing(rule: ValidationRuleDescriptor, with_feature: bool) -> super::Bu
     let mut declaration = declare("@test", |c| {
         c.kind("behavior", |k| {
             k.description("b");
+            k.field("features", |f| {
+                f.field_type(FieldType::ReferenceList)
+                    .edge("BehaviorImplementsFeature")
+                    .target_kind("feature");
+            });
         });
         if with_feature {
             c.kind("feature", |k| {
@@ -91,8 +96,8 @@ fn an_edge_rule_counts_only_its_edge_type() {
     let b2 = entity("b2", "behavior", 0, 0).with_edges(Direction::Outgoing, "feature", 1);
     let built = implementing(declared.clone(), true);
     assert_eq!(
-        built.rules.iter().next().unwrap().describe()["edge_peer_kinds"],
-        serde_json::json!(["feature"])
+        built.rules.iter().next().unwrap().describe()["edge_writers"],
+        serde_json::json!(["behavior.features"])
     );
     let diagnostics = check(&built, &[b1, b2]);
     assert_eq!(
@@ -141,8 +146,8 @@ fn an_edge_rule_over_an_undeclared_edge_counts_every_writing_kind() {
     });
     let built = rules_of(vec![first, second]);
     assert_eq!(
-        built.rules.iter().next().unwrap().describe()["edge_peer_kinds"],
-        serde_json::json!(["task", "ticket"])
+        built.rules.iter().next().unwrap().describe()["edge_writers"],
+        serde_json::json!(["task.assignee", "ticket.owner"])
     );
 
     let by_task = entity("p1", "person", 0, 0).with_edges(Direction::Incoming, "task", 1);

@@ -288,7 +288,6 @@ fn a_cycle_rule_follows_only_the_edges_of_its_type() {
     behavior = "registry_build_edges",
     verify = "an edge type names every field that writes it: a kind's own, shared and enhancement fields alike"
 )]
-#[ignore = "fixed by T2"]
 fn an_enhancement_field_writes_its_edge_type() {
     let source = "b b1 \"B one\" { owner c1 }\nc c1 \"C one\" {}\nc c2 \"C two\" {}\n\
                   e e1 \"E one\" { pins [c2] }\n";
@@ -313,7 +312,6 @@ fn an_enhancement_field_writes_its_edge_type() {
     behavior = "registry_build_edges",
     verify = "a field that writes a declared edge type from a kind outside its declared source kind, or to a kind outside its declared target kind, is W021 and writes no edge of that type"
 )]
-#[ignore = "fixed by T2"]
 fn a_field_outside_a_declared_end_does_not_write_the_edge_type() {
     let source = "b b1 \"B one\" { owner c1 }\nc c1 \"C one\" {}\nc c2 \"C two\" {}\n";
     let diagnostics = compile("@probe/sides", source, sides);

@@ -126,8 +126,9 @@ pub struct RegistryBuild {
     /// E027 (a cycle's after the declarations'), W145 pass cycles — in that
     /// order, extension by extension within each.
     declaration_diagnostics: Vec<Reported>,
-    /// Populate (E026, W018, W019, W021, I004), W017, the rule set's (W150,
-    /// W147 or W112 per declared rule), then W023 — in that order.
+    /// Populate (E026, W018, W019, W021, I004, then the edge types' W021),
+    /// W017, the rule set's (W150, W147 or W112 per declared rule), then
+    /// W023 — in that order.
     registry_diagnostics: Vec<Reported>,
     /// The custom rules' probes (W112), set by [`Self::probe`]; empty until then.
     probe_diagnostics: Vec<Diagnostic>,
@@ -148,8 +149,9 @@ impl RegistryBuild {
         &self.fields
     }
 
-    /// The edge types: declared, and every label a field maps to without
-    /// declaring it.
+    /// The edge types, each resolved once (ADR 0060): declared, and every
+    /// label a field maps to without declaring it, with every field that
+    /// writes it, its ends, and the edge type each field writes.
     pub fn edges(&self) -> &EdgeRegistry {
         &self.edges
     }
@@ -191,8 +193,8 @@ impl RegistryBuild {
 
     /// Every diagnostic the build reports with what it is about, in its one
     /// order: the declarations' own (E030, W021, E073 and E027, W145), the
-    /// registries' (E026, W018, W019, W021, I004; W017; W150, W147 or W112
-    /// per rule; W023), the custom rules' probes (W112), then the surfaces'
+    /// registries' (E026, W018, W019, W021, I004, the edge types' W021; W017;
+    /// W150, W147 or W112 per rule; W023), the custom rules' probes (W112), then the surfaces'
     /// (E055, E039); each group extension by extension in load order.
     /// `specforge check` reports them right after the environment's own,
     /// before any source (ADR 0012 D11, amended).

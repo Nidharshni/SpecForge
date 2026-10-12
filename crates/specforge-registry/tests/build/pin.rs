@@ -219,7 +219,7 @@ fn digest(build: &RegistryBuild) -> Value {
     let mut edges: Vec<String> = build
         .edges()
         .iter()
-        .map(|(label, entry)| format!("{label}: {}", entry.source_extension))
+        .map(|entry| format!("{}: {}", entry.label(), entry.source_extension()))
         .collect();
     edges.sort();
     json!({

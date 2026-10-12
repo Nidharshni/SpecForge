@@ -14,7 +14,16 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "BehaviorConsumesEvent",
       "source_extension": "@specforge/software",
       "source_kind": "behavior",
-      "target_kind": "event"
+      "sources": [
+        "behavior"
+      ],
+      "target_kind": "event",
+      "targets": [
+        "event"
+      ],
+      "writers": [
+        "@specforge/software behavior.consumes -> event"
+      ]
     },
     "BehaviorEnforcesInvariant": {
       "description": null,
@@ -24,7 +33,16 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "BehaviorEnforcesInvariant",
       "source_extension": "@specforge/software",
       "source_kind": "behavior",
-      "target_kind": "invariant"
+      "sources": [
+        "behavior"
+      ],
+      "target_kind": "invariant",
+      "targets": [
+        "invariant"
+      ],
+      "writers": [
+        "@specforge/software behavior.invariants -> invariant"
+      ]
     },
     "BehaviorImplementsFeature": {
       "description": "Behavior implements a feature (cross-extension via peer_dependency @specforge/product)",
@@ -34,7 +52,16 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "BehaviorImplementsFeature",
       "source_extension": "@specforge/software",
       "source_kind": "behavior",
-      "target_kind": "feature"
+      "sources": [
+        "behavior"
+      ],
+      "target_kind": "feature",
+      "targets": [
+        "feature"
+      ],
+      "writers": [
+        "@specforge/software behavior.features -> feature"
+      ]
     },
     "BehaviorProducesEvent": {
       "description": null,
@@ -44,7 +71,16 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "BehaviorProducesEvent",
       "source_extension": "@specforge/software",
       "source_kind": "behavior",
-      "target_kind": "event"
+      "sources": [
+        "behavior"
+      ],
+      "target_kind": "event",
+      "targets": [
+        "event"
+      ],
+      "writers": [
+        "@specforge/software behavior.produces -> event"
+      ]
     },
     "BehaviorReferencesType": {
       "description": null,
@@ -54,7 +90,16 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "BehaviorReferencesType",
       "source_extension": "@specforge/software",
       "source_kind": "behavior",
-      "target_kind": "type"
+      "sources": [
+        "behavior"
+      ],
+      "target_kind": "type",
+      "targets": [
+        "type"
+      ],
+      "writers": [
+        "@specforge/software behavior.types -> type"
+      ]
     },
     "BehaviorUsesPort": {
       "description": null,
@@ -64,7 +109,16 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "BehaviorUsesPort",
       "source_extension": "@specforge/software",
       "source_kind": "behavior",
-      "target_kind": "port"
+      "sources": [
+        "behavior"
+      ],
+      "target_kind": "port",
+      "targets": [
+        "port"
+      ],
+      "writers": [
+        "@specforge/software behavior.ports -> port"
+      ]
     },
     "EventCarriesPayloadType": {
       "description": null,
@@ -74,7 +128,16 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "EventCarriesPayloadType",
       "source_extension": "@specforge/software",
       "source_kind": "event",
-      "target_kind": "type"
+      "sources": [
+        "event"
+      ],
+      "target_kind": "type",
+      "targets": [
+        "type"
+      ],
+      "writers": [
+        "@specforge/software event.payload -> type"
+      ]
     },
     "ExternalRef": {
       "description": "Entity references an external URI or resource",
@@ -84,7 +147,10 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "ExternalRef",
       "source_extension": "@specforge/software",
       "source_kind": null,
-      "target_kind": null
+      "sources": [],
+      "target_kind": null,
+      "targets": [],
+      "writers": []
     },
     "MilestoneIncludesBehavior": {
       "description": "Milestone delivers a behavior (cross-extension enhancement edge)",
@@ -94,7 +160,14 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "MilestoneIncludesBehavior",
       "source_extension": "@specforge/software",
       "source_kind": "milestone",
-      "target_kind": "behavior"
+      "sources": [
+        "milestone"
+      ],
+      "target_kind": "behavior",
+      "targets": [
+        "behavior"
+      ],
+      "writers": []
     },
     "ModuleConsumesPort": {
       "description": null,
@@ -104,7 +177,14 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "ModuleConsumesPort",
       "source_extension": "@specforge/software",
       "source_kind": "module",
-      "target_kind": "port"
+      "sources": [
+        "module"
+      ],
+      "target_kind": "port",
+      "targets": [
+        "port"
+      ],
+      "writers": []
     },
     "ModuleDefinesPort": {
       "description": null,
@@ -114,7 +194,14 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "ModuleDefinesPort",
       "source_extension": "@specforge/software",
       "source_kind": "module",
-      "target_kind": "port"
+      "sources": [
+        "module"
+      ],
+      "target_kind": "port",
+      "targets": [
+        "port"
+      ],
+      "writers": []
     },
     "PortReferencesType": {
       "description": "Port names a type in a method parameter or return type",
@@ -124,7 +211,16 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "PortReferencesType",
       "source_extension": "@specforge/software",
       "source_kind": "port",
-      "target_kind": "type"
+      "sources": [
+        "port"
+      ],
+      "target_kind": "type",
+      "targets": [
+        "type"
+      ],
+      "writers": [
+        "@specforge/software port.types -> type"
+      ]
     },
     "References": {
       "description": "General cross-reference between entities",
@@ -134,7 +230,10 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "References",
       "source_extension": "@specforge/software",
       "source_kind": null,
-      "target_kind": null
+      "sources": [],
+      "target_kind": null,
+      "targets": [],
+      "writers": []
     },
     "TypeComposesType": {
       "description": null,
@@ -144,7 +243,16 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "TypeComposesType",
       "source_extension": "@specforge/software",
       "source_kind": "type",
-      "target_kind": "type"
+      "sources": [
+        "type"
+      ],
+      "target_kind": "type",
+      "targets": [
+        "type"
+      ],
+      "writers": [
+        "@specforge/software type.composed_types -> type"
+      ]
     },
     "TypeExtendsType": {
       "description": null,
@@ -154,7 +262,16 @@ expression: "digest(&load(&runtime, &[name]))"
       "label": "TypeExtendsType",
       "source_extension": "@specforge/software",
       "source_kind": "type",
-      "target_kind": "type"
+      "sources": [
+        "type"
+      ],
+      "target_kind": "type",
+      "targets": [
+        "type"
+      ],
+      "writers": [
+        "@specforge/software type.extends -> type"
+      ]
     }
   },
   "ext_short": {
@@ -960,7 +1077,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "custom",
       "code": "E004",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": null,
       "message_template": "port '{id}' method '{field}' references unknown type '{value}'",
@@ -973,7 +1089,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "custom",
       "code": "E051",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": null,
       "message_template": "event '{id}' trigger must reference a behavior, found '{value}'",
@@ -986,7 +1101,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "no_incoming_edges",
       "code": "W002",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": null,
       "message_template": "type '{id}' is not referenced by any behavior, port, or type",
@@ -999,7 +1113,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "no_incoming_edges",
       "code": "W003",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": null,
       "message_template": "invariant '{id}' is not enforced by any behavior",
@@ -1012,7 +1125,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "no_incoming_edges",
       "code": "W005",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": null,
       "message_template": "port '{id}' is not referenced by any behavior",
@@ -1025,7 +1137,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_field_when_flag_set",
       "code": "W006",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "category",
       "message_template": "behavior '{id}' has no category — agents use category for task routing",
@@ -1038,7 +1149,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "no_incoming_edges",
       "code": "W007",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": null,
       "message_template": "event '{id}' is not produced by any behavior",
@@ -1051,7 +1161,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "custom",
       "code": "W010",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": null,
       "message_template": "type '{id}' field '{field}' has unknown annotation '{value}'",
@@ -1064,7 +1173,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "E006",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "contract",
       "message_template": "behavior '{id}' is missing required field 'contract'",
@@ -1077,7 +1185,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "E006",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "guarantee",
       "message_template": "invariant '{id}' is missing required field 'guarantee'",
@@ -1090,7 +1197,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "check": "missing_required_field",
       "code": "E006",
       "constraint": null,
-      "edge_peer_kinds": null,
       "edge_type": null,
       "field": "direction",
       "message_template": "port '{id}' is missing required field 'direction'",
