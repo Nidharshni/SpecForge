@@ -5,8 +5,10 @@
 use specforge_emitter::{
     EmitFormat, EmitOptions, GraphProtocolSchema, estimate_tokens, generate_schema,
 };
-use specforge_protocol_types::{EdgeTypeDescriptor, EntityKindDescriptor, ExtensionDeclaration};
-use specforge_registry::{FieldRegistry, build_registries};
+use specforge_protocol_types::{
+    EdgeTypeDescriptor, EntityKindDescriptor, ExtensionDeclaration, FieldDescriptor,
+};
+use specforge_registry::build_registries;
 
 use crate::support::headline_registry;
 
@@ -49,9 +51,22 @@ fn declaration(name: &str) -> ExtensionDeclaration {
     declaration
 }
 
-fn schema(fields: &FieldRegistry) -> GraphProtocolSchema {
+/// The schema of the software and product extensions: `behavior` declares
+/// `contract` and `status` as headline fields (`contract` normative), as
+/// `@specforge/software` does.
+fn schema() -> GraphProtocolSchema {
     let mut software = declaration("@specforge/software");
-    software.entities = vec![kind("behavior", true)];
+    let mut behavior = kind("behavior", true);
+    behavior.fields = ["contract", "status"]
+        .map(|field| FieldDescriptor {
+            name: field.to_string(),
+            field_type: "string".to_string(),
+            normative: field == "contract",
+            headline: true,
+            ..Default::default()
+        })
+        .to_vec();
+    software.entities = vec![behavior];
     let mut product = declaration("@specforge/product");
     product.entities = vec![kind("feature", false)];
     product.edges = vec![EdgeTypeDescriptor {
@@ -60,23 +75,14 @@ fn schema(fields: &FieldRegistry) -> GraphProtocolSchema {
         target_kind: Some("behavior".to_string()),
         ..Default::default()
     }];
-    let build = build_registries(vec![software, product]);
-    generate_schema(
-        build.kinds(),
-        build.edges(),
-        fields,
-        &[
-            ("@specforge/software".to_string(), "1.0.0".to_string()),
-            ("@specforge/product".to_string(), "1.0.0".to_string()),
-        ],
-    )
+    generate_schema(&build_registries(vec![software, product]))
 }
 
 #[test]
 fn every_format_schema_scope_and_budget_renders_as_today() {
     let (graph, _) = specforge_graph::build_graph(&[specforge_parser::parse(SRC, "main.spec")]);
     let fields = headline_registry(&["behavior"]);
-    let schema = schema(&fields);
+    let schema = schema();
 
     let formats = [
         ("json", EmitFormat::Json),

@@ -29,6 +29,7 @@ behavior generate_schema_from_registries "Generate Schema From Registries" {
     SchemaField,
     KindRegistryEntry,
     FieldRegistryEntry,
+    RegistryBuild,
     SchemaExtensionInfo,
   ]
   ports      [CompilerApi]
@@ -53,7 +54,8 @@ behavior generate_schema_from_registries "Generate Schema From Registries" {
     its edge type (registry_build_edges): the declared kind on a side it
     declares, else the kinds of the fields that write it (sources) and
     the target kinds they declare (targets), sorted; a side nothing
-    resolves is absent.
+    resolves is absent. The schema is generated from the registry build
+    alone, its extensions included.
     The schema MUST be generated once
     per compilation and cached for reuse by embed_schema_in_export and
     serve_schema_resource. In watch mode or LSP mode, the schema MUST be

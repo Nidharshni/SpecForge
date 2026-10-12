@@ -299,12 +299,7 @@ fn populated_schema_serde_round_trip() {
 fn generate_schema_includes_kinds_edges_fields() {
     let build = software_and_product();
 
-    let extensions = vec![
-        ("@specforge/software".to_string(), "1.0.0".to_string()),
-        ("@specforge/product".to_string(), "1.0.0".to_string()),
-    ];
-
-    let schema = generate_schema(build.kinds(), build.edges(), build.fields(), &extensions);
+    let schema = generate_schema(&build);
 
     assert_eq!(schema.entity_kinds.len(), 2);
     assert_eq!(schema.entity_kinds[0].name, "behavior");
@@ -325,7 +320,21 @@ fn generate_schema_includes_kinds_edges_fields() {
         Some(vec!["feature".to_string()])
     );
 
-    assert_eq!(schema.extensions.len(), 2);
+    // The schema's extensions are the build's.
+    let loaded: Vec<(&str, &str)> = build.extension_info().collect();
+    let listed: Vec<(&str, &str)> = schema
+        .extensions
+        .iter()
+        .map(|e| (e.name.as_str(), e.version.as_str()))
+        .collect();
+    assert_eq!(
+        loaded,
+        [
+            ("@specforge/software", "1.0.0"),
+            ("@specforge/product", "1.0.0")
+        ]
+    );
+    assert_eq!(listed, loaded);
 }
 
 // B:generate_schema_from_registries — verify unit "zero-extension registries produce valid empty schema"
@@ -336,7 +345,7 @@ fn generate_schema_includes_kinds_edges_fields() {
 fn generate_schema_empty_registries() {
     let build = build_registries(vec![]);
 
-    let schema = generate_schema(build.kinds(), build.edges(), build.fields(), &[]);
+    let schema = generate_schema(&build);
     assert!(schema.entity_kinds.is_empty());
     assert!(schema.edge_types.is_empty());
     assert!(schema.extensions.is_empty());
@@ -365,7 +374,7 @@ fn generate_schema_field_type_mapping() {
         vec![],
     )]);
 
-    let schema = generate_schema(build.kinds(), build.edges(), build.fields(), &[]);
+    let schema = generate_schema(&build);
 
     let kind = &schema.entity_kinds[0];
     assert_eq!(kind.fields.len(), 5);
@@ -404,7 +413,7 @@ fn generate_schema_deterministic_sort() {
         ],
     )]);
 
-    let schema = generate_schema(build.kinds(), build.edges(), build.fields(), &[]);
+    let schema = generate_schema(&build);
 
     let kind_names: Vec<&str> = schema
         .entity_kinds
@@ -989,10 +998,8 @@ fn full_pipeline_registries_to_schema_to_embed() {
     // Build registries
     let build = software_and_product();
 
-    let extensions = vec![("@specforge/software".to_string(), "1.0.0".to_string())];
-
     // Generate
-    let schema = generate_schema(build.kinds(), build.edges(), build.fields(), &extensions);
+    let schema = generate_schema(&build);
     assert_eq!(schema.entity_kinds.len(), 2);
 
     // Embed
@@ -1188,7 +1195,7 @@ fn generate_schema_edge_no_source_target() {
         vec![edge_decl("custom_rel", None, None)],
     )]);
 
-    let schema = generate_schema(build.kinds(), build.edges(), build.fields(), &[]);
+    let schema = generate_schema(&build);
     assert_eq!(schema.edge_types.len(), 1);
     assert!(schema.edge_types[0].source_kinds.is_none());
     assert!(schema.edge_types[0].target_kinds.is_none());
@@ -1308,10 +1315,8 @@ fn detect_breaking_migration_record_emitted() {
 fn schema_generated_deterministically_for_caching() {
     let build = software_and_product();
 
-    let ext = vec![("@specforge/software".to_string(), "1.0.0".to_string())];
-
-    let schema1 = generate_schema(build.kinds(), build.edges(), build.fields(), &ext);
-    let schema2 = generate_schema(build.kinds(), build.edges(), build.fields(), &ext);
+    let schema1 = generate_schema(&build);
+    let schema2 = generate_schema(&build);
     assert_eq!(
         schema1, schema2,
         "Schema generation must be deterministic for caching"
@@ -1332,16 +1337,7 @@ fn schema_reflects_current_state() {
             &specforge_common::ProjectRoot::of(dir).unwrap(),
             Some(Arc::new(runtime)),
         );
-        let schema = generate_schema(
-            ctx.environment().registries().kinds(),
-            ctx.environment().registries().edges(),
-            ctx.environment().registries().fields(),
-            &ctx.environment()
-                .registries()
-                .extension_info()
-                .map(|(name, version)| (name.to_string(), version.to_string()))
-                .collect::<Vec<_>>(),
-        );
+        let schema = generate_schema(ctx.environment().registries());
         serde_json::to_value(&schema).unwrap()
     }
     fn configure(dir: &std::path::Path, extensions: &[&str]) {
@@ -1502,12 +1498,7 @@ fn published_schema_describes_all_edge_types() {
 fn generate_schema_contract() {
     let build = software_and_product();
 
-    let schema = generate_schema(
-        build.kinds(),
-        build.edges(),
-        build.fields(),
-        &[("@specforge/software".to_string(), "1.0.0".to_string())],
-    );
+    let schema = generate_schema(&build);
 
     // ensures: all_kinds_in_schema
     assert_eq!(schema.entity_kinds.len(), build.kinds().len());
@@ -1981,7 +1972,7 @@ fn ticket_registries() -> specforge_registry::RegistryBuild {
 )]
 fn a_field_type_is_named_in_the_schema_as_declared() {
     let build = ticket_registries();
-    let schema = generate_schema(build.kinds(), build.edges(), build.fields(), &[]);
+    let schema = generate_schema(&build);
     let ticket = schema
         .entity_kinds
         .iter()
@@ -2005,7 +1996,7 @@ fn a_field_type_is_named_in_the_schema_as_declared() {
 )]
 fn the_published_schema_lists_the_field_types_the_host_reads() {
     let build = ticket_registries();
-    let schema = generate_schema(build.kinds(), build.edges(), build.fields(), &[]);
+    let schema = generate_schema(&build);
     let published: serde_json::Value =
         serde_json::from_str(&publish_json_schema_format(&schema, EmitFormat::Json).unwrap())
             .unwrap();
@@ -2034,7 +2025,7 @@ fn the_published_schema_lists_the_field_types_the_host_reads() {
 )]
 fn the_schema_carries_a_declared_default_value() {
     let build = ticket_registries();
-    let schema = generate_schema(build.kinds(), build.edges(), build.fields(), &[]);
+    let schema = generate_schema(&build);
     let ticket = schema
         .entity_kinds
         .iter()
@@ -2097,7 +2088,7 @@ fn an_open_edge_type_takes_the_kinds_of_the_fields_writing_it() {
         ],
     )]);
 
-    let schema = generate_schema(build.kinds(), build.edges(), build.fields(), &[]);
+    let schema = generate_schema(&build);
     let edge = |label: &str| {
         schema
             .edge_types
@@ -2158,7 +2149,7 @@ fn an_undeclared_edge_two_kinds_write_names_every_writer() {
     };
     let build = specforge_registry::build_registries(vec![declaration]);
 
-    let schema = generate_schema(build.kinds(), build.edges(), build.fields(), &[]);
+    let schema = generate_schema(&build);
     let links = schema
         .edge_types
         .iter()

@@ -10,9 +10,7 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 use specforge_common::shape::Shape;
 use specforge_diagnostics::{Code, codes};
-use specforge_registry::{
-    EdgeRegistry, FieldRegistry, FieldRegistryEntry, FieldType, KindRegistry,
-};
+use specforge_registry::{FieldRegistryEntry, FieldType, RegistryBuild};
 
 // ---------------------------------------------------------------------------
 // Slice 1: Schema Types
@@ -380,17 +378,17 @@ pub(crate) enum SchemaAttachment {
 // Slice 2: Generate Schema from Registries
 // ---------------------------------------------------------------------------
 
-pub fn generate_schema(
-    kinds: &KindRegistry,
-    edges: &EdgeRegistry,
-    fields: &FieldRegistry,
-    extensions: &[(String, String)],
-) -> GraphProtocolSchema {
-    let ext_infos: Vec<SchemaExtensionInfo> = extensions
-        .iter()
+/// The Graph Protocol schema of `build`: its kinds with their fields, its
+/// edge types with the ends the build resolved, and its extensions. The
+/// schema is generated from the registry build alone (ADR 0060); nothing is
+/// inferred here.
+pub fn generate_schema(build: &RegistryBuild) -> GraphProtocolSchema {
+    let (kinds, edges, fields) = (build.kinds(), build.edges(), build.fields());
+    let ext_infos: Vec<SchemaExtensionInfo> = build
+        .extension_info()
         .map(|(name, version)| SchemaExtensionInfo {
-            name: name.clone(),
-            version: version.clone(),
+            name: name.to_string(),
+            version: version.to_string(),
         })
         .collect();
 

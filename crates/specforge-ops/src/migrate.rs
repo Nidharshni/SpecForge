@@ -376,16 +376,7 @@ pub fn rollback(root: &specforge_common::ProjectRoot) -> RollbackOutcome {
 }
 
 fn schema_of(project: &CompiledProject) -> specforge_emitter::GraphProtocolSchema {
-    let registries = project.environment().registries();
-    specforge_emitter::generate_schema(
-        registries.kinds(),
-        registries.edges(),
-        registries.fields(),
-        &registries
-            .extension_info()
-            .map(|(name, version)| (name.to_string(), version.to_string()))
-            .collect::<Vec<_>>(),
-    )
+    specforge_emitter::generate_schema(project.environment().registries())
 }
 
 /// Run each extension's declared migration hook, in the registry build's load order (ADR 0041).
