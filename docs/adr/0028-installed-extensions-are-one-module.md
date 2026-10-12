@@ -144,3 +144,8 @@ not load has no version. A builtin is `builtin` even when a stray lock entry nam
 extension a named entry loads is never `file:` because a refused `.wasm` file entry declares the same
 name. `specforge remove` and `specforge.remove_extension` remove an entry the project cannot load,
 by its name.
+
+## Amendment (2026-10-12): the change's last step
+
+**Amended by ADR 0059:** `commit_with(config, last)` runs `last` after the lock: the `specforge.json` edit and
+the user's publisher-key pins. A failure there puts every file back; `config` is changed when its bytes are.
