@@ -6,9 +6,7 @@
 //! code, the same output once the project's directory is written `<P>`, and
 //! (for a command that writes) the same files under the project.
 //!
-//! Today's differences are listed in [`DIVERGES_TODAY`]. A row that differs
-//! without being listed fails, and so does a listed row that no longer
-//! differs: fixing a surface means deleting its row.
+//! A row that differs fails.
 
 use std::collections::BTreeMap;
 use std::io::{BufRead, BufReader};
@@ -21,12 +19,6 @@ use specforge_test_macros::test as specforge_test;
 use tempfile::TempDir;
 
 use crate::child_guard::{ChildGuard, guarded_command};
-
-/// The rows whose two runs differ today.
-const DIVERGES_TODAY: &[&str] = &[
-    // `specforge.json` read at the path as given.
-    "search", "add", "update", "publish", "login",
-];
 
 /// The project every row runs in: software and product enabled, a provider
 /// configured, an offline registry (nothing listens on port 9), and a spec
@@ -206,6 +198,17 @@ fn normalized(text: &str, root: &Path) -> String {
         .replace(greet_blob().to_str().unwrap(), "[BLOB]")
         .replace(canonical.to_str().unwrap(), "<P>")
         .replace(root.to_str().unwrap(), "<P>");
+    // The clock moves between the two runs.
+    let mut stamped = String::with_capacity(text.len());
+    let mut rest = text.as_str();
+    while let Some(at) = rest.find("\"timestamp\": \"") {
+        let value = at + "\"timestamp\": \"".len();
+        stamped.push_str(&rest[..value]);
+        stamped.push_str("[TIME]");
+        rest = &rest[value + rest[value..].find('"').unwrap_or(0)..];
+    }
+    stamped.push_str(rest);
+    let text = stamped;
     let mut out = String::with_capacity(text.len());
     let mut run = String::new();
     for c in text.chars().chain(std::iter::once(' ')) {
@@ -334,8 +337,7 @@ fn compare(row: &Row) -> (bool, Observed, Observed) {
     (root != subdir, root, subdir)
 }
 
-/// Compare `rows`, in parallel, and check the differing set against
-/// [`DIVERGES_TODAY`].
+/// Compare the rows of `kinds`, in parallel: none may differ.
 fn assert_rows(kinds: &[Kind]) {
     let rows: Vec<&Row> = ROWS.iter().filter(|r| kinds.contains(&r.kind)).collect();
     let results: Vec<(&str, bool, Observed, Observed)> = std::thread::scope(|scope| {
@@ -352,15 +354,9 @@ fn assert_rows(kinds: &[Kind]) {
     });
     let mut report = String::new();
     for (name, differs, root, subdir) in &results {
-        let listed = DIVERGES_TODAY.contains(name);
-        if *differs != listed {
+        if *differs {
             report.push_str(&format!(
-                "row `{name}`: {}\n  from the root:   {root:?}\n  from {SUBDIR}: {subdir:?}\n",
-                if *differs {
-                    "differs but is not in DIVERGES_TODAY"
-                } else {
-                    "is in DIVERGES_TODAY but no longer differs: delete it"
-                }
+                "row `{name}` differs\n  from the root:   {root:?}\n  from {SUBDIR}: {subdir:?}\n"
             ));
         }
     }

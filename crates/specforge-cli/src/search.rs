@@ -34,7 +34,11 @@ impl Args {
             self.output.format,
         );
         // No registry configured: fail before any network call (ADR 0004 N1).
-        let registry = ConfiguredRegistry::for_project(path, "search");
+        let root = match crate::project::root(path) {
+            Ok(root) => root,
+            Err(error) => return Refusal::of(format).report(terminal, &error),
+        };
+        let registry = ConfiguredRegistry::for_project(&root, "search");
         let searched = registry.search(query, contributes);
         terminal.diagnostics(&registry.reported());
         let searched = match searched {

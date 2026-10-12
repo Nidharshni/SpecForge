@@ -50,9 +50,12 @@ impl World {
     }
 
     fn registry(&self) -> ConfiguredRegistry {
-        ConfiguredRegistry::for_project(self.project.path(), "search")
-            .as_user(User::at(self.home.path(), None))
-            .with_client(self.client.clone())
+        ConfiguredRegistry::for_project(
+            &specforge_common::ProjectRoot::of(self.project.path()).unwrap(),
+            "search",
+        )
+        .as_user(User::at(self.home.path(), None))
+        .with_client(self.client.clone())
     }
 
     /// `alias` holds `name@version`, declaring one entity kind when `entities`.

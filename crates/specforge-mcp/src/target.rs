@@ -233,8 +233,8 @@ pub enum CallTarget {
 /// What every handler reads, from either adapter: the served session or the
 /// session opened for the call.
 pub struct ProjectRef<'a> {
-    /// The project root (where `specforge.json` lives).
-    pub root: &'a Path,
+    /// The project root (where `specforge.json` lives), as the session was opened at it.
+    pub root: &'a ProjectRoot,
     /// The runtime its extensions were loaded in, read from the view (its
     /// environment's): every project a call reaches has one (the host's or
     /// the project's own, as `McpState::open` gives it), so an extension
@@ -462,7 +462,9 @@ impl<'s> Call<'s> {
                 // unreachable, and a server answers rather than panics).
                 let view = ProjectView::of(session.project())
                     .also_reporting(self.state.surfaces().diagnostics());
-                let (Some(root), Some(runtime)) = (view.root(), view.runtime()) else {
+                let (Some(root), Some(runtime)) =
+                    (session.project().project_root(), view.runtime())
+                else {
                     return Err(no_project(Reach::Served));
                 };
                 Ok(ProjectRef {
@@ -476,7 +478,9 @@ impl<'s> Call<'s> {
                 // `McpState::open` opens every project from disk, with a
                 // runtime (see above).
                 let view = ProjectView::of(session.project());
-                let (Some(root), Some(runtime)) = (view.root(), view.runtime()) else {
+                let (Some(root), Some(runtime)) =
+                    (session.project().project_root(), view.runtime())
+                else {
                     return Err(no_project(Reach::AnyProject));
                 };
                 Ok(ProjectRef {

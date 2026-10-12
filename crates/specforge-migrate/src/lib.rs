@@ -126,10 +126,6 @@ impl MigrationRecord {
         target: &FormatVersion,
         backups: &[MigrationBackup],
     ) -> std::io::Result<Self> {
-        let root = ProjectRoot::of(root)
-            .map(|r| r.dir().to_path_buf())
-            .unwrap_or_else(|_| root.to_path_buf());
-        let root = root.as_path();
         let files = backups
             .iter()
             .map(|backup| {
@@ -599,15 +595,13 @@ pub fn restore(originals: &[Original]) -> RollbackSummary {
     }
 }
 
-/// Undo the recorded migration of the project `path` is in. Each recorded file that still hashes as
+/// Undo the recorded migration of the project at `root`. Each recorded file that still hashes as
 /// the migration left it is restored from its backup, atomically. One whose backup is missing is
 /// skipped with a warning naming the backup. One that changed since is skipped with a warning and
 /// left as it is. Backups are never removed. The record then keeps only the files not restored, and
 /// goes when none is left. With no record, nothing is restored and the one warning says so.
-pub fn run_rollback(path: &Path) -> RollbackSummary {
-    let root = ProjectRoot::of(path)
-        .map(|r| r.dir().to_path_buf())
-        .unwrap_or_else(|_| path.to_path_buf());
+pub fn run_rollback(root: &ProjectRoot) -> RollbackSummary {
+    let root = root.dir();
     let mut summary = RollbackSummary {
         restored_count: 0,
         skipped_count: 0,
@@ -616,7 +610,7 @@ pub fn run_rollback(path: &Path) -> RollbackSummary {
         warnings: Vec::new(),
         record: RecordChange::Unchanged,
     };
-    let record = match MigrationRecord::read(&root) {
+    let record = match MigrationRecord::read(root) {
         Ok(Some(record)) => record,
         Ok(None) => {
             summary.warnings.push(format!(
@@ -684,7 +678,7 @@ pub fn run_rollback(path: &Path) -> RollbackSummary {
     }
 
     if remaining.is_empty() {
-        if MigrationRecord::remove(&root).is_ok() {
+        if MigrationRecord::remove(root).is_ok() {
             summary.record = RecordChange::Removed;
         }
     } else if summary.restored_count > 0 {
@@ -692,7 +686,7 @@ pub fn run_rollback(path: &Path) -> RollbackSummary {
             target: record.target,
             files: remaining,
         };
-        if kept.write(&root).is_ok() {
+        if kept.write(root).is_ok() {
             summary.record = RecordChange::Rewritten;
         }
     }
@@ -706,17 +700,15 @@ fn project_sources(project_root: &Path) -> Vec<PathBuf> {
     load_project_config(project_root).spec_files(project_root)
 }
 
-/// Migrate every source of the project `path` is in.
+/// Migrate every source of the project at `root`.
 pub fn migrate_project(
-    path: &Path,
+    root: &ProjectRoot,
     target_version: &FormatVersion,
     dry_run: bool,
     no_backup: bool,
 ) -> MigrationSummary {
-    let project_root = ProjectRoot::of(path)
-        .map(|r| r.dir().to_path_buf())
-        .unwrap_or_else(|_| path.to_path_buf());
-    let targets = project_sources(&project_root);
+    let project_root = root.dir();
+    let targets = project_sources(project_root);
 
     let mut results = Vec::new();
     let mut backups = Vec::new();
@@ -734,7 +726,7 @@ pub fn migrate_project(
         };
         let (result, backup, diff) = migrate_file(
             target_path,
-            &project_root,
+            project_root,
             target_version,
             dry_run,
             no_backup,

@@ -53,7 +53,7 @@ pub fn parse_target(raw: Option<&str>) -> Result<FormatVersion, OpError> {
 }
 
 pub struct Request<'a> {
-    pub root: &'a Path,
+    pub root: &'a specforge_common::ProjectRoot,
     pub target: FormatVersion,
     /// Report what would change; write nothing.
     pub dry_run: bool,
@@ -213,13 +213,10 @@ pub use specforge_protocol_types::MigrationInput;
 /// restores every migrated file from its backup. With no runtime no
 /// extension is loaded, so no hook runs.
 pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Outcome {
-    // The project the path is in (else the path itself): the one the files
-    // are migrated in and the one the hooks and the checks compile.
-    let root = &specforge_common::ProjectRoot::of(request.root)
-        .map(|r| r.dir().to_path_buf())
-        .unwrap_or_else(|_| request.root.to_path_buf());
+    // The project the files are migrated in and the one the hooks and the checks compile.
+    let project = request.root;
     let target = &request.target;
-    let preview = migrate_project(root, target, true, true);
+    let preview = migrate_project(project, target, true, true);
     let from = preview
         .results
         .iter()
@@ -247,15 +244,11 @@ pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Outcome {
         return outcome;
     }
 
-    // The graph and schema before any file is touched. (Pending files mean
-    // the path exists, so it resolves.)
-    let Ok(project) = specforge_common::ProjectRoot::of(root) else {
-        return outcome;
-    };
-    let pre = CompiledProject::compile(&project, runtime.clone());
+    // The graph and schema before any file is touched.
+    let pre = CompiledProject::compile(project, runtime.clone());
     let pre_schema = schema_of(&pre);
 
-    outcome.summary = migrate_project(root, target, false, request.no_backup);
+    outcome.summary = migrate_project(project, target, false, request.no_backup);
     outcome.applied = true;
     outcome.writes = summary_writes(&outcome.summary);
     if outcome.summary.failed_count > 0 {
@@ -286,7 +279,7 @@ pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Outcome {
     }
 
     // The migrated project must have the graph it had before.
-    let post = CompiledProject::compile(&project, runtime);
+    let post = CompiledProject::compile(project, runtime);
     outcome.validated = true;
     outcome.schema_warnings = check_schema_compatibility(&pre_schema, &schema_of(&post));
     outcome.structural_differences = compare_graphs(pre.graph(), post.graph());
@@ -295,7 +288,7 @@ pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Outcome {
         roll_back(&mut outcome);
         return outcome;
     }
-    keep_record(root, request, &mut outcome);
+    keep_record(project.dir(), request, &mut outcome);
     outcome
 }
 
@@ -373,14 +366,11 @@ impl RollbackOutcome {
 
 /// Restore every migrated file of the project `root` is in from its `.bak`
 /// backup.
-pub fn rollback(root: &Path) -> RollbackOutcome {
+pub fn rollback(root: &specforge_common::ProjectRoot) -> RollbackOutcome {
     let summary = run_rollback(root);
     let mut writes = restored_writes(&summary);
     if summary.record != RecordChange::Unchanged {
-        let project = specforge_common::ProjectRoot::of(root)
-            .map(|r| r.dir().to_path_buf())
-            .unwrap_or_else(|_| root.to_path_buf());
-        writes.record(project.join(MigrationRecord::PATH));
+        writes.record(root.dir().join(MigrationRecord::PATH));
     }
     RollbackOutcome { summary, writes }
 }

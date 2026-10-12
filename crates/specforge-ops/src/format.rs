@@ -284,7 +284,7 @@ pub struct Request<'a> {
     /// sources are the default targets, and paths are shown relative to it.
     /// It does not bound configuration discovery: each file is formatted
     /// with the configuration of its own project (D2).
-    pub root: &'a Path,
+    pub root: &'a ProjectRoot,
     /// Files or directories to format; empty means the project's sources
     /// (`ProjectConfig::spec_files`). A named file is always formatted. A
     /// named directory that is a project (`ProjectRoot::is_root`) is that
@@ -686,7 +686,7 @@ pub fn run(request: &Request) -> Outcome {
         mode: request.mode,
         ..Outcome::default()
     };
-    for target in targets(request.root, request.paths) {
+    for target in targets(request.root.dir(), request.paths) {
         let source = match std::fs::read_to_string(&target) {
             Ok(source) => source,
             Err(e) => {
@@ -740,7 +740,7 @@ mod tests {
         dir
     }
 
-    fn request(root: &Path, mode: Mode) -> Request<'_> {
+    fn request(root: &ProjectRoot, mode: Mode) -> Request<'_> {
         Request {
             root,
             paths: &[],
@@ -752,7 +752,10 @@ mod tests {
     fn check_mode_reports_every_change_and_writes_nothing() {
         let dir = project();
 
-        let outcome = run(&request(dir.path(), Mode::Check));
+        let outcome = run(&request(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            Mode::Check,
+        ));
 
         assert_eq!(outcome.checked, 2);
         assert_eq!(outcome.changes.len(), 2);
@@ -767,8 +770,14 @@ mod tests {
     fn write_mode_rewrites_and_a_second_run_is_clean() {
         let dir = project();
 
-        let first = run(&request(dir.path(), Mode::Write));
-        let second = run(&request(dir.path(), Mode::Write));
+        let first = run(&request(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            Mode::Write,
+        ));
+        let second = run(&request(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            Mode::Write,
+        ));
 
         assert!(first.changes.iter().all(|c| c.written));
         assert_eq!(first.written().count(), 2);
@@ -780,7 +789,13 @@ mod tests {
     #[test]
     fn ok_fails_only_a_check_on_a_change() {
         let dir = project();
-        let ok = |mode| run(&request(dir.path(), mode)).ok();
+        let ok = |mode| {
+            run(&request(
+                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                mode,
+            ))
+            .ok()
+        };
 
         assert!(!ok(Mode::Check), "a check that finds a change fails");
         assert!(ok(Mode::Preview), "a preview of a change passes");
@@ -794,7 +809,14 @@ mod tests {
             &[("spec/a.spec", "behavior a \"A\" {\n  @@@ ]]\n}\n")],
         );
         for mode in [Mode::Write, Mode::Check, Mode::Preview] {
-            assert!(!run(&request(region.path(), mode)).ok(), "{mode:?}");
+            assert!(
+                !run(&request(
+                    &specforge_common::ProjectRoot::of(region.path()).unwrap(),
+                    mode
+                ))
+                .ok(),
+                "{mode:?}"
+            );
         }
     }
 
@@ -803,18 +825,27 @@ mod tests {
         let canonical = "behavior messy \"Messy\" {\n  contract \"The system MUST work\"\n}\n";
         // Canonical: clean.
         let dir = project_with("{}", &[("spec/a.spec", canonical)]);
-        let outcome = run(&request(dir.path(), Mode::Check));
+        let outcome = run(&request(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            Mode::Check,
+        ));
         assert!(outcome.clean() && outcome.complete() && outcome.succeeded());
 
         // A change: not clean, though complete and succeeded.
         let dir = project_with("{}", &[("spec/a.spec", MESSY)]);
-        let outcome = run(&request(dir.path(), Mode::Check));
+        let outcome = run(&request(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            Mode::Check,
+        ));
         assert!(!outcome.clean() && outcome.complete() && outcome.succeeded());
 
         // A region left unformatted: not complete, so not clean.
         let broken = format!("{canonical}\n}}}}}}\n");
         let dir = project_with("{}", &[("spec/a.spec", &broken)]);
-        let outcome = run(&request(dir.path(), Mode::Check));
+        let outcome = run(&request(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            Mode::Check,
+        ));
         assert!(outcome.changes.is_empty(), "{:?}", outcome.changes);
         assert!(!outcome.complete() && !outcome.clean() && outcome.succeeded());
 
@@ -822,7 +853,7 @@ mod tests {
         let dir = project_with("{}", &[("spec/a.spec", canonical)]);
         let missing = [dir.path().join("spec/missing.spec")];
         let outcome = run(&Request {
-            root: dir.path(),
+            root: &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
             paths: &missing,
             mode: Mode::Check,
         });
@@ -848,7 +879,10 @@ mod tests {
         let locked = dir.path().join("spec/a.spec");
         std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o444)).unwrap();
 
-        let outcome = run(&request(dir.path(), Mode::Write));
+        let outcome = run(&request(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            Mode::Write,
+        ));
         std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o644)).unwrap();
 
         let change = outcome.changes.iter().find(|c| c.path == locked).unwrap();
@@ -873,7 +907,7 @@ mod tests {
         std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o000)).unwrap();
         let named = [locked.clone(), missing.clone()];
         let outcome = run(&Request {
-            root: dir.path(),
+            root: &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
             paths: &named,
             mode: Mode::Check,
         });
@@ -943,11 +977,14 @@ mod tests {
 
     /// The changed files of a check run over `root`, relative to it.
     fn changed(root: &Path) -> Vec<String> {
-        run(&request(root, Mode::Check))
-            .changes
-            .iter()
-            .map(|c| relative(root, &c.path))
-            .collect()
+        run(&request(
+            &specforge_common::ProjectRoot::of(root).unwrap(),
+            Mode::Check,
+        ))
+        .changes
+        .iter()
+        .map(|c| relative(root, &c.path))
+        .collect()
     }
 
     /// `path` relative to `root`, with `/` separators.
@@ -962,7 +999,7 @@ mod tests {
     fn check_paths(root: &Path, paths: &[&str]) -> Outcome {
         let paths: Vec<PathBuf> = paths.iter().map(|p| root.join(p)).collect();
         run(&Request {
-            root,
+            root: &specforge_common::ProjectRoot::of(root).unwrap(),
             paths: &paths,
             mode: Mode::Check,
         })
@@ -1175,7 +1212,7 @@ mod tests {
         }
         assert_eq!(found.len(), sources.len());
         let outcome = run(&Request {
-            root: &workspace,
+            root: &specforge_common::ProjectRoot::of(&workspace).unwrap(),
             paths: &paths,
             mode: Mode::Check,
         });
@@ -1219,7 +1256,10 @@ mod tests {
             ],
         );
 
-        let outcome = run(&request(dir.path(), Mode::Check));
+        let outcome = run(&request(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            Mode::Check,
+        ));
 
         assert_eq!(outcome.checked, 2);
         let w141: Vec<_> = outcome
@@ -1407,7 +1447,10 @@ mod tests {
         assert!(!edits.is_empty());
         assert!(in_order_without_overlap(&edits), "{edits:?}");
         // cli_parity_enforced: what `specforge format` writes for the file.
-        let outcome = run(&request(dir.path(), Mode::Check));
+        let outcome = run(&request(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            Mode::Check,
+        ));
         assert_eq!(outcome.changes[0].after, doc.formatted);
         assert!(doc.complete());
     }
@@ -1656,7 +1699,10 @@ mod tests {
         let dir = project_with("{}", &[("sub/a.spec", MESSY)]);
         std::fs::create_dir_all(dir.path().join("sub/archive.spec")).unwrap();
 
-        let outcome = run(&request(dir.path(), Mode::Check));
+        let outcome = run(&request(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            Mode::Check,
+        ));
         assert!(outcome.failures.is_empty(), "{:?}", outcome.failures);
         assert_eq!(outcome.checked, 1);
 
@@ -1714,7 +1760,10 @@ mod tests {
     )]
     fn the_document_is_the_run_both_surfaces_print() {
         let dir = project();
-        let mut outcome = run(&request(dir.path(), Mode::Check));
+        let mut outcome = run(&request(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            Mode::Check,
+        ));
 
         let plain = serde_json::to_value(outcome.document(false)).unwrap();
         assert_eq!(plain["total_checked"], 2);

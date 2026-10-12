@@ -49,9 +49,10 @@ impl Args {
     /// `--stdin`, whose output is the formatted text, refuses it.
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         let format = self.output.format;
-        let project_root = specforge_common::ProjectRoot::of(&self.path)
-            .map(|r| r.dir().to_path_buf())
-            .unwrap_or_else(|_| self.path.clone());
+        let project_root = match crate::project::root(&self.path) {
+            Ok(root) => root,
+            Err(error) => return Refusal::of(format).report(terminal, &error),
+        };
         if self.stdin {
             if format == OutputFormat::Json {
                 return Refusal::of(format).report(
@@ -64,7 +65,7 @@ impl Args {
                     .with_suggestion("drop --format json, or name the files to format"),
                 );
             }
-            return run_stdin(&project_root, &self.path, terminal);
+            return run_stdin(project_root.dir(), &self.path, terminal);
         }
         let mode = Mode::of_flags(self.check, self.diff, None);
         let outcome = format::run(&Request {
@@ -77,7 +78,7 @@ impl Args {
             // them; a run that only reports lists none.
             let files_written = mode
                 .writes()
-                .then(|| outcome.writes().names_under(&project_root));
+                .then(|| outcome.writes().names_under(project_root.dir()));
             terminal.json(&Written {
                 document: outcome.document(self.diff),
                 files_written,

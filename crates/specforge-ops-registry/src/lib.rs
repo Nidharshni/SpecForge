@@ -26,7 +26,7 @@ use specforge_registry_client::{
     verify_registry_integrity,
 };
 use specforge_registry_wire::{PackageMetadata, SearchQuery};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 
 /// Whom a key change is asked of.
@@ -181,11 +181,14 @@ const INVALID_CONFIG: Code = codes::E067;
 /// one that is there and unusable fails as `add` fails (`config_invalid`).
 /// When `registries` has entries but none can be read, it fails with E067
 /// naming them.
-pub fn configured(root: &Path, operation: &str) -> Result<Configured, OpError> {
+pub fn configured(
+    root: &specforge_common::ProjectRoot,
+    operation: &str,
+) -> Result<Configured, OpError> {
     // `specforge.json` is read the way `add`, `update` and `remove` read
     // it: one that is there and unusable is refused as they refuse it
     // (`config_invalid`, E069), not as a missing registry.
-    let read = specforge_ops::config::usable(root)?;
+    let read = specforge_ops::config::usable(root.dir())?;
     let Some(raw) = read.config.raw.as_ref().filter(|_| read.found) else {
         return Err(no_registry(operation));
     };
@@ -228,7 +231,7 @@ pub fn configured(root: &Path, operation: &str) -> Result<Configured, OpError> {
 /// [`ConfiguredRegistry::with_client`] gives another. Built without reading, touching the network or
 /// failing: with no registry configured, each call fails with E063 before any request.
 pub struct ConfiguredRegistry {
-    root: PathBuf,
+    root: specforge_common::ProjectRoot,
     operation: String,
     /// Read once, on the first call that needs a registry.
     registries: OnceLock<Result<Configured, OpError>>,
@@ -244,9 +247,9 @@ pub struct ConfiguredRegistry {
 impl ConfiguredRegistry {
     /// The registries `root`'s `specforge.json` configures, over HTTP. Reads nothing yet; `operation`
     /// names the command in E063.
-    pub fn for_project(root: &Path, operation: &str) -> Self {
+    pub fn for_project(root: &specforge_common::ProjectRoot, operation: &str) -> Self {
         Self {
-            root: root.to_path_buf(),
+            root: root.clone(),
             operation: operation.to_string(),
             registries: OnceLock::new(),
             client: Box::new(Retrying::new(HttpRegistryClient::new())),
@@ -623,7 +626,10 @@ mod tests {
     #[test]
     fn an_unconfigured_project_fails_each_call_with_e063_before_any_request() {
         let dir = tempfile::tempdir().unwrap();
-        let registry = ConfiguredRegistry::for_project(dir.path(), "update");
+        let registry = ConfiguredRegistry::for_project(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            "update",
+        );
         assert!(registry.reported().is_empty());
         let sdk = PackageName::parse("@sdk/greet").unwrap();
         let error = registry.versions(&sdk).unwrap_err();

@@ -76,15 +76,15 @@ impl CoreTool for Tool {
 
         // The project the call installs into: the served one, or the one
         // `path` names.
-        let root = project.root.to_path_buf();
+        let root = project.root;
         let extensions = extension::specified(&args.specifiers.0)?;
 
         let registry =
-            specforge_ops_registry::ConfiguredRegistry::for_project(&root, "add_extension");
+            specforge_ops_registry::ConfiguredRegistry::for_project(root, "add_extension");
         // The shared operation `specforge add` runs. An agent can't be asked,
         // so a publisher key change is refused rather than re-pinned.
         let request = AddRequest {
-            root: &root,
+            root,
             extensions,
             allow_unsigned: args.allow_unsigned,
             trust: Trust::Refuse,

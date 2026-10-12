@@ -915,7 +915,7 @@ mod tests {
         std::fs::write(&blob, crate::testing::GREET).unwrap();
         crate::extension::add(
             &crate::extension::AddRequest {
-                root: dir.path(),
+                root: &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
                 extensions: vec![crate::extension::Source::Local(blob).into()],
                 allow_unsigned: false,
                 trust: crate::extension::Trust::Refuse,
@@ -986,7 +986,7 @@ mod tests {
             .unwrap();
         crate::extension::add(
             &crate::extension::AddRequest {
-                root: dir.path(),
+                root: &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
                 extensions: vec![crate::extension::Source::Local(command.into()).into()],
                 allow_unsigned: false,
                 trust: crate::extension::Trust::Refuse,

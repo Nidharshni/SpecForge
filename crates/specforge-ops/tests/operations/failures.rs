@@ -221,7 +221,7 @@ fn hooks_run_for_the_project_a_sub_path_is_in() {
         .unwrap();
         run(
             &Request {
-                root: at,
+                root: &specforge_common::ProjectRoot::of(at).unwrap(),
                 target: CURRENT_FORMAT_VERSION,
                 dry_run: false,
                 no_backup: true,
@@ -249,7 +249,7 @@ fn format_verdict_inputs() {
     .unwrap();
 
     let checked = run(&Request {
-        root: dir.path(),
+        root: &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
         paths: &[],
         mode: Mode::Check,
     });
@@ -258,7 +258,7 @@ fn format_verdict_inputs() {
     assert!(!checked.ok(), "a check that finds a change fails the run");
 
     let written = run(&Request {
-        root: dir.path(),
+        root: &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
         paths: &[],
         mode: Mode::Write,
     });

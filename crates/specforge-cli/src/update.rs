@@ -37,12 +37,15 @@ impl Args {
     /// applied).
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         let format = self.output.format;
-        let path = self.path.as_path();
+        let root = match crate::project::root(&self.path) {
+            Ok(root) => root,
+            Err(error) => return Refusal::of(format).report(terminal, &error),
+        };
         let registry =
-            ConfiguredRegistry::for_project(path, "update").asking(crate::trust::asker(terminal));
+            ConfiguredRegistry::for_project(&root, "update").asking(crate::trust::asker(terminal));
         let runtime = specforge_component::ComponentRuntime::with_user_cache();
         let request = UpdateRequest {
-            root: path,
+            root: &root,
             name: self.name.as_deref(),
             major: self.major,
             allow_unsigned: self.allow_unsigned,

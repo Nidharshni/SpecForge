@@ -33,11 +33,15 @@ pub(crate) struct Args {
 impl Args {
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         let format = self.output.format;
-        let path = self.path.as_path();
+        let root = match crate::project::root(&self.path) {
+            Ok(root) => root,
+            Err(error) => return Refusal::of(format).report(terminal, &error),
+        };
+        let path = root.dir();
         let (dry_run, no_backup) = (self.dry_run, self.no_backup);
         // Handle rollback mode
         if self.rollback {
-            let outcome = migrate::rollback(path);
+            let outcome = migrate::rollback(&root);
             print_rollback(
                 &outcome.summary,
                 &outcome.writes.names_under(path),
@@ -57,7 +61,7 @@ impl Args {
         let runtime: specforge_project::SharedRuntime =
             std::sync::Arc::new(specforge_component::ComponentRuntime::with_user_cache());
         let request = Request {
-            root: path,
+            root: &root,
             target,
             dry_run,
             no_backup,
