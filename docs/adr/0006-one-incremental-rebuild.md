@@ -37,3 +37,9 @@ re-linking, the graph-build diagnostics, `GraphDelta` and `--verify-incremental`
 `specforge_graph::GraphBuild`, which a cold build uses too; `specforge-project` keeps the source cache
 (texts, retained trees, unreadable files) and the session. Every session verifies in a debug build, the
 comparison covers diagnostics, and path aliases are removed, so the `@alias` case above no longer exists.
+
+**Amended by ADR 0055 (round 7, plan 04).** "A changed file discovery would not find … is ignored, as a
+cold compile ignores it" was false until then: the resolver asked the disk whether an import's target
+existed, so a cold compile read such a file's existence and a session ignoring it diverged. Imports now
+resolve against the compile's sources, so the sentence holds. The session's "a disk change always applies"
+special case, which kept its tests in step with that disk read, is gone.

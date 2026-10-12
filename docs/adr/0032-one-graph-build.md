@@ -38,6 +38,9 @@ order that nothing outside it read.
   W113 and W027; `resolve_import` names one import's file for go-to-definition. File scopes, re-exports
   and the import order stay inside it, where W027 and W113 need them. Path aliases are removed:
   `specforge.json` never could set one, so `@scope/name` is always an extension import (I004).
+  *(ADR 0055: `resolve_imports(parsed, unreadable)` over the sources' keys, with no spec root and no
+  `exists`; `resolve_import` is `import_target(sources, importing, path)`. Nothing the resolver does reads
+  the disk.)*
 - A session reports graph-build diagnostics in build order, the order `specforge check` reports them.
 - Rename's text edits (`RenameEdit`) live with the rename operation in `specforge-ops`.
 
