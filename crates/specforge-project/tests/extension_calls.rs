@@ -324,7 +324,7 @@ fn c4_a_failing_analyze_pass_is_an_e028_finding_of_its_report() {
     );
     let registries = compiled.environment().registries();
     let reports = run_extension_passes(
-        registries.passes(),
+        registries.analyze_passes(),
         &AnalysisContext {
             graph: compiled.graph(),
             kind_registry: registries.kinds(),
@@ -334,7 +334,6 @@ fn c4_a_failing_analyze_pass_is_an_e028_finding_of_its_report() {
             proved_claims: None,
         },
         runtime.as_ref(),
-        "all",
     );
     assert_eq!(reports.len(), 1);
     let report = &reports[0];

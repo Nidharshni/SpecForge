@@ -491,10 +491,11 @@ fn analyze_via(
         // across extensions they are advisory.
         passes_run.extend(
             passes::run_extension_passes(
-                registries.passes(),
+                registries
+                    .analyze_passes()
+                    .filter(|p| selection.runs(&p.full_name())),
                 &input,
                 runtime.as_ref(),
-                &selection.extension,
             )
             .into_iter()
             .map(|r| PassOutcome {
@@ -549,37 +550,58 @@ fn stray_records(graph: &Graph, report: Option<&TestReport>) -> Vec<StrayRecord>
         .collect()
 }
 
+/// The extension passes a selection runs.
+enum ExtensionPasses {
+    /// Every analyze-phase pass the extensions declare.
+    Every,
+    /// The one pass of this full name (`<extension>:<pass>`).
+    One(String),
+    /// None: a builtin pass was asked for.
+    None,
+}
+
 struct Selection {
     builtins: Vec<&'static str>,
-    /// What `run_extension_passes` is asked for: `all` or one full name.
-    extension: String,
+    extensions: ExtensionPasses,
 }
 
 impl Selection {
     /// Whether the extension pass `full_name` is selected.
     fn runs(&self, full_name: &str) -> bool {
-        self.extension == EVERY_PASS || self.extension == full_name
+        match &self.extensions {
+            ExtensionPasses::Every => true,
+            ExtensionPasses::One(name) => name == full_name,
+            ExtensionPasses::None => false,
+        }
     }
 }
 
 fn select(view: &ProjectView, requested: &str) -> Result<Selection, AnalyzeError> {
-    let one = |builtins: Vec<&'static str>, extension: &str| Selection {
-        builtins,
-        extension: extension.to_string(),
-    };
     if requested == EVERY_PASS {
-        return Ok(one(PASS_NAMES.to_vec(), EVERY_PASS));
+        return Ok(Selection {
+            builtins: PASS_NAMES.to_vec(),
+            extensions: ExtensionPasses::Every,
+        });
     }
     // Coverage is an extension pass (ADR 0002).
     if requested == "coverage" {
-        return Ok(one(Vec::new(), COVERAGE_PASS));
+        return Ok(Selection {
+            builtins: Vec::new(),
+            extensions: ExtensionPasses::One(COVERAGE_PASS.to_string()),
+        });
     }
     if let Some(name) = PASS_NAMES.iter().find(|n| **n == requested) {
-        return Ok(one(vec![name], requested));
+        return Ok(Selection {
+            builtins: vec![name],
+            extensions: ExtensionPasses::None,
+        });
     }
     let declared = declared_pass_names(view);
     if declared.iter().any(|n| n == requested) {
-        return Ok(one(Vec::new(), requested));
+        return Ok(Selection {
+            builtins: Vec::new(),
+            extensions: ExtensionPasses::One(requested.to_string()),
+        });
     }
     let mut available: Vec<String> = [EVERY_PASS, "coverage"].map(String::from).to_vec();
     available.extend(PASS_NAMES.iter().map(|n| n.to_string()));
@@ -596,9 +618,7 @@ fn declared_pass_names(view: &ProjectView) -> Vec<String> {
         return Vec::new();
     }
     view.registries()
-        .passes()
-        .iter()
-        .filter(|p| !p.is_check_phase())
+        .analyze_passes()
         .map(DeclaredPass::full_name)
         .collect()
 }
