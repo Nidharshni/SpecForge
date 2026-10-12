@@ -50,7 +50,9 @@ behavior load_extension_manifests "Load Extension Manifests" {
     entity types, edge types, validation rules and optional peer
     dependencies, from the binary itself. Missing extensions or unloadable
     .wasm binaries MUST produce a diagnostic, not a crash. A builtin loads
-    from the binary. Any other entry names an installed extension by its
+    from the binary the host embeds; the builtins are one table, each by
+    the directory its crate lives in under extensions/ (specforge_component).
+    Any other entry names an installed extension by its
     bare name (a legacy name@version entry names the same extension): it
     MUST load from .specforge/extensions/<name>/extension.wasm under that
     name, on every surface, only when the binary's hash is the one its
@@ -105,6 +107,7 @@ behavior load_extension_manifests "Load Extension Manifests" {
   verify unit "the extension load and the lock plan resolve an entry by one rule"
   verify integration "a .wasm file entry that is missing, is not a component, names another extension or repeats a loaded one produces E028 naming the entry"
   verify unit "missing extension produces diagnostic"
+  verify unit "every builtin is listed once, by the directory its crate lives in"
   verify unit "a declaration declares entity types and validations"
   verify integration "two extensions loaded and registries populated without collision"
   verify unit "unloadable extension binary produces diagnostic instead of crash"

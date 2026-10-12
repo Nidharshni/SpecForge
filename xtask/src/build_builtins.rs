@@ -1,4 +1,4 @@
-//! Builds the six builtin extension components (wasm32-wasip2) and keeps the
+//! Builds every builtin extension component (`specforge_component::builtins::BUILTINS`, wasm32-wasip2) and keeps the
 //! vendored copies under `extensions/<name>/wasm/` — the bytes
 //! `specforge-component` embeds — in step with their sources.
 //!
@@ -15,22 +15,11 @@
 //! its sources and the toolchain, not on where the repository is checked out.
 
 use serde_json::{Value, json};
+use specforge_component::builtins::BUILTINS;
 use specforge_installed::hex_sha256;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::process::Command;
-
-const EXTENSIONS: &[(&str, &str)] = &[
-    ("product", "specforge_ext_product.wasm"),
-    ("software", "specforge_ext_software.wasm"),
-    ("governance", "specforge_ext_governance.wasm"),
-    ("formal", "specforge_ext_formal.wasm"),
-    ("testing", "specforge_ext_testing.wasm"),
-    ("cargo-test", "specforge_ext_cargo_test.wasm"),
-    ("vitest", "specforge_ext_vitest.wasm"),
-    ("rust", "specforge_ext_rust.wasm"),
-    ("typescript", "specforge_ext_typescript.wasm"),
-];
 
 const TARGET: &str = "wasm32-wasip2";
 const INPUTS_FILE: &str = "inputs.json";
@@ -79,7 +68,8 @@ fn main() {
         .expect("CARGO_MANIFEST_DIR is set when run via cargo xtask");
 
     let mut failed = false;
-    for &(name, artifact) in EXTENSIONS {
+    for builtin in BUILTINS {
+        let (name, artifact) = (builtin.dir, builtin.artifact);
         let ok = match mode {
             Mode::Check => check(&root, name, artifact),
             Mode::Verify => verify(&root, name, artifact),
@@ -763,7 +753,8 @@ mod tests {
     #[test]
     fn a_builtin_compiles_only_its_own_sources_and_the_guest_crates() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
-        for &(name, _) in EXTENSIONS {
+        for builtin in BUILTINS {
+            let name = builtin.dir;
             let path = root.join(format!("extensions/{name}/wasm/{INPUTS_FILE}"));
             let record: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
             let own = format!("extensions/{name}/");
