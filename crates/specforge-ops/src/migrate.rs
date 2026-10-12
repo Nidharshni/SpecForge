@@ -98,6 +98,61 @@ pub struct Outcome {
     pub writes: Writes,
 }
 
+/// Why a migration run failed ([`Outcome::failure`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Failure {
+    /// A migration hook failed (each failure as the hook's call reported it); every migrated file
+    /// was restored.
+    HookFailed { hooks: Vec<String> },
+    /// The migrated project reports errors; every migrated file was restored.
+    DoesNotCompile { errors: usize },
+    /// The migrated project compiles to another graph (W054); every migrated file was restored.
+    ChangedGraph { differences: usize },
+    /// Files that could not be migrated (each shown path and its error); the others were.
+    FilesFailed { files: Vec<(String, String)> },
+}
+
+impl From<Failure> for OpError {
+    /// The failure as every operation reports one: its cause picks the kind and the code.
+    fn from(failure: Failure) -> OpError {
+        match failure {
+            Failure::HookFailed { hooks } => OpError::new(
+                OpErrorKind::Internal,
+                "migration_hook_failed",
+                format!(
+                    "a migration hook failed ({}); every migrated file was restored",
+                    hooks.join("; ")
+                ),
+            ),
+            Failure::DoesNotCompile { errors } => OpError::new(
+                OpErrorKind::CompilationFailed,
+                "migration_does_not_compile",
+                format!(
+                    "the migrated project does not compile ({errors} error(s)); every migrated file was restored"
+                ),
+            ),
+            Failure::ChangedGraph { differences } => OpError::new(
+                OpErrorKind::CompilationFailed,
+                "migration_changed_graph",
+                format!(
+                    "the migration changed the graph ({differences} structural difference(s), W054); every migrated file was restored"
+                ),
+            ),
+            Failure::FilesFailed { files } => {
+                let first = files
+                    .first()
+                    .map(|(path, error)| format!(": {path}: {error}"))
+                    .unwrap_or_default();
+                OpError::new(
+                    OpErrorKind::SchemaMismatch,
+                    "migration_file_failed",
+                    format!("{} file(s) could not be migrated{first}", files.len()),
+                )
+            }
+        }
+    }
+}
+
 /// What `specforge migrate --format json` and `specforge.migrate` print
 /// (`McpMigrateResult`): one record whether anything was pending or not.
 #[derive(Debug, Clone, Serialize, Shape)]
@@ -179,24 +234,34 @@ impl Outcome {
         self.summary.failed_count == 0 && self.rollback.is_none()
     }
 
-    /// Why the run failed, as every operation reports a failure; `None`
-    /// when [`Self::ok`]. Code `migration_failed`; kind `CompilationFailed`
-    /// when the migrated project reported errors before it was rolled
-    /// back, else `Internal`; message "the migrated project does not
-    /// compile" or "the migration failed".
-    pub fn failure(&self) -> Option<OpError> {
+    /// Why the run failed; `None` when [`Self::ok`]. A rollback's cause first (a hook that failed,
+    /// a project that does not compile, a graph that changed), then files that failed.
+    pub fn failure(&self) -> Option<Failure> {
         if self.ok() {
             return None;
         }
-        let (kind, message) = if self.post_errors().next().is_some() {
-            (
-                OpErrorKind::CompilationFailed,
-                "the migrated project does not compile",
-            )
-        } else {
-            (OpErrorKind::Internal, "the migration failed")
-        };
-        Some(OpError::new(kind, "migration_failed", message))
+        if self.rollback.is_none() {
+            let files = self
+                .summary
+                .results
+                .iter()
+                .filter(|r| r.status == MigrationStatus::Failed)
+                .map(|r| (r.file_path.clone(), r.error.clone().unwrap_or_default()))
+                .collect();
+            return Some(Failure::FilesFailed { files });
+        }
+        if !self.hook_failures.is_empty() {
+            return Some(Failure::HookFailed {
+                hooks: self.hook_failures.clone(),
+            });
+        }
+        let errors = self.post_errors().count();
+        if errors > 0 {
+            return Some(Failure::DoesNotCompile { errors });
+        }
+        Some(Failure::ChangedGraph {
+            differences: self.structural_differences().len(),
+        })
     }
 
     /// The errors compiling the migrated project reported.

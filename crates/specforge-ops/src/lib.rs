@@ -93,8 +93,9 @@ pub enum OpErrorKind {
     /// A file the operation reads is not what it should hold: the config,
     /// the lock, a manifest, a test report, a signature's metadata.
     SchemaMismatch,
-    /// The project the operation produced does not compile: a migration
-    /// whose migrated sources report errors.
+    /// The project the operation produced does not compile, or compiles to
+    /// another graph: a migration whose migrated sources report errors or
+    /// change the graph (W054).
     CompilationFailed,
     /// Something the operation needs is not set up: no project, no
     /// registry, no collector, no lock file.

@@ -302,8 +302,11 @@ fn a_directory_that_is_no_project_is_migrated() {
     );
 }
 
-#[test]
-fn a_migration_that_fails_is_an_internal_error() {
+#[specforge_test(
+    behavior = "provide_mcp_migrate_tool",
+    verify = "a failed migration's error names its cause: a hook, a changed graph, a project that does not compile, or files that could not be migrated"
+)]
+fn a_migration_that_cannot_read_a_file_is_a_schema_mismatch() {
     let mut served = served();
     served.write(
         "bad.spec",
@@ -312,8 +315,14 @@ fn a_migration_that_fails_is_an_internal_error() {
 
     let error = mcp_error(&call_tool(&mut served, "specforge.migrate", json!({})));
 
-    assert_eq!(error["code"], "internal_error", "{error}");
-    assert_eq!(error["message"], "the migration failed", "{error}");
+    assert_eq!(error["code"], "schema_mismatch", "{error}");
+    assert!(
+        error["message"]
+            .as_str()
+            .unwrap()
+            .starts_with("1 file(s) could not be migrated: "),
+        "{error}"
+    );
     assert_eq!(error["data"]["files_failed"], 1, "{error}");
     assert_eq!(error["data"]["ok"], false, "{error}");
 }
@@ -338,14 +347,14 @@ fn migrate_ok_is_the_cli_verdict() {
     let nothing = tool(&mut current, "specforge.migrate", json!({}));
     assert_eq!(nothing["ok"], true, "{nothing}");
 
-    // A file that cannot migrate fails: exit 1, internal_error, ok false.
+    // A file that cannot migrate fails: exit 1, schema_mismatch, ok false.
     let mut bad = served();
     bad.write(
         "bad.spec",
         "// specforge-format: 99.0\nbehavior bad \"Bad\" {\n}\n",
     );
     let error = mcp_error(&call_tool(&mut bad, "specforge.migrate", json!({})));
-    assert_eq!(error["code"], "internal_error", "{error}");
+    assert_eq!(error["code"], "schema_mismatch", "{error}");
     assert_eq!(error["data"]["ok"], false, "{error}");
 }
 
