@@ -97,9 +97,15 @@ fn refresh_lockfile(root: &Path, guest: &str) -> Result<bool, String> {
     let before = std::fs::read(&lock).ok();
     let metadata = |locked: bool| {
         let mut cmd = Command::new("cargo");
-        cmd.args(["metadata", "--format-version", "1", "--quiet", "--manifest-path"])
-            .arg(&manifest)
-            .stdout(std::process::Stdio::null());
+        cmd.args([
+            "metadata",
+            "--format-version",
+            "1",
+            "--quiet",
+            "--manifest-path",
+        ])
+        .arg(&manifest)
+        .stdout(std::process::Stdio::null());
         if locked {
             cmd.arg("--locked");
         }
@@ -117,12 +123,20 @@ fn refresh_lockfile(root: &Path, guest: &str) -> Result<bool, String> {
 fn build_greet(root: &Path) -> Result<(), String> {
     let dir = root.join(GREET);
     let status = Command::new("cargo")
-        .args(["build", "--release", "--target", "wasm32-wasip2", "--manifest-path"])
+        .args([
+            "build",
+            "--release",
+            "--target",
+            "wasm32-wasip2",
+            "--manifest-path",
+        ])
         .arg(dir.join("Cargo.toml"))
         .status()
         .map_err(|e| format!("cannot run cargo: {e}"))?;
     if !status.success() {
-        return Err(format!("building {GREET} failed (rustup target add wasm32-wasip2?)"));
+        return Err(format!(
+            "building {GREET} failed (rustup target add wasm32-wasip2?)"
+        ));
     }
     let built = dir.join("target/wasm32-wasip2/release/greet.wasm");
     std::fs::copy(&built, dir.join("greet.wasm"))
