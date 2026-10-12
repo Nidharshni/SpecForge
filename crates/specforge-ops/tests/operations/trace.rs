@@ -177,8 +177,7 @@ fn every_trace_serializes_as_json_array() {
 }
 
 fn expectations() -> TraceExpectations {
-    let (fields, kinds) = crate::trace_support::registries();
-    TraceExpectations::from_registries(&fields, &kinds)
+    TraceExpectations::of(&crate::trace_support::build())
 }
 
 /// The missing links of a chain as (from, edge_label, expected_kind).
@@ -302,16 +301,7 @@ fn trace_expectations_come_from_the_registries() {
     assert_eq!(features.target_kind, "feature");
 
     // A required reference is expected wherever it comes from.
-    let (mut fields, kinds) = crate::trace_support::registries();
-    let mut declared =
-        crate::trace_support::reference("behavior", "parent", "behavior", "@t/formal", None)
-            .declared()
-            .clone();
-    declared.required = true;
-    fields.register(
-        specforge_registry::FieldRegistryEntry::new("behavior", "@t/formal", declared).unwrap(),
-    );
-    let expected = TraceExpectations::from_registries(&fields, &kinds);
+    let expected = TraceExpectations::of(&crate::trace_support::build_with_required_parent());
     let parent = expected
         .for_kind("behavior")
         .iter()
@@ -320,13 +310,49 @@ fn trace_expectations_come_from_the_registries() {
     assert!(parent.required);
 
     // No extensions, no expectations.
-    assert!(
-        TraceExpectations::from_registries(
-            &specforge_registry::FieldRegistry::new(),
-            &specforge_registry::KindRegistry::new()
-        )
-        .is_empty()
-    );
+    assert!(TraceExpectations::of(&specforge_registry::build_registries(vec![])).is_empty());
+}
+
+// B:compute_traceability_chain — an inverse is a field of the target kind
+// (`FieldRegistry::inverse_fields`), the one rule trace and the graph read.
+#[specforge_test(
+    behavior = "compute_traceability_chain",
+    verify = "an expected link declared from the other side, through an inverse field of the target kind, is not missing"
+)]
+fn an_inverse_is_a_field_of_the_target_kind() {
+    let expected = expectations();
+    let inverse_labels = |label: &str| -> Vec<String> {
+        expected
+            .for_kind("behavior")
+            .iter()
+            .find(|e| e.label == label)
+            .unwrap_or_else(|| panic!("{label} is expected of behaviors"))
+            .inverse_labels
+            .clone()
+    };
+    // `features` names `behaviors`, a field of feature; `invariants` names
+    // `enforced_by`, which invariant lacks: no inverse.
+    assert_eq!(inverse_labels("features"), vec!["behaviors"]);
+    assert!(inverse_labels("invariants").is_empty());
+
+    // So an edge from the target kind through the field it lacks closes
+    // nothing, and one through a field it has does.
+    let mut graph = Graph::new();
+    graph.add_node(node("a", "feature"));
+    graph.add_node(node("b", "behavior"));
+    graph.add_node(node("i", "invariant"));
+    graph.add_edge(Edge {
+        source: "a".into(),
+        target: "b".into(),
+        label: "behaviors".into(),
+    });
+    graph.add_edge(Edge {
+        source: "i".into(),
+        target: "b".into(),
+        label: "enforced_by".into(),
+    });
+    let trace = chain_in(&graph, crate::trace_support::build(), "b").unwrap();
+    assert_eq!(missing(&trace), vec![("b", "invariants", "invariant")]);
 }
 
 // B:compute_traceability_chain — human output marks each missing link.

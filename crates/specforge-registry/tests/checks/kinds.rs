@@ -337,7 +337,7 @@ fn kindless_extensions_report_one_w151() {
     let structural = [
         EntityRecord::new("ref", "gh.issue:1", span("t.spec")).with_edges(
             specforge_registry::entity::Direction::Incoming,
-            "spec",
+            Some("References"),
             1,
         ),
         EntityRecord::new("spec", "s", span("t.spec")),

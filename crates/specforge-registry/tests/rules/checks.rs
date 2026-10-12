@@ -63,6 +63,11 @@ fn implementing(rule: ValidationRuleDescriptor, with_feature: bool) -> super::Bu
     let mut declaration = declare("@test", |c| {
         c.kind("behavior", |k| {
             k.description("b");
+            k.field("features", |f| {
+                f.field_type(FieldType::ReferenceList)
+                    .edge("BehaviorImplementsFeature")
+                    .target_kind("feature");
+            });
         });
         if with_feature {
             c.kind("feature", |k| {
@@ -87,12 +92,20 @@ fn an_edge_rule_counts_only_its_edge_type() {
     declared.message_template = "behavior '{id}' does not implement any feature".to_string();
 
     // b1 references an event but no feature; b2 implements a feature.
-    let b1 = entity("b1", "behavior", 0, 0).with_edges(Direction::Outgoing, "event", 1);
-    let b2 = entity("b2", "behavior", 0, 0).with_edges(Direction::Outgoing, "feature", 1);
+    let b1 = entity("b1", "behavior", 0, 0).with_edges(
+        Direction::Outgoing,
+        Some("BehaviorReferencesEvent"),
+        1,
+    );
+    let b2 = entity("b2", "behavior", 0, 0).with_edges(
+        Direction::Outgoing,
+        Some("BehaviorImplementsFeature"),
+        1,
+    );
     let built = implementing(declared.clone(), true);
     assert_eq!(
-        built.rules.iter().next().unwrap().describe()["edge_peer_kinds"],
-        serde_json::json!(["feature"])
+        built.rules.iter().next().unwrap().describe()["edge_writers"],
+        serde_json::json!(["behavior.features"])
     );
     let diagnostics = check(&built, &[b1, b2]);
     assert_eq!(
@@ -141,15 +154,48 @@ fn an_edge_rule_over_an_undeclared_edge_counts_every_writing_kind() {
     });
     let built = rules_of(vec![first, second]);
     assert_eq!(
-        built.rules.iter().next().unwrap().describe()["edge_peer_kinds"],
-        serde_json::json!(["task", "ticket"])
+        built.rules.iter().next().unwrap().describe()["edge_writers"],
+        serde_json::json!(["task.assignee", "ticket.owner"])
     );
 
-    let by_task = entity("p1", "person", 0, 0).with_edges(Direction::Incoming, "task", 1);
-    let by_ticket = entity("p2", "person", 0, 0).with_edges(Direction::Incoming, "ticket", 1);
-    let by_event = entity("p3", "person", 0, 0).with_edges(Direction::Incoming, "event", 1);
-    let diagnostics = check(&built, &[by_task, by_ticket, by_event]);
+    let assigned = Some("assigned_to");
+    let by_task = entity("p1", "person", 0, 0).with_edges(Direction::Incoming, assigned, 1);
+    let by_ticket = entity("p2", "person", 0, 0).with_edges(Direction::Incoming, assigned, 1);
+    let by_other = entity("p3", "person", 0, 0).with_edges(Direction::Incoming, Some("owns"), 1);
+    let diagnostics = check(&built, &[by_task, by_ticket, by_other]);
     assert_eq!(messages(&diagnostics), ["person 'p3' is assigned nothing"]);
+}
+
+#[spec(
+    behavior = "execute_validation_pattern",
+    verify = "an edge rule no loaded field can satisfy at its target kind is inert"
+)]
+fn an_edge_rule_no_field_can_satisfy_is_inert() {
+    // `behavior.features` is the one field writing BehaviorImplementsFeature:
+    // from a behavior, to a feature.
+    let mut outgoing = rule("W001", "no_outgoing_edges");
+    outgoing.target_kind = Some("feature".to_string());
+    outgoing.edge_type = Some("BehaviorImplementsFeature".to_string());
+    let mut incoming = rule("W002", "no_incoming_edges");
+    incoming.target_kind = Some("behavior".to_string());
+    incoming.edge_type = Some("BehaviorImplementsFeature".to_string());
+
+    // No feature writes one, no behavior receives one: nothing can satisfy
+    // either rule, so neither is registered (nor flagged).
+    for inert in [outgoing, incoming] {
+        let built = implementing(inert, true);
+        assert!(built.rules.is_empty(), "{:?}", built.rules);
+        assert!(built.diagnostics.is_empty(), "{:?}", built.diagnostics);
+    }
+
+    // The same rules aimed where the field writes are live.
+    let mut outgoing = rule("W001", "no_outgoing_edges");
+    outgoing.edge_type = Some("BehaviorImplementsFeature".to_string());
+    assert_eq!(implementing(outgoing, true).rules.len(), 1);
+    let mut incoming = rule("W002", "no_incoming_edges");
+    incoming.target_kind = Some("feature".to_string());
+    incoming.edge_type = Some("BehaviorImplementsFeature".to_string());
+    assert_eq!(implementing(incoming, true).rules.len(), 1);
 }
 
 #[spec(
@@ -779,7 +825,7 @@ fn a_rule_whose_edge_type_no_loaded_extension_declares_reports_nothing() {
     assert!(built.diagnostics.is_empty(), "{:?}", built.diagnostics);
     let entities = [
         entity("b1", "behavior", 0, 0),
-        entity("b2", "behavior", 0, 0).with_edges(Direction::Outgoing, "event", 1),
+        entity("b2", "behavior", 0, 0).with_edges(Direction::Outgoing, Some("Emits"), 1),
     ];
     assert!(check(&built, &entities).is_empty());
 }

@@ -464,30 +464,39 @@ behavior registry_build_edges "Registry Build Registers Edge Types" {
   }
   ensures {
     edge_types_registered "Every declared edge type, and every edge label a field maps to without declaring it, is in the build's EdgeRegistry"
-    every_writer_named    "An edge label no extension declares names every field that writes it, in load order, and its ends are those writers' kinds and target kinds"
+    every_writer_named    "Every edge type names every field that writes it, in load order: a kind's own, shared and enhancement fields; its ends are its declared ones, else its writers' kinds and target kinds"
+    one_type_per_field    "Each field writes at most one edge type, which the build answers for that field on its kind"
     first_wins            "An edge label two extensions declare belongs to the first in load order; the later declaration is W018 and its constraints are discarded"
   }
   contract   """
     The registry build MUST register every edge type a declaration
     declares, embedding its descriptor (label, description, source and
-    target kind, style) and naming the declaring extension. An edge label
-    a field maps to that no edge type declares MUST be registered as an
-    edge from the field's kind to its target kind, naming every field of a
-    loaded kind that writes it (its extension, kind, field and target
-    kind) in load order: its source kinds are those writers' kinds and its
-    target kinds their declared target kinds, each once, in that order;
-    the first writer's extension owns it. A label any loaded extension
-    declares is that declaration, whatever field wrote it first. An edge label declared
-    again by a later extension MUST produce a W018 warning naming both
-    extensions; the first in load order keeps the label and its
-    constraints, which graph validation uses.
+    target kind, style) and naming the declaring extension. Once every
+    kind, field and enhancement is registered, it MUST resolve each edge
+    type once: every registered field that names it as its edge (a kind's
+    own fields, its extension's shared fields, every enhancement's fields)
+    is one of its writers, ordered by extension in load order, then kind
+    and field. A field that writes a declared edge type from a kind other
+    than its declared source_kind, or to a target kind other than its
+    declared target_kind, MUST produce W021 and writes no edge of that
+    type. An edge label no extension declares is an edge type of its
+    writers, owned by the first writer's extension. Its ends are the
+    declared kind on a side it declares, else its writers' kinds (source)
+    and declared target kinds (target), sorted, each once. The build MUST
+    answer which edge type a field of a kind writes; the rule set, the
+    entity snapshot, the schema and trace read these answers and derive
+    none. An edge label declared again by a later extension MUST produce a
+    W018 warning naming both extensions; the first in load order keeps the
+    label and its constraints, which graph validation uses.
   """
   verify unit "edge type registered with label and description"
   verify unit "source/target kind constraints recorded"
   verify unit "a field's edge label no edge type declares is registered as an edge from the field's kind to its target kind"
   verify unit "an edge label several kinds write without declaring it names every writer, in load order"
+  verify unit "an edge type names every field that writes it: a kind's own, shared and enhancement fields alike"
+  verify unit "a field that writes a declared edge type from a kind outside its declared source kind, or to a kind outside its declared target kind, is W021 and writes no edge of that type"
   verify unit "an edge label a later extension declares again is W018 and the first in load order keeps it"
-  verify contract "Registry Build Registers Edge Types: edge type registration holds — declarations_in_load_order, edge_types_registered, every_writer_named, first_wins"
+  verify contract "Registry Build Registers Edge Types: edge type registration holds — declarations_in_load_order, edge_types_registered, every_writer_named, one_type_per_field, first_wins"
 }
 
 behavior registry_build_graph_inputs "Registry Build Derives the Graph Inputs" {
@@ -509,8 +518,10 @@ behavior registry_build_graph_inputs "Registry Build Derives the Graph Inputs" {
     extension parses (has_body_parser); every registered field of the
     reference type as a single reference field, none while no kind is
     registered; every reference field whose target kind no loaded extension
-    declares, with that kind; every inverse field pair, written lesser label
-    first, the list sorted; how each registered field's value is coerced to
+    declares, with that kind; every pair of a reference field and one of its
+    inverse fields (the field its inverse_of names, when its target kind
+    registers it, and every field of its target kind naming it inverse_of),
+    written lesser label first, the list sorted; how each registered field's value is coerced to
     its declared type (string_list and reference_list to a list, integer,
     bool, string and enum to that type, a single reference and a block read
     as written); and every reference field whose edges the host derives
@@ -522,6 +533,7 @@ behavior registry_build_graph_inputs "Registry Build Derives the Graph Inputs" {
   verify unit "a field's value coercion follows its registered type"
   verify unit "a derived reference field is a graph input only with a target kind and a known source"
   verify unit "inverse pairs are written lesser first and sorted, whatever the registration order"
+  verify unit "an inverse field is a field of the target kind: the one inverse_of names, and every one naming the field inverse_of"
   verify contract "Registry Build Derives the Graph Inputs: graph inputs hold — registries_populated, every_input_derived, registries_agree, deterministic"
 }
 
@@ -604,7 +616,7 @@ behavior registry_build_declaration_consistency "Registry Build Checks Declarati
     peers_loaded               "A declaration's peers are among the loaded declarations, or their kinds are unknown"
   }
   ensures {
-    references_resolved        "Every field target_kind names a kind the declaration or a loaded peer declares, and every field edge label an edge type the declaration declares"
+    references_resolved        "Every field target_kind names a kind the declaration or a loaded peer declares, and every edge label its kinds' own, shared and enhancement fields name an edge type the declaration declares"
     authoring_errors_diagnosed "Every other reference, and a derived_from the host can't apply, is a W021 warning naming it"
     compile_not_failed         "W021 never fails the compile: the declaration's kinds still register"
   }
@@ -616,7 +628,9 @@ behavior registry_build_declaration_consistency "Registry Build Checks Declarati
     non-peer extension declares is W021 too, naming that extension (the
     kind exists but the dependency is undeclared). While a named peer is
     not loaded its kinds are unknown, so any target is let through. A
-    field's edge label MUST name an edge type the declaration declares. A
+    edge label of every field the declaration contributes (its kinds' own
+    fields, its shared fields, its enhancements' fields) MUST name an edge
+    type the declaration declares. A
     validation rule's target_kind and edge_type MUST name a kind or edge
     type the declaration, one of its loaded peers or the rule's
     target_extension declares: with no target_extension, anything goes

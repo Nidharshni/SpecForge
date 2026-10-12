@@ -3,7 +3,7 @@
 //! registries, then the host's E006 rules. ([`duplicate_codes`] is W023, which the
 //! registry build reports as a collision.)
 
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 
 use specforge_common::{Diagnostic, Severity, codes};
 use specforge_diagnostics::{Level, check_extension_code};
@@ -294,7 +294,9 @@ fn shape(descriptor: &ValidationRuleDescriptor, extension: &str) -> Result<Rule,
                 "check 'cycle_detection' requires an edge_type but none is set",
             ));
         }
-        CheckKind::CycleDetection => Check::Cycle { labels: Vec::new() },
+        CheckKind::CycleDetection => Check::Cycle {
+            edge_type: String::new(),
+        },
         CheckKind::VerifyKindAllowlist => match r.constraint.as_ref() {
             Some(c) if !c.values.is_empty() => Check::VerifyKindAllowlist {
                 allowed: c.values.clone(),
@@ -335,7 +337,7 @@ fn shape(descriptor: &ValidationRuleDescriptor, extension: &str) -> Result<Rule,
         check,
         declared: Declared {
             edge_type: r.edge_type.clone(),
-            edge_fields: Vec::new(),
+            edge_writers: Vec::new(),
             target_extension: r.target_extension.clone(),
             constraint: r.constraint.as_ref().map(|c| DeclaredConstraint {
                 kind: ConstraintKind::parse(&c.kind),
@@ -358,14 +360,15 @@ fn shape(descriptor: &ValidationRuleDescriptor, extension: &str) -> Result<Rule,
 /// rule whose obligations are statements) on a declared kind that accepts
 /// none can neither be satisfied nor violated: W112.
 ///
-/// An edge rule (`no_*_edges` with an edge type) counts only edges to the
-/// edge type's target kind (from its source kind for `no_incoming_edges`):
-/// a `no_outgoing_edges` rule on `BehaviorImplementsFeature` asks whether a
-/// behavior implements a feature, not whether it references anything. When
-/// no loaded extension declares that kind, the edge can't exist in the
-/// project and the rule is dropped. A cycle rule follows every field that
-/// writes its edge type. An edge or cycle rule whose edge type no loaded
-/// extension declares is dropped (inert).
+/// An edge rule (`no_*_edges` with an edge type) asks about the edges of
+/// that edge type: a `no_outgoing_edges` rule on `BehaviorImplementsFeature`
+/// asks whether a behavior implements a feature, not whether it references
+/// anything. It reads the fields that write the edge type
+/// ([`crate::EdgeRegistryEntry::writers`]); when no loaded field can write
+/// such an edge at the rule's target kind, the edge can't exist in the
+/// project and the rule is dropped (inert). A cycle rule follows every
+/// field that writes its edge type. An edge or cycle rule whose edge type no
+/// loaded extension declares is dropped (inert).
 #[allow(clippy::result_large_err)]
 fn resolve(mut rule: Rule, registries: Registries<'_>) -> Result<Option<Rule>, Diagnostic> {
     if let Some(kind) = rule.target.as_deref()
@@ -411,39 +414,43 @@ fn resolve(mut rule: Rule, registries: Registries<'_>) -> Result<Option<Rule>, D
     let Some(edge) = registries.edges.get(&edge_type) else {
         return Ok(None);
     };
-    // The fields an edge of this type is written as (its graph labels).
-    let writing: Vec<String> = registries
-        .fields
+    // Only a field that can write an edge this rule asks about makes it
+    // meaningful: with none loaded, no edge of that type can exist there
+    // and the rule is inert (ADR 0020 D5, per writer).
+    let target = rule.target.as_deref();
+    let writers = edge.writers();
+    let relevant = writers.iter().any(|writer| match rule.check {
+        Check::NoIncomingEdges(_) => target.is_none_or(|t| {
+            writer
+                .target_kind
+                .as_deref()
+                .is_none_or(|written| written == t)
+        }),
+        Check::NoOutgoingEdges(_) => {
+            target.is_none_or(|t| writer.kind == t)
+                // A writer whose target kind no extension declares cannot
+                // write an edge.
+                && writer
+                    .target_kind
+                    .as_deref()
+                    .is_none_or(|written| registries.kinds.contains(written))
+        }
+        _ => target.is_none_or(|t| writer.kind == t),
+    });
+    if !relevant {
+        return Ok(None);
+    }
+    rule.declared.edge_writers = writers
         .iter()
-        .filter(|(_, _, entry)| entry.declared().edge.as_deref() == Some(&edge_type))
-        .map(|(_, field, _)| field.to_string())
-        .collect::<BTreeSet<_>>()
-        .into_iter()
+        .map(|writer| format!("{}.{}", writer.kind, writer.field))
         .collect();
-    rule.declared.edge_fields = writing.clone();
     match &mut rule.check {
         Check::NoIncomingEdges(scope) | Check::NoOutgoingEdges(scope) => {
-            // The far end: its declared kind, else every kind that writes
-            // it without declaring it. Open: every edge counts.
-            let far_end = if rule.check_kind == CheckKind::NoIncomingEdges {
-                edge.source_kinds()
-            } else {
-                edge.target_kinds()
-            };
-            if !far_end.is_empty() {
-                let loaded: Vec<String> = far_end
-                    .into_iter()
-                    .filter(|kind| registries.kinds.contains(kind))
-                    .map(str::to_string)
-                    .collect();
-                // No loaded kind at its far end: the rule can't be met.
-                if loaded.is_empty() {
-                    return Ok(None);
-                }
-                *scope = EdgeScope::Peers(loaded);
-            }
+            *scope = EdgeScope::Type(edge_type);
         }
-        Check::Cycle { labels } => *labels = writing,
+        Check::Cycle {
+            edge_type: followed,
+        } => *followed = edge_type,
         _ => {}
     }
     Ok(Some(rule))

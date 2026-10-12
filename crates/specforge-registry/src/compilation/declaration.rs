@@ -176,6 +176,35 @@ pub(crate) fn consistency(
         }
     }
 
+    // The fields every kind shares and the enhancements' fields write edge
+    // types too (ADR 0060): their labels are declared like a kind's own.
+    for field in &declaration.shared_fields {
+        if let Some(edge) = field
+            .edge
+            .as_deref()
+            .filter(|edge| !own_edge_labels.contains(edge))
+        {
+            diagnostics.push(warn(format!(
+                "extension '{}': shared field '{}' references edge label '{}' not declared among its edges",
+                name, field.name, edge
+            )));
+        }
+    }
+    for enhancement in &declaration.enhancements {
+        for field in &enhancement.fields {
+            if let Some(edge) = field
+                .edge
+                .as_deref()
+                .filter(|edge| !own_edge_labels.contains(edge))
+            {
+                diagnostics.push(warn(format!(
+                    "extension '{}': enhancement field '{}' on kind '{}' references edge label '{}' not declared among its edges",
+                    name, field.name, enhancement.target_kind, edge
+                )));
+            }
+        }
+    }
+
     for edge in &declaration.edges {
         for (role, kind) in [
             ("source_kind", &edge.source_kind),

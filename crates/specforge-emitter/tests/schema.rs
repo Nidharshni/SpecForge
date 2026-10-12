@@ -8,9 +8,11 @@ use specforge_emitter::{
 };
 use specforge_graph::{Edge, FieldValue, Graph, Node};
 use specforge_parser::{EntityId, EntityKind, FieldMap};
+use specforge_protocol_types::{
+    EdgeTypeDescriptor, EntityKindDescriptor, ExtensionDeclaration, FieldDescriptor,
+};
 use specforge_registry::{
-    EdgeRegistry, EdgeRegistryEntry, FieldRegistry, FieldRegistryEntry, FieldType, KindRegistry,
-    KindRegistryEntry,
+    FieldRegistry, FieldRegistryEntry, FieldType, RegistryBuild, build_registries,
 };
 use specforge_test::prelude::*;
 use std::sync::Arc;
@@ -57,34 +59,93 @@ fn node(id: &str, kind: &str, title: Option<&str>) -> Node {
     }
 }
 
-fn make_kind_entry(name: &str, ext: &str, testable: bool) -> KindRegistryEntry {
-    KindRegistryEntry {
-        kind_name: name.to_string(),
-        source_extension: ext.to_string(),
+/// A kind declaration: `name` is its keyword; `testable` kinds accept
+/// `verify`.
+fn kind_decl(name: &str, testable: bool, fields: Vec<FieldDescriptor>) -> EntityKindDescriptor {
+    EntityKindDescriptor {
+        name: name.to_string(),
+        keyword: Some(name.to_string()),
         testable,
         supports_verify: testable,
-        allowed_verify_kinds: vec![],
-        lifecycle_field: None,
+        fields,
         ..Default::default()
     }
 }
 
-fn make_edge_entry(
-    label: &str,
-    ext: &str,
-    src: Option<&str>,
-    tgt: Option<&str>,
-) -> EdgeRegistryEntry {
-    EdgeRegistryEntry {
-        source_extension: ext.to_string(),
-        declared: specforge_registry::EdgeTypeDescriptor {
-            label: label.to_string(),
-            source_kind: src.map(|s| s.to_string()),
-            target_kind: tgt.map(|s| s.to_string()),
-            ..Default::default()
-        },
-        writers: Vec::new(),
+/// An edge type declaration; a side given as `None` is open.
+fn edge_decl(label: &str, src: Option<&str>, tgt: Option<&str>) -> EdgeTypeDescriptor {
+    EdgeTypeDescriptor {
+        label: label.to_string(),
+        source_kind: src.map(|s| s.to_string()),
+        target_kind: tgt.map(|s| s.to_string()),
+        ..Default::default()
     }
+}
+
+/// A field declaration of `ft`.
+fn field_decl(name: &str, ft: FieldType, required: bool) -> FieldDescriptor {
+    FieldDescriptor {
+        name: name.to_string(),
+        field_type: ft.as_str().to_string(),
+        required,
+        ..Default::default()
+    }
+}
+
+/// An enum field declaration.
+fn enum_decl(name: &str, values: &[&str], required: bool) -> FieldDescriptor {
+    FieldDescriptor {
+        enum_values: values.iter().map(|v| v.to_string()).collect(),
+        ..field_decl(name, FieldType::Enum, required)
+    }
+}
+
+/// A reference-list field declaration writing `edge` towards `target`.
+fn edge_writer_decl(name: &str, edge: &str, target: &str) -> FieldDescriptor {
+    FieldDescriptor {
+        edge: Some(edge.to_string()),
+        target_kind: Some(target.to_string()),
+        ..field_decl(name, FieldType::ReferenceList, false)
+    }
+}
+
+/// The extension `name` (version 1.0.0) declaring `entities` and `edges`.
+fn declaration(
+    name: &str,
+    entities: Vec<EntityKindDescriptor>,
+    edges: Vec<EdgeTypeDescriptor>,
+) -> ExtensionDeclaration {
+    let mut declaration = ExtensionDeclaration::default();
+    declaration.handshake.name = name.to_string();
+    declaration.handshake.version = "1.0.0".to_string();
+    declaration.entities = entities;
+    declaration.edges = edges;
+    declaration
+}
+
+/// The sample project's registries: the software extension's `behavior`
+/// (a `contract` string and an enum `status`) and its edge type
+/// `implements` to the product extension's `feature`.
+fn software_and_product() -> RegistryBuild {
+    build_registries(vec![
+        declaration(
+            "@specforge/software",
+            vec![kind_decl(
+                "behavior",
+                true,
+                vec![
+                    field_decl("contract", FieldType::String, false),
+                    enum_decl("status", &["draft", "done"], false),
+                ],
+            )],
+            vec![edge_decl("implements", Some("behavior"), Some("feature"))],
+        ),
+        declaration(
+            "@specforge/product",
+            vec![kind_decl("feature", false, vec![])],
+            vec![],
+        ),
+    ])
 }
 
 fn make_field_entry(kind: &str, field: &str, ft: FieldType, required: bool) -> FieldRegistryEntry {
@@ -99,14 +160,6 @@ fn make_field_entry(kind: &str, field: &str, ft: FieldType, required: bool) -> F
         },
     )
     .unwrap()
-}
-
-fn make_enum_entry(kind: &str, field: &str, values: &[&str], required: bool) -> FieldRegistryEntry {
-    let mut declared = make_field_entry(kind, field, FieldType::Enum, required)
-        .declared()
-        .clone();
-    declared.enum_values = values.iter().map(|v| v.to_string()).collect();
-    FieldRegistryEntry::new(kind, "@specforge/software", declared).unwrap()
 }
 
 /// `entry` with its declaration changed by `change`.
@@ -244,38 +297,9 @@ fn populated_schema_serde_round_trip() {
     verify = "schema includes all registered entity kinds"
 )]
 fn generate_schema_includes_kinds_edges_fields() {
-    let mut kinds = KindRegistry::new();
-    kinds.register(make_kind_entry("behavior", "@specforge/software", true));
-    kinds.register(make_kind_entry("feature", "@specforge/product", false));
+    let build = software_and_product();
 
-    let mut edges = EdgeRegistry::new();
-    edges.register(make_edge_entry(
-        "implements",
-        "@specforge/software",
-        Some("behavior"),
-        Some("feature"),
-    ));
-
-    let mut fields = FieldRegistry::new();
-    fields.register(make_field_entry(
-        "behavior",
-        "contract",
-        FieldType::String,
-        false,
-    ));
-    fields.register(make_enum_entry(
-        "behavior",
-        "status",
-        &["draft", "done"],
-        false,
-    ));
-
-    let extensions = vec![
-        ("@specforge/software".to_string(), "1.0.0".to_string()),
-        ("@specforge/product".to_string(), "1.0.0".to_string()),
-    ];
-
-    let schema = generate_schema(&kinds, &edges, &fields, &extensions);
+    let schema = generate_schema(&build);
 
     assert_eq!(schema.entity_kinds.len(), 2);
     assert_eq!(schema.entity_kinds[0].name, "behavior");
@@ -296,7 +320,21 @@ fn generate_schema_includes_kinds_edges_fields() {
         Some(vec!["feature".to_string()])
     );
 
-    assert_eq!(schema.extensions.len(), 2);
+    // The schema's extensions are the build's.
+    let loaded: Vec<(&str, &str)> = build.extension_info().collect();
+    let listed: Vec<(&str, &str)> = schema
+        .extensions
+        .iter()
+        .map(|e| (e.name.as_str(), e.version.as_str()))
+        .collect();
+    assert_eq!(
+        loaded,
+        [
+            ("@specforge/software", "1.0.0"),
+            ("@specforge/product", "1.0.0")
+        ]
+    );
+    assert_eq!(listed, loaded);
 }
 
 // B:generate_schema_from_registries — verify unit "zero-extension registries produce valid empty schema"
@@ -305,11 +343,9 @@ fn generate_schema_includes_kinds_edges_fields() {
     verify = "zero extensions produces valid empty schema"
 )]
 fn generate_schema_empty_registries() {
-    let kinds = KindRegistry::new();
-    let edges = EdgeRegistry::new();
-    let fields = FieldRegistry::new();
+    let build = build_registries(vec![]);
 
-    let schema = generate_schema(&kinds, &edges, &fields, &[]);
+    let schema = generate_schema(&build);
     assert!(schema.entity_kinds.is_empty());
     assert!(schema.edge_types.is_empty());
     assert!(schema.extensions.is_empty());
@@ -322,42 +358,23 @@ fn generate_schema_empty_registries() {
     verify = "schema fields match FieldRegistry entries"
 )]
 fn generate_schema_field_type_mapping() {
-    let mut kinds = KindRegistry::new();
-    kinds.register(make_kind_entry("behavior", "@specforge/software", true));
+    let build = build_registries(vec![declaration(
+        "@specforge/software",
+        vec![kind_decl(
+            "behavior",
+            true,
+            vec![
+                field_decl("contract", FieldType::String, false),
+                field_decl("priority", FieldType::Integer, false),
+                field_decl("active", FieldType::Bool, false),
+                field_decl("invariants", FieldType::ReferenceList, false),
+                enum_decl("status", &["draft", "done"], false),
+            ],
+        )],
+        vec![],
+    )]);
 
-    let mut fields = FieldRegistry::new();
-    fields.register(make_field_entry(
-        "behavior",
-        "contract",
-        FieldType::String,
-        false,
-    ));
-    fields.register(make_field_entry(
-        "behavior",
-        "priority",
-        FieldType::Integer,
-        false,
-    ));
-    fields.register(make_field_entry(
-        "behavior",
-        "active",
-        FieldType::Bool,
-        false,
-    ));
-    fields.register(make_field_entry(
-        "behavior",
-        "invariants",
-        FieldType::ReferenceList,
-        false,
-    ));
-    fields.register(make_enum_entry(
-        "behavior",
-        "status",
-        &["draft", "done"],
-        false,
-    ));
-
-    let schema = generate_schema(&kinds, &EdgeRegistry::new(), &fields, &[]);
+    let schema = generate_schema(&build);
 
     let kind = &schema.entity_kinds[0];
     assert_eq!(kind.fields.len(), 5);
@@ -383,26 +400,20 @@ fn generate_schema_field_type_mapping() {
     verify = "schema includes all registered edge types"
 )]
 fn generate_schema_deterministic_sort() {
-    let mut kinds = KindRegistry::new();
-    kinds.register(make_kind_entry("type", "@specforge/software", false));
-    kinds.register(make_kind_entry("behavior", "@specforge/software", true));
-    kinds.register(make_kind_entry("invariant", "@specforge/software", true));
-
-    let mut edges = EdgeRegistry::new();
-    edges.register(make_edge_entry(
-        "implements",
+    let build = build_registries(vec![declaration(
         "@specforge/software",
-        None,
-        None,
-    ));
-    edges.register(make_edge_entry(
-        "enforces",
-        "@specforge/software",
-        None,
-        None,
-    ));
+        vec![
+            kind_decl("type", false, vec![]),
+            kind_decl("behavior", true, vec![]),
+            kind_decl("invariant", true, vec![]),
+        ],
+        vec![
+            edge_decl("implements", None, None),
+            edge_decl("enforces", None, None),
+        ],
+    )]);
 
-    let schema = generate_schema(&kinds, &edges, &FieldRegistry::new(), &[]);
+    let schema = generate_schema(&build);
 
     let kind_names: Vec<&str> = schema
         .entity_kinds
@@ -985,30 +996,10 @@ fn publish_json_schema_has_title() {
 )]
 fn full_pipeline_registries_to_schema_to_embed() {
     // Build registries
-    let mut kinds = KindRegistry::new();
-    kinds.register(make_kind_entry("behavior", "@specforge/software", true));
-    kinds.register(make_kind_entry("feature", "@specforge/product", false));
-
-    let mut edges = EdgeRegistry::new();
-    edges.register(make_edge_entry(
-        "implements",
-        "@specforge/software",
-        Some("behavior"),
-        Some("feature"),
-    ));
-
-    let mut fields = FieldRegistry::new();
-    fields.register(make_field_entry(
-        "behavior",
-        "contract",
-        FieldType::String,
-        false,
-    ));
-
-    let extensions = vec![("@specforge/software".to_string(), "1.0.0".to_string())];
+    let build = software_and_product();
 
     // Generate
-    let schema = generate_schema(&kinds, &edges, &fields, &extensions);
+    let schema = generate_schema(&build);
     assert_eq!(schema.entity_kinds.len(), 2);
 
     // Embed
@@ -1198,15 +1189,13 @@ fn negotiate_above_max_fails() {
     verify = "schema includes all registered edge types"
 )]
 fn generate_schema_edge_no_source_target() {
-    let mut edges = EdgeRegistry::new();
-    edges.register(make_edge_entry(
-        "custom_rel",
+    let build = build_registries(vec![declaration(
         "@specforge/software",
-        None,
-        None,
-    ));
+        vec![],
+        vec![edge_decl("custom_rel", None, None)],
+    )]);
 
-    let schema = generate_schema(&KindRegistry::new(), &edges, &FieldRegistry::new(), &[]);
+    let schema = generate_schema(&build);
     assert_eq!(schema.edge_types.len(), 1);
     assert!(schema.edge_types[0].source_kinds.is_none());
     assert!(schema.edge_types[0].target_kinds.is_none());
@@ -1324,30 +1313,10 @@ fn detect_breaking_migration_record_emitted() {
 
 #[test]
 fn schema_generated_deterministically_for_caching() {
-    let mut kinds = KindRegistry::new();
-    kinds.register(make_kind_entry("behavior", "@specforge/software", true));
-    kinds.register(make_kind_entry("feature", "@specforge/product", false));
+    let build = software_and_product();
 
-    let mut edges = EdgeRegistry::new();
-    edges.register(make_edge_entry(
-        "implements",
-        "@specforge/software",
-        Some("behavior"),
-        Some("feature"),
-    ));
-
-    let mut fields = FieldRegistry::new();
-    fields.register(make_field_entry(
-        "behavior",
-        "contract",
-        FieldType::String,
-        false,
-    ));
-
-    let ext = vec![("@specforge/software".to_string(), "1.0.0".to_string())];
-
-    let schema1 = generate_schema(&kinds, &edges, &fields, &ext);
-    let schema2 = generate_schema(&kinds, &edges, &fields, &ext);
+    let schema1 = generate_schema(&build);
+    let schema2 = generate_schema(&build);
     assert_eq!(
         schema1, schema2,
         "Schema generation must be deterministic for caching"
@@ -1368,16 +1337,7 @@ fn schema_reflects_current_state() {
             &specforge_common::ProjectRoot::of(dir).unwrap(),
             Some(Arc::new(runtime)),
         );
-        let schema = generate_schema(
-            ctx.environment().registries().kinds(),
-            ctx.environment().registries().edges(),
-            ctx.environment().registries().fields(),
-            &ctx.environment()
-                .registries()
-                .extension_info()
-                .map(|(name, version)| (name.to_string(), version.to_string()))
-                .collect::<Vec<_>>(),
-        );
+        let schema = generate_schema(ctx.environment().registries());
         serde_json::to_value(&schema).unwrap()
     }
     fn configure(dir: &std::path::Path, extensions: &[&str]) {
@@ -1536,35 +1496,13 @@ fn published_schema_describes_all_edge_types() {
     verify = "Generate Schema From Registries: schema generation from registries holds — registries_populated_fired, all_kinds_in_schema, all_edges_in_schema, schema_cached, schema_generated_emitted"
 )]
 fn generate_schema_contract() {
-    let mut kinds = KindRegistry::new();
-    kinds.register(make_kind_entry("behavior", "@specforge/software", true));
+    let build = software_and_product();
 
-    let mut fields = FieldRegistry::new();
-    fields.register(make_field_entry(
-        "behavior",
-        "contract",
-        FieldType::String,
-        false,
-    ));
-
-    let mut edges = EdgeRegistry::new();
-    edges.register(make_edge_entry(
-        "implements",
-        "@specforge/software",
-        Some("behavior"),
-        Some("feature"),
-    ));
-
-    let schema = generate_schema(
-        &kinds,
-        &edges,
-        &fields,
-        &[("@specforge/software".to_string(), "1.0.0".to_string())],
-    );
+    let schema = generate_schema(&build);
 
     // ensures: all_kinds_in_schema
-    assert_eq!(schema.entity_kinds.len(), kinds.len());
-    for (_, entry) in kinds.iter() {
+    assert_eq!(schema.entity_kinds.len(), build.kinds().len());
+    for (_, entry) in build.kinds().iter() {
         assert!(
             schema
                 .entity_kinds
@@ -1574,14 +1512,9 @@ fn generate_schema_contract() {
     }
 
     // ensures: all_edges_in_schema
-    assert_eq!(schema.edge_types.len(), edges.len());
-    for (_, entry) in edges.iter() {
-        assert!(
-            schema
-                .edge_types
-                .iter()
-                .any(|e| e.label == entry.declared.label)
-        );
+    assert_eq!(schema.edge_types.len(), build.edges().len());
+    for edge in &schema.edge_types {
+        assert!(build.edges().contains(&edge.label));
     }
 }
 
@@ -2039,7 +1972,7 @@ fn ticket_registries() -> specforge_registry::RegistryBuild {
 )]
 fn a_field_type_is_named_in_the_schema_as_declared() {
     let build = ticket_registries();
-    let schema = generate_schema(build.kinds(), build.edges(), build.fields(), &[]);
+    let schema = generate_schema(&build);
     let ticket = schema
         .entity_kinds
         .iter()
@@ -2063,7 +1996,7 @@ fn a_field_type_is_named_in_the_schema_as_declared() {
 )]
 fn the_published_schema_lists_the_field_types_the_host_reads() {
     let build = ticket_registries();
-    let schema = generate_schema(build.kinds(), build.edges(), build.fields(), &[]);
+    let schema = generate_schema(&build);
     let published: serde_json::Value =
         serde_json::from_str(&publish_json_schema_format(&schema, EmitFormat::Json).unwrap())
             .unwrap();
@@ -2092,7 +2025,7 @@ fn the_published_schema_lists_the_field_types_the_host_reads() {
 )]
 fn the_schema_carries_a_declared_default_value() {
     let build = ticket_registries();
-    let schema = generate_schema(build.kinds(), build.edges(), build.fields(), &[]);
+    let schema = generate_schema(&build);
     let ticket = schema
         .entity_kinds
         .iter()
@@ -2122,52 +2055,40 @@ fn the_schema_carries_a_declared_default_value() {
     assert_eq!(owner["default_value"], "nobody");
 }
 
-/// A field of `kind` that writes `edge` towards `target`.
-fn edge_writer(kind: &str, field: &str, edge: &str, target: &str) -> FieldRegistryEntry {
-    FieldRegistryEntry::new(
-        kind,
-        "@specforge/software",
-        specforge_registry::FieldDescriptor {
-            name: field.to_string(),
-            field_type: FieldType::ReferenceList.as_str().to_string(),
-            edge: Some(edge.to_string()),
-            target_kind: Some(target.to_string()),
-            ..Default::default()
-        },
-    )
-    .unwrap()
-}
-
 // B:generate_schema_from_registries — an edge type that leaves a side open takes its writers
 #[specforge_test(
     behavior = "generate_schema_from_registries",
     verify = "an edge type that declares no source or target kind names those of the fields that write it"
 )]
 fn an_open_edge_type_takes_the_kinds_of_the_fields_writing_it() {
-    let mut kinds = KindRegistry::new();
-    for name in ["a", "b", "c"] {
-        kinds.register(make_kind_entry(name, "@specforge/software", false));
-    }
-    let mut edges = EdgeRegistry::new();
-    edges.register(make_edge_entry(
-        "relates",
+    let build = build_registries(vec![declaration(
         "@specforge/software",
-        None,
-        None,
-    ));
-    edges.register(make_edge_entry(
-        "owns",
-        "@specforge/software",
-        Some("a"),
-        None,
-    ));
-    let mut fields = FieldRegistry::new();
-    fields.register(edge_writer("a", "x", "relates", "c"));
-    fields.register(edge_writer("b", "y", "relates", "a"));
-    fields.register(edge_writer("a", "z", "owns", "c"));
-    fields.register(edge_writer("b", "w", "owns", "b"));
+        vec![
+            kind_decl(
+                "a",
+                false,
+                vec![
+                    edge_writer_decl("x", "relates", "c"),
+                    edge_writer_decl("z", "owns", "c"),
+                ],
+            ),
+            kind_decl(
+                "b",
+                false,
+                vec![
+                    edge_writer_decl("y", "relates", "a"),
+                    edge_writer_decl("w", "owns", "b"),
+                ],
+            ),
+            kind_decl("c", false, vec![]),
+        ],
+        vec![
+            edge_decl("relates", None, None),
+            edge_decl("owns", Some("a"), None),
+        ],
+    )]);
 
-    let schema = generate_schema(&kinds, &edges, &fields, &[]);
+    let schema = generate_schema(&build);
     let edge = |label: &str| {
         schema
             .edge_types
@@ -2179,10 +2100,23 @@ fn an_open_edge_type_takes_the_kinds_of_the_fields_writing_it() {
     let relates = edge("relates");
     assert_eq!(relates.source_kinds, Some(vec!["a".into(), "b".into()]));
     assert_eq!(relates.target_kinds, Some(vec!["a".into(), "c".into()]));
-    // A side the edge type declares is kept; the open side is inferred, sorted.
+    // A side the edge type declares is kept; the open side is the writers',
+    // sorted. `b.w` writes `owns` from outside its declared source `a`: it
+    // is W021 and writes no `owns` edge, so `b` is no target of it.
     let owns = edge("owns");
     assert_eq!(owns.source_kinds, Some(vec!["a".into()]));
-    assert_eq!(owns.target_kinds, Some(vec!["b".into(), "c".into()]));
+    assert_eq!(owns.target_kinds, Some(vec!["c".into()]));
+    let w021: Vec<&str> = build
+        .diagnostics()
+        .filter(|d| d.code == "W021")
+        .map(|d| d.message.as_str())
+        .collect();
+    assert_eq!(
+        w021,
+        [
+            "extension '@specforge/software': field 'w' on kind 'b' writes edge type 'owns', whose declared source_kind is 'a' — its edges are not of that type"
+        ]
+    );
 }
 
 #[specforge_test(
@@ -2215,7 +2149,7 @@ fn an_undeclared_edge_two_kinds_write_names_every_writer() {
     };
     let build = specforge_registry::build_registries(vec![declaration]);
 
-    let schema = generate_schema(build.kinds(), build.edges(), build.fields(), &[]);
+    let schema = generate_schema(&build);
     let links = schema
         .edge_types
         .iter()

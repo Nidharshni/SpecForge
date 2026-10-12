@@ -230,16 +230,7 @@ impl<'a> ProjectView<'a> {
     /// The Graph Protocol schema the loaded extensions produce, unversioned
     /// (what the model diagram renders).
     pub fn schema(&self) -> GraphProtocolSchema {
-        let registries = self.registries();
-        generate_schema(
-            registries.kinds(),
-            registries.edges(),
-            registries.fields(),
-            &registries
-                .extension_info()
-                .map(|(name, version)| (name.to_string(), version.to_string()))
-                .collect::<Vec<_>>(),
-        )
+        generate_schema(self.registries())
     }
 
     /// [`Self::schema`], versioned against the schema cache at the root

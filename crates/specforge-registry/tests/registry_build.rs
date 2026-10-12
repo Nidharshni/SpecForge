@@ -244,7 +244,7 @@ fn no_declarations_build_empty_registries() {
     assert!(build.fields().fields_for_kind("behavior").is_empty());
     assert!(build.edges().is_empty());
     assert!(build.edges().get("enforces").is_none());
-    assert_eq!(build.edges().labels().count(), 0);
+    assert_eq!(build.edges().iter().count(), 0);
     assert!(build.rules().is_empty());
     assert!(build.surfaces().is_empty());
     assert!(build.passes().is_empty());
@@ -259,6 +259,11 @@ fn one_rule(name: &str, code: &str, severity: ValidationSeverity) -> ExtensionDe
     let mut c = extension(name, "1.0.0");
     c.kind("Thing", |k| {
         k.keyword("thing");
+        k.field("uses", |f| {
+            f.field_type(FieldType::ReferenceList)
+                .edge("uses")
+                .target_kind("thing");
+        });
     });
     c.edge("uses", |e| {
         e.source_kind("thing").target_kind("thing");

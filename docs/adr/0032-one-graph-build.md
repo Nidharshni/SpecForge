@@ -67,7 +67,8 @@ build, computed for one caller (`Environment::graph_config`); two (`field_coerci
   depends on the registry). `specforge-project`'s `field_types` module is gone, and so are the four
   fields.
 - **Deterministic.** Inverse pairs are written (lesser, greater) and sorted; the graph reads a pair
-  symmetrically, so no graph changes.
+  symmetrically, so no graph changes. *(ADR 0060: a pair is a reference field and one of its inverse
+  fields, fields of its target kind, `FieldRegistry::inverse_fields`.)*
 
 Rejected: the registry build taking the provider schemes (`graph_config(schemes)`), which ADR 0031 D7
 rejected for `build_registries`; the graph crate reading the registries, which would make every graph

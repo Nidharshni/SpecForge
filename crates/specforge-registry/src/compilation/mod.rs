@@ -8,6 +8,7 @@
 
 mod build;
 mod declaration;
+mod edge_types;
 mod graph_inputs;
 mod peers;
 mod populate;

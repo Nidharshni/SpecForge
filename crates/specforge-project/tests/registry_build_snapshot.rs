@@ -196,18 +196,25 @@ fn digest(env: &Environment) -> Value {
     let edges: BTreeMap<&str, Value> = r
         .edges()
         .iter()
-        .map(|(label, e)| {
+        .map(|e| {
+            let declared = e.declared().cloned().unwrap_or_default();
             (
-                label.as_str(),
+                e.label(),
                 json!({
-                    "label": e.declared.label,
-                    "description": e.declared.description,
-                    "source_kind": e.declared.source_kind,
-                    "target_kind": e.declared.target_kind,
-                    "source_extension": e.source_extension,
-                    "edge_style": e.declared.edge_style,
-                    "edge_color": e.declared.edge_color,
-                    "edge_arrowhead": e.declared.edge_arrowhead,
+                    "label": e.label(),
+                    "description": declared.description,
+                    "source_kind": declared.source_kind,
+                    "target_kind": declared.target_kind,
+                    "source_extension": e.source_extension(),
+                    "sources": e.sources(),
+                    "targets": e.targets(),
+                    "writers": e.writers().iter().map(|w| match &w.target_kind {
+                        Some(target) => format!("{} {}.{} -> {target}", w.extension, w.kind, w.field),
+                        None => format!("{} {}.{}", w.extension, w.kind, w.field),
+                    }).collect::<Vec<_>>(),
+                    "edge_style": declared.edge_style,
+                    "edge_color": declared.edge_color,
+                    "edge_arrowhead": declared.edge_arrowhead,
                 }),
             )
         })

@@ -133,23 +133,24 @@ kind still counts its enhancement edge types between kept kinds. The markdown su
 
 An edge type whose registry entry leaves a side open is given, on that side, the kinds whose fields
 write it and the target kinds those fields declare, sorted (`schema::generate_schema`). A side it
-declares is kept. The inference stays in the emitter. `generate_schema` is its only reader (the model,
+declares is kept. ~~The inference stays in the emitter. `generate_schema` is its only reader (the model,
 `specforge schema --kind` and the exports read the schema it returns), so moving it beside the
 registries would relocate it without a second caller. Reopen this when another reader needs an edge
-type's endpoints.
+type's endpoints.~~ *(Superseded by [ADR 0060](0060-edge-types-resolved-once.md): the registry build resolves each edge type once; the schema prints its ends and infers nothing.)*
 
 ## Amendment (round 6 follow-up): an undeclared edge type names every writer
 
-An edge label fields write without any loaded extension declaring it is registered with its label alone
+~~An edge label fields write without any loaded extension declaring it is registered with its label alone
 and every field that writes it (`EdgeRegistryEntry::writers`: extension, kind, field, target kind), in load
 order: a kind's shared fields it does not declare again, then its own. Its ends are its writers'
 (`EdgeRegistryEntry::source_kinds` and `target_kinds`, each kind once, in load order), and the first writer's
 extension owns it (`source_extension`, which the model's per-extension edge count reads). It is recorded after
 every declaration's edge types, so a label any extension declares is that declaration, whichever field wrote it
-first, and no W018 is reported against an undeclared use.
+first, and no W018 is reported against an undeclared use.~~
 
-An edge rule's peer scope is its edge type's far end: the declared kind, else every writer's kind (or, outgoing,
+~~An edge rule's peer scope is its edge type's far end: the declared kind, else every writer's kind (or, outgoing,
 every writer's target kind) that is loaded, and an edge counts when its peer is any of them
 (`EdgeScope::Peers`; the registry snapshot's `edge_peer_kinds`). A rule none of whose far-end kinds is loaded is
 inert, as before; an open far end counts every edge. The schema names every writing kind through the open-side
-inference above (both sides of an undeclared edge type are open); each of those kinds names its own extension.
+inference above (both sides of an undeclared edge type are open); each of those kinds names its own extension.~~
+*(Superseded by [ADR 0060](0060-edge-types-resolved-once.md): the registry build resolves each edge type once; the schema prints its ends and infers nothing.)*

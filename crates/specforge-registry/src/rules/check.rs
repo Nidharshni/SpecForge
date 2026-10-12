@@ -36,10 +36,9 @@ pub(crate) enum Check {
         when_field: String,
         equals: Vec<String>,
     },
-    /// The entities on a cycle of the edges labelled one of `labels` (the
-    /// fields that write the edge type). No labels: it reports nothing.
+    /// The entities on a cycle of the edges of `edge_type`.
     Cycle {
-        labels: Vec<String>,
+        edge_type: String,
     },
     FileExists {
         field: String,
@@ -59,12 +58,10 @@ pub(crate) enum Check {
 /// Which edges an edge rule counts.
 #[derive(Debug, Clone)]
 pub(crate) enum EdgeScope {
-    /// Every edge.
+    /// Every edge (the rule names no edge type).
     Any,
-    /// Only edges to (outgoing) or from (incoming) an entity of one of
-    /// these kinds: the far end of the rule's edge type (its declared kind,
-    /// else every kind that writes it without declaring it).
-    Peers(Vec<String>),
+    /// The edges of this edge type.
+    Type(String),
 }
 
 /// A `field_value_constraint`'s predicate on the field's text.
@@ -107,8 +104,8 @@ pub(super) fn run(
     input: &RuleInput<'_>,
     verdicts: &dyn CustomVerdicts,
 ) -> Vec<Diagnostic> {
-    if let Check::Cycle { labels } = &rule.check {
-        return cycles(rule, labels, input);
+    if let Check::Cycle { edge_type } = &rule.check {
+        return cycles(rule, edge_type, input);
     }
     if let Check::FileExists { field } = &rule.check {
         return missing_files(rule, field, input);
@@ -186,8 +183,12 @@ fn evaluate(
 ) -> Result<Option<Violation>, VerdictError> {
     let violated = |violated: bool| Ok(violated.then(Violation::default));
     match &rule.check {
-        Check::NoIncomingEdges(scope) => violated(scope.count(record, Direction::Incoming) == 0),
-        Check::NoOutgoingEdges(scope) => violated(scope.count(record, Direction::Outgoing) == 0),
+        Check::NoIncomingEdges(scope) => {
+            violated(record.edges(Direction::Incoming, scope.edge_type()) == 0)
+        }
+        Check::NoOutgoingEdges(scope) => {
+            violated(record.edges(Direction::Outgoing, scope.edge_type()) == 0)
+        }
         Check::NoEdges => violated(
             record.edges(Direction::Incoming, None) == 0
                 && record.edges(Direction::Outgoing, None) == 0,
@@ -253,14 +254,11 @@ fn evaluate(
 }
 
 impl EdgeScope {
-    /// The edges of `record` in `direction` it counts.
-    fn count(&self, record: &EntityRecord, direction: Direction) -> usize {
+    /// The edge type it counts; `None`: every edge.
+    fn edge_type(&self) -> Option<&str> {
         match self {
-            EdgeScope::Any => record.edges(direction, None),
-            EdgeScope::Peers(kinds) => kinds
-                .iter()
-                .map(|kind| record.edges(direction, Some(kind)))
-                .sum(),
+            EdgeScope::Any => None,
+            EdgeScope::Type(edge_type) => Some(edge_type),
         }
     }
 }
@@ -324,14 +322,11 @@ fn interpolate(
 }
 
 /// A cycle rule over `input`: each entity it applies to (every entity when
-/// it names no target kind) that sits on a cycle of the edges labelled one
-/// of `labels` between such entities, by id. `{kind}` is the member's own
+/// it names no target kind) that sits on a cycle of the edges of
+/// `edge_type` between such entities, by id. `{kind}` is the member's own
 /// kind; `{field}` and `{value}` default to the rule's field, as for every
 /// check.
-fn cycles(rule: &Rule, labels: &[String], input: &RuleInput<'_>) -> Vec<Diagnostic> {
-    if labels.is_empty() {
-        return Vec::new();
-    }
+fn cycles(rule: &Rule, edge_type: &str, input: &RuleInput<'_>) -> Vec<Diagnostic> {
     let members: BTreeMap<&str, &EntityRecord> = input
         .entities
         .iter()
@@ -343,7 +338,7 @@ fn cycles(rule: &Rule, labels: &[String], input: &RuleInput<'_>) -> Vec<Diagnost
     }
     let mut adjacency: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     for edge in input.edges {
-        if labels.contains(&edge.label)
+        if edge.edge_type.as_deref() == Some(edge_type)
             && members.contains_key(edge.source.as_str())
             && members.contains_key(edge.target.as_str())
         {
