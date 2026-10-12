@@ -1,0 +1,41 @@
+---
+source: crates/specforge-cli/tests/parity.rs
+expression: cli_snap
+---
+{
+  "check": {
+    "diagnostics": [],
+    "ok": true
+  },
+  "config": {
+    "extensions": [
+      "@specforge/software"
+    ],
+    "name": "demo",
+    "registries": [
+      {
+        "alias": "offline",
+        "default_registry": true,
+        "url": "http://127.0.0.1:9/v1"
+      }
+    ],
+    "spec_root": "spec",
+    "version": "0.1.0"
+  },
+  "files": {
+    "spec/main.spec": "behavior alpha \"Alpha\" {\n  category \"core\"\n  contract \"The system MUST work\"\n}\n"
+  },
+  "ok": true,
+  "payload": {
+    "code": "E047",
+    "replaced_by": {
+      "code": "W139",
+      "docs": "https://github.com/leaderiop/SpecForge/blob/main/docs/diagnostics.md#w139",
+      "explanation": "`specforge analyze --prove` found that a declared claim (a field an extension gives the `claim` proof role, such as a formal property's or invariant's `expression`) isn't guaranteed by the declared bounds: the SMT solver found a counterexample that satisfies every bound while violating the claim. The claim isn't wrong; the bounds just don't guarantee it yet, and its `verify property` obligation stays unproven. Strengthen the declared bounds or weaken the claim. Use `--strict` to fail the run on it. This code was E047 until it was renumbered to match its severity.",
+      "level": "warning",
+      "owner": "core",
+      "title": "Formal claim not entailed by declared bounds"
+    },
+    "retired": true
+  }
+}

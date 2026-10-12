@@ -16,6 +16,7 @@ pub mod command;
 pub mod config;
 pub mod coverage;
 pub mod doctor;
+pub mod explain;
 pub mod explore;
 pub mod export;
 pub mod extension;

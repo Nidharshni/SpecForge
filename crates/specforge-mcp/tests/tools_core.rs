@@ -2443,24 +2443,20 @@ fn explain_an_uncatalogued_code_is_invalid_input() {
         let resp = call_tool(&mut server, "specforge.explain", json!({"code": code}));
         let error = crate::tool_errors::mcp_error(&resp);
         assert_eq!(error["code"], "invalid_input", "{code}: {error}");
-        assert!(error["message"].as_str().unwrap().contains(code), "{error}");
+        assert_eq!(error["argument"], "code", "{code}: {error}");
+        assert_eq!(
+            error["message"],
+            format!("unknown diagnostic code: {code}"),
+            "{error}"
+        );
+        assert!(
+            error["data"]["suggestion"]
+                .as_str()
+                .unwrap()
+                .starts_with("codes are E###"),
+            "{error}"
+        );
     }
-}
-
-#[test]
-fn explain_an_uncatalogued_code_names_the_argument() {
-    let mut server = test_server();
-    let resp = call_tool(&mut server, "specforge.explain", json!({"code": "E999"}));
-    let error = crate::tool_errors::mcp_error(&resp);
-    assert_eq!(error["code"], "invalid_input", "{error}");
-    assert_eq!(error["argument"], "code", "{error}");
-    assert!(
-        error["message"]
-            .as_str()
-            .unwrap()
-            .starts_with("Unknown diagnostic code: E999. Catalogued codes are"),
-        "{error}"
-    );
 }
 
 #[specforge_test(

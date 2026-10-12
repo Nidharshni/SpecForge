@@ -387,10 +387,7 @@ mod ownership {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-        assert_eq!(
-            json_of(response).await["error"]["code"],
-            "UNSIGNED_PACKAGE"
-        );
+        assert_eq!(json_of(response).await["error"]["code"], "UNSIGNED_PACKAGE");
 
         let response = router
             .clone()

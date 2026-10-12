@@ -442,6 +442,27 @@ const SCENARIOS: &[Scenario] = &[
         },
         mcp_rooted: true,
     },
+    Scenario {
+        name: "explain",
+        setup: project,
+        cli: |_| args(&["explain", "w018", "--format", "json"]),
+        mcp: |_| ("specforge.explain", json!({"code": "w018"})),
+        mcp_rooted: true,
+    },
+    Scenario {
+        name: "explain_retired",
+        setup: project,
+        cli: |_| args(&["explain", "E047", "--format", "json"]),
+        mcp: |_| ("specforge.explain", json!({"code": "E047"})),
+        mcp_rooted: true,
+    },
+    Scenario {
+        name: "explain_retired_gone",
+        setup: project,
+        cli: |_| args(&["explain", "W024", "--format", "json"]),
+        mcp: |_| ("specforge.explain", json!({"code": "W024"})),
+        mcp_rooted: true,
+    },
 ];
 
 // ── running a surface ───────────────────────────────────────────────────────
@@ -1717,4 +1738,19 @@ fn collect_outcome_is_the_same_on_both_surfaces() {
         std::fs::read_to_string(cli_dir.path().join("specforge-report.json")).unwrap(),
         std::fs::read_to_string(mcp_dir.path().join("specforge-report.json")).unwrap(),
     );
+}
+
+#[test]
+fn parity_explain() {
+    parity("explain");
+}
+
+#[test]
+fn parity_explain_retired() {
+    parity("explain_retired");
+}
+
+#[test]
+fn parity_explain_retired_gone() {
+    parity("explain_retired_gone");
 }
