@@ -239,6 +239,15 @@ fn initialize_registers_tools() {
     assert!(tool_names.contains(&"specforge.export"));
     assert!(tool_names.contains(&"specforge.trace"));
     assert!(tool_names.contains(&"specforge.search"));
+
+    // The first request after the handshake lists every core tool.
+    for core in core_tools() {
+        assert!(
+            tool_names.contains(&core.name.as_str()),
+            "{} is not listed: {tool_names:?}",
+            core.name
+        );
+    }
 }
 
 // B:mcp_initialize — verify unit "registers resources"

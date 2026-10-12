@@ -3031,10 +3031,7 @@ fn mcp_skips_blank_lines_and_reads_crlf_and_an_unterminated_last_line() {
 /// A stdio client subscribed to the graph gets `specforge/graphChanged` on
 /// stdout once the project changed: each reply arrives before the client's
 /// next request, a response before the notifications it queued.
-#[specforge_test(
-    behavior = "notify_graph_delta_via_mcp",
-    verify = "graph_changed notification sent after incremental rebuild"
-)]
+#[test]
 fn mcp_writes_a_response_before_the_notifications_it_queued() {
     let dir = setup_project(&[("spec/base.spec", r#"behavior base "B" { contract "b" }"#)]);
     let mut child = specforge_binary()
