@@ -130,6 +130,8 @@ behavior document_open_close "Document Open/Close" {
   verify unit "closing a saved document leaves nothing to catch up on"
   verify unit "closing a document that does not parse runs the checks its typing skipped"
   verify unit "an open document's entities stay when its file is deleted, until it is closed"
+  verify unit "a document is one file whatever spelling of its URI the client sends"
+  verify unit "an open document stays itself when an environment load moves its key"
   verify contract "Document Open/Close: document open/close holds — lsp_initialized_fired, document_tracked, file_changed_emitted, closed_file_published, closed_file_from_disk"
 }
 
@@ -306,6 +308,7 @@ behavior hover_diagnostic "Hover a Diagnostic" {
   verify unit "hovering a diagnostic shows its catalogued title and explanation"
   verify unit "an uncatalogued diagnostic's hover shows its code and message only"
   verify unit "the diagnostic under the cursor comes before the entity's hover, which does not list it again"
+  verify unit "hovering a region the formatter left unformatted shows its W142"
 }
 
 // Completion behaviors (autocomplete_entity_ids, complete_field_names, complete_keywords)
@@ -484,6 +487,7 @@ behavior emit_live_diagnostics "Live Diagnostics" {
   verify unit "code actions act on the diagnostics last published for the document"
   verify unit "a publish clears the files whose diagnostics are gone"
   verify unit "a publish is labelled with the version of the buffer the project was compiled from"
+  verify unit "each file's diagnostics are published under the URI the client named it by"
   verify integration "diagnostics appear within 100ms"
   verify unit "a spanless diagnostic about entities is published at the first one's name"
   verify unit "a diagnostic is published on the file its span names"

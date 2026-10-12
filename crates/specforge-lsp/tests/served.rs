@@ -260,6 +260,14 @@ impl Served {
             .apply_change(uri.as_str(), None, text);
     }
 
+    /// The buffer of the document the client opened as `uri` becomes `text`; nothing is
+    /// compiled (the stale window).
+    pub fn type_into(&mut self, uri: &Url, text: &str) {
+        self.state
+            .blocking_write()
+            .apply_change(uri.as_str(), None, text);
+    }
+
     /// `type_text`, then `apply(Change::Edited([file]))`.
     pub fn edit(&mut self, file: &str, text: &str) -> Option<Applied> {
         self.type_text(file, text);

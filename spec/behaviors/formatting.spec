@@ -398,6 +398,8 @@ behavior lsp_format_document "LSP Format Document" {
   """
   verify unit "formatting request returns TextEdit list"
   verify integration "formatting keeps the document's compile diagnostics published"
+  verify integration "the formatter's diagnostics stay published until the document changes"
+  verify unit "a formatting publish carries diagnostics of one document version"
   verify unit "TextEdit coordinates are 0-indexed lines and columns"
   verify unit "TextEdit operations in a response do not overlap"
   verify integration "LSP format produces same result as CLI format"
