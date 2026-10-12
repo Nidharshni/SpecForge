@@ -4,7 +4,9 @@ use super::registry_config::{RegistryConfig, RegistryCredential};
 use specforge_package::PackageName;
 use specforge_package::Version;
 use specforge_protocol_types::ExtensionDeclaration;
-use specforge_registry_wire::{PackageMetadata, PackageSignature, SearchHit, SearchQuery};
+use specforge_registry_wire::{
+    ErrorCode, PackageMetadata, PackageSignature, SearchHit, SearchQuery,
+};
 
 /// Errors that can occur during registry operations.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -34,6 +36,11 @@ pub enum RegistryError {
     /// The declaration to publish names no package: its name or version is
     /// not one (E072).
     InvalidPackage {
+        message: String,
+    },
+    /// The registry read the request and refused it (HTTP 400), saying why (R008).
+    Refused {
+        code: ErrorCode,
         message: String,
     },
 }
@@ -82,6 +89,14 @@ impl RegistryError {
             RegistryError::InvalidPackage { message } => {
                 specforge_common::package::invalid(message)
             }
+            RegistryError::Refused { code, message } => Diagnostic::new(
+                codes::R008,
+                format!("the registry refused the request ({code}): {message}"),
+            )
+            .with_suggestion(
+                "fix what the registry names and try again; sending the same request again is refused the same way"
+                    .to_string(),
+            ),
         }
     }
 }

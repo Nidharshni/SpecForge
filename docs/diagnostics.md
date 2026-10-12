@@ -1744,8 +1744,9 @@ Level: error
 ```
 R-TRUST-002: Invalid package signature
 
-The package's signature is malformed, or it doesn't verify: the Wasm binary or
-the manifest isn't what the publisher signed. Don't install the package.
+The package's publisher signature doesn't verify: the Wasm binary or the
+manifest isn't what the publisher signed. Don't install the package.
+`--allow-unsigned` doesn't accept it.
 
 Owner: core
 Level: error
@@ -1888,6 +1889,23 @@ R007: Version already published
 `specforge publish` tried to publish a version that already exists for the
 package, and published versions are immutable. Bump the version in the manifest
 and publish again.
+
+Owner: core
+Level: error
+```
+
+## R008
+
+```
+R008: Registry refused the request
+
+The registry read the request and refused it (HTTP 400), naming its reason and
+code: for a publish, a package that isn't signed or whose signature isn't one or
+doesn't verify over the uploaded binary and manifest (INVALID_SIGNATURE), a
+binary that isn't a Wasm module, or a manifest that isn't an extension
+declaration or names another package. Nothing was stored, and the version can
+still be published. Fix what the message names and try again; sending the same
+request again is refused the same way.
 
 Owner: core
 Level: error

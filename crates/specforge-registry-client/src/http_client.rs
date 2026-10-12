@@ -4,7 +4,7 @@ use reqwest::StatusCode;
 use reqwest::blocking::{Client, RequestBuilder, Response};
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, RETRY_AFTER};
 use specforge_registry_wire::{
-    ErrorBody, PackageMetadata, PackageSignature, SearchHit, SearchQuery, SearchResults,
+    ErrorBody, ErrorCode, PackageMetadata, PackageSignature, SearchHit, SearchQuery, SearchResults,
     TokenVerified, VersionList, form, path,
 };
 
@@ -280,10 +280,11 @@ fn failure_of(resp: Response, subject: &str) -> RegistryError {
     )
 }
 
-/// What an answer other than success means, the same for every call (ADR 0044): 401 `Unauthorized` and
-/// 403 `Forbidden` (both carrying the registry's message as guidance, else a default), 404 `NotFound`
-/// naming `subject`, 429 `RateLimited` (its `Retry-After`, read as `now` sees it), anything else
-/// `NetworkError` with the registry's message, else "registry answered {status}". Publish reads 409 as
+/// What an answer other than success means, the same for every call (ADR 0044): 400 `Refused` (the
+/// registry's code and message, else `Unknown` and "registry answered 400 Bad Request"), 401
+/// `Unauthorized` and 403 `Forbidden` (both carrying the registry's message as guidance, else a default),
+/// 404 `NotFound` naming `subject`, 429 `RateLimited` (its `Retry-After`, read as `now` sees it), anything
+/// else `NetworkError` with the registry's message, else "registry answered {status}". Publish reads 409 as
 /// `DuplicateVersion` before asking this.
 fn failure(
     status: StatusCode,
@@ -292,9 +293,22 @@ fn failure(
     subject: &str,
     now: SystemTime,
 ) -> RegistryError {
-    let message = serde_json::from_str::<ErrorBody>(body)
+    let error = serde_json::from_str::<ErrorBody>(body)
         .ok()
-        .map(|e| e.error.message);
+        .map(|e| e.error);
+    if status == StatusCode::BAD_REQUEST {
+        return match error {
+            Some(error) => RegistryError::Refused {
+                code: error.code,
+                message: error.message,
+            },
+            None => RegistryError::Refused {
+                code: ErrorCode::Unknown,
+                message: format!("registry answered {status}"),
+            },
+        };
+    }
+    let message = error.map(|e| e.message);
     match status {
         StatusCode::UNAUTHORIZED => RegistryError::Unauthorized {
             guidance: message.unwrap_or_else(|| "token expired or invalid".to_string()),
@@ -360,7 +374,7 @@ mod tests {
     }
 
     fn error_body(message: &str) -> String {
-        serde_json::to_string(&ErrorBody::new("ANY", message)).unwrap()
+        serde_json::to_string(&ErrorBody::new(ErrorCode::NotFound, message)).unwrap()
     }
 
     #[specforge_test_macros::test(
@@ -414,6 +428,13 @@ mod tests {
             }
         );
         assert_eq!(
+            read(400, None, &error_body("bad form")),
+            RegistryError::Refused {
+                code: ErrorCode::NotFound,
+                message: "bad form".into()
+            }
+        );
+        assert_eq!(
             read(500, None, &error_body("database is down")),
             RegistryError::NetworkError {
                 message: "database is down".into()
@@ -453,11 +474,13 @@ mod tests {
         }
     }
 
-    // bug: plan 12 §3 R4, flipped by T3
-    #[test]
-    fn a_registry_refusal_reads_as_a_network_error_today() {
+    #[specforge_test_macros::test(
+        behavior = "publish_to_registry",
+        verify = "a registry's refusal reaches the publisher with its reason"
+    )]
+    fn a_registry_refusal_is_its_own_error() {
         let body = serde_json::to_string(&ErrorBody::new(
-            specforge_registry_wire::code::UNSIGNED_PACKAGE,
+            ErrorCode::UnsignedPackage,
             "packages must be signed",
         ))
         .unwrap();
@@ -470,13 +493,24 @@ mod tests {
         );
         assert_eq!(
             error,
-            RegistryError::NetworkError {
+            RegistryError::Refused {
+                code: ErrorCode::UnsignedPackage,
                 message: "packages must be signed".into()
             }
         );
         let diagnostic = error.to_diagnostic();
-        assert_eq!(diagnostic.code, "R005");
-        assert!(diagnostic.suggestion.unwrap().contains("network"));
+        assert_eq!(diagnostic.code, "R008");
+        assert!(diagnostic.message.contains("UNSIGNED_PACKAGE"));
+        assert!(diagnostic.message.contains("packages must be signed"));
+        assert!(!diagnostic.suggestion.unwrap().contains("network"));
+
+        assert_eq!(
+            failure(StatusCode::BAD_REQUEST, None, "", "x", NOW),
+            RegistryError::Refused {
+                code: ErrorCode::Unknown,
+                message: "registry answered 400 Bad Request".into()
+            }
+        );
     }
 
     #[test]

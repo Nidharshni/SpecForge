@@ -394,7 +394,7 @@ mod tests {
         );
         assert_eq!(
             CATALOG.iter().filter(|e| e.owner == "core").count(),
-            121,
+            122,
             "every core entry has a constant; extensions' entries have none"
         );
     }

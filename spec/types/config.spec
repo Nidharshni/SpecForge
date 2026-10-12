@@ -149,9 +149,14 @@ type TokenVerified "Token Verified" {
   verify unit "TokenVerified is the JSON a registry answers a token check with"
 }
 
+// What a registry refused, named the same by server and client
+// (specforge_registry_wire::ErrorCode); a client reads a code it doesn't
+// know as UNKNOWN.
+type RegistryErrorCode = "NOT_FOUND" | "UNAUTHORIZED" | "FORBIDDEN" | "ADMIN_REQUIRED" | "SCOPE_OWNED" | "RATE_LIMITED" | "BAD_REQUEST" | "INVALID_NAME" | "INVALID_VERSION" | "UNSIGNED_PACKAGE" | "INVALID_SIGNATURE" | "INVALID_WASM" | "INVALID_MANIFEST" | "NAME_MISMATCH" | "DUPLICATE_VERSION" | "INTEGRITY_VIOLATION" | "DB_ERROR" | "DB_TASK" | "AUTH_TASK" | "INTEGRITY_TASK" | "STORAGE_ERROR" | "STORAGE_TASK" | "UNKNOWN"
+
 // Every error answer: {"error": {"code", "message"}}.
 type RegistryErrorBody "Registry Error Body" {
-  code    string
+  code    RegistryErrorCode
   message string
   verify unit "RegistryErrorBody is the JSON of every registry error"
 }

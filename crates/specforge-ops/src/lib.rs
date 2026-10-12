@@ -141,6 +141,7 @@ impl OpErrorKind {
             (codes::R002, OpErrorKind::PermissionDenied),
             (codes::R007, OpErrorKind::Conflict),
             (codes::R004, OpErrorKind::Timeout),
+            (codes::R008, OpErrorKind::InvalidInput),
         ];
         KINDS
             .iter()

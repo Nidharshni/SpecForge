@@ -14,6 +14,7 @@ pub mod form;
 pub mod path;
 pub mod signature;
 
+pub use code::ErrorCode;
 pub use signature::{PackageSignature, SignatureError, SignedContent, sha256_hex};
 
 use serde::{Deserialize, Serialize};
@@ -200,17 +201,18 @@ pub struct ErrorBody {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ErrorDetail {
-    /// One of [`code`]'s constants.
+    /// What the registry refused, as one of [`ErrorCode`]'s names; [`ErrorCode::Unknown`] for a code this client does
+    /// not know, or none.
     #[serde(default)]
-    pub code: String,
+    pub code: ErrorCode,
     pub message: String,
 }
 
 impl ErrorBody {
-    pub fn new(code: &str, message: impl Into<String>) -> Self {
+    pub fn new(code: ErrorCode, message: impl Into<String>) -> Self {
         Self {
             error: ErrorDetail {
-                code: code.to_string(),
+                code,
                 message: message.into(),
             },
         }
@@ -388,13 +390,17 @@ mod tests {
     )]
     fn an_error_body_is_this_json() {
         is_this_json(
-            &ErrorBody::new(code::NOT_FOUND, "package not found"),
+            &ErrorBody::new(ErrorCode::NotFound, "package not found"),
             json!({"error": {"code": "NOT_FOUND", "message": "package not found"}}),
         );
-        // An error from a registry that sends no code still reads.
+        // An error from a registry that sends no code, or one this client does not know, still reads.
         let codeless: ErrorBody =
             serde_json::from_value(json!({"error": {"message": "no"}})).unwrap();
-        assert_eq!(codeless.error.code, "");
+        assert_eq!(codeless.error.code, ErrorCode::Unknown);
+        let unknown: ErrorBody =
+            serde_json::from_value(json!({"error": {"code": "SOMETHING_NEW", "message": "no"}}))
+                .unwrap();
+        assert_eq!(unknown.error.code, ErrorCode::Unknown);
     }
 
     #[test]

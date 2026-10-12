@@ -444,7 +444,7 @@ catalog! {
         "The registry package carries no publisher signature, so where it came from can't be verified. Install it anyway only if you trust the source, with `--allow-unsigned`.";
     R_TRUST_002 = "R-TRUST-002": Error core,
         "Invalid package signature",
-        "The package's signature is malformed, or it doesn't verify: the Wasm binary or the manifest isn't what the publisher signed. Don't install the package.";
+        "The package's publisher signature doesn't verify: the Wasm binary or the manifest isn't what the publisher signed. Don't install the package. `--allow-unsigned` doesn't accept it.";
     R_TRUST_003 = "R-TRUST-003": Error core,
         "Publisher key changed",
         "The package is signed with a different key than the one pinned for it when it was first installed (trust on first use). That can be a key rotation or a compromised publisher. If you trust the new key, re-run with `--yes` or add it to `trusted_keys`.";
@@ -478,6 +478,9 @@ catalog! {
     R007: Error core,
         "Version already published",
         "`specforge publish` tried to publish a version that already exists for the package, and published versions are immutable. Bump the version in the manifest and publish again.";
+    R008: Error core,
+        "Registry refused the request",
+        "The registry read the request and refused it (HTTP 400), naming its reason and code: for a publish, a package that isn't signed or whose signature isn't one or doesn't verify over the uploaded binary and manifest (INVALID_SIGNATURE), a binary that isn't a Wasm module, or a manifest that isn't an extension declaration or names another package. Nothing was stored, and the version can still be published. Fix what the message names and try again; sending the same request again is refused the same way.";
     R010: Error core,
         "Registry token variable not set",
         "The registry's credential is a reference to an environment variable (`specforge login --token-env`, or a `token_env` entry in `~/.specforge/credentials.json`) that isn't set, or is blank, where the command runs. Set it, or log in again with another source.";

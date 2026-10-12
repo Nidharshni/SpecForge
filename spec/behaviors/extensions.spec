@@ -731,6 +731,7 @@ behavior publish_to_registry "Publish to Registry" {
   ensures {
     sha256_computed            "SHA256 hash of .wasm binary is computed and included in the upload"
     duplicate_version_rejected "A version the registry already holds is refused (R007): a published version is immutable"
+    refusal_reported           "A registry's refusal reaches the publisher as R008 with the registry's code and reason, not as a network error"
     registry_url_returned      "Successful publish returns the registry URL for the published version"
     published_event_emitted    "extension_published_to_registry event fires on successful publish"
   }
@@ -743,6 +744,8 @@ behavior publish_to_registry "Publish to Registry" {
     registry MUST refuse a manifest that is not an extension declaration,
     and takes the description and keywords it shows from the declaration. A version the registry
     already holds MUST be refused (R007): a published version is immutable.
+    A registry's refusal MUST reach the publisher as R008 naming the
+    registry's code and reason.
     The package MUST go to the one registry that serves its name, the
     registry add and update fetch that name from (ADR 0045). The upload MUST
     be authenticated: with no credential for that registry
@@ -766,6 +769,7 @@ behavior publish_to_registry "Publish to Registry" {
   verify unit "publish refuses a binary whose declaration has errors before any network call"
   verify integration "the registry refuses a manifest that is not an extension declaration"
   verify integration "the registry takes a package's description and keywords from its declaration"
+  verify unit "a registry's refusal reaches the publisher with its reason"
   verify unit "SHA256 computed and included in upload"
   verify unit "a version already published is refused with R007"
   verify unit "successful publish returns registry URL"
@@ -778,7 +782,7 @@ behavior publish_to_registry "Publish to Registry" {
   verify unit "publish asks the registry add fetches the same name from"
   verify unit "the declaration's warnings are reported even when publish is refused"
   verify unit "what publish uploads is what add installs"
-  verify contract "Publish to Registry: registry publishing holds — declaration_valid, wasm_binary_available, registry_client_available, credentials_available, sha256_computed, duplicate_version_rejected, registry_url_returned, published_event_emitted"
+  verify contract "Publish to Registry: registry publishing holds — declaration_valid, wasm_binary_available, registry_client_available, credentials_available, sha256_computed, duplicate_version_rejected, refusal_reported, registry_url_returned, published_event_emitted"
 }
 
 behavior verify_registry_integrity "Verify Registry Integrity" {
