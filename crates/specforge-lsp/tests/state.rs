@@ -58,10 +58,11 @@ async fn did_close_removes_document() {
     assert!(session.format(uri).await.is_null());
 
     // The state forgets both.
+    let uri = crate::url(uri);
     let mut state = specforge_lsp::LspState::new();
-    state.open_document(uri, LOGIN);
-    state.close_document(uri);
-    assert!(!state.is_open(uri));
+    state.open_document(&uri, LOGIN, 1);
+    state.close_document(&uri);
+    assert!(state.document(&uri).is_none());
 }
 
 /// `login` references `session_limit`, which exists nowhere.
@@ -70,14 +71,15 @@ const LOGIN: &str = "behavior login \"Login\" {\n  invariants [session_limit]\n}
 #[test]
 fn only_open_documents_tracked() {
     let mut state = specforge_lsp::LspState::new();
-    state.open_document("file:///a.spec", "a");
-    state.open_document("file:///b.spec", "b");
+    let (a, b) = (crate::url("file:///a.spec"), crate::url("file:///b.spec"));
+    state.open_document(&a, "a", 1);
+    state.open_document(&b, "b", 1);
 
-    assert_eq!(state.open_uris().len(), 2);
+    assert!(state.document(&a).is_some() && state.document(&b).is_some());
 
-    state.close_document("file:///a.spec");
-    assert_eq!(state.open_uris().len(), 1);
-    assert_eq!(state.open_uris()[0], "file:///b.spec");
+    state.close_document(&a);
+    assert!(state.document(&a).is_none());
+    assert_eq!(state.document(&b).map(|d| d.text()), Some("b"));
 }
 
 // -- handle_text_document_change ----------------------------------------------
@@ -88,17 +90,17 @@ fn only_open_documents_tracked() {
 )]
 fn did_change_applies_edits() {
     let mut state = specforge_lsp::LspState::new();
-    state.open_document("file:///a.spec", "hello world\n");
+    let uri = crate::url("file:///a.spec");
+    state.open_document(&uri, "hello world\n", 1);
 
-    state.apply_change(
-        "file:///a.spec",
-        Some(crate::lsp_range(0, 6, 0, 11)),
-        "rust",
+    state.change_document(
+        &uri,
+        2,
+        &[crate::change(Some(crate::lsp_range(0, 6, 0, 11)), "rust")],
     );
-    assert_eq!(
-        state.document("file:///a.spec").unwrap().text(),
-        "hello rust\n"
-    );
+    let document = state.document(&uri).unwrap();
+    assert_eq!(document.text(), "hello rust\n");
+    assert_eq!(document.version(), Some(2));
 }
 
 // -- the rule set -------------------------------------------------------

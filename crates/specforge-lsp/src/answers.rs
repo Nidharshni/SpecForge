@@ -110,7 +110,7 @@ fn entity_under_cursor(compiled: &Compiled, uri: &Url, position: Position) -> Op
 /// joined by a rule. `None` for a document that is not open or a position
 /// with neither.
 pub fn hover(state: &LspState, uri: &Url, position: Position) -> Option<Hover> {
-    state.document(uri.as_str())?;
+    state.document(uri)?;
     let compiled = Compiled::new(state);
     let shown = compiled
         .index_of(&compiled.key(uri))
@@ -144,7 +144,7 @@ pub fn hover(state: &LspState, uri: &Url, position: Position) -> Option<Hover> {
 
 /// What completes at the cursor (ADR 0023 D6).
 pub fn completion(state: &LspState, uri: &Url, position: Position) -> Option<CompletionResponse> {
-    let cursor = state.document(uri.as_str())?.at(position)?;
+    let cursor = state.document(uri)?.at(position)?;
     let items = crate::completion::items(
         &cursor.completion(),
         &cursor.word_edit(),
@@ -237,10 +237,7 @@ pub fn prepare_rename(
     uri: &Url,
     position: Position,
 ) -> tower_lsp::jsonrpc::Result<Option<PrepareRenameResponse>> {
-    let Some(cursor) = state
-        .document(uri.as_str())
-        .and_then(|doc| doc.at(position))
-    else {
+    let Some(cursor) = state.document(uri).and_then(|doc| doc.at(position)) else {
         return Ok(None);
     };
     let compiled = Compiled::new(state);
@@ -272,7 +269,7 @@ pub fn rename(
     let compiled = Compiled::new(state);
     // The edits come from the compile: asked from a document typed in since,
     // the rename waits for it, whatever the cursor names (ADR 0023 D7).
-    if state.document(uri.as_str()).is_some() && compiled.is_stale(&compiled.key(uri)) {
+    if state.document(uri).is_some() && compiled.is_stale(&compiled.key(uri)) {
         return Err(content_modified(&compiled.key(uri)));
     }
     let Some(id) = entity_under_cursor(&compiled, uri, position) else {
@@ -335,7 +332,7 @@ pub fn code_actions(state: &LspState, uri: &Url, range: Range) -> Option<CodeAct
     let file = compiled.key(uri);
     // The request's range is the editor's own: positions in its buffer.
     let within = state
-        .document(uri.as_str())
+        .document(uri)
         .map(|doc| doc.index().span(Sym::new(&file), range));
     let query = FixQuery {
         file: Some(&file),
@@ -405,7 +402,7 @@ pub fn workspace_symbols(state: &LspState, query: &str) -> Option<Vec<SymbolInfo
 
 /// The document's semantic tokens.
 pub fn semantic_tokens(state: &LspState, uri: &Url) -> Option<SemanticTokensResult> {
-    let doc = state.document(uri.as_str())?;
+    let doc = state.document(uri)?;
     Some(SemanticTokensResult::Tokens(SemanticTokens {
         result_id: None,
         data: doc.semantic_tokens(&state.view()),
@@ -440,7 +437,7 @@ pub fn formatting(
         tab_size: options.tab_size as usize,
         insert_spaces: options.insert_spaces,
     };
-    let doc = state.document(uri.as_str())?;
+    let doc = state.document(uri)?;
     let file = crate::uri::file_path(uri);
     let place = file
         .as_deref()

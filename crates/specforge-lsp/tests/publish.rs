@@ -70,7 +70,7 @@ fn each_diagnostic_goes_on_the_file_its_span_names() {
     );
     let a = uri(dir.path(), "a.spec");
     let b = uri(dir.path(), "b.spec");
-    state.open_document(b.as_str(), CLEAN);
+    state.open_document(&b, CLEAN, 1);
     let publication = Publication::of(&state, Some(&b), &[]);
     let on_a = publication.files.get(&a).expect("a.spec is published");
     let unresolved = on_a
@@ -109,7 +109,7 @@ fn a_spanless_cycle_goes_on_the_first_entitys_name() {
     );
     let cycle = uri(dir.path(), "cycle.spec");
     let other = uri(dir.path(), "other.spec");
-    state.open_document(other.as_str(), "behavior gamma \"G\" {\n}\n");
+    state.open_document(&other, "behavior gamma \"G\" {\n}\n", 1);
     let publication = Publication::of(&state, Some(&other), &[]);
     let w061 = publication.files[&cycle]
         .diagnostics
@@ -140,8 +140,8 @@ fn a_diagnostic_about_nothing_goes_on_the_edited_document_else_the_anchor_else_t
     let (dir, mut state) = project(&[], &[("a.spec", "\n"), ("b.spec", "\n")]);
     let a = uri(dir.path(), "a.spec");
     let b = uri(dir.path(), "b.spec");
-    state.open_document(a.as_str(), "\n");
-    state.open_document(b.as_str(), "\n");
+    state.open_document(&a, "\n", 1);
+    state.open_document(&b, "\n", 1);
     let about_nothing = |publication: &Publication, file: &Url| {
         codes(publication.files.get(file)).contains(&"I002".to_string())
     };
@@ -159,7 +159,7 @@ fn a_diagnostic_about_nothing_goes_on_the_edited_document_else_the_anchor_else_t
     state.record(&publication);
 
     // The anchor closed: on the first open document.
-    state.close_document(b.as_str());
+    state.close_document(&b);
     let publication = Publication::of(&state, None, &[]);
     assert!(about_nothing(&publication, &a), "{:?}", publication.files);
 }

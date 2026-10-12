@@ -89,20 +89,20 @@ impl Plan {
             Change::Edited(uris) => {
                 let open: Vec<&Url> = uris
                     .iter()
-                    .filter(|uri| state.is_open(uri.as_str()))
+                    .filter(|uri| state.document(uri).is_some())
                     .collect();
                 let edited = open.last().map(|uri| (*uri).clone())?;
                 Some(Plan {
                     held: open
                         .iter()
-                        .filter_map(|uri| buffer_of(state, uri.as_str()))
+                        .filter_map(|uri| buffer_of(state, uri))
                         .collect(),
                     edited: Some(edited),
                     ..nothing
                 })
             }
             Change::Closed(uri) => {
-                if state.is_open(uri.as_str()) {
+                if state.document(&uri).is_some() {
                     return None;
                 }
                 Some(Plan {
@@ -190,10 +190,9 @@ impl Plan {
 }
 
 /// The open document `uri` as a buffer to apply.
-fn buffer_of(state: &LspState, uri: &str) -> Option<Buffer> {
+fn buffer_of(state: &LspState, uri: &Url) -> Option<Buffer> {
     let document = state.document(uri)?;
-    let url = Url::parse(uri).ok()?;
-    Some(Buffer::new(uri::path_of(&url), document.text()).at_version(document.version()))
+    Some(Buffer::new(uri::path_of(uri), document.text()).at_version(document.version()))
 }
 
 /// What applying a plan did.

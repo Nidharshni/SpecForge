@@ -33,7 +33,7 @@ fn serving(dir: &TempDir, text: &str) -> (LspState, Url) {
         &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
     ));
     let uri = Url::from_file_path(dir.path().join("main.spec")).unwrap();
-    state.open_document(uri.as_str(), text);
+    state.open_document(&uri, text, 1);
     (state, uri)
 }
 
@@ -119,7 +119,7 @@ fn client_support_reads_what_the_client_declared() {
 /// (`STALE_TYPED`): the stale window, before the compile.
 fn typed_since_the_compile(dir: &TempDir) -> (LspState, Url) {
     let (mut state, uri) = serving(dir, STALE_COMPILED);
-    state.apply_change(uri.as_str(), None, STALE_TYPED);
+    state.change_document(&uri, 2, &[crate::whole(STALE_TYPED)]);
     (state, uri)
 }
 

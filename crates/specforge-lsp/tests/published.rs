@@ -77,8 +77,7 @@ async fn the_formatters_findings_stay_published_until_the_document_changes() {
 fn a_formatting_publish_mixes_two_versions_today() {
     let mut state = buffers(&[("/buffer/f.spec", KEPT)]);
     let uri = uri_of_path("/buffer/f.spec");
-    state.apply_change(uri.as_str(), None, &format!("// typed\n{KEPT}"));
-    state.document_mut(uri.as_str()).unwrap().set_version(2);
+    state.change_document(&uri, 2, &[crate::whole(&format!("// typed\n{KEPT}"))]);
     let options = FormattingOptions {
         tab_size: 2,
         insert_spaces: true,

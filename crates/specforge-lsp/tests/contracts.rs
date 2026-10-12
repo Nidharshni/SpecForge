@@ -112,21 +112,19 @@ fn lsp_shutdown_contract() {
     // Requires: active LSP state with open documents
     // Ensures: shutdown releases state, subsequent operations rejected
     let mut state = specforge_lsp::LspState::new();
-    state.open_document("file:///a.spec", "content");
-    assert!(state.is_open("file:///a.spec"));
+    let (a, b) = (crate::url("file:///a.spec"), crate::url("file:///b.spec"));
+    state.open_document(&a, "content", 1);
+    assert!(state.document(&a).is_some());
 
     state.shutdown();
 
     assert!(state.is_shutdown(), "state must be marked as shutdown");
-    assert!(
-        !state.is_open("file:///a.spec"),
-        "documents must be released"
-    );
+    assert!(state.document(&a).is_none(), "documents must be released");
 
     // Post-shutdown operations should be rejected
-    state.open_document("file:///b.spec", "new content");
+    state.open_document(&b, "new content", 1);
     assert!(
-        !state.is_open("file:///b.spec"),
+        state.document(&b).is_none(),
         "must reject operations after shutdown"
     );
 }

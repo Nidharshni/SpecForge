@@ -9,6 +9,7 @@ use specforge_registry::{FieldRegistry, KindRegistry, RegistryBuild};
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use tower_lsp::lsp_types::{TextDocumentContentChangeEvent, Url};
 
 /// Shared LSP server state: open documents, the project session (the one
 /// `specforge watch` holds: environment, graph, per-file parses and
@@ -142,48 +143,47 @@ impl LspState {
         changed
     }
 
-    pub fn open_document(&mut self, uri: &str, content: &str) {
+    /// `didOpen`: `uri` holding `text` at `version` (nothing after shutdown).
+    pub fn open_document(&mut self, uri: &Url, text: &str, version: i32) {
         if self.shutdown {
             return;
         }
-        self.documents
-            .insert(uri.to_string(), Document::new(content.to_string()));
+        let mut document = Document::new(text.to_string());
+        document.set_version(version);
+        self.documents.insert(uri.to_string(), document);
     }
 
-    pub fn close_document(&mut self, uri: &str) {
-        self.documents.remove(uri);
-        self.diagnostics.remove(uri);
+    /// `didChange`: `changes` applied in order to the open document `uri`, now at
+    /// `version`. Nothing for a document that is not open.
+    pub fn change_document(
+        &mut self,
+        uri: &Url,
+        version: i32,
+        changes: &[TextDocumentContentChangeEvent],
+    ) {
+        if let Some(document) = self.documents.get_mut(uri.as_str()) {
+            for change in changes {
+                document.apply_change(change.range, &change.text);
+            }
+            document.set_version(version);
+        }
     }
 
-    pub fn is_open(&self, uri: &str) -> bool {
-        self.documents.contains_key(uri)
+    /// `didClose`.
+    pub fn close_document(&mut self, uri: &Url) {
+        self.documents.remove(uri.as_str());
+        self.diagnostics.remove(uri.as_str());
     }
 
-    pub fn document(&self, uri: &str) -> Option<&Document> {
-        self.documents.get(uri)
+    /// The open document `uri` names.
+    pub fn document(&self, uri: &Url) -> Option<&Document> {
+        self.documents.get(uri.as_str())
     }
 
-    pub fn document_mut(&mut self, uri: &str) -> Option<&mut Document> {
-        self.documents.get_mut(uri)
-    }
-
-    pub fn open_uris(&self) -> Vec<&str> {
+    pub(crate) fn open_uris(&self) -> Vec<&str> {
         let mut uris: Vec<&str> = self.documents.keys().map(|s| s.as_str()).collect();
         uris.sort();
         uris
-    }
-
-    /// Apply one content change to an open document: `range` (UTF-16
-    /// positions) replaced by `new_text`, the whole text when `None`.
-    pub fn apply_change(
-        &mut self,
-        uri: &str,
-        range: Option<tower_lsp::lsp_types::Range>,
-        new_text: &str,
-    ) {
-        if let Some(doc) = self.documents.get_mut(uri) {
-            doc.apply_change(range, new_text);
-        }
     }
 
     pub fn diagnostics(&self, uri: &str) -> &[Diagnostic] {
@@ -382,7 +382,9 @@ impl LspState {
     /// The open document diagnostics without a span were last published
     /// on (`None` once it is closed).
     pub fn anchor(&self) -> Option<&str> {
-        self.anchor.as_deref().filter(|uri| self.is_open(uri))
+        self.anchor
+            .as_deref()
+            .filter(|uri| self.documents.contains_key(*uri))
     }
 
     /// Keep what `publication` sends: each file's placed diagnostics (code

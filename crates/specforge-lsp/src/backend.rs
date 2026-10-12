@@ -133,43 +133,32 @@ impl LanguageServer for Backend {
     }
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
-        let uri = params.text_document.uri;
-        let text = params.text_document.text;
-        let version = params.text_document.version;
+        let document = params.text_document;
+        self.state
+            .write()
+            .await
+            .open_document(&document.uri, &document.text, document.version);
 
-        {
-            let mut state = self.state.write().await;
-            state.open_document(uri.as_str(), &text);
-            if let Some(doc) = state.document_mut(uri.as_str()) {
-                doc.set_version(version);
-            }
-        }
-
-        react(&self.reaction, Change::Edited(vec![uri])).await;
+        react(&self.reaction, Change::Edited(vec![document.uri])).await;
     }
 
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
-        let uri = params.text_document.uri;
+        let id = params.text_document;
 
         // Apply text changes immediately (keeps buffer current for completions/hover)
-        {
-            let mut state = self.state.write().await;
-            for change in &params.content_changes {
-                state.apply_change(uri.as_str(), change.range, &change.text);
-            }
-            if let Some(doc) = state.document_mut(uri.as_str()) {
-                doc.set_version(params.text_document.version);
-            }
-        }
+        self.state
+            .write()
+            .await
+            .change_document(&id.uri, id.version, &params.content_changes);
 
         // Hand off to the serialized latest-wins worker (C4-03): the burst
         // is coalesced and one whole-graph pass runs at a time.
-        let _ = self.update_tx.send(uri);
+        let _ = self.update_tx.send(id.uri);
     }
 
     async fn did_close(&self, params: DidCloseTextDocumentParams) {
         let uri = params.text_document.uri;
-        self.state.write().await.close_document(uri.as_str());
+        self.state.write().await.close_document(&uri);
         // The buffer is no longer the truth for its file (ADR 0023 D9): the reaction publishes
         // the file as the project reports it now (ADR 0043 D7).
         react(&self.reaction, Change::Closed(uri)).await;

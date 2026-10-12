@@ -87,7 +87,7 @@ impl<'s> Compiled<'s> {
         }
         let index = self.state.compiled_text(file).map(|text| {
             let uri = self.uri(file);
-            match self.state.document(uri.as_str()) {
+            match self.state.document(&uri) {
                 Some(doc) if doc.text() == &*text => Arc::clone(doc.index()),
                 _ => Arc::new(LineIndex::new(&text)),
             }
@@ -116,7 +116,7 @@ impl<'s> Compiled<'s> {
     /// document is the compiled text; while it is stale, the cursor names
     /// what its own word names ([`crate::Cursor::named`], D7).
     pub(crate) fn target(&self, uri: &Url, position: Position) -> Option<Target> {
-        let cursor = self.state.document(uri.as_str())?.at(position)?;
+        let cursor = self.state.document(uri)?.at(position)?;
         let file = self.key(uri);
         if self.is_stale(&file) {
             cursor.named(&self.state.view())
@@ -138,7 +138,7 @@ impl<'s> Compiled<'s> {
             let Some(compiled) = self.state.compiled_text(file) else {
                 return true;
             };
-            match self.state.document(self.uri(file).as_str()) {
+            match self.state.document(&self.uri(file)) {
                 Some(doc) => doc.text() != &*compiled,
                 None => std::fs::read_to_string(self.state.file_path(file))
                     .map_or(true, |disk| disk != *compiled),
@@ -295,6 +295,16 @@ mod tests {
     use super::*;
     use specforge_project::ProjectSession;
     use specforge_test_macros::test as spec;
+    use tower_lsp::lsp_types::TextDocumentContentChangeEvent;
+
+    /// The editor replaces the whole text with `text`.
+    fn whole(text: &str) -> TextDocumentContentChangeEvent {
+        TextDocumentContentChangeEvent {
+            range: None,
+            range_length: None,
+            text: text.to_string(),
+        }
+    }
 
     /// A title with non-ASCII letters: `{` is at byte column 25 and UTF-16
     /// column 21 of the first line.
@@ -315,7 +325,7 @@ mod tests {
 
     /// A state serving the project at `dir` (one file, `a.spec`, holding
     /// `COMPILED`), and the URI of that file.
-    fn serving(dir: &tempfile::TempDir) -> (LspState, String) {
+    fn serving(dir: &tempfile::TempDir) -> (LspState, Url) {
         std::fs::write(
             dir.path().join("specforge.json"),
             r#"{"name":"t","version":"0.1.0","extensions":[]}"#,
@@ -326,7 +336,7 @@ mod tests {
         state.set_session(ProjectSession::open(
             &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
         ));
-        let uri = Compiled::new(&state).uri("a.spec").to_string();
+        let uri = Compiled::new(&state).uri("a.spec");
         (state, uri)
     }
 
@@ -340,7 +350,7 @@ mod tests {
 
         // The buffer is the compiled text: the span lands on its UTF-16
         // column, through the document's own index.
-        state.open_document(&uri, COMPILED);
+        state.open_document(&uri, COMPILED, 1);
         let ranges = Compiled::new(&state);
         assert!(!ranges.is_stale("a.spec"));
         let range = ranges.range(&brace()).expect("the compile holds a.spec");
@@ -350,14 +360,11 @@ mod tests {
         // The editor typed since, and the compile has not run: the span is
         // still a position in the compiled text, so it keeps its column
         // (against the buffer, byte column 25 is past the line's end).
-        state.apply_change(&uri, None, TYPED);
+        state.change_document(&uri, 2, &[whole(TYPED)]);
         let ranges = Compiled::new(&state);
         assert!(ranges.is_stale("a.spec"));
         assert_eq!(ranges.range(&brace()), Some(range));
-        assert_eq!(
-            ranges.location(&brace()).map(|l| l.uri.to_string()),
-            Some(uri.clone())
-        );
+        assert_eq!(ranges.location(&brace()).map(|l| l.uri), Some(uri.clone()));
         // What navigation reads is that text too (`Compiled::navigator`).
         assert_eq!(state.compiled_text("a.spec").as_deref(), Some(COMPILED));
     }
@@ -427,20 +434,17 @@ mod tests {
             anchor: None,
         };
 
-        state.open_document(&uri, COMPILED);
+        state.open_document(&uri, COMPILED, 1);
         let ranges = Compiled::new(&state);
         let action = fix_to_code_action(&ranges, fix(&["a.spec"])).expect("placeable");
         let changes = action.edit.unwrap().changes.unwrap();
-        assert_eq!(
-            changes[&Url::parse(&uri).unwrap()][0].range.start.character,
-            21
-        );
+        assert_eq!(changes[&uri][0].range.start.character, 21);
         // One edit with no text refuses the whole fix.
         assert!(fix_to_code_action(&ranges, fix(&["a.spec", "ghost.spec"])).is_none());
 
         // The editor typed since: the edits are positions in a text it no
         // longer has.
-        state.apply_change(&uri, None, TYPED);
+        state.change_document(&uri, 2, &[whole(TYPED)]);
         let ranges = Compiled::new(&state);
         assert!(fix_to_code_action(&ranges, fix(&["a.spec"])).is_none());
     }

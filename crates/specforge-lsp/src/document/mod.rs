@@ -52,7 +52,7 @@ impl Document {
         self.version
     }
 
-    pub fn set_version(&mut self, version: i32) {
+    pub(crate) fn set_version(&mut self, version: i32) {
         self.version = Some(version);
     }
 

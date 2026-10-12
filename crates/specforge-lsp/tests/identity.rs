@@ -175,7 +175,7 @@ fn a_document_is_found_after_its_key_moves() {
     served = served.open(&[]);
     {
         let state = served.state();
-        assert!(state.document(uri.as_str()).is_some());
+        assert!(state.document(&uri).is_some());
         assert!(answers::document_symbols(&state, &uri).is_some());
         assert!(state.compiled_text("spec/a.spec").is_some());
     }
@@ -191,7 +191,7 @@ fn a_document_is_found_after_its_key_moves() {
     ]));
     let state = served.state();
     assert!(state.compiled_text("a.spec").is_some(), "the key moved");
-    assert!(state.document(uri.as_str()).is_some());
+    assert!(state.document(&uri).is_some());
     assert!(answers::document_symbols(&state, &uri).is_some());
     let hover = hover_text(&state, &uri, Position::new(0, 6)).unwrap_or_default();
     assert!(hover.contains("alpha"), "{hover}");

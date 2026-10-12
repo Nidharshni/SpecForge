@@ -183,9 +183,7 @@ impl Served {
             .map(|file| {
                 let uri = self.uri(file);
                 let text = std::fs::read_to_string(self.dir.path().join(file)).unwrap();
-                self.state
-                    .blocking_write()
-                    .open_document(uri.as_str(), &text);
+                self.state.blocking_write().open_document(&uri, &text, 1);
                 uri
             })
             .collect();
@@ -204,9 +202,7 @@ impl Served {
             .iter()
             .map(|(file, text)| {
                 let uri = self.uri(file);
-                self.state
-                    .blocking_write()
-                    .open_document(uri.as_str(), text);
+                self.state.blocking_write().open_document(&uri, text, 1);
                 uri
             })
             .collect();
@@ -219,9 +215,7 @@ impl Served {
         let uri = self.uri(file);
         self.state
             .blocking_write()
-            .document_mut(uri.as_str())
-            .expect("open")
-            .set_version(version);
+            .change_document(&uri, version, &[]);
     }
 
     /// What opening the workspace and its documents sent.
@@ -255,17 +249,18 @@ impl Served {
     /// The buffer of `file` becomes `text`; nothing is compiled (the stale window).
     pub fn type_text(&mut self, file: &str, text: &str) {
         let uri = self.uri(file);
-        self.state
-            .blocking_write()
-            .apply_change(uri.as_str(), None, text);
+        self.type_into(&uri, text);
     }
 
     /// The buffer of the document the client opened as `uri` becomes `text`; nothing is
     /// compiled (the stale window).
     pub fn type_into(&mut self, uri: &Url, text: &str) {
-        self.state
-            .blocking_write()
-            .apply_change(uri.as_str(), None, text);
+        let mut state = self.state.blocking_write();
+        let version = state
+            .document(uri)
+            .and_then(|doc| doc.version())
+            .unwrap_or(1);
+        state.change_document(uri, version, &[crate::whole(text)]);
     }
 
     /// `type_text`, then `apply(Change::Edited([file]))`.
@@ -280,20 +275,12 @@ impl Served {
     pub fn hold(&self, file: &str) {
         let uri = self.uri(file);
         let text = std::fs::read_to_string(self.dir.path().join(file)).unwrap();
-        self.state
-            .blocking_write()
-            .open_document(uri.as_str(), &text);
+        self.state.blocking_write().open_document(&uri, &text, 1);
     }
 
     /// As `didOpen`: `uri` opened with `text` at version 1, then `Change::Edited([uri])`.
     pub fn open_document(&mut self, uri: &Url, text: &str) -> Option<Applied> {
-        {
-            let mut state = self.state.blocking_write();
-            state.open_document(uri.as_str(), text);
-            if let Some(doc) = state.document_mut(uri.as_str()) {
-                doc.set_version(1);
-            }
-        }
+        self.state.blocking_write().open_document(uri, text, 1);
         self.apply(Change::Edited(vec![uri.clone()]))
     }
 
@@ -304,7 +291,7 @@ impl Served {
     }
 
     pub fn close_uri(&mut self, uri: &Url) -> Option<Applied> {
-        self.state.blocking_write().close_document(uri.as_str());
+        self.state.blocking_write().close_document(uri);
         self.apply(Change::Closed(uri.clone()))
     }
 
@@ -398,10 +385,10 @@ pub fn edit_buffer(state: &mut LspState, path: &str, text: &str) {
     let mut served = Served::over(std::mem::take(state));
     {
         let mut held = served.state.blocking_write();
-        if held.is_open(uri.as_str()) {
-            held.apply_change(uri.as_str(), None, text);
+        if held.document(&uri).is_some() {
+            held.change_document(&uri, 1, &[crate::whole(text)]);
         } else {
-            held.open_document(uri.as_str(), text);
+            held.open_document(&uri, text, 1);
         }
     }
     served
