@@ -230,6 +230,8 @@ c.meta.peer_dependencies.push(PeerDependency {
 });
 ```
 
+`specforge add` and `init` enable a required peer that is a builtin along with your extension; a required peer that is not installed, or an installed one at a version your range does not accept (a builtin's included), refuses the install with E027, as `specforge check` would report it.
+
 ## Contribution Surface Reference
 
 Every contribution is a builder call. The SDK adds the matching Wasm exports and metadata descriptors.

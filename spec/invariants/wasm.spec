@@ -33,8 +33,9 @@ invariant peer_dependency_satisfaction "Peer Dependency Satisfaction" {
     satisfies its declared semver range. An optional peer may be absent.
     Unsatisfied peer dependencies MUST produce an error diagnostic (E-level), not
     a silent degradation. A range that is not a SemVer requirement satisfies
-    no version (E073). `check`, `doctor`, `add` and `update` judge a peer by
-    one rule (ADR 0041).
+    no version (E073). `check`, `doctor`, `add`, `init` and `update` judge a
+    peer by one rule over one set: the extensions the project's
+    specforge.json entries load (ADR 0041).
   """
   risk      high
   verify unit "satisfied peer dependencies pass validation"

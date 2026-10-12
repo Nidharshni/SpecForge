@@ -64,7 +64,10 @@ behavior load_extension_manifests "Load Extension Manifests" {
     to the project root): it MUST load from that file, on every surface,
     under the name the component declares, the one rule the runtime and the
     environment both read an entry by; a name written before = MUST be the
-    declared one. A file that does not exist, does not load as a component,
+    declared one. Which extension each entry names is decided once (a
+    builtin's name before a lock entry; .wasm file entries after every named
+    entry), and the extension load and the lock plan of add, init and update
+    read that one decision. A file that does not exist, does not load as a component,
     declares another name than the one written, or declares an extension
     another entry already loads MUST produce E028 naming the entry. A
     specforge.json that is there and is not used as written MUST produce

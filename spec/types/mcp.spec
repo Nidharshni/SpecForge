@@ -790,18 +790,18 @@ type McpAddExtensionEnabled "A builtin extension enabled" {
 }
 
 type McpAddExtensionInstalled "A package installed and locked" {
-  action    "installed"         @literal
+  action        "installed"         @literal
   /// The specifier as the call gave it.
-  specifier string
-  extension string              @readonly
-  version   string
-  sha256    string
+  specifier     string
+  extension     string              @readonly
+  version       string
+  sha256        string
   /// "registry", or "local:<path>" for a local file.
-  source    string
+  source        string
   /// The publisher key id; absent for an unsigned package or a local file.
-  key_id    string              @optional
+  key_id        string              @optional
   /// Absent for a local file.
-  publisher PublisherAcceptance @optional
+  publisher     PublisherAcceptance @optional
   /// The required builtins the add enabled with it, dependencies first.
   peers_enabled string[]
   verify unit "McpAddExtensionInstalled schema is valid"
