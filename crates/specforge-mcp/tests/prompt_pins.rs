@@ -146,7 +146,8 @@ fn infer_names_the_projects_spec_directory() {
         "{overview}"
     );
     let plan = infer(&mut served, json!({"scope": "plan"}));
-    assert_eq!(plan["plan"]["target_spec_directory"], "model/");
+    assert_eq!(plan["scope"], "plan");
+    assert_eq!(plan["target_spec_directory"], "model/");
 }
 
 #[test]
@@ -188,7 +189,7 @@ fn infer_plan_lists_unwritten_kinds_first_in_reference_order() {
         .file("b.spec", "behavior b {\n}\n")
         .serve(&[extension]);
     let plan = infer(&mut served, json!({"scope": "plan"}));
-    let kinds: Vec<&str> = plan["plan"]["kind_priorities"]
+    let kinds: Vec<&str> = plan["kind_priorities"]
         .as_array()
         .unwrap()
         .iter()

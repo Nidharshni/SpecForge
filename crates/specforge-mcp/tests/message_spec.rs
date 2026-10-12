@@ -462,6 +462,15 @@ fn shape(schema: &Value) -> String {
     }
 }
 
+/// The prompt payloads typed so far, each with the spec type it is. Plan 07
+/// T7 replaces this with the `CORE_PROMPTS` walk.
+fn prompt_payloads() -> Vec<(&'static str, &'static Value)> {
+    vec![(
+        "McpInferPromptResult",
+        specforge_common::shape::document::<specforge_mcp::prompts::infer::Payload>(),
+    )]
+}
+
 /// One walk over every core tool's reply and every message the server
 /// sends: per spec type reached, its violations.
 fn report() -> &'static Report {
@@ -470,6 +479,9 @@ fn report() -> &'static Report {
         let mut report = Report::default();
         for document in specforge_mcp::message::documents() {
             check_type(document.spec, document.schema, document.schema, &mut report);
+        }
+        for (spec, schema) in prompt_payloads() {
+            check_type(spec, schema, schema, &mut report);
         }
         for tool in specforge_mcp::tools::CORE_TOOLS {
             let ReplySpec::Type(name) = tool.spec_reply() else {
@@ -587,6 +599,15 @@ message_type! {
     mcp_resource_template_descriptor => "McpResourceTemplateDescriptor", "McpResourceTemplateDescriptor schema is valid",
     mcp_prompt_descriptor => "McpPromptDescriptor", "McpPromptDescriptor schema is valid",
     mcp_prompt_argument => "McpPromptArgument", "McpPromptArgument schema is valid",
+    mcp_infer_overview => "McpInferOverview", "Infer Prompt Result conforms to schema",
+    mcp_infer_guide_kind => "McpInferGuideKind", "McpInferGuideKind schema is valid",
+    mcp_infer_kind_guide => "McpInferKindGuide", "McpInferKindGuide schema is valid",
+    mcp_infer_guide_field => "McpInferGuideField", "McpInferGuideField schema is valid",
+    mcp_infer_file_guide => "McpInferFileGuide", "McpInferFileGuide schema is valid",
+    mcp_infer_file_kind => "McpInferFileKind", "McpInferFileKind schema is valid",
+    mcp_infer_plan => "McpInferPlan", "McpInferPlan schema is valid",
+    mcp_infer_kind_priority => "McpInferKindPriority", "McpInferKindPriority schema is valid",
+    mcp_infer_workflow => "McpInferWorkflow", "McpInferWorkflow schema is valid",
     graph_delta => "GraphDelta", "GraphDelta schema is valid",
     node_change => "NodeChange", "NodeChange schema is valid",
     modified_node_change => "ModifiedNodeChange", "ModifiedNodeChange schema is valid",

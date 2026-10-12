@@ -1070,3 +1070,102 @@ type McpRelationshipPath {
   path_length integer
   verify unit "McpRelationshipPath schema is valid"
 }
+
+// The infer prompt's payload, one per scope, tagged by it.
+type McpInferPromptResult = McpInferOverview
+  | McpInferKindGuide
+  | McpInferFileGuide
+  | McpInferPlan
+  | McpInferWorkflow
+
+type McpInferOverview "Infer prompt, no scope: every kind's guide" {
+  scope                "overview" @literal
+  installed_extensions string[]
+  /// Entities per kind, every kind entities are written with.
+  existing_entities    object
+  kinds                McpInferGuideKind[]
+  project_conventions  string
+  spec_directory       string
+  output_format        string
+  validation           string
+  verify unit "Infer Prompt Result conforms to schema"
+}
+
+type McpInferGuideKind {
+  kind            string @readonly
+  extension       string @readonly
+  description     string @optional
+  /// Field names; a required one is followed by *.
+  fields          string[]
+  inference_guide string
+  verify unit "McpInferGuideKind schema is valid"
+}
+
+type McpInferKindGuide "Infer prompt, scope kind:<name>: one kind's guide" {
+  scope               "kind" @literal
+  kind                string @readonly
+  extension           string @readonly
+  description         string @optional
+  existing_entity_ids string[]
+  fields              McpInferGuideField[]
+  inference_guide     string
+  example             string
+  validation          string
+  verify unit "McpInferKindGuide schema is valid"
+}
+
+type McpInferGuideField {
+  name        string @readonly
+  type        string
+  required    boolean
+  description string @optional
+  verify unit "McpInferGuideField schema is valid"
+}
+
+type McpInferFileGuide "Infer prompt, scope file:<path>: what a source file already has" {
+  scope                              "file" @literal
+  file                               string @readonly
+  match_mode                         "exact" | "directory" | "suffix_path" | "none"
+  existing_entities_referencing_file McpSpecForSourceEntity[]
+  kinds                              McpInferFileKind[]
+  project_conventions                string
+  validation                         string
+  verify unit "McpInferFileGuide schema is valid"
+}
+
+type McpInferFileKind {
+  kind            string @readonly
+  inference_guide string
+  verify unit "McpInferFileKind schema is valid"
+}
+
+type McpInferPlan "Infer prompt, scope plan: the prioritized inference plan" {
+  scope                 "plan" @literal
+  target_spec_directory string
+  progress              McpInferSummary
+  cursor                integer
+  /// The cursor of the next page of either file list; absent on the last.
+  next_cursor           integer @optional
+  /// At most 50 unanalyzed files from cursor; files only.
+  unanalyzed_files      string[]
+  unanalyzed_total      integer
+  stale_files           string[]
+  stale_total           integer
+  kind_priorities       McpInferKindPriority[]
+  verify unit "McpInferPlan schema is valid"
+}
+
+type McpInferKindPriority "One kind in the inference plan's order" {
+  kind           string @readonly
+  extension      string @readonly
+  existing_count integer
+  verify unit "McpInferKindPriority schema is valid"
+}
+
+type McpInferWorkflow "Infer prompt, scope workflow: the tools the protocol names" {
+  scope           "workflow" @literal
+  /// The tools the protocol names, as tools/list names them.
+  tools           string[]
+  installed_kinds string[]
+  verify unit "McpInferWorkflow schema is valid"
+}

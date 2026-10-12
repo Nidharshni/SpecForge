@@ -792,7 +792,7 @@ fn infer_plan_reads_cursor_from_a_string() {
             "specforge://prompts/infer",
             json!({"scope": "plan", "cursor": cursor}),
         );
-        serde_json::from_str::<Value>(&prompt_text(&resp)).unwrap()["plan"]["cursor"].clone()
+        serde_json::from_str::<Value>(&prompt_text(&resp)).unwrap()["cursor"].clone()
     };
     assert_eq!(plan(&mut server, json!("50")), 50);
     assert_eq!(plan(&mut server, json!(50)), 50);

@@ -3,7 +3,7 @@
 
 mod context;
 mod explore;
-mod infer;
+pub mod infer;
 mod review;
 mod table;
 mod trace;

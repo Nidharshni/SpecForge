@@ -261,6 +261,7 @@ expression: "shape(&reply, dir.path())"
     ],
     "output_format": "Write .spec files in the spec/ directory. Use `keyword entity_id \"Title\" { fields }` syntax. Entity IDs are snake_case identifiers (letters, digits, underscores, 2-60 chars).",
     "project_conventions": "",
+    "scope": "overview",
     "spec_directory": "spec/",
     "validation": "After writing .spec files, call specforge.validate to check for errors (and specforge.analyze for coverage/contract findings). Fix any errors before proceeding."
   },

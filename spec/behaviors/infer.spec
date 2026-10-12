@@ -291,6 +291,7 @@ behavior provide_mcp_infer_gaps_tool "Provide MCP Infer Gaps Tool" {
 behavior compute_inference_guide "Compute Inference Guide" {
   features   [infer_plan_mode]
   invariants [zero_domain_knowledge_core]
+  types      [McpInferPromptResult, McpInferOverview, McpInferGuideKind]
   category   query
   ensures {
     guides_merged     "a kind's guide is its extension's, then the project's own for it"
@@ -330,6 +331,7 @@ behavior compute_inference_guide "Compute Inference Guide" {
 
 behavior provide_infer_kind_scope "Provide Infer Prompt Kind Scope" {
   features [infer_plan_mode]
+  types    [McpInferKindGuide, McpInferGuideField]
   category mcp
   ensures {
     fields_registered "every field registered on the kind is listed: its own, its extension's shared fields and other extensions' enhancement fields"
@@ -341,14 +343,14 @@ behavior provide_infer_kind_scope "Provide Infer Prompt Kind Scope" {
     description, existing entity IDs, fields, guide and example, and the
     validation step naming the validate and analyze tools. A kind no loaded
     extension declares is refused on scope as unknown_kind naming the
-    closest declared kind.
+    closest declared kind. The payload is tagged with its scope (kind).
   """
   verify unit "the kind scope renders the kind's guide; an undeclared kind is refused on scope with the closest declared kind"
 }
 
 behavior provide_infer_plan_scope "Provide Infer Prompt Plan Scope" {
   features [infer_plan_mode]
-  types    [InferencePlan, InferenceKindPriority]
+  types    [McpInferPlan, McpInferKindPriority]
   category mcp
   ensures {
     zero_first        "kinds with no existing entity come first"
@@ -362,14 +364,15 @@ behavior provide_infer_plan_scope "Provide Infer Prompt Plan Scope" {
     inference plan (specforge_ops::infer::inference_plan): the target
     spec directory (target_spec_directory, else the project's spec root
     relative to its root), the inference progress, the unanalyzed and
-    stale source files in pages of 50 from cursor with the cursor of the
-    next page, and the kind priorities. Kinds with no existing entity come
+    stale source files in pages of at most 50 from cursor, each page
+    files only, with each list's total and, unless the page is the last,
+    the cursor of the next page; and the kind priorities. The payload is
+    tagged scope plan. Kinds with no existing entity come
     first, then the others; within each group a kind comes after the kinds
     its reference fields target, else in declaration order, a cycle broken
     in declaration order. The core names no kind. Already-analyzed files
     are not unanalyzed. If specforge-infer.json exists and cannot be used,
     the plan is refused with E071.
-    Requires explicit Some("plan") match arm in prompt dispatch.
   """
   verify unit "plan lists kinds with no entities first, then each kind after the kinds it references"
   verify unit "plan excludes already-analyzed files"
@@ -381,7 +384,7 @@ behavior provide_infer_plan_scope "Provide Infer Prompt Plan Scope" {
 
 behavior provide_infer_workflow_scope "Provide Infer Prompt Workflow Scope" {
   features [infer_progress_tracking]
-  types    [InferenceManifest]
+  types    [InferenceManifest, McpInferWorkflow]
   category mcp
   ensures {
     protocol_taught   "agent receives step-by-step inference protocol"
@@ -401,7 +404,8 @@ behavior provide_infer_workflow_scope "Provide Infer Prompt Workflow Scope" {
     7. Call specforge.infer_session with action=end
     Include retry pattern: if validate fails, fix .spec -> re-validate
     -> then mark. Never mark before validation passes. The payload lists
-    the tools the protocol names and the declared kinds.
+    the tools the protocol names and the declared kinds. It is tagged with
+    its scope (workflow).
   """
   verify unit "workflow returns step-by-step protocol"
   verify unit "the workflow lists the tools it names, as the tool table names them"
@@ -411,7 +415,7 @@ behavior provide_infer_workflow_scope "Provide Infer Prompt Workflow Scope" {
 behavior provide_infer_file_scope "Provide Infer Prompt File Scope" {
   features [infer_plan_mode]
   category mcp
-  types    [McpSpecForSourceResult]
+  types    [McpSpecForSourceResult, McpInferFileGuide, McpInferFileKind]
   ensures {
     existing_listed "entities that belong to the file are listed so the agent does not duplicate them"
     one_answer      "the same entities specforge.find_spec_for_source finds for that file"
@@ -422,7 +426,8 @@ behavior provide_infer_file_scope "Provide Infer Prompt File Scope" {
     file rule MCP navigation and the LSP share, with each one's kind,
     line and symbol, and each kind's guide
     (compute_inference_guide). The list is the one
-    specforge.find_spec_for_source returns for the same path.
+    specforge.find_spec_for_source returns for the same path. The payload
+    is tagged with its scope (file).
   """
   verify unit "file scope lists the entities find_spec_for_source finds for the same file"
   verify unit "an unanchored file lists no existing entities"
