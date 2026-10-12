@@ -80,14 +80,14 @@ type PackageMetadata "Package Metadata" {
   name         string
   version      string
   sha256       string
-  size_bytes   integer  @optional
-  description  string   @optional
-  keywords     string[] @optional
-  publisher    string   @optional
-  published_at string   @optional
+  size_bytes   integer          @optional
+  description  string           @optional
+  keywords     string[]         @optional
+  publisher    string           @optional
+  published_at string           @optional
   wasm_url     string
   signature    PackageSignature @optional
-  manifest     string   @optional
+  manifest     string           @optional
   verify unit "PackageMetadata is the JSON a registry serves for one version"
 }
 
@@ -156,7 +156,29 @@ type TokenVerified "Token Verified" {
 // What a registry refused, named the same by server and client
 // (specforge_registry_wire::ErrorCode); a client reads a code it doesn't
 // know as UNKNOWN.
-type RegistryErrorCode = "NOT_FOUND" | "UNAUTHORIZED" | "FORBIDDEN" | "ADMIN_REQUIRED" | "SCOPE_OWNED" | "RATE_LIMITED" | "BAD_REQUEST" | "INVALID_NAME" | "INVALID_VERSION" | "UNSIGNED_PACKAGE" | "INVALID_SIGNATURE" | "INVALID_WASM" | "INVALID_MANIFEST" | "NAME_MISMATCH" | "DUPLICATE_VERSION" | "INTEGRITY_VIOLATION" | "DB_ERROR" | "DB_TASK" | "AUTH_TASK" | "INTEGRITY_TASK" | "STORAGE_ERROR" | "STORAGE_TASK" | "UNKNOWN"
+type RegistryErrorCode = "NOT_FOUND"
+  | "UNAUTHORIZED"
+  | "FORBIDDEN"
+  | "ADMIN_REQUIRED"
+  | "SCOPE_OWNED"
+  | "RATE_LIMITED"
+  | "BAD_REQUEST"
+  | "INVALID_NAME"
+  | "INVALID_VERSION"
+  | "UNSIGNED_PACKAGE"
+  | "INVALID_SIGNATURE"
+  | "INVALID_WASM"
+  | "INVALID_MANIFEST"
+  | "NAME_MISMATCH"
+  | "DUPLICATE_VERSION"
+  | "INTEGRITY_VIOLATION"
+  | "DB_ERROR"
+  | "DB_TASK"
+  | "AUTH_TASK"
+  | "INTEGRITY_TASK"
+  | "STORAGE_ERROR"
+  | "STORAGE_TASK"
+  | "UNKNOWN"
 
 // Every error answer: {"error": {"code", "message"}}.
 type RegistryErrorBody "Registry Error Body" {

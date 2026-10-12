@@ -734,13 +734,13 @@ behavior publish_to_registry "Publish to Registry" {
     credentials_available     "Authentication credentials are available for the target registry"
   }
   ensures {
-    sha256_computed            "SHA256 hash of .wasm binary is computed and included in the upload"
-    duplicate_version_rejected "A version the registry already holds is refused (R007): a published version is immutable"
+    sha256_computed             "SHA256 hash of .wasm binary is computed and included in the upload"
+    duplicate_version_rejected  "A version the registry already holds is refused (R007): a published version is immutable"
     signature_checked_on_upload "The registry refuses an upload whose signature is missing (UNSIGNED_PACKAGE), isn't a package signature, or doesn't verify over its name, version, binary and exact manifest (INVALID_SIGNATURE), before storing anything"
-    refusal_reported           "A registry's refusal reaches the publisher as R008 with the registry's code and reason, not as a network error"
-    receipt_checked            "Publish checks the registry's receipt names the uploaded name, version, SHA-256, size and key id, else R009"
-    registry_url_returned      "Successful publish returns the registry URL for the published version"
-    published_event_emitted    "extension_published_to_registry event fires on successful publish"
+    refusal_reported            "A registry's refusal reaches the publisher as R008 with the registry's code and reason, not as a network error"
+    receipt_checked             "Publish checks the registry's receipt names the uploaded name, version, SHA-256, size and key id, else R009"
+    registry_url_returned       "Successful publish returns the registry URL for the published version"
+    published_event_emitted     "extension_published_to_registry event fires on successful publish"
   }
   contract   """
     When specforge publish is invoked with a registry target, the system
