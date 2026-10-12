@@ -3263,7 +3263,6 @@ dependencies = [
  "specforge-parser",
  "specforge-test",
  "specforge-test-macros",
- "tempfile",
 ]
 
 [[package]]

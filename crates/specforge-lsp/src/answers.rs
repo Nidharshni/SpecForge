@@ -25,7 +25,7 @@ use crate::navigation::{
     Compiled, fix_to_code_action, outline_to_document_symbols, symbol_kind_from_entity,
 };
 use crate::publish::diagnostic_to_lsp;
-use crate::{LspState, goto_import_definition, hover};
+use crate::{LspState, hover};
 
 /// What the client declared at initialize that shapes an answer or a
 /// reaction.
@@ -169,10 +169,12 @@ pub fn definition(
             if state.spec_root().as_os_str().is_empty() {
                 return None;
             }
-            // The imported file, from its first line: no text needed.
-            let span = goto_import_definition(&path, &compiled.key(uri), state.spec_root())?;
+            // The source the compile resolves the import to, from its
+            // first line: no text needed.
+            let sources = state.source_keys();
+            let target = specforge_resolver::import_target(&sources, &compiled.key(uri), &path)?;
             Some(GotoDefinitionResponse::Scalar(Location {
-                uri: compiled.uri(span.file.as_str()),
+                uri: compiled.uri(target),
                 range: Range::default(),
             }))
         }

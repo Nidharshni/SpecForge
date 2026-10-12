@@ -9,12 +9,12 @@
 //! parses the same as before. The graph those parses build is
 //! [`specforge_graph::GraphBuild`]'s.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use specforge_common::{Diagnostic, codes};
-use specforge_graph::FileChange;
+use specforge_graph::{FileChange, GraphBuild};
 use specforge_parser::{SpecFile, parse_incremental};
 
 use crate::inputs::source_key;
@@ -82,7 +82,7 @@ impl SourceCache {
         let mut cache = SourceCache::empty();
         let mut files = Vec::with_capacity(discovered.len() + held.len());
         let keys = discovered.iter().map(|path| source_key(spec_root, path));
-        let mut seen = std::collections::BTreeSet::new();
+        let mut seen = BTreeSet::new();
         for key in keys {
             let read = match held.get(&key) {
                 Some(text) => Read::Text((*text).to_string()),
@@ -168,6 +168,29 @@ impl SourceCache {
         self.unreadable.values()
     }
 
+    /// Every source it holds, by key: each parsed one and each that could not
+    /// be read. What a `use` path may name (ADR 0055).
+    pub fn keys(&self) -> BTreeSet<&str> {
+        self.texts
+            .keys()
+            .chain(self.unreadable.keys())
+            .map(String::as_str)
+            .collect()
+    }
+
+    /// The import diagnostics of what the compile holds: E025 for each source
+    /// that could not be read, then the resolver's over `graph`'s parses (E025,
+    /// I004, W113, W027), an unreadable source being one an import may name.
+    /// The same function after a cold read and after every update.
+    pub fn import_diagnostics(&self, graph: &GraphBuild) -> Vec<Diagnostic> {
+        let parsed: Vec<(&str, &SpecFile)> = graph.files().collect();
+        let unreadable: Vec<&str> = self.unreadable.keys().map(String::as_str).collect();
+        self.unreadable()
+            .cloned()
+            .chain(specforge_resolver::resolve_imports(&parsed, &unreadable))
+            .collect()
+    }
+
     fn forget(&mut self, path: &str) {
         self.trees.remove(path);
         self.texts.remove(path);
@@ -247,7 +270,7 @@ fn edited_tree_for_replacement(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use specforge_graph::{GraphBuild, GraphConfig};
+    use specforge_graph::GraphConfig;
     use specforge_parser::parse;
 
     /// Typing reuses the retained tree; a shrinking replacement still

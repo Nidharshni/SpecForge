@@ -6,7 +6,7 @@ use specforge_ops::view::ProjectView;
 use specforge_project::coverage::RecordedCoverage;
 use specforge_project::{Environment, ProjectSession};
 use specforge_registry::{EdgeRegistry, FieldRegistry, KindRegistry, RegistryBuild};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -46,6 +46,9 @@ struct StandIn {
     /// The text the graph's spans are positions in
     /// ([`ProjectSession::source_texts`]).
     texts: HashMap<String, Arc<str>>,
+    /// The keys of the sources the graph was built from, parsed or
+    /// unreadable ([`CompiledProject::source_keys`]).
+    source_keys: BTreeSet<String>,
     /// The recorded-coverage memo of this stand-in graph (it records
     /// nothing: no root), seeded with the snapshot the session held for
     /// that graph, so no stand-in reads the memo of another.
@@ -290,6 +293,12 @@ impl LspState {
                 graph: session.project().graph().clone(),
                 env: session.project().shared_environment(),
                 texts: session.project().source_texts(),
+                source_keys: session
+                    .project()
+                    .source_keys()
+                    .into_iter()
+                    .map(str::to_string)
+                    .collect(),
                 recorded: RecordedCoverage::of(Arc::clone(session.project().recorded().entities())),
             })),
             Project::Out(_) => return None,
@@ -312,6 +321,7 @@ impl LspState {
                 graph,
                 env: environment,
                 texts: HashMap::new(),
+                source_keys: BTreeSet::new(),
                 recorded,
             };
         }
@@ -342,6 +352,17 @@ impl LspState {
     /// Everything built from the loaded extensions.
     pub fn registries(&self) -> &RegistryBuild {
         self.environment().registries()
+    }
+
+    /// The keys of the sources the project was last compiled from (each a
+    /// `.spec` file's path relative to the spec root, parsed or unreadable,
+    /// open buffers included): what a `use` path may name. While the session
+    /// is out for an update, its last complete compile's.
+    pub fn source_keys(&self) -> BTreeSet<&str> {
+        match &self.project {
+            Project::Held(session) => session.project().source_keys(),
+            Project::Out(stand_in) => stand_in.source_keys.iter().map(String::as_str).collect(),
+        }
     }
 
     /// Where the project's `.spec` files live (empty with no project).

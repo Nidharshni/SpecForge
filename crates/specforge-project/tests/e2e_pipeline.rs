@@ -317,7 +317,7 @@ fn single_entity_roundtrip() {
     verify = "a use path resolves to the project source it names"
 )]
 fn multi_file_with_imports() {
-    let (dir, ctx) = compile_specs_in(&[
+    let (_dir, ctx) = compile_specs_in(&[
         (
             "types.spec",
             r#"type user_id "User ID" {
@@ -351,7 +351,7 @@ behavior login "User Login" {
     // `use "types"` resolved to the file types.spec (extension appended,
     // path relative to the spec root), and only that.
     assert_eq!(
-        specforge_resolver::resolve_import(dir.path(), "behaviors.spec", "types").as_deref(),
+        specforge_resolver::import_target(&ctx.source_keys(), "behaviors.spec", "types"),
         Some("types.spec")
     );
     // The import's types edge links the two files' entities.

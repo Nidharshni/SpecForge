@@ -2,7 +2,7 @@
 //! compile built and what it reports. A one-shot compile is one; a project
 //! session holds one and keeps it current.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
@@ -95,6 +95,13 @@ impl CompiledProject {
     /// The root it was compiled from; `None` for a detached project.
     pub fn root(&self) -> Option<&Path> {
         self.on_disk.then_some(self.env.root())
+    }
+
+    /// The keys of the sources it holds (each `.spec` file's path relative to
+    /// the spec root): those in its graph and those that could not be read.
+    /// What a `use` path may name (ADR 0055).
+    pub fn source_keys(&self) -> BTreeSet<&str> {
+        self.sources.keys()
     }
 
     /// The graph of its sources.
@@ -211,7 +218,7 @@ impl CompiledProject {
         let applied = self.graph.apply(changes);
         self.recorded = OnceLock::new();
         self.import_diagnostics = if self.on_disk {
-            self.env.import_diagnostics(&self.sources, &self.graph)
+            self.sources.import_diagnostics(&self.graph)
         } else {
             Vec::new()
         };

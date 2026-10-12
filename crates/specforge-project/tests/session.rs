@@ -339,7 +339,7 @@ fn imports_of_every_kind_stay_resolved_across_updates() {
     session.set_verify_incremental(true);
     assert_eq!(
         e025(&session.project().diagnostics()),
-        ["import target not found: models"]
+        ["import target not found among the project's sources: models"]
     );
     assert!(
         session
@@ -370,7 +370,7 @@ fn imports_of_every_kind_stay_resolved_across_updates() {
     assert_eq!(update.rebuilt_files, ["types.spec"]);
     assert_eq!(
         e025(&update.diagnostics),
-        ["import target not found: ../types"]
+        ["import target not found among the project's sources: ../types"]
     );
     assert_matches_a_fresh_compile(&session, root);
 }
@@ -2542,7 +2542,6 @@ const EXCLUDING_DRAFTS: &str =
     behavior = "resolve_use_imports",
     verify = "an import of a file that is no project source produces E025"
 )]
-#[ignore = "fixed by T1"]
 fn an_import_of_a_file_that_is_no_source_is_e025() {
     let dir = project(
         EXCLUDING_DRAFTS,
@@ -2597,7 +2596,6 @@ fn an_import_of_a_file_that_is_no_source_is_e025() {
     behavior = "resolve_use_imports",
     verify = "an import of an unreadable source reports only that source's E025"
 )]
-#[ignore = "fixed by T1"]
 fn an_import_of_an_unreadable_source_reports_only_its_e025() {
     let dir = project(
         BARE,
@@ -2626,7 +2624,6 @@ fn an_import_of_an_unreadable_source_reports_only_its_e025() {
     behavior = "resolve_use_imports",
     verify = "an import names an editor buffer's source, saved or not"
 )]
-#[ignore = "fixed by T1"]
 fn an_import_names_an_unsaved_buffer() {
     let dir = project(BARE, &[("a.spec", "use \"b\"\n\nterm a \"A\" {\n}\n")]);
     let root = dir.path();
@@ -2648,7 +2645,6 @@ fn an_import_names_an_unsaved_buffer() {
     invariant = "incremental_correctness",
     verify = "a file discovery does not find changes nothing a compile or a session reports"
 )]
-#[ignore = "fixed by T1"]
 fn a_file_discovery_does_not_find_changes_nothing_a_session_reports() {
     let dir = project(
         EXCLUDING_DRAFTS,
@@ -2715,5 +2711,32 @@ fn a_glob_exclude_entry_leaves_its_files_out_of_the_compile() {
     assert_eq!(
         session.inputs().classify(&root.join("sub/c.draft.spec")),
         specforge_project::InputRole::Unrelated
+    );
+}
+
+#[specforge_test(
+    behavior = "resolve_use_imports",
+    verify = "symlink pointing outside spec_root is rejected"
+)]
+#[cfg(unix)]
+fn a_symlinked_directory_is_no_source() {
+    let outer = TempDir::new().unwrap();
+    let outside = outer.path().join("outside");
+    write(&outside, "secret.spec", "term secret \"S\" {\n}\n");
+    let dir = project(
+        BARE,
+        &[("a.spec", "use \"escape/secret\"\nterm a \"A\" {\n}\n")],
+    );
+    std::os::unix::fs::symlink(&outside, dir.path().join("escape")).unwrap();
+
+    let compiled = CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        None,
+    );
+
+    assert!(compiled.graph().node("secret").is_none());
+    assert_eq!(
+        e025(&compiled.diagnostics()),
+        ["import target not found among the project's sources: escape/secret"]
     );
 }

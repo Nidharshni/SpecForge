@@ -15,7 +15,7 @@ expression: "normalized(&doc, dir.path())"
       },
       "file": "main.spec",
       "line": 1,
-      "message": "import target not found: missing",
+      "message": "import target not found among the project's sources: missing",
       "severity": "Error",
       "span": {
         "end_col": 14,
@@ -24,7 +24,7 @@ expression: "normalized(&doc, dir.path())"
         "start_col": 1,
         "start_line": 1
       },
-      "suggestion": null,
+      "suggestion": "a use path names a project source: a .spec file under the spec root, not excluded and not under a skipped directory",
       "title": "Import resolution failed"
     }
   ]

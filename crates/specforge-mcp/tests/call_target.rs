@@ -1357,7 +1357,6 @@ fn a_loose_path_is_opened_for_its_call_and_never_served() {
     invariant = "incremental_correctness",
     verify = "a file discovery does not find changes nothing a compile or a session reports"
 )]
-#[ignore = "fixed by T1"]
 fn validate_reports_what_check_reports_when_an_excluded_import_target_appears() {
     let dir = project(&[], "use \"drafts/x\"\n\nterm a \"A\" {\n}\n");
     let config =

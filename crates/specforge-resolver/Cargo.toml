@@ -15,6 +15,5 @@ specforge-common = { workspace = true }
 specforge-parser = { workspace = true }
 
 [dev-dependencies]
-tempfile = { workspace = true }
 specforge-test = { workspace = true }
 specforge-test-macros = { workspace = true }

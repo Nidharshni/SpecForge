@@ -823,7 +823,6 @@ fn watch_ends_when_its_reader_leaves() {
     invariant = "incremental_correctness",
     verify = "a file discovery does not find changes nothing a compile or a session reports"
 )]
-#[ignore = "fixed by T1"]
 fn watch_reports_what_check_reports_when_an_excluded_import_target_appears() {
     let project = TempDir::new().unwrap();
     fs::write(
