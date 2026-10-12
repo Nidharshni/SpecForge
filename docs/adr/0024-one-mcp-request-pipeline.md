@@ -94,8 +94,9 @@ stream the same way, each removal recorded. `resources/subscribe` refuses an uns
 `resources/read` does (not found); `unsubscribe` never refuses.
 
 **D7. Operations fail with a kind.** `specforge_ops::OpErrorKind` is set where a failure is raised;
-MCP maps it totally to its McpErrorCode. Diagnostic codes map through one table in ops
-(`OpErrorKind::of_diagnostic`). The code stays what the CLI prints.
+MCP maps it totally to its McpErrorCode. A catalogued code is raised with its kind
+(`OpError::coded`), and a lower crate's diagnostic crosses with the kind its boundary states (`OpError::of`);
+no table maps a code to a kind (amended by ADR 0054). The code stays what the CLI prints.
 
 **D8. A request carries its revision.** *(Added 2026-10-08.)* The revision a request is served under,
 `lifecycle::Revision` (the one `initialize` negotiated, or the stateless one its `_meta` names), is
