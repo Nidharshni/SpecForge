@@ -179,7 +179,6 @@ fn check_reports_a_cycle_among_required_peers() {
 
     let outcome = specforge_ops::check::check(
         &ProjectView::of(&compiled),
-        all.clone(),
         &specforge_ops::check::CheckOptions::default(),
     )
     .unwrap();

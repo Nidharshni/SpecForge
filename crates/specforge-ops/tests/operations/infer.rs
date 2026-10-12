@@ -51,7 +51,7 @@ fn inferred(project: &Project) -> Vec<String> {
         lint_profiles: vec![LintProfile::Inferred],
         ..Default::default()
     };
-    let outcome = check(&project.view(), Vec::new(), &options).unwrap();
+    let outcome = check(&project.view().reporting(&[]), &options).unwrap();
     outcome.reported.iter().map(|d| d.code.clone()).collect()
 }
 
@@ -74,7 +74,7 @@ fn the_inferred_lint_reports_an_unusable_manifest() {
         lint_profiles: vec![LintProfile::Inferred],
         ..Default::default()
     };
-    let outcome = check(&project.view(), Vec::new(), &options).unwrap();
+    let outcome = check(&project.view().reporting(&[]), &options).unwrap();
     assert_eq!(outcome.reported.len(), 1, "{:?}", outcome.reported);
     assert_eq!(outcome.reported[0].code, "E071");
     assert!(
