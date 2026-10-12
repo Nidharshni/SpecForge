@@ -103,7 +103,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   kind, title, methods and outgoing edges differ), added and removed edges, and the affected files; source
   positions ignored (`specforge_graph::GraphDelta`, re-exported as `specforge_project::GraphDelta`). A graph
   build computes it. `specforge watch --format json` prints it and MCP sends it whole as
-  `specforge/graphChanged` (ADR 0058).
+  `specforge/graphChanged` (ADR 0058). `specforge migrate` keeps a migration only when the delta from the graph
+  before it to the graph after is empty, and reports each change as W054.
 - **Debounce rule**: changes that arrive less than 50 ms apart are one batch, due 50 ms after the last
   of them, each change once. Watch batches the file changes under every directory it watches as one
   stream, and the LSP batches edited documents, by the same rule (`specforge_watch::Coalescer`,

@@ -3,19 +3,20 @@
 //! The run previews first: a project with nothing to migrate is left alone
 //! (no compile, no hooks). Otherwise it compiles the project, migrates the
 //! files, runs the extensions' migration hooks, and compiles again. When a
-//! hook fails, or the graph's structure changed, the migrated files are
-//! restored from their backups.
+//! hook fails, or the graph delta from before to after is not empty, the
+//! migrated files are restored from their backups.
 
 use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_common::{Diagnostic, DiagnosticList, Severity, codes};
+use specforge_graph::{GraphDelta, compute_graph_delta};
 /// The migration crate's report types, as this operation's interface.
 pub use specforge_migrate::{
     MigrationBackup, MigrationDiff, MigrationRecord, MigrationResult, MigrationStatus,
     MigrationSummary, RecordChange, RollbackSummary,
 };
 use specforge_migrate::{
-    check_schema_compatibility, compare_graphs, migrate_project, restore, run_rollback,
+    check_schema_compatibility, migrate_project, restore, run_rollback, structural_differences,
 };
 use specforge_parser::{
     CURRENT_FORMAT_VERSION, FormatVersion, MAX_SUPPORTED_VERSION, MIN_SUPPORTED_VERSION,
@@ -84,8 +85,9 @@ pub struct Outcome {
     pub validated: bool,
     /// Breaking Graph Protocol schema changes (W053).
     pub schema_warnings: Vec<Diagnostic>,
-    /// How the migrated graph differs from the one before (W054).
-    pub structural_differences: Vec<Diagnostic>,
+    /// The graph delta from the graph before the migration to the graph after it, source positions ignored: the run
+    /// keeps the migration only when it is empty. Empty when the run did not compare.
+    pub graph_delta: GraphDelta,
     /// What compiling the migrated project reported.
     pub post_diagnostics: Vec<Diagnostic>,
     /// The restore, when the migration was rolled back.
@@ -133,6 +135,12 @@ pub struct MigrateDocument {
 }
 
 impl Outcome {
+    /// How the migrated graph differs from the one before: one W054 per change in [`Self::graph_delta`]; empty
+    /// exactly when it is.
+    pub fn structural_differences(&self) -> Vec<Diagnostic> {
+        structural_differences(&self.graph_delta)
+    }
+
     /// The document both surfaces print.
     pub fn document(&self) -> MigrateDocument {
         MigrateDocument {
@@ -151,7 +159,7 @@ impl Outcome {
             hooks_invoked: self.hooks_invoked.clone(),
             hook_failures: self.hook_failures.clone(),
             schema_warnings: DiagnosticList(self.schema_warnings.clone()),
-            structural_differences: DiagnosticList(self.structural_differences.clone()),
+            structural_differences: DiagnosticList(self.structural_differences()),
             rolled_back: self.rollback.is_some(),
             rollback: self.rollback.clone(),
             post_migration_validated: self.validated,
@@ -209,7 +217,7 @@ pub use specforge_protocol_types::MigrationInput;
 
 /// Migrate the project at `request.root`: preview, compile, rewrite the files,
 /// run the extensions' migration hooks in `runtime` in dependency order,
-/// compile again and compare. A failing hook or a changed graph structure
+/// compile again and compare. A failing hook or a non-empty graph delta
 /// restores every migrated file from its backup. With no runtime no
 /// extension is loaded, so no hook runs.
 pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Outcome {
@@ -235,7 +243,7 @@ pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Outcome {
         hook_failures: Vec::new(),
         validated: false,
         schema_warnings: Vec::new(),
-        structural_differences: Vec::new(),
+        graph_delta: GraphDelta::default(),
         post_diagnostics: Vec::new(),
         rollback: None,
         writes: Writes::none(),
@@ -282,9 +290,9 @@ pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Outcome {
     let post = CompiledProject::compile(project, runtime);
     outcome.validated = true;
     outcome.schema_warnings = check_schema_compatibility(&pre_schema, &schema_of(&post));
-    outcome.structural_differences = compare_graphs(pre.graph(), post.graph());
+    outcome.graph_delta = compute_graph_delta(pre.graph(), post.graph());
     outcome.post_diagnostics = post.diagnostics();
-    if !outcome.structural_differences.is_empty() {
+    if !outcome.graph_delta.is_empty() {
         roll_back(&mut outcome);
         return outcome;
     }

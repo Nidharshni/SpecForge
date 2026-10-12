@@ -416,7 +416,10 @@ behavior compute_graph_delta "Compute Graph Delta" {
     modified. added_nodes, removed_nodes, and modified_nodes MUST be
     sorted by EntityId.raw to guarantee deterministic output. The delta
     MUST be computed before any subscribers are notified. One delta
-    serves every surface: watch prints it, MCP notifies it.
+    serves every reader: watch prints it, MCP notifies it, and the
+    post-migration check (validate_post_migration_integrity) keeps a
+    migration only when the delta from the graph before it to the graph
+    after is empty.
   """
   verify unit "added nodes appear in delta"
   verify unit "removed nodes appear in delta"

@@ -548,8 +548,10 @@ fn changed_files(
     changed
 }
 
-/// The incremental graph is the cold one: every node's kind, file,
-/// position, title, fields and methods, and every edge.
+/// The incremental graph is the cold one: every node's kind, file, position, title, fields and methods, and every
+/// edge. It is the graph delta's comparison plus positions (each node's file, line and column, and the spans in its
+/// expressions and methods): the delta ignores them by contract, and an incremental build that misplaces a node is
+/// wrong even when nothing changed (ADR 0032, round 7 amendment).
 fn compare_graph_contents(incremental: &Graph, cold: &Graph) -> Result<(), String> {
     let node_sigs = |g: &Graph| -> BTreeMap<String, String> {
         g.nodes()
@@ -640,6 +642,35 @@ mod tests {
             err.contains("'other'") && err.contains("Stale Title"),
             "{err}"
         );
+    }
+
+    /// A node out of place is no change to the delta, but the verification places every node.
+    #[specforge_test(
+        behavior = "rebuild_affected_subgraph",
+        verify = "debug --verify-incremental performs cold rebuild comparison"
+    )]
+    fn a_node_out_of_place_is_a_divergence_the_delta_ignores() {
+        let mut build = build(&[
+            ("a.spec", "behavior foo \"Foo\" { contract \"x\" }"),
+            ("b.spec", "behavior other \"Other\" { contract \"o\" }"),
+        ]);
+        build.set_verify(true);
+        let placed = build.graph.clone();
+        let mut moved = build.graph.node("other").cloned().unwrap();
+        moved.source_span.start_line += 3;
+        build.graph.add_node(moved);
+        assert!(
+            crate::compute_graph_delta(&placed, &build.graph).is_empty(),
+            "a move is not a change"
+        );
+
+        let applied = build.apply([change(
+            "a.spec",
+            "behavior bar \"Bar\" { contract \"new\" }",
+        )]);
+
+        let err = applied.verification.unwrap().unwrap_err();
+        assert!(err.contains("'other'") && err.contains("b.spec:"), "{err}");
     }
 
     /// The diagnostics are compared too, in order.
