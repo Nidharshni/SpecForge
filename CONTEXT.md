@@ -28,7 +28,17 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   diagnostics are, by definition, what `specforge check` reports under the default policy, in the one
   report order: the environment's, the imports', the graph build's, the checks', then surface conflicts
   (`specforge_project::CompiledProject`). A one-shot compile (every CLI command) is one and keeps no
-  stamp; a project session holds one and keeps it current (`ProjectSession::project`, ADR 0047).
+  stamp; a project session holds one and keeps it current (`ProjectSession::project`, ADR 0047); it is
+  compiled from a project root (`CompiledProject::compile(&ProjectRoot, …)`).
+- **Project root**: the directory holding the `specforge.json` a path is in, located from any path inside the
+  project (a subdirectory, a file) by walking up, the nearest winning
+  (`specforge_common::ProjectRoot::of`, ADR 0053). Only `specforge.json` marks a project. With none at or
+  above the path, the path's own directory is a **loose root**: a project with the default configuration and
+  no extension (I002 says so). A path that does not exist is `file_not_found`. The compile, the session open,
+  the environment load and every operation that reads a project from disk take a project root, never a raw
+  path; only `init` takes its directory as given. Distinct from the **spec root**, where the project's
+  `.spec` files are discovered (`spec_root` in its `specforge.json`, else the project root): a path inside
+  the spec root names the project, never a project of its own.
 - **Format version**: the `.spec` file format a file was written against, `MAJOR.MINOR`, declared by
   the `// specforge-format:` header on its first non-blank line; a file with no header is at the
   current version and reports nothing. The parser reads it with the file
@@ -75,7 +85,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   another project opened as a session for that call only and brought up to date after the call writes, as the served one is, the directory `init` creates, or, with nothing served and
   no project named, the empty session for an entry that reads only the project view
   (`specforge_mcp::target::CallTarget`).
-  Only a project (a directory holding `specforge.json` or `specforge.spec`) is ever served: the server
+  Only a project (a directory holding `specforge.json`) is ever served: the server
   serves the nearest one at or above its root, else nothing, and a `path` to a directory that is no
   project is read for its call only (ADR 0014 D6 as amended).
   An entry's target is derived from what its handler is given

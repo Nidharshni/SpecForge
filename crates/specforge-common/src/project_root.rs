@@ -12,8 +12,8 @@ pub const PROJECT_FILE: &str = "specforge.json";
 /// itself), symlinks resolved, the first directory holding `specforge.json`
 /// is the project root (the nearest wins). With none at or above it, the
 /// path's own directory is a *loose* root: a project with the default
-/// configuration and no extension. Nothing else marks a project: a
-/// `specforge.spec` file is a source like any other.
+/// configuration and no extension. Nothing else marks a project: the file that
+/// holds the `spec` block is a source like any other.
 ///
 /// It is spelled as the path spells it where that spelling reaches the root
 /// (an editor keeps naming its files the way it named its workspace),

@@ -56,10 +56,13 @@ before each read) with disk, and `ensure_fresh` applies exactly that.
   serves the project it created), so "a project is served" never depends on which tool came first.
   *(Round 6 plan 12: only a project is adopted: a `path` naming a directory that holds neither
   `specforge.json` nor `specforge.spec` is read for that call as another project, and nothing becomes served.)*
+  *(Round 7 plan 01: a project is a directory holding `specforge.json`; `specforge.spec` marks nothing,
+  ADR 0053 D2.)*
 - **D6. Path normalization.** Canonical, then the nearest enclosing project (`specforge.json` or
   `specforge.spec`), else the directory itself; one that does not exist is `file_not_found` on
   `path`. A path inside the served project is the served project. `init`'s path is used as given and
-  may not lie inside the served project.
+  may not lie inside the served project. *(Round 7 plan 01: the rule is `ProjectRoot::of`, made canonical for
+  MCP (`canonicalized`); it is the one every surface uses, ADR 0053.)*
   *(Round 6 plan 12: the server's own root (`projectRoot`, else the path `specforge mcp` was started
   with) is read by the first step of this rule only: the nearest enclosing project, the root included;
   with none, nothing is served. It used to be served as given, so a directory with no project, or a

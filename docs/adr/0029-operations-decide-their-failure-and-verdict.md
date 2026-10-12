@@ -123,3 +123,9 @@ an embedding) that needs a command's output as a value rather than as writes.
 
 A surface that needs a failure kind ops cannot know (a transport failure), or a command whose exit
 code must say more than passed, failed or unjudged.
+
+## Amendment (architecture round 7, plan 01)
+
+- **D6a.** D6's rule is `specforge_common::ProjectRoot` (ADR 0053): every surface, not only format and
+  migrate, opens the project a path is in, and the operations take the root, not a path. `project_root_of`
+  and `enclosing_project_root` are deleted.
