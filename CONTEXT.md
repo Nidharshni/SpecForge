@@ -521,7 +521,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   D4-a). A refusal (`OpError`) is not a verdict; a measuring command's refusal exits 2. Not to be
   confused with an entity's coverage **Verdict** (ADR 0029).
 - **Terminal**: where a core CLI command writes and whom it asks: its stdout, its stderr, the input a
-  prompt reads, whether each stream is coloured (`NO_COLOR`, then `CLICOLOR_FORCE`, then whether it is
+  prompt reads (or `specforge mcp` serves, byte for byte), whether each stream is coloured (`NO_COLOR`, then `CLICOLOR_FORCE`, then whether it is
   a terminal) and whether anyone can answer, fixed when `main` makes it from the process
   (`specforge_cli::terminal::Terminal`); a test captures one. A publisher key change and a collector's
   command are asked of it, nobody to ask being no; a reader that leaves stdout ends the output

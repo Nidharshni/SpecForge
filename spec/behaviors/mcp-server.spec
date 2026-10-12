@@ -917,5 +917,6 @@ behavior serve_mcp_over_stdio "Serve MCP over Stdio" {
   verify unit "the end of the input disconnects the client"
   verify unit "a failed write ends the connection and disconnects the client"
   verify unit "a failed read ends the connection and disconnects the client"
+  verify integration "specforge mcp answers a line that is not UTF-8 instead of ending the session"
   verify contract "Serve MCP over Stdio: stdio transport holds — connection_open, one_line_per_message, response_first, connection_ended"
 }

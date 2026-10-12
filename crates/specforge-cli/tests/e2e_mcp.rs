@@ -3127,8 +3127,10 @@ fn mcp_stops_when_its_stdout_closes() {
 
 /// A line that is not UTF-8 is not JSON: answered with -32700, and the
 /// session goes on.
-#[test]
-#[ignore = "fixed by T3"]
+#[specforge_test(
+    behavior = "serve_mcp_over_stdio",
+    verify = "specforge mcp answers a line that is not UTF-8 instead of ending the session"
+)]
 fn mcp_answers_a_line_that_is_not_utf8_and_keeps_serving() {
     let dir = setup_project(&[("main.spec", r#"behavior alpha "A" { contract "first" }"#)]);
     let mut input = format!("{PING_1}\n").into_bytes();
