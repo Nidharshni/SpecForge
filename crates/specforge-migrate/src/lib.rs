@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use specforge_common::shape::Shape;
-use specforge_common::{Diagnostic, Severity, codes, load_project_config, project_root_of};
+use specforge_common::{Diagnostic, ProjectRoot, Severity, codes, load_project_config};
 use specforge_emitter::schema::{GraphProtocolSchema, SchemaMigration, diff_schemas};
 use specforge_formatter::unified_diff;
 use specforge_parser::{FORMAT_HEADER_PREFIX, FormatVersion, detect_format_version};
@@ -126,7 +126,9 @@ impl MigrationRecord {
         target: &FormatVersion,
         backups: &[MigrationBackup],
     ) -> std::io::Result<Self> {
-        let root = project_root_of(root);
+        let root = ProjectRoot::of(root)
+            .map(|r| r.dir().to_path_buf())
+            .unwrap_or_else(|_| root.to_path_buf());
         let root = root.as_path();
         let files = backups
             .iter()
@@ -603,7 +605,9 @@ pub fn restore(originals: &[Original]) -> RollbackSummary {
 /// left as it is. Backups are never removed. The record then keeps only the files not restored, and
 /// goes when none is left. With no record, nothing is restored and the one warning says so.
 pub fn run_rollback(path: &Path) -> RollbackSummary {
-    let root = project_root_of(path);
+    let root = ProjectRoot::of(path)
+        .map(|r| r.dir().to_path_buf())
+        .unwrap_or_else(|_| path.to_path_buf());
     let mut summary = RollbackSummary {
         restored_count: 0,
         skipped_count: 0,
@@ -709,7 +713,9 @@ pub fn migrate_project(
     dry_run: bool,
     no_backup: bool,
 ) -> MigrationSummary {
-    let project_root = project_root_of(path);
+    let project_root = ProjectRoot::of(path)
+        .map(|r| r.dir().to_path_buf())
+        .unwrap_or_else(|_| path.to_path_buf());
     let targets = project_sources(&project_root);
 
     let mut results = Vec::new();

@@ -232,9 +232,11 @@ fn the_providers_listing_reads_the_registration() {
 )]
 fn collect_at_a_root_that_is_no_project_is_no_project() {
     let project = project();
-    let recorded = RecordedCoverage::over(&project.graph, &project.env);
+    // A project whose environment found no specforge.json.
+    let env = specforge_project::Environment::empty();
+    let recorded = RecordedCoverage::over(&project.graph, &env);
     let bare = tempfile::TempDir::new().unwrap();
-    let view = ProjectView::new(&project.graph, &project.env, Some(bare.path()), &recorded);
+    let view = ProjectView::new(&project.graph, &env, Some(bare.path()), &recorded);
 
     let error = specforge_ops::collect::collect(
         &view,

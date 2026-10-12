@@ -12,7 +12,7 @@ use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 
 use serde_json::Value;
-use specforge_common::{Diagnostic, is_project_root, project_root_of};
+use specforge_common::{Diagnostic, ProjectRoot};
 use specforge_graph::Graph;
 use specforge_ops::view::ProjectView;
 use specforge_project::{ProjectSession, SharedRuntime};
@@ -581,9 +581,9 @@ impl<'s> Call<'s> {
 /// Resolve the call's `path` (from `arguments`) under `spec`, then apply
 /// the freshness policy to a served target.
 ///
-/// A `path` is canonical, then the nearest enclosing project (a directory
-/// with `specforge.json` or `specforge.spec`), else the directory itself;
-/// one that does not exist is `file_not_found`. A path to a project while
+/// A `path` names the project it is in (`ProjectRoot::of`, canonical: the
+/// nearest directory at or above it holding `specforge.json`, else the
+/// directory itself); one that does not exist is `file_not_found`. A path to a project while
 /// nothing is served is adopted: the server serves it, and the call acts on
 /// it as the served project. A path naming the served project (or a
 /// directory inside it) is the served project; any other, a directory that
@@ -639,20 +639,20 @@ pub fn resolve(
     };
     let root = project_at(Path::new(path))?;
     let served_root = state.project_root().map(absolute);
-    if served_root.is_none() && target.reach != Reach::Served && is_project_root(&root) {
+    if served_root.is_none() && target.reach != Reach::Served && root.is_configured() {
         // Nothing served: the call serves this project, as it is on disk
         // now. A directory that is no project is never served; it is
         // opened for this call below.
-        state.serve(&root);
+        state.serve(root.dir());
         return Ok(CallTarget::Served);
     }
-    if served_root.as_deref() == Some(root.as_path()) {
+    if served_root.as_deref() == Some(root.canonical()) {
         return served(state);
     }
     if target.reach == Reach::Served {
         return Err(TargetError::OtherProjectRefused);
     }
-    Ok(CallTarget::Other(Box::new(state.open(&root))))
+    Ok(CallTarget::Other(Box::new(state.open(root.dir()))))
 }
 
 /// The target argument `name` of the call, read as `T`: none when absent
@@ -674,12 +674,12 @@ fn argument<T: crate::args::Arg>(
     }
 }
 
-/// The project `path` names: canonical, then the nearest enclosing project,
-/// else the directory itself.
-fn project_at(path: &Path) -> Result<PathBuf, TargetError> {
-    let canonical =
-        std::fs::canonicalize(path).map_err(|_| TargetError::PathNotFound(path.to_path_buf()))?;
-    Ok(project_root_of(&canonical))
+/// The project `path` names ([`ProjectRoot::of`]), spelled canonically as
+/// MCP serves and compares it (ADR 0014 D6).
+fn project_at(path: &Path) -> Result<ProjectRoot, TargetError> {
+    ProjectRoot::of(path)
+        .map(ProjectRoot::canonicalized)
+        .map_err(|e| TargetError::PathNotFound(e.path))
 }
 
 /// `path` made absolute and canonical as far as it exists (a directory

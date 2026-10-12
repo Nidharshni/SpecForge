@@ -53,7 +53,9 @@ impl Args {
 fn collect_at(options: &Args, terminal: &Terminal) -> Exit {
     let format = options.output.format;
     // The project the path is in (ADR 0029 D6); collect refuses one that is none.
-    let root = specforge_common::project_root_of(&options.path);
+    let root = specforge_common::ProjectRoot::of(&options.path)
+        .map(|r| r.dir().to_path_buf())
+        .unwrap_or_else(|_| options.path.clone());
 
     let project = crate::pipeline::compile_project(&root);
 

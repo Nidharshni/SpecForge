@@ -215,7 +215,9 @@ pub use specforge_protocol_types::MigrationInput;
 pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Outcome {
     // The project the path is in (else the path itself): the one the files
     // are migrated in and the one the hooks and the checks compile.
-    let root = &specforge_common::project_root_of(request.root);
+    let root = &specforge_common::ProjectRoot::of(request.root)
+        .map(|r| r.dir().to_path_buf())
+        .unwrap_or_else(|_| request.root.to_path_buf());
     let target = &request.target;
     let preview = migrate_project(root, target, true, true);
     let from = preview
@@ -371,7 +373,10 @@ pub fn rollback(root: &Path) -> RollbackOutcome {
     let summary = run_rollback(root);
     let mut writes = restored_writes(&summary);
     if summary.record != RecordChange::Unchanged {
-        writes.record(specforge_common::project_root_of(root).join(MigrationRecord::PATH));
+        let project = specforge_common::ProjectRoot::of(root)
+            .map(|r| r.dir().to_path_buf())
+            .unwrap_or_else(|_| root.to_path_buf());
+        writes.record(project.join(MigrationRecord::PATH));
     }
     RollbackOutcome { summary, writes }
 }

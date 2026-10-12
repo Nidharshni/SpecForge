@@ -27,7 +27,7 @@ behavior scaffold_new_project "Scaffold New Project" {
   produces   [project_initialized]
   requires {
     filesystem_available "FileSystem port is available for writing project files"
-    no_existing_project  "No specforge.json or specforge.spec exists in the directory being initialized"
+    no_existing_project  "No specforge.json exists in the directory being initialized"
   }
   ensures {
     valid_config_created        "A syntactically valid specforge.json is created with the user-provided project name and version"
@@ -40,7 +40,7 @@ behavior scaffold_new_project "Scaffold New Project" {
     project name and version. The generated config MUST include the
     $schema field pointing to the SpecForge JSON schema URL to enable
     IDE autocomplete. The generated config MUST be syntactically valid
-    and parseable by the compiler. If a specforge.json or specforge.spec
+    and parseable by the compiler. If a specforge.json
     already exists in the directory being initialized, the system MUST
     reject the operation with an error message and exit code 1. Init only
     adds: a directory whose starter file (spec/hello.spec) already exists
@@ -181,7 +181,7 @@ behavior non_interactive_init "Non-Interactive Init" {
   requires {
     name_flag_provided   "--name flag is provided with a valid project name"
     filesystem_available "FileSystem port is available for writing project files"
-    no_existing_project  "No specforge.json or specforge.spec exists in the directory being initialized"
+    no_existing_project  "No specforge.json exists in the directory being initialized"
   }
   ensures {
     config_identical_to_interactive "Generated specforge.json is structurally identical to one created interactively with the same inputs"
@@ -249,7 +249,7 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
   ports      [FileSystem, RegistryClient]
   produces   [extension_added]
   requires {
-    existing_project_found "A specforge.json exists in the current directory or an ancestor directory as resolved by find_project_root()"
+    existing_project_found "A specforge.json exists at or above the path given (locate_project_root)"
     extension_resolvable   "Extension specifier can be resolved via registry, bundled index, or local cache"
   }
   ensures {
@@ -308,8 +308,8 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
     whose declaration cannot be read refuses the operation (E028) before
     anything is written, and a required builtin peer the builtin this
     specforge embeds does not satisfy refuses it (E027).
-    If no specforge.json exists in the current directory or any ancestor
-    directory (as resolved by find_project_root()), the system MUST reject
+    If no specforge.json exists at or above the path given (the project
+    it is in, locate_project_root), the system MUST reject
     the operation with an error message and exit code 1. If the extension
     specifier cannot be resolved, the system MUST reject the operation with
     a diagnostic naming the unresolvable extension. A registry specifier
@@ -392,47 +392,6 @@ behavior graceful_zero_extension_init "Graceful Zero-Extension Init" {
   verify integration "graceful_zero_extension_init completes full init-check-export cycle in under 60 seconds"
   verify unit "zero-extension config produces empty extensions array []"
   verify contract "Graceful Zero-Extension Init: zero-extension init holds — zero_extensions_selected, filesystem_available, empty_extensions_list, structural_starter_valid, valid_graph_exportable, project_initialized_emitted"
-}
-
-behavior find_project_root "Find Project Root" {
-  features   [project_initialization]
-  category   internal
-  requires {
-    filesystem_available "FileSystem port is available for directory traversal and symlink resolution"
-  }
-  ensures {
-    closest_wins_enforced "The first directory containing specforge.json or specforge.spec (from cwd upward) is returned"
-    json_precedence       "Within a single directory, specforge.json takes precedence over specforge.spec"
-    symlinks_resolved     "Symlinks are resolved before path comparison to prevent infinite loops"
-    none_on_missing       "If neither file is found up to filesystem root, None is returned"
-  }
-  contract   """
-    The system MUST locate the project root by walking from the current
-    directory upward to the filesystem root. At each directory level,
-    the system MUST check for both specforge.json and specforge.spec
-    before ascending to the parent. Within a single directory,
-    specforge.json takes precedence over specforge.spec. The first
-    directory containing either file wins (closest-wins semantics).
-    The system MUST resolve symlinks before path comparison to avoid
-    infinite loops caused by circular symlink chains. If neither file
-    is found in any directory up to the filesystem root, the function
-    MUST return None. The calling command decides how to handle a
-    missing project root (e.g., init may proceed, check may emit a
-    diagnostic). This function MUST NOT contain command-specific logic.
-  """
-  types      [CompilerConfig]
-  ports      [FileSystem]
-  invariants [spec_root_singleton]
-  verify unit "specforge.json found in current directory"
-  verify unit "specforge.json found in ancestor directory"
-  verify unit "specforge.spec found when specforge.json is absent at same level"
-  verify unit "closest directory wins over ancestor directory"
-  verify unit "specforge.json takes precedence over specforge.spec in same directory"
-  verify unit "symlinks are resolved before path comparison"
-  verify unit "circular symlink chain does not cause infinite loop"
-  verify unit "no config found returns None"
-  verify performance "directory traversal completes in under 100ms for 20-level deep hierarchy"
-  verify contract "Find Project Root: project root discovery holds — filesystem_available, closest_wins_enforced, json_precedence, symlinks_resolved, none_on_missing"
 }
 
 behavior locate_project_root "Locate the Project a Path Is In" {

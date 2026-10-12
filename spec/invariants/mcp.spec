@@ -77,7 +77,7 @@ invariant mcp_served_project_consistency "MCP Served Project Consistency" {
     it is on disk: an extension enabled since the last request is found by
     the next one, whether the request is a call, a read, a listing or a
     subscription (one freshness decision, owned by the request pipeline). Only a
-    project (a directory holding specforge.json or specforge.spec) is ever
+    project (a directory holding specforge.json) is ever
     served: the server serves the nearest one at or above its root (the
     client's projectRoot, else the path it was started with), and nothing
     when there is none. A call whose path names a project while none is

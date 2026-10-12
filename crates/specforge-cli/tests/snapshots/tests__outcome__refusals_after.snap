@@ -90,7 +90,7 @@ exit 1
 -- stdout:
 {
   "code": "no_project",
-  "error": "no specforge project at . (no specforge.json or specforge.spec)",
+  "error": "no specforge project at [ROOT] (no specforge.json at or above it)",
   "suggestion": null
 }
 -- stderr:

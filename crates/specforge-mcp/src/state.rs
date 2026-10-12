@@ -173,11 +173,11 @@ impl McpState {
     /// Subscribed clients learn what changed. The one place the served
     /// project is replaced (initialize, adopting a call's path, the
     /// directory `init` created). Only a project (a directory holding
-    /// `specforge.json` or `specforge.spec`) is ever served.
+    /// `specforge.json`) is ever served.
     pub fn serve(&mut self, root: &Path) {
         debug_assert!(
-            specforge_common::is_project_root(root),
-            "only a project is served: {} holds no specforge.json or specforge.spec",
+            specforge_common::ProjectRoot::is_root(root),
+            "only a project is served: {} holds no specforge.json",
             root.display()
         );
         let before = self.heard_diagnostics();

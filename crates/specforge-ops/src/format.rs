@@ -10,8 +10,8 @@
 use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_common::{
-    Diagnostic, DiagnosticList, ProjectConfig, Sym, codes, find_project_root, is_project_root,
-    load_project_config, walk_spec_files,
+    Diagnostic, DiagnosticList, ProjectConfig, ProjectRoot, Sym, codes, load_project_config,
+    walk_spec_files,
 };
 use specforge_formatter::config::{find_config_path, read_config_file};
 use specforge_formatter::{FormatConfig, TextEdit, compute_edits, format_range, format_source};
@@ -178,7 +178,7 @@ impl Configs {
     fn project_of(&mut self, dir: &Path) -> Option<PathBuf> {
         self.projects
             .entry(dir.to_path_buf())
-            .or_insert_with(|| find_project_root(dir))
+            .or_insert_with(|| ProjectRoot::enclosing(dir).map(|r| r.dir().to_path_buf()))
             .clone()
     }
 
@@ -287,7 +287,7 @@ pub struct Request<'a> {
     pub root: &'a Path,
     /// Files or directories to format; empty means the project's sources
     /// (`ProjectConfig::spec_files`). A named file is always formatted. A
-    /// named directory that is a project (`is_project_root`) is that
+    /// named directory that is a project (`ProjectRoot::is_root`) is that
     /// project's sources; any other named directory is walked as discovery
     /// walks (`specforge_common::walk_spec_files`), taking a nested
     /// project's sources where the walk reaches its root,
@@ -593,8 +593,8 @@ impl FileFailure {
 /// - no paths: the project's sources ([`ProjectConfig::spec_files`]);
 /// - a named `.spec` file: that file, even if excluded (the user named it);
 ///   any other named file is skipped;
-/// - a named directory that is a project root (`specforge.json` or
-///   `specforge.spec`): that project's sources;
+/// - a named directory that is a project root (it holds `specforge.json`):
+///   that project's sources;
 /// - any other named directory: its `.spec` files as discovery walks them
 ///   (`specforge_common::walk_spec_files`), taking a nested project's
 ///   sources where the walk reaches its root, without the files their
@@ -641,10 +641,10 @@ impl Projects {
 
     /// The `.spec` files of a named directory (see [`targets`]), sorted.
     fn walk(&mut self, dir: &Path) -> Vec<PathBuf> {
-        if is_project_root(dir) {
+        if ProjectRoot::is_root(dir) {
             return self.config(dir).spec_files(dir);
         }
-        let walked = walk_spec_files(dir, is_project_root);
+        let walked = walk_spec_files(dir, ProjectRoot::is_root);
         let mut files: Vec<PathBuf> = walked
             .files
             .into_iter()
@@ -667,7 +667,7 @@ impl Projects {
         let root = self
             .roots
             .entry(dir.clone())
-            .or_insert_with(|| find_project_root(&dir))
+            .or_insert_with(|| ProjectRoot::enclosing(&dir).map(|r| r.dir().to_path_buf()))
             .clone();
         root.is_some_and(|root| {
             let config = self.config(&root);
@@ -1687,11 +1687,11 @@ mod tests {
         behavior = "discover_format_targets",
         verify = "a named directory that is a project formats that project's sources"
     )]
-    fn a_walk_reads_a_specforge_spec_directory_as_a_project() {
+    fn a_walk_reads_a_nested_project_directory_as_a_project() {
         let dir = project_with(
             "{}",
             &[
-                ("sub/N/specforge.spec", ""),
+                ("sub/N/specforge.json", "{}"),
                 ("sub/N/n.spec", MESSY),
                 ("sub/N/inner/specforge.json", r#"{"exclude": ["drafts"]}"#),
                 ("sub/N/inner/drafts/d.spec", MESSY),
@@ -1700,7 +1700,7 @@ mod tests {
 
         let outcome = check_paths(dir.path(), &["sub"]);
 
-        // N is a project (its `specforge.spec` marks it), so its sources are
+        // N is a project (its `specforge.json` marks it), so its sources are
         // N's own discovery, which does not stop at `inner`.
         assert_eq!(
             changed_in(dir.path(), &outcome),

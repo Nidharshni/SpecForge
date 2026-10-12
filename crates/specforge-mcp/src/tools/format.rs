@@ -4,7 +4,7 @@ use crate::target::{AnyProject, Project};
 use crate::tool::{CoreTool, Effect, ReplySpec, WriteHints};
 use std::path::PathBuf;
 
-use specforge_common::project_root_of;
+use specforge_common::ProjectRoot;
 
 use crate::args::Arguments;
 use crate::mutation::{
@@ -76,7 +76,9 @@ impl CoreTool for Tool {
         // names (a directory that is no project is its own root, formatted with
         // the defaults, as `specforge format` formats it); its config decides
         // what is formatted.
-        let project_root = project_root_of(project.root);
+        let project_root = ProjectRoot::of(project.root)
+            .map(|root| root.dir().to_path_buf())
+            .unwrap_or_else(|_| project.root.to_path_buf());
 
         // The run `specforge format` makes. Relative paths name files under
         // the project root.

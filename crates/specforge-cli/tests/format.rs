@@ -759,13 +759,8 @@ fn json_prints_the_format_document_and_the_files_written() {
 
     assert_eq!(code, Some(0), "{document}");
     assert_eq!(stderr, "", "JSON output writes nothing on stderr");
-    // Shown under the project root `--path` resolves to.
-    let changed = root
-        .canonicalize()
-        .unwrap()
-        .join("spec/bad.spec")
-        .display()
-        .to_string();
+    // Shown under the project root `--path` names, as it spells it.
+    let changed = root.join("spec/bad.spec").display().to_string();
     assert_eq!(document["changed_files"], serde_json::json!([changed]));
     assert_eq!(document["total_checked"], 2);
     assert_eq!(document["ok"], true);
@@ -852,7 +847,7 @@ fn json_names_a_file_that_cannot_be_read_in_the_document() {
 
     assert_eq!(code, Some(1), "{document}");
     assert_eq!(stderr, "");
-    let shown = locked.canonicalize().unwrap().display().to_string();
+    let shown = locked.display().to_string();
     assert_eq!(document["failed_files"], serde_json::json!([shown]));
     assert_eq!(document["failures"][0]["operation"], "read");
     assert_eq!(document["failures"][0]["code"], "permission_denied");

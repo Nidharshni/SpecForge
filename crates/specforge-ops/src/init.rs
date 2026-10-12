@@ -13,7 +13,7 @@ use crate::{OpError, OpErrorKind, Writes};
 use serde::Serialize;
 use serde_json::{Value, json};
 use specforge_common::shape::Shape;
-use specforge_common::validate_project_name;
+use specforge_common::{PROJECT_FILE, ProjectRoot, validate_project_name};
 use specforge_wasm::WasmRuntime;
 use std::path::{Path, PathBuf};
 
@@ -116,14 +116,14 @@ pub struct InitDocument {
 
 /// Validate `req` and build what init writes, writing nothing.
 pub fn plan(req: &Request, runtime: &dyn WasmRuntime) -> Result<Plan, OpError> {
-    if let Some(marker) = ["specforge.json", "specforge.spec"]
-        .into_iter()
-        .find(|marker| req.dir.join(marker).exists())
-    {
+    if ProjectRoot::is_root(req.dir) {
         return Err(OpError::new(
             OpErrorKind::Conflict,
             PROJECT_EXISTS,
-            format!("project already exists at {} ({marker})", req.dir.display()),
+            format!(
+                "project already exists at {} ({PROJECT_FILE})",
+                req.dir.display()
+            ),
         ));
     }
 

@@ -49,7 +49,9 @@ impl Args {
     /// `--stdin`, whose output is the formatted text, refuses it.
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         let format = self.output.format;
-        let project_root = specforge_common::project_root_of(&self.path);
+        let project_root = specforge_common::ProjectRoot::of(&self.path)
+            .map(|r| r.dir().to_path_buf())
+            .unwrap_or_else(|_| self.path.clone());
         if self.stdin {
             if format == OutputFormat::Json {
                 return Refusal::of(format).report(

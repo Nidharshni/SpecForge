@@ -124,17 +124,26 @@ fn collect_maps_results_to_the_views_entities() {
         "@specforge/testing",
         "@specforge/cargo-test",
     ]));
-    let env = specforge_project::Environment::with_registries(
-        specforge_registry::build_registries(vec![load_via_protocol("@specforge/cargo-test")]),
-        Some(runtime),
-    );
     let (graph, _) = specforge_graph::build_graph(&[specforge_parser::parse(
         "behavior a \"A\" {\n}\n",
         "main.spec",
     )]);
     let dir = tempfile::TempDir::new().unwrap();
     // The root holds a project: collect refuses a directory that holds none.
-    std::fs::write(dir.path().join("specforge.json"), r#"{"name": "shop"}"#).unwrap();
+    let config = r#"{"name": "shop"}"#;
+    std::fs::write(dir.path().join("specforge.json"), config).unwrap();
+    let env = specforge_project::Environment::assemble(
+        specforge_common::parse_project_config(&dir.path().join("specforge.json"), config),
+        specforge_installed::Installed::none(),
+        specforge_project::ExtensionLoad::In {
+            runtime,
+            loaded: specforge_project::Loaded {
+                enabled: Vec::new(),
+                declarations: vec![load_via_protocol("@specforge/cargo-test")],
+                diagnostics: Vec::new(),
+            },
+        },
+    );
     let report = dir.path().join("target/specforge/shop.json");
     std::fs::create_dir_all(report.parent().unwrap()).unwrap();
     std::fs::write(

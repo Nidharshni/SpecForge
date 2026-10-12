@@ -709,9 +709,9 @@ pub enum CollectStatus {
 /// project: `no_project`.
 pub fn collect(view: &ProjectView, request: Request) -> Result<Outcome, OpError> {
     let root = view.project_root()?;
-    if !specforge_common::is_project_root(root) {
+    if !view.env().config_found() {
         return Err(OpError::no_project(format!(
-            "no specforge project at {} (no specforge.json or specforge.spec)",
+            "no specforge project at {} (no specforge.json at or above it)",
             root.display()
         )));
     }

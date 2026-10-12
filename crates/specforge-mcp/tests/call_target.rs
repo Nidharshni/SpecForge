@@ -1296,15 +1296,15 @@ fn project_with_a_spec_block() -> TempDir {
     p
 }
 
-#[test]
-fn a_server_started_in_a_spec_root_holding_specforge_spec_serves_that_directory_today() {
+#[specforge_test(
+    behavior = "locate_project_root",
+    verify = "a server started in a spec root holding specforge.spec serves the project around it"
+)]
+fn a_server_started_in_a_spec_root_holding_specforge_spec_serves_the_project_around_it() {
     let p = project_with_a_spec_block();
     let mut server = McpServer::new();
     initialize(&mut server, &p.path().join("spec"));
-    assert_eq!(
-        served_root(&server),
-        Some(canonical(&p.path().join("spec")))
-    );
+    assert_eq!(served_root(&server), Some(canonical(p.path())));
 }
 
 #[specforge_test(

@@ -44,7 +44,7 @@ behavior mcp_initialize "MCP Initialize" {
   contract   """
     The MCP server MUST serve the project at or above its root (the
     client's projectRoot, else the path it was started with: the nearest
-    directory holding specforge.json or specforge.spec), or nothing when
+    directory holding specforge.json, by locate_project_root), or nothing when
     there is none. It MUST compile that project's graph, load all
     extension manifests, register all tools/resources/prompts from
     installed extensions (including surface-contributed MCP tools and

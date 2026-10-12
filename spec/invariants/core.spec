@@ -2,10 +2,12 @@
 
 invariant spec_root_singleton "Spec Root Singleton" {
   guarantee """
-    Exactly one project root MUST exist per project, identified by
-    find_project_root() which locates specforge.json. The specforge.json
-    file declares project identity (name, version), installed extensions,
-    and provider configurations.
+    Exactly one project root MUST exist per project: the directory
+    holding its specforge.json, located from any path inside the
+    project by locate_project_root. The specforge.json file declares
+    project identity (name, version), installed extensions, and
+    provider configurations; no other file marks or configures a
+    project.
   """
   risk      medium
   verify property "a project with exactly one specforge.json is accepted"
