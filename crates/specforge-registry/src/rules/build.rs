@@ -3,7 +3,7 @@
 //! registries, then the host's E006 rules. ([`duplicate_codes`] is W023, which the
 //! registry build reports as a collision.)
 
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 
 use specforge_common::{Diagnostic, Severity, codes};
 use specforge_diagnostics::{Level, check_extension_code};
@@ -294,7 +294,9 @@ fn shape(descriptor: &ValidationRuleDescriptor, extension: &str) -> Result<Rule,
                 "check 'cycle_detection' requires an edge_type but none is set",
             ));
         }
-        CheckKind::CycleDetection => Check::Cycle { labels: Vec::new() },
+        CheckKind::CycleDetection => Check::Cycle {
+            edge_type: String::new(),
+        },
         CheckKind::VerifyKindAllowlist => match r.constraint.as_ref() {
             Some(c) if !c.values.is_empty() => Check::VerifyKindAllowlist {
                 allowed: c.values.clone(),
@@ -444,34 +446,11 @@ fn resolve(mut rule: Rule, registries: Registries<'_>) -> Result<Option<Rule>, D
         .collect();
     match &mut rule.check {
         Check::NoIncomingEdges(scope) | Check::NoOutgoingEdges(scope) => {
-            // The far end: its declared kind, else every kind that writes
-            // it without declaring it. Open: every edge counts.
-            let far_end = if rule.check_kind == CheckKind::NoIncomingEdges {
-                edge.sources()
-            } else {
-                edge.targets()
-            };
-            if !far_end.is_empty() {
-                let loaded: Vec<String> = far_end
-                    .iter()
-                    .filter(|kind| registries.kinds.contains(kind))
-                    .cloned()
-                    .collect();
-                // No loaded kind at its far end: the rule can't be met.
-                if loaded.is_empty() {
-                    return Ok(None);
-                }
-                *scope = EdgeScope::Peers(loaded);
-            }
+            *scope = EdgeScope::Type(edge_type);
         }
-        Check::Cycle { labels } => {
-            *labels = writers
-                .iter()
-                .map(|writer| writer.field.clone())
-                .collect::<BTreeSet<_>>()
-                .into_iter()
-                .collect();
-        }
+        Check::Cycle {
+            edge_type: followed,
+        } => *followed = edge_type,
         _ => {}
     }
     Ok(Some(rule))

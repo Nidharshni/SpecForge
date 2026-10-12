@@ -82,14 +82,16 @@ behavior execute_validation_pattern "Execute Validation Pattern" {
     against the compiled graph. no_incoming_edges MUST check that every
     entity of the target kind has at least one incoming edge. no_outgoing_edges
     MUST check outgoing edges. An edge rule with an edge type counts only
-    the edges to or from the kinds at that edge type's far end: its
-    declared kind, else every kind that writes it without declaring it. missing_field_when_flag_set MUST check that
+    the edges of that type: an edge is of the type its field writes from
+    the kind of the entity it starts at (registry_build_edges). The rule is
+    inert when no loaded field can write such an edge at its target kind.
+    missing_field_when_flag_set MUST check that
     entities whose kind has the specified flag set to true have the specified field. field_value_constraint MUST
     check that a named field on entities of the target kind satisfies a
     value predicate (non-empty, matches regex, or is one of an allowed set).
     cycle_detection MUST report each entity of the target kind (every
-    entity when no target kind is set) that sits on a cycle of the edge
-    type's edges, following every field that writes that edge type.
+    entity when no target kind is set) that sits on a cycle of the edges
+    of its edge type, whichever fields write them.
     file_exists MUST check that file-reference fields point to existing
     files, a relative path resolved against the spec root (never the
     working directory). A list field's items are each a path. A rule without a target kind applies to entities
@@ -108,6 +110,7 @@ behavior execute_validation_pattern "Execute Validation Pattern" {
   verify unit "a cycle_detection rule without a target_kind reports every entity on a cycle of its edge type"
   verify unit "cycle_detection follows every field that writes its edge type"
   verify unit "a cycle_detection rule follows only the edges of its edge type, never another kind's field of the same name"
+  verify unit "an edge rule no loaded field can satisfy at its target kind is inert"
   verify unit "the builtin extensions' rules register with no W112, W147 or W021"
   verify unit "file_exists reports missing file-reference field targets"
   verify unit "file_exists resolves a relative path against the spec root, never the working directory"
@@ -223,6 +226,11 @@ behavior snapshot_entities_once "Snapshot the Entities Once per Compile" {
     the check-phase passes) and the coverage of that compile MUST read
     it. A session MUST take a new one with every update.
 
+    Edges: every edge the snapshot holds is typed by the edge type its
+    field writes from the kind it starts at, and each entity's edges are
+    counted in total and by that type. An edge whose field writes no edge
+    type has none and counts in the total only.
+
     Field text: every field an entity writes has exactly one text, which
     declarative rules match, custom validators receive as the field's
     value (always a string) and compiler passes receive in `fields`. A
@@ -255,6 +263,7 @@ behavior snapshot_entities_once "Snapshot the Entities Once per Compile" {
   verify unit "every field an entity writes has one text, the same for declarative rules, custom validators and compiler passes"
   verify unit "a variant list or type union is its members joined by ' | ', a mixed list or expression group its items joined by ', '"
   verify unit "an empty list or block is written, with empty text, never left out or null"
+  verify unit "every edge in the snapshot is typed by the edge type its field writes from the kind it starts at, and counted by that type"
   verify unit "an entity owes obligations when a no_verify_statements rule applies to its kind and neither a union body nor an exempting flag exempts it"
   verify unit "a rule without a target kind applies to every kind, for the rule, the standing and the verify stub alike"
   verify unit "a kind that accepts no verify statements owes no obligations, whatever rule applies to it"

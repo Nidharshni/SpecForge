@@ -61,6 +61,15 @@ fn compile(
     source: &str,
     build: impl Fn(&mut ContributionsBuilder) + Send + Sync + 'static,
 ) -> Vec<Diagnostic> {
+    compiled(name, source, build).diagnostics()
+}
+
+/// [`compile`], keeping the compiled project.
+fn compiled(
+    name: &'static str,
+    source: &str,
+    build: impl Fn(&mut ContributionsBuilder) + Send + Sync + 'static,
+) -> CompiledProject {
     let dir = TempDir::new().unwrap();
     let config = json!({ "name": "pins", "version": "0.1.0", "extensions": [name] });
     fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
@@ -75,7 +84,6 @@ fn compile(
         &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
         Some(Arc::new(runtime)),
     )
-    .diagnostics()
 }
 
 /// The messages of the diagnostics with `code`.
@@ -240,7 +248,6 @@ fn an_undeclared_edge_type_counts_the_edges_of_every_writer() {
     behavior = "execute_validation_pattern",
     verify = "an edge rule does not count an edge of another edge type, whatever kinds it links"
 )]
-#[ignore = "fixed by T3"]
 fn a_declared_edge_rule_does_not_count_an_edge_of_another_type() {
     // (i) c1 is only mentioned, never owned: a Mentions edge is not Owns.
     let source = "a a1 \"A one\" { owner c2 }\nc c1 \"C one\" {}\nc c2 \"C two\" {}\n\
@@ -266,7 +273,6 @@ fn a_declared_edge_rule_does_not_count_an_edge_of_another_type() {
     behavior = "execute_validation_pattern",
     verify = "a cycle_detection rule follows only the edges of its edge type, never another kind's field of the same name"
 )]
-#[ignore = "fixed by T3"]
 fn a_cycle_rule_follows_only_the_edges_of_its_type() {
     // An NDep loop is not an MDep cycle, though both are `depends_on`.
     let loop_of_n = "n n1 \"N one\" { depends_on [n2] }\nn n2 \"N two\" { depends_on [n1] }\n";
@@ -282,6 +288,80 @@ fn a_cycle_rule_follows_only_the_edges_of_its_type() {
         ["m 'm1' is on an MDep cycle", "m 'm2' is on an MDep cycle"],
         "{diagnostics:?}"
     );
+}
+
+/// `@probe/typed`: `a.owner` writes `Owns` and `d.mentions` writes
+/// `Mentions` (both declared); `d.watches` is a reference field that writes
+/// no edge type.
+fn typed(c: &mut ContributionsBuilder) {
+    kind_writing(c, "a", "owner", FieldType::Reference, "Owns", "c");
+    c.kind("c", |k| {
+        k.description("c");
+    });
+    c.kind("d", |k| {
+        k.description("d");
+        k.field("mentions", |f| {
+            f.field_type(FieldType::ReferenceList)
+                .edge("Mentions")
+                .target_kind("c");
+        });
+        k.field("watches", |f| {
+            f.field_type(FieldType::ReferenceList).target_kind("c");
+        });
+    });
+    for label in ["Owns", "Mentions"] {
+        c.edge(label, |e| {
+            e.target_kind("c");
+        });
+    }
+}
+
+#[spec(
+    behavior = "snapshot_entities_once",
+    verify = "every edge in the snapshot is typed by the edge type its field writes from the kind it starts at, and counted by that type"
+)]
+fn the_snapshot_types_each_edge_by_the_field_that_wrote_it() {
+    let source = "a a1 \"A one\" { owner c2 }\nc c1 \"C one\" {}\nc c2 \"C two\" {}\n\
+                  d d1 \"D one\" { mentions [c1], watches [c1, c2] }\n";
+    let project = compiled("@probe/typed", source, typed);
+    let entities = project.entities();
+
+    // Each edge is typed once, by the field that wrote it.
+    let mut edges: Vec<(&str, &str, &str, Option<&str>)> = entities
+        .edges()
+        .iter()
+        .map(|e| {
+            (
+                e.source.as_str(),
+                e.target.as_str(),
+                e.label.as_str(),
+                e.edge_type.as_deref(),
+            )
+        })
+        .collect();
+    edges.sort();
+    assert_eq!(
+        edges,
+        [
+            ("a1", "c2", "owner", Some("Owns")),
+            ("d1", "c1", "mentions", Some("Mentions")),
+            ("d1", "c1", "watches", None),
+            ("d1", "c2", "watches", None),
+        ]
+    );
+
+    // And counted by that type: an edge of no type counts in the total only.
+    use specforge_registry::entity::Direction::{Incoming, Outgoing};
+    let (c1, _) = entities.get("c1").unwrap();
+    assert_eq!(c1.edges(Incoming, None), 2);
+    assert_eq!(c1.edges(Incoming, Some("Mentions")), 1);
+    assert_eq!(c1.edges(Incoming, Some("Owns")), 0);
+    let (c2, _) = entities.get("c2").unwrap();
+    assert_eq!(c2.edges(Incoming, None), 2);
+    assert_eq!(c2.edges(Incoming, Some("Owns")), 1);
+    let (d1, _) = entities.get("d1").unwrap();
+    assert_eq!(d1.edges(Outgoing, None), 3);
+    assert_eq!(d1.edges(Outgoing, Some("Mentions")), 1);
 }
 
 #[spec(

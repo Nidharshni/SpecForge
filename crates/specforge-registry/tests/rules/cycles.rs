@@ -1,5 +1,5 @@
-//! `cycle_detection` rules: the entities on a cycle of the edges their edge
-//! type is written as, over the input's edge records.
+//! `cycle_detection` rules: the entities on a cycle of the edges of their edge
+//! type, over the input's edge records (each typed by the field that wrote it).
 
 use specforge_protocol_types::{ValidationRuleDescriptor, ValidationSeverity};
 use specforge_registry::entity::{EdgeRecord, EntityRecord};
@@ -54,16 +54,20 @@ pub fn cycle_rule(
     }
 }
 
-fn edge(source: &str, target: &str, label: &str) -> EdgeRecord {
+/// The edge `source -> target` the field `label` wrote; `edge_type` is the
+/// edge type that field writes from the kind `source` is, if it writes one.
+fn edge(source: &str, target: &str, label: &str, edge_type: Option<&str>) -> EdgeRecord {
     EdgeRecord {
         source: source.to_string(),
         target: target.to_string(),
         label: label.to_string(),
+        edge_type: edge_type.map(str::to_string),
     }
 }
 
 /// `a ⇄ b` and `c → a` over `depends_on`, `x ⇄ y` over `uses`, and the
-/// `other` entity `o` on a `depends_on` loop with `a`.
+/// `other` entity `o`, whose `depends_on` is no field of its kind (that edge
+/// is of no edge type), looped with `c`.
 fn project() -> (Vec<EntityRecord>, Vec<EdgeRecord>) {
     let entities = vec![
         entity("a", "module", 0, 0),
@@ -74,13 +78,13 @@ fn project() -> (Vec<EntityRecord>, Vec<EdgeRecord>) {
         entity("y", "module", 0, 0),
     ];
     let edges = vec![
-        edge("b", "a", "depends_on"),
-        edge("a", "b", "depends_on"),
-        edge("c", "a", "depends_on"),
-        edge("o", "c", "depends_on"),
-        edge("c", "o", "depends_on"),
-        edge("x", "y", "uses"),
-        edge("y", "x", "uses"),
+        edge("b", "a", "depends_on", Some("ModuleDependsOn")),
+        edge("a", "b", "depends_on", Some("ModuleDependsOn")),
+        edge("c", "a", "depends_on", Some("ModuleDependsOn")),
+        edge("o", "c", "depends_on", None),
+        edge("c", "o", "depends_on", Some("ModuleDependsOn")),
+        edge("x", "y", "uses", None),
+        edge("y", "x", "uses", None),
     ];
     (entities, edges)
 }
@@ -193,9 +197,9 @@ fn cycle_detection_follows_every_field_that_writes_its_edge_type() {
     ];
     // m1 -> s1 -> m1 closes only through both fields; m2 -> s1 leads in.
     let edges = [
-        edge("m1", "s1", "depends_on"),
-        edge("s1", "m1", "needs"),
-        edge("m2", "s1", "depends_on"),
+        edge("m1", "s1", "depends_on", Some("Requires")),
+        edge("s1", "m1", "needs", Some("Requires")),
+        edge("m2", "s1", "depends_on", Some("Requires")),
     ];
 
     let diagnostics = built
@@ -239,15 +243,14 @@ fn an_untargeted_cycle_rule_reports_every_entity_on_a_cycle() {
         .rules
         .check(&with_edges(&entities, &edges), &NoVerdicts);
 
-    // Every kind's entities: the `other` entity closes a loop with c; each
-    // message names the member's own kind.
+    // Every kind's entities, by the edges of the edge type only: `o`'s
+    // `depends_on` is no field of its kind, so the loop through it is not a
+    // cycle of the edge type (a field name is not an edge type).
     assert_eq!(
         messages(&diagnostics),
         [
             "module 'a' is on a dependency cycle",
             "module 'b' is on a dependency cycle",
-            "module 'c' is on a dependency cycle",
-            "other 'o' is on a dependency cycle",
         ]
     );
 }

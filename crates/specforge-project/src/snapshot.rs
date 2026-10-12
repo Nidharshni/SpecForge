@@ -1,7 +1,7 @@
 //! The entity snapshot (ADR 0019): every entity of one built graph as every
 //! check after the build reads it, taken once per compile and per session
-//! check. It owns the field-text rule, the edge counts by peer kind and the
-//! one obligation rule ([`Standing`]). The registry checks and the rules read
+//! check. It owns the field-text rule, the edge types of its edges (each
+//! typed once, by the field that wrote it) and the one obligation rule ([`Standing`]). The registry checks and the rules read
 //! its records; the pass input, the custom validators' context and the
 //! coverage rule's entities are adapters over it.
 
@@ -76,6 +76,7 @@ impl EntitySnapshot {
                 source: e.source.as_str().to_string(),
                 target: e.target.as_str().to_string(),
                 label: e.label.as_str().to_string(),
+                edge_type: edge_type_of(&kind_of, registries, e.source.as_str(), e.label.as_str()),
             })
             .collect();
         EntitySnapshot {
@@ -411,8 +412,22 @@ fn primitives() -> Vec<String> {
     PRIMITIVE_TYPES.iter().map(|s| s.to_string()).collect()
 }
 
+/// The edge type of the edge the field `label` writes from the entity
+/// `source`, when that field writes one (`EdgeRegistry::written_by`, on the
+/// kind `source` is). The one place a graph edge is typed.
+fn edge_type_of(
+    kind_of: &HashMap<&str, &str>,
+    registries: &RegistryBuild,
+    source: &str,
+    label: &str,
+) -> Option<String> {
+    let kind = kind_of.get(source)?;
+    let entry = registries.edges().written_by(kind, label)?;
+    Some(entry.label().to_string())
+}
+
 /// One node as its record: what it writes (as field text), its references,
-/// obligations, edge counts by peer kind, methods, and what exempts it.
+/// obligations, edge counts by edge type, methods, and what exempts it.
 fn record(
     graph: &Graph,
     kind_of: &HashMap<&str, &str>,
@@ -420,29 +435,29 @@ fn record(
     registries: &RegistryBuild,
 ) -> EntityRecord {
     let id = node.id.raw.as_str();
-    // Edges in one direction, by the kind of the entity at the far end.
-    let counts = |peers: Vec<&str>| {
-        let mut by_peer_kind = BTreeMap::new();
-        for kind in peers.iter().filter_map(|peer| kind_of.get(peer)) {
-            *by_peer_kind.entry(kind.to_string()).or_insert(0) += 1;
+    // Edges in one direction, in total and by edge type.
+    let counts = |types: Vec<Option<String>>| {
+        let mut by_type = BTreeMap::new();
+        for edge_type in types.iter().flatten() {
+            *by_type.entry(edge_type.clone()).or_insert(0) += 1;
         }
         EdgeCounts {
-            total: peers.len(),
-            by_peer_kind,
+            total: types.len(),
+            by_type,
         }
     };
     let incoming = counts(
         graph
             .edges_to(id)
             .iter()
-            .map(|e| e.source.as_str())
+            .map(|e| edge_type_of(kind_of, registries, e.source.as_str(), e.label.as_str()))
             .collect(),
     );
     let outgoing = counts(
         graph
             .edges_from(id)
             .iter()
-            .map(|e| e.target.as_str())
+            .map(|e| edge_type_of(kind_of, registries, id, e.label.as_str()))
             .collect(),
     );
     let entries = node.fields.entries();
