@@ -1,0 +1,94 @@
+---
+source: crates/specforge-cli/tests/parity.rs
+assertion_line: 752
+expression: cli_snap
+---
+{
+  "check": {
+    "diagnostics": [
+      "Warning W138",
+      "Warning W138"
+    ],
+    "ok": true
+  },
+  "config": {
+    "extensions": [
+      "@specforge/software"
+    ],
+    "name": "demo",
+    "registries": [
+      {
+        "alias": "offline",
+        "default_registry": true,
+        "url": "http://127.0.0.1:9/v1"
+      }
+    ],
+    "spec_root": "spec",
+    "version": "0.1.0"
+  },
+  "files": {
+    "spec/main.spec": "behavior alpha \"Alpha\" {\n  category \"core\"\n  contract \"The system MUST work\"\n}\n"
+  },
+  "ok": true,
+  "payload": {
+    "cache_status": "ok",
+    "conflicts": [],
+    "credentials": [],
+    "credentials_failures": 0,
+    "enhancements": {
+      "milestone": [
+        {
+          "edge_types": [
+            "MilestoneIncludesBehavior"
+          ],
+          "extension": "@specforge/software",
+          "fields": [
+            "behaviors"
+          ]
+        }
+      ],
+      "module": [
+        {
+          "edge_types": [
+            "ModuleConsumesPort",
+            "ModuleDefinesPort"
+          ],
+          "extension": "@specforge/software",
+          "fields": [
+            "ports",
+            "ports_defined"
+          ]
+        }
+      ]
+    },
+    "extensions": [
+      {
+        "enhancement_count": 2,
+        "name": "@specforge/software",
+        "source": "builtin",
+        "status": "loaded",
+        "version": "1.0.0"
+      }
+    ],
+    "extensions_ok": true,
+    "findings": [
+      {
+        "about": "load",
+        "check": "extension '@specforge/software': describe 'enhancements' item 'module' has the key 'edge_types', which the protocol does not define; it is ignored",
+        "code": "W138",
+        "remediation": "check the key's spelling against the protocol's descriptors (docs/extension-protocol.md), or update specforge if the extension needs a newer host",
+        "status": "warn"
+      },
+      {
+        "about": "load",
+        "check": "extension '@specforge/software': describe 'enhancements' item 'milestone' has the key 'edge_types', which the protocol does not define; it is ignored",
+        "code": "W138",
+        "remediation": "check the key's spelling against the protocol's descriptors (docs/extension-protocol.md), or update specforge if the extension needs a newer host",
+        "status": "warn"
+      }
+    ],
+    "installed_count": 0,
+    "ok": true,
+    "z3_available": "[Z3]"
+  }
+}

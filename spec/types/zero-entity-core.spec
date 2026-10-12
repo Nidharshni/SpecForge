@@ -153,17 +153,16 @@ type EdgeTypeDescriptor {
   verify unit "EdgeTypeDescriptor schema is valid"
 }
 
-// Fields, edge types and verify kinds one extension adds to an entity kind
+// Fields and verify kinds one extension adds to an entity kind
 // another extension declares.
 type EntityEnhancementDescriptor {
-  target_kind      string               @readonly
+  target_kind      string            @readonly
   // The extension that owns the target kind: an enhancement of a kind whose
   // owner is not loaded is skipped silently
-  source_extension string               @readonly
-  fields           FieldDescriptor[]    @optional
-  edge_types       EdgeTypeDescriptor[] @optional
+  source_extension string            @readonly
+  fields           FieldDescriptor[] @optional
   // Makes the target kind testable with exactly these verify kinds (ADR 0002)
-  verify_kinds     string[]             @optional
+  verify_kinds     string[]          @optional
   verify unit "EntityEnhancementDescriptor schema is valid"
 }
 

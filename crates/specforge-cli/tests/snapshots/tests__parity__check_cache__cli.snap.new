@@ -1,0 +1,58 @@
+---
+source: crates/specforge-cli/tests/parity.rs
+assertion_line: 752
+expression: cli_snap
+---
+{
+  "check": {
+    "diagnostics": [
+      "Warning W138",
+      "Warning W138"
+    ],
+    "ok": true
+  },
+  "config": {
+    "extensions": [
+      "@specforge/software"
+    ],
+    "name": "demo",
+    "registries": [
+      {
+        "alias": "offline",
+        "default_registry": true,
+        "url": "http://127.0.0.1:9/v1"
+      }
+    ],
+    "spec_root": "spec",
+    "version": "0.1.0"
+  },
+  "files": {
+    "spec/main.spec": "behavior alpha \"Alpha\" {\n  category \"core\"\n  contract \"The system MUST work\"\n}\n",
+    "specforge-cache.json": "{\n  \"format\": 1,\n  \"statuses\": {}\n}\n"
+  },
+  "ok": true,
+  "payload": [
+    {
+      "code": "W138",
+      "column": null,
+      "file": null,
+      "line": null,
+      "message": "extension '@specforge/software': describe 'enhancements' item 'module' has the key 'edge_types', which the protocol does not define; it is ignored",
+      "severity": "Warning",
+      "span": null,
+      "suggestion": "check the key's spelling against the protocol's descriptors (docs/extension-protocol.md), or update specforge if the extension needs a newer host",
+      "title": "Unknown describe key"
+    },
+    {
+      "code": "W138",
+      "column": null,
+      "file": null,
+      "line": null,
+      "message": "extension '@specforge/software': describe 'enhancements' item 'milestone' has the key 'edge_types', which the protocol does not define; it is ignored",
+      "severity": "Warning",
+      "span": null,
+      "suggestion": "check the key's spelling against the protocol's descriptors (docs/extension-protocol.md), or update specforge if the extension needs a newer host",
+      "title": "Unknown describe key"
+    }
+  ]
+}

@@ -26,7 +26,7 @@ fn handshake_request_json_field_names() {
 
 #[test]
 fn protocol_version_constant() {
-    assert_eq!(PROTOCOL_VERSION, "1.2.0");
+    assert_eq!(PROTOCOL_VERSION, "1.3.0");
 }
 
 // ── Step 2: HandshakeResponse ──
@@ -404,15 +404,6 @@ fn entity_enhancement_descriptor_round_trip() {
             headline: false,
             derived_from: None,
             proof_role: None,
-        }],
-        edge_types: vec![EdgeTypeDescriptor {
-            label: "RequiresCondition".to_string(),
-            description: None,
-            source_kind: Some("behavior".to_string()),
-            target_kind: Some("condition".to_string()),
-            edge_style: None,
-            edge_color: None,
-            edge_arrowhead: None,
         }],
     };
     let json = serde_json::to_string(&enh).unwrap();
