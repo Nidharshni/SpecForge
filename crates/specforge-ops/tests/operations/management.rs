@@ -58,7 +58,6 @@ fn project() -> Project {
                         ..EnabledExtension::unloaded("@acme/missing@1.2.0")
                     }],
                     declarations: Vec::new(),
-                    diagnostics: Vec::new(),
                 },
             },
         )
@@ -199,7 +198,14 @@ fn the_providers_listing_reports_what_the_environment_registered() {
     assert_eq!(w118(&listing.diagnostics).len(), 2, "{listing:?}");
     assert_eq!(
         w118(&listing.diagnostics),
-        w118(compiled.environment().providers().diagnostics())
+        w118(
+            &compiled
+                .environment()
+                .providers()
+                .diagnostics()
+                .cloned()
+                .collect::<Vec<_>>()
+        )
     );
 }
 

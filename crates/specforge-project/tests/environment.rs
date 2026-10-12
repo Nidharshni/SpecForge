@@ -7,7 +7,9 @@ use serde_json::json;
 use specforge_common::parse_project_config;
 use specforge_extension_sdk::prelude::*;
 use specforge_installed::Installed;
-use specforge_project::{EnabledExtension, Environment, ExtensionLoad, Loaded, SharedRuntime};
+use specforge_project::{
+    EnabledExtension, Environment, ExtensionLoad, Loaded, SetupPart, SharedRuntime,
+};
 use specforge_test::prelude::*;
 use specforge_wasm::testing::InProcessRuntime;
 use tempfile::TempDir;
@@ -156,7 +158,6 @@ fn an_environment_assembles_from_the_parts_it_is_given() {
             loaded: Loaded {
                 enabled: vec![EnabledExtension::unloaded(RULES)],
                 declarations: vec![declaration],
-                diagnostics: vec![],
             },
         },
     );
@@ -201,9 +202,11 @@ fn an_environment_assembles_from_the_parts_it_is_given() {
     );
 }
 
-/// Characterization: an entry's load diagnostics are not together today.
-#[test]
-fn the_load_reports_failures_and_unpinned_entries_before_every_warning() {
+#[specforge_test(
+    behavior = "load_extension_manifests",
+    verify = "the environment says what part of the setup each of its diagnostics is about, and reports an entry's load diagnostics together"
+)]
+fn an_entrys_load_diagnostics_come_together_in_entry_order() {
     let dir = TempDir::new().unwrap();
     let root = dir.path();
     std::fs::write(
@@ -239,11 +242,25 @@ fn the_load_reports_failures_and_unpinned_entries_before_every_warning() {
 
     let env = Environment::load(&specforge_common::ProjectRoot::of(root).unwrap(), Some(rt));
 
-    // Today the failures and notices come first, then every warning.
+    // Each entry's diagnostics come right after the entry.
     assert_eq!(
         codes_among(&env, &["W153", "E028", "W149"]),
-        ["E028", "W149", "W153"],
+        ["W153", "E028", "W149"],
         "{:#?}",
         env.diagnostics().collect::<Vec<_>>()
+    );
+    let parts: Vec<_> = env
+        .setup_diagnostics()
+        .into_iter()
+        .map(|s| (s.part, s.diagnostic.code.as_str()))
+        .filter(|(_, code)| ["W153", "E028", "W149"].contains(code))
+        .collect();
+    assert_eq!(
+        parts,
+        [
+            (SetupPart::Entry(0), "W153"),
+            (SetupPart::Entry(1), "E028"),
+            (SetupPart::Entry(2), "W149"),
+        ]
     );
 }

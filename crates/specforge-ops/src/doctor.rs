@@ -618,6 +618,7 @@ mod tests {
                     name: "@sdk/greet".into(),
                     file: Some("greet.wasm".into()),
                     failure: None,
+                    warnings: Vec::new(),
                 },
                 failing_entry("@acme/missing", LoadProblem::NotInstalled),
                 failing_entry(

@@ -78,9 +78,13 @@ behavior load_extension_manifests "Load Extension Manifests" {
     that is not a string is ignored; the rest of the file is used. A
     missing specforge.json is the default config and produces no E069.
     Before any source, the environment MUST report its own diagnostics —
-    E069, the load's failures and warnings, provider registration (W118,
+    E069, the extension load's entry by entry (an entry's failure, or what
+    it reported though it loaded: W149, W153, W138; the lock's E033 once,
+    before the first entry it left unloaded), provider registration (W118,
     E057), then I002 — and then the registry build's, in the build's one
-    order (build_registries_from_declarations).
+    order (build_registries_from_declarations). Each MUST say the part of
+    the setup it is about: the config, the lock, one entry, structural-only,
+    the providers, or the registry build's part.
     This behavior orchestrates: for each extension, it loads its
     binary and reads its declaration once. Once all declarations are loaded
     and the extension_manifests_loaded event is produced, the registry build
@@ -103,6 +107,7 @@ behavior load_extension_manifests "Load Extension Manifests" {
   verify unit "E069 names a mistyped key or a non-string item, and the rest of specforge.json is used"
   verify integration "a specforge.json that is there and can't be used produces E069 first and an I002 that names it"
   verify integration "the environment reports its own diagnostics, then the registry build's, before any source"
+  verify integration "the environment says what part of the setup each of its diagnostics is about, and reports an entry's load diagnostics together"
   verify contract "Load Extension Manifests: extension manifest loading holds — all_files_parsed, extensions_config_available, all_extensions_attempted, loaded_manifests_available, failed_extensions_diagnosed, loaded_event_fired, extension_isolation"
 }
 

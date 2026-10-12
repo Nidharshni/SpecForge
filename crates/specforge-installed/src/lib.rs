@@ -25,7 +25,7 @@ pub use change::{Change, Committed, Failed, Pin};
 pub use declare::declaration_of;
 pub use health::Health;
 pub use layout::{LOCK_FILE, lock_path};
-pub use load::{Builtins, EnabledExtension, LoadFailure, LoadProblem, Loaded};
+pub use load::{Builtins, EnabledExtension, LoadFailure, LoadProblem, LoadSubject, Loaded};
 pub use lock::{LockFile, LockFileEntry, LockSource, LockState, read_lock_file, write_lock_file};
 pub use module::{Module, hex_sha256};
 

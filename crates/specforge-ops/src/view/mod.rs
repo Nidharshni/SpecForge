@@ -337,7 +337,6 @@ pub(crate) mod testing {
                                 Loaded::unloaded(&self.read.config.extensions).enabled
                             }),
                             declarations: self.declarations.clone(),
-                            diagnostics: Vec::new(),
                         },
                     }
                 };

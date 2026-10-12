@@ -3,6 +3,7 @@
 //! registered, and the W118/E057 the registration reported.
 
 use serde_json::{Value, json};
+use specforge_common::Diagnostic;
 use specforge_extension_sdk::{ContributionsBuilder, ExtensionMeta};
 use specforge_project::providers::{Provider, ProviderStatus, Providers};
 use specforge_protocol_types::ExtensionDeclaration;
@@ -41,12 +42,13 @@ fn listed(providers: &Providers) -> Vec<(&str, &str, &str, &'static str)> {
         .collect()
 }
 
+/// What registering the providers reported.
+fn reported(providers: &Providers) -> Vec<&Diagnostic> {
+    providers.diagnostics().collect()
+}
+
 fn codes(providers: &Providers) -> Vec<&str> {
-    providers
-        .diagnostics()
-        .iter()
-        .map(|d| d.code.as_str())
-        .collect()
+    providers.diagnostics().map(|d| d.code.as_str()).collect()
 }
 
 // The array of {scheme, alias, extension, settings} (ADR 0004 D3-c), in
@@ -73,9 +75,9 @@ fn test_load_providers_valid_array() {
     );
 
     assert!(
-        providers.diagnostics().is_empty(),
+        reported(&providers).is_empty(),
         "{:?}",
-        providers.diagnostics()
+        reported(&providers)
     );
     assert_eq!(
         listed(&providers),
@@ -103,7 +105,7 @@ fn test_load_providers_missing_key() {
         Providers::register(None, &[]),
     ] {
         assert_eq!(providers.iter().count(), 0);
-        assert!(providers.diagnostics().is_empty());
+        assert!(reported(&providers).is_empty());
         assert!(providers.schemes().is_empty());
     }
 }
@@ -122,26 +124,21 @@ fn test_load_providers_invalid_entry_warns() {
         &[],
     );
     assert_eq!(providers.iter().count(), 0);
-    assert_eq!(
-        providers.diagnostics().len(),
-        4,
-        "{:?}",
-        providers.diagnostics()
-    );
-    assert!(providers.diagnostics().iter().all(|d| d.code == "W118"));
+    assert_eq!(reported(&providers).len(), 4, "{:?}", reported(&providers));
+    assert!(reported(&providers).iter().all(|d| d.code == "W118"));
     assert!(
-        providers.diagnostics()[2].message.contains("extension"),
+        reported(&providers)[2].message.contains("extension"),
         "{:?}",
-        providers.diagnostics()[2]
+        reported(&providers)[2]
     );
 
     let map = register(json!({ "gh": { "package": "@acme/gh" } }), &[]);
     assert_eq!(map.iter().count(), 0);
-    assert_eq!(map.diagnostics().len(), 1);
+    assert_eq!(reported(&map).len(), 1);
     assert!(
-        map.diagnostics()[0].message.contains("must be an array"),
+        reported(&map)[0].message.contains("must be an array"),
         "{:?}",
-        map.diagnostics()[0]
+        reported(&map)[0]
     );
 }
 
@@ -156,16 +153,16 @@ fn test_load_providers_contract() {
         &[make_declaration("@acme/gh", true)],
     );
     assert_eq!(providers.iter().count(), 1);
-    assert!(providers.diagnostics().is_empty());
+    assert!(reported(&providers).is_empty());
 
     // ensures: empty config → empty result
     let empty = Providers::register(Some(&json!({})), &[]);
     assert_eq!(empty.iter().count(), 0);
-    assert!(empty.diagnostics().is_empty());
+    assert!(reported(&empty).is_empty());
 
     // ensures: invalid entry → W118
     let invalid = register(json!([{}]), &[]);
-    assert!(invalid.diagnostics().iter().any(|d| d.code == "W118"));
+    assert!(reported(&invalid).iter().any(|d| d.code == "W118"));
 }
 
 #[specforge_test(
@@ -178,7 +175,7 @@ fn test_register_schemes_from_manifest() {
         &[make_declaration("@specforge/github", true)],
     );
 
-    assert!(providers.diagnostics().is_empty());
+    assert!(reported(&providers).is_empty());
     assert_eq!(
         listed(&providers),
         [("gh", "github", "@specforge/github", "registered")]
@@ -203,13 +200,13 @@ fn test_register_schemes_duplicate_produces_e057() {
     );
 
     // The provider declared first keeps the scheme; the later one is E057.
-    assert_eq!(codes(&providers), ["E057"], "{:?}", providers.diagnostics());
+    assert_eq!(codes(&providers), ["E057"], "{:?}", reported(&providers));
     assert!(
-        providers.diagnostics()[0]
+        reported(&providers)[0]
             .message
             .contains("already registered by provider 'gh-a'"),
         "{:?}",
-        providers.diagnostics()
+        reported(&providers)
     );
     assert_eq!(
         listed(&providers),
@@ -225,7 +222,7 @@ fn test_register_schemes_duplicate_produces_e057() {
 #[test]
 fn test_register_schemes_no_manifest_warns() {
     let providers = register(json!([entry("github", "gh", "@specforge/github")]), &[]);
-    assert_eq!(codes(&providers), ["W118"], "{:?}", providers.diagnostics());
+    assert_eq!(codes(&providers), ["W118"], "{:?}", reported(&providers));
     assert_eq!(
         listed(&providers),
         [("gh", "github", "@specforge/github", "extension_not_loaded")]
@@ -252,7 +249,7 @@ fn test_register_schemes_contract() {
 
     // ensures: registered correctly
     let providers = register(config.clone(), &[make_declaration("@ext/gh", true)]);
-    assert!(providers.diagnostics().is_empty());
+    assert!(reported(&providers).is_empty());
     assert!(providers.schemes().contains("gh"));
 
     // ensures: a non-contributing extension is not matched
@@ -275,9 +272,9 @@ fn test_provider_scheme_isolation_each_registered_to_owner() {
     );
 
     assert!(
-        providers.diagnostics().is_empty(),
+        reported(&providers).is_empty(),
         "expected no diagnostics for isolated providers, got: {:?}",
-        providers.diagnostics()
+        reported(&providers)
     );
     assert_eq!(
         listed(&providers),

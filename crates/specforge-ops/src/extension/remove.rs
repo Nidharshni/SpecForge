@@ -448,6 +448,7 @@ mod tests {
                 name: "@sdk/greet".into(),
                 file: Some("greet.wasm".into()),
                 failure: None,
+                warnings: Vec::new(),
             },
         ]);
         write_config(&fixture, r#"{"extensions": ["@sdk/greet", "greet.wasm"]}"#);
@@ -730,6 +731,7 @@ mod tests {
                 name: "@sdk/greet".into(),
                 file: Some("greet.wasm".into()),
                 failure: None,
+                warnings: Vec::new(),
             }])
             .declarations(vec![Fixture::declaration("@sdk/greet", "0.1.0")]);
         write_config(&fixture, r#"{"extensions": ["@sdk/greet=greet.wasm"]}"#);

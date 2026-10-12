@@ -56,10 +56,6 @@ pub struct Loaded {
     /// entries name them: the registry build's input, which it puts in
     /// load order (ADR 0041).
     pub declarations: Vec<ExtensionDeclaration>,
-    /// The lock's E033 (once, when it left an entry unloaded), each
-    /// failure's diagnostic, in entry order, then the declarations' load
-    /// warnings (W153, W138) in the same order.
-    pub diagnostics: Vec<Diagnostic>,
 }
 
 impl Loaded {
@@ -72,7 +68,6 @@ impl Loaded {
                 .map(|entry| EnabledExtension::unloaded(entry))
                 .collect(),
             declarations: Vec::new(),
-            diagnostics: Vec::new(),
         }
     }
 }
@@ -90,6 +85,19 @@ pub struct EnabledExtension {
     /// Why it did not load. `None`: it loaded, or nothing was loaded
     /// ([`EnabledExtension::unloaded`]).
     pub failure: Option<LoadFailure>,
+    /// What it reported though it loaded: W149 (its lock entry pins no
+    /// hash), then W153 and W138 as its declaration was read. Empty when it
+    /// did not load or nothing was loaded.
+    pub warnings: Vec<Diagnostic>,
+}
+
+/// What one diagnostic of an extension load is about.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LoadSubject {
+    /// `specforge.lock`, which cannot be read (its E033).
+    Lock,
+    /// The `extensions` entry at this index.
+    Entry(usize),
 }
 
 impl EnabledExtension {
@@ -101,12 +109,14 @@ impl EnabledExtension {
                 name: name.to_string(),
                 file: None,
                 failure: None,
+                warnings: Vec::new(),
             },
             ExtensionEntry::File { name, path } => EnabledExtension {
                 entry: entry.trim().to_string(),
                 name: name.unwrap_or(path).to_string(),
                 file: Some(path.to_string()),
                 failure: None,
+                warnings: Vec::new(),
             },
         }
     }
@@ -326,7 +336,7 @@ enum Slot {
     /// Not loaded again: another entry enables the same extension.
     Skipped,
     Loaded(Box<Done>),
-    Failed(LoadFailure),
+    Failed,
 }
 
 impl Installed {
@@ -340,9 +350,9 @@ impl Installed {
     ///   is refused).
     ///
     /// The bytes compiled are the bytes hashed. Never fails: what does not
-    /// load is a [`LoadFailure`] on its entry, and its diagnostic. An
-    /// unreadable lock is its E033 once, before the E028 of each named
-    /// entry it leaves unloaded.
+    /// load is a [`LoadFailure`] on its entry with its diagnostic, and what an
+    /// entry reports though it loaded is on the entry too
+    /// ([`Installed::load_diagnostics`] orders them).
     pub fn load(
         &self,
         entries: &[String],
@@ -370,8 +380,8 @@ impl Installed {
                     slots[i] = Slot::Loaded(Box::new(done));
                 }
                 Err(failure) => {
-                    enabled[i].failure = Some(failure.clone());
-                    slots[i] = Slot::Failed(failure);
+                    enabled[i].failure = Some(failure);
+                    slots[i] = Slot::Failed;
                 }
             }
         }
@@ -410,41 +420,50 @@ impl Installed {
                         diagnostic: problem.diagnostic(&subject, self),
                         problem,
                     };
-                    enabled[i].failure = Some(failure.clone());
-                    slots[i] = Slot::Failed(failure);
+                    enabled[i].failure = Some(failure);
+                    slots[i] = Slot::Failed;
                 }
             }
         }
 
         let mut declarations = Vec::new();
-        let mut diagnostics = Vec::new();
-        let mut warnings = Vec::new();
+        for (i, slot) in slots.into_iter().enumerate() {
+            if let Slot::Loaded(done) = slot {
+                enabled[i].warnings = done.notices.into_iter().chain(done.warnings).collect();
+                declarations.push(done.declaration);
+            }
+        }
+        Loaded {
+            enabled,
+            declarations,
+        }
+    }
+
+    /// What the load of `enabled` (as [`Installed::load`] left them, in entry
+    /// order) reports, in its one order: entry by entry, its failure's
+    /// diagnostic or its warnings; the lock's E033 once, just before the
+    /// first entry it left unloaded. Reads nothing.
+    pub fn load_diagnostics<'a>(
+        &'a self,
+        enabled: &'a [EnabledExtension],
+    ) -> Vec<(LoadSubject, &'a Diagnostic)> {
+        let mut reported = Vec::new();
         let mut lock_reported = false;
-        for slot in slots {
-            match slot {
-                Slot::Skipped => {}
-                Slot::Loaded(done) => {
-                    diagnostics.extend(done.notices);
-                    warnings.extend(done.warnings);
-                    declarations.push(done.declaration);
-                }
-                Slot::Failed(failure) => {
+        for (i, entry) in enabled.iter().enumerate() {
+            match &entry.failure {
+                Some(failure) => {
                     if failure.problem == LoadProblem::LockUnreadable
                         && !std::mem::replace(&mut lock_reported, true)
                         && let Some(problem) = self.lock.problem()
                     {
-                        diagnostics.push(problem.clone());
+                        reported.push((LoadSubject::Lock, problem));
                     }
-                    diagnostics.push(failure.diagnostic);
+                    reported.push((LoadSubject::Entry(i), &failure.diagnostic));
                 }
+                None => reported.extend(entry.warnings.iter().map(|w| (LoadSubject::Entry(i), w))),
             }
         }
-        diagnostics.extend(warnings);
-        Loaded {
-            enabled,
-            declarations,
-            diagnostics,
-        }
+        reported
     }
 
     /// Load the extension a named entry names: a builtin from its bytes, an
@@ -635,6 +654,5 @@ mod tests {
         assert_eq!(files, [None, Some("ext.wasm")]);
         assert!(loaded.enabled.iter().all(|e| e.failure.is_none()));
         assert!(loaded.declarations.is_empty());
-        assert!(loaded.diagnostics.is_empty());
     }
 }
