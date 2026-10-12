@@ -34,3 +34,13 @@ range that is not SemVer, the new extension's or another requirer's, is refused 
 let through, or R-RES-003). A local install is gated too: with no registry to unify against, a
 locked peer outside its range is E027. Every add checks the locked extensions that require the
 package it installs, as `update` checks the dependents of what it updates.
+
+## Amendment (round 7): one rule picks the unified version
+
+The intersection is `specforge_package::highest_matching`: the highest published version every
+requirer's range matches, each range read on its own with semver's pre-release rule (a pre-release
+only when that range names its `MAJOR.MINOR.PATCH`). The ranges are never merged into one
+requirement, which would admit a pre-release one requirer's range names and another's does not.
+`pick` and `update`'s upgrade target read the same function. The requirers are the members of the
+project peer set that declare the peer (ADR 0041, amendment round 7); the gate is
+`specforge_ops::extension::lock_plan`.

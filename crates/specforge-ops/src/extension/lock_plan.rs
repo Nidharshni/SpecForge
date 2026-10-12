@@ -17,9 +17,8 @@ use std::path::Path;
 
 use specforge_common::{Diagnostic, codes};
 use specforge_installed::{Change, Installed, LockSource, Module, Pin};
-use specforge_package::PackageName;
-use specforge_package::Version;
 use specforge_package::peers::{PeerRequirement, Verdict};
+use specforge_package::{PackageName, Version, highest_matching};
 use specforge_protocol_types::{DeclaredCategory, ExtensionDeclaration, PeerDependency};
 use specforge_wasm::WasmRuntime;
 
@@ -861,57 +860,46 @@ fn diamond(registry: &dyn Registry, set: &ProjectPeers, edge: &Edge, locked: &st
     }
 }
 
-/// The versions `registry` publishes of `peer`. E072 when `peer` is no package name.
-fn published_versions(registry: &dyn Registry, peer: &str) -> Result<Vec<String>, OpError> {
+/// The versions `registry` publishes of `peer`, in the registry's order. E072 when `peer` is no
+/// package name.
+fn published_versions(registry: &dyn Registry, peer: &str) -> Result<Vec<Version>, OpError> {
     let name = PackageName::parse(peer)
         .map_err(|why| OpError::from(specforge_common::package::invalid(&why)))?;
-    Ok(registry
-        .versions(&name)?
-        .iter()
-        .map(Version::to_string)
-        .collect())
+    registry.versions(&name)
 }
 
-/// Unify a version diamond: several requirers each declare a SemVer range for the same package.
-/// Pick the highest of its published `versions` that satisfies every requirer's range
-/// (intersection, not backtracking: when none does, R-RES-005 names each requirer; a range that
-/// is not SemVer is E073).
+/// Unify a version diamond (ADR 0001): the highest of `published` that every requirer's range
+/// matches, each range read on its own (`specforge_package::highest_matching`; a pre-release only
+/// when that range names its `MAJOR.MINOR.PATCH`). R-RES-005 naming each requirer when none does;
+/// E073 for a range that is not SemVer.
 fn unify(
     name: &str,
-    versions: &[String],
+    published: &[Version],
     requirers: &[(&str, &PeerDependency)],
-) -> Result<String, Diagnostic> {
+) -> Result<Version, Diagnostic> {
     let mut reqs = Vec::with_capacity(requirers.len());
     for (requirer, declared) in requirers {
         let requirement = PeerRequirement::read(declared)
             .map_err(|why| specforge_common::peers::unreadable(requirer, declared, &why))?;
-        reqs.push((*requirer, declared.version.as_str(), requirement));
+        reqs.push((*requirer, declared.version.as_str(), requirement.range));
     }
+    let ranges: Vec<_> = reqs.iter().map(|(_, _, range)| range).collect();
 
-    let mut candidates: Vec<Version> = versions
-        .iter()
-        .filter_map(|v| Version::parse(v).ok())
-        .collect();
-    candidates.sort();
-
-    let unified = candidates.into_iter().rev().find(|v| {
-        reqs.iter()
-            .all(|(_, _, requirement)| requirement.accepts(&v.to_string()) == Some(true))
-    });
-
-    unified.map(|v| v.to_string()).ok_or_else(|| {
+    highest_matching(published, &ranges).cloned().ok_or_else(|| {
         let wanted = reqs
             .iter()
             .map(|(requirer, range, _)| format!("{requirer} wants {name} {range}"))
             .collect::<Vec<_>>()
             .join("; ");
+        let available = published
+            .iter()
+            .map(Version::to_string)
+            .collect::<Vec<_>>()
+            .join(", ");
         Diagnostic::new(
             codes::R_RES_005,
             format!(
-                "version diamond for '{}': no single version satisfies every requirer ({}). Available: {}",
-                name,
-                wanted,
-                versions.join(", ")
+                "version diamond for '{name}': no single version satisfies every requirer ({wanted}). Available: {available}"
             ),
         )
         .with_suggestion(
@@ -2028,10 +2016,6 @@ mod tests {
         );
     }
 
-    fn versions(vs: &[&str]) -> Vec<String> {
-        vs.iter().map(|v| v.to_string()).collect()
-    }
-
     fn req(requirer: &'static str, range: &str) -> (&'static str, PeerDependency) {
         (requirer, peer("@shared/lib", range))
     }
@@ -2042,7 +2026,8 @@ mod tests {
     ) -> Result<String, Diagnostic> {
         let borrowed: Vec<(&str, &PeerDependency)> =
             requirers.iter().map(|(n, p)| (*n, p)).collect();
-        unify("@shared/lib", &versions(vs), &borrowed)
+        let published: Vec<Version> = vs.iter().map(|v| Version::parse(v).unwrap()).collect();
+        unify("@shared/lib", &published, &borrowed).map(|version| version.to_string())
     }
 
     /// Pinned: a pre-release is unified only when every requirer's range names its
