@@ -8,6 +8,7 @@ mod fixtures;
 mod inventory;
 mod list;
 mod lock_plan;
+mod peer_set;
 mod remove;
 mod resolve;
 mod update;
@@ -32,8 +33,7 @@ pub use update::{
     UpdateOutcome, UpdateRequest, UpdateRow, UpdateStatus, UpgradeCompleted, update,
 };
 
-pub(crate) use candidate::required_builtins;
-pub(crate) use lock_plan::{check_local, install_local};
+pub(crate) use lock_plan::{Appended, Install, LockPlan, Refused, Verb, install_local};
 
 use specforge_installed::LockSource;
 

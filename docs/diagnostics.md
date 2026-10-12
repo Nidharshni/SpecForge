@@ -333,12 +333,15 @@ E027: Unsatisfiable peer dependency
 An extension's peer dependency isn't satisfied: a required peer isn't installed,
 or an installed peer (optional or not) is at a version the range doesn't accept,
 a version that isn't SemVer included; or required peers form a cycle, reported
-once naming its extensions by every compile. `specforge add` and `update` refuse
-an install that would leave a locked peer unsatisfied (from a registry, a
-version diamond is R-RES-005/R-RES-006 instead), and `specforge remove` refuses
-to uninstall an extension others still require. Install or upgrade the named
-peer, make one peer of a cycle optional, or use `--force` where the command
-supports it.
+once naming its extensions by every compile. `specforge add`, `init` and
+`update` judge the project's peer set as their change leaves it (the extensions
+its `specforge.json` entries load: builtins, installed extensions and `.wasm`
+file entries) and refuse a change that would leave a peer it touches unsatisfied
+(from a registry, a version diamond is R-RES-005/R-RES-006 instead); `add` and
+`init` first enable the builtins what they add requires. `specforge remove`
+refuses to uninstall an extension others still require. Install or upgrade the
+named peer, install a version of the dependent that accepts the builtin this
+specforge embeds, or make one peer of a cycle optional.
 
 Owner: core
 Level: error

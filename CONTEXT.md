@@ -138,7 +138,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Extension load**: turning a project's `extensions` entries into loaded extensions and their
   declarations, once per environment load (`Installed::load`, over the `WasmRuntime` port): a
   builtin from its embedded binary, an installed extension from its pinned module, a `.wasm` file
-  entry from its file under the name it declares. Its declarations come in entry order; the registry
+  entry from its file under the name it declares. Which extension each entry names is decided once
+  (`Installed::resolve`: a builtin's name before a lock entry, `.wasm` file entries after every named
+  entry), and the lock plan reads the same decision. Its declarations come in entry order; the registry
   build puts them in load order. What does not load is a typed `LoadFailure` on its
   entry with one diagnostic, and what an entry reports though it loaded (W149, W153, W138) is on the
   entry too; the runtime keeps none, and `Installed::load_diagnostics` orders them, entry by entry. Without a runtime nothing loads, and each entry
@@ -157,19 +159,29 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   declaration read from its binary once, through the `WasmRuntime` the operation's caller passes (the
   CLI's component runtime with the per-user compile cache, the MCP call's runtime, a test's in-process
   runtime), never through one the operation builds (`specforge_ops::extension::candidate`, ADR 0028
-  D7). A binary to install must load (E028) and must not declare a builtin's name; enabling a builtin
-  enables the builtins it requires first, in `add` and `init` alike, and a builtin that does not load
+  D7). A binary to install must load (E028) and must not declare a builtin's name; the lock plan
+  enables the builtins an extension requires (CONTEXT "Lock plan"), and a builtin that does not load
   refuses the operation.
-- **Lock plan**: the installs one operation makes (`add` one, `update` every upgrade, `init` its
-  local files), staged into the lock as the operation leaves it: each package's entry replaces
-  its previous one, never sits beside it (`specforge_ops::extension::lock_plan::LockPlan`, ADR
-  0041). The peer rule judges it once, after every install is staged: each staged extension's
-  own peers, and every locked extension's peers on a staged one, unified against the registry an
-  install came from (R-RES-006/005, ADR 0001) or, for a local file, refused with E027; a peer that
-  is not locked is `check`'s. Lock order decides nothing. A registry install's binary loads only
-  after that and must declare what was published; then the plan is written as one change, whose last
-  step pins the publisher keys its fetches accepted (`Registry::pin`): a refused or failed plan pins
-  nothing (ADR 0059).
+- **Lock plan**: the change one operation makes to what the project installs and enables (`add` its
+  installs and builtins, `update` every upgrade, `init` its local files and builtins), staged as the
+  operation leaves them: each package's lock entry replaces its previous one, never sits beside it,
+  and each new `specforge.json` entry is appended (`specforge_ops::extension::lock_plan::LockPlan`, ADR
+  0041). `add` and `init` first enable the builtins what they add requires, dependencies first;
+  `update` enables nothing. The peer rule then judges the **project peer set** as the change leaves it,
+  once: every declared peer whose dependent or peer the change touches. A required peer no member
+  provides is E027; a peer installed from a registry is unified against the registry the install came
+  from (R-RES-006/005, ADR 0001); anything else out of range (a local install, a builtin, a `.wasm`
+  file entry) is E027. Lock order and entry order decide nothing. A registry install's binary loads
+  only after that and must declare what was published; then the plan is written as one change,
+  `specforge.json` included, whose last step pins the publisher keys its fetches accepted
+  (`Registry::pin`): a refused or failed plan pins nothing (ADR 0059).
+- **Project peer set**: the extensions a project's `specforge.json` entries load, as the peer rule reads
+  them: a builtin by the declaration this specforge embeds, an installed extension by its lock entry, a
+  `.wasm` file entry by its file's declaration, each entry resolved by the extension load's one rule
+  (`Installed::resolve`). An entry that loads nothing and a locked extension no entry enables are not in
+  it (`specforge_ops::extension::peer_set::ProjectPeers`). The registry build judges it as loaded; the
+  lock plan judges it as a change will leave it, before anything is written, so `add`, `init`,
+  `update` and `check` judge one set (ADR 0041).
 - **Setup part**: what part of a project's setup a diagnostic the environment reports is about: the
   config, the lock, one `extensions` entry, structural-only, the configured providers, one declaration,
   the peers, the registries, a rule, a surface, or a collision (two contributions claiming one name: a
@@ -325,7 +337,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`specforge_package::peers::PeerRequirement`, ADR 0050). One rule judges it (`peers::verdict`): an
   unreadable range satisfies nothing (E073); a required peer must be installed; an installed one must
   be at a version the range accepts (E027 otherwise). The registry build, `doctor` and the lock plan
-  read that rule and nothing else (ADR 0041).
+  read that rule and nothing else, over one set, the project peer set (ADR 0041).
 - **Load order**: the order a project's extensions load in, which every first-wins rule and in-order
   list follows: entry order, except that an extension comes after the peers it declares (required
   ones always, optional ones unless that would close a cycle). The registry build produces it

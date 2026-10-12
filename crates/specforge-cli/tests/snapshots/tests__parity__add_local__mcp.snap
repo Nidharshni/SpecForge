@@ -34,6 +34,7 @@ expression: mcp_snap
       {
         "action": "installed",
         "extension": "@sdk/greet",
+        "peers_enabled": [],
         "sha256": "[SHA256]",
         "source": "local:[BLOB]",
         "specifier": "[BLOB]",

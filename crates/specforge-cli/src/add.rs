@@ -100,18 +100,24 @@ fn print_human(added: &AddedExtension, terminal: &Terminal) {
             version,
             publisher,
             origin,
+            peers_enabled,
             ..
-        } => match origin {
-            Origin::Installed { source } if !source.is_registry() => {
-                outln!(terminal, "installed {} from local path", name);
+        } => {
+            for peer in peers_enabled {
+                outln!(terminal, "enabled builtin {peer} (required by {name})");
             }
-            _ => {
-                outln!(terminal, "installed {} v{}", name, version);
-                if let Some(publisher) = publisher {
-                    outln!(terminal, "  {}", publisher_line(publisher));
+            match origin {
+                Origin::Installed { source } if !source.is_registry() => {
+                    outln!(terminal, "installed {} from local path", name);
+                }
+                _ => {
+                    outln!(terminal, "installed {} v{}", name, version);
+                    if let Some(publisher) = publisher {
+                        outln!(terminal, "  {}", publisher_line(publisher));
+                    }
                 }
             }
-        },
+        }
         AddOutcome::AlreadyPresent { name, version } => {
             outln!(terminal, "{name} {version} is already installed");
         }

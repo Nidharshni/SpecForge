@@ -27,6 +27,17 @@ pub fn greet() -> ContributionsBuilder {
     greet::build()
 }
 
+/// A local file declaring `@probe/needs-software` 1.0.0, requiring `@specforge/software` ^9.0.
+pub const NEEDS_SOFTWARE_9: &[u8] = b"\0asm in-process @probe/needs-software 1.0.0 software ^9";
+/// The same, requiring `@specforge/software` ^1.0.
+pub const NEEDS_SOFTWARE_1: &[u8] = b"\0asm in-process @probe/needs-software 1.0.0 software ^1";
+/// `@probe/base` 2.0.0, no peers.
+pub const BASE_2: &[u8] = b"\0asm in-process @probe/base 2.0.0";
+/// `@probe/base` 1.2.0, no peers.
+pub const BASE_1: &[u8] = b"\0asm in-process @probe/base 1.2.0";
+/// `@probe/dep` 1.0.0, requiring `@probe/base` ^1.0.
+pub const DEP_1: &[u8] = b"\0asm in-process @probe/dep 1.0.0";
+
 /// An extension named `name` at `version` whose peers are `peers` (name,
 /// requirement, optional).
 pub fn declaring(
@@ -69,5 +80,43 @@ pub fn serving_builtin(
             .get(name)
             .expect("a builtin extension"),
         build,
+    )
+}
+
+/// [`candidates`], also serving the probes above and the builtins `@specforge/software` 1.0.0 and
+/// `@specforge/testing` 1.0.0 (no peers) from their embedded bytes.
+pub fn probes() -> InProcessRuntime {
+    let runtime = candidates()
+        .binary(
+            NEEDS_SOFTWARE_9,
+            declaring(
+                "@probe/needs-software",
+                "1.0.0",
+                &[("@specforge/software", "^9.0", false)],
+            ),
+        )
+        .binary(
+            NEEDS_SOFTWARE_1,
+            declaring(
+                "@probe/needs-software",
+                "1.0.0",
+                &[("@specforge/software", "^1.0", false)],
+            ),
+        )
+        .binary(BASE_2, declaring("@probe/base", "2.0.0", &[]))
+        .binary(BASE_1, declaring("@probe/base", "1.2.0", &[]))
+        .binary(
+            DEP_1,
+            declaring("@probe/dep", "1.0.0", &[("@probe/base", "^1.0", false)]),
+        );
+    let runtime = serving_builtin(
+        runtime,
+        "@specforge/software",
+        declaring("@specforge/software", "1.0.0", &[]),
+    );
+    serving_builtin(
+        runtime,
+        "@specforge/testing",
+        declaring("@specforge/testing", "1.0.0", &[]),
     )
 }

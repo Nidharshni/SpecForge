@@ -893,7 +893,12 @@ behavior update_all_extensions "Update All Extensions" {
     whole update leaves it, whatever order the lock lists the extensions
     in: an upgraded extension's peer ranges against the versions its peers
     are left at, those this update moves included, and every locked
-    extension's ranges against the versions this update locks. If any
+    extension's ranges against the versions this update locks.
+    The peers judged are those of the project's peer set (the extensions
+    its specforge.json entries load: builtins, installed extensions and
+    .wasm file entries): an upgraded extension's required peer that no
+    entry enables, a builtin included, refuses that upgrade (E027, the
+    message specforge check gives); update enables nothing. If any
     upgrade fails, the system MUST roll back all
     changes and report the failure. A write that fails while the checked
     upgrades are applied is the update's own failure, naming the file it
@@ -924,6 +929,7 @@ behavior update_all_extensions "Update All Extensions" {
   verify unit "lock file records new binary hashes after update"
   verify unit "peer dependency conflicts detected before applying"
   verify unit "every upgrade is judged against the lock as the whole update leaves it, whatever order the lock lists them in"
+  verify unit "an upgrade whose required peer no entry enables is refused, and update enables nothing"
   verify unit "failed upgrade rolls back all changes"
   verify unit "a write that fails while applying fails the update, naming what it could not write, and nothing is applied"
   verify integration "update never replaces a locally installed extension from a registry"

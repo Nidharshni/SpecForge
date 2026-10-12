@@ -149,3 +149,13 @@ by its name.
 
 **Amended by ADR 0059:** `commit_with(config, last)` runs `last` after the lock: the `specforge.json` edit and
 the user's publisher-key pins. A failure there puts every file back; `config` is changed when its bytes are.
+
+## Amendment (round 7): one entry rule; the lock plan enables required builtins
+
+- **D3:** which extension each `specforge.json` entry names is decided once, `Installed::resolve` (a
+  builtin's name before a lock entry; `.wasm` file entries after every named entry; a file declaring a
+  name already loaded refused). The extension load, the watched module paths (`Installed::modules`) and
+  the lock plan's project peer set read it (ADR 0041, amendment round 7).
+- **D7**, first bullet: enabling the builtins an extension requires is the lock plan's (ADR 0041 B3),
+  for a builtin, a local file and a registry package alike, in `add` and `init`; `candidate::
+  required_builtins` is gone. A builtin that does not load still refuses the operation (E028).

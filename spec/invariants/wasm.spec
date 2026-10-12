@@ -33,14 +33,16 @@ invariant peer_dependency_satisfaction "Peer Dependency Satisfaction" {
     satisfies its declared semver range. An optional peer may be absent.
     Unsatisfied peer dependencies MUST produce an error diagnostic (E-level), not
     a silent degradation. A range that is not a SemVer requirement satisfies
-    no version (E073). `check`, `doctor`, `add` and `update` judge a peer by
-    one rule (ADR 0041).
+    no version (E073). `check`, `doctor`, `add`, `init` and `update` judge a
+    peer by one rule over one set: the extensions the project's
+    specforge.json entries load (ADR 0041).
   """
   risk      high
   verify unit "satisfied peer dependencies pass validation"
   verify unit "unsatisfied peer dependency produces an error diagnostic"
   verify unit "peer with wrong version range produces an error diagnostic"
   verify unit "one rule judges a peer: its range read as SemVer, then the version its peer is installed at"
+  verify unit "add, init and update judge the set check judges: the extensions the project's entries load"
 }
 
 // -- Cache & Isolation Invariants ---------------------------------------------

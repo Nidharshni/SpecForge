@@ -84,6 +84,12 @@ impl Installed {
 }
 
 impl Change<'_> {
+    /// The project's installed extensions as this change leaves them: the same root, and the lock
+    /// it will write (what the lock plan's peer set resolves entries against).
+    pub fn installed(&self) -> Installed {
+        Installed::with_lock(self.installed.root(), LockState::Read(self.lock.clone()))
+    }
+
     /// The lock as the change will write it (the diamond gate and the
     /// dependents check read it).
     pub fn lock(&self) -> &LockFile {
