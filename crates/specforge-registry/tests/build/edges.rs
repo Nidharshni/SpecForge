@@ -269,7 +269,7 @@ fn an_edge_label_declared_twice_is_w018_and_the_first_keeps_it() {
 
 #[spec(
     behavior = "registry_build_edges",
-    verify = "Registry Build Registers Edge Types: edge type registration holds — declarations_in_load_order, edge_types_registered, every_writer_named, first_wins"
+    verify = "Registry Build Registers Edge Types: edge type registration holds — declarations_in_load_order, edge_types_registered, every_writer_named, one_type_per_field, first_wins"
 )]
 fn edge_registration_holds() {
     // declarations_in_load_order: software, then product, which declares
@@ -297,10 +297,24 @@ fn edge_registration_holds() {
             });
         })
     };
-    let linked = crate::support::build([writes("@test/a", "alpha"), writes("@test/b", "beta")]);
-    let linked = linked.edges().get("linked").unwrap();
+    let linked_build =
+        crate::support::build([writes("@test/a", "alpha"), writes("@test/b", "beta")]);
+    let linked = linked_build.edges().get("linked").unwrap();
     assert_eq!(linked.sources(), ["alpha", "beta"]);
     assert_eq!(linked.writers().len(), 2);
+
+    // one_type_per_field: the build answers one edge type for each field
+    // on its kind, and none for a field that writes no edge.
+    for kind in ["alpha", "beta"] {
+        assert_eq!(
+            linked_build
+                .edges()
+                .written_by(kind, "links")
+                .map(|e| e.label()),
+            Some("linked")
+        );
+        assert!(linked_build.edges().written_by(kind, "absent").is_none());
+    }
 
     // first_wins: W018, and the later constraints are discarded.
     assert_eq!(coded(&build, "W018").len(), 1);
