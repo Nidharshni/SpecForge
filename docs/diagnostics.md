@@ -1758,10 +1758,11 @@ Level: error
 ```
 R-TRUST-003: Publisher key changed
 
-The package is signed with a different key than the one pinned for it when it
-was first installed (trust on first use). That can be a key rotation or a
-compromised publisher. If you trust the new key, re-run with `--yes` or add it
-to `trusted_keys`.
+The package is signed with a different key than the one expected for it: the key
+pinned for it when you first installed it (trust on first use), or, when you
+have no pin for it, the key the project's `specforge.lock` records. That can be
+a key rotation or a compromised publisher. If you trust the new key, re-run with
+`--yes` or add it to `trusted_keys`.
 
 Owner: core
 Level: error

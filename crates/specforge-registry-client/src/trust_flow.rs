@@ -492,6 +492,140 @@ mod tests {
         assert_eq!(err.code, "R-TRUST-002");
     }
 
+    /// `check` with `locked` as the key the project's lock records for the name.
+    fn check_locked(
+        metadata: &PackageMetadata,
+        decide: &dyn Fn(&KeyChange) -> bool,
+        store: &Path,
+        locked: &str,
+    ) -> Result<Trusted, Diagnostic> {
+        check(
+            "@acme/tool",
+            metadata,
+            WASM,
+            false,
+            decide,
+            store,
+            Some(locked),
+        )
+    }
+
+    #[test]
+    fn with_no_pin_the_locked_key_is_expected() {
+        let (locked, other) = (SigningKey::generate(), SigningKey::generate());
+        let dir = tempfile::tempdir().unwrap();
+        let store = dir.path().join("known-keys.json");
+
+        // The locked key is accepted; it is still pinned for the user when the install is written.
+        let trusted = check_locked(
+            &signed_response(&locked, MANIFEST, WASM),
+            &never,
+            &store,
+            &locked.key_id(),
+        )
+        .unwrap();
+        assert_eq!(
+            trusted.accepted,
+            Accepted::Signed {
+                key_id: locked.key_id(),
+                first_use: true
+            }
+        );
+
+        // Another key is a key change, from the lock.
+        let err = check_locked(
+            &signed_response(&other, MANIFEST, WASM),
+            &never,
+            &store,
+            &locked.key_id(),
+        )
+        .unwrap_err();
+        assert_eq!(err.code, "R-TRUST-003");
+        let seen = |change: &KeyChange| {
+            assert_eq!(change.source, PinSource::Lock);
+            assert_eq!(change.pinned, locked.key_id());
+            true
+        };
+        let trusted = check_locked(
+            &signed_response(&other, MANIFEST, WASM),
+            &seen,
+            &store,
+            &locked.key_id(),
+        )
+        .unwrap();
+        assert_eq!(
+            trusted.accepted,
+            Accepted::Repinned {
+                key_id: other.key_id(),
+                previous: locked.key_id()
+            }
+        );
+    }
+
+    #[test]
+    fn a_users_pin_wins_over_the_locked_key() {
+        let (pinned, locked) = (SigningKey::generate(), SigningKey::generate());
+        let dir = tempfile::tempdir().unwrap();
+        let store = dir.path().join("known-keys.json");
+        let mut known = KnownKeys::default();
+        known.pin("@acme/tool", &pinned.key_id());
+        save_known_keys_at(&store, &known).unwrap();
+
+        // Signed by the user's pin: accepted as pinned, whatever the lock says.
+        let trusted = check_locked(
+            &signed_response(&pinned, MANIFEST, WASM),
+            &never,
+            &store,
+            &locked.key_id(),
+        )
+        .unwrap();
+        assert_eq!(
+            trusted.accepted,
+            Accepted::Signed {
+                key_id: pinned.key_id(),
+                first_use: false
+            }
+        );
+        // Signed by the lock's key: a change from the user's pin.
+        let err = check_locked(
+            &signed_response(&locked, MANIFEST, WASM),
+            &never,
+            &store,
+            &locked.key_id(),
+        )
+        .unwrap_err();
+        assert_eq!(err.code, "R-TRUST-003");
+        assert!(
+            err.message.ends_with("(the key specforge.lock records)"),
+            "{}",
+            err.message
+        );
+    }
+
+    #[test]
+    fn a_change_from_the_locked_key_names_specforge_lock() {
+        let (locked, other) = (SigningKey::generate(), SigningKey::generate());
+        let dir = tempfile::tempdir().unwrap();
+        let store = dir.path().join("known-keys.json");
+
+        let err = check_locked(
+            &signed_response(&other, MANIFEST, WASM),
+            &never,
+            &store,
+            &locked.key_id(),
+        )
+        .unwrap_err();
+
+        assert_eq!(
+            err.message,
+            format!(
+                "key change rejected for '@acme/tool': specforge.lock records '{}' but package is signed '{}'",
+                locked.key_id(),
+                other.key_id()
+            )
+        );
+    }
+
     #[test]
     fn a_store_that_cannot_be_read_refuses_and_is_left_as_it_was() {
         let key = SigningKey::generate();

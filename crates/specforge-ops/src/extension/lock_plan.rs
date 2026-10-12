@@ -61,7 +61,6 @@ pub(crate) struct Fetch<'a> {
     pub(crate) runtime: &'a dyn WasmRuntime,
     /// The project's installed extensions: the publisher key its lock records for a name is the
     /// pin when the user has none.
-    #[expect(dead_code, reason = "read when the lock's key is the pin (T4)")]
     pub(crate) installed: &'a Installed,
     pub(crate) allow_unsigned: bool,
     pub(crate) trust: Trust,
@@ -92,14 +91,16 @@ impl<'a> Fetch<'a> {
     /// `name@version` fetched as an install. The registry adapter checks integrity and the
     /// publisher signature under the TOFU policy. Its pin is read from the published declaration:
     /// its version and its peers, the publisher's key id, `source: registry`. Its binary is not
-    /// loaded: [`LockPlan::check`] loads it after the gate. Nothing is pinned for the user: the
+    /// loaded: [`LockPlan::check`] loads it after the gate. It is held to the key the lock records
+    /// for `name` when the user has no pin of their own. Nothing is pinned for the user: the
     /// publisher the fetch decided is pinned when the plan commits.
     pub(crate) fn install(
         &self,
         name: &PackageName,
         version: &Version,
     ) -> Result<Install<'a>, OpError> {
-        let policy = TrustPolicy::new(self.allow_unsigned, self.trust);
+        let policy = TrustPolicy::new(self.allow_unsigned, self.trust)
+            .locked(self.installed.locked_key(name));
         let mut package = self.registry.fetch(name, version, policy)?;
         let module = Module::new(std::mem::take(&mut package.wasm));
         let pin = Pin {

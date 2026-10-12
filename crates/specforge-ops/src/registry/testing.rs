@@ -172,6 +172,56 @@ impl MemoryRegistry {
         self
     }
 
+    /// The publisher of a package signed by `key_id`: held to the user's pin for `name`, else to the
+    /// key the project's lock records, else accepted on first use. A key change is consented to
+    /// under `Trust::AssumeYes` only.
+    fn decide(
+        &self,
+        name: &PackageName,
+        key_id: &str,
+        policy: TrustPolicy<'_>,
+    ) -> Result<Publisher, OpError> {
+        let signed = |first_use| Publisher::Signed {
+            key_id: key_id.to_string(),
+            first_use,
+        };
+        let users = self.pins.lock().unwrap().get(name).cloned();
+        let (expected, from_lock) = match (users, policy.locked_key) {
+            (Some(pinned), _) => (pinned, false),
+            (None, Some(locked)) => (locked.to_string(), true),
+            (None, None) => return Ok(signed(true)),
+        };
+        if expected == key_id {
+            return Ok(signed(from_lock));
+        }
+        if policy.trust != Trust::AssumeYes {
+            let what = if from_lock {
+                format!("specforge.lock records '{expected}'")
+            } else {
+                format!("pinned '{expected}'")
+            };
+            let locked_too = !from_lock && policy.locked_key == Some(key_id);
+            let also = if locked_too {
+                " (the key specforge.lock records)"
+            } else {
+                ""
+            };
+            return Err(OpError::diagnostic(
+                codes::R_TRUST_003,
+                format!(
+                    "key change rejected for '{name}': {what} but package is signed '{key_id}'{also}"
+                ),
+            )
+            .with_suggestion(format!(
+                "if you trust the new key, re-run with --yes (or add '{key_id}' to trusted_keys)"
+            )));
+        }
+        Ok(Publisher::Repinned {
+            key_id: key_id.to_string(),
+            previous: expected,
+        })
+    }
+
     /// A package this registry knows but lists no version of: `versions` answers `Ok(vec![])`, as a
     /// registry may (the wire allows an empty list; ours answers 404). Not part of the contract.
     pub fn listing_none(mut self, name: &str) -> Self {
@@ -209,9 +259,10 @@ impl Registry for MemoryRegistry {
     /// The package published as `name@version`: R006 "Package not found: {name}@{version}" when there is none,
     /// R-TRUST-001 "package '{name}' is not signed" (suggestion "re-run with --allow-unsigned to accept the
     /// risk") when unsigned and `!allow_unsigned`; else its bytes, `hex_sha256(bytes)`, its declaration and
-    /// publisher. A signed package's publisher is decided against the user's pin for `name`: first use
-    /// without one, `first_use: false` when it matches, a key change otherwise (`Repinned` under
-    /// `Trust::AssumeYes`, else R-TRUST-003). Nothing is pinned: that is [`Registry::pin`].
+    /// publisher. A signed package's publisher is decided against the key expected for `name` (the
+    /// user's pin, else `policy.locked_key`): first use without one, `first_use: false` when it
+    /// matches the user's pin, a key change otherwise (`Repinned` under `Trust::AssumeYes`, else
+    /// R-TRUST-003). Nothing is pinned: that is [`Registry::pin`].
     fn fetch(
         &self,
         name: &PackageName,
@@ -242,33 +293,7 @@ impl Registry for MemoryRegistry {
         }
         let publisher = match &published.key_id {
             None => Publisher::Unsigned,
-            Some(key_id) => match self.pins.lock().unwrap().get(name) {
-                None => Publisher::Signed {
-                    key_id: key_id.clone(),
-                    first_use: true,
-                },
-                Some(pinned) if pinned == key_id => Publisher::Signed {
-                    key_id: key_id.clone(),
-                    first_use: false,
-                },
-                Some(pinned) => {
-                    if policy.trust != Trust::AssumeYes {
-                        return Err(OpError::diagnostic(
-                                codes::R_TRUST_003,
-                                format!(
-                                    "key change rejected for '{name}': pinned '{pinned}' but package is signed '{key_id}'"
-                                ),
-                            )
-                            .with_suggestion(format!(
-                                "if you trust the new key, re-run with --yes (or add '{key_id}' to trusted_keys)"
-                            )));
-                    }
-                    Publisher::Repinned {
-                        key_id: key_id.clone(),
-                        previous: pinned.clone(),
-                    }
-                }
-            },
+            Some(key_id) => self.decide(name, key_id, policy)?,
         };
         Ok(Package {
             name: name.clone(),
@@ -616,6 +641,38 @@ pub fn assert_registry_contract(registry: &dyn Registry, published: &[Published]
     assert!(
         error.is(codes::R_TRUST_003),
         "C9: the consented fetch pinned nothing: {error:?}"
+    );
+
+    // C10: the lock's key is the pin when the user has none
+    let error = registry
+        .fetch(
+            &fresh,
+            &fresh_version,
+            refuse(false).locked(Some("contract-other")),
+        )
+        .unwrap_err();
+    assert!(
+        error.is(codes::R_TRUST_003),
+        "C10: another key than the lock's: {error:?}"
+    );
+    assert!(
+        error.message.contains("specforge.lock"),
+        "C10: the message names the lock: {error:?}"
+    );
+    let locked = registry
+        .fetch(
+            &fresh,
+            &fresh_version,
+            refuse(false).locked(Some(receipt.key_id.as_str())),
+        )
+        .unwrap_or_else(|e| panic!("C10: the locked key is accepted: {e:?}"));
+    assert_eq!(
+        locked.publisher,
+        Publisher::Signed {
+            key_id: receipt.key_id.clone(),
+            first_use: true
+        },
+        "C10: the lock's key is accepted, and still pinned when the install is written"
     );
 
     // R-S

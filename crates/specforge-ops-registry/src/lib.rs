@@ -356,7 +356,7 @@ impl Registry for ConfiguredRegistry {
             policy.allow_unsigned,
             &self.decider(policy.trust),
             &self.user.known_keys(),
-            None,
+            policy.locked_key,
         )
         .map_err(OpError::from)?; // 4: R-TRUST-001..006, writes nothing
         self.reported_by_policy

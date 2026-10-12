@@ -1598,29 +1598,49 @@ fn a_refused_install_pins_no_first_use_key() {
     let output = t.run(&["add", "@sdk/greet@0.2.0", "--format", "json"]);
 
     assert!(!output.status.success());
+    assert_eq!(json_of(&output)["code"], "R-TRUST-003");
     assert!(
         !known_keys(&t.home).exists(),
         "a refused install creates no pin store"
     );
 }
 
-#[test]
-fn pin_the_key_the_lock_records_is_not_read() {
+#[specforge_test(
+    behavior = "pin_publisher_key",
+    verify = "with no pin of the user's, the key specforge.lock records is the pin"
+)]
+fn with_no_pin_the_key_the_lock_records_is_the_pin() {
     let t = trusting(TrustingSetup {
         greet_signed_by_k2: true,
         ..setup(false)
     });
 
+    let lock_before = std::fs::read(t.dir.path().join("specforge.lock")).unwrap();
+
     let output = t.run(&["add", "@sdk/greet@0.1.0", "--format", "json"]);
 
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stdout)
-    );
+    assert!(!output.status.success());
     let json = json_of(&output);
-    assert_eq!(json["added"][0]["publisher"], "pinned_now", "{json}");
-    assert_eq!(json["added"][0]["key_id"], t.k2.key_id(), "{json}");
+    assert_eq!(json["code"], "R-TRUST-003", "{json}");
+    assert!(
+        json["error"]
+            .as_str()
+            .unwrap()
+            .contains(&format!("specforge.lock records '{}'", t.k1.key_id())),
+        "{json}"
+    );
+    assert!(!known_keys(&t.home).exists());
+    assert_eq!(
+        std::fs::read(t.dir.path().join("specforge.lock")).unwrap(),
+        lock_before
+    );
+    // The user can accept the key the registry serves now.
+    let accepted = t.run(&["add", "@sdk/greet@0.1.0", "--yes", "--format", "json"]);
+    assert!(
+        accepted.status.success(),
+        "{}",
+        String::from_utf8_lossy(&accepted.stdout)
+    );
     assert_eq!(t.locked_key("@sdk/greet"), Some(t.k2.key_id()));
     assert_eq!(t.pinned("@sdk/greet"), Some(t.k2.key_id()));
 }

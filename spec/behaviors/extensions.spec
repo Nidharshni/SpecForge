@@ -937,14 +937,18 @@ behavior pin_publisher_key "Pin Publisher Key" {
     surface_decides     "Whether to accept a key change is asked of the surface that can ask (the CLI's terminal); MCP and --format json refuse it"
     pinned_when_written "A key is pinned only when the install that fetched it is written, after its lock entry: a refused or failed operation pins nothing"
     store_fails_closed  "A known-keys store that can't be read refuses the install with R-TRUST-006 and is left as it was"
+    lock_key_pinned     "With no pin of the user's, the key specforge.lock records for the package is its pin; the user's own pin wins over it"
   }
   contract   """
     Trust on first use: a signed package's publisher key id MUST be pinned
     for the package name in the user's known-keys store, and later installs
-    signed by that key MUST be accepted. A package signed by another key
-    MUST be refused with R-TRUST-003 naming both key ids unless the user
-    consents (--yes, an interactive yes, or the key on trusted_keys);
-    --allow-unsigned is not consent. Consent MUST re-pin the new key. A key
+    signed by that key MUST be accepted. With no pin of the user's, the key
+    the project's specforge.lock records for the package is the pin; the
+    user's own pin wins over it. A package signed by another key MUST be
+    refused with R-TRUST-003 naming both key ids (and specforge.lock when
+    the lock's key is the one expected) unless the user consents (--yes, an
+    interactive yes, or the key on trusted_keys); --allow-unsigned is not
+    consent. Consent MUST re-pin the new key. A key
     on denied_keys MUST be refused with R-TRUST-005 whatever the consent.
     Fetching a package only decides: its key is pinned when the
     operation's lock plan commits, after the binaries, the lock and
@@ -971,6 +975,8 @@ behavior pin_publisher_key "Pin Publisher Key" {
   verify integration "an install refused when its binary loads pins no key"
   verify integration "a refused add of several specifiers pins no key"
   verify integration "a known-keys store that can't be read refuses the install and is left as it was"
+  verify integration "with no pin of the user's, the key specforge.lock records is the pin"
+  verify integration "a user's pin wins over the key specforge.lock records"
 }
 
 behavior configure_registries "Configure Registries" {

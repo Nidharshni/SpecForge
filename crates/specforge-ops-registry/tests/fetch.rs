@@ -391,6 +391,67 @@ fn a_pin_that_cannot_be_saved_is_r_trust_006() {
     assert!(project.known_keys().is_dir());
 }
 
+/// `@acme/tool@1.0.0` fetched through `registry` while the project's lock records `locked`.
+fn fetch_locked(
+    registry: &ConfiguredRegistry,
+    locked: &str,
+    trust: Trust,
+) -> Result<specforge_ops::registry::Package, specforge_ops::OpError> {
+    registry.fetch(
+        &PackageName::parse(NAME).unwrap(),
+        &Version::parse(VERSION).unwrap(),
+        TrustPolicy::new(false, trust).locked(Some(locked)),
+    )
+}
+
+#[specforge_test(
+    behavior = "pin_publisher_key",
+    verify = "a user's pin wins over the key specforge.lock records"
+)]
+fn a_users_pin_wins_over_the_locked_key() {
+    let (pinned, locked) = (SigningKey::generate(), SigningKey::generate());
+
+    // Signed by the user's pin: accepted as pinned, whatever the lock records.
+    let project = Project::on(Reply::signed(&pinned));
+    project.pin(&pinned);
+    let package = fetch_locked(&project.registry(), &locked.key_id(), Trust::Refuse).unwrap();
+    assert_eq!(
+        package.publisher,
+        Publisher::Signed {
+            key_id: pinned.key_id(),
+            first_use: false
+        }
+    );
+
+    // Signed by the lock's key: a change from the user's pin.
+    let project = Project::on(Reply::signed(&locked));
+    project.pin(&pinned);
+    let error = fetch_locked(&project.registry(), &locked.key_id(), Trust::Refuse).unwrap_err();
+    assert_eq!(error.code, "R-TRUST-003", "{error:?}");
+    assert!(
+        error.message.ends_with("(the key specforge.lock records)"),
+        "{}",
+        error.message
+    );
+}
+
+#[test]
+fn with_no_pin_a_package_signed_by_the_locked_key_is_a_first_use() {
+    let key = SigningKey::generate();
+    let project = Project::on(Reply::signed(&key));
+
+    let package = fetch_locked(&project.registry(), &key.key_id(), Trust::Refuse).unwrap();
+
+    assert_eq!(
+        package.publisher,
+        Publisher::Signed {
+            key_id: key.key_id(),
+            first_use: true
+        }
+    );
+    assert_eq!(project.pinned(), None, "the fetch pins nothing");
+}
+
 #[specforge_test(
     behavior = "pin_publisher_key",
     verify = "a package signed by another key than the pinned one is refused"

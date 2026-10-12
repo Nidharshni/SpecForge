@@ -447,7 +447,7 @@ catalog! {
         "The package's publisher signature doesn't verify: the Wasm binary or the manifest isn't what the publisher signed. Don't install the package. `--allow-unsigned` doesn't accept it. (A signature that isn't one at all makes the registry's answer unreadable: R009.)";
     R_TRUST_003 = "R-TRUST-003": Error core,
         "Publisher key changed",
-        "The package is signed with a different key than the one pinned for it when it was first installed (trust on first use). That can be a key rotation or a compromised publisher. If you trust the new key, re-run with `--yes` or add it to `trusted_keys`.";
+        "The package is signed with a different key than the one expected for it: the key pinned for it when you first installed it (trust on first use), or, when you have no pin for it, the key the project's `specforge.lock` records. That can be a key rotation or a compromised publisher. If you trust the new key, re-run with `--yes` or add it to `trusted_keys`.";
     R_TRUST_004 = "R-TRUST-004": Error core,
         "Registry answer mismatch",
         "The registry's answer doesn't match: it, or the manifest it serves, describes another package or version than the one requested, or the binary declares other than the served declaration. Don't install the package, and check the registry.";
