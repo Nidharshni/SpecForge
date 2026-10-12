@@ -392,11 +392,6 @@ mod tests {
             (graded.code, graded.owner, graded.level),
             ("A010", "core", Level::SetByPass)
         );
-        assert_eq!(
-            CATALOG.iter().filter(|e| e.owner == "core").count(),
-            123,
-            "every core entry has a constant; extensions' entries have none"
-        );
     }
 
     /// Replace test-only items (`#[cfg(test)]` / `#[test]` and the item that

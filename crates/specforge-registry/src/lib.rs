@@ -35,7 +35,7 @@ pub use entity::{
 };
 
 // --- Registry compilation (plan 05): one build, and the graph checks ---
-pub use compilation::{CHECK_PHASE, DeclaredPass, RegistryBuild, build_registries};
+pub use compilation::{BuildPart, CHECK_PHASE, DeclaredPass, RegistryBuild, build_registries};
 
 // Module paths external code names directly (`specforge_registry::surface::`).
 pub mod surface;

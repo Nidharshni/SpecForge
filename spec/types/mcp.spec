@@ -368,15 +368,17 @@ type McpProviderInfo {
 }
 
 type McpDoctorFinding {
-  /// What the finding is about: config, lock, binary, load, conflict, shadowing, peer or toolchain.
-  about       "config" | "lock" | "binary" | "load" | "conflict" | "shadowing" | "peer" | "toolchain"
+  /// What the finding is about: config, lock, binary, load, structural_only, providers,
+  /// declaration, peer, registry, rule, surface, conflict, shadowing or toolchain.
+  about       "config" | "lock" | "binary" | "load" | "structural_only" | "providers" | "declaration" | "peer" | "registry" | "rule" | "surface" | "conflict" | "shadowing" | "toolchain"
   check       string
-  status      "ok" | "warn" | "error"
+  /// The diagnostic's severity; the disk checks' own are error or warn.
+  status      "error" | "warn" | "info"
   code        string
   remediation string
   /// A binary finding's issue (missing_binary or stale_hash and its fields).
   issue       object @optional
-  /// A shadowing finding's keyword.
+  /// The keyword a shadowing finding (E013) or a kind conflict (E026) names.
   keyword     string @optional
   verify unit "McpDoctorFinding schema is valid"
 }
@@ -397,9 +399,9 @@ type McpDoctorExtension {
 type McpDoctorReport {
   /// The report's verdict: no error-level finding (specforge doctor exits 1 without it).
   ok              boolean
-  /// Every installed binary is healthy, every enabled extension loaded and every peer requirement met.
+  /// No error-level finding about an installed binary, an extension load or a peer requirement.
   extensions_ok   boolean
-  /// The check of each finding where two contributions collide.
+  /// The check of each conflict finding: two contributions claiming one name (E026, W018, W023, E039, E057).
   conflicts       string[]
   /// "stale" when an installed binary is missing or its hash drifted.
   cache_status    "ok" | "stale"

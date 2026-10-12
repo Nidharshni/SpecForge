@@ -2792,6 +2792,7 @@ dependencies = [
  "specforge-parser",
  "specforge-project",
  "specforge-protocol-types",
+ "specforge-registry",
  "specforge-registry-client",
  "specforge-registry-server",
  "specforge-test",

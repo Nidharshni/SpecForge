@@ -8,7 +8,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   runtime the extensions were loaded in (`runtime()`; none when it was loaded without one, so nothing
   loaded). Every extension call an operation makes over the project, a check's included, runs in
   that runtime (`specforge_project::Environment`, ADR 0015 "The runtime travels with the
-  environment"). A `specforge.json` that is there and can't be used is the
+  environment"). It hands out its diagnostics with the setup part each is about
+  (`setup_diagnostics()`; `diagnostics()` is the same list without the parts). A `specforge.json` that is there and can't be used is the
   default config (for the unusable file or key), with each reason kept (`config_problems()`) and
   reported as the error E069. It also holds the project's **installed extensions** (`installed()`:
   what `specforge.lock` held when it was read, absent, read or unreadable, once, for every
@@ -133,7 +134,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   builtin from its embedded binary, an installed extension from its pinned module, a `.wasm` file
   entry from its file under the name it declares. Its declarations come in entry order; the registry
   build puts them in load order. What does not load is a typed `LoadFailure` on its
-  entry with one diagnostic; the runtime keeps none. Without a runtime nothing loads, and each entry
+  entry with one diagnostic, and what an entry reports though it loaded (W149, W153, W138) is on the
+  entry too; the runtime keeps none, and `Installed::load_diagnostics` orders them, entry by entry. Without a runtime nothing loads, and each entry
   enables what it names (`Loaded::unloaded`); what an environment is assembled from says which
   (`specforge_project::ExtensionLoad`: `NoRuntime`, or what was loaded `In` a runtime).
 - **Extension inventory**: every extension a project has, one row per name: enabled by a
@@ -160,11 +162,17 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   install came from (R-RES-006/005, ADR 0001) or, for a local file, refused with E027; a peer that
   is not locked is `check`'s. Lock order decides nothing. A registry install's binary loads only
   after that and must declare what was published; then the plan is written as one change.
+- **Setup part**: what part of a project's setup a diagnostic the environment reports is about: the
+  config, the lock, one `extensions` entry, structural-only, the configured providers, one declaration,
+  the peers, the registries, a rule, a surface, or a collision (two contributions claiming one name: a
+  kind keyword, an edge label, a rule code, a command, tool or resource, a provider scheme). Decided
+  where the diagnostic is raised (`specforge_project::SetupPart`, the registry build's `BuildPart`);
+  doctor makes one finding per setup diagnostic from it and reads no code but E013's (ADR 0054).
 - **Registry build**: the pure result of putting extension declarations in load order and turning
   them into kind, field and edge registries, the rule set, pass order, the graph inputs
   (`RegistryBuild::graph_inputs`) and the diagnostics of those declarations, in one order
-  (`RegistryBuild::diagnostics`: the declarations' own, the registries', the custom rules' probes,
-  the surfaces') (`specforge_registry::build_registries`). The custom rules' probe is the one call it
+  (`RegistryBuild::reported`: the declarations' own, the registries', the custom rules' probes, the
+  surfaces', each with the setup part it is about) (`specforge_registry::build_registries`). The custom rules' probe is the one call it
   makes out, through the `CustomVerdicts` port, when the environment probes it in the runtime its
   extensions loaded in (`RegistryBuild::probe`). It also runs every check over a built graph's entity
   records, in one order behind one gate: the structural checks, then the rule set
@@ -492,7 +500,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   unjudged): check (no error reported), analyze (no error finding, and with a minimum the coverage
   gate met; unjudged when the gate has no figure), format (every target read and written, nothing
   left unformatted, and under `--check` nothing that would change), migrate (no file failed, nothing
-  rolled back), doctor (no error-level finding). The CLI exits 0, 1 or 2 by it (`specforge_cli::outcome::Exit`, the only value a core
+  rolled back), doctor (no error-level finding: an error the environment reports, E013, a binary that
+  does not match the lock, an unreadable lock). The CLI exits 0, 1 or 2 by it (`specforge_cli::outcome::Exit`, the only value a core
   command ends with); MCP returns it as `ok`
   (`specforge.validate`: `_meta["specforge/check"].ok`) and keeps `isError` for refusals (ADR 0004
   D4-a). A refusal (`OpError`) is not a verdict; a measuring command's refusal exits 2. Not to be

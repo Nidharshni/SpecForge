@@ -4,10 +4,11 @@
 use std::path::Path;
 use std::sync::Mutex;
 
+use specforge_common::Diagnostic;
 use specforge_extension_sdk::{ContributionsBuilder, ExtensionMeta};
 use specforge_installed::testing::{install, placeholder_module};
 use specforge_installed::{
-    Builtins, Installed, LoadProblem, LockState, hex_sha256, write_lock_file,
+    Builtins, Installed, LoadProblem, LoadSubject, LockState, hex_sha256, write_lock_file,
 };
 use specforge_package::PackageName;
 use specforge_wasm::testing::InProcessRuntime;
@@ -41,8 +42,17 @@ fn package(name: &str) -> PackageName {
     PackageName::parse(name).unwrap()
 }
 
-fn codes(loaded: &specforge_installed::Loaded) -> Vec<&str> {
-    loaded.diagnostics.iter().map(|d| d.code.as_str()).collect()
+/// What the load of `root` reported, in `load_diagnostics`' order.
+fn reported(root: &Path, loaded: &specforge_installed::Loaded) -> Vec<Diagnostic> {
+    Installed::at(root)
+        .load_diagnostics(&loaded.enabled)
+        .into_iter()
+        .map(|(_, diagnostic)| diagnostic.clone())
+        .collect()
+}
+
+fn codes(root: &Path, loaded: &specforge_installed::Loaded) -> Vec<String> {
+    reported(root, loaded).into_iter().map(|d| d.code).collect()
 }
 
 #[specforge_test_macros::test(
@@ -56,10 +66,10 @@ fn an_installed_extension_loads_from_its_pinned_module() {
     let loaded = load_with(dir.path(), &entries(&["@acme/a"]), &runtime());
 
     assert_eq!(
-        codes(&loaded),
-        Vec::<&str>::new(),
+        codes(dir.path(), &loaded),
+        Vec::<String>::new(),
         "{:?}",
-        loaded.diagnostics
+        reported(dir.path(), &loaded)
     );
     assert_eq!(loaded.declarations.len(), 1);
     assert_eq!(loaded.declarations[0].name(), "@acme/a");
@@ -79,7 +89,12 @@ fn a_changed_module_is_refused_and_not_loaded() {
 
     let loaded = load_with(dir.path(), &entries(&["@acme/a"]), &runtime);
 
-    assert_eq!(codes(&loaded), ["E070"], "{:?}", loaded.diagnostics);
+    assert_eq!(
+        codes(dir.path(), &loaded),
+        ["E070"],
+        "{:?}",
+        reported(dir.path(), &loaded)
+    );
     assert!(loaded.declarations.is_empty());
     let failure = loaded.enabled[0].failure.as_ref().unwrap();
     assert_eq!(
@@ -126,14 +141,13 @@ fn an_entry_that_names_no_package_is_e072_and_not_loaded() {
     );
 
     assert_eq!(
-        codes(&loaded),
+        codes(dir.path(), &loaded),
         ["E072", "E072", "E072"],
         "{:?}",
-        loaded.diagnostics
+        reported(dir.path(), &loaded)
     );
     for (diagnostic, entry) in
-        loaded
-            .diagnostics
+        reported(dir.path(), &loaded)
             .iter()
             .zip(["../../../outside1", "@acme/..", "Bad Name"])
     {
@@ -159,8 +173,8 @@ fn an_entry_without_a_lock_entry_is_e028_naming_the_command_that_installs_it() {
 
     let loaded = load_with(dir.path(), &entries(&["@acme/a"]), &runtime());
 
-    assert_eq!(codes(&loaded), ["E028"]);
-    let diagnostic = &loaded.diagnostics[0];
+    assert_eq!(codes(dir.path(), &loaded), ["E028"]);
+    let diagnostic = &reported(dir.path(), &loaded)[0];
     assert!(diagnostic.message.contains("no specforge.lock entry"));
     assert!(
         diagnostic
@@ -184,7 +198,7 @@ fn a_locked_extension_without_its_module_is_e028_naming_where_it_should_be() {
 
     let loaded = load_with(dir.path(), &entries(&["@acme/a"]), &runtime());
 
-    assert_eq!(codes(&loaded), ["E028"]);
+    assert_eq!(codes(dir.path(), &loaded), ["E028"]);
     assert_eq!(
         loaded.enabled[0].failure.as_ref().unwrap().problem,
         LoadProblem::ModuleMissing { path: module }
@@ -195,18 +209,32 @@ fn a_locked_extension_without_its_module_is_e028_naming_where_it_should_be() {
     behavior = "load_extension_manifests",
     verify = "an unreadable specforge.lock is reported once (E033) and each installed extension it leaves unloaded is E028 naming it"
 )]
-fn an_unreadable_lock_is_reported_once_and_each_installed_entry_is_e028() {
+fn an_unreadable_lock_is_reported_once_before_the_first_entry_it_left_unloaded() {
     let dir = TempDir::new().unwrap();
     install(dir.path(), &["@acme/a", "@acme/b"]);
     std::fs::write(dir.path().join("specforge.lock"), "not a lock {{{").unwrap();
 
     let loaded = load_with(dir.path(), &entries(&["@acme/a", "@acme/b"]), &runtime());
 
-    assert_eq!(codes(&loaded), ["E033", "E028", "E028"]);
-    assert!(loaded.diagnostics[1].message.contains("@acme/a"));
-    assert!(loaded.diagnostics[2].message.contains("@acme/b"));
+    let installed = Installed::at(dir.path());
+    let reported = installed.load_diagnostics(&loaded.enabled);
+    let parts: Vec<_> = reported
+        .iter()
+        .map(|(s, d)| (*s, d.code.as_str()))
+        .collect();
+    assert_eq!(
+        parts,
+        [
+            (LoadSubject::Lock, "E033"),
+            (LoadSubject::Entry(0), "E028"),
+            (LoadSubject::Entry(1), "E028"),
+        ]
+    );
+    assert!(reported[1].1.message.contains("@acme/a"));
+    assert!(reported[2].1.message.contains("@acme/b"));
     assert!(
-        loaded.diagnostics[1]
+        reported[1]
+            .1
             .message
             .contains("specforge.lock can't be read")
     );
@@ -222,10 +250,10 @@ fn a_project_that_enables_nothing_installed_does_not_report_its_lock() {
     let loaded = Installed::at(dir.path()).load(&entries(&["@acme/a"]), &builtins, &runtime());
 
     assert_eq!(
-        codes(&loaded),
-        Vec::<&str>::new(),
+        codes(dir.path(), &loaded),
+        Vec::<String>::new(),
         "{:?}",
-        loaded.diagnostics
+        reported(dir.path(), &loaded)
     );
     assert_eq!(loaded.declarations.len(), 1);
 }
@@ -273,7 +301,11 @@ fn the_bytes_compiled_are_the_bytes_hashed() {
 
     let loaded = load_with(dir.path(), &entries(&["@acme/a"]), &runtime);
 
-    assert!(loaded.diagnostics.is_empty(), "{:?}", loaded.diagnostics);
+    assert!(
+        reported(dir.path(), &loaded).is_empty(),
+        "{:?}",
+        reported(dir.path(), &loaded)
+    );
     let seen = runtime.loaded.lock().unwrap();
     assert_eq!(seen.len(), 1);
     let module = Installed::at(dir.path()).module_path(&package("@acme/a"));
@@ -297,7 +329,11 @@ fn a_file_entry_loads_under_the_name_it_declares() {
 
     let loaded = load_with(dir.path(), &entries(&["tool.wasm"]), &runtime);
 
-    assert!(loaded.diagnostics.is_empty(), "{:?}", loaded.diagnostics);
+    assert!(
+        reported(dir.path(), &loaded).is_empty(),
+        "{:?}",
+        reported(dir.path(), &loaded)
+    );
     assert_eq!(loaded.enabled[0].name, "@acme/tool");
     assert_eq!(loaded.enabled[0].file.as_deref(), Some("tool.wasm"));
     assert_eq!(loaded.declarations[0].name(), "@acme/tool");
@@ -335,7 +371,12 @@ fn a_file_entry_that_cannot_load_is_e028_naming_it() {
 
     let loaded = load_with(dir.path(), &all, &runtime);
 
-    assert_eq!(codes(&loaded), ["E028"; 4], "{:?}", loaded.diagnostics);
+    assert_eq!(
+        codes(dir.path(), &loaded),
+        ["E028"; 4],
+        "{:?}",
+        reported(dir.path(), &loaded)
+    );
     let problems: Vec<&LoadProblem> = loaded
         .enabled
         .iter()
@@ -352,7 +393,7 @@ fn a_file_entry_that_cannot_load_is_e028_naming_it() {
         problems[3],
         LoadProblem::AlreadyLoaded { declared } if declared == "@acme/a"
     ));
-    for (diagnostic, entry) in loaded.diagnostics.iter().zip([
+    for (diagnostic, entry) in reported(dir.path(), &loaded).iter().zip([
         "missing.wasm",
         "plain.wasm",
         "@acme/other=tool.wasm",
@@ -388,7 +429,11 @@ fn declarations_come_in_entry_order_once_per_extension() {
 
     let names: Vec<&str> = loaded.declarations.iter().map(|d| d.name()).collect();
     assert_eq!(names, ["@acme/b", "@acme/tool", "@acme/a"]);
-    assert!(loaded.diagnostics.is_empty(), "{:?}", loaded.diagnostics);
+    assert!(
+        reported(dir.path(), &loaded).is_empty(),
+        "{:?}",
+        reported(dir.path(), &loaded)
+    );
     assert_eq!(loaded.enabled.len(), 4);
     assert!(loaded.enabled.iter().all(|e| e.failure.is_none()));
 }
@@ -409,11 +454,16 @@ fn an_unpinned_entry_loads_with_w149() {
 
     let loaded = load_with(dir.path(), &entries(&["@acme/a"]), &runtime());
 
-    assert_eq!(loaded.declarations.len(), 1, "{:?}", loaded.diagnostics);
-    assert_eq!(codes(&loaded), ["W149"]);
-    assert!(loaded.diagnostics[0].message.contains("@acme/a"));
+    assert_eq!(
+        loaded.declarations.len(),
+        1,
+        "{:?}",
+        reported(dir.path(), &loaded)
+    );
+    assert_eq!(codes(dir.path(), &loaded), ["W149"]);
+    assert!(reported(dir.path(), &loaded)[0].message.contains("@acme/a"));
     assert!(
-        loaded.diagnostics[0]
+        reported(dir.path(), &loaded)[0]
             .suggestion
             .as_deref()
             .unwrap()
@@ -435,7 +485,12 @@ fn a_module_declaring_another_extension_is_e070() {
 
     let loaded = load_with(dir.path(), &entries(&["@acme/a"]), &runtime);
 
-    assert_eq!(codes(&loaded), ["E070"], "{:?}", loaded.diagnostics);
+    assert_eq!(
+        codes(dir.path(), &loaded),
+        ["E070"],
+        "{:?}",
+        reported(dir.path(), &loaded)
+    );
     assert_eq!(
         loaded.enabled[0].failure.as_ref().unwrap().problem,
         LoadProblem::NotItsLockEntry {
@@ -444,11 +499,11 @@ fn a_module_declaring_another_extension_is_e070() {
     );
     assert!(loaded.declarations.is_empty());
     assert!(
-        loaded.diagnostics[0]
+        reported(dir.path(), &loaded)[0]
             .message
             .contains("declares '@acme/b', not the extension its lock entry names"),
         "{:?}",
-        loaded.diagnostics[0]
+        reported(dir.path(), &loaded)[0]
     );
     // What was refused is not left loaded.
     assert!(!runtime.unload("@acme/a"));

@@ -78,6 +78,10 @@ first — the load's failures and warnings, provider registration (W118/E057), I
 build's whole list in its one order, `RegistryBuild::diagnostics()`, which ends with the surfaces' E055
 and E039; see the amendment below.)*
 
+*(Amended by ADR 0054: the extension load's diagnostics come entry by entry — an entry's failure, or
+W149 then W153/W138 — with the lock's E033 once before the first entry it left unloaded; every
+diagnostic of the environment and the build carries its setup part.)*
+
 `build_registries(Vec<ExtensionDeclaration>) -> RegistryBuild` checks the declarations
 themselves (E030 identity and shape, W021 consistency against the loaded peers, E027 peer
 dependencies, W145 pass order cycles, in that order, extension by extension within each),

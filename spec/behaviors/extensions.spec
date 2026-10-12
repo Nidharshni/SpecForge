@@ -78,9 +78,13 @@ behavior load_extension_manifests "Load Extension Manifests" {
     that is not a string is ignored; the rest of the file is used. A
     missing specforge.json is the default config and produces no E069.
     Before any source, the environment MUST report its own diagnostics —
-    E069, the load's failures and warnings, provider registration (W118,
+    E069, the extension load's entry by entry (an entry's failure, or what
+    it reported though it loaded: W149, W153, W138; the lock's E033 once,
+    before the first entry it left unloaded), provider registration (W118,
     E057), then I002 — and then the registry build's, in the build's one
-    order (build_registries_from_declarations).
+    order (build_registries_from_declarations). Each MUST say the part of
+    the setup it is about: the config, the lock, one entry, structural-only,
+    the providers, or the registry build's part.
     This behavior orchestrates: for each extension, it loads its
     binary and reads its declaration once. Once all declarations are loaded
     and the extension_manifests_loaded event is produced, the registry build
@@ -103,6 +107,7 @@ behavior load_extension_manifests "Load Extension Manifests" {
   verify unit "E069 names a mistyped key or a non-string item, and the rest of specforge.json is used"
   verify integration "a specforge.json that is there and can't be used produces E069 first and an I002 that names it"
   verify integration "the environment reports its own diagnostics, then the registry build's, before any source"
+  verify integration "the environment says what part of the setup each of its diagnostics is about, and reports an entry's load diagnostics together"
   verify contract "Load Extension Manifests: extension manifest loading holds — all_files_parsed, extensions_config_available, all_extensions_attempted, loaded_manifests_available, failed_extensions_diagnosed, loaded_event_fired, extension_isolation"
 }
 
@@ -162,7 +167,11 @@ behavior build_registries_from_declarations "Build Registries From Declarations"
     kept), the kind, field and edge registries, the rules, the surfaces and
     the graph inputs (registry_build_graph_inputs). It MUST report its
     diagnostics in one order: the declarations' own, the registries', the
-    custom rules' probes, then the surfaces'. A custom rule whose function
+    custom rules' probes, then the surfaces'. Each diagnostic MUST say what
+    it is about: a declaration (E030, W021, W145), the peers (E073, E027),
+    the registries (W019, W021, I004, W017), a rule (W150, W147, W112), a
+    surface (E055), or a collision of two contributions on one name (E026,
+    W018, W023, E039). A custom rule whose function
     its extension cannot answer through is W112, after the registries'
     diagnostics, once, when the build is probed in the runtime its
     extensions loaded in. It MUST be pure: the probe, through the
@@ -187,6 +196,7 @@ behavior build_registries_from_declarations "Build Registries From Declarations"
   verify unit "the declarations' own diagnostics come in a fixed order: E030, W021, the peers' E073 and E027, the cycles' E027, W145"
   verify unit "the registry build reports its diagnostics in one order: the declarations', the registries', the custom rules' probes, the surfaces'"
   verify unit "probing the build reports each custom rule whose function cannot answer once, as W112 after the registries' diagnostics"
+  verify unit "the registry build says what each of its diagnostics is about: a declaration, the peers, the registries, a rule, a surface or a collision"
   verify integration "every loaded declaration is registered before a compile checks anything"
 }
 
@@ -544,7 +554,7 @@ behavior management_operations_over_the_project_view "Management Operations over
   """
   verify unit "an operation that reads or writes the project on disk refuses a view without a root"
   verify unit "the extensions listing reads the config entries from the view, never specforge.json again"
-  verify unit "doctor reads the diagnostics its view reports"
+  verify unit "doctor reads the setup diagnostics of its view's environment, and E013 from what its view reports"
   verify unit "list, doctor and remove read the lock the compile read, once"
   verify unit "list, doctor and remove read one inventory of the project's extensions"
   verify integration "add, update and remove refuse an unusable specforge.json with one refusal, before they write"

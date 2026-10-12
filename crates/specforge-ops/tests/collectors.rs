@@ -140,7 +140,6 @@ fn collect_maps_results_to_the_views_entities() {
             loaded: specforge_project::Loaded {
                 enabled: Vec::new(),
                 declarations: vec![load_via_protocol("@specforge/cargo-test")],
-                diagnostics: Vec::new(),
             },
         },
     );

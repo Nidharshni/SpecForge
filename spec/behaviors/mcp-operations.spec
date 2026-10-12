@@ -457,8 +457,8 @@ behavior provide_mcp_doctor_tool "Provide MCP Doctor Tool" {
     no required parameters. The tool MUST check project health: extension
     conflicts, stale Wasm cache entries, extensions that fail to load (E028,
     E070), missing specforge.json fields, version mismatches, and unreferenced
-    entities. A specforge.json the server could not use (E069) MUST be a
-    finding. The response MUST be the report specforge doctor computes: its
+    entities. Every diagnostic the environment reports MUST be a finding, an
+    unusable specforge.json (E069) included. The response MUST be the report specforge doctor computes: its
     verdict ok and each detected issue once, with what it is about and a
     deterministic resolution step. Like specforge.validate, the tool MUST bring the
     project up to date with disk before checking it, so it sees edits made

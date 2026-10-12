@@ -29,6 +29,7 @@ pub mod passes;
 mod policy;
 pub mod providers;
 mod session;
+mod setup;
 pub mod snapshot;
 mod sources;
 mod verdicts;
@@ -62,10 +63,11 @@ pub use inputs::{Changes, InputRole, SessionInputs, UpdateKind, WatchRoot, Watch
 pub use policy::{DiagnosticPolicy, LINT_PROFILE_NAMES, LintProfile, UnknownLintProfile};
 pub use providers::Providers;
 pub use session::{CheckMode, OpeningProject, ProjectSession, RuntimeSource, SourceChange, Update};
+pub use setup::{SetupDiagnostic, SetupPart};
 pub use specforge_graph::{
     EdgeChange, GraphDelta, ModifiedNodeChange, NodeChange, compute_graph_delta,
 };
-pub use specforge_installed::{EnabledExtension, Loaded};
+pub use specforge_installed::{EnabledExtension, LoadSubject, Loaded};
 
 /// The runtime a project's extensions run in (every [`WasmRuntime`] is
 /// `Send + Sync`).
@@ -121,10 +123,9 @@ pub struct Environment {
     /// the loaded declarations (ADR 0004 D3-c): with any scheme registered,
     /// a ref with another scheme is I005.
     providers: Providers,
-    /// One E069 per config problem, then the extension load's diagnostics:
-    /// the runtime's load failures (E028/E033) in load order, then the
-    /// declarations' unknown keys (W138).
-    load_diagnostics: Vec<Diagnostic>,
+    /// One E069 per config problem. The extension load's diagnostics are on
+    /// [`Self::enabled`] ([`Installed::load_diagnostics`] orders them).
+    config_diagnostics: Vec<Diagnostic>,
     /// I002, when no extension loaded.
     structural_only: Option<Diagnostic>,
     /// The runtime the extensions were loaded in: every extension call an
@@ -150,7 +151,7 @@ impl Environment {
             spec_root: PathBuf::new(),
             registries: RegistryBuild::default(),
             providers: Providers::default(),
-            load_diagnostics: Vec::new(),
+            config_diagnostics: Vec::new(),
             structural_only: None,
             runtime: None,
             root: None,
@@ -193,7 +194,7 @@ impl Environment {
     /// Reads nothing from disk. Its one effect is the probe's calls in the
     /// runtime it is given (the `WasmRuntime` port).
     pub fn assemble(read: ConfigRead, installed: Installed, load: ExtensionLoad) -> Self {
-        let mut load_diagnostics: Vec<Diagnostic> = read
+        let config_diagnostics: Vec<Diagnostic> = read
             .problems
             .iter()
             .map(config_problem_diagnostic)
@@ -205,9 +206,7 @@ impl Environment {
         let Loaded {
             enabled,
             declarations,
-            diagnostics,
         } = loaded;
-        load_diagnostics.extend(diagnostics);
         let mut registries = build_registries(declarations);
         // A custom rule's wasm_function is resolved against its extension
         // now, so a name it does not export is reported once (W112).
@@ -231,7 +230,7 @@ impl Environment {
             spec_root,
             registries,
             providers,
-            load_diagnostics,
+            config_diagnostics,
             structural_only,
             runtime,
             root: None,
@@ -365,18 +364,55 @@ impl Environment {
         diagnostics
     }
 
-    /// The diagnostics reported before any source, in this order: the
-    /// environment's own (why `specforge.json` is not used as written
-    /// (E069), the extension load's failures (E033, then E028/E070/W149 per
-    /// entry) and warnings (W153, W138), provider registration (W118/E057),
-    /// I002), then the registry build's, in its order
-    /// ([`specforge_registry::RegistryBuild::diagnostics`]).
-    pub fn diagnostics(&self) -> impl Iterator<Item = &Diagnostic> {
-        self.load_diagnostics
+    /// The diagnostics reported before any source, each with the part of
+    /// the setup it is about, in `specforge check`'s order: why
+    /// `specforge.json` is not used as written (E069), the extension load's
+    /// entry by entry (an entry's failure, or what it reported though it
+    /// loaded; the lock's E033 once, before the first entry it left
+    /// unloaded), provider registration (W118; E057 is a collision), I002,
+    /// then the registry build's, in its order
+    /// ([`specforge_registry::RegistryBuild::reported`]).
+    pub fn setup_diagnostics(&self) -> Vec<SetupDiagnostic<'_>> {
+        let of = |part, diagnostic| SetupDiagnostic { part, diagnostic };
+        let mut all: Vec<SetupDiagnostic<'_>> = self
+            .config_diagnostics
             .iter()
-            .chain(self.providers.diagnostics())
-            .chain(&self.structural_only)
-            .chain(self.registries.diagnostics())
+            .map(|d| of(SetupPart::Config, d))
+            .collect();
+        all.extend(
+            self.installed
+                .load_diagnostics(&self.enabled)
+                .into_iter()
+                .map(|(subject, d)| {
+                    of(
+                        match subject {
+                            LoadSubject::Lock => SetupPart::Lock,
+                            LoadSubject::Entry(i) => SetupPart::Entry(i),
+                        },
+                        d,
+                    )
+                }),
+        );
+        all.extend(self.providers.reported().map(|(part, d)| of(part, d)));
+        all.extend(
+            self.structural_only
+                .iter()
+                .map(|d| of(SetupPart::StructuralOnly, d)),
+        );
+        all.extend(
+            self.registries
+                .reported()
+                .map(|(part, d)| of(part.into(), d)),
+        );
+        all
+    }
+
+    /// [`Self::setup_diagnostics`] without the parts: what `specforge check`
+    /// reports before any source.
+    pub fn diagnostics(&self) -> impl Iterator<Item = &Diagnostic> {
+        self.setup_diagnostics()
+            .into_iter()
+            .map(|setup| setup.diagnostic)
     }
 
     /// Whether a file (its path relative to the spec root) is left out of

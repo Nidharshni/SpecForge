@@ -75,7 +75,7 @@ nearest project, else the directory itself" on their own.
   answer is refused before any pass runs (E068). The analysis document carries `gate`; under `--json` nothing
   goes to stderr. `specforge.analyze` takes `min`; an unjudged gate there is `ok: false` with
   `gate.status: "unjudged"`, not an error. `DoctorReport::ok()` is doctor's verdict; `specforge doctor` exits by
-  it and the user's credential health, which only the CLI shows.
+  it and the user's credential health, which only the CLI shows. Doctor's verdict fails whenever `check` fails on a setup diagnostic (ADR 0054 S4).
 - **D4a. A core command's `run` returns `Exit`.** `main` alone turns it into a process code; `Refusal::report`
   returns `Exit`, and `RunVerdict` (`specforge_ops`) is the verdict an operation that can be unjudged returns.
   Extension commands keep their own code (ADR 0011). The build-cache write failure, the watch start failure

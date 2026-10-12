@@ -188,7 +188,7 @@ pub fn providers(view: &ProjectView) -> ProviderListing {
     let registered = view.env().providers();
     ProviderListing {
         providers: registered.iter().cloned().collect(),
-        diagnostics: registered.diagnostics().to_vec(),
+        diagnostics: registered.diagnostics().cloned().collect(),
     }
 }
 
@@ -253,6 +253,7 @@ mod tests {
                 name: "@sdk/greet".into(),
                 file: Some("greet.wasm".into()),
                 failure: None,
+                warnings: Vec::new(),
             }])
             .declarations(vec![Fixture::declaration("@sdk/greet", "0.1.0")]);
 

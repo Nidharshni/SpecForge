@@ -668,11 +668,21 @@ behavior run_doctor_check "Run Doctor Check" {
     and additional checks (shadowed fields, unknown target entities,
     edge label conflicts). An enabled extension that fails to load (E028:
     not installed; E070: its binary is not the one the lock pins) MUST be
-    reported as an error. Each problem MUST be one finding that says what it
-    is about (the config, the lock, a binary, a load, a conflict, a
-    shadowing, a peer, the toolchain); a missing or changed installed binary
+    reported as an error. Every diagnostic the environment reports (what
+    specforge check reports before any source) MUST be one finding, at its
+    severity (error, warn or info), saying the part of the setup it is about
+    as the environment says it: the config, the lock, an extension load,
+    structural-only, the providers, a declaration, a peer, the registries, a
+    rule, a surface, or a conflict (two contributions claiming one name: a
+    kind keyword, an edge label, a rule code, a command, tool or resource,
+    a provider scheme); doctor MUST NOT decide that part from the code. The
+    one source diagnostic doctor reports is E013, an entity id that is a
+    keyword, as a shadowing finding. A missing or changed installed binary
     is one binary finding, whose remediation is the command that reinstalls
-    it as its lock entry records it. The report MUST carry its verdict (no
+    it as its lock entry records it, and an unreadable lock one lock finding;
+    the load diagnostics they cause are not listed again. So doctor fails
+    whenever check fails on a diagnostic of the project's setup. The report
+    MUST carry its verdict (no
     error-level finding), and specforge doctor --format json and
     specforge.doctor MUST return the same report (the CLI adds the user's
     credentials). Each peer requirement the compile reports unsatisfied
@@ -697,6 +707,8 @@ behavior run_doctor_check "Run Doctor Check" {
   verify unit "doctor lists all enhancements grouped by entity kind"
   verify unit "doctor reports conflicts with resolution suggestions"
   verify unit "doctor detects shadowed grammar-level constructs"
+  verify unit "doctor reports every diagnostic the environment reports as one finding, with the part of the setup it is about and the diagnostic's severity"
+  verify integration "doctor fails whenever check fails on a diagnostic of the project's setup"
   verify unit "doctor --format json produces valid JSON output"
   verify unit "doctor reports an extension that fails to load (E028, E070) as an error"
   verify unit "doctor reports a missing or changed installed binary once, with the remedy its load gives"

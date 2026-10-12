@@ -193,7 +193,6 @@ pub fn loaded(declarations: Vec<ExtensionDeclaration>) -> ExtensionLoad {
         loaded: Loaded {
             enabled: Vec::new(),
             declarations,
-            diagnostics: Vec::new(),
         },
     }
 }
