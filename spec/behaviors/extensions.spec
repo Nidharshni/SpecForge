@@ -681,12 +681,16 @@ behavior search_registry "Search Registry" {
   }
   contract   """
     When specforge search is invoked, the system MUST query all configured
-    registries with the search term. Results MUST be filterable by declared
-    category (--contributes, one of entities, edges, shared_fields,
-    enhancements, validation_rules, surfaces, collectors, analyzers, passes,
-    feature_flags): a registry lists only the packages whose stored
-    declaration declares something in that category, and an unknown
-    category is refused before any request. Results from multiple
+    registries with the search term. Each registry lists a package once,
+    when any of its versions matches the term, at the version specforge
+    add <name> would install from it (latest: the highest release, a
+    pre-release only when the package has none). Results MUST be
+    filterable by declared category (--contributes, one of entities,
+    edges, shared_fields, enhancements, validation_rules, surfaces,
+    collectors, analyzers, passes, feature_flags): a registry lists only
+    the packages whose listed version's stored declaration declares
+    something in that category, and an unknown category is refused before
+    any request. Results from multiple
     registries MUST be merged and deduplicated using a composite key of
     name + version — when the same name + version appears from multiple
     registries, the first registry in specforge.json declaration order
@@ -706,6 +710,7 @@ behavior search_registry "Search Registry" {
   verify unit "an unusable specforge.json is refused with the refusal add gives, before any network call"
   verify unit "queries all configured registries"
   verify unit "filters by declared category"
+  verify unit "a registry lists each package at the version add installs from it"
   verify unit "each failed registry is reported once, and search fails when every registry failed"
   verify unit "deduplicates results across registries"
   verify unit "output is deterministic"

@@ -491,6 +491,61 @@ fn a_failed_update_prints_its_document() {
     );
 }
 
+#[specforge_test(
+    behavior = "update_all_extensions",
+    verify = "update --major on a pre-release lock never installs a lower release"
+)]
+fn update_major_on_a_pre_release_lock_installs_nothing_lower() {
+    // 0.1.0 is a release below the locked 0.2.0-beta.1: --major admits only newer versions.
+    let registry = serve(vec![
+        Package::new("@sdk/greet", "0.1.0", greet_wasm()),
+        Package::new("@sdk/greet", "0.2.0-beta.1", b"\0asm stub".to_vec()),
+    ]);
+    let dir = project_on(&registry);
+    let lock = json!({
+        "lockfile_version": 1,
+        "entries": [
+            {"name": "@sdk/greet", "version": "0.2.0-beta.1", "source": "registry", "wasm_hash": "00"},
+        ],
+    });
+    std::fs::write(dir.path().join("specforge.lock"), lock.to_string()).unwrap();
+    let lock_before = std::fs::read(dir.path().join("specforge.lock")).unwrap();
+    let home = TempDir::new().unwrap();
+
+    let out = specforge()
+        .args(["update", "--major", "--allow-unsigned", "--format", "json"])
+        .args(["--path"])
+        .arg(dir.path())
+        .env("HOME", home.path())
+        .output()
+        .unwrap();
+
+    assert!(out.status.success(), "{out:?}");
+    let document: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(
+        document["extensions"][0],
+        json!({"status": "up_to_date", "name": "@sdk/greet", "version": "0.2.0-beta.1"}),
+        "{document}"
+    );
+    assert_eq!(
+        document["extension_upgrade_completed"],
+        json!([]),
+        "{document}"
+    );
+    assert_eq!(
+        document["batch_update_completed"]["updatedCount"], 0,
+        "{document}"
+    );
+    assert_eq!(
+        document["batch_update_completed"]["skippedCount"], 1,
+        "{document}"
+    );
+    assert_eq!(
+        std::fs::read(dir.path().join("specforge.lock")).unwrap(),
+        lock_before
+    );
+}
+
 /// `specforge doctor --format json` on `root`: whether it passed, and the
 /// report.
 fn doctor(root: &Path) -> (bool, Value) {

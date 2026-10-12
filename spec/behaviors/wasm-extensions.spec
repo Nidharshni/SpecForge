@@ -857,17 +857,25 @@ behavior update_all_extensions "Update All Extensions" {
   }
   ensures {
     batch_update_completed_emitted "batch_update_completed event is emitted after all upgrades are applied"
-    semver_constraints_respected   "upgrades respect semver constraints, major bumps skipped without --major"
+    semver_constraints_respected   "an upgrade moves only to a newer version, within the locked version's caret range unless --major, never to the locked version or below"
     lock_hashes_refreshed          "updated lock entries record the new binary hashes"
     atomic_rollback_on_failure     "if any upgrade fails, all changes are rolled back"
   }
   contract   """
     When specforge update is invoked, the system MUST check all installed
     extensions for newer versions by querying their configured registries.
-    The system MUST upgrade each extension to the latest compatible version
-    respecting semver constraints. Major version bumps MUST be skipped unless
-    --major is specified. After upgrading, the system MUST refresh the lock
-    file with the new binary hashes. Peer dependency
+    What an extension moves to is one rule, its upgrade target: the
+    highest published version newer than the locked one, within the
+    locked version's caret range, or any newer version with --major. A
+    pre-release is a target only on the locked version's own
+    MAJOR.MINOR.PATCH when the locked version is a pre-release of it
+    (2.0.0-beta.1 moves to 2.0.0-beta.2 or 2.0.0, never to 3.0.0-alpha.1),
+    and a release never moves to a pre-release. An update MUST NOT move an
+    extension to its locked version or below: an extension with nothing
+    newer is up_to_date, also when its locked version is no longer
+    published. A lock entry whose version is not SemVer moves to the
+    version specforge add <name> installs. After upgrading, the system
+    MUST refresh the lock file with the new binary hashes. Peer dependency
     conflicts introduced by upgrades MUST be detected and reported before
     applying changes. Every upgrade is judged against the lock as the
     whole update leaves it, whatever order the lock lists the extensions
@@ -899,6 +907,8 @@ behavior update_all_extensions "Update All Extensions" {
   verify unit "newer versions detected from registry"
   verify unit "semver-compatible upgrades applied"
   verify unit "major version skipped without --major flag"
+  verify unit "an update never moves an extension to its locked version or below, and a locked version no longer published is up to date"
+  verify integration "update --major on a pre-release lock never installs a lower release"
   verify unit "lock file records new binary hashes after update"
   verify unit "peer dependency conflicts detected before applying"
   verify unit "every upgrade is judged against the lock as the whole update leaves it, whatever order the lock lists them in"

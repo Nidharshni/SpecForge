@@ -105,12 +105,14 @@ registry install, so pins are auditable per project.
 
 ## Residual risks (stated plainly)
 
-- **Registry-controlled version lists**: `specforge update` resolves the
-  newest version within the locked version's caret range (any version with
-  `--major`) from the registry, and a compromised registry can serve an *older*, still
-  validly signed version (a downgrade within the semver range you accept).
-  Version-list signatures (TUF-style) are deferred past v1. Pin exact versions
-  via `specforge.lock` when this matters.
+- **Registry-controlled version lists**: `specforge update` installs only a
+  version newer than the locked one (within its caret range, any newer one
+  with `--major`), so a registry cannot make an update install an older
+  version. A compromised registry can still withhold newer versions (a
+  freeze), or serve a newer, validly signed but malicious one. Version-list
+  signatures (TUF-style) are deferred past v1. `specforge add
+  <name>@<version>` installs exactly what it names, older included; pin exact
+  versions via `specforge.lock` when this matters.
 - **Replay**: a signed package stays signed forever. If a publisher's *old*
   release is vulnerable, its signature is still valid; review the version you
   install, not just the signature.
