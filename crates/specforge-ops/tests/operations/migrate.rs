@@ -74,6 +74,110 @@ fn exports_called(runtime: &InProcessRuntime) -> Vec<String> {
     runtime.calls().into_iter().map(|c| c.export).collect()
 }
 
+/// Copy `from` (a spec root) into `to`, prefixing each `.spec` without a header with an old one; the number of files
+/// prefixed.
+fn copy_at_old_format(from: &Path, to: &Path) -> usize {
+    let mut prefixed = 0;
+    for entry in std::fs::read_dir(from).unwrap() {
+        let path = entry.unwrap().path();
+        let target = to.join(path.file_name().unwrap());
+        if path.is_dir() {
+            std::fs::create_dir_all(&target).unwrap();
+            prefixed += copy_at_old_format(&path, &target);
+        } else if path.extension().is_some_and(|e| e == "spec") {
+            let text = std::fs::read_to_string(&path).unwrap();
+            let old = if text.starts_with("// specforge-format:") {
+                text
+            } else {
+                prefixed += 1;
+                format!("// specforge-format: 0.9\n{text}")
+            };
+            std::fs::write(target, old).unwrap();
+        }
+    }
+    prefixed
+}
+
+#[specforge_test(
+    invariant = "migration_semantic_preservation",
+    verify = "migration that only changes formatting preserves graph structure"
+)]
+fn a_header_only_migration_of_the_dogfood_spec_keeps_its_graph() {
+    let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let dir = tempfile::TempDir::new().unwrap();
+    std::fs::copy(
+        repo.join("specforge.json"),
+        dir.path().join("specforge.json"),
+    )
+    .unwrap();
+    std::fs::create_dir_all(dir.path().join("spec")).unwrap();
+    let files = copy_at_old_format(&repo.join("spec"), &dir.path().join("spec"));
+    assert!(files > 100, "the corpus is the dogfood spec: {files}");
+    specforge_installed::testing::install_configured(dir.path(), &specforge_project::builtins());
+    let runtime = Arc::new(specforge_component::ComponentRuntime::with_user_cache());
+
+    let outcome = run(
+        &request(&specforge_common::ProjectRoot::of(dir.path()).unwrap()),
+        Some(runtime),
+    );
+
+    assert!(outcome.validated && outcome.migrated(), "{outcome:?}");
+    assert_eq!(outcome.summary.migrated_count, files);
+    assert!(
+        outcome.structural_differences.is_empty(),
+        "{:?}",
+        outcome.structural_differences
+    );
+    assert!(outcome.rollback.is_none());
+    assert!(
+        outcome.post_errors().next().is_none(),
+        "{:?}",
+        outcome.post_errors().collect::<Vec<_>>()
+    );
+}
+
+#[specforge_test(
+    behavior = "validate_post_migration_integrity",
+    verify = "a migration step that changes an entity's title or kind is reported and rolled back"
+)]
+#[ignore = "fixed by 15-T2"]
+fn a_migration_step_that_changes_a_title_or_a_kind_is_rolled_back() {
+    for (from, to, aspect) in [
+        ("\"Alpha\"", "\"Renamed\"", "title"),
+        ("behavior alpha", "feature alpha", "kind"),
+    ] {
+        let dir = project_with_extension();
+        let file = dir.path().join("old.spec");
+        let runtime = Arc::new(hooked(move |input| {
+            let path = &input.files[0];
+            let migrated = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+            std::fs::write(path, migrated.replace(from, to)).map_err(|e| e.to_string())
+        }));
+
+        let outcome = run(
+            &request(&specforge_common::ProjectRoot::of(dir.path()).unwrap()),
+            Some(runtime),
+        );
+
+        assert!(outcome.validated, "{aspect}: {outcome:?}");
+        let messages: Vec<&str> = outcome
+            .structural_differences
+            .iter()
+            .map(|d| d.message.as_str())
+            .collect();
+        assert_eq!(
+            messages,
+            [format!("entity 'alpha' changed during migration: {aspect}")],
+            "{aspect}"
+        );
+        assert!(
+            outcome.rollback.is_some() && !outcome.ok(),
+            "{aspect}: {outcome:?}"
+        );
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), OLD, "{aspect}");
+    }
+}
+
 #[specforge_test(
     behavior = "rollback_failed_migration",
     verify = "a migration whose graph changes structure is rolled back automatically"
