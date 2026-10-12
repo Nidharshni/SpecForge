@@ -186,7 +186,6 @@ fn findings(report: &DoctorReport) -> Vec<(String, String, String)> {
     behavior = "run_doctor_check",
     verify = "doctor reports every diagnostic the environment reports as one finding, with the part of the setup it is about and the diagnostic's severity"
 )]
-#[ignore = "fixed by T3"]
 fn doctor_reports_every_setup_diagnostic_the_environment_reports() {
     for (name, (_dir, project)) in scenarios() {
         let view = ProjectView::of(&project);
@@ -212,7 +211,6 @@ fn doctor_reports_every_setup_diagnostic_the_environment_reports() {
     behavior = "run_doctor_check",
     verify = "doctor fails whenever check fails on a diagnostic of the project's setup"
 )]
-#[ignore = "fixed by T3"]
 fn doctor_fails_whenever_check_fails_on_a_setup_diagnostic() {
     for (name, (_dir, project)) in scenarios() {
         let view = ProjectView::of(&project);

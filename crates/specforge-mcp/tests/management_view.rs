@@ -80,6 +80,14 @@ fn project_findings(report: &Value) -> Vec<Value> {
         .collect()
 }
 
+/// The codes of [`project_findings`].
+fn project_codes(report: &Value) -> Vec<String> {
+    project_findings(report)
+        .iter()
+        .map(|f| f["code"].as_str().unwrap().to_string())
+        .collect()
+}
+
 #[specforge_test(
     behavior = "provide_mcp_extensions_tool",
     verify = "specforge.extensions lists all installed extensions"
@@ -321,7 +329,7 @@ fn validate_and_doctor_report_an_unusable_config() {
         .filter(|f| f["code"] != "z3_missing")
         .map(|f| (f["code"].as_str().unwrap(), f["status"].as_str().unwrap()))
         .collect();
-    assert_eq!(findings, [("E069", "error")], "{report}");
+    assert_eq!(findings, [("E069", "error"), ("I002", "info")], "{report}");
 }
 
 // A lock file that is there and cannot be read: the served project's
@@ -335,19 +343,24 @@ fn doctor_reports_a_corrupt_lock_as_an_error_finding() {
     let (mut server, root) =
         server_over(json!({"name": "t", "version": "0.1.0", "extensions": []}));
     assert_eq!(
-        project_findings(&answer(&call_tool(
+        project_codes(&answer(&call_tool(
             &mut server,
             "specforge.doctor",
             json!({})
         ))),
-        Vec::<Value>::new()
+        ["I002"]
     );
 
     std::fs::write(root.path().join("specforge.lock"), "not valid json {{{").unwrap();
 
     let report = answer(&call_tool(&mut server, "specforge.doctor", json!({})));
     let findings = project_findings(&report);
-    assert_eq!(findings.len(), 1, "{report}");
+    // The lock, then the I002 of a project that enables nothing.
+    assert_eq!(
+        project_codes(&report),
+        ["lock_unreadable", "I002"],
+        "{report}"
+    );
     assert_eq!(findings[0]["code"], "lock_unreadable", "{report}");
     assert_eq!(findings[0]["status"], "error", "{report}");
     assert!(

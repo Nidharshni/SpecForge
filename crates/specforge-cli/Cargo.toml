@@ -48,6 +48,7 @@ specforge-registry-client = { path = "../specforge-registry-client" }
 sha2 = { workspace = true }
 hex = "0.4.3"
 specforge-parser = { workspace = true }
+specforge-registry = { workspace = true }
 specforge-emitter = { path = "../specforge-emitter" }
 semver = { workspace = true }
 # Extensions declared with the SDK, served in process (`specforge_wasm::testing`).

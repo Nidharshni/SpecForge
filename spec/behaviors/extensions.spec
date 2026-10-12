@@ -554,7 +554,7 @@ behavior management_operations_over_the_project_view "Management Operations over
   """
   verify unit "an operation that reads or writes the project on disk refuses a view without a root"
   verify unit "the extensions listing reads the config entries from the view, never specforge.json again"
-  verify unit "doctor reads the diagnostics its view reports"
+  verify unit "doctor reads the setup diagnostics of its view's environment, and E013 from what its view reports"
   verify unit "list, doctor and remove read the lock the compile read, once"
   verify unit "list, doctor and remove read one inventory of the project's extensions"
   verify integration "add, update and remove refuse an unusable specforge.json with one refusal, before they write"

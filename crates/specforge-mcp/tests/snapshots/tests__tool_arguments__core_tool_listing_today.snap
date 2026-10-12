@@ -1,5 +1,6 @@
 ---
 source: crates/specforge-mcp/tests/tool_arguments.rs
+assertion_line: 17
 expression: listing
 ---
 [
@@ -5273,9 +5274,9 @@ expression: listing
                   },
                   "status": {
                     "enum": [
-                      "ok",
+                      "error",
                       "warn",
-                      "error"
+                      "info"
                     ],
                     "type": "string"
                   }
@@ -5309,9 +5310,9 @@ expression: listing
                   },
                   "status": {
                     "enum": [
-                      "ok",
+                      "error",
                       "warn",
-                      "error"
+                      "info"
                     ],
                     "type": "string"
                   }
@@ -5396,9 +5397,9 @@ expression: listing
                   },
                   "status": {
                     "enum": [
-                      "ok",
+                      "error",
                       "warn",
-                      "error"
+                      "info"
                     ],
                     "type": "string"
                   }
@@ -5433,9 +5434,261 @@ expression: listing
                   },
                   "status": {
                     "enum": [
-                      "ok",
+                      "error",
                       "warn",
-                      "error"
+                      "info"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "check",
+                  "status",
+                  "code",
+                  "remediation",
+                  "about"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "about": {
+                    "enum": [
+                      "structural_only"
+                    ],
+                    "type": "string"
+                  },
+                  "check": {
+                    "type": "string"
+                  },
+                  "code": {
+                    "type": "string"
+                  },
+                  "remediation": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "enum": [
+                      "error",
+                      "warn",
+                      "info"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "check",
+                  "status",
+                  "code",
+                  "remediation",
+                  "about"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "about": {
+                    "enum": [
+                      "providers"
+                    ],
+                    "type": "string"
+                  },
+                  "check": {
+                    "type": "string"
+                  },
+                  "code": {
+                    "type": "string"
+                  },
+                  "remediation": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "enum": [
+                      "error",
+                      "warn",
+                      "info"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "check",
+                  "status",
+                  "code",
+                  "remediation",
+                  "about"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "about": {
+                    "enum": [
+                      "declaration"
+                    ],
+                    "type": "string"
+                  },
+                  "check": {
+                    "type": "string"
+                  },
+                  "code": {
+                    "type": "string"
+                  },
+                  "remediation": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "enum": [
+                      "error",
+                      "warn",
+                      "info"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "check",
+                  "status",
+                  "code",
+                  "remediation",
+                  "about"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "about": {
+                    "enum": [
+                      "peer"
+                    ],
+                    "type": "string"
+                  },
+                  "check": {
+                    "type": "string"
+                  },
+                  "code": {
+                    "type": "string"
+                  },
+                  "remediation": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "enum": [
+                      "error",
+                      "warn",
+                      "info"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "check",
+                  "status",
+                  "code",
+                  "remediation",
+                  "about"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "about": {
+                    "enum": [
+                      "registry"
+                    ],
+                    "type": "string"
+                  },
+                  "check": {
+                    "type": "string"
+                  },
+                  "code": {
+                    "type": "string"
+                  },
+                  "remediation": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "enum": [
+                      "error",
+                      "warn",
+                      "info"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "check",
+                  "status",
+                  "code",
+                  "remediation",
+                  "about"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "about": {
+                    "enum": [
+                      "rule"
+                    ],
+                    "type": "string"
+                  },
+                  "check": {
+                    "type": "string"
+                  },
+                  "code": {
+                    "type": "string"
+                  },
+                  "remediation": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "enum": [
+                      "error",
+                      "warn",
+                      "info"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "check",
+                  "status",
+                  "code",
+                  "remediation",
+                  "about"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "about": {
+                    "enum": [
+                      "surface"
+                    ],
+                    "type": "string"
+                  },
+                  "check": {
+                    "type": "string"
+                  },
+                  "code": {
+                    "type": "string"
+                  },
+                  "remediation": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "enum": [
+                      "error",
+                      "warn",
+                      "info"
                     ],
                     "type": "string"
                   }
@@ -5464,14 +5717,17 @@ expression: listing
                   "code": {
                     "type": "string"
                   },
+                  "keyword": {
+                    "type": "string"
+                  },
                   "remediation": {
                     "type": "string"
                   },
                   "status": {
                     "enum": [
-                      "ok",
+                      "error",
                       "warn",
-                      "error"
+                      "info"
                     ],
                     "type": "string"
                   }
@@ -5508,9 +5764,9 @@ expression: listing
                   },
                   "status": {
                     "enum": [
-                      "ok",
+                      "error",
                       "warn",
-                      "error"
+                      "info"
                     ],
                     "type": "string"
                   }
@@ -5522,42 +5778,6 @@ expression: listing
                   "remediation",
                   "about",
                   "keyword"
-                ],
-                "type": "object"
-              },
-              {
-                "additionalProperties": false,
-                "properties": {
-                  "about": {
-                    "enum": [
-                      "peer"
-                    ],
-                    "type": "string"
-                  },
-                  "check": {
-                    "type": "string"
-                  },
-                  "code": {
-                    "type": "string"
-                  },
-                  "remediation": {
-                    "type": "string"
-                  },
-                  "status": {
-                    "enum": [
-                      "ok",
-                      "warn",
-                      "error"
-                    ],
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "check",
-                  "status",
-                  "code",
-                  "remediation",
-                  "about"
                 ],
                 "type": "object"
               },
@@ -5581,9 +5801,9 @@ expression: listing
                   },
                   "status": {
                     "enum": [
-                      "ok",
+                      "error",
                       "warn",
-                      "error"
+                      "info"
                     ],
                     "type": "string"
                   }
