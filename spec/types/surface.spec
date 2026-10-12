@@ -125,6 +125,11 @@ type CommandOutput {
 
 // ── MCP Tool Contributions ──────────────────────────────────
 
+// The categories a tool that is no mutation is listed in, and the ones an
+// extension tool may declare: only a core tool that writes its target's
+// project files is a mutation.
+type McpToolGroup = "core" | "navigation" | "management"
+
 // input_schema and output_schema must be JSON objects: a tool with
 // another value is E055 and is not registered.
 type McpToolContribution {

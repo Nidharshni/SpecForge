@@ -4,6 +4,7 @@ pub mod args;
 pub mod events;
 mod extension_dispatch;
 pub mod lifecycle;
+pub mod message;
 pub mod modern;
 pub mod mutation;
 pub mod prompt;

@@ -70,6 +70,40 @@ behavior mcp_initialize "MCP Initialize" {
   verify contract "MCP Initialize: MCP initialization holds — compiler_api_available, wasm_runtime_available, capabilities_returned, surface_contributions_merged, mcp_initialized_emitted"
 }
 
+// Every document MCP sends whose content SpecForge decides is one typed
+// definition, held to its spec type (ADR 0048 for tool replies; the rest
+// by the same rule, ADR 0058).
+behavior state_mcp_messages_as_spec_types "State MCP Messages as Spec Types" {
+  features   [mcp_protocol_compliance]
+  invariants [mcp_structured_error_responses]
+  category   query
+  types      [McpError, GraphDelta, DiagnosticsDelta]
+  ports      [McpProtocol]
+  ensures {
+    one_definition  "Each document the server sends whose content SpecForge decides is serialized from one typed definition"
+    spec_states_it  "Its spec type states the same keys, required keys and value types, and a test holds them together"
+  }
+  contract   """
+    Every document the MCP server sends whose content SpecForge decides
+    MUST be serialized from one typed definition whose spec type states
+    the same shape: a core tool's reply, a core prompt's payload, the
+    initialize and server/discover results, a listing's descriptors, the
+    specforge/graphChanged and specforge/diagnosticsChanged params and the
+    McpError a refusal carries. Every Mcp type of spec/types/mcp.spec MUST
+    be one of them. A frame whose keys MCP fixes (the JSON-RPC envelope, a
+    tool result's content and _meta, a read's contents, a prompt's
+    messages, notifications/resources/updated,
+    notifications/subscriptions/acknowledged) follows MCP's schema and is
+    not restated. A document's schema closes every object it holds but the
+    open values it lists (content an extension or a client defines) and
+    repeats no object schema; it carries no null.
+  """
+  verify unit "every document the server sends besides a tool reply is the schema its type derives, as its spec type states it"
+  verify unit "every Mcp type of spec/types/mcp.spec is a tool reply, a prompt payload or a document the server sends"
+  verify unit "a sent document's schema closes every object it holds but its listed open values, and repeats no object schema"
+  verify unit "an McpError is serialized from its type, the isError content and a JSON-RPC error's data alike"
+}
+
 behavior mcp_shutdown "MCP Shutdown" {
   features   [mcp_lifecycle]
   types      [McpSubscription, timestamp]

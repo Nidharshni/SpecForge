@@ -60,6 +60,14 @@ impl JsonRpcResponse {
         }
     }
 
+    /// A successful response whose result is `message`.
+    pub fn sent<M: crate::message::Message>(id: Option<Value>, message: &M) -> Self {
+        Self::success(
+            id,
+            serde_json::to_value(message).expect("a message serializes"),
+        )
+    }
+
     pub fn error(id: Option<Value>, code: i64, message: impl Into<String>) -> Self {
         Self::from_error(id, JsonRpcError::new(code, message))
     }

@@ -144,11 +144,15 @@ fn references<'v>(schema: &'v Value, path: &str, out: &mut Vec<(String, &'v Valu
     }
 }
 
-#[test]
+#[specforge_test(
+    behavior = "state_mcp_messages_as_spec_types",
+    verify = "a sent document's schema closes every object it holds but its listed open values, and repeats no object schema"
+)]
 fn no_object_schema_repeats_within_a_document() {
-    for (name, schema) in documents() {
+    for document in crate::support::documents::all() {
+        let (name, schema) = (document.owner, document.schema);
         let mut found = Vec::new();
-        objects(&schema, &mut found);
+        objects(schema, &mut found);
         let mut seen = std::collections::BTreeSet::new();
         for object in found {
             assert!(

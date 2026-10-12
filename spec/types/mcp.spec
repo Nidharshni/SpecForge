@@ -30,9 +30,11 @@ type JsonSchema "JSON Schema Object" {
   verify unit "JSON Schema Object conforms to schema"
 }
 
-// A failed tool call is an isError result whose content is an McpError
-// (MCP 2025-11-25, SEP-1303). It carries no timestamp: the same failing
-// call returns the same error (mcp_tool_idempotency).
+// A refusal: the content of a failed tool call's isError result (MCP
+// 2025-11-25, SEP-1303), and the data of a prompt's or a resource read's
+// JSON-RPC error. One definition serializes it everywhere. It carries no
+// timestamp: the same failing call returns the same error
+// (mcp_tool_idempotency).
 type McpError "MCP Structured Error Response" {
   code       McpErrorCode
   message    string
@@ -50,6 +52,7 @@ type McpError "MCP Structured Error Response" {
   /// diagnostic.code, never only text in the message.
   diagnostic Diagnostic @optional
   /// More about the failure: the renderers available, a failed run's report.
+  /// An open value: its shape is the failure's own.
   data       object     @optional
   verify unit "MCP Structured Error Response conforms to schema"
 }
@@ -110,11 +113,6 @@ type McpSubscription {
 // specforge.collect, specforge.render). The short name is used in the protocol
 // for brevity; UIs and documentation may display "project management".
 type McpToolCategory = "core" | "navigation" | "mutation" | "management"
-
-// The categories a tool that is no mutation is listed in, and the ones an
-// extension tool may declare: only a core tool that writes its target's
-// project files is a mutation.
-type McpToolGroup = "core" | "navigation" | "management"
 
 type McpPromptDescriptor {
   name        string @readonly

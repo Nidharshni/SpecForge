@@ -8,6 +8,7 @@
 //! what its sources and its extension declare.
 
 pub mod disk;
+pub mod documents;
 pub mod events;
 pub mod extension;
 pub mod project;
