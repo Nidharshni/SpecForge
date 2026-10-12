@@ -889,16 +889,28 @@ async fn admin_list_tokens(
 async fn admin_revoke_token(
     State(state): State<Arc<AppState>>,
     _admin: AdminToken,
-    Path(prefix): Path<String>,
-) -> Json<TokenRevoked> {
+    Path(id): Path<String>,
+) -> Result<Json<TokenRevoked>, ApiError> {
     let revoked = {
         let st = state.clone();
-        let prefix = prefix.clone();
-        tokio::task::spawn_blocking(move || auth::revoke_token(&st.database, &prefix))
+        tokio::task::spawn_blocking(move || auth::revoke_token(&st.database, &id))
             .await
             .expect("token revocation panicked")
     };
-    Json(TokenRevoked { revoked })
+    match revoked {
+        Ok(revoked) => Ok(Json(TokenRevoked { revoked })),
+        Err(crate::db::RevokeRefused::NotAnId) => Err(ApiError::bad_request(
+            ErrorCode::BadRequest,
+            "a token id is the 8 hex digits the listing shows",
+        )),
+        Err(crate::db::RevokeRefused::Ambiguous) => Err(ApiError::conflict(
+            ErrorCode::BadRequest,
+            "ambiguous token id: two live tokens share it",
+        )),
+        Err(crate::db::RevokeRefused::Storage(why)) => {
+            Err(ApiError::internal(ErrorCode::DbError, why))
+        }
+    }
 }
 
 /// Registry-assigned publisher identity: deterministic per issuing token.

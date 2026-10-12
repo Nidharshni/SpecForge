@@ -1225,7 +1225,6 @@ async fn search_matches_as_the_fakes_do() {
 }
 
 #[tokio::test]
-#[ignore = "fixed by T18"]
 async fn revoking_takes_a_token_id() {
     let dir = tempfile::tempdir().unwrap();
     let state = app_state(dir.path(), 100);

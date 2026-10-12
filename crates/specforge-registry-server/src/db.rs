@@ -22,6 +22,20 @@ impl Database {
     }
 }
 
+/// The length of a token id: the first hex digits of its hash, as the listing shows.
+pub const TOKEN_ID_LEN: usize = 8;
+
+/// Why a token was not revoked ([`Database::revoke_token`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RevokeRefused {
+    /// The segment is not a token id (8 lowercase hex digits).
+    NotAnId,
+    /// Two live tokens share the id; neither is revoked.
+    Ambiguous,
+    /// The database failed.
+    Storage(String),
+}
+
 /// Why a publish was not recorded ([`Database::publish`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PublishRefused {
@@ -478,16 +492,38 @@ impl Database {
         Ok(rows)
     }
 
-    pub fn revoke_token_by_prefix(&self, prefix: &str) -> bool {
+    /// Revoke the token whose id (the first 8 hex digits of its hash, as the listing shows) is
+    /// `id`: `Ok(true)` when exactly one live token had it, `Ok(false)` when none did. An id is
+    /// never a pattern.
+    pub fn revoke_token(&self, id: &str) -> Result<bool, RevokeRefused> {
+        if id.len() != TOKEN_ID_LEN || !id.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')) {
+            return Err(RevokeRefused::NotAnId);
+        }
         let conn = self.conn();
-        let pattern = format!("{}%", prefix);
-        let rows = conn
-            .execute(
-                "UPDATE tokens SET revoked = 1 WHERE token_hash LIKE ?1 AND revoked = 0",
-                params![pattern],
+        let storage =
+            |e: rusqlite::Error| RevokeRefused::Storage(format!("token revocation failed: {e}"));
+        let mut stmt = conn
+            .prepare(
+                "SELECT token_hash FROM tokens WHERE substr(token_hash, 1, 8) = ?1 AND revoked = 0",
             )
-            .unwrap_or(0);
-        rows > 0
+            .map_err(storage)?;
+        let hashes: Vec<String> = stmt
+            .query_map(params![id], |row| row.get(0))
+            .map_err(storage)?
+            .filter_map(|r| r.ok())
+            .collect();
+        match hashes.as_slice() {
+            [] => Ok(false),
+            [hash] => {
+                conn.execute(
+                    "UPDATE tokens SET revoked = 1 WHERE token_hash = ?1",
+                    params![hash],
+                )
+                .map_err(storage)?;
+                Ok(true)
+            }
+            _ => Err(RevokeRefused::Ambiguous),
+        }
     }
 }
 
