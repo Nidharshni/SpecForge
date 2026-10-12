@@ -13,12 +13,12 @@ mod layout;
 mod load;
 mod lock;
 mod module;
+mod resolve;
 #[cfg(feature = "testing")]
 pub mod testing;
 
 use std::path::{Path, PathBuf};
 
-use specforge_common::ExtensionEntry;
 use specforge_package::PackageName;
 
 pub use change::{Change, Committed, Failed, Pin};
@@ -28,6 +28,7 @@ pub use layout::{LOCK_FILE, lock_path};
 pub use load::{Builtins, EnabledExtension, LoadFailure, LoadProblem, LoadSubject, Loaded};
 pub use lock::{LockFile, LockFileEntry, LockSource, LockState, read_lock_file, write_lock_file};
 pub use module::{Module, hex_sha256};
+pub use resolve::{FileEntry, Resolution, Resolved};
 
 /// A project's installed extensions: its root and what `specforge.lock`
 /// held when it was read, once. Every rule about installed extensions is
@@ -108,14 +109,27 @@ impl Installed {
     /// builtin or for a name that is no package name. The paths whose
     /// change reloads an environment (plan 03).
     pub fn modules(&self, entries: &[String], builtins: &Builtins) -> Vec<PathBuf> {
-        entries
+        let resolution = self.resolve(entries, builtins);
+        let path = |resolved: &Resolved| match resolved {
+            Resolved::Builtin { .. }
+            | Resolved::Unloadable {
+                problem: LoadProblem::NotAPackageName { .. },
+                ..
+            } => None,
+            Resolved::Locked { entry, .. } => Some(self.module_path(&entry.name)),
+            Resolved::Unloadable { name, .. } => PackageName::parse(name)
+                .ok()
+                .map(|name| self.module_path(&name)),
+            Resolved::File(file) => Some(file.file.clone()),
+            Resolved::Again { .. } => None,
+        };
+        resolution
+            .entries()
             .iter()
-            .filter_map(|entry| match ExtensionEntry::parse(entry) {
-                file @ ExtensionEntry::File { .. } => file.file(&self.root),
-                ExtensionEntry::Named(name) if builtins.contains(name) => None,
-                ExtensionEntry::Named(name) => PackageName::parse(name)
-                    .ok()
-                    .map(|name| self.module_path(&name)),
+            .filter_map(|resolved| match resolved {
+                // The same extension again names the same module.
+                Resolved::Again { first } => path(&resolution.entries()[*first]),
+                other => path(other),
             })
             .collect()
     }

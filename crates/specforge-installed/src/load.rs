@@ -5,18 +5,18 @@
 //! [`LoadFailure`] on its entry with one diagnostic; the runtime keeps no
 //! load state.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use specforge_common::{Diagnostic, ExtensionEntry, codes};
-use specforge_package::PackageName;
 use specforge_protocol_types::ExtensionDeclaration;
 use specforge_wasm::protocol::load_declaration;
 use specforge_wasm::{ExtensionCalls, WasmRuntime};
 
 use crate::Installed;
-use crate::lock::{LockFileEntry, LockState};
+use crate::lock::LockFileEntry;
 use crate::module::Module;
+use crate::resolve::{FileEntry, Resolved};
 
 /// The builtin extensions the host embeds: name and component bytes.
 #[derive(Debug, Clone, Copy)]
@@ -363,20 +363,39 @@ impl Installed {
         let mut slots: Vec<Slot> = entries.iter().map(|_| Slot::Skipped).collect();
 
         // Named entries first: a `.wasm` file that declares a name they
-        // loaded is refused, not swapped in.
-        let mut seen = HashSet::new();
+        // loaded is refused, not swapped in. `resolve` decides the order.
+        let resolution = self.resolve(entries, builtins);
         let mut loaded_names = HashSet::new();
-        for (i, entry) in entries.iter().enumerate() {
-            let ExtensionEntry::Named(name) = ExtensionEntry::parse(entry) else {
-                continue;
+        for (i, resolved) in resolution.in_load_order() {
+            let outcome = match resolved {
+                Resolved::Builtin { name, bytes } => self
+                    .load_bytes(name, bytes, None, runtime)
+                    .map(|done| ((*name).to_string(), done)),
+                Resolved::Locked { name, entry } => self
+                    .check_module(entry)
+                    .map_err(|problem| self.failure(&Subject::Named(name), problem))
+                    .and_then(|module| self.load_bytes(name, module.bytes(), Some(entry), runtime))
+                    .map(|done| ((*name).to_string(), done)),
+                Resolved::Unloadable { name, problem } => {
+                    Err(self.failure(&Subject::Named(name), problem.clone()))
+                }
+                Resolved::File(file) => {
+                    let subject = Subject::File {
+                        key: file.key,
+                        file: &file.file,
+                        path: file.path,
+                    };
+                    self.load_file(file, &loaded_names, runtime)
+                        .map_err(|problem| self.failure(&subject, problem))
+                }
+                Resolved::Again { .. } => unreachable!("left out of the load order"),
             };
-            // An extension two entries enable is read once.
-            if !seen.insert(name.to_string()) {
-                continue;
-            }
-            match self.load_named(name, builtins, runtime) {
-                Ok(done) => {
-                    loaded_names.insert(name.to_string());
+            match outcome {
+                Ok((declared, done)) => {
+                    if matches!(resolved, Resolved::File(_)) {
+                        enabled[i].name = declared.clone();
+                    }
+                    loaded_names.insert(declared);
                     slots[i] = Slot::Loaded(Box::new(done));
                 }
                 Err(failure) => {
@@ -385,44 +404,12 @@ impl Installed {
                 }
             }
         }
-
-        let mut files: HashMap<&str, String> = HashMap::new();
-        for (i, entry) in entries.iter().enumerate() {
-            let parsed = ExtensionEntry::parse(entry);
-            let ExtensionEntry::File {
-                name: written,
-                path,
-            } = parsed
-            else {
-                continue;
-            };
-            let key = entry.trim();
-            // The same entry twice loads once.
-            if let Some(declared) = files.get(key) {
-                enabled[i].name = declared.clone();
-                continue;
-            }
-            let file = parsed.file(&self.root).expect("a file entry names a file");
-            let subject = Subject::File {
-                key,
-                file: &file,
-                path,
-            };
-            match self.load_file(key, &file, written, &loaded_names, runtime) {
-                Ok((declared, done)) => {
-                    loaded_names.insert(declared.clone());
-                    files.insert(key, declared.clone());
-                    enabled[i].name = declared;
-                    slots[i] = Slot::Loaded(Box::new(done));
-                }
-                Err(problem) => {
-                    let failure = LoadFailure {
-                        diagnostic: problem.diagnostic(&subject, self),
-                        problem,
-                    };
-                    enabled[i].failure = Some(failure);
-                    slots[i] = Slot::Failed;
-                }
+        // A repeated `.wasm` file entry takes its first's declared name.
+        for (i, resolved) in resolution.entries().iter().enumerate() {
+            if let Resolved::Again { first } = resolved
+                && enabled[*first].file.is_some()
+            {
+                enabled[i].name = enabled[*first].name.clone();
             }
         }
 
@@ -466,50 +453,39 @@ impl Installed {
         reported
     }
 
-    /// Load the extension a named entry names: a builtin from its bytes, an
-    /// installed one from its pinned module.
-    fn load_named(
+    /// `problem` as the failure of the entry `subject` names.
+    fn failure(&self, subject: &Subject, problem: LoadProblem) -> LoadFailure {
+        LoadFailure {
+            diagnostic: problem.diagnostic(subject, self),
+            problem,
+        }
+    }
+
+    /// Load the extension a named entry names from `bytes`: a builtin's embedded bytes, or the
+    /// pinned module of the lock `entry` it is installed by.
+    fn load_bytes(
         &self,
         name: &str,
-        builtins: &Builtins,
+        bytes: &[u8],
+        entry: Option<&LockFileEntry>,
         runtime: &dyn WasmRuntime,
     ) -> Result<Done, LoadFailure> {
-        let fail = |problem: LoadProblem| LoadFailure {
-            diagnostic: problem.diagnostic(&Subject::Named(name), self),
-            problem,
-        };
+        let fail = |problem: LoadProblem| self.failure(&Subject::Named(name), problem);
         let mut notices = Vec::new();
-        let module;
-        let installed = builtins.get(name).is_none();
-        let bytes = match builtins.get(name) {
-            Some(bytes) => bytes,
-            None => {
-                // What names a directory under `.specforge/extensions` is a
-                // package name, checked before the lock is asked (ADR 0036).
-                let package = PackageName::parse(name).map_err(|why| {
-                    fail(LoadProblem::NotAPackageName {
-                        reason: why.to_string(),
-                    })
-                })?;
-                let (pinned, unpinned) = self.pinned_module(&package).map_err(fail)?;
-                if unpinned {
-                    notices.push(
-                        Diagnostic::new(
-                            codes::W149,
-                            format!(
-                                "extension '{name}': its lock entry pins no hash, so its binary was loaded without being checked"
-                            ),
-                        )
-                        .with_suggestion(format!(
-                            "pin it by installing it again: {}",
-                            self.reinstall(name)
-                        )),
-                    );
-                }
-                module = pinned;
-                module.bytes()
-            }
-        };
+        if entry.is_some_and(|entry| entry.wasm_hash.is_empty()) {
+            notices.push(
+                Diagnostic::new(
+                    codes::W149,
+                    format!(
+                        "extension '{name}': its lock entry pins no hash, so its binary was loaded without being checked"
+                    ),
+                )
+                .with_suggestion(format!(
+                    "pin it by installing it again: {}",
+                    self.reinstall(name)
+                )),
+            );
+        }
         runtime
             .load(name, bytes)
             .map_err(|reason| fail(LoadProblem::NotAComponent { reason }))?;
@@ -519,7 +495,7 @@ impl Installed {
             })
         })?;
         // An installed binary is the extension its lock entry names.
-        if installed && loaded.declaration.name() != name {
+        if entry.is_some() && loaded.declaration.name() != name {
             runtime.unload(name);
             return Err(fail(LoadProblem::NotItsLockEntry {
                 declared: loaded.declaration.name().to_string(),
@@ -530,19 +506,6 @@ impl Installed {
             notices,
             warnings: loaded.warnings,
         })
-    }
-
-    /// The module installed as `name`, when its lock entry pins it, and
-    /// whether that entry pins no hash.
-    fn pinned_module(&self, name: &PackageName) -> Result<(Module, bool), LoadProblem> {
-        let entry = match &self.lock {
-            LockState::Read(lock) => lock.entries.iter().find(|e| e.name == *name),
-            LockState::Absent => None,
-            LockState::Unreadable(_) => return Err(LoadProblem::LockUnreadable),
-        };
-        let entry = entry.ok_or(LoadProblem::NotInstalled)?;
-        let unpinned = entry.wasm_hash.is_empty();
-        self.check_module(entry).map(|module| (module, unpinned))
     }
 
     /// `entry`'s module, read once, when it is the one the entry pins.
@@ -571,12 +534,11 @@ impl Installed {
     /// declares, which is returned with its declaration.
     fn load_file(
         &self,
-        key: &str,
-        file: &Path,
-        written: Option<&str>,
+        entry: &FileEntry,
         loaded_names: &HashSet<String>,
         runtime: &dyn WasmRuntime,
     ) -> Result<(String, Done), LoadProblem> {
+        let (key, file) = (entry.key, entry.file.as_path());
         if !file.is_file() {
             return Err(LoadProblem::FileMissing {
                 path: file.to_path_buf(),
@@ -598,16 +560,9 @@ impl Installed {
                 });
             }
         };
-        if let Some(written) = written.filter(|written| *written != declared) {
+        if let Err(problem) = entry.admit(&declared, |name| loaded_names.contains(name)) {
             runtime.unload(key);
-            return Err(LoadProblem::NotTheNameWritten {
-                declared,
-                written: written.to_string(),
-            });
-        }
-        if declared != key && loaded_names.contains(&declared) {
-            runtime.unload(key);
-            return Err(LoadProblem::AlreadyLoaded { declared });
+            return Err(problem);
         }
         runtime.rename(key, &declared);
         match load_declaration(runtime, &declared) {
