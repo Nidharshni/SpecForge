@@ -175,7 +175,6 @@ crate-type = ["cdylib"]
 
 [dependencies]
 specforge-extension-sdk = "0.1"
-wit-bindgen = "0.30"
 serde_json = "1.0"
 "#
     );

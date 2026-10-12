@@ -17,6 +17,10 @@
 
 pub use specforge_extension_sdk_macros::extension;
 
+/// The bindings generator [`component_guest!`] expands through.
+#[doc(hidden)]
+pub use wit_bindgen as __wit_bindgen;
+
 /// The extension vocabulary — field types, validation check kinds and
 /// constraint kinds — as the host's registry build reads it. `Custom` hands
 /// the decision to the rule's `wasm_function` (see
@@ -1382,8 +1386,9 @@ mod command_graph_tests {
 
 /// Component-mode export glue (wasm32-wasip2 guests).
 ///
-/// Expands to the `wit_bindgen::generate!` bindings for the
-/// `specforge:bridge@0.1.0` world plus a `Guest` implementation that
+/// Expands to the bindings of the `specforge:bridge@0.1.0` world (through the
+/// SDK's own `wit-bindgen`, so the guest needs no dependency of its own) plus
+/// a `Guest` implementation that
 /// dispatches the host's `call(name, export-name, input)` entry point:
 ///
 /// - `__handshake` / `__describe` are served from the [`ContributionsBuilder`]
@@ -1415,7 +1420,7 @@ macro_rules! component_guest {
         );
     };
     (build = $build:expr, handler = $handler:expr) => {
-        ::wit_bindgen::generate!({
+        ::specforge_extension_sdk::__wit_bindgen::generate!({
             inline: r#"
 package specforge:bridge@0.1.0;
 
@@ -1424,6 +1429,7 @@ world bridge {
         result<list<u8>, string>;
 }
 "#,
+            runtime_path: "::specforge_extension_sdk::__wit_bindgen::rt",
         });
 
         struct BridgeGuest;

@@ -1524,7 +1524,7 @@ fn new_extension_scaffolds_sdk_project() {
     let cargo = fs::read_to_string(project.join("Cargo.toml")).unwrap();
     assert!(cargo.contains(r#"name = "my-ext""#));
     assert!(cargo.contains("specforge-extension-sdk"));
-    assert!(cargo.contains("wit-bindgen"));
+    assert!(!cargo.contains("wit-bindgen"));
 
     let config = fs::read_to_string(project.join(".cargo/config.toml")).unwrap();
     assert!(config.contains("wasm32-wasip2"));

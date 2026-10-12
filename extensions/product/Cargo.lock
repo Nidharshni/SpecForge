@@ -346,7 +346,6 @@ dependencies = [
  "specforge-protocol-types",
  "specforge-test",
  "specforge-wasm",
- "wit-bindgen",
 ]
 
 [[package]]
