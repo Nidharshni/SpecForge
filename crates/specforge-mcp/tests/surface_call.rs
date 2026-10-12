@@ -60,19 +60,14 @@ fn tool_error(response: &Value) -> Value {
 }
 
 /// The names of every event recorded so far.
-fn event_names(server: &McpServer) -> Vec<String> {
-    server
-        .state()
-        .events
-        .iter()
-        .map(|e| e.name.clone())
-        .collect()
+fn event_names(server: &impl Logs) -> Vec<String> {
+    server.log().names()
 }
 
 /// The names of the events `act` records, `mcp_protocol_error_handled`
 /// (the report of any JSON-RPC error) left out.
-fn recorded(server: &mut McpServer, act: impl FnOnce(&mut McpServer)) -> Vec<String> {
-    let before = server.state().events.len();
+fn recorded(server: &mut Served, act: impl FnOnce(&mut McpServer)) -> Vec<String> {
+    let before = server.log().len();
     act(server);
     event_names(server)
         .split_off(before)

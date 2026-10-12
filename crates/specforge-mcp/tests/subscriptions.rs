@@ -2,14 +2,15 @@ use crate::support::*;
 use serde_json::json;
 use specforge_common::{Diagnostic, Severity, SourceSpan};
 use specforge_mcp::McpServer;
+use specforge_mcp::events::testing::EventLog;
 use specforge_mcp::subscriptions::{Changes, Subscriptions, Watched};
 use specforge_project::{GraphDelta, NodeChange};
 use specforge_test::prelude::*;
 use std::fs;
 use tempfile::TempDir;
 
-fn init_server() -> McpServer {
-    let mut server = McpServer::new();
+fn init_server() -> Logged {
+    let mut server = logged(McpServer::new());
     let req = json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{}});
     server.handle_message(&req.to_string());
     server
@@ -89,12 +90,9 @@ fn shutdown_clears_subscriptions() {
 
     assert!(server.state().subscriptions().is_empty());
     assert!(
-        server
-            .state()
-            .events
+        events(&server, "mcp_subscription_removed")
             .iter()
-            .any(|e| e.name == "mcp_subscription_removed"
-                && e.params["resourceUri"] == "specforge://graph"),
+            .any(|payload| payload["resourceUri"] == "specforge://graph"),
         "shutdown emits mcp_subscription_removed"
     );
 }
@@ -119,8 +117,8 @@ fn project() -> TempDir {
     dir
 }
 
-fn init_with_project(root: &TempDir) -> McpServer {
-    let mut server = McpServer::new();
+fn init_with_project(root: &TempDir) -> Logged {
+    let mut server = logged(McpServer::new());
     call(
         &mut server,
         "initialize",
@@ -179,13 +177,7 @@ fn subscribe_recompile_delivers_graph_notification() {
         added.iter().any(|n| n == "fresh_added"),
         "delta must name the new entity: {added:?}"
     );
-    assert!(
-        server
-            .state()
-            .events
-            .iter()
-            .any(|e| e.name == "mcp_delta_notified")
-    );
+    assert!(!events(&server, "mcp_delta_notified").is_empty());
 }
 
 #[specforge_test(
@@ -235,16 +227,14 @@ fn shutdown_event_counts_what_it_released() {
 
     call(&mut server, "shutdown", json!({}));
 
-    let event = server
-        .state()
-        .events
-        .iter()
-        .find(|e| e.name == "mcp_server_shutdown")
+    let event = events(&server, "mcp_server_shutdown")
+        .into_iter()
+        .next()
         .expect("mcp_server_shutdown emitted");
-    assert_eq!(event.params["pending_notifications_flushed"], pending);
-    assert_eq!(event.params["subscriptions_released"], 2);
+    assert_eq!(event["pending_notifications_flushed"], pending);
+    assert_eq!(event["subscriptions_released"], 2);
     // The served project's runtime is released with its session.
-    assert_eq!(event.params["wasm_engines_released"], 1);
+    assert_eq!(event["wasm_engines_released"], 1);
 }
 
 #[specforge_test(
@@ -725,7 +715,7 @@ fn node_change(id: &str) -> NodeChange {
 )]
 fn the_graph_delta_names_nodes_by_id() {
     let mut subscriptions = Subscriptions::new();
-    let mut events = Vec::new();
+    let mut events = EventLog::new();
     subscriptions.subscribe("specforge://graph", &mut events);
 
     let delta = GraphDelta {
@@ -773,7 +763,7 @@ fn the_diagnostics_delta_names_what_was_added_and_removed() {
     let warning = Diagnostic::untyped("W001", Severity::Warning, "test warning");
     let delta = GraphDelta::default();
     let mut subscriptions = Subscriptions::new();
-    let mut events = Vec::new();
+    let mut events = EventLog::new();
     subscriptions.subscribe("specforge://diagnostics", &mut events);
 
     subscriptions.updated(
@@ -842,7 +832,7 @@ fn a_diagnostic_is_named_by_code_message_and_file() {
 
 #[test]
 fn diagnostics_are_read_only_when_someone_hears_them() {
-    let mut events = Vec::new();
+    let mut events = EventLog::new();
     let mut subscriptions = Subscriptions::new();
     assert!(!subscriptions.hears_diagnostics());
     subscriptions.subscribe("specforge://graph", &mut events);
@@ -864,19 +854,20 @@ fn diagnostics_are_read_only_when_someone_hears_them() {
 #[test]
 fn reopening_a_listen_id_ends_the_old_stream() {
     let mut subscriptions = Subscriptions::new();
-    let mut events = Vec::new();
+    let mut events = EventLog::new();
     subscriptions.listen(json!(1), vec!["specforge://graph".into()], &mut events);
     subscriptions.drain();
-    events.clear();
+    events = EventLog::new();
 
     subscriptions.listen(
         json!(1),
         vec!["specforge://diagnostics".into()],
         &mut events,
     );
-    let names: Vec<(&str, &serde_json::Value)> = events
+    let names: Vec<(String, serde_json::Value)> = events
+        .recorded()
         .iter()
-        .map(|e| (e.name.as_str(), &e.params))
+        .map(|recorded| (recorded.name(), recorded.payload()))
         .collect();
     assert_eq!(names.len(), 2, "{names:?}");
     assert_eq!(names[0].0, "mcp_subscription_removed");
@@ -900,7 +891,7 @@ fn reopening_a_listen_id_ends_the_old_stream() {
 )]
 fn one_update_is_heard_in_one_order() {
     let mut subscriptions = Subscriptions::new();
-    let mut events = Vec::new();
+    let mut events = EventLog::new();
     subscriptions.listen(
         json!(1),
         vec!["specforge://diagnostics".into(), "specforge://graph".into()],
@@ -965,7 +956,7 @@ fn an_environment_reload_touches_the_graph_views_and_the_schema() {
     assert!(!reload.touched(Watched::Diagnostics));
 
     let mut subscriptions = Subscriptions::new();
-    let mut events = Vec::new();
+    let mut events = EventLog::new();
     subscriptions.subscribe("specforge://graph", &mut events);
     subscriptions.updated(&reload, &mut events);
     let sent = subscriptions.drain();
@@ -977,7 +968,7 @@ fn an_environment_reload_touches_the_graph_views_and_the_schema() {
 #[test]
 fn a_schema_subscriber_hears_no_graph_delta() {
     let mut subscriptions = Subscriptions::new();
-    let mut events = Vec::new();
+    let mut events = EventLog::new();
     subscriptions.subscribe("specforge://schema", &mut events);
     let delta = GraphDelta {
         added_nodes: vec![node_change("alpha")],

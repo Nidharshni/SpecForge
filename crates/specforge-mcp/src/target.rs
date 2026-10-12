@@ -17,6 +17,7 @@ use specforge_graph::Graph;
 use specforge_ops::view::ProjectView;
 use specforge_project::{ProjectSession, SharedRuntime};
 
+use crate::events::EventSink;
 use crate::state::McpState;
 use crate::tool::{ErrorCode, McpError};
 
@@ -432,6 +433,11 @@ impl<'s> Call<'s> {
     /// A call on `target`, resolved by [`resolve`].
     pub(crate) fn new(state: &'s mut McpState, target: CallTarget) -> Self {
         Call { state, target }
+    }
+
+    /// The server's event sink: what a handler records goes here (ADR 0057).
+    pub(crate) fn events(&mut self) -> &mut dyn EventSink {
+        &mut *self.state.events
     }
 
     /// The session the call reads: the served one, or the one opened for

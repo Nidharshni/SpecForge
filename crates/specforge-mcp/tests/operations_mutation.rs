@@ -39,7 +39,7 @@ fn fresh_project_dir() -> tempfile::TempDir {
     tempfile::TempDir::new().unwrap()
 }
 
-fn invoked(server: &McpServer, tool: &str) -> bool {
+fn invoked(server: &impl Logs, tool: &str) -> bool {
     events(server, "mcp_tool_invoked")
         .iter()
         .any(|p| p["toolName"] == tool && p["category"] == "mutation")
@@ -709,14 +709,12 @@ fn rename_contract() {
         "{diagnostics:?}"
     );
     assert_eq!(references(&server, "login"), ["token_distinct"]);
-    let events: Vec<&str> = server
-        .state()
-        .events
-        .iter()
-        .map(|e| e.name.as_str())
-        .collect();
-    assert!(events.contains(&"mcp_tool_invoked"), "{events:?}");
-    assert!(events.contains(&"mcp_mutation_completed"), "{events:?}");
+    let events = server.log().names();
+    assert!(events.iter().any(|e| e == "mcp_tool_invoked"), "{events:?}");
+    assert!(
+        events.iter().any(|e| e == "mcp_mutation_completed"),
+        "{events:?}"
+    );
 }
 
 // --- specforge.init ---

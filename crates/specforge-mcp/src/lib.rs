@@ -1,6 +1,7 @@
 extern crate self as specforge_mcp;
 
 pub mod args;
+pub mod events;
 mod extension_dispatch;
 pub mod lifecycle;
 pub mod modern;
@@ -21,6 +22,7 @@ pub mod tools;
 pub mod types;
 mod uri_template;
 
+use events::{EventSink, McpEvent};
 use protocol::router::route;
 use protocol::{JsonRpcResponse, parse_request_value};
 use serde_json::Value;
@@ -49,6 +51,14 @@ impl McpServer {
         let mut server = Self::new();
         server.state.default_project_root = Some(root);
         server
+    }
+
+    /// The same server, its events recorded into `sink` instead of
+    /// discarded (a test's `events::testing::EventLog`). Every server
+    /// records into [`events::Discard`] until given another sink.
+    pub fn with_events(mut self, sink: impl EventSink + 'static) -> Self {
+        self.state.events = Box::new(sink);
+        self
     }
 
     /// Handle one incoming message, a request, a notification or (in a
@@ -163,14 +173,11 @@ impl McpServer {
         let Some(error) = &response.error else {
             return;
         };
-        let mut event = serde_json::json!({
-            "errorCode": error.code,
-            "errorMessage": error.message,
+        self.state.events.record(McpEvent::McpProtocolErrorHandled {
+            error_code: error.code,
+            error_message: error.message.clone(),
+            method: method.map(str::to_string),
         });
-        if let Some(method) = method {
-            event["method"] = Value::from(method);
-        }
-        self.state.push_event("mcp_protocol_error_handled", event);
     }
 
     pub fn state(&self) -> &McpState {
@@ -186,7 +193,7 @@ impl McpServer {
     /// The connection ended (stdio: end of input): every subscription and
     /// listen stream ends.
     pub fn disconnect(&mut self) {
-        self.state.subscriptions.disconnect(&mut self.state.events);
+        self.state.subscriptions.disconnect(&mut *self.state.events);
     }
 
     pub fn state_mut(&mut self) -> &mut McpState {

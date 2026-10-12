@@ -2,6 +2,7 @@ use serde_json::Value;
 use specforge_common::find_project_root;
 use std::path::PathBuf;
 
+use crate::events::{InitFailure, McpEvent};
 use crate::protocol::{JsonRpcResponse, error_codes};
 use crate::state::{McpState, ServerPhase};
 use crate::tool::CoreTool;
@@ -84,13 +85,10 @@ pub fn handle_initialize(
     id: Option<Value>,
 ) -> JsonRpcResponse {
     if state.phase == ServerPhase::Initialized {
-        state.push_event(
-            "mcp_initialization_failed",
-            serde_json::json!({
-                "error_kind": "already_initialized",
-                "message": "Server already initialized",
-            }),
-        );
+        state.events.record(McpEvent::McpInitializationFailed {
+            error_kind: InitFailure::AlreadyInitialized,
+            message: "Server already initialized".to_string(),
+        });
         return JsonRpcResponse::error(
             id,
             error_codes::INVALID_REQUEST,
@@ -128,18 +126,16 @@ pub fn handle_initialize(
         .iter()
         .filter(|tool| matches!(tool.kind, crate::surface_table::ToolKind::Command(_)))
         .count();
-    state.push_event(
-        "mcp_initialized",
-        serde_json::json!({
-            "tools_registered": crate::tools::CORE_TOOLS.len() + surface_tools,
-            "resources_registered": crate::resources::CORE_RESOURCES.len() + surface_resources,
-            "prompts_registered": crate::prompts::CORE_PROMPTS.len(),
-            "extensions_loaded": state.registries().extension_info().count(),
-            "surface_tools_registered": surface_tools,
-            "surface_resources_registered": surface_resources,
-            "auto_promoted_tools": auto_promoted_tools,
-        }),
-    );
+    let extensions_loaded = state.registries().extension_info().count();
+    state.events.record(McpEvent::McpInitialized {
+        tools_registered: crate::tools::CORE_TOOLS.len() + surface_tools,
+        resources_registered: crate::resources::CORE_RESOURCES.len() + surface_resources,
+        prompts_registered: crate::prompts::CORE_PROMPTS.len(),
+        extensions_loaded,
+        surface_tools_registered: surface_tools,
+        surface_resources_registered: surface_resources,
+        auto_promoted_tools,
+    });
 
     let value = serde_json::to_value(capabilities).unwrap();
     JsonRpcResponse::success(id, value)
@@ -221,21 +217,18 @@ pub fn handle_shutdown(state: &mut McpState, id: Option<Value>) -> JsonRpcRespon
     // outlives shutdown.
     let engines = usize::from(state.session().runtime().is_some());
     let subscriptions = state.shutdown();
-    state.push_event(
-        "mcp_server_shutdown",
-        serde_json::json!({
-            "pending_notifications_flushed": pending_notifications,
-            "subscriptions_released": subscriptions,
-            "wasm_engines_released": engines,
-        }),
-    );
+    state.events.record(McpEvent::McpServerShutdown {
+        pending_notifications_flushed: pending_notifications,
+        subscriptions_released: subscriptions,
+        wasm_engines_released: engines,
+    });
     JsonRpcResponse::success(id, serde_json::json!({}))
 }
 
 pub fn handle_cancel(state: &mut McpState, params: Value, id: Option<Value>) -> JsonRpcResponse {
     // Cancelling a subscriptions/listen request ends its stream.
     if let Some(listened) = params.get("requestId") {
-        state.subscriptions.end(listened, &mut state.events);
+        state.subscriptions.end(listened, &mut *state.events);
     }
     // JSON-RPC ids are strings or numbers; the event names either as a string.
     let request_id = params
@@ -245,13 +238,10 @@ pub fn handle_cancel(state: &mut McpState, params: Value, id: Option<Value>) -> 
         .unwrap_or_default();
     // Requests run one at a time, so the one named has already completed:
     // it was never in progress, and cancelling it changes nothing.
-    state.push_event(
-        "mcp_request_cancelled",
-        serde_json::json!({
-            "requestId": request_id,
-            "wasInProgress": false,
-        }),
-    );
+    state.events.record(McpEvent::McpRequestCancelled {
+        request_id,
+        was_in_progress: false,
+    });
     JsonRpcResponse::success(id, serde_json::json!({}))
 }
 

@@ -5,8 +5,8 @@ use specforge_test::prelude::*;
 use std::fs;
 use tempfile::TempDir;
 
-fn init_server() -> McpServer {
-    let mut server = McpServer::new();
+fn init_server() -> Logged {
+    let mut server = logged(McpServer::new());
     call(&mut server, "initialize", json!({}));
     server
 }
@@ -15,7 +15,7 @@ fn init_server() -> McpServer {
 /// `ext.hello` and the resource template `specforge://ext/hello/{name}`,
 /// served through the runtime seam as loading the extension does.
 fn server_with_extension_surfaces() -> (
-    McpServer,
+    Logged,
     std::sync::Arc<crate::fake_extension::FakeExtension>,
     TempDir,
 ) {
@@ -401,12 +401,12 @@ fn initialize_rejects_tool_calls_before_completion() {
 fn shutdown_events_recorded() {
     let mut server = init_server();
     call(&mut server, "shutdown", json!({}));
-    let shutdown: Vec<&Value> = server
-        .state()
-        .events
+    let shutdown: Vec<Value> = server
+        .log()
+        .recorded()
         .iter()
-        .filter(|e| e.name == "mcp_server_shutdown")
-        .map(|e| &e.params)
+        .filter(|recorded| recorded.name() == "mcp_server_shutdown")
+        .map(|recorded| recorded.payload())
         .collect();
     assert_eq!(shutdown.len(), 1, "{shutdown:?}");
     let mut payload = shutdown[0].clone();
