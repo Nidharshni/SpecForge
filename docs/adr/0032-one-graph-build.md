@@ -69,3 +69,32 @@ build, computed for one caller (`Environment::graph_config`); two (`field_coerci
 Rejected: the registry build taking the provider schemes (`graph_config(schemes)`), which ADR 0031 D7
 rejected for `build_registries`; the graph crate reading the registries, which would make every graph
 test build one.
+
+## Migrate's check is the delta; the verification keeps its positions (amendment, architecture round 7, plan 15)
+
+`specforge migrate` judged "the migration kept the graph" with a comparison of its own
+(`specforge_migrate::compare_graphs`): entity IDs, edges and field values. It missed a changed kind, title or method
+set, which the delta already compared, so such a migration was kept and recorded, against
+`migration_semantic_preservation`. It was latent only because the one core transform is the format header and a
+hook's sandbox has no directory.
+
+- **Migrate reads the delta.** The post-migration check is `compute_graph_delta(pre, post)`: the run keeps the
+  migration exactly when it is empty (`migrate::Outcome::graph_delta`), and W054 is rendered from it
+  (`specforge_migrate::structural_differences`), one warning per entity removed, added or changed and per edge
+  removed or added. `compare_graphs` is gone.
+- **The verification's comparison stays its own.** `GraphBuild::verify` compares the incremental graph with a cold
+  build including positions (each node's file, line and column, and the spans in its expressions and methods): an
+  incremental build that misplaces a node is wrong even when nothing changed, and the delta ignores positions by
+  contract. It is the delta's comparison plus positions; a node that only moved is no delta and a divergence.
+- **Migrate reads each file once.** Its backup, its diff and the text an automatic rollback restores are one read.
+  The run still reads after the pre-migration compile, on purpose: migrating the compile's texts instead would
+  overwrite a save made in between with no warning, since the graphs would then agree.
+
+**Rejected.** A position mode on the delta for the verification (a mode with one caller that every other reader must
+never use, against "source positions are ignored"); expressing the verification as "delta empty, then a position walk"
+(a walk over every node, expression and method span: no less code, and the message no longer shows both nodes);
+carrying the delta in `MigrateDocument` (the W054 list names every change, and any change rolls the run back).
+
+**What would reopen it.** A node attribute added to `Node`: the delta's `changes` and the verification's signature
+must both compare it (the verification serializes fields and methods whole, so only a new top-level attribute
+needs both).

@@ -124,9 +124,9 @@ fn a_header_only_migration_of_the_dogfood_spec_keeps_its_graph() {
     assert!(outcome.validated && outcome.migrated(), "{outcome:?}");
     assert_eq!(outcome.summary.migrated_count, files);
     assert!(
-        outcome.structural_differences.is_empty(),
+        outcome.structural_differences().is_empty(),
         "{:?}",
-        outcome.structural_differences
+        outcome.structural_differences()
     );
     assert!(outcome.rollback.is_none());
     assert!(
@@ -140,7 +140,6 @@ fn a_header_only_migration_of_the_dogfood_spec_keeps_its_graph() {
     behavior = "validate_post_migration_integrity",
     verify = "a migration step that changes an entity's title or kind is reported and rolled back"
 )]
-#[ignore = "fixed by 15-T2"]
 fn a_migration_step_that_changes_a_title_or_a_kind_is_rolled_back() {
     for (from, to, aspect) in [
         ("\"Alpha\"", "\"Renamed\"", "title"),
@@ -160,11 +159,8 @@ fn a_migration_step_that_changes_a_title_or_a_kind_is_rolled_back() {
         );
 
         assert!(outcome.validated, "{aspect}: {outcome:?}");
-        let messages: Vec<&str> = outcome
-            .structural_differences
-            .iter()
-            .map(|d| d.message.as_str())
-            .collect();
+        let differences = outcome.structural_differences();
+        let messages: Vec<&str> = differences.iter().map(|d| d.message.as_str()).collect();
         assert_eq!(
             messages,
             [format!("entity 'alpha' changed during migration: {aspect}")],
@@ -201,11 +197,11 @@ fn a_migration_that_changes_the_graph_is_rolled_back() {
     assert!(outcome.validated);
     assert!(
         outcome
-            .structural_differences
+            .structural_differences()
             .iter()
             .any(|d| d.code == "W054" && d.message.contains("alpha")),
         "{:?}",
-        outcome.structural_differences
+        outcome.structural_differences()
     );
     let rollback = outcome.rollback.as_ref().expect("rolled back");
     assert_eq!(rollback.restored_count, 1, "{rollback:?}");
@@ -332,7 +328,7 @@ fn a_header_only_migration_is_checked_after_it_runs() {
         outcome.validated,
         "the migrated project is compiled and compared"
     );
-    assert!(outcome.structural_differences.is_empty());
+    assert!(outcome.structural_differences().is_empty());
     assert!(outcome.rollback.is_none());
     assert_eq!(outcome.from.to_string(), "0.9");
 }

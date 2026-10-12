@@ -200,8 +200,8 @@ behavior validate_post_migration_integrity "Validate Post-Migration Integrity" {
     zero_domain_knowledge_core,
   ]
   category   validation
-  types      [Graph, DiagnosticBag]
-  ports      [CompilerApi, GraphSerializer]
+  types      [Graph, GraphDelta, DiagnosticBag]
+  ports      [CompilerApi]
   // Runs exactly once after the terminal migration event
   // (extension_migration_hooks_complete).
   consumes   [extension_migration_hooks_complete]
@@ -210,22 +210,28 @@ behavior validate_post_migration_integrity "Validate Post-Migration Integrity" {
     extension_hooks_complete_fired "extension_migration_hooks_complete event has fired, confirming all extension migration hooks have run"
   }
   ensures {
-    structural_equivalence_checked        "Post-migration graph compared against pre-migration graph at the Graph Protocol level"
-    differences_reported                  "Any structural differences reported as warnings"
+    structural_equivalence_checked        "The graph delta from the pre-migration graph to the post-migration graph is computed, source positions ignored"
+    differences_reported                  "Each change the graph delta names is reported as a W054 warning"
     migration_validation_complete_emitted "migration_validation_complete event fires after validation finishes"
   }
   contract   """
-    This behavior validates instance-level integrity (entity IDs, edges,
-    field values) after migration. Schema-level backward compatibility is
-    handled separately by verify_graph_protocol_compatibility_after_migration.
+    This behavior validates instance-level integrity after migration.
+    Schema-level backward compatibility is handled separately by
+    verify_graph_protocol_compatibility_after_migration.
 
     After all migration transforms and extension hooks have completed,
-    the system MUST export the post-migration graph via GraphSerializer
-    and compare at the Graph Protocol level (entity IDs, edge
-    relationships, field values). Source spans (line, column) MUST be
-    excluded from comparison since format migration inherently shifts
-    source positions. Any structural differences MUST be reported as
-    warnings. New diagnostics introduced by migration MUST be reported.
+    the system MUST compile the migrated project and compute the
+    GraphDelta from the pre-migration graph to the post-migration graph
+    (compute_graph_delta): entity IDs, and each entity's kind, title,
+    field values, methods and outgoing edges. Source positions MUST be
+    ignored, since format migration inherently shifts them. The
+    migration keeps the graph exactly when the delta is empty. Each
+    change the delta names MUST be reported as one W054 warning: an
+    entity removed or added, an entity whose content changed (naming
+    what changed, in the delta's words), and an edge removed or added.
+    A non-empty delta rolls the migration back
+    (rollback_failed_migration). New diagnostics introduced by
+    migration MUST be reported.
   """
   verify unit "post-migration check runs automatically"
   verify unit "structural equivalence verified between pre and post graphs"

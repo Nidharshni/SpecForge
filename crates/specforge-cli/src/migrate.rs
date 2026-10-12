@@ -80,8 +80,8 @@ impl Args {
         for warning in &outcome.schema_warnings {
             errln!(terminal, "warning[{}]: {}", warning.code, warning.message);
         }
-        for d in &outcome.structural_differences {
-            errln!(terminal, "{}: {}", d.code, d.message);
+        for d in outcome.structural_differences() {
+            errln!(terminal, "warning[{}]: {}", d.code, d.message);
         }
         if outcome.rollback.is_some() {
             if outcome.hook_failures.is_empty() {

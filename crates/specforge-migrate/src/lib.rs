@@ -216,7 +216,7 @@ fn sha256_hash(content: &str) -> String {
 }
 
 // ---------------------------------------------------------------------------
-// Schema and Graph Comparison
+// Post-migration checks
 // ---------------------------------------------------------------------------
 
 /// Compare pre/post migration schemas and return breaking change diagnostics.
@@ -312,116 +312,6 @@ fn changed(node: &ModifiedNodeChange) -> String {
         .chain(aspects.iter().map(|a| a.to_string()))
         .collect::<Vec<_>>()
         .join(", ")
-}
-
-/// Compare two graphs for structural equivalence (entity IDs, edges, field values).
-/// Returns diagnostics for any differences found, excluding source spans.
-pub fn compare_graphs(
-    pre: &specforge_graph::Graph,
-    post: &specforge_graph::Graph,
-) -> Vec<Diagnostic> {
-    let mut diagnostics = Vec::new();
-
-    let pre_nodes = pre.nodes();
-    let post_nodes = post.nodes();
-
-    // Check entity IDs
-    let pre_ids: std::collections::BTreeSet<&str> =
-        pre_nodes.iter().map(|n| n.id.raw.as_str()).collect();
-    let post_ids: std::collections::BTreeSet<&str> =
-        post_nodes.iter().map(|n| n.id.raw.as_str()).collect();
-
-    for id in pre_ids.difference(&post_ids) {
-        diagnostics.push(Diagnostic::new(
-            codes::W054,
-            format!("entity '{id}' present before migration but missing after"),
-        ));
-    }
-
-    for id in post_ids.difference(&pre_ids) {
-        diagnostics.push(Diagnostic::new(
-            codes::W054,
-            format!("entity '{id}' appeared after migration but was not present before"),
-        ));
-    }
-
-    // Check edges
-    let pre_edges: std::collections::BTreeSet<(&str, &str, &str)> = pre
-        .edges()
-        .iter()
-        .map(|e| (e.source.as_str(), e.target.as_str(), e.label.as_str()))
-        .collect();
-    let post_edges: std::collections::BTreeSet<(&str, &str, &str)> = post
-        .edges()
-        .iter()
-        .map(|e| (e.source.as_str(), e.target.as_str(), e.label.as_str()))
-        .collect();
-
-    for edge in pre_edges.difference(&post_edges) {
-        diagnostics.push(Diagnostic::new(
-            codes::W054,
-            format!(
-                "edge {}-[{}]->{} present before migration but missing after",
-                edge.0, edge.2, edge.1
-            ),
-        ));
-    }
-
-    for edge in post_edges.difference(&pre_edges) {
-        diagnostics.push(Diagnostic::new(
-            codes::W054,
-            format!(
-                "edge {}-[{}]->{} appeared after migration but was not present before",
-                edge.0, edge.2, edge.1
-            ),
-        ));
-    }
-
-    // Field values of entities present on both sides, compared as the
-    // Graph Protocol exports them, without source positions.
-    let post_by_id: std::collections::HashMap<&str, _> =
-        post_nodes.iter().map(|n| (n.id.raw.as_str(), n)).collect();
-    for pre_node in pre_nodes.iter() {
-        let Some(post_node) = post_by_id.get(pre_node.id.raw.as_str()) else {
-            continue;
-        };
-        let before = comparable_fields(&pre_node.fields);
-        let after = comparable_fields(&post_node.fields);
-        let keys: std::collections::BTreeSet<&String> = before.keys().chain(after.keys()).collect();
-        for key in keys {
-            if before.get(key) != after.get(key) {
-                diagnostics.push(Diagnostic::new(
-                    codes::W054,
-                    format!(
-                        "field '{key}' of entity '{}' changed during migration",
-                        pre_node.id.raw.as_str()
-                    ),
-                ));
-            }
-        }
-    }
-
-    diagnostics
-}
-
-/// An entity's fields as exported JSON, with every source span removed:
-/// a format migration shifts positions without changing structure.
-fn comparable_fields(
-    fields: &specforge_graph::FieldMap,
-) -> std::collections::BTreeMap<String, serde_json::Value> {
-    fn strip_spans(value: &mut serde_json::Value) {
-        match value {
-            serde_json::Value::Object(map) => {
-                map.remove("span");
-                map.values_mut().for_each(strip_spans);
-            }
-            serde_json::Value::Array(items) => items.iter_mut().for_each(strip_spans),
-            _ => {}
-        }
-    }
-    let mut map = specforge_emitter::field_map_to_json(fields);
-    map.values_mut().for_each(strip_spans);
-    map
 }
 
 // ---------------------------------------------------------------------------

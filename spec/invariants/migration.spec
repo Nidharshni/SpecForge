@@ -61,12 +61,13 @@ invariant migration_event_ordering "Migration Event Ordering" {
 invariant migration_semantic_preservation "Migration Semantic Preservation" {
   guarantee """
     Migration transforms MUST preserve the entity graph structure. After
-    migration, the set of nodes (entity IDs, kinds, field values) and edges
-    (reference relationships) MUST be identical to the pre-migration graph.
-    Only syntax-level changes (whitespace, keyword spelling, block ordering)
-    are permitted. Any migration that adds, removes, or alters a node or
-    edge is a breaking change and MUST be flagged by
-    validate_post_migration_integrity.
+    migration, the set of nodes (entity IDs, and each node's kind, title,
+    field values and methods) and edges (reference relationships) MUST be
+    identical to the pre-migration graph, source positions aside: the
+    graph delta between them is empty. Only syntax-level changes
+    (whitespace, keyword spelling, block ordering) are permitted. Any
+    migration that adds, removes, or alters a node or edge is a breaking
+    change and MUST be flagged by validate_post_migration_integrity.
   """
   risk      high
   verify property "pre-migration and post-migration entity graphs are structurally identical"
