@@ -239,7 +239,7 @@ fn contract_shutdown() {
         .as_array()
         .unwrap()
         .iter()
-        .map(|v| v.as_str().unwrap())
+        .map(|v| v["id"].as_str().unwrap())
         .collect();
     added.sort();
     assert_eq!(added, ["gamma"]);
@@ -2443,11 +2443,12 @@ fn contract_graph_notification() {
                 "jsonrpc": "2.0",
                 "method": "specforge/graphChanged",
                 "params": {
-                    "added_nodes": ["gamma"],
-                    "removed_nodes": ["beta"],
+                    "added_nodes": [{"id": "gamma", "kind": "behavior", "file": "test.spec", "line": 3}],
+                    "removed_nodes": [{"id": "beta", "kind": "feature", "file": "test.spec", "line": 3}],
                     "modified_nodes": [],
                     "added_edges": [],
                     "removed_edges": [{"source": "beta", "target": "alpha", "label": "behaviors"}],
+                    "affected_files": ["test.spec"],
                 },
             }),
         ]
@@ -2471,9 +2472,16 @@ fn contract_graph_notification() {
                 "params": {
                     "added_nodes": [],
                     "removed_nodes": [],
-                    "modified_nodes": ["gamma"],
+                    "modified_nodes": [{
+                        "id": "gamma",
+                        "changed_fields": ["contract"],
+                        "changed_aspects": [],
+                        "file": "test.spec",
+                        "line": 3,
+                    }],
                     "added_edges": [],
                     "removed_edges": [],
+                    "affected_files": ["test.spec"],
                 },
             }),
         ]
@@ -2513,13 +2521,19 @@ fn subscribed_graph_server() -> (Served, PathBuf) {
     (server, spec)
 }
 
-/// The `modified_nodes` of the one graph notification a rebuild sends.
+/// The IDs of the `modified_nodes` of the one graph notification a rebuild
+/// sends.
 fn modified_after_rebuild(server: &mut McpServer) -> Value {
     rebuild(server);
     let sent = server.take_notifications();
     assert_eq!(sent.len(), 2, "{sent:?}");
     assert_eq!(sent[1]["method"], "specforge/graphChanged");
-    sent[1]["params"]["modified_nodes"].clone()
+    sent[1]["params"]["modified_nodes"]
+        .as_array()
+        .expect("modified nodes")
+        .iter()
+        .map(|node| node["id"].clone())
+        .collect()
 }
 
 #[specforge_test(
@@ -2628,10 +2642,24 @@ fn contract_diagnostics_notification() {
     )
     .unwrap();
     rebuild(&mut server);
+    // Whole, as every surface presents a diagnostic (`specforge check
+    // --format json`), so the client can locate it.
     let duplicate = json!({
         "code": "E002",
+        "title": "Duplicate entity ID",
         "severity": "Error",
         "message": "duplicate entity ID 'alpha' (first declared at test.spec:1:1)",
+        "span": {
+            "file": "test.spec",
+            "start_line": 3,
+            "start_col": 1,
+            "end_line": 4,
+            "end_col": 2,
+        },
+        "suggestion": "rename one of the entities to avoid the collision",
+        "file": "test.spec",
+        "line": 3,
+        "column": 1,
     });
     let changed = |added: Value, removed: Value| {
         json!({

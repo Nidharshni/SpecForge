@@ -7,17 +7,21 @@
 //! every update of the served project passes (ADR 0035 D3), and every
 //! subscription they touched hears about them ([`Subscriptions::updated`]).
 //! Subscriptions belong to the connection: they end with it, or at shutdown.
-//! The requests that change them are in [`requests`]; the notifications'
-//! JSON shapes in `wire`.
+//! The requests that change them are in [`requests`]; the notifications,
+//! typed, in `wire`.
 
 pub(crate) mod requests;
 mod wire;
 
 use std::collections::HashSet;
 
+use serde::Serialize;
 use serde_json::Value;
-use specforge_common::Diagnostic;
+use specforge_common::shape::Shape;
+use specforge_common::{Diagnostic, DiagnosticList};
 use specforge_project::{GraphDelta, Update, UpdateKind};
+
+pub use wire::{Acknowledged, Honoured, Notification, ResourceUpdated, StreamMeta};
 
 use crate::events::{EventSink, McpEvent};
 
@@ -47,11 +51,13 @@ impl Watched {
     }
 }
 
-/// The diagnostics added and removed by one update.
-#[derive(Debug, Default)]
-struct DiagnosticsDelta {
-    added: Vec<Diagnostic>,
-    removed: Vec<Diagnostic>,
+/// The diagnostics added and removed by one update, each presented as every
+/// surface presents a diagnostic (`DiagnosticsDelta` in
+/// spec/types/graph.spec).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Shape)]
+pub struct DiagnosticsDelta {
+    pub added: DiagnosticList,
+    pub removed: DiagnosticList,
 }
 
 impl DiagnosticsDelta {
@@ -77,17 +83,19 @@ impl DiagnosticsDelta {
                 .iter()
                 .filter(|d| !before_keys.contains(&Self::identity(d)))
                 .cloned()
-                .collect(),
+                .collect::<Vec<_>>()
+                .into(),
             removed: before
                 .iter()
                 .filter(|d| !after_keys.contains(&Self::identity(d)))
                 .cloned()
-                .collect(),
+                .collect::<Vec<_>>()
+                .into(),
         }
     }
 
     fn is_empty(&self) -> bool {
-        self.added.is_empty() && self.removed.is_empty()
+        self.added.0.is_empty() && self.removed.0.is_empty()
     }
 }
 
@@ -161,7 +169,7 @@ pub struct Subscriptions {
     /// `subscriptions/listen`: the open streams, in opening order.
     streams: Vec<Stream>,
     /// Queued notifications, oldest first.
-    outbox: Vec<Value>,
+    outbox: Vec<Notification>,
 }
 
 impl Subscriptions {
@@ -207,7 +215,7 @@ impl Subscriptions {
                 named.push(uri);
             }
         }
-        self.outbox.push(wire::acknowledged(&id, &named));
+        self.outbox.push(Notification::acknowledged(&id, &named));
         for uri in &named {
             events.record(McpEvent::subscription_created(uri, Some(&id)));
         }
@@ -269,34 +277,36 @@ impl Subscriptions {
             for uri in &stream.uris {
                 if changes.touched(Watched::of(uri)) {
                     self.outbox
-                        .push(wire::resource_updated(uri, Some(&stream.id)));
+                        .push(Notification::resource_updated(uri, Some(&stream.id)));
                 }
             }
         }
         for uri in &self.resources {
             if changes.touched(Watched::of(uri)) {
-                self.outbox.push(wire::resource_updated(uri, None));
+                self.outbox.push(Notification::resource_updated(uri, None));
             }
         }
         let subscribed =
             |watched: Watched| self.resources.iter().any(|uri| Watched::of(uri) == watched);
         if !changes.graph.is_empty() && subscribed(Watched::Graph) {
-            self.outbox.push(wire::graph_changed(changes.graph));
+            self.outbox
+                .push(Notification::GraphChanged(changes.graph.clone()));
             events.record(McpEvent::graph_delta(changes.graph));
         }
         if let Some(delta) = changes.diagnostics.as_ref().filter(|d| !d.is_empty())
             && subscribed(Watched::Diagnostics)
         {
-            self.outbox.push(wire::diagnostics_changed(delta));
+            self.outbox
+                .push(Notification::DiagnosticsChanged(delta.clone()));
             events.record(McpEvent::diagnostics_delta(
-                delta.added.len(),
-                delta.removed.len(),
+                delta.added.0.len(),
+                delta.removed.0.len(),
             ));
         }
     }
 
     /// Take the queued notifications, oldest first.
-    pub fn drain(&mut self) -> Vec<Value> {
+    pub fn drain(&mut self) -> Vec<Notification> {
         std::mem::take(&mut self.outbox)
     }
 

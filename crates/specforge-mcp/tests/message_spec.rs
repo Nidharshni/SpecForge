@@ -560,7 +560,6 @@ const PROTOCOL_AND_PROMPT_TYPES: &[&str] = &[
     "McpResourceDescriptor",
     "McpToolDescriptor",
     "McpToolAnnotations",
-    "McpSubscription",
     "McpToolCategory",
     "McpPromptDescriptor",
     "McpPromptArgument",
@@ -572,6 +571,23 @@ const PROTOCOL_AND_PROMPT_TYPES: &[&str] = &[
     "McpExplorePromptResult",
     "McpRelationshipPath",
 ];
+
+macro_rules! message_type {
+    ($($test:ident => $name:literal, $verify:literal),* $(,)?) => {$(
+        #[specforge_test(type = $name, verify = $verify)]
+        fn $test() {
+            assert_reply_type($name)
+        }
+    )*};
+}
+
+message_type! {
+    graph_delta => "GraphDelta", "GraphDelta schema is valid",
+    node_change => "NodeChange", "NodeChange schema is valid",
+    modified_node_change => "ModifiedNodeChange", "ModifiedNodeChange schema is valid",
+    edge_change => "EdgeChange", "EdgeChange schema is valid",
+    diagnostics_delta => "DiagnosticsDelta", "DiagnosticsDelta schema is valid",
+}
 
 #[specforge_test(
     type = "McpError",

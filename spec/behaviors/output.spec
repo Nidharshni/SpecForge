@@ -819,15 +819,16 @@ behavior present_diagnostics_as_json "Present Diagnostics as JSON" {
     diagnostics_collected "the diagnostics to present have been collected"
   }
   ensures {
-    one_shape_everywhere "specforge check --format json, MCP validate, the specforge://diagnostics resource and tool _meta present diagnostics in one shape"
+    one_shape_everywhere "specforge check --format json, MCP validate, the specforge://diagnostics resource, tool _meta, the diagnosticsChanged notification and McpError present diagnostics in one shape"
     location_both_ways   "each entry carries its span nested under span and the span's start flat as file, line and column"
     data_only_when_typed "an entry carries data, the diagnostic's typed payload, only when the diagnostic has one"
   }
   contract   """
     Wherever SpecForge prints diagnostics as JSON (specforge check
     --format json, specforge collect and specforge watch --format json,
-    the MCP specforge.validate tool, the specforge://diagnostics resource and the
-    diagnostics in a tool result's _meta), it MUST present them in one
+    the MCP specforge.validate tool, the specforge://diagnostics resource, the
+    diagnostics in a tool result's _meta, the specforge/diagnosticsChanged
+    notification and an McpError's diagnostic), it MUST present them in one
     shape: an array of
     entries with code, severity, message and suggestion (null when there
     is none), the span nested under span (file, start_line, start_col,

@@ -102,12 +102,6 @@ type McpToolAnnotations {
   verify unit "McpToolAnnotations schema is valid"
 }
 
-type McpSubscription {
-  uri             string @readonly
-  subscription_id string @readonly @optional
-  verify unit "McpSubscription schema is valid"
-}
-
 // Tool categories: "management" corresponds to the "Project Management Tools"
 // feature group (specforge.extensions, specforge.providers, specforge.doctor,
 // specforge.collect, specforge.render). The short name is used in the protocol

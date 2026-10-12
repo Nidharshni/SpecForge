@@ -3021,7 +3021,7 @@ fn mcp_stdio_client_receives_graph_notification() {
         .unwrap_or_else(|| panic!("no graphChanged notification in {out:?}"));
     assert!(notification.get("id").is_none(), "{notification}");
     let added = notification["params"]["added_nodes"].as_array().unwrap();
-    assert!(added.iter().any(|n| n == "added"), "{notification}");
+    assert!(added.iter().any(|n| n["id"] == "added"), "{notification}");
 }
 
 /// A stateless (MCP 2026-07-28) client over stdio: no initialize, the

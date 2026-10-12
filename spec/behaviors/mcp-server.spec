@@ -106,7 +106,7 @@ behavior state_mcp_messages_as_spec_types "State MCP Messages as Spec Types" {
 
 behavior mcp_shutdown "MCP Shutdown" {
   features   [mcp_lifecycle]
-  types      [McpSubscription, timestamp]
+  types      [timestamp]
   category   command
   ports      [CompilerApi, WasmRuntime]
   produces   [mcp_server_shutdown, mcp_subscription_removed]
@@ -526,7 +526,7 @@ behavior notify_graph_delta_via_mcp "Notify Graph Delta via MCP" {
     mcp_subscription_cleanup,
   ]
   category   command
-  types      [GraphDelta, McpSubscription]
+  types      [GraphDelta, NodeChange, ModifiedNodeChange, EdgeChange]
   ports      [McpProtocol, CompilerApi]
   consumes   [graph_delta_computed]
   produces   [mcp_delta_notified, mcp_subscription_created, mcp_subscription_removed]
@@ -544,9 +544,11 @@ behavior notify_graph_delta_via_mcp "Notify Graph Delta via MCP" {
     receive notifications/resources/updated naming it, for each such
     resource, by the rule subscriptions/listen follows. When the graph
     changed and the client subscribed to a resource that changes with it,
-    the system MUST then send specforge/graphChanged, whose payload MUST
-    include the GraphDelta describing added, removed, and modified nodes and
-    edges. A subscription is to one resource: unsubscribing one keeps the
+    the system MUST then send specforge/graphChanged, whose params MUST be
+    the update's GraphDelta, whole: each added and removed node with its
+    kind, file and line, each modified node with its changed fields and
+    changed aspects, the added and removed edges and the affected files:
+    the delta watch --format json prints. A subscription is to one resource: unsubscribing one keeps the
     others, and the client's subscriptions end with its connection.
     resources/subscribe to a URI the server does not serve is refused as
     resources/read refuses it (not found: -32002, Unknown resource URI);
@@ -575,7 +577,7 @@ behavior notify_diagnostics_delta_via_mcp "Notify Diagnostics Delta via MCP" {
     mcp_subscription_cleanup,
   ]
   category   command
-  types      [DiagnosticsDelta, McpSubscription]
+  types      [DiagnosticsDelta]
   ports      [McpProtocol, CompilerApi]
   consumes   [validation_complete]
   produces   [mcp_delta_notified, mcp_subscription_created, mcp_subscription_removed]
@@ -592,13 +594,16 @@ behavior notify_diagnostics_delta_via_mcp "Notify Diagnostics Delta via MCP" {
     a client subscribed to specforge://diagnostics MUST receive
     notifications/resources/updated for it and then a
     specforge/diagnosticsChanged notification.
-    The notification payload MUST include added and removed diagnostics since the
-    previous compilation. Clients MUST be able to subscribe and unsubscribe. If
+    The notification's params MUST be the DiagnosticsDelta since the
+    previous compilation: the diagnostics added and removed, each presented
+    as every surface presents a diagnostic (present_diagnostics_as_json), so
+    a client can locate it. Clients MUST be able to subscribe and unsubscribe. If
     no clients are subscribed or the diagnostics are unchanged, the notification
     MUST be suppressed.
   """
   verify unit "diagnostics_changed notification sent after validation"
   verify unit "payload includes added and removed diagnostics"
+  verify unit "each added or removed diagnostic is presented as every surface presents diagnostics"
   verify unit "unsubscribed clients do not receive notifications"
   verify unit "no notification when diagnostics are unchanged"
   verify contract "Notify Diagnostics Delta via MCP: diagnostics delta MCP notification holds — validation_complete_fired, subscribers_notified, unchanged_suppressed, delta_notified_emitted"
