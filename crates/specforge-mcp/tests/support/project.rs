@@ -6,10 +6,12 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use specforge_mcp::McpServer;
+use specforge_mcp::events::testing::EventLog;
 use specforge_project::SharedRuntime;
 use specforge_wasm::testing::{InProcessRuntime, RecordedCall};
 use tempfile::TempDir;
 
+use super::events::{Logged, Logs};
 use super::extension::{EXT, TestExtension, runtime_of};
 use super::rpc;
 
@@ -117,8 +119,11 @@ impl TestProject {
         write(self.root(), "specforge.json", &config.to_string());
     }
 
-    /// Write `specforge.json`, then initialize `server` over the root.
-    fn initialized(self, mut server: McpServer) -> Served {
+    /// Write `specforge.json`, then initialize `server` over the root, its
+    /// events recorded into the log the returned value keeps.
+    fn initialized(self, server: McpServer) -> Served {
+        let log = EventLog::new();
+        let mut server = server.with_events(log.clone());
         self.write_config();
         let reply = rpc::call(
             &mut server,
@@ -129,6 +134,7 @@ impl TestProject {
         assert!(server.state().session().project().root().is_some());
         Served {
             server,
+            log,
             project: self,
             runtime: None,
         }
@@ -139,6 +145,8 @@ impl TestProject {
 /// `specforge mcp <root>` talks to. Dereferences to the server.
 pub struct Served {
     server: McpServer,
+    /// What the server recorded.
+    log: EventLog,
     project: TestProject,
     runtime: Option<Arc<InProcessRuntime>>,
 }
@@ -155,10 +163,14 @@ impl Served {
         write(self.root(), path, text);
     }
 
-    /// The server and the project's directory, apart: for a helper that
-    /// hands them out separately (`fake_extension::initialized`).
-    pub fn into_parts(self) -> (McpServer, TempDir) {
-        (self.server, self.project.dir)
+    /// The server (with its log) and the project's directory, apart: for a
+    /// helper that hands them out separately (`fake_extension::initialized`).
+    pub fn into_parts(self) -> (Logged, TempDir) {
+        let logged = Logged {
+            server: self.server,
+            log: self.log,
+        };
+        (logged, self.project.dir)
     }
 
     /// Remove `path` under the root.
@@ -178,6 +190,12 @@ impl Served {
             .into_iter()
             .filter(|c| c.export != "__handshake" && c.export != "__describe")
             .collect()
+    }
+}
+
+impl Logs for Served {
+    fn log(&self) -> &EventLog {
+        &self.log
     }
 }
 

@@ -6,6 +6,7 @@
 
 use serde_json::{Value, json};
 
+use crate::events::{Listing, McpEvent};
 use crate::lifecycle::Revision;
 use crate::protocol::JsonRpcResponse;
 use crate::resources::{CORE_RESOURCES, ResourceSpec};
@@ -51,7 +52,10 @@ pub fn handle_list_tools(
             tool
         })
         .collect();
-    push_discovery(state, "tools", tools.len());
+    state.events.record(McpEvent::McpDiscoveryInvoked {
+        discovery_type: Listing::Tools,
+        result_count: tools.len(),
+    });
     JsonRpcResponse::success(id, json!({ "tools": tools }))
 }
 
@@ -60,7 +64,10 @@ pub fn handle_list_resources(state: &mut McpState, id: Option<Value>) -> JsonRpc
         .filter(|r| !is_template(r))
         .map(|r| serde_json::to_value(r).unwrap())
         .collect();
-    push_discovery(state, "resources", resources.len());
+    state.events.record(McpEvent::McpDiscoveryInvoked {
+        discovery_type: Listing::Resources,
+        result_count: resources.len(),
+    });
     JsonRpcResponse::success(id, json!({ "resources": resources }))
 }
 
@@ -80,7 +87,10 @@ pub fn handle_list_resource_templates(state: &mut McpState, id: Option<Value>) -
             template
         })
         .collect();
-    push_discovery(state, "resource_templates", templates.len());
+    state.events.record(McpEvent::McpDiscoveryInvoked {
+        discovery_type: Listing::ResourceTemplates,
+        result_count: templates.len(),
+    });
     JsonRpcResponse::success(id, json!({ "resourceTemplates": templates }))
 }
 
@@ -96,14 +106,9 @@ pub fn handle_list_prompts(state: &mut McpState, id: Option<Value>) -> JsonRpcRe
         .iter()
         .map(|p| serde_json::to_value(p).unwrap())
         .collect();
-    push_discovery(state, "prompts", prompts.len());
+    state.events.record(McpEvent::McpDiscoveryInvoked {
+        discovery_type: Listing::Prompts,
+        result_count: prompts.len(),
+    });
     JsonRpcResponse::success(id, json!({ "prompts": prompts }))
-}
-
-/// Record a listing: which registry, and how many entries the client got.
-fn push_discovery(state: &mut McpState, discovery_type: &str, result_count: usize) {
-    state.push_event(
-        "mcp_discovery_invoked",
-        json!({"discoveryType": discovery_type, "resultCount": result_count}),
-    );
 }

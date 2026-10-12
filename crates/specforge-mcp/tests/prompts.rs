@@ -804,14 +804,7 @@ fn infer_plan_reads_cursor_from_a_string() {
 )]
 fn unknown_prompt_records_no_invocation() {
     let mut server = test_server();
-    let invoked = |server: &McpServer| {
-        server
-            .state()
-            .events
-            .iter()
-            .filter(|e| e.name == "mcp_prompt_invoked")
-            .count()
-    };
+    let invoked = |server: &Served| events(server, "mcp_prompt_invoked").len();
     let resp = get_prompt(&mut server, "specforge://prompts/nope", json!({}));
     assert_eq!(resp["error"]["code"], -32602, "{resp}");
     assert_eq!(invoked(&server), 0);

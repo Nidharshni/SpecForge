@@ -6,6 +6,8 @@
 use serde_json::{Value, json};
 use specforge_mcp::McpServer;
 
+use crate::support::{Logged, events, logged};
+
 /// The project the prompts read: product, software and testing loaded,
 /// a four-hop chain `alpha - feat_login - beta - inv_session - delta`,
 /// `alpha` anchored to `src/login.rs`, and four source files.
@@ -78,8 +80,8 @@ behavior delta "Delta" {
 }
 
 /// A server for `dir`, as `specforge mcp <dir>` starts it, initialized.
-fn server(dir: &tempfile::TempDir) -> McpServer {
-    let mut server = McpServer::with_project_root(dir.path().to_path_buf());
+fn server(dir: &tempfile::TempDir) -> Logged {
+    let mut server = logged(McpServer::with_project_root(dir.path().to_path_buf()));
     send(&mut server, "initialize", json!({}));
     server
 }
@@ -368,16 +370,6 @@ fn prompt_golden_events() {
         "prompts/get",
         json!({"name": "specforge://prompts/nope"}),
     );
-    let invoked: Vec<Value> = server
-        .state()
-        .events
-        .iter()
-        .filter(|e| e.name == "mcp_prompt_invoked")
-        .map(|e| {
-            let mut params = e.params.clone();
-            params.as_object_mut().map(|o| o.remove("timestamp"));
-            params
-        })
-        .collect();
+    let invoked = events(&server, "mcp_prompt_invoked");
     insta::assert_json_snapshot!("39_invocation_events", invoked);
 }

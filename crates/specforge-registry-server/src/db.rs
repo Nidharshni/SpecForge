@@ -1,5 +1,10 @@
 use rusqlite::{Connection, params};
+use specforge_registry_wire::PackageSignature;
 use std::path::Path;
+
+/// The schema this registry reads and writes (`PRAGMA user_version`). A data directory written before the
+/// signature was typed (ADR 0061) has none and is refused.
+const SCHEMA: i64 = 1;
 use std::sync::Mutex;
 
 pub struct Database {
@@ -27,10 +32,9 @@ pub struct PackageVersion {
     pub keywords: String,
     pub publisher: String,
     pub published_at: String,
-    /// Wire signature object (JSON with sig/keyId/pubkey/signedAt); empty when unsigned.
-    pub signature: String,
-    /// Short publisher key id; empty when unsigned.
-    pub key_id: String,
+    /// The publisher signature, stored as its JSON; `None` only for what `testing::LocalRegistry::store` stores
+    /// unsigned. Its key id is `signature.key_id()`.
+    pub signature: Option<PackageSignature>,
     /// Exact manifest JSON uploaded with the package; served so clients can
     /// verify manifest_sha256 offline.
     pub manifest: String,
@@ -48,23 +52,6 @@ pub struct TokenRecord {
     pub admin: bool,
 }
 
-/// Sort key for a version string: SemVer when parseable (pre-release
-/// ordering included), lexicographic fallback for legacy rows.
-fn semver_key(version: &str) -> (u64, u64, u64, u8, String) {
-    match semver::Version::parse(version) {
-        // the empty pre-release flag ranks a release above its own
-        // pre-releases; identifiers otherwise compare as strings (v1)
-        Ok(v) => (
-            v.major,
-            v.minor,
-            v.patch,
-            u8::from(v.pre.is_empty()),
-            v.pre.to_string(),
-        ),
-        Err(_) => (0, 0, 0, 1, version.to_string()),
-    }
-}
-
 impl Database {
     pub fn open(path: &Path) -> Result<Self, String> {
         let conn = Connection::open(path).map_err(|e| format!("failed to open database: {}", e))?;
@@ -73,6 +60,24 @@ impl Database {
             "PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;",
         )
         .map_err(|e| format!("failed to set pragmas: {e}"))?;
+
+        let version: i64 = conn
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .map_err(|e| format!("failed to read the schema version: {e}"))?;
+        let has_packages: bool = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'packages'",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .map(|n| n > 0)
+            .map_err(|e| format!("failed to read the schema: {e}"))?;
+        if has_packages && version != SCHEMA {
+            return Err(format!(
+                "the registry data in {} was written by an earlier specforge-registry (schema {version}); this one reads schema {SCHEMA}: serve from a new --data-dir",
+                path.display()
+            ));
+        }
 
         let db = Self {
             conn: Mutex::new(conn),
@@ -95,6 +100,8 @@ impl Database {
                 publisher TEXT NOT NULL DEFAULT '',
                 published_at TEXT NOT NULL DEFAULT (datetime('now')),
                 yanked INTEGER NOT NULL DEFAULT 0,
+                signature TEXT,
+                manifest TEXT NOT NULL DEFAULT '',
                 UNIQUE(name, version)
             );
 
@@ -123,45 +130,16 @@ impl Database {
         )
         .map_err(|e| format!("migration failed: {}", e))?;
 
-        // Signature columns arrived after the initial schema: add them to
-        // databases created before signed publishing existed.
-        for (column, ddl) in [
-            (
-                "signature",
-                "ALTER TABLE packages ADD COLUMN signature TEXT NOT NULL DEFAULT ''",
-            ),
-            (
-                "key_id",
-                "ALTER TABLE packages ADD COLUMN key_id TEXT NOT NULL DEFAULT ''",
-            ),
-            (
-                "manifest",
-                "ALTER TABLE packages ADD COLUMN manifest TEXT NOT NULL DEFAULT ''",
-            ),
-        ] {
-            let present: bool = conn
-                .query_row(
-                    &format!(
-                        "SELECT COUNT(*) FROM pragma_table_info('packages') WHERE name = '{column}'"
-                    ),
-                    [],
-                    |row| row.get::<_, i64>(0),
-                )
-                .map(|n| n > 0)
-                .unwrap_or(false);
-            if !present {
-                conn.execute_batch(ddl)
-                    .map_err(|e| format!("migration failed ({column}): {}", e))?;
-            }
-        }
+        conn.execute_batch(&format!("PRAGMA user_version = {SCHEMA}"))
+            .map_err(|e| format!("migration failed (schema version): {e}"))?;
         Ok(())
     }
 
     pub fn insert_package(&self, pkg: &PackageVersion) -> Result<(), String> {
         let conn = self.conn();
         conn.execute(
-            "INSERT INTO packages (name, version, sha256, size_bytes, description, keywords, publisher, published_at, signature, key_id, manifest)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            "INSERT INTO packages (name, version, sha256, size_bytes, description, keywords, publisher, published_at, signature, manifest)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 pkg.name,
                 pkg.version,
@@ -171,8 +149,7 @@ impl Database {
                 pkg.keywords,
                 pkg.publisher,
                 pkg.published_at,
-                pkg.signature,
-                pkg.key_id,
+                pkg.signature.as_ref().map(PackageSignature::to_json),
                 pkg.manifest,
             ],
         ).map_err(|e| {
@@ -188,7 +165,7 @@ impl Database {
     pub fn get_package_version(&self, name: &str, version: &str) -> Option<PackageVersion> {
         let conn = self.conn();
         conn.query_row(
-            "SELECT name, version, sha256, size_bytes, description, keywords, publisher, published_at, signature, key_id, manifest
+            "SELECT name, version, sha256, size_bytes, description, keywords, publisher, published_at, signature, manifest
              FROM packages WHERE name = ?1 AND version = ?2 AND yanked = 0",
             params![name, version],
             |row| {
@@ -201,9 +178,19 @@ impl Database {
                     keywords: row.get(5)?,
                     publisher: row.get(6)?,
                     published_at: row.get(7)?,
-                    signature: row.get(8)?,
-                    key_id: row.get(9)?,
-                    manifest: row.get(10)?,
+                    signature: row
+                        .get::<_, Option<String>>(8)?
+                        .map(|text| {
+                            PackageSignature::parse(&text).map_err(|why| {
+                                rusqlite::Error::FromSqlConversionFailure(
+                                    8,
+                                    rusqlite::types::Type::Text,
+                                    Box::new(why),
+                                )
+                            })
+                        })
+                        .transpose()?,
+                    manifest: row.get(9)?,
                 })
             },
         )
@@ -225,23 +212,28 @@ impl Database {
         Ok(rows)
     }
 
-    /// The latest version of each package matching `query`, sorted by name; with `contributes`, only
-    /// those whose stored declaration declares that category (an unreadable manifest is not kept).
+    /// Each package one of whose versions matches `query`, at the version `specforge add <name>`
+    /// installs (`latest`), sorted by name; with `contributes`, only those whose listed version's
+    /// stored declaration declares that category (an unreadable manifest is not kept).
     pub fn search(
         &self,
         query: &str,
         limit: u32,
         contributes: Option<specforge_protocol_types::DeclaredCategory>,
     ) -> Result<Vec<PackageVersion>, String> {
-        use std::collections::HashMap;
+        use specforge_package::{Version, VersionRequirement};
+        use std::collections::BTreeMap;
 
         let conn = self.conn();
         let pattern = format!("%{query}%");
+        // Every non-yanked version of each package one of whose versions matches the term.
         let mut stmt = conn
             .prepare(
                 "SELECT name, version, sha256, size_bytes, description, keywords, publisher, published_at, manifest
                  FROM packages
-                 WHERE yanked = 0 AND (name LIKE ?1 OR description LIKE ?1 OR keywords LIKE ?1)",
+                 WHERE yanked = 0 AND name IN (
+                   SELECT name FROM packages
+                   WHERE yanked = 0 AND (name LIKE ?1 OR description LIKE ?1 OR keywords LIKE ?1))",
             )
             .map_err(|e| format!("search query failed: {e}"))?;
         let rows: Vec<PackageVersion> = stmt
@@ -255,8 +247,7 @@ impl Database {
                     keywords: row.get(5)?,
                     publisher: row.get(6)?,
                     published_at: row.get(7)?,
-                    signature: String::new(),
-                    key_id: String::new(),
+                    signature: None,
                     manifest: row.get(8)?,
                 })
             })
@@ -264,25 +255,24 @@ impl Database {
             .filter_map(|r| r.ok())
             .collect();
 
-        // Latest per name by SemVer order — SQL MAX(version) is
-        // lexicographic and would rank 9.0.0 above 10.0.0.
-        let mut latest: HashMap<String, PackageVersion> = HashMap::new();
-        for p in rows {
-            match latest.get(&p.name) {
-                Some(current) if semver_key(&current.version) >= semver_key(&p.version) => {}
-                _ => {
-                    latest.insert(p.name.clone(), p);
-                }
-            }
+        // Each package at what `latest` picks, by SemVer (SQL MAX(version) is lexicographic and
+        // would rank 9.0.0 above 10.0.0); the map yields the names in order.
+        let mut by_name: BTreeMap<String, Vec<PackageVersion>> = BTreeMap::new();
+        for row in rows {
+            by_name.entry(row.name.clone()).or_default().push(row);
         }
-        let mut out: Vec<PackageVersion> = latest.into_values().collect();
+        let mut out: Vec<PackageVersion> = by_name
+            .into_values()
+            .filter_map(|versions| {
+                VersionRequirement::Latest.pick_from(versions, |p| Version::parse(&p.version).ok())
+            })
+            .collect();
         if let Some(category) = contributes {
             out.retain(|p| {
                 serde_json::from_str::<specforge_protocol_types::ExtensionDeclaration>(&p.manifest)
                     .is_ok_and(|d| d.declares(category))
             });
         }
-        out.sort_by(|a, b| a.name.cmp(&b.name));
         out.truncate(limit as usize);
         Ok(out)
     }
@@ -428,10 +418,34 @@ mod tests {
             keywords: String::new(),
             publisher: "tester".to_string(),
             published_at: "2026-01-01".to_string(),
-            signature: String::new(),
-            key_id: String::new(),
+            signature: None,
             manifest: String::new(),
         }
+    }
+
+    #[test]
+    fn an_older_data_directory_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("old.db");
+        {
+            let conn = Connection::open(&path).unwrap();
+            conn.execute_batch("CREATE TABLE packages (id INTEGER PRIMARY KEY, name TEXT)")
+                .unwrap();
+        }
+        let error = Database::open(&path)
+            .err()
+            .expect("an older file is refused");
+        assert!(error.contains("--data-dir"), "{error}");
+
+        // An empty file opens and carries the schema version.
+        let fresh = dir.path().join("fresh.db");
+        drop(Database::open(&fresh).unwrap());
+        let version: i64 = Connection::open(&fresh)
+            .unwrap()
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, SCHEMA);
+        Database::open(&fresh).expect("a current file reopens");
     }
 
     // C8-08: committed data survives an unclean shutdown — the leaked
@@ -462,20 +476,28 @@ mod tests {
         assert_eq!(hits[0].version, "10.0.0", "10.0.0 must outrank 9.0.0");
     }
 
-    #[test]
-    fn search_orders_by_semver_including_prerelease() {
-        // SemVer: 2.0.0-beta.1 > 1.9.0 (major compare first; pre-release
-        // only breaks ties within the same version triple).
+    /// The version a search of `published` (all `pkg`) lists.
+    fn listed(published: &[&str]) -> String {
         let dir = tempfile::tempdir().unwrap();
         let db = Database::open(&dir.path().join("t.db")).unwrap();
-        db.insert_package(&pv("pkg", "2.0.0-beta.1")).unwrap();
-        db.insert_package(&pv("pkg", "1.9.0")).unwrap();
+        for version in published {
+            db.insert_package(&pv("pkg", version)).unwrap();
+        }
         let hits = db.search("pkg", 10, None).unwrap();
-        assert_eq!(hits[0].version, "2.0.0-beta.1");
+        assert_eq!(hits.len(), 1, "one row per package name: {published:?}");
+        hits[0].version.clone()
+    }
 
-        // ...but a pre-release never outranks its own release triple.
-        db.insert_package(&pv("pkg", "2.0.0")).unwrap();
-        let hits = db.search("pkg", 10, None).unwrap();
-        assert_eq!(hits[0].version, "2.0.0");
+    #[specforge_test_macros::test(
+        behavior = "search_registry",
+        verify = "a registry lists each package at the version add installs from it"
+    )]
+    fn search_lists_the_version_add_installs() {
+        assert_eq!(listed(&["9.0.0", "10.0.0"]), "10.0.0");
+        // The highest release, not a pre-release of a higher version.
+        assert_eq!(listed(&["2.0.0-beta.1", "1.9.0"]), "1.9.0");
+        assert_eq!(listed(&["2.0.0-beta.1", "1.9.0", "2.0.0"]), "2.0.0");
+        // A pre-release only when there is no release; identifiers compare as SemVer, not text.
+        assert_eq!(listed(&["2.0.0-beta.9", "2.0.0-beta.10"]), "2.0.0-beta.10");
     }
 }

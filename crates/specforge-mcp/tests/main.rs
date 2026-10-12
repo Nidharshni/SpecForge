@@ -1,6 +1,7 @@
 mod call_target;
 mod conformance;
 mod contracts;
+mod event_spec;
 mod events;
 mod failure_kinds;
 mod fake_extension;

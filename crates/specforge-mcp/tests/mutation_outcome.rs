@@ -72,16 +72,16 @@ fn assert_ok(reply: &Value) {
 }
 
 /// The last `mcp_mutation_completed` event, if any.
-fn last_completed(server: &McpServer) -> Option<Value> {
+fn last_completed(server: &impl Logs) -> Option<Value> {
     events(server, "mcp_mutation_completed").pop()
 }
 
 /// The names of the events recorded from index `since` on, among `names`.
-fn event_names_since(server: &McpServer, since: usize, names: &[&str]) -> Vec<String> {
-    server.state().events[since..]
+fn event_names_since(server: &impl Logs, since: usize, names: &[&str]) -> Vec<String> {
+    server.log().names()[since..]
         .iter()
-        .filter(|e| names.contains(&e.name.as_str()))
-        .map(|e| e.name.clone())
+        .filter(|name| names.contains(&name.as_str()))
+        .cloned()
         .collect()
 }
 
@@ -555,7 +555,7 @@ fn a_mutation_refused_for_its_arguments_is_a_failed_mutation() {
 fn the_domain_event_precedes_the_mutation_event() {
     let mut server = empty_components();
 
-    let since = server.state().events.len();
+    let since = server.log().len();
     assert_ok(&call_tool(
         &mut server,
         "specforge.add_extension",
@@ -580,7 +580,7 @@ fn the_domain_event_precedes_the_mutation_event() {
 
     let scratch = tempfile::TempDir::new().unwrap();
     let dir = scratch.path().join("fresh");
-    let since = server.state().events.len();
+    let since = server.log().len();
     assert_ok(&call_tool(
         &mut server,
         "specforge.init",
@@ -836,7 +836,7 @@ fn shown(changed: &[PathBuf]) -> Vec<String> {
 
 /// Call `tool`; the files it wrote on disk equal its reply's
 /// `files_written`, whose length is its event's `files_changed`.
-fn lists_what_it_wrote(server: &mut McpServer, root: &Path, tool: &str, arguments: Value) -> Value {
+fn lists_what_it_wrote(server: &mut Served, root: &Path, tool: &str, arguments: Value) -> Value {
     let (reply, changed) = wrote(server, root, tool, arguments.clone());
     let listed = files_written(&reply);
     assert_eq!(listed, shown(&changed), "{tool} {arguments}: {reply}");
@@ -1023,7 +1023,7 @@ fn registry_installed_greet() -> Served {
 )]
 fn a_dry_run_is_a_preview_whatever_the_operation_answers() {
     let mut server = registry_installed_greet();
-    let since = server.state().events.len();
+    let since = server.log().len();
     let reply = call_tool(
         &mut server,
         "specforge.add_extension",
@@ -1067,7 +1067,7 @@ fn a_refused_preview_lists_nothing_and_a_refused_mutation_lists_no_file() {
         ),
     ] {
         let tool = format!("specforge.{tool}");
-        let since = server.state().events.len();
+        let since = server.log().len();
         let reply = call_tool(&mut server, &tool, preview.clone());
         assert_eq!(
             reply["result"]["isError"], true,

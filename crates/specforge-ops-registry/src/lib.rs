@@ -466,7 +466,7 @@ impl Registry for ConfiguredRegistry {
             registry,
             Some(&credential),
             &*self.client,
-            Some(&key),
+            &key,
         )
         .map_err(OpError::from)?; // R007, R001, R002, R004, R005
         Ok(Published {

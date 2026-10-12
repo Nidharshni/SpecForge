@@ -72,3 +72,27 @@ fn versions_list_in_store_order() {
         .unwrap();
     assert_eq!(list.versions, ["2.0.0", "1.0.0", "1.5.0"]);
 }
+
+#[test]
+fn a_stored_signature_reads_back_typed() {
+    use specforge_registry_wire::SignedContent;
+    let registry = LocalRegistry::start();
+    let wasm: &[u8] = b"\0asm signed bytes";
+    let signature = specforge_registry_client::SigningKey::from_bytes(&[7; 32])
+        .sign(&SignedContent::of("@acme/tool", "1.0.0", wasm, "{}"));
+    registry.store(
+        &PackageMetadata {
+            name: "@acme/tool".into(),
+            version: "1.0.0".into(),
+            sha256: hex::encode(Sha256::digest(wasm)),
+            signature: Some(signature.clone()),
+            manifest: "{}".into(),
+            ..Default::default()
+        },
+        wasm,
+    );
+    let metadata: PackageMetadata = get(&format!("{}/packages/@acme%2Ftool/1.0.0", registry.url()))
+        .json()
+        .unwrap();
+    assert_eq!(metadata.signature, Some(signature));
+}

@@ -6,6 +6,7 @@ use serde::Serialize;
 use specforge_common::shape::Shape;
 
 use crate::args::{Arguments, NonEmpty};
+use crate::events::ExtensionAdded;
 use crate::mutation::{
     Failed, Mutated, Mutation, MutationArgs, MutationEvent, MutationReply, NoDiagnostics, Written,
 };
@@ -116,11 +117,11 @@ impl CoreTool for Tool {
         let written = added.added.iter().fold(
             Written::files(added.writes.clone()),
             |written, extension| {
-                written.with_event(MutationEvent::ExtensionAdded {
-                    specifier: extension.specifier.clone(),
+                written.with_event(MutationEvent::ExtensionAdded(ExtensionAdded {
+                    extension_specifier: extension.specifier.clone(),
                     total_extensions: added.extensions_enabled,
                     was_duplicate: extension.outcome.is_duplicate(),
-                })
+                }))
             },
         );
         Ok(Mutated::new(answer, written))

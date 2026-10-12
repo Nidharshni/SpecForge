@@ -4,7 +4,7 @@
 use crate::handlers::ApiError;
 use specforge_package::PackageName;
 use specforge_package::Version;
-use specforge_registry_wire::code;
+use specforge_registry_wire::ErrorCode;
 
 /// The package a publish names, read from its URL path: a scoped
 /// `PackageName` (a registry holds no other) and a `Version`.
@@ -20,15 +20,20 @@ pub(crate) fn publish_target(
         Ok(name) if name.scope().is_some() => name,
         Ok(name) => {
             return Err(ApiError::bad_request(
-                code::INVALID_NAME,
+                ErrorCode::InvalidName,
                 format!("'{name}' is not a scoped package name (expected @scope/name)"),
             ));
         }
-        Err(why) => return Err(ApiError::bad_request(code::INVALID_NAME, why.to_string())),
+        Err(why) => {
+            return Err(ApiError::bad_request(
+                ErrorCode::InvalidName,
+                why.to_string(),
+            ));
+        }
     };
     let version = Version::parse(version).map_err(|_| {
         ApiError::bad_request(
-            code::INVALID_VERSION,
+            ErrorCode::InvalidVersion,
             format!("'{version}' is not a valid SemVer version (MAJOR.MINOR.PATCH)"),
         )
     })?;
@@ -59,11 +64,11 @@ mod tests {
             "@acme%2Ftool@",
         ] {
             let error = publish_target(name, "1.0.0").err().unwrap();
-            assert_eq!(error.code, "INVALID_NAME", "{name}");
+            assert_eq!(error.code, ErrorCode::InvalidName, "{name}");
         }
         for version in ["1.x", "1.2", "latest", "1.0.0/x"] {
             let error = publish_target("@acme%2Ftool", version).err().unwrap();
-            assert_eq!(error.code, "INVALID_VERSION", "{version}");
+            assert_eq!(error.code, ErrorCode::InvalidVersion, "{version}");
         }
     }
 }

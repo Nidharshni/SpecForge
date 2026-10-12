@@ -5,7 +5,6 @@
 //! Each test serves one package from an in-memory client (ADR 0044) and pins
 //! keys in a temporary store, never in `~/.specforge`.
 
-use sha2::{Digest, Sha256};
 use specforge_ops::extension::Trust;
 use specforge_ops::registry::{Publisher, Registry};
 use specforge_ops_registry::{ConfiguredRegistry, User};
@@ -15,7 +14,7 @@ use specforge_registry_client::testing::MemoryClient;
 use specforge_registry_client::{
     KnownKeys, RegistryConfig, SigningKey, load_known_keys_at, save_known_keys_at,
 };
-use specforge_registry_wire::PackageMetadata;
+use specforge_registry_wire::{PackageMetadata, PackageSignature, SignedContent, sha256_hex};
 use specforge_test_macros::test as specforge_test;
 use std::path::{Path, PathBuf};
 use tempfile::TempDir;
@@ -26,13 +25,6 @@ const WASM: &[u8] = b"\0asm-acme-tool";
 /// The package's declaration, as `specforge publish` uploads it.
 const MANIFEST: &str = r#"{"handshake":{"protocol_version":"1.0.0","name":"@acme/tool","version":"1.0.0","peer_dependencies":[],"sandbox_policy":null}}"#;
 
-fn sha256(bytes: &[u8]) -> String {
-    Sha256::digest(bytes)
-        .iter()
-        .map(|b| format!("{b:02x}"))
-        .collect()
-}
-
 /// What the registry serves for `@acme/tool@1.0.0`.
 struct Reply {
     name: String,
@@ -41,9 +33,8 @@ struct Reply {
     /// The downloaded bytes.
     wasm: Vec<u8>,
     manifest: String,
-    /// The wire signature object, empty when unsigned.
-    signature: String,
-    key_id: String,
+    /// The publisher signature, `None` when unsigned.
+    signature: Option<PackageSignature>,
     /// Where the metadata says the binary is; empty is where it is.
     wasm_url: String,
 }
@@ -52,31 +43,23 @@ impl Reply {
     fn unsigned() -> Self {
         Reply {
             name: NAME.to_string(),
-            sha256: sha256(WASM),
+            sha256: sha256_hex(WASM),
             wasm: WASM.to_vec(),
             manifest: MANIFEST.to_string(),
-            signature: String::new(),
-            key_id: String::new(),
+            signature: None,
             wasm_url: String::new(),
         }
     }
 
     /// Signed by `key` over `name`, `wasm` and `manifest`.
     fn signed_over(key: &SigningKey, name: &str, wasm: &[u8], manifest: &str) -> Self {
-        let signature = key.sign_package(
-            name,
-            VERSION,
-            &sha256(wasm),
-            &sha256(manifest.as_bytes()),
-            "2026-10-03T00:00:00+00:00",
-        );
+        let signature = key.sign(&SignedContent::of(name, VERSION, wasm, manifest));
         Reply {
             name: name.to_string(),
             wasm: wasm.to_vec(),
-            sha256: sha256(wasm),
+            sha256: sha256_hex(wasm),
             manifest: manifest.to_string(),
-            signature: serde_json::to_string(&signature).unwrap(),
-            key_id: signature.key_id,
+            signature: Some(signature),
             wasm_url: String::new(),
         }
     }
@@ -93,7 +76,6 @@ impl Reply {
             sha256: self.sha256,
             manifest: self.manifest,
             signature: self.signature,
-            key_id: self.key_id,
             wasm_url: self.wasm_url,
             ..Default::default()
         };
@@ -203,7 +185,7 @@ fn a_download_that_does_not_match_the_registry_sha256_is_refused() {
 )]
 fn a_registry_sha256_that_does_not_match_the_download_is_refused() {
     let served = Reply {
-        sha256: sha256(b"something else"),
+        sha256: sha256_hex(b"something else"),
         ..Reply::unsigned()
     };
     let project = Project::on(served);
@@ -222,7 +204,7 @@ fn a_signature_over_other_bytes_is_refused_even_with_allow_unsigned() {
     // must not.
     let key = SigningKey::generate();
     let served = Reply {
-        sha256: sha256(b"\0asm-evil"),
+        sha256: sha256_hex(b"\0asm-evil"),
         wasm: b"\0asm-evil".to_vec(),
         ..Reply::signed(&key)
     };
@@ -250,37 +232,6 @@ fn a_swapped_manifest_breaks_the_signature() {
 
     let error = project.fetch(true, Trust::AssumeYes).unwrap_err();
     assert_eq!(error.code, "R-TRUST-002", "{error:?}");
-}
-
-#[specforge_test(
-    behavior = "verify_publisher_signature",
-    verify = "a malformed signature object is refused"
-)]
-fn a_signature_object_that_is_not_json_is_refused() {
-    let served = Reply {
-        signature: "not a signature".to_string(),
-        ..Reply::unsigned()
-    };
-    let project = Project::on(served);
-
-    let error = project.fetch(true, Trust::AssumeYes).unwrap_err();
-    assert_eq!(error.code, "R-TRUST-002", "{error:?}");
-}
-
-#[specforge_test(
-    behavior = "check_registry_reply",
-    verify = "a key id the signature does not carry is refused"
-)]
-fn a_key_id_the_signature_does_not_carry_is_refused() {
-    let key = SigningKey::generate();
-    let served = Reply {
-        key_id: SigningKey::generate().key_id(),
-        ..Reply::signed(&key)
-    };
-    let project = Project::on(served);
-
-    let error = project.fetch(true, Trust::AssumeYes).unwrap_err();
-    assert_eq!(error.code, "R-TRUST-004", "{error:?}");
 }
 
 #[specforge_test(
@@ -327,7 +278,7 @@ fn a_correctly_signed_package_is_accepted_and_its_key_pinned() {
     assert_eq!(package.name.as_str(), NAME);
     assert_eq!(package.version.to_string(), VERSION);
     assert_eq!(package.wasm, WASM);
-    assert_eq!(package.sha256, sha256(WASM));
+    assert_eq!(package.sha256, sha256_hex(WASM));
     assert_eq!(
         package.publisher,
         Publisher::Signed {

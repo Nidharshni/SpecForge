@@ -255,18 +255,26 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   keyring (a 0600 file without one), or a reference to an environment variable (`--token-env`) or a file
   (`--token-file`), resolved before any request (`CredentialStore::credential`; R010, R011). Every read carries
   it; a publish takes `SPECFORGE_REGISTRY_TOKEN` first (ADR 0045 as amended).
-- **Fetch policy**: what a package passes before an operation sees it: the registry's reply names the
-  package and version asked for, the binary hashes to the served SHA-256, the served manifest reads as that
+- **Fetch policy**: what a package passes before an operation sees it: the registry's reply reads as the protocol's JSON (R009 else;
+  a malformed signature is that) and names the package and version asked for, the binary hashes to the served SHA-256, the served manifest reads as that
   package's declaration (one from before ADR 0012 is refused), and the publisher signature verifies with a
   key that matches its pin or is pinned now (`ConfiguredRegistry::fetch`; ADR 0010, 0012, 0044). A refused
   package pins no key. Accepting an unsigned package (`--allow-unsigned`) is reported as W155 and a re-pinned
   key as W156; a first-use pin is part of the outcome (`Publisher`). The check writes nothing to the terminal:
   a key change is asked of the surface that can ask.
-- **Package registry contract**: what a package registry and its client exchange over HTTP: the paths, the
-  JSON bodies, the publish form and the error codes, each defined once in `specforge-registry-wire`, which
-  `specforge-registry-server` and `specforge-registry-client` both compile against (ADR 0044). A test
-  reaches a registry through the real server in process or an in-memory client, never through JSON written
-  by hand.
+- **Package signature**: a publisher's Ed25519 signature over a package's signed content (its name and version as
+  declared, and the SHA-256 of the exact binary and manifest uploaded), with the public key and the time that verify it
+  offline (`specforge_registry_wire::PackageSignature`, JSON `{sig, public_key, signed_at}`). Its key id is the first
+  16 hex of the public key's SHA-256. Only a well-formed one exists. `specforge publish` signs with the user's key; the
+  registry refuses an upload whose signature isn't one or doesn't verify over it (INVALID_SIGNATURE), before storing
+  anything, so the version stays publishable; `add` verifies what it downloads again, because the registry is not the
+  trust anchor: which keys to trust is the user's pins (ADR 0061).
+- **Package registry contract**: what a package registry and its client exchange over HTTP: the paths, the JSON
+  bodies (the package signature among them), the publish form and the error codes, each defined once in
+  `specforge-registry-wire`, which `specforge-registry-server` and `specforge-registry-client` both compile against
+  (ADR 0044, ADR 0061). A registry's refusal (HTTP 400) carries a typed code and reaches the user as R008; an
+  answer that isn't the call's wire type is R009. A test reaches a registry through the real server in process or
+  an in-memory client, never through JSON written by hand.
 - **Registry for a package**: the one configured registry that serves a package name: the first
   `registries` entry whose `scope_filter` is the name's scope, else the first marked
   `default_registry`; with neither, none does, and the operation refuses with R-OPS-001 before any
@@ -280,9 +288,14 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   `add` installs and `publish` uploads it; a `specforge.json` entry and a lock entry are read as one.
 - **Version requirement**: which version of a package is asked for: `latest` (the highest release,
   a pre-release only when there is none), one full version, or a SemVer requirement read as Cargo
-  reads one (`VersionRequirement`); `pick` is the one rule that chooses among published versions,
-  run by ops for `add` and `update`. The `Registry` port lists versions and fetches one; it does not
-  resolve.
+  reads one (`VersionRequirement`); `pick` is the one rule that chooses among published versions:
+  ops runs it for `add`, and every registry's search lists a package at what it picks for `latest`
+  (`pick_from`). The `Registry` port lists versions and fetches one; it does not resolve.
+- **Upgrade target**: what `update` moves a locked registry extension to: the highest published version
+  newer than the locked one that the update's reach admits, `^locked` (`Reach::Compatible`) or any
+  (`Reach::Major`, `--major`), a pre-release only on the locked pre-release's own `MAJOR.MINOR.PATCH`. None
+  means up to date, never a lower version; a lock version that is not SemVer moves to what `latest` picks
+  (`specforge_package::upgrade_target`, ADR 0036 as amended).
 - **Peer requirement**: what an extension declares it needs from another extension: the peer's name,
   a SemVer range read as Cargo reads one, and whether the peer may be absent
   (`specforge_package::peers::PeerRequirement`, ADR 0050). One rule judges it (`peers::verdict`): an
@@ -587,8 +600,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Surface call**: one MCP request that invokes a named tool, resource or prompt (`tools/call`,
   `resources/read`, `prompts/get`), run through one pipeline: read the request, find the entry (the
   core table, then, with the served project brought up to date, the extension surface table), record
-  the invocation, resolve the call target, run the handler, record its events, answer with the kind's
-  envelope. Each kind is one adapter; a refusal without `isError` (resources, prompts) is a JSON-RPC
+  the invocation, resolve the call target, run the handler (which records its own events), record the
+  completion, answer with the kind's envelope; every record goes through the server's event sink. Each kind is one adapter; a refusal without `isError` (resources, prompts) is a JSON-RPC
   error whose data is its McpError (`specforge_mcp::surface_call`, ADR 0024).
 - **Resource spec**: the single definition of a core MCP resource: its URI or template, descriptor
   and its read of the project view. A graph view (`graph`, `context`, `brief`, scoped or not, and `graph/{entity_id}`)
@@ -611,6 +624,17 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   diagnostics then hears the delta (`specforge/graphChanged`, `specforge/diagnosticsChanged`).
   Subscriptions belong to the connection and end with it or at shutdown
   (`specforge_mcp::subscriptions::Subscriptions`, ADR 0024 D6).
+- **MCP event**: what an MCP server records it did — a tool, prompt or listing invoked, a resource
+  read, a mutation completed, a subscription made or ended, a delta notified, an extension surface
+  dispatched, the server initialized or shut down, a protocol error answered, a cancel acknowledged —
+  one typed value per event the spec declares for it, its payload the spec's field for field
+  (`specforge_mcp::events::McpEvent`; `spec/events/mcp.spec`, `surface-contributions.spec`, and the
+  `extension_added` and `project_initialized` a mutation produces). Every module records through the
+  server's one **event sink** (`EventSink`): a production server's keeps nothing (`Discard`), so what
+  a server holds never grows with the requests it answered; a test's keeps every event in order,
+  stamped with the time it was recorded (`events::testing::EventLog`, given with
+  `McpServer::with_events`). Events never leave the process: a client learns what a call wrote from
+  its reply (ADR 0022 D7, ADR 0057). The CLI, the LSP and the operations keep no event.
 - **Diagnostic catalog**: the one table of diagnostic codes (`specforge_diagnostics`'s `catalog!`):
   each code's title, owner, level and explanation. It generates `CATALOG`, which `specforge explain`,
   MCP `specforge.explain`, diagnostics JSON titles, doctor and the LSP hover read and from which

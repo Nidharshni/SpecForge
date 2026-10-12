@@ -2,6 +2,7 @@ use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use crate::terminal::{Terminal, errln, outln};
 use specforge_ops::extension::{self, UpdateRequest};
 use specforge_ops_registry::ConfiguredRegistry;
+use specforge_package::Reach;
 use std::path::PathBuf;
 
 // `specforge update`'s command line.
@@ -17,7 +18,8 @@ pub(crate) struct Args {
     output: OutputArg,
 
     /// Allow new major versions (otherwise each extension stays within
-    /// its locked version's caret range)
+    /// its locked version's caret range); an update never moves an
+    /// extension to a lower version
     #[arg(long, default_value_t = false)]
     major: bool,
 
@@ -46,7 +48,11 @@ impl Args {
         let request = UpdateRequest {
             root: &root,
             name: self.name.as_deref(),
-            major: self.major,
+            reach: if self.major {
+                Reach::Major
+            } else {
+                Reach::Compatible
+            },
             allow_unsigned: self.allow_unsigned,
             trust: format.trust(self.yes),
         };

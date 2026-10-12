@@ -524,7 +524,7 @@ mod tests {
                 &UpdateRequest {
                     root: &specforge_common::ProjectRoot::of(fixture.dir.path()).unwrap(),
                     name: None,
-                    major: false,
+                    reach: specforge_package::Reach::Compatible,
                     allow_unsigned: true,
                     trust: Trust::Refuse,
                 },

@@ -190,6 +190,34 @@ fn a_search_by_category_keeps_only_packages_declaring_it() {
     assert_eq!(names, ["@acme/with"]);
 }
 
+#[specforge_test(
+    behavior = "search_registry",
+    verify = "a registry lists each package at the version add installs from it"
+)]
+fn a_search_lists_the_version_add_installs() {
+    let world = World::with(&["main"]);
+    world.store("main", "@acme/tool", "1.4.0", "t", false);
+    world.store("main", "@acme/tool", "2.0.0-beta.1", "t", false);
+
+    let searched = world.registry().search("tool", None).unwrap();
+
+    assert_eq!(searched.found.len(), 1, "{searched:?}");
+    assert_eq!(searched.found[0].version, "1.4.0");
+
+    // A package one of whose versions matches is listed at the version `add` installs.
+    world.store("main", "@acme/old", "1.0.0", "widget", false);
+    world.store("main", "@acme/old", "1.1.0", "tool", false);
+
+    let searched = world.registry().search("widget", None).unwrap();
+
+    let listed: Vec<(&str, &str, &str)> = searched
+        .found
+        .iter()
+        .map(|f| (f.name.as_str(), f.version.as_str(), f.description.as_str()))
+        .collect();
+    assert_eq!(listed, [("@acme/old", "1.1.0", "tool")]);
+}
+
 #[test]
 fn each_registry_is_asked_with_its_own_credential() {
     let world = World::with(&["a", "b"]);

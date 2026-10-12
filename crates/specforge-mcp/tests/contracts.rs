@@ -43,7 +43,7 @@ fn test_server() -> Served {
     contracts_project().serve(&[extension()])
 }
 
-fn assert_resource_read(server: &McpServer, uri: &str) {
+fn assert_resource_read(server: &impl Logs, uri: &str) {
     let reads = events(server, "mcp_resource_read");
     assert!(
         reads
@@ -907,7 +907,7 @@ fn contract_schema() {
         json!({"name": "t", "version": "0.1.0", "extensions": ["@specforge/software"]}),
         "behavior act \"Act\" {\n  contract \"MUST act\"\n}\n",
     );
-    let mut server = McpServer::new();
+    let mut server = logged(McpServer::new());
     call(
         &mut server,
         "initialize",
@@ -1375,7 +1375,7 @@ fn contract_dispatch_surface_command() {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     listener.set_nonblocking(true).unwrap();
     let port = listener.local_addr().unwrap().port();
-    let mut server = McpServer::new();
+    let mut server = logged(McpServer::new());
     server.state_mut().extension_runtime = Some(std::sync::Arc::new(runtime));
     let init = call(
         &mut server,
@@ -1515,7 +1515,7 @@ fn event_surface_command_dispatched() {
 
 /// The recorded `name` events, each without its `durationMs`, which must
 /// be a count of milliseconds.
-fn timed_events(server: &McpServer, name: &str) -> Vec<Value> {
+fn timed_events(server: &impl Logs, name: &str) -> Vec<Value> {
     events(server, name)
         .into_iter()
         .map(|mut e| {
@@ -1849,7 +1849,7 @@ fn contract_validate() {
         "behavior greet \"Greet\" {\n  category command\n  contract \"MUST greet\"\n  verify unit \"greets\"\n}\n",
     )
     .unwrap();
-    let mut server = McpServer::new();
+    let mut server = logged(McpServer::new());
     call(
         &mut server,
         "initialize",
@@ -1955,7 +1955,7 @@ fn contract_suggest_fixes() {
          behavior logout \"Logout\" {\n  invariants [sesion_limit]\n}\n",
     )
     .unwrap();
-    let mut server = McpServer::new();
+    let mut server = logged(McpServer::new());
     let init = json!({"jsonrpc": "2.0", "id": 1, "method": "initialize",
         "params": {"projectRoot": dir.path().to_str().unwrap()}});
     server.handle_message(&init.to_string());
@@ -2077,7 +2077,7 @@ fn contract_extensions() {
         json!({"name":"t","version":"0.1.0","extensions":["@specforge/product", "@acme/absent@1.2.0"]}),
         "",
     );
-    let mut server = McpServer::new();
+    let mut server = logged(McpServer::new());
     call(
         &mut server,
         "initialize",
@@ -2214,7 +2214,7 @@ fn contract_schema_resource() {
         json!({"name": "t", "version": "0.1.0", "extensions": ["@specforge/software"]}),
         "behavior act \"Act\" {\n  contract \"MUST act\"\n}\n",
     );
-    let mut server = McpServer::new();
+    let mut server = logged(McpServer::new());
     call(
         &mut server,
         "initialize",
@@ -2866,12 +2866,12 @@ fn contract_analyze() {
 // ── specforge.model ─────────────────────────────────────────────────────────
 
 /// A server serving a project with @specforge/software.
-fn model_server() -> (McpServer, tempfile::TempDir) {
+fn model_server() -> (Logged, tempfile::TempDir) {
     let project = project_dir(
         json!({"name": "t", "version": "0.1.0", "extensions": ["@specforge/software"]}),
         "behavior act \"Act\" {\n  contract \"MUST act\"\n}\n",
     );
-    let mut server = McpServer::new();
+    let mut server = logged(McpServer::new());
     call(
         &mut server,
         "initialize",

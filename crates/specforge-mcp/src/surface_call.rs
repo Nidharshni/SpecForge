@@ -2,8 +2,9 @@
 //! `resources/read`, `prompts/get` — through one pipeline (ADR 0024): read
 //! the request, find what it names (the core table, then, with the served
 //! project brought up to date, the extension surface table), record the
-//! invocation, resolve the call target, run the handler, record what it
-//! reported, and answer with the kind's envelope. Each request kind is one
+//! invocation, resolve the call target, run the handler (which records its
+//! own events), record the completion, and answer with the kind's envelope;
+//! every record goes through the server's event sink (ADR 0057). Each request kind is one
 //! [`Surface`] adapter; no other code builds the reply of these three
 //! methods; it also owns the one freshness decision of the extension
 //! surface table (a lookup, a listing, a subscription). The router guards
@@ -11,14 +12,12 @@
 
 use serde_json::Value;
 
+use crate::events::{EventSink, McpEvent};
 use crate::lifecycle::Revision;
 use crate::protocol::{JsonRpcError, JsonRpcResponse, error_codes};
 use crate::state::McpState;
 use crate::target::{self, Call, TargetSpec};
 use crate::tool::McpError;
-
-/// An event to record: its name and payload.
-pub(crate) type Event = (String, Value);
 
 /// What one request invokes: a tool's or prompt's name with its `arguments`
 /// object, or the URI a resource read names (with `{}`).
@@ -78,23 +77,6 @@ impl<C: Copy> Found<C, std::convert::Infallible> {
     }
 }
 
-/// What a handler produced, with the events to record whatever it was (an
-/// extension's dispatch event is recorded for a failed dispatch too).
-pub struct Ran<O> {
-    pub outcome: O,
-    pub events: Vec<Event>,
-}
-
-impl<O> Ran<O> {
-    /// A result that records nothing beside the pipeline's own events.
-    pub fn of(outcome: O) -> Self {
-        Ran {
-            outcome,
-            events: Vec::new(),
-        }
-    }
-}
-
 /// One request kind. Three adapters: [`crate::tools::Tools`],
 /// [`crate::resources::Resources`], [`crate::prompts::Prompts`].
 pub(crate) trait Surface {
@@ -125,16 +107,21 @@ pub(crate) trait Surface {
     fn invoked(
         found: &Found<Self::Core, Self::Extension>,
         invocation: &Invocation,
-    ) -> Option<Event>;
-    /// Run the entry over its resolved call.
+    ) -> Option<McpEvent>;
+    /// Run the entry over its resolved call; it records its own events
+    /// through the call ([`Call::events`]).
     fn run(
         call: &mut Call<'_>,
         found: &Found<Self::Core, Self::Extension>,
         invocation: &Invocation,
-    ) -> Ran<Self::Outcome>;
-    /// What a refusal of the call's target is: the outcome, and what a
-    /// refused mutation still records.
-    fn refused(found: &Found<Self::Core, Self::Extension>, error: McpError) -> Ran<Self::Outcome>;
+    ) -> Self::Outcome;
+    /// What a refusal of the call's target is; a refused mutation still
+    /// records into `events`.
+    fn refused(
+        found: &Found<Self::Core, Self::Extension>,
+        error: McpError,
+        events: &mut dyn EventSink,
+    ) -> Self::Outcome;
     /// How an unknown name is refused (-32602 for a tool or a prompt; a
     /// resource that does not exist is not found in the revision of the
     /// request, ADR 0024 D4).
@@ -153,7 +140,7 @@ pub(crate) trait Surface {
         found: &Found<Self::Core, Self::Extension>,
         invocation: &Invocation,
         outcome: &Self::Outcome,
-    ) -> Option<Event>;
+    ) -> Option<McpEvent>;
     /// The reply: the only place this kind builds its result or its error,
     /// a failure naming the entry (`tool`, `prompt`, `uri`).
     fn envelope(
@@ -179,31 +166,28 @@ pub(crate) fn serve<S: Surface>(
     let Some(found) = find::<S>(state, &invocation.name) else {
         return JsonRpcResponse::from_error(id, S::unknown(revision, &invocation.name));
     };
-    if let Some((name, event)) = S::invoked(&found, &invocation) {
-        state.push_event(name, event);
+    if let Some(event) = S::invoked(&found, &invocation) {
+        state.events.record(event);
     }
     // The project the call acts on, resolved (and brought up to date)
     // before the handler runs: handlers never pick a root or reload.
-    let Ran { outcome, events } =
-        match target::resolve(state, S::target(&found), &invocation.arguments) {
-            Ok(target) => {
-                let mut call = Call::new(state, target);
-                let mut ran = S::run(&mut call, &found, &invocation);
-                // With nothing served, a refusal that names a file or an
-                // entity is the no-project refusal, whichever kind of
-                // request it is.
-                if let Some(refusal) = S::refusal_mut(&mut ran.outcome) {
-                    target::refuse_without_project(call.target(), refusal);
-                }
-                ran
+    let outcome = match target::resolve(state, S::target(&found), &invocation.arguments) {
+        Ok(target) => {
+            let mut call = Call::new(state, target);
+            // The handler records its own events through `call.events()`.
+            let mut outcome = S::run(&mut call, &found, &invocation);
+            // With nothing served, a refusal that names a file or an
+            // entity is the no-project refusal, whichever kind of request
+            // it is.
+            if let Some(refusal) = S::refusal_mut(&mut outcome) {
+                target::refuse_without_project(call.target(), refusal);
             }
-            Err(refused) => S::refused(&found, McpError::from(refused)),
-        };
-    for (name, event) in events {
-        state.push_event(name, event);
-    }
-    if let Some((name, event)) = S::completed(&found, &invocation, &outcome) {
-        state.push_event(name, event);
+            outcome
+        }
+        Err(refused) => S::refused(&found, McpError::from(refused), &mut *state.events),
+    };
+    if let Some(event) = S::completed(&found, &invocation, &outcome) {
+        state.events.record(event);
     }
     S::envelope(revision, &found, &invocation, outcome, id)
 }
