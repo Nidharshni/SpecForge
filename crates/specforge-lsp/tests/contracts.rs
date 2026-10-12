@@ -112,21 +112,19 @@ fn lsp_shutdown_contract() {
     // Requires: active LSP state with open documents
     // Ensures: shutdown releases state, subsequent operations rejected
     let mut state = specforge_lsp::LspState::new();
-    state.open_document("file:///a.spec", "content");
-    assert!(state.is_open("file:///a.spec"));
+    let (a, b) = (crate::url("file:///a.spec"), crate::url("file:///b.spec"));
+    state.open_document(&a, "content", 1);
+    assert!(state.document(&a).is_some());
 
     state.shutdown();
 
     assert!(state.is_shutdown(), "state must be marked as shutdown");
-    assert!(
-        !state.is_open("file:///a.spec"),
-        "documents must be released"
-    );
+    assert!(state.document(&a).is_none(), "documents must be released");
 
     // Post-shutdown operations should be rejected
-    state.open_document("file:///b.spec", "new content");
+    state.open_document(&b, "new content", 1);
     assert!(
-        !state.is_open("file:///b.spec"),
+        state.document(&b).is_none(),
         "must reject operations after shutdown"
     );
 }
@@ -622,7 +620,7 @@ fn complete_field_names_contract() {
     let (_dir, project) = crate::completion::compiled(&[("test.spec", text)]);
     let view = specforge_ops::view::ProjectView::of(&project);
     let labels_at = |line: u32| -> Vec<String> {
-        let doc = specforge_lsp::Document::new("file:///test.spec".into(), text.into());
+        let doc = specforge_lsp::Document::new(text.into());
         let cursor = doc
             .at(tower_lsp::lsp_types::Position::new(line, 2))
             .unwrap();
@@ -659,7 +657,7 @@ fn complete_keywords_contract() {
     // Ensures: all registered kinds + structural keywords returned, no duplicates
     let (_dir, project) = crate::completion::compiled(&[("test.spec", "\n")]);
     let view = specforge_ops::view::ProjectView::of(&project);
-    let doc = specforge_lsp::Document::new("file:///test.spec".into(), "\n".into());
+    let doc = specforge_lsp::Document::new("\n".into());
     let cursor = doc.at(tower_lsp::lsp_types::Position::new(0, 0)).unwrap();
     let keywords: Vec<String> =
         specforge_lsp::completion::items(&cursor.completion(), &cursor.word_edit(), false, &view)
@@ -955,7 +953,7 @@ fn provide_semantic_tokens_contract() {
     let env = specforge_project::Environment::with_registries(registries, None);
     let recorded = specforge_project::coverage::RecordedCoverage::over(&graph, &env);
     let view = specforge_ops::view::ProjectView::new(&graph, &env, None, &recorded);
-    let tokens = specforge_lsp::Document::new("file:///t.spec".into(), source.into()).tokens(&view);
+    let tokens = specforge_lsp::Document::new(source.into()).tokens(&view);
 
     assert!(!tokens.is_empty(), "must produce tokens");
     assert!(
@@ -1149,10 +1147,8 @@ fn go_to_definition_contract() {
 fn incremental_document_sync_contract() {
     // Requires: LSP initialized with INCREMENTAL sync, document open
     // Ensures: buffer consistent after partial update; only changed range applied
-    let mut buf = specforge_lsp::Document::new(
-        "file:///test.spec".into(),
-        "behavior foo \"Foo\" {\n  contract \"old\"\n}\n".into(),
-    );
+    let mut buf =
+        specforge_lsp::Document::new("behavior foo \"Foo\" {\n  contract \"old\"\n}\n".into());
 
     // Apply partial change: only replace "old" with "new"
     buf.apply_change(Some(crate::lsp_range(1, 12, 1, 15)), "new");
@@ -1229,21 +1225,12 @@ async fn live_diagnostics_contract() {
 fn shared_incremental_pipeline_contract() {
     // Requires: incremental_rebuild_complete event has fired
     // Ensures: shared graph updated, diagnostics pushed, pipeline parity enforced
-    // Open a doc, build the graph through the session, push diagnostics
+    // Open a doc and build the graph through the session
     let state = buffers(&[("/a.spec", "behavior a \"A\" {}\n")]);
-    let mut state = state;
 
     // Graph is shared: navigation works on the same graph instance
     let def = answers::definition(&state, &uri_of_path("/a.spec"), Position::new(0, 10));
     assert!(def.is_some(), "shared graph must serve navigation");
-
-    // Diagnostics pushed through the shared state
-    let a = uri_of_path("/a.spec");
-    state.set_diagnostics(a.as_str(), vec![]);
-    assert!(
-        state.diagnostics(a.as_str()).is_empty(),
-        "diagnostics must be pushable"
-    );
 }
 
 /// Build a Wasm runtime for a temp project listing `ext_names`, mirroring

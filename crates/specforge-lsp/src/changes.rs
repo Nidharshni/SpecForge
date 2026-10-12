@@ -14,9 +14,8 @@ use specforge_project::{
 use tower_lsp::lsp_types::{FileEvent, Url};
 
 use crate::LspState;
-use crate::navigation::Compiled;
 use crate::publish::Publication;
-use crate::uri::uri_to_file_path;
+use crate::uri;
 
 /// A change the client reports.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -50,8 +49,8 @@ pub struct Plan {
     released: Option<PathBuf>,
     /// The open buffers to hold, by absolute path: the session keys them.
     held: Vec<Buffer>,
-    /// The document an anchorless diagnostic goes to.
-    edited: Option<Url>,
+    /// The session key of the document an anchorless diagnostic goes to.
+    edited: Option<String>,
 }
 
 impl Plan {
@@ -87,33 +86,44 @@ impl Plan {
                 ..nothing
             }),
             Change::Edited(uris) => {
-                let open: Vec<&Url> = uris
-                    .iter()
-                    .filter(|uri| state.is_open(uri.as_str()))
-                    .collect();
-                let edited = open.last().map(|uri| (*uri).clone())?;
+                // The distinct documents still open, in the order they were last edited.
+                let files = state.files();
+                let mut open: Vec<String> = Vec::new();
+                for uri in &uris {
+                    let key = state.key_of(uri);
+                    if files.document(&key).is_some() {
+                        open.retain(|k| *k != key);
+                        open.push(key);
+                    }
+                }
+                let edited = open.last().cloned()?;
                 Some(Plan {
+                    // The buffer of each, as the path it was opened as.
                     held: open
                         .iter()
-                        .filter_map(|uri| buffer_of(state, uri.as_str()))
+                        .filter_map(|key| {
+                            let document = files.document(key)?;
+                            let buffer = Buffer::new(files.path(key)?, document.text());
+                            Some(buffer.at_version(document.version()))
+                        })
                         .collect(),
                     edited: Some(edited),
                     ..nothing
                 })
             }
             Change::Closed(uri) => {
-                if state.is_open(uri.as_str()) {
+                if state.document(&uri).is_some() {
                     return None;
                 }
                 Some(Plan {
-                    released: Some(PathBuf::from(uri_to_file_path(&uri))),
+                    released: Some(uri::path_of(&uri)),
                     ..nothing
                 })
             }
             Change::Watched(events) => {
                 let paths: Vec<PathBuf> = events
                     .iter()
-                    .map(|event| PathBuf::from(uri_to_file_path(&event.uri)))
+                    .map(|event| uri::path_of(&event.uri))
                     .collect();
                 Plan::on_disk(session.changes(paths.iter().map(PathBuf::as_path)))
             }
@@ -189,16 +199,6 @@ impl Plan {
     }
 }
 
-/// The open document `uri` as a buffer to apply.
-fn buffer_of(state: &LspState, uri: &str) -> Option<Buffer> {
-    let document = state.document(uri)?;
-    let url = Url::parse(uri).ok()?;
-    Some(
-        Buffer::new(PathBuf::from(uri_to_file_path(&url)), document.text())
-            .at_version(document.version()),
-    )
-}
-
 /// What applying a plan did.
 #[derive(Debug, Clone, Default)]
 pub struct Applied {
@@ -212,7 +212,7 @@ pub struct Applied {
     /// Where an incremental rebuild differed from a cold build, when the
     /// session verifies its updates (debug builds).
     pub divergences: Vec<String>,
-    edited: Option<Url>,
+    edited: Option<String>,
     touched: Vec<String>,
     /// A document was closed: the editor showed its buffer's diagnostics for this file, so the
     /// file is published as the project reports it now, whether or not the session changed.
@@ -255,8 +255,10 @@ impl Applied {
         if !self.changed && !self.closed {
             return None;
         }
-        let compiled = Compiled::new(state);
-        let touched: Vec<Url> = self.touched.iter().map(|key| compiled.uri(key)).collect();
-        Some(Publication::of(state, self.edited.as_ref(), &touched))
+        Some(Publication::of(
+            state,
+            self.edited.as_deref(),
+            &self.touched,
+        ))
     }
 }

@@ -82,6 +82,17 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   the session's freshness and classification leave it out, and an open or an environment reload builds it in
   place of its file. Releasing it reads the file through the session's one read. Diagnostics computed from it
   are published with its version. Only the LSP holds buffers (ADR 0046).
+- **Open document**: a `.spec` buffer the editor has open in the LSP (`specforge_lsp::Document`: its text, its
+  version, its line index and its syntax). Its identity is its file's session key (`Environment::source_key` of the
+  path its URI names, percent-decoded): the document, the diagnostics published for its file and whether it is
+  stale are all found by that key, so two spellings of one URI (VS Code writes `@` as `%40`) are one document. The
+  URI the client opened it with is kept only to name the file back to the client (`specforge_lsp::files::Files`,
+  ADR 0056). It is given to the project session as a held buffer.
+- **Published diagnostics**: what the LSP last told the editor about one file, kept by session key in two layers,
+  each labelled with the version of the buffer it is positions in: the compile's (what the project reports) and the
+  formatter's (a W142 per region formatting kept verbatim, while the document is the text it formatted). A publish
+  sends the file's whole list, the compile layer plus the formatter layer of the same version, under the one URI
+  the client names the file by. Hover and code actions read the layers; one module writes them (ADR 0056).
 - **Call target**: the project one MCP call acts on, resolved from the call's optional `path` and its
   entry's target before the handler runs: the served session (brought up to date unless `use_cached`),
   another project opened as a session for that call only and brought up to date after the call writes, as the served one is, the directory `init` creates, or, with nothing served and

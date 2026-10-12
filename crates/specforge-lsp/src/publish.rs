@@ -19,9 +19,10 @@ use crate::navigation::Compiled;
 /// empty list clears the file.
 #[derive(Debug, Clone, Default)]
 pub struct Publication {
-    pub files: BTreeMap<Url, FilePublication>,
-    /// Where a diagnostic about no entity went: the next publish's anchor.
-    pub anchor: Option<Url>,
+    /// Each target file's part, by session key.
+    pub files: BTreeMap<String, FilePublication>,
+    /// The key a diagnostic about no entity went on: the next publish's anchor.
+    pub anchor: Option<String>,
 }
 
 /// One file's part of a [`Publication`].
@@ -44,23 +45,19 @@ impl Publication {
     /// `edited`, else on the anchor while it is open, else on the first
     /// open document. Targets: every file with diagnostics, every file
     /// published before, `edited` and `touched`.
-    pub fn of(state: &LspState, edited: Option<&Url>, touched: &[Url]) -> Publication {
+    pub fn of(state: &LspState, edited: Option<&str>, touched: &[String]) -> Publication {
+        let files = state.files();
         let nowhere = edited
-            .cloned()
-            .or_else(|| state.anchor().and_then(|uri| Url::parse(uri).ok()))
-            .or_else(|| {
-                state
-                    .open_uris()
-                    .first()
-                    .and_then(|uri| Url::parse(uri).ok())
-            });
+            .or_else(|| files.anchor())
+            .or_else(|| files.open_keys().next())
+            .map(str::to_string);
         let diagnostics = state
             .session()
             .map(|s| s.project().diagnostics())
             .unwrap_or_default();
         let compiled = Compiled::new(state);
         let nav = compiled.navigator();
-        let mut files: BTreeMap<Url, FilePublication> = BTreeMap::new();
+        let mut by_file: BTreeMap<String, FilePublication> = BTreeMap::new();
         let mut anchor = None;
         for diagnostic in &diagnostics {
             let mut related = Vec::new();
@@ -74,12 +71,12 @@ impl Publication {
                     None => diagnostic.clone(),
                 },
             };
-            let uri = match &placed.span {
-                Some(span) => compiled.uri(span.file.as_str()),
+            let key = match &placed.span {
+                Some(span) => span.file.as_str().to_string(),
                 None => match &nowhere {
-                    Some(uri) => {
-                        anchor = Some(uri.clone());
-                        uri.clone()
+                    Some(key) => {
+                        anchor = Some(key.clone());
+                        key.clone()
                     }
                     None => continue,
                 },
@@ -88,25 +85,23 @@ impl Publication {
             if !related.is_empty() {
                 lsp.related_information = Some(related);
             }
-            let file = files.entry(uri).or_default();
+            let file = by_file.entry(key).or_default();
             file.diagnostics.push(lsp);
             file.placed.push(placed);
         }
-        let mut targets: BTreeSet<Url> = touched.iter().cloned().collect();
-        targets.extend(
-            state
-                .published_uris()
-                .iter()
-                .filter_map(|uri| Url::parse(uri).ok()),
-        );
-        targets.extend(edited.cloned());
-        for uri in targets {
-            files.entry(uri).or_default();
+        let mut targets: BTreeSet<String> = touched.iter().cloned().collect();
+        targets.extend(files.published_keys().map(str::to_string));
+        targets.extend(edited.map(str::to_string));
+        for key in targets {
+            by_file.entry(key).or_default();
         }
-        for (uri, file) in &mut files {
-            file.version = compiled.version(uri);
+        for (key, file) in &mut by_file {
+            file.version = state.compiled_version(key);
         }
-        Publication { files, anchor }
+        Publication {
+            files: by_file,
+            anchor,
+        }
     }
 }
 

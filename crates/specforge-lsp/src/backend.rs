@@ -81,14 +81,14 @@ fn workspace_root(params: &InitializeParams) -> Option<String> {
     params
         .root_uri
         .as_ref()
-        .and_then(|u| u.to_file_path().ok())
+        .and_then(crate::uri::file_path)
         .map(|p| p.to_string_lossy().to_string())
         .or_else(|| {
             params
                 .workspace_folders
                 .as_ref()
                 .and_then(|folders| folders.first())
-                .and_then(|f| f.uri.to_file_path().ok())
+                .and_then(|f| crate::uri::file_path(&f.uri))
                 .map(|p| p.to_string_lossy().to_string())
         })
 }
@@ -133,43 +133,32 @@ impl LanguageServer for Backend {
     }
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
-        let uri = params.text_document.uri;
-        let text = params.text_document.text;
-        let version = params.text_document.version;
+        let document = params.text_document;
+        self.state
+            .write()
+            .await
+            .open_document(&document.uri, &document.text, document.version);
 
-        {
-            let mut state = self.state.write().await;
-            state.open_document(uri.as_str(), &text);
-            if let Some(doc) = state.document_mut(uri.as_str()) {
-                doc.set_version(version);
-            }
-        }
-
-        react(&self.reaction, Change::Edited(vec![uri])).await;
+        react(&self.reaction, Change::Edited(vec![document.uri])).await;
     }
 
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
-        let uri = params.text_document.uri;
+        let id = params.text_document;
 
         // Apply text changes immediately (keeps buffer current for completions/hover)
-        {
-            let mut state = self.state.write().await;
-            for change in &params.content_changes {
-                state.apply_change(uri.as_str(), change.range, &change.text);
-            }
-            if let Some(doc) = state.document_mut(uri.as_str()) {
-                doc.set_version(params.text_document.version);
-            }
-        }
+        self.state
+            .write()
+            .await
+            .change_document(&id.uri, id.version, &params.content_changes);
 
         // Hand off to the serialized latest-wins worker (C4-03): the burst
         // is coalesced and one whole-graph pass runs at a time.
-        let _ = self.update_tx.send(uri);
+        let _ = self.update_tx.send(id.uri);
     }
 
     async fn did_close(&self, params: DidCloseTextDocumentParams) {
         let uri = params.text_document.uri;
-        self.state.write().await.close_document(uri.as_str());
+        self.state.write().await.close_document(&uri);
         // The buffer is no longer the truth for its file (ADR 0023 D9): the reaction publishes
         // the file as the project reports it now (ADR 0043 D7).
         react(&self.reaction, Change::Closed(uri)).await;
@@ -314,14 +303,20 @@ impl Backend {
         let Some(formatted) = formatted else {
             return Ok(None);
         };
-        if let Some((diagnostics, version)) = formatted.publish {
+        let (send, notice) = {
+            let mut state = self.state.write().await;
+            let send = state.publish_formatting(formatted.findings);
+            let notice = formatted
+                .notice
+                .filter(|(configuration, _)| state.first_format_notice(configuration));
+            (send, notice)
+        };
+        if let Some(send) = send {
             self.client
-                .publish_diagnostics(uri.clone(), diagnostics, version)
+                .publish_diagnostics(send.uri, send.diagnostics, send.version)
                 .await;
         }
-        if let Some((configuration, message)) = formatted.notice
-            && self.state.write().await.first_format_notice(&configuration)
-        {
+        if let Some((_, message)) = notice {
             self.client.log_message(MessageType::INFO, message).await;
         }
         Ok(Some(formatted.edits))

@@ -119,6 +119,13 @@ behavior document_open_close "Document Open/Close" {
     keeps the errors its file on disk has, and a file that left the project
     is cleared. The server MUST track which documents are open to determine
     the scope of incremental recompilation.
+    A document is the file its URI names, read percent-decoded: a client
+    may encode characters the server's own spelling leaves as they are
+    (VS Code writes `@` as `%40` and a Windows drive's `:` as `%3A`), and
+    both spellings MUST name one open document, one list of published
+    diagnostics and one staleness. Every answer and publish about the file
+    MUST name it by the URI the client opened it with. An environment load
+    that moves the spec root keeps every open document.
   """
   verify unit "didOpen registers document and triggers compilation"
   verify unit "didClose removes document and clears diagnostics"
@@ -130,6 +137,8 @@ behavior document_open_close "Document Open/Close" {
   verify unit "closing a saved document leaves nothing to catch up on"
   verify unit "closing a document that does not parse runs the checks its typing skipped"
   verify unit "an open document's entities stay when its file is deleted, until it is closed"
+  verify unit "a document is one file whatever spelling of its URI the client sends"
+  verify unit "an open document stays itself when an environment load moves its key"
   verify contract "Document Open/Close: document open/close holds — lsp_initialized_fired, document_tracked, file_changed_emitted, closed_file_published, closed_file_from_disk"
 }
 
@@ -301,11 +310,14 @@ behavior hover_diagnostic "Hover a Diagnostic" {
     code with the catalogue's title, the catalogue's explanation and the
     link to the code's section of docs/diagnostics.md. A code the catalogue
     does not have shows its code and message only. The entity hover that
-    follows does not list that diagnostic again.
+    follows does not list that diagnostic again. A region the formatter
+    left unformatted (W142) is such a diagnostic while the document is the
+    text formatting reported it on.
   """
   verify unit "hovering a diagnostic shows its catalogued title and explanation"
   verify unit "an uncatalogued diagnostic's hover shows its code and message only"
   verify unit "the diagnostic under the cursor comes before the entity's hover, which does not list it again"
+  verify unit "hovering a region the formatter left unformatted shows its W142"
 }
 
 // Completion behaviors (autocomplete_entity_ids, complete_field_names, complete_keywords)
@@ -473,7 +485,13 @@ behavior emit_live_diagnostics "Live Diagnostics" {
     diagnostics, and an empty list to each file that had some and has none
     now. Each file's list carries the version of the buffer the project was
     compiled from, none for a file compiled from disk, so a client drops a
-    list a newer edit superseded. A diagnostic without a span about no
+    list a newer edit superseded. A file's list is published under the one
+    URI the client names it by (the one it opened the document with, else
+    the file's own file: URI), never under two spellings of one file. The
+    list is the project's diagnostics for the file and, while the open
+    document is the text formatting reported on, the formatter's
+    (lsp_format_document).
+    A diagnostic without a span about no
     entity is published on the
     document being edited, else on the last one such a diagnostic went on
     while it is open, else on the first open document. W143 (a define
@@ -484,6 +502,7 @@ behavior emit_live_diagnostics "Live Diagnostics" {
   verify unit "code actions act on the diagnostics last published for the document"
   verify unit "a publish clears the files whose diagnostics are gone"
   verify unit "a publish is labelled with the version of the buffer the project was compiled from"
+  verify unit "each file's diagnostics are published under the URI the client named it by"
   verify integration "diagnostics appear within 100ms"
   verify unit "a spanless diagnostic about entities is published at the first one's name"
   verify unit "a diagnostic is published on the file its span names"

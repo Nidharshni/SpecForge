@@ -118,7 +118,7 @@ fn initialize_answers_a_static_result() {
 )]
 fn shutdown_clears_state() {
     let mut state = specforge_lsp::LspState::new();
-    state.open_document("file:///p/login.spec", LOGIN);
+    state.open_document(&crate::url("file:///p/login.spec"), LOGIN, 1);
     edit_buffer(&mut state, "/p/login.spec", LOGIN);
     assert!(state.graph().node("login").is_some());
     let session = state.session().unwrap();
@@ -139,7 +139,11 @@ fn shutdown_clears_state() {
     assert_eq!(state.graph().edges().len(), 0);
     let session = state.session().unwrap();
     assert!(session.project().diagnostics().is_empty());
-    assert!(!state.is_open("file:///p/login.spec"));
+    assert!(
+        state
+            .document(&crate::url("file:///p/login.spec"))
+            .is_none()
+    );
     assert!(state.is_shutdown());
 }
 
@@ -158,8 +162,9 @@ fn requests_after_shutdown_rejected() {
     let mut state = specforge_lsp::LspState::new();
     state.shutdown();
     // Trying to open a document after shutdown should be ignored
-    state.open_document("file:///a.spec", "content");
-    assert!(!state.is_open("file:///a.spec"));
+    let uri = crate::url("file:///a.spec");
+    state.open_document(&uri, "content", 1);
+    assert!(state.document(&uri).is_none());
 }
 
 // -- shared_incremental_pipeline ----------------------------------------------
