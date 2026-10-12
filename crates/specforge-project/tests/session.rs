@@ -1231,7 +1231,8 @@ fn a_rebuild_that_passes_the_check_is_reported_as_passed() {
         .iter()
         .find(|n| n.id == "beta")
         .expect("beta lost its edge");
-    assert_eq!(beta.changed_fields, ["edges"]);
+    assert!(beta.changed_fields.is_empty());
+    assert_eq!(beta.changed_aspects, [specforge_project::NodeAspect::Edges]);
 }
 
 #[specforge_test(

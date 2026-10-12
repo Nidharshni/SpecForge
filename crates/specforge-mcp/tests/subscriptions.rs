@@ -809,6 +809,7 @@ fn graph_changed_sends_the_whole_delta() {
         modified_nodes: vec![ModifiedNodeChange {
             id: "gamma".to_string(),
             changed_fields: vec!["status".to_string()],
+            changed_aspects: vec![specforge_project::NodeAspect::Title],
             file: "test.spec".to_string(),
             line: 1,
         }],

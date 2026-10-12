@@ -1,7 +1,7 @@
 use specforge_common::{SourceSpan, Sym};
 use specforge_graph::{Edge, Graph, Node};
 use specforge_parser::{EntityId, EntityKind, FieldMap, FieldValue, parse_expression};
-use specforge_project::{EdgeChange, GraphDelta, NodeChange, compute_graph_delta};
+use specforge_project::{EdgeChange, GraphDelta, NodeAspect, NodeChange, compute_graph_delta};
 use specforge_test::prelude::*;
 
 fn make_node(id: &str, kind: &str, file: &str, line: usize) -> Node {
@@ -178,7 +178,8 @@ fn added_and_removed_edges_appear_in_delta() {
     assert_eq!(delta.added_edges, [change("a", "c", "invariants")]);
     // a's outgoing edges changed: it is modified.
     assert_eq!(delta.modified_nodes[0].id, "a");
-    assert_eq!(delta.modified_nodes[0].changed_fields, ["edges"]);
+    assert!(delta.modified_nodes[0].changed_fields.is_empty());
+    assert_eq!(delta.modified_nodes[0].changed_aspects, [NodeAspect::Edges]);
 }
 
 #[specforge_test(
@@ -322,7 +323,8 @@ fn a_wrong_delta_is_rejected_naming_what_differs() {
     let gone = GraphDelta {
         modified_nodes: vec![specforge_project::ModifiedNodeChange {
             id: "c".into(),
-            changed_fields: vec!["title".into()],
+            changed_fields: Vec::new(),
+            changed_aspects: vec![NodeAspect::Title],
             file: "a.spec".into(),
             line: 9,
         }],
@@ -364,43 +366,25 @@ fn graph_with_kind_field(kind: &str, field: Option<&str>) -> Graph {
     graph
 }
 
-/// Pin: today a changed field named `kind` and a changed entity kind both
-/// read `changed_fields == ["kind"]`. Deleted by the ticket that tells
-/// fields and aspects apart.
-#[test]
-fn a_field_named_kind_reads_as_the_kind_today() {
-    let field_changed = compute_graph_delta(
-        &graph_with_kind_field("type", Some("struct")),
-        &graph_with_kind_field("type", Some("enum")),
-    );
-    assert_eq!(field_changed.modified_nodes[0].changed_fields, ["kind"]);
-
-    let kind_changed = compute_graph_delta(
-        &graph_with_kind_field("type", None),
-        &graph_with_kind_field("event", None),
-    );
-    assert_eq!(kind_changed.modified_nodes[0].changed_fields, ["kind"]);
-}
-
 #[specforge_test(
     behavior = "compute_graph_delta",
     verify = "a field named like an aspect is a changed field, never the aspect"
 )]
-#[ignore = "fixed by T1"]
 fn a_field_named_like_an_aspect_is_a_field() {
     let field_changed = compute_graph_delta(
         &graph_with_kind_field("type", Some("struct")),
         &graph_with_kind_field("type", Some("enum")),
     );
     assert_eq!(field_changed.modified_nodes[0].changed_fields, ["kind"]);
+    assert!(field_changed.modified_nodes[0].changed_aspects.is_empty());
 
     let kind_changed = compute_graph_delta(
         &graph_with_kind_field("type", None),
         &graph_with_kind_field("event", None),
     );
-    assert!(
-        kind_changed.modified_nodes[0].changed_fields.is_empty(),
-        "{:?}",
-        kind_changed.modified_nodes[0]
+    assert!(kind_changed.modified_nodes[0].changed_fields.is_empty());
+    assert_eq!(
+        kind_changed.modified_nodes[0].changed_aspects,
+        [NodeAspect::Kind]
     );
 }

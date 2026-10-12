@@ -390,7 +390,7 @@ behavior compute_graph_delta "Compute Graph Delta" {
     graph_delta_determinism,
   ]
   category   query
-  types      [Graph, GraphDelta, NodeChange, ModifiedNodeChange]
+  types      [Graph, GraphDelta, NodeChange, ModifiedNodeChange, EdgeChange]
   consumes   [incremental_rebuild_complete]
   produces   [graph_delta_computed]
   requires {
@@ -408,8 +408,10 @@ behavior compute_graph_delta "Compute Graph Delta" {
     After an incremental rebuild completes, the system MUST diff the
     previous graph state against the new graph state to produce a
     GraphDelta. The delta MUST enumerate all added nodes, removed nodes,
-    modified nodes (with what changed: field names, or kind, title,
-    methods, edges), added edges, removed edges, and the list of affected
+    modified nodes (with what changed: the fields whose values differ, by
+    name, and apart from them which of its kind, title, methods and
+    outgoing edges differ, so a field named kind or methods is never read
+    as the aspect), added edges, removed edges, and the list of affected
     files. Source positions are ignored: an entity that only moved is not
     modified. added_nodes, removed_nodes, and modified_nodes MUST be
     sorted by EntityId.raw to guarantee deterministic output. The delta

@@ -2,7 +2,9 @@ mod build;
 mod coerce;
 pub use coerce::FieldCoercion;
 mod delta;
-pub use delta::{EdgeChange, GraphDelta, ModifiedNodeChange, NodeChange, compute_graph_delta};
+pub use delta::{
+    EdgeChange, GraphDelta, ModifiedNodeChange, NodeAspect, NodeChange, compute_graph_delta,
+};
 mod derive;
 pub use derive::{DerivedFrom, DerivedReference};
 mod graph;
