@@ -490,7 +490,7 @@ mod tests {
                 payload: Payload::Json(value),
                 ..
             } => value.clone(),
-            ToolOutcome::Refused(error) => error.to_json(),
+            ToolOutcome::Refused(error) => serde_json::to_value(error).unwrap(),
             other => panic!("not JSON: {other:?}"),
         }
     }

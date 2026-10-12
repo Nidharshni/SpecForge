@@ -89,11 +89,18 @@ pub fn resource(server: &mut McpServer, uri: &str) -> (Value, Value) {
     (response["result"]["contents"][0].clone(), parsed)
 }
 
+/// The latest handshake revision: the one `initialize` negotiates by default.
+pub fn latest() -> specforge_mcp::lifecycle::Revision {
+    specforge_mcp::lifecycle::Revision::Negotiated(
+        specforge_mcp::lifecycle::LATEST_PROTOCOL_VERSION,
+    )
+}
+
 /// The core tools as `tools/list` describes them, in listing order.
-pub fn core_tools() -> Vec<specforge_mcp::types::McpToolDescriptor> {
+pub fn core_tools() -> Vec<specforge_mcp::registry::ToolDescriptor<'static>> {
     specforge_mcp::tools::CORE_TOOLS
         .iter()
-        .map(|tool| tool.descriptor())
+        .map(|tool| tool.descriptor(latest()))
         .collect()
 }
 

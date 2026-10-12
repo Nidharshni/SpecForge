@@ -65,7 +65,7 @@ pub use providers::Providers;
 pub use session::{CheckMode, OpeningProject, ProjectSession, RuntimeSource, SourceChange, Update};
 pub use setup::{SetupDiagnostic, SetupPart};
 pub use specforge_graph::{
-    EdgeChange, GraphDelta, ModifiedNodeChange, NodeChange, compute_graph_delta,
+    EdgeChange, GraphDelta, ModifiedNodeChange, NodeAspect, NodeChange, compute_graph_delta,
 };
 pub use specforge_installed::{EnabledExtension, LoadSubject, Loaded};
 

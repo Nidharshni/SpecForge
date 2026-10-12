@@ -5,6 +5,19 @@ use specforge_test::prelude::*;
 use std::fs;
 use tempfile::TempDir;
 
+/// `server/discover`, which the stateless revision answers without
+/// `initialize`.
+fn discover(server: &mut McpServer) -> serde_json::Value {
+    call(
+        server,
+        "server/discover",
+        json!({"_meta": {
+            "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+            "io.modelcontextprotocol/clientCapabilities": {},
+        }}),
+    )
+}
+
 fn init_server() -> Logged {
     let mut server = logged(McpServer::new());
     call(&mut server, "initialize", json!({}));
@@ -47,7 +60,7 @@ fn state_snapshot(server: &McpServer) -> Value {
         .collect();
     nodes.sort();
     json!({
-        "tools": specforge_mcp::registry::listed_tools(state).collect::<Vec<_>>(),
+        "tools": specforge_mcp::registry::listed_tools(state, latest()).collect::<Vec<_>>(),
         "resources": specforge_mcp::registry::listed_resources(state).collect::<Vec<_>>(),
         "nodes": nodes,
         "edges": state.graph().edge_count(),
@@ -135,10 +148,77 @@ fn initialize_returns_capabilities() {
         "resources.subscribe must be advertised: the subscribe→recompile→notify loop is wired (C9-01)"
     );
 
-    // Convenience arrays still present for backwards compat
-    assert!(result["tools"].is_array());
-    assert!(result["resources"].is_array());
-    assert!(result["prompts"].is_array());
+    // The server tells the client's model about itself; nothing is listed.
+    assert!(
+        result["instructions"]
+            .as_str()
+            .unwrap()
+            .contains("SpecForge")
+    );
+    for key in ["tools", "resources", "prompts"] {
+        assert!(
+            result.get(key).is_none(),
+            "{key} is discovered by its list method"
+        );
+    }
+}
+
+#[specforge_test(
+    behavior = "mcp_initialize",
+    verify = "initialize and server/discover give the same capabilities and instructions"
+)]
+fn initialize_and_discover_agree() {
+    let mut server = McpServer::new();
+    let init = call(&mut server, "initialize", json!({}));
+    let discover = discover(&mut server);
+    assert_eq!(
+        init["result"]["capabilities"],
+        discover["result"]["capabilities"]
+    );
+    assert_eq!(
+        init["result"]["instructions"],
+        discover["result"]["instructions"]
+    );
+}
+
+#[specforge_test(
+    behavior = "mcp_initialize",
+    verify = "initialize answers the negotiated revision, the server's capabilities, its name and version and its instructions, and no listing"
+)]
+fn initialize_is_mcps_initialize_result() {
+    for revision in ["2025-03-26", "2025-06-18", "2025-11-25"] {
+        let mut server = McpServer::new();
+        let resp = call(
+            &mut server,
+            "initialize",
+            json!({"protocolVersion": revision}),
+        );
+        let mut keys: Vec<&str> = resp["result"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(String::as_str)
+            .collect();
+        keys.sort_unstable();
+        assert_eq!(
+            keys,
+            [
+                "capabilities",
+                "instructions",
+                "protocolVersion",
+                "serverInfo"
+            ],
+            "{revision}"
+        );
+        assert_eq!(resp["result"]["protocolVersion"], revision);
+    }
+    let mut server = McpServer::new();
+    let init = call(&mut server, "initialize", json!({}));
+    let discover = discover(&mut server);
+    assert_eq!(
+        init["result"]["instructions"],
+        discover["result"]["instructions"]
+    );
 }
 
 // B:mcp_initialize — verify unit "registers tools"
@@ -148,7 +228,8 @@ fn initialize_returns_capabilities() {
 )]
 fn initialize_registers_tools() {
     let mut server = McpServer::new();
-    let resp = call(&mut server, "initialize", json!({}));
+    call(&mut server, "initialize", json!({}));
+    let resp = call(&mut server, "tools/list", json!({}));
     let tools = resp["result"]["tools"].as_array().unwrap();
     assert!(!tools.is_empty());
 
@@ -167,8 +248,9 @@ fn initialize_registers_tools() {
 )]
 fn initialize_registers_resources() {
     let mut server = McpServer::new();
-    let resp = call(&mut server, "initialize", json!({}));
-    let resources = resp["result"]["resources"].as_array().unwrap();
+    call(&mut server, "initialize", json!({}));
+    let listed = call(&mut server, "resources/list", json!({}));
+    let resources = listed["result"]["resources"].as_array().unwrap();
     assert!(!resources.is_empty());
 
     let mut uris: Vec<&str> = resources
@@ -181,18 +263,14 @@ fn initialize_registers_resources() {
         vec![
             "specforge://brief",
             "specforge://context",
-            "specforge://context/{entity_id}",
             "specforge://diagnostics",
-            "specforge://entities/{kind}",
             "specforge://graph",
-            "specforge://graph/{entity_id}",
             "specforge://schema",
         ]
     );
     // Registered before the first request is served: five plain resources,
     // three templated ones.
-    let listed = call(&mut server, "resources/list", json!({}));
-    assert_eq!(listed["result"]["resources"].as_array().unwrap().len(), 5);
+    assert_eq!(resources.len(), 5);
     let templates = call(&mut server, "resources/templates/list", json!({}));
     assert_eq!(
         templates["result"]["resourceTemplates"]
@@ -206,7 +284,8 @@ fn initialize_registers_resources() {
 #[test]
 fn initialize_registers_prompts() {
     let mut server = McpServer::new();
-    let resp = call(&mut server, "initialize", json!({}));
+    call(&mut server, "initialize", json!({}));
+    let resp = call(&mut server, "prompts/list", json!({}));
     let prompts = resp["result"]["prompts"].as_array().unwrap();
     assert!(!prompts.is_empty());
 
@@ -446,7 +525,7 @@ fn reinit_rejected_no_resource_leak() {
     let mut server = init_server();
     let listed = |server: &McpServer| {
         (
-            specforge_mcp::registry::listed_tools(server.state()).count(),
+            specforge_mcp::registry::listed_tools(server.state(), latest()).count(),
             specforge_mcp::registry::listed_resources(server.state()).count(),
         )
     };

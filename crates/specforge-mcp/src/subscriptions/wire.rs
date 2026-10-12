@@ -1,80 +1,110 @@
-//! The notifications' JSON shapes, in both subscription eras.
+//! The notifications the server sends, typed. Their frames are MCP's; the
+//! SpecForge deltas' params are messages (`crate::message`).
 
-use serde_json::{Value, json};
+use serde::Serialize;
+use serde_json::Value;
 use specforge_project::GraphDelta;
 
 use super::DiagnosticsDelta;
 
-/// The `_meta` key tying a notification to its `subscriptions/listen`.
-pub(super) const SUBSCRIPTION_ID_META: &str = "io.modelcontextprotocol/subscriptionId";
-/// The handshake era's graph delta (C9-01).
-pub(super) const GRAPH_CHANGED: &str = "specforge/graphChanged";
-/// The handshake era's diagnostics delta (C9-01).
-pub(super) const DIAGNOSTICS_CHANGED: &str = "specforge/diagnosticsChanged";
-
-/// `notifications/subscriptions/acknowledged` for the stream `id`, naming
-/// the resources honoured.
-pub(super) fn acknowledged(id: &Value, uris: &[String]) -> Value {
-    json!({
-        "jsonrpc": "2.0",
-        "method": "notifications/subscriptions/acknowledged",
-        "params": {
-            "_meta": { SUBSCRIPTION_ID_META: id },
-            "notifications": { "resourceSubscriptions": uris },
-        },
-    })
+/// One notification queued for the client.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(tag = "method", content = "params")]
+pub enum Notification {
+    /// `subscriptions/listen` honoured these resources (MCP 2026-07-28).
+    #[serde(rename = "notifications/subscriptions/acknowledged")]
+    Acknowledged(Acknowledged),
+    /// A resource the client hears about changed.
+    #[serde(rename = "notifications/resources/updated")]
+    ResourceUpdated(ResourceUpdated),
+    /// The graph delta, whole (handshake subscribers of a graph view).
+    #[serde(rename = "specforge/graphChanged")]
+    GraphChanged(GraphDelta),
+    /// The diagnostics added and removed (handshake subscribers of
+    /// `specforge://diagnostics`).
+    #[serde(rename = "specforge/diagnosticsChanged")]
+    DiagnosticsChanged(DiagnosticsDelta),
 }
 
-/// `notifications/resources/updated` for `uri`, tagged with the stream's id
-/// when it is sent on one.
-pub(super) fn resource_updated(uri: &str, stream: Option<&Value>) -> Value {
-    let mut params = json!({ "uri": uri });
-    if let Some(id) = stream {
-        params["_meta"] = json!({ SUBSCRIPTION_ID_META: id });
+impl Notification {
+    /// `notifications/subscriptions/acknowledged` for the stream `id`,
+    /// naming the resources honoured.
+    pub(super) fn acknowledged(id: &Value, uris: &[String]) -> Self {
+        Notification::Acknowledged(Acknowledged {
+            meta: StreamMeta {
+                subscription_id: id.clone(),
+            },
+            notifications: Honoured {
+                resource_subscriptions: uris.to_vec(),
+            },
+        })
     }
-    json!({
-        "jsonrpc": "2.0",
-        "method": "notifications/resources/updated",
-        "params": params,
-    })
+
+    /// `notifications/resources/updated` for `uri`, tagged with the
+    /// stream's id when it is sent on one.
+    pub(super) fn resource_updated(uri: &str, stream: Option<&Value>) -> Self {
+        Notification::ResourceUpdated(ResourceUpdated {
+            uri: uri.to_string(),
+            meta: stream.map(|id| StreamMeta {
+                subscription_id: id.clone(),
+            }),
+        })
+    }
+
+    /// Its JSON-RPC method.
+    pub fn method(&self) -> &'static str {
+        match self {
+            Notification::Acknowledged(_) => "notifications/subscriptions/acknowledged",
+            Notification::ResourceUpdated(_) => "notifications/resources/updated",
+            Notification::GraphChanged(_) => "specforge/graphChanged",
+            Notification::DiagnosticsChanged(_) => "specforge/diagnosticsChanged",
+        }
+    }
+
+    /// The JSON-RPC message the transport writes:
+    /// `{"jsonrpc":"2.0", "method", "params"}`.
+    pub fn framed(&self) -> Value {
+        #[derive(Serialize)]
+        struct Framed<'a> {
+            jsonrpc: &'static str,
+            #[serde(flatten)]
+            notification: &'a Notification,
+        }
+        serde_json::to_value(Framed {
+            jsonrpc: "2.0",
+            notification: self,
+        })
+        .expect("a notification serializes")
+    }
 }
 
-/// `specforge/graphChanged`: the delta with nodes named by ID.
-pub(super) fn graph_changed(delta: &GraphDelta) -> Value {
-    json!({
-        "jsonrpc": "2.0",
-        "method": GRAPH_CHANGED,
-        "params": {
-            "added_nodes": delta.added_nodes.iter().map(|n| &n.id).collect::<Vec<_>>(),
-            "removed_nodes": delta.removed_nodes.iter().map(|n| &n.id).collect::<Vec<_>>(),
-            "modified_nodes": delta.modified_nodes.iter().map(|n| &n.id).collect::<Vec<_>>(),
-            "added_edges": delta.added_edges,
-            "removed_edges": delta.removed_edges
-        }
-    })
+/// `notifications/resources/updated`'s params.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct ResourceUpdated {
+    pub uri: String,
+    #[serde(rename = "_meta", skip_serializing_if = "Option::is_none")]
+    pub meta: Option<StreamMeta>,
 }
 
-/// `specforge/diagnosticsChanged`: what was added and removed, each as
-/// `{code, severity, message}`.
-pub(super) fn diagnostics_changed(delta: &DiagnosticsDelta) -> Value {
-    let named = |diagnostics: &[specforge_common::Diagnostic]| -> Vec<Value> {
-        diagnostics
-            .iter()
-            .map(|d| {
-                json!({
-                    "code": d.code,
-                    "severity": format!("{:?}", d.severity),
-                    "message": d.message
-                })
-            })
-            .collect()
-    };
-    json!({
-        "jsonrpc": "2.0",
-        "method": DIAGNOSTICS_CHANGED,
-        "params": {
-            "added": named(&delta.added),
-            "removed": named(&delta.removed)
-        }
-    })
+/// `notifications/subscriptions/acknowledged`'s params.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Acknowledged {
+    #[serde(rename = "_meta")]
+    pub meta: StreamMeta,
+    pub notifications: Honoured,
+}
+
+/// The `_meta` tying a notification to its `subscriptions/listen`.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct StreamMeta {
+    /// The listen request's JSON-RPC id, a string or a number.
+    #[serde(rename = "io.modelcontextprotocol/subscriptionId")]
+    pub subscription_id: Value,
+}
+
+/// What a `subscriptions/listen` acknowledgement says was honoured.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Honoured {
+    pub resource_subscriptions: Vec<String>,
 }

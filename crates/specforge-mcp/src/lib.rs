@@ -4,6 +4,7 @@ pub mod args;
 pub mod events;
 mod extension_dispatch;
 pub mod lifecycle;
+pub mod message;
 pub mod modern;
 pub mod mutation;
 pub mod prompt;
@@ -19,7 +20,6 @@ pub mod surface_table;
 pub mod target;
 pub mod tool;
 pub mod tools;
-pub mod types;
 mod uri_template;
 
 use events::{EventSink, McpEvent};
@@ -187,7 +187,12 @@ impl McpServer {
     /// The notifications queued since the last call, oldest first: the host
     /// writes them after the response of the message that queued them.
     pub fn take_notifications(&mut self) -> Vec<serde_json::Value> {
-        self.state.subscriptions.drain()
+        self.state
+            .subscriptions
+            .drain()
+            .iter()
+            .map(subscriptions::Notification::framed)
+            .collect()
     }
 
     /// The connection ended (stdio: end of input): every subscription and

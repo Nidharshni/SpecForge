@@ -23,6 +23,7 @@ expression: "shape(&reply, dir.path())"
       "type",
       "port"
     ],
+    "scope": "workflow",
     "tools": [
       "specforge.infer_session",
       "specforge.infer_progress",

@@ -1181,7 +1181,10 @@ fn cli_and_prompt_infer_guide_are_one_document() {
     );
     assert_eq!(
         cli_json(&["infer-guide", "--path", s(root), "--format", "json"]),
-        without(prompts[0].clone(), &["output_format", "validation"])
+        without(
+            prompts[0].clone(),
+            &["scope", "output_format", "validation"]
+        )
     );
     assert_eq!(
         cli_json(&[
@@ -1192,7 +1195,7 @@ fn cli_and_prompt_infer_guide_are_one_document() {
             "--format",
             "json"
         ]),
-        without(prompts[1].clone(), &["validation"])
+        without(prompts[1].clone(), &["scope", "validation"])
     );
 }
 

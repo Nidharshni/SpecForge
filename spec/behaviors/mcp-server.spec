@@ -22,7 +22,7 @@ use "types/output"
 
 behavior mcp_initialize "MCP Initialize" {
   features   [mcp_lifecycle]
-  types      [McpCapabilities, CompilerConfig]
+  types      [McpInitializeResult, CompilerConfig]
   category   command
   ports      [CompilerApi, WasmRuntime]
   produces   [mcp_initialized, mcp_initialization_failed]
@@ -38,8 +38,8 @@ behavior mcp_initialize "MCP Initialize" {
     wasm_runtime_available "WasmRuntime port is available for loading extension manifests"
   }
   ensures {
-    capabilities_returned        "McpCapabilities returned containing all registered tools, resources, and prompts"
-    surface_contributions_merged "Surface-contributed tools and resources merged with core before advertisement"
+    capabilities_returned        "McpInitializeResult returned: the negotiated revision, the server's capabilities, its name and version and its instructions"
+    surface_contributions_merged "Surface-contributed tools and resources merged with core before the list methods answer"
     mcp_initialized_emitted      "mcp_initialized event emitted on success, mcp_initialization_failed on failure"
   }
   contract   """
@@ -49,9 +49,13 @@ behavior mcp_initialize "MCP Initialize" {
     there is none. It MUST compile that project's graph, load all
     extension manifests, register all tools/resources/prompts from
     installed extensions (including surface-contributed MCP tools and
-    resources from extension manifests), and return McpCapabilities.
-    Surface-contributed tools and resources MUST be merged with core
-    tools and resources before capability advertisement. The server
+    resources from extension manifests), merged with the core ones, before
+    it answers, and answer McpInitializeResult: the negotiated revision,
+    the capabilities it offers (tools, resources with subscribe, prompts,
+    none announcing list changes), its name and version, and the
+    instructions server/discover gives. It MUST NOT list tools, resources
+    or prompts in its answer: the list methods list them, under the
+    revision of the request. The server
     MUST NOT accept tool/resource calls before initialization completes.
     The server MUST negotiate the protocol revision: it answers with the
     version the client requested when it supports that version
@@ -66,12 +70,48 @@ behavior mcp_initialize "MCP Initialize" {
   verify unit "all core resources registered before accepting requests"
   verify unit "returns MCP-compliant init response"
   verify unit "compiles project when projectRoot is provided"
+  verify unit "initialize and server/discover give the same capabilities and instructions"
+  verify unit "initialize answers the negotiated revision, the server's capabilities, its name and version and its instructions, and no listing"
   verify contract "MCP Initialize: MCP initialization holds — compiler_api_available, wasm_runtime_available, capabilities_returned, surface_contributions_merged, mcp_initialized_emitted"
+}
+
+// Every document MCP sends whose content SpecForge decides is one typed
+// definition, held to its spec type (ADR 0048 for tool replies; the rest
+// by the same rule, ADR 0058).
+behavior state_mcp_messages_as_spec_types "State MCP Messages as Spec Types" {
+  features   [mcp_protocol_compliance]
+  invariants [mcp_structured_error_responses]
+  category   query
+  types      [McpError, GraphDelta, DiagnosticsDelta]
+  ports      [McpProtocol]
+  ensures {
+    one_definition  "Each document the server sends whose content SpecForge decides is serialized from one typed definition"
+    spec_states_it  "Its spec type states the same keys, required keys and value types, and a test holds them together"
+  }
+  contract   """
+    Every document the MCP server sends whose content SpecForge decides
+    MUST be serialized from one typed definition whose spec type states
+    the same shape: a core tool's reply, a core prompt's payload, the
+    initialize and server/discover results, a listing's descriptors, the
+    specforge/graphChanged and specforge/diagnosticsChanged params and the
+    McpError a refusal carries. Every Mcp type of spec/types/mcp.spec MUST
+    be one of them. A frame whose keys MCP fixes (the JSON-RPC envelope, a
+    tool result's content and _meta, a read's contents, a prompt's
+    messages, notifications/resources/updated,
+    notifications/subscriptions/acknowledged) follows MCP's schema and is
+    not restated. A document's schema closes every object it holds but the
+    open values it lists (content an extension or a client defines) and
+    repeats no object schema; it carries no null.
+  """
+  verify unit "every document the server sends besides a tool reply is the schema its type derives, as its spec type states it"
+  verify unit "every Mcp type of spec/types/mcp.spec is a tool reply, a prompt payload or a document the server sends"
+  verify unit "a sent document's schema closes every object it holds but its listed open values, and repeats no object schema"
+  verify unit "an McpError is serialized from its type, the isError content and a JSON-RPC error's data alike"
 }
 
 behavior mcp_shutdown "MCP Shutdown" {
   features   [mcp_lifecycle]
-  types      [McpSubscription, timestamp]
+  types      [timestamp]
   category   command
   ports      [CompilerApi, WasmRuntime]
   produces   [mcp_server_shutdown, mcp_subscription_removed]
@@ -103,7 +143,7 @@ behavior list_mcp_resources "List MCP Resources" {
   invariants [mcp_structured_error_responses, mcp_tool_idempotency]
   category   query
   ports      [McpProtocol, CompilerApi]
-  types      [McpResourceDescriptor]
+  types      [McpResourceDescriptor, McpResourceTemplateDescriptor]
   produces   [mcp_discovery_invoked]
   requires {
     server_initialized "MCP server has been initialized and all extensions loaded"
@@ -491,7 +531,7 @@ behavior notify_graph_delta_via_mcp "Notify Graph Delta via MCP" {
     mcp_subscription_cleanup,
   ]
   category   command
-  types      [GraphDelta, McpSubscription]
+  types      [GraphDelta, NodeChange, ModifiedNodeChange, EdgeChange]
   ports      [McpProtocol, CompilerApi]
   consumes   [graph_delta_computed]
   produces   [mcp_delta_notified, mcp_subscription_created, mcp_subscription_removed]
@@ -509,9 +549,11 @@ behavior notify_graph_delta_via_mcp "Notify Graph Delta via MCP" {
     receive notifications/resources/updated naming it, for each such
     resource, by the rule subscriptions/listen follows. When the graph
     changed and the client subscribed to a resource that changes with it,
-    the system MUST then send specforge/graphChanged, whose payload MUST
-    include the GraphDelta describing added, removed, and modified nodes and
-    edges. A subscription is to one resource: unsubscribing one keeps the
+    the system MUST then send specforge/graphChanged, whose params MUST be
+    the update's GraphDelta, whole: each added and removed node with its
+    kind, file and line, each modified node with its changed fields and
+    changed aspects, the added and removed edges and the affected files:
+    the delta watch --format json prints. A subscription is to one resource: unsubscribing one keeps the
     others, and the client's subscriptions end with its connection.
     resources/subscribe to a URI the server does not serve is refused as
     resources/read refuses it (not found: -32002, Unknown resource URI);
@@ -540,7 +582,7 @@ behavior notify_diagnostics_delta_via_mcp "Notify Diagnostics Delta via MCP" {
     mcp_subscription_cleanup,
   ]
   category   command
-  types      [DiagnosticsDelta, McpSubscription]
+  types      [DiagnosticsDelta]
   ports      [McpProtocol, CompilerApi]
   consumes   [validation_complete]
   produces   [mcp_delta_notified, mcp_subscription_created, mcp_subscription_removed]
@@ -557,13 +599,16 @@ behavior notify_diagnostics_delta_via_mcp "Notify Diagnostics Delta via MCP" {
     a client subscribed to specforge://diagnostics MUST receive
     notifications/resources/updated for it and then a
     specforge/diagnosticsChanged notification.
-    The notification payload MUST include added and removed diagnostics since the
-    previous compilation. Clients MUST be able to subscribe and unsubscribe. If
+    The notification's params MUST be the DiagnosticsDelta since the
+    previous compilation: the diagnostics added and removed, each presented
+    as every surface presents a diagnostic (present_diagnostics_as_json), so
+    a client can locate it. Clients MUST be able to subscribe and unsubscribe. If
     no clients are subscribed or the diagnostics are unchanged, the notification
     MUST be suppressed.
   """
   verify unit "diagnostics_changed notification sent after validation"
   verify unit "payload includes added and removed diagnostics"
+  verify unit "each added or removed diagnostic is presented as every surface presents diagnostics"
   verify unit "unsubscribed clients do not receive notifications"
   verify unit "no notification when diagnostics are unchanged"
   verify contract "Notify Diagnostics Delta via MCP: diagnostics delta MCP notification holds — validation_complete_fired, subscribers_notified, unchanged_suppressed, delta_notified_emitted"
@@ -636,7 +681,7 @@ behavior follow_negotiated_mcp_revision "Follow the Negotiated MCP Revision" {
   features   [mcp_protocol_compliance]
   invariants [mcp_structured_error_responses]
   category   command
-  types      [McpCapabilities]
+  types      [McpInitializeResult]
   ports      [McpProtocol]
   produces   [mcp_protocol_error_handled]
   requires {
@@ -691,7 +736,7 @@ behavior serve_stateless_mcp_requests "Serve Stateless MCP Requests" {
   features   [mcp_protocol_compliance]
   invariants [mcp_structured_error_responses]
   category   command
-  types      [McpCapabilities]
+  types      [McpDiscoverResult]
   ports      [McpProtocol, CompilerApi]
   produces   [mcp_protocol_error_handled]
   requires {
@@ -802,7 +847,7 @@ behavior guard_mcp_reinitialization "Guard MCP Reinitialization" {
   features   [mcp_protocol_compliance]
   invariants [mcp_structured_error_responses]
   category   command
-  types      [McpCapabilities]
+  types      [McpInitializeResult]
   ports      [McpProtocol]
   produces   [mcp_protocol_error_handled]
   requires {

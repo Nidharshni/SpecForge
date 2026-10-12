@@ -125,16 +125,24 @@ fn contract_initialize() {
     assert_eq!(result["serverInfo"]["version"], env!("CARGO_PKG_VERSION"));
     assert_eq!(result["capabilities"]["resources"]["subscribe"], true);
 
-    // capabilities_returned: every registered tool, resource and prompt.
-    let names = |key: &str, field: &str| -> Vec<String> {
-        result[key]
+    // capabilities_returned: initialize lists nothing; the list methods
+    // list every registered tool, resource and prompt.
+    for key in ["tools", "resources", "prompts"] {
+        assert!(
+            result.get(key).is_none(),
+            "initialize lists {key}: {result}"
+        );
+    }
+    assert!(result["instructions"].is_string(), "{result}");
+    let mut names = |method: &str, key: &str, field: &str| -> Vec<String> {
+        call(&mut server, method, json!({}))["result"][key]
             .as_array()
             .unwrap()
             .iter()
             .map(|d| d[field].as_str().unwrap().to_string())
             .collect()
     };
-    let tools = names("tools", "name");
+    let tools = names("tools/list", "tools", "name");
     for core in [
         "specforge.query",
         "specforge.export",
@@ -148,10 +156,10 @@ fn contract_initialize() {
             "{core} missing: {tools:?}"
         );
     }
-    let resources = names("resources", "uri");
+    let resources = names("resources/list", "resources", "uri");
     assert!(resources.contains(&"specforge://graph".to_string()));
     assert!(resources.contains(&"specforge://diagnostics".to_string()));
-    let prompts = names("prompts", "name");
+    let prompts = names("prompts/list", "prompts", "name");
     assert!(prompts.contains(&"specforge://prompts/context".to_string()));
 
     // surface_contributions_merged: after the core tools and resources come
@@ -163,8 +171,8 @@ fn contract_initialize() {
     );
     let core_resources = specforge_mcp::resources::CORE_RESOURCES.len();
     assert_eq!(
-        resources[core_resources..],
-        ["specforge://ext/cmds/summary"]
+        resources.last().map(String::as_str),
+        Some("specforge://ext/cmds/summary")
     );
 
     // compiler_api_available: the project root was located and used.
@@ -199,7 +207,9 @@ fn contract_initialize() {
         })]
     );
     assert_eq!(tools.len(), core_tools + 2);
-    assert_eq!(resources.len(), core_resources + 1);
+    // resources/list lists the five plain core resources (the three
+    // templates are listed by resources/templates/list) and the extension's.
+    assert_eq!(resources.len(), 5 + 1);
 
     // Tool calls are accepted once initialized.
     let after = call_tool(&mut server, "specforge.stats", json!({}));
@@ -239,7 +249,7 @@ fn contract_shutdown() {
         .as_array()
         .unwrap()
         .iter()
-        .map(|v| v.as_str().unwrap())
+        .map(|v| v["id"].as_str().unwrap())
         .collect();
     added.sort();
     assert_eq!(added, ["gamma"]);
@@ -1742,7 +1752,7 @@ fn contract_guard_reinit() {
         .state()
         .project_root()
         .map(std::path::Path::to_path_buf);
-    let tools = specforge_mcp::registry::listed_tools(server.state()).count();
+    let tools = specforge_mcp::registry::listed_tools(server.state(), latest()).count();
     let other = tempfile::TempDir::new().unwrap();
 
     // reinit_rejected: -32600, even when naming another project.
@@ -1756,7 +1766,10 @@ fn contract_guard_reinit() {
     // session_unaffected: same project, graph and registries.
     let state = server.state();
     assert_eq!(state.project_root().map(std::path::Path::to_path_buf), root);
-    assert_eq!(specforge_mcp::registry::listed_tools(state).count(), tools);
+    assert_eq!(
+        specforge_mcp::registry::listed_tools(state, latest()).count(),
+        tools
+    );
     assert_eq!(state.graph().node_count(), 2);
     let stats = tool(&mut server, "specforge.stats", json!({}));
     assert_eq!(stats["edge_count"], 1);
@@ -2443,11 +2456,12 @@ fn contract_graph_notification() {
                 "jsonrpc": "2.0",
                 "method": "specforge/graphChanged",
                 "params": {
-                    "added_nodes": ["gamma"],
-                    "removed_nodes": ["beta"],
+                    "added_nodes": [{"id": "gamma", "kind": "behavior", "file": "test.spec", "line": 3}],
+                    "removed_nodes": [{"id": "beta", "kind": "feature", "file": "test.spec", "line": 3}],
                     "modified_nodes": [],
                     "added_edges": [],
                     "removed_edges": [{"source": "beta", "target": "alpha", "label": "behaviors"}],
+                    "affected_files": ["test.spec"],
                 },
             }),
         ]
@@ -2471,9 +2485,16 @@ fn contract_graph_notification() {
                 "params": {
                     "added_nodes": [],
                     "removed_nodes": [],
-                    "modified_nodes": ["gamma"],
+                    "modified_nodes": [{
+                        "id": "gamma",
+                        "changed_fields": ["contract"],
+                        "changed_aspects": [],
+                        "file": "test.spec",
+                        "line": 3,
+                    }],
                     "added_edges": [],
                     "removed_edges": [],
+                    "affected_files": ["test.spec"],
                 },
             }),
         ]
@@ -2513,13 +2534,19 @@ fn subscribed_graph_server() -> (Served, PathBuf) {
     (server, spec)
 }
 
-/// The `modified_nodes` of the one graph notification a rebuild sends.
+/// The IDs of the `modified_nodes` of the one graph notification a rebuild
+/// sends.
 fn modified_after_rebuild(server: &mut McpServer) -> Value {
     rebuild(server);
     let sent = server.take_notifications();
     assert_eq!(sent.len(), 2, "{sent:?}");
     assert_eq!(sent[1]["method"], "specforge/graphChanged");
-    sent[1]["params"]["modified_nodes"].clone()
+    sent[1]["params"]["modified_nodes"]
+        .as_array()
+        .expect("modified nodes")
+        .iter()
+        .map(|node| node["id"].clone())
+        .collect()
 }
 
 #[specforge_test(
@@ -2628,10 +2655,24 @@ fn contract_diagnostics_notification() {
     )
     .unwrap();
     rebuild(&mut server);
+    // Whole, as every surface presents a diagnostic (`specforge check
+    // --format json`), so the client can locate it.
     let duplicate = json!({
         "code": "E002",
+        "title": "Duplicate entity ID",
         "severity": "Error",
         "message": "duplicate entity ID 'alpha' (first declared at test.spec:1:1)",
+        "span": {
+            "file": "test.spec",
+            "start_line": 3,
+            "start_col": 1,
+            "end_line": 4,
+            "end_col": 2,
+        },
+        "suggestion": "rename one of the entities to avoid the collision",
+        "file": "test.spec",
+        "line": 3,
+        "column": 1,
     });
     let changed = |added: Value, removed: Value| {
         json!({

@@ -7,92 +7,90 @@ expression: "shape(&reply, dir.path())"
   "instruction": "Create a prioritized inference plan. There are 0 unanalyzed files and 0 stale files. Write .spec files to 'spec/'. Process files with the most entity signals first. Use specforge.infer_session to track progress (start → mark_analyzed per file → end). After each file, call specforge.validate to check for errors.",
   "layout": "turns",
   "payload": {
-    "plan": {
-      "cursor": 50,
-      "kind_priorities": [
-        {
-          "existing_count": 0,
-          "extension": "@specforge/product",
-          "kind": "persona"
-        },
-        {
-          "existing_count": 0,
-          "extension": "@specforge/product",
-          "kind": "channel"
-        },
-        {
-          "existing_count": 0,
-          "extension": "@specforge/product",
-          "kind": "journey"
-        },
-        {
-          "existing_count": 0,
-          "extension": "@specforge/software",
-          "kind": "type"
-        },
-        {
-          "existing_count": 0,
-          "extension": "@specforge/software",
-          "kind": "event"
-        },
-        {
-          "existing_count": 0,
-          "extension": "@specforge/software",
-          "kind": "port"
-        },
-        {
-          "existing_count": 0,
-          "extension": "@specforge/product",
-          "kind": "module"
-        },
-        {
-          "existing_count": 0,
-          "extension": "@specforge/product",
-          "kind": "milestone"
-        },
-        {
-          "existing_count": 0,
-          "extension": "@specforge/product",
-          "kind": "deliverable"
-        },
-        {
-          "existing_count": 0,
-          "extension": "@specforge/product",
-          "kind": "term"
-        },
-        {
-          "existing_count": 0,
-          "extension": "@specforge/product",
-          "kind": "release"
-        },
-        {
-          "existing_count": 1,
-          "extension": "@specforge/product",
-          "kind": "feature"
-        },
-        {
-          "existing_count": 1,
-          "extension": "@specforge/software",
-          "kind": "invariant"
-        },
-        {
-          "existing_count": 3,
-          "extension": "@specforge/software",
-          "kind": "behavior"
-        }
-      ],
-      "next_cursor": null,
-      "progress": {
-        "entities_produced": 0,
-        "files_analyzed": 0,
-        "files_total": 0
+    "cursor": 50,
+    "kind_priorities": [
+      {
+        "existing_count": 0,
+        "extension": "@specforge/product",
+        "kind": "persona"
       },
-      "stale_files": [],
-      "stale_total": 0,
-      "target_spec_directory": "spec/",
-      "unanalyzed_files": [],
-      "unanalyzed_total": 0
-    }
+      {
+        "existing_count": 0,
+        "extension": "@specforge/product",
+        "kind": "channel"
+      },
+      {
+        "existing_count": 0,
+        "extension": "@specforge/product",
+        "kind": "journey"
+      },
+      {
+        "existing_count": 0,
+        "extension": "@specforge/software",
+        "kind": "type"
+      },
+      {
+        "existing_count": 0,
+        "extension": "@specforge/software",
+        "kind": "event"
+      },
+      {
+        "existing_count": 0,
+        "extension": "@specforge/software",
+        "kind": "port"
+      },
+      {
+        "existing_count": 0,
+        "extension": "@specforge/product",
+        "kind": "module"
+      },
+      {
+        "existing_count": 0,
+        "extension": "@specforge/product",
+        "kind": "milestone"
+      },
+      {
+        "existing_count": 0,
+        "extension": "@specforge/product",
+        "kind": "deliverable"
+      },
+      {
+        "existing_count": 0,
+        "extension": "@specforge/product",
+        "kind": "term"
+      },
+      {
+        "existing_count": 0,
+        "extension": "@specforge/product",
+        "kind": "release"
+      },
+      {
+        "existing_count": 1,
+        "extension": "@specforge/product",
+        "kind": "feature"
+      },
+      {
+        "existing_count": 1,
+        "extension": "@specforge/software",
+        "kind": "invariant"
+      },
+      {
+        "existing_count": 3,
+        "extension": "@specforge/software",
+        "kind": "behavior"
+      }
+    ],
+    "progress": {
+      "entities_produced": 0,
+      "files_analyzed": 0,
+      "files_total": 0
+    },
+    "scope": "plan",
+    "stale_files": [],
+    "stale_total": 0,
+    "target_spec_directory": "spec/",
+    "unanalyzed_files": [],
+    "unanalyzed_total": 0
   },
   "roles": [
     "user",

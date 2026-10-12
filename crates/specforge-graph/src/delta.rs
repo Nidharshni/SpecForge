@@ -7,16 +7,19 @@ use crate::{Graph, Node};
 use serde::Serialize;
 use serde_json::Value;
 use specforge_common::Sym;
+use specforge_common::shape::Shape;
 
 /// What changed between two graphs. Node lists are sorted by ID, edge
 /// lists by (source, target, label). Source positions are ignored: an
-/// entity that only moved is not modified.
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize)]
+/// entity that only moved is not modified. Watch prints it under
+/// `--format json` and MCP sends it as `specforge/graphChanged`'s params,
+/// whole (`GraphDelta` in spec/types/graph.spec).
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Shape)]
 pub struct GraphDelta {
     pub added_nodes: Vec<NodeChange>,
     pub removed_nodes: Vec<NodeChange>,
-    /// Nodes in both graphs whose kind, title, fields (verify list
-    /// included), methods or outgoing edges differ.
+    /// Nodes in both graphs whose fields (verify list included), kind,
+    /// title, methods or outgoing edges differ.
     pub modified_nodes: Vec<ModifiedNodeChange>,
     pub added_edges: Vec<EdgeChange>,
     pub removed_edges: Vec<EdgeChange>,
@@ -25,7 +28,8 @@ pub struct GraphDelta {
 }
 
 /// A node added or removed, where it is declared.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Shape)]
+#[shape(define)]
 pub struct NodeChange {
     pub id: String,
     pub kind: String,
@@ -34,18 +38,32 @@ pub struct NodeChange {
 }
 
 /// A node whose content changed, where it is declared now.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Shape)]
 pub struct ModifiedNodeChange {
     pub id: String,
-    /// What differs (sorted): field names, and `kind`, `title`, `methods`
-    /// or `edges` (its outgoing edges).
+    /// The fields whose values differ, by name (sorted). A field is named
+    /// here whatever its name, `kind` and `methods` included.
     pub changed_fields: Vec<String>,
+    /// What else differs (sorted, each once): its kind, its title, its
+    /// methods, its outgoing edges.
+    pub changed_aspects: Vec<NodeAspect>,
     pub file: String,
     pub line: usize,
 }
 
+/// What a node is besides its fields.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Shape)]
+#[serde(rename_all = "snake_case")]
+pub enum NodeAspect {
+    Kind,
+    Title,
+    Methods,
+    Edges,
+}
+
 /// One edge in a [`GraphDelta`].
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Shape)]
+#[shape(define)]
 pub struct EdgeChange {
     pub source: String,
     pub target: String,
@@ -172,11 +190,11 @@ pub(crate) fn diff(
                     .push(node_change(node, &mut affected_files));
             }
             (Some(old), Some(node)) => {
-                let changed = changes(old, &out(&old_out, id), node, &out(&new_out, id));
-                if !changed.is_empty() {
+                let (fields, aspects) = changes(old, &out(&old_out, id), node, &out(&new_out, id));
+                if !fields.is_empty() || !aspects.is_empty() {
                     delta
                         .modified_nodes
-                        .push(modified(node, changed, &mut affected_files));
+                        .push(modified(node, fields, aspects, &mut affected_files));
                 }
             }
             (None, None) => {}
@@ -195,7 +213,8 @@ pub(crate) fn diff(
         {
             delta.modified_nodes.push(modified(
                 node,
-                vec!["edges".to_string()],
+                Vec::new(),
+                vec![NodeAspect::Edges],
                 &mut affected_files,
             ));
         }
@@ -238,44 +257,52 @@ fn node_change(node: &Node, files: &mut BTreeSet<String>) -> NodeChange {
     }
 }
 
-fn modified(node: &Node, changed: Vec<String>, files: &mut BTreeSet<String>) -> ModifiedNodeChange {
+fn modified(
+    node: &Node,
+    fields: Vec<String>,
+    aspects: Vec<NodeAspect>,
+    files: &mut BTreeSet<String>,
+) -> ModifiedNodeChange {
     files.insert(node.source_span.file.to_string());
     ModifiedNodeChange {
         id: node.id.raw.to_string(),
-        changed_fields: changed,
+        changed_fields: fields,
+        changed_aspects: aspects,
         file: node.source_span.file.to_string(),
         line: node.source_span.start_line,
     }
 }
 
 /// What differs between two versions of a node, its source positions
-/// ignored (sorted).
+/// ignored: the fields whose values differ by name, and apart from them
+/// the aspects (each sorted).
 fn changes(
     old: &Node,
     old_out: &BTreeSet<(Sym, Sym)>,
     new: &Node,
     new_out: &BTreeSet<(Sym, Sym)>,
-) -> Vec<String> {
+) -> (Vec<String>, Vec<NodeAspect>) {
     let (old_fields, new_fields) = (field_contents(old), field_contents(new));
-    let mut changed: BTreeSet<String> = old_fields
+    let fields: BTreeSet<String> = old_fields
         .keys()
         .chain(new_fields.keys())
         .filter(|key| old_fields.get(*key) != new_fields.get(*key))
         .cloned()
         .collect();
+    let mut aspects = BTreeSet::new();
     if old.kind.raw != new.kind.raw {
-        changed.insert("kind".to_string());
+        aspects.insert(NodeAspect::Kind);
     }
     if old.title != new.title {
-        changed.insert("title".to_string());
+        aspects.insert(NodeAspect::Title);
     }
     if methods(old) != methods(new) {
-        changed.insert("methods".to_string());
+        aspects.insert(NodeAspect::Methods);
     }
     if old_out != new_out {
-        changed.insert("edges".to_string());
+        aspects.insert(NodeAspect::Edges);
     }
-    changed.into_iter().collect()
+    (fields.into_iter().collect(), aspects.into_iter().collect())
 }
 
 /// Each field's values (a key may repeat), with positions stripped.

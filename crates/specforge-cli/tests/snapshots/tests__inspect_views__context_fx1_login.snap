@@ -14,7 +14,7 @@ expression: "normalized(&result, root)"
     },
     {
       "content": {
-        "text": "{\"contract_text\":\"The system MUST let a known user log in\",\"downstream_entities\":[\"signin\"],\"entity_id\":\"login\",\"fields\":{\"contract\":\"The system MUST let a known user log in\",\"features\":[\"signin\"],\"verify\":[{\"description\":\"a known user logs in\",\"kind\":\"unit\"}]},\"kind\":\"behavior\",\"structural_constraint_entities\":[],\"structural_constraints\":[],\"upstream_entities\":[],\"verify_expectations\":[\"unit a known user logs in\"]}",
+        "text": "{\"entity_id\":\"login\",\"kind\":\"behavior\",\"contract_text\":\"The system MUST let a known user log in\",\"fields\":{\"contract\":\"The system MUST let a known user log in\",\"features\":[\"signin\"],\"verify\":[{\"description\":\"a known user logs in\",\"kind\":\"unit\"}]},\"upstream_entities\":[],\"downstream_entities\":[\"signin\"],\"verify_expectations\":[\"unit a known user logs in\"],\"structural_constraints\":[],\"structural_constraint_entities\":[]}",
         "type": "text"
       },
       "role": "user"

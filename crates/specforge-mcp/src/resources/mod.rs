@@ -6,12 +6,12 @@ use serde_json::{Value, json};
 use crate::events::{EventSink, McpEvent};
 use crate::lifecycle::Revision;
 use crate::protocol::{JsonRpcError, JsonRpcResponse};
+use crate::registry::Listed;
 use crate::state::McpState;
 use crate::surface_call::{Found, Invocation, Surface};
 use crate::surface_table::ResourceEntry;
 use crate::target::{Call, TargetSpec};
 use crate::tool::{ErrorCode, McpError};
-use crate::types::McpResourceDescriptor;
 use specforge_ops::export::Format;
 use specforge_ops::view::ProjectView;
 
@@ -197,13 +197,8 @@ impl ResourceSpec {
 
     /// The resource as `resources/list` (or `resources/templates/list`)
     /// describes it.
-    pub fn descriptor(&self) -> McpResourceDescriptor {
-        McpResourceDescriptor {
-            uri: self.uri.into(),
-            name: self.name.into(),
-            description: Some(self.description.into()),
-            mime_type: Some(self.mime_type.into()),
-        }
+    pub fn descriptor(&self) -> Listed {
+        Listed::of(self.uri, self.name, Some(self.description), self.mime_type)
     }
 
     /// Whether `uri` names this resource, by the one rule extension

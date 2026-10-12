@@ -69,6 +69,7 @@ expression: "shape(&reply, dir.path())"
     ],
     "match_mode": "none",
     "project_conventions": "",
+    "scope": "file",
     "validation": "After writing .spec files, call specforge.validate to check for errors (and specforge.analyze for coverage/contract findings). Fix any errors before proceeding."
   },
   "roles": [

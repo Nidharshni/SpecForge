@@ -174,7 +174,7 @@ fn subscribe_recompile_delivers_graph_notification() {
         .as_array()
         .unwrap();
     assert!(
-        added.iter().any(|n| n == "fresh_added"),
+        added.iter().any(|n| n["id"] == "fresh_added"),
         "delta must name the new entity: {added:?}"
     );
     assert!(!events(&server, "mcp_delta_notified").is_empty());
@@ -386,6 +386,15 @@ fn resources_subscribe_guards() {
 
 // ---- Pins: who hears about what (plan 12, T0) ----
 
+/// What `subscriptions` queued, as the transport writes it.
+fn drained(subscriptions: &mut Subscriptions) -> Vec<serde_json::Value> {
+    subscriptions
+        .drain()
+        .iter()
+        .map(specforge_mcp::subscriptions::Notification::framed)
+        .collect()
+}
+
 /// The `method` of each notification.
 fn methods(sent: &[serde_json::Value]) -> Vec<String> {
     sent.iter()
@@ -499,7 +508,7 @@ fn unsubscribing_one_resource_keeps_the_others() {
         ["notifications/resources/updated", "specforge/graphChanged"]
     );
     assert_eq!(sent[0]["params"]["uri"], "specforge://graph");
-    assert_eq!(sent[1]["params"]["added_nodes"], json!(["beta"]));
+    assert_eq!(sent[1]["params"]["added_nodes"][0]["id"], "beta");
 }
 
 #[specforge_test(
@@ -708,59 +717,64 @@ fn node_change(id: &str) -> NodeChange {
     }
 }
 
-// B:notify_graph_delta_via_mcp — verify unit "formats notification as JSON-RPC"
 #[specforge_test(
     behavior = "notify_graph_delta_via_mcp",
     verify = "notification includes GraphDelta payload"
 )]
-fn the_graph_delta_names_nodes_by_id() {
+fn graph_changed_sends_the_whole_delta() {
+    use specforge_project::{EdgeChange, ModifiedNodeChange};
     let mut subscriptions = Subscriptions::new();
     let mut events = EventLog::new();
     subscriptions.subscribe("specforge://graph", &mut events);
 
     let delta = GraphDelta {
         added_nodes: vec![node_change("alpha")],
-        ..GraphDelta::default()
+        removed_nodes: vec![node_change("beta")],
+        modified_nodes: vec![ModifiedNodeChange {
+            id: "gamma".to_string(),
+            changed_fields: vec!["status".to_string()],
+            changed_aspects: vec![specforge_project::NodeAspect::Title],
+            file: "test.spec".to_string(),
+            line: 1,
+        }],
+        added_edges: vec![EdgeChange {
+            source: "alpha".to_string(),
+            target: "gamma".to_string(),
+            label: "depends_on".to_string(),
+        }],
+        removed_edges: vec![EdgeChange {
+            source: "beta".to_string(),
+            target: "gamma".to_string(),
+            label: "depends_on".to_string(),
+        }],
+        affected_files: vec!["test.spec".to_string()],
     };
     subscriptions.updated(&Changes::new(&delta, false, None), &mut events);
-    let sent = subscriptions.drain();
-    assert_eq!(
-        methods(&sent),
-        ["notifications/resources/updated", "specforge/graphChanged"]
-    );
+    let sent = drained(&mut subscriptions);
     assert_eq!(
         sent[1],
         json!({
             "jsonrpc": "2.0",
             "method": "specforge/graphChanged",
-            "params": {
-                "added_nodes": ["alpha"],
-                "removed_nodes": [],
-                "modified_nodes": [],
-                "added_edges": [],
-                "removed_edges": [],
-            },
+            "params": serde_json::to_value(&delta).unwrap(),
         })
     );
-
-    // And the other way round: alpha removed.
-    let delta = GraphDelta {
-        removed_nodes: vec![node_change("alpha")],
-        ..GraphDelta::default()
-    };
-    subscriptions.updated(&Changes::new(&delta, false, None), &mut events);
-    let sent = subscriptions.drain();
-    assert_eq!(sent[1]["params"]["added_nodes"], json!([]));
-    assert_eq!(sent[1]["params"]["removed_nodes"], json!(["alpha"]));
 }
 
-// B:notify_diagnostics_delta_via_mcp — verify unit "formats notification as JSON-RPC"
 #[specforge_test(
     behavior = "notify_diagnostics_delta_via_mcp",
     verify = "payload includes added and removed diagnostics"
 )]
-fn the_diagnostics_delta_names_what_was_added_and_removed() {
-    let warning = Diagnostic::untyped("W001", Severity::Warning, "test warning");
+fn diagnostics_changed_sends_whole_diagnostics() {
+    let warning = Diagnostic::untyped("W001", Severity::Warning, "test warning")
+        .with_span(SourceSpan {
+            file: "a.spec".into(),
+            start_line: 3,
+            start_col: 1,
+            end_line: 3,
+            end_col: 9,
+        })
+        .with_suggestion("do the other thing");
     let delta = GraphDelta::default();
     let mut subscriptions = Subscriptions::new();
     let mut events = EventLog::new();
@@ -771,29 +785,66 @@ fn the_diagnostics_delta_names_what_was_added_and_removed() {
         &mut events,
     );
     assert_eq!(
-        subscriptions.drain()[1],
+        drained(&mut subscriptions)[1],
         json!({
             "jsonrpc": "2.0",
             "method": "specforge/diagnosticsChanged",
             "params": {
-                "added": [{"code": "W001", "severity": "Warning", "message": "test warning"}],
+                "added": serde_json::to_value(specforge_common::diagnostics_json(
+                    std::slice::from_ref(&warning)
+                )).unwrap(),
                 "removed": [],
             },
         })
     );
+}
 
-    // A fixed warning shows up as removed.
-    subscriptions.updated(
-        &Changes::new(&delta, false, Some((std::slice::from_ref(&warning), &[]))),
-        &mut events,
-    );
-    assert_eq!(
-        subscriptions.drain()[1]["params"],
-        json!({
-            "added": [],
-            "removed": [{"code": "W001", "severity": "Warning", "message": "test warning"}],
-        })
-    );
+#[specforge_test(
+    behavior = "notify_diagnostics_delta_via_mcp",
+    verify = "each added or removed diagnostic is presented as every surface presents diagnostics"
+)]
+fn a_notified_diagnostic_is_presented_as_check_presents_it() {
+    use specforge_common::DiagnosticData;
+    let unresolved = Diagnostic::new(
+        specforge_common::codes::E003,
+        "unresolved reference 'ghost'",
+    )
+    .with_span(SourceSpan {
+        file: "b.spec".into(),
+        start_line: 4,
+        start_col: 2,
+        end_line: 4,
+        end_col: 12,
+    })
+    .with_suggestion("did you mean 'alpha'?")
+    .with_data(DiagnosticData::UnresolvedReference {
+        target: "ghost".to_string(),
+        entity: "beta".to_string(),
+        field: "depends_on".to_string(),
+        did_you_mean: Some("alpha".to_string()),
+    });
+    let delta = GraphDelta::default();
+    let mut subscriptions = Subscriptions::new();
+    let mut events = EventLog::new();
+    subscriptions.subscribe("specforge://diagnostics", &mut events);
+
+    for (before, after, key) in [
+        (&[][..], std::slice::from_ref(&unresolved), "added"),
+        (std::slice::from_ref(&unresolved), &[][..], "removed"),
+    ] {
+        subscriptions.updated(
+            &Changes::new(&delta, false, Some((before, after))),
+            &mut events,
+        );
+        let sent = drained(&mut subscriptions);
+        let presented = serde_json::to_value(specforge_common::diagnostics_json(
+            std::slice::from_ref(&unresolved),
+        ))
+        .unwrap();
+        assert_eq!(sent[1]["params"][key], presented, "{key}");
+        assert!(presented[0]["data"].is_object(), "{presented}");
+        assert!(presented[0]["span"].is_object(), "{presented}");
+    }
 }
 
 #[test]
@@ -856,7 +907,7 @@ fn reopening_a_listen_id_ends_the_old_stream() {
     let mut subscriptions = Subscriptions::new();
     let mut events = EventLog::new();
     subscriptions.listen(json!(1), vec!["specforge://graph".into()], &mut events);
-    subscriptions.drain();
+    drained(&mut subscriptions);
     events = EventLog::new();
 
     subscriptions.listen(
@@ -874,7 +925,7 @@ fn reopening_a_listen_id_ends_the_old_stream() {
     assert_eq!(names[0].1["resourceUri"], "specforge://graph");
     assert_eq!(names[0].1["subscriptionId"], "1");
     assert_eq!(names[1].0, "mcp_subscription_created");
-    subscriptions.drain();
+    drained(&mut subscriptions);
 
     // A graph change reaches nobody: the stream on the graph ended.
     let delta = GraphDelta {
@@ -882,7 +933,7 @@ fn reopening_a_listen_id_ends_the_old_stream() {
         ..GraphDelta::default()
     };
     subscriptions.updated(&Changes::new(&delta, false, None), &mut events);
-    assert!(subscriptions.drain().is_empty());
+    assert!(drained(&mut subscriptions).is_empty());
 }
 
 #[specforge_test(
@@ -899,7 +950,7 @@ fn one_update_is_heard_in_one_order() {
     );
     subscriptions.subscribe("specforge://context", &mut events);
     subscriptions.subscribe("specforge://diagnostics", &mut events);
-    subscriptions.drain();
+    drained(&mut subscriptions);
 
     let delta = GraphDelta {
         added_nodes: vec![node_change("alpha")],
@@ -911,7 +962,7 @@ fn one_update_is_heard_in_one_order() {
         &mut events,
     );
 
-    let sent = subscriptions.drain();
+    let sent = drained(&mut subscriptions);
     let heard: Vec<(&str, &str, bool)> = sent
         .iter()
         .map(|n| {
@@ -959,7 +1010,7 @@ fn an_environment_reload_touches_the_graph_views_and_the_schema() {
     let mut events = EventLog::new();
     subscriptions.subscribe("specforge://graph", &mut events);
     subscriptions.updated(&reload, &mut events);
-    let sent = subscriptions.drain();
+    let sent = drained(&mut subscriptions);
     // The graph delta is empty: the standard update, and no graphChanged.
     assert_eq!(methods(&sent), ["notifications/resources/updated"]);
     assert_eq!(sent[0]["params"]["uri"], "specforge://graph");
@@ -975,5 +1026,5 @@ fn a_schema_subscriber_hears_no_graph_delta() {
         ..GraphDelta::default()
     };
     subscriptions.updated(&Changes::new(&delta, false, None), &mut events);
-    assert!(subscriptions.drain().is_empty());
+    assert!(drained(&mut subscriptions).is_empty());
 }

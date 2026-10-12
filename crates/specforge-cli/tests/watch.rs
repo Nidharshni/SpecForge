@@ -17,6 +17,14 @@ fn specforge_cmd() -> Command {
     Command::cargo_bin("specforge").unwrap()
 }
 
+/// The `delta` of a `rebuilt` or `rechecked` line: the graph delta MCP
+/// notifies.
+fn delta_of(line: &str) -> serde_json::Value {
+    let event: serde_json::Value =
+        serde_json::from_str(line).unwrap_or_else(|e| panic!("a watch line is JSON ({e}): {line}"));
+    event["delta"].clone()
+}
+
 /// Spawn `specforge watch --json` on a fresh project and return the line
 /// receiver plus the child handle.
 fn spawn_watch(project: &TempDir) -> (mpsc::Receiver<String>, ChildGuard) {
@@ -98,7 +106,10 @@ fn watch_rebuilds_on_file_change() {
     // the rebuild for this edit is the one that adds a node.
     let rebuilt =
         wait_for_line(&rx, "\"event\":\"rebuilt\"", Duration::from_secs(60)).and_then(|first| {
-            if first.contains("\"added_nodes\":0") && first.contains("\"modified_nodes\":0") {
+            let delta = delta_of(&first);
+            if delta["added_nodes"] == serde_json::json!([])
+                && delta["modified_nodes"] == serde_json::json!([])
+            {
                 wait_for_line(&rx, "\"event\":\"rebuilt\"", Duration::from_secs(60))
             } else {
                 Some(first)
@@ -107,8 +118,9 @@ fn watch_rebuilds_on_file_change() {
     drop(child);
 
     let line = rebuilt.expect("no rebuild event after file change");
-    assert!(
-        line.contains("\"added_nodes\":1"),
+    assert_eq!(
+        delta_of(&line)["added_nodes"].as_array().map(Vec::len),
+        Some(1),
         "expected exactly one added node, got: {line}"
     );
     assert!(
@@ -144,7 +156,9 @@ fn watch_reports_diagnostics_on_broken_edit() {
     // is the one that modifies `one` and reports the error.
     let rebuilt =
         wait_for_line(&rx, "\"event\":\"rebuilt\"", Duration::from_secs(60)).and_then(|first| {
-            if first.contains("\"errors\":0") && first.contains("\"modified_nodes\":0") {
+            if first.contains("\"errors\":0")
+                && delta_of(&first)["modified_nodes"] == serde_json::json!([])
+            {
                 wait_for_line(&rx, "\"event\":\"rebuilt\"", Duration::from_secs(60))
             } else {
                 Some(first)
@@ -396,9 +410,9 @@ fn next_event(rx: &mpsc::Receiver<String>, timeout: Duration) -> Option<serde_js
             continue;
         };
         let unchanged = event["event"] == "rebuilt"
-            && event["added_nodes"] == 0
-            && event["removed_nodes"] == 0
-            && event["modified_nodes"] == 0;
+            && event["delta"]["added_nodes"] == serde_json::json!([])
+            && event["delta"]["removed_nodes"] == serde_json::json!([])
+            && event["delta"]["modified_nodes"] == serde_json::json!([]);
         if !unchanged {
             return Some(event);
         }
@@ -507,7 +521,11 @@ fn watch_ignores_a_wasm_no_extension_loads() {
         serde_json::json!(["main.spec"]),
         "{event}"
     );
-    assert_eq!(event["added_nodes"], 1, "{event}");
+    assert_eq!(
+        event["delta"]["added_nodes"].as_array().map(Vec::len),
+        Some(1),
+        "{event}"
+    );
 }
 
 #[specforge_test(
@@ -565,7 +583,11 @@ fn watch_follows_a_moved_spec_root() {
         serde_json::json!(["three.spec"]),
         "{event}"
     );
-    assert_eq!(event["added_nodes"], 1, "{event}");
+    assert_eq!(
+        event["delta"]["added_nodes"].as_array().map(Vec::len),
+        Some(1),
+        "{event}"
+    );
 }
 
 /// A project whose `gadget` kind (the vendored docref extension) has a

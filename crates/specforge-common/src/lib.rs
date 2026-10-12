@@ -20,9 +20,9 @@ pub use diagnostic::{CustomRuleFailure, Diagnostic, DiagnosticData, DiagnosticsE
 pub use discovery::{Walked, discover_spec_files, is_discovered, is_excluded, walk_spec_files};
 pub use interner::Sym;
 pub use present::{
-    Counts, DiagnosticJson, DiagnosticList, MAX_DIAGNOSTICS, compute_exit_code, diagnostic_summary,
-    diagnostics_json, format_diagnostic, render_diagnostics, render_plain, serialize_diagnostics,
-    truncate_diagnostics,
+    Counts, DiagnosticDocument, DiagnosticJson, DiagnosticList, MAX_DIAGNOSTICS, compute_exit_code,
+    diagnostic_summary, diagnostics_json, format_diagnostic, render_diagnostics, render_plain,
+    serialize_diagnostics, truncate_diagnostics,
 };
 pub use project::{
     ConfigProblem, ConfigRead, ExtensionEntry, InferenceConfig, ProjectConfig,

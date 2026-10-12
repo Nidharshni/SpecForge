@@ -390,7 +390,7 @@ behavior compute_graph_delta "Compute Graph Delta" {
     graph_delta_determinism,
   ]
   category   query
-  types      [Graph, GraphDelta, NodeChange, ModifiedNodeChange]
+  types      [Graph, GraphDelta, NodeChange, ModifiedNodeChange, EdgeChange]
   consumes   [incremental_rebuild_complete]
   produces   [graph_delta_computed]
   requires {
@@ -408,8 +408,10 @@ behavior compute_graph_delta "Compute Graph Delta" {
     After an incremental rebuild completes, the system MUST diff the
     previous graph state against the new graph state to produce a
     GraphDelta. The delta MUST enumerate all added nodes, removed nodes,
-    modified nodes (with what changed: field names, or kind, title,
-    methods, edges), added edges, removed edges, and the list of affected
+    modified nodes (with what changed: the fields whose values differ, by
+    name, and apart from them which of its kind, title, methods and
+    outgoing edges differ, so a field named kind or methods is never read
+    as the aspect), added edges, removed edges, and the list of affected
     files. Source positions are ignored: an entity that only moved is not
     modified. added_nodes, removed_nodes, and modified_nodes MUST be
     sorted by EntityId.raw to guarantee deterministic output. The delta
@@ -422,6 +424,7 @@ behavior compute_graph_delta "Compute Graph Delta" {
   verify unit "added and removed edges appear in delta"
   verify unit "affected files listed in delta"
   verify unit "shifted expression positions are not a modification"
+  verify unit "a field named like an aspect is a changed field, never the aspect"
   verify contract "Compute Graph Delta: graph delta computation holds — previous_graph_available"
 }
 
@@ -485,8 +488,9 @@ behavior notify_delta_subscribers "Notify Delta Subscribers" {
   contract   """
     After every update, the project session MUST report the GraphDelta
     and the files it affects with the update, for whoever holds the
-    session to deliver: specforge watch prints its counts, and MCP
-    notifies its subscribed clients (notify_graph_delta_via_mcp) and diffs
+    session to deliver: specforge watch prints it (whole, as each rebuilt
+    or rechecked line's delta under --format json; its counts in text),
+    and MCP notifies its subscribed clients (notify_graph_delta_via_mcp) and diffs
     the diagnostics into a DiagnosticsDelta itself
     (notify_diagnostics_delta_via_mcp). The session never waits on a
     subscriber, so a slow one cannot delay the compilation pipeline. The
@@ -495,6 +499,7 @@ behavior notify_delta_subscribers "Notify Delta Subscribers" {
     (provide_semantic_tokens, behaviors/lsp.spec).
   """
   verify unit "an update reports its delta and the files it affects"
+  verify unit "watch --format json prints each rebuild's GraphDelta, the one MCP notifies"
   verify contract "Notify Delta Subscribers: delta reporting holds — graph_delta_computed_fired, affected_files_delivered, delta_subscribers_notified_emitted"
 }
 

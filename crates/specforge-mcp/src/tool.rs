@@ -12,16 +12,17 @@ use std::marker::PhantomData;
 use serde::Serialize;
 use serde_json::{Value, json};
 use specforge_common::shape::Shape;
-use specforge_common::{Diagnostic, Severity};
+use specforge_common::{Diagnostic, DiagnosticDocument, Severity};
 use specforge_graph::Graph;
 
 use crate::args::{Argument, Arguments};
 use crate::events::EventSink;
+use crate::lifecycle::Revision;
 use crate::mutation::{Mutation, MutationArgs, MutationReply};
 use crate::protocol::{JsonRpcError, JsonRpcResponse, error_codes};
+use crate::registry::{ToolAnnotations, ToolDescriptor};
 use crate::reply::{Answered, Object, Source, Text};
 use crate::target::{Call, Input, TargetSpec};
-use crate::types::McpToolDescriptor;
 use specforge_ops::{OpError, OpErrorKind};
 
 /// The group a tool that is no mutation is listed in: the spec's
@@ -104,13 +105,13 @@ pub struct WriteHints {
 
 impl WriteHints {
     /// `{readOnlyHint: false, destructiveHint, idempotentHint, openWorldHint}`.
-    pub fn annotations(self) -> Value {
-        json!({
-            "readOnlyHint": false,
-            "destructiveHint": self.destructive,
-            "idempotentHint": self.idempotent,
-            "openWorldHint": self.open_world,
-        })
+    pub fn annotations(self) -> ToolAnnotations {
+        ToolAnnotations {
+            read_only_hint: false,
+            destructive_hint: Some(self.destructive),
+            idempotent_hint: Some(self.idempotent),
+            open_world_hint: self.open_world,
+        }
     }
 }
 
@@ -118,8 +119,13 @@ impl WriteHints {
 /// project, `{readOnlyHint: true, openWorldHint: false}`: every core read,
 /// and every extension tool (the host grants an extension no capability,
 /// ADR 0037 D1).
-pub fn read_only_annotations() -> Value {
-    json!({ "readOnlyHint": true, "openWorldHint": false })
+pub fn read_only_annotations() -> ToolAnnotations {
+    ToolAnnotations {
+        read_only_hint: true,
+        destructive_hint: None,
+        idempotent_hint: None,
+        open_world_hint: false,
+    }
 }
 
 /// What a tool does to its environment: the one declaration its category,
@@ -156,7 +162,7 @@ impl Effect {
     }
 
     /// `read_only_annotations()` for `Reads`, else its hints' annotations.
-    pub fn annotations(self) -> Value {
+    pub fn annotations(self) -> ToolAnnotations {
         match self {
             Effect::Reads { .. } => read_only_annotations(),
             Effect::WritesOutput { hints, .. } | Effect::Mutates { hints } => hints.annotations(),
@@ -362,7 +368,7 @@ pub trait ToolSpec: Sync {
     }
 
     /// `readOnlyHint` for a read, else its hints'.
-    fn annotations(&self) -> Value {
+    fn annotations(&self) -> ToolAnnotations {
         self.effect().annotations()
     }
 
@@ -393,15 +399,19 @@ pub trait ToolSpec: Sync {
         crate::args::undeclared(arguments, &self.arguments(), self.target())
     }
 
-    /// The tool as `tools/list` describes it.
-    fn descriptor(&self) -> McpToolDescriptor {
-        McpToolDescriptor {
+    /// The tool as `tools/list` describes it under `revision`: it lists its
+    /// outputSchema from 2025-06-18, the revision that came with
+    /// structured content.
+    fn descriptor(&self, revision: Revision) -> ToolDescriptor<'static> {
+        ToolDescriptor {
             name: self.name().into(),
             description: self.description().into(),
             input_schema: self.input_schema(),
-            output_schema: self.output_schema().cloned(),
-            category: Some(self.category().as_str().into()),
-            source: Some(CORE_SOURCE.into()),
+            output_schema: self
+                .output_schema()
+                .filter(|_| revision.sends_structured_content()),
+            category: self.category(),
+            source: CORE_SOURCE.into(),
             annotations: self.annotations(),
         }
     }
@@ -499,7 +509,8 @@ impl<T: CoreTool> ToolSpec for T {
 }
 
 /// The spec's `McpErrorCode`: the small closed set agents branch on.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Shape)]
+#[serde(rename_all = "snake_case")]
 pub enum ErrorCode {
     InvalidInput,
     CompilationFailed,
@@ -581,29 +592,42 @@ impl From<OpErrorKind> for ErrorCode {
     }
 }
 
-/// A failed tool call: the spec's `McpError`, the content of its `isError`
-/// result. The diagnostic code, when there is one, is `diagnostic.code`,
-/// never only message text.
-#[derive(Debug, Clone)]
+/// A failed call or read: the spec's `McpError`. It is the text (and, for an
+/// untyped tool, the structuredContent) of an `isError` tool result, and the
+/// `data` of a prompt's or a resource read's JSON-RPC error; serialized from
+/// this one definition everywhere. The diagnostic code, when there is one,
+/// is `diagnostic.code`, never only message text.
+#[derive(Debug, Clone, Serialize, Shape)]
 pub struct McpError {
     pub code: ErrorCode,
     pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub tool: Option<String>,
     /// The prompt that refused: a `prompts/get` answered with an error.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub prompt: Option<String>,
     /// The URI of the resource whose read failed: a `resources/read`
     /// answered with an error (the URI read).
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub uri: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub entity_id: Option<String>,
     /// The project file the failure is about (`file_not_found`): what a
     /// refusal that finds no project to look in names, rather than reading
     /// it back out of the message.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub file: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub argument: Option<String>,
-    pub diagnostic: Option<Value>,
+    /// The diagnostic behind the failure, as every surface presents one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub diagnostic: Option<DiagnosticDocument>,
+    /// More about the failure: the open value `McpError` reserves.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<Value>,
     /// Other diagnostics the call reported on its way to failing; they
     /// ride in `_meta.diagnostics`, as a successful call's do.
+    #[serde(skip)]
     pub reported: Vec<Diagnostic>,
 }
 
@@ -655,11 +679,7 @@ impl McpError {
     }
 
     pub fn with_diagnostic(mut self, diagnostic: &Diagnostic) -> Self {
-        self.diagnostic = serde_json::to_value(specforge_common::diagnostics_json(
-            std::slice::from_ref(diagnostic),
-        ))
-        .ok()
-        .and_then(|mut all| all.get_mut(0).map(Value::take));
+        self.diagnostic = Some(DiagnosticDocument(diagnostic.clone()));
         self
     }
 
@@ -693,27 +713,8 @@ impl McpError {
         } else {
             self.code.rpc_code()
         };
-        JsonRpcError::new(code, self.message.clone()).with_data(self.to_json())
-    }
-
-    /// The error as its `isError` result carries it.
-    pub fn to_json(&self) -> Value {
-        let mut error = json!({ "code": self.code.as_str(), "message": self.message });
-        for (key, value) in [
-            ("tool", self.tool.clone().map(Value::from)),
-            ("prompt", self.prompt.clone().map(Value::from)),
-            ("uri", self.uri.clone().map(Value::from)),
-            ("entity_id", self.entity_id.clone().map(Value::from)),
-            ("file", self.file.clone().map(Value::from)),
-            ("argument", self.argument.clone().map(Value::from)),
-            ("diagnostic", self.diagnostic.clone()),
-            ("data", self.data.clone()),
-        ] {
-            if let Some(value) = value {
-                error[key] = value;
-            }
-        }
-        error
+        let data = serde_json::to_value(&self).expect("an McpError serializes");
+        JsonRpcError::new(code, self.message).with_data(data)
     }
 }
 
@@ -911,7 +912,7 @@ pub fn envelope(
 ) -> JsonRpcResponse {
     let (payload, is_error, diagnostics, mut meta) = match outcome {
         ToolOutcome::Refused(error) => {
-            let json = error.to_json();
+            let json = serde_json::to_value(&*error).expect("an McpError serializes");
             (
                 Payload::Json(json),
                 true,
@@ -972,6 +973,34 @@ mod tests {
         ErrorCode::PreconditionFailed,
     ];
 
+    #[specforge_test_macros::test(
+        behavior = "state_mcp_messages_as_spec_types",
+        verify = "an McpError is serialized from its type, the isError content and a JSON-RPC error's data alike"
+    )]
+    fn an_error_serializes_as_its_type() {
+        let mut error = McpError::new(ErrorCode::InvalidInput, "no")
+            .with_argument("scope")
+            .with_diagnostic(&Diagnostic::untyped("E003", Severity::Error, "gone"));
+        error.prompt = Some("specforge://prompts/context".into());
+        // As a JSON value (its keys sorted, as every JSON-RPC document the
+        // server builds from a value).
+        let text = serde_json::to_value(&error).unwrap().to_string();
+
+        // The isError result's text is the type, byte for byte.
+        let reply = envelope(
+            ToolOutcome::Refused(Box::new(error.clone())),
+            None,
+            false,
+            false,
+        );
+        let content = reply.result.as_ref().unwrap()["content"][0]["text"].clone();
+        assert_eq!(content.as_str(), Some(text.as_str()));
+
+        // And so is a JSON-RPC error's data.
+        let rpc = error.into_rpc_error();
+        assert_eq!(rpc.data.unwrap().to_string(), text);
+    }
+
     #[test]
     fn every_operation_kind_has_an_error_code() {
         for (kind, code) in [
@@ -1002,7 +1031,7 @@ mod tests {
             .with_entity("alpha")
             .with_suggestion("pick another")
             .into();
-        let json = error.to_json();
+        let json = serde_json::to_value(&error).unwrap();
         assert_eq!(json["code"], "conflict");
         assert_eq!(json["entity_id"], "alpha");
         assert_eq!(json["data"]["suggestion"], "pick another");
@@ -1012,7 +1041,7 @@ mod tests {
             OpError::diagnostic(specforge_common::codes::E062, "the budget is too small")
                 .with_suggestion("raise it")
                 .into();
-        let json = error.to_json();
+        let json = serde_json::to_value(&error).unwrap();
         assert_eq!(json["code"], "invalid_input");
         assert_eq!(json["diagnostic"]["code"], "E062");
         assert_eq!(json["diagnostic"]["suggestion"], "raise it");
@@ -1037,20 +1066,41 @@ mod tests {
     #[test]
     fn a_prompts_refusal_names_the_prompt() {
         let mut error = McpError::new(ErrorCode::InvalidInput, "no");
-        assert!(error.to_json().get("prompt").is_none());
+        assert!(
+            serde_json::to_value(&error)
+                .unwrap()
+                .get("prompt")
+                .is_none()
+        );
         error.prompt = Some("specforge://prompts/context".into());
-        assert_eq!(error.to_json()["prompt"], "specforge://prompts/context");
-        assert!(error.to_json().get("tool").is_none());
+        assert_eq!(
+            serde_json::to_value(&error).unwrap()["prompt"],
+            "specforge://prompts/context"
+        );
+        assert!(serde_json::to_value(&error).unwrap().get("tool").is_none());
     }
 
     #[test]
     fn a_resources_refusal_names_the_uri() {
         let mut error = McpError::new(ErrorCode::InvalidInput, "no");
-        assert!(error.to_json().get("uri").is_none());
+        assert!(serde_json::to_value(&error).unwrap().get("uri").is_none());
         error.uri = Some("specforge://graph?depth=two".into());
-        assert_eq!(error.to_json()["uri"], "specforge://graph?depth=two");
-        assert!(error.to_json().get("resource").is_none());
-        assert!(error.to_json().get("prompt").is_none());
+        assert_eq!(
+            serde_json::to_value(&error).unwrap()["uri"],
+            "specforge://graph?depth=two"
+        );
+        assert!(
+            serde_json::to_value(&error)
+                .unwrap()
+                .get("resource")
+                .is_none()
+        );
+        assert!(
+            serde_json::to_value(&error)
+                .unwrap()
+                .get("prompt")
+                .is_none()
+        );
     }
 
     #[test]
@@ -1080,7 +1130,7 @@ mod tests {
 
     #[test]
     fn an_unknown_entity_carries_its_e003() {
-        let json = entity_not_found(&Graph::new(), "ghost").to_json();
+        let json = serde_json::to_value(entity_not_found(&Graph::new(), "ghost")).unwrap();
         assert_eq!(json["code"], "entity_not_found");
         assert_eq!(json["entity_id"], "ghost");
         assert_eq!(json["diagnostic"]["code"], "E003");
@@ -1198,9 +1248,11 @@ mod spec_tests {
         assert_eq!(input["properties"]["name"]["type"], "string", "{input}");
         let output = tool.output_schema().expect("a typed reply lists a schema");
         assert_eq!(output["properties"]["name"]["type"], "string", "{output}");
-        let descriptor = tool.descriptor();
-        assert_eq!(descriptor.category.as_deref(), Some("navigation"));
-        assert_eq!(descriptor.source.as_deref(), Some(CORE_SOURCE));
+        let descriptor = tool.descriptor(Revision::Negotiated(
+            crate::lifecycle::LATEST_PROTOCOL_VERSION,
+        ));
+        assert_eq!(descriptor.category, Category::Navigation);
+        assert_eq!(descriptor.source, CORE_SOURCE);
     }
 
     #[specforge_test_macros::test(

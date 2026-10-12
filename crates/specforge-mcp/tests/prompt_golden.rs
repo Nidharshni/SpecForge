@@ -185,6 +185,43 @@ fn pin(cases: &[(&str, &str, Value)]) {
     }
 }
 
+/// Every prompt's payload is valid against the schema its type derives
+/// (unlinked: the reflection test holds that schema to the spec).
+#[test]
+fn every_rendered_payload_conforms_to_its_derived_schema() {
+    let dir = project();
+    let mut server = server(&dir);
+    let cases: &[(&str, Value)] = &[
+        (
+            "context",
+            json!({"entity_id": "alpha", "structural_constraints": "beta"}),
+        ),
+        ("review", json!({})),
+        ("review", json!({"entity_id": "alpha"})),
+        ("trace", json!({"entity_id": "alpha"})),
+        ("explore", json!({})),
+        ("infer", json!({})),
+        ("infer", json!({"scope": "kind:behavior"})),
+        ("infer", json!({"scope": "file:src/login.rs"})),
+        ("infer", json!({"scope": "plan"})),
+        ("infer", json!({"scope": "workflow"})),
+    ];
+    for (prompt, arguments) in cases {
+        let spec = specforge_mcp::prompts::core_prompt(&format!("specforge://prompts/{prompt}"))
+            .expect("a core prompt");
+        let reply = get(&mut server, prompt, arguments.clone());
+        let text = reply["result"]["messages"][1]["content"]["text"]
+            .as_str()
+            .unwrap_or_else(|| panic!("{prompt} {arguments}: {reply}"));
+        let payload: Value = serde_json::from_str(text).unwrap();
+        let violations = specforge_common::shape::violations(spec.payload_schema(), &payload);
+        assert!(
+            violations.is_empty(),
+            "{prompt} {arguments}: {violations:#?}"
+        );
+    }
+}
+
 #[test]
 fn prompt_golden_list() {
     let dir = project();

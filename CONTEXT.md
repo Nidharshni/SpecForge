@@ -98,9 +98,12 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   ADR 0032). An update says whether the session's inputs changed (`inputs_changed`) and, when it was
   verified, how it differs from a cold rebuild (`divergence`). An update that changes no file (a held buffer
   whose text is already its file's) runs no check.
-- **Graph delta**: what an update or a reload changed in the graph: added, removed and modified
-  nodes (source positions ignored) and edges. Watch prints it and MCP notifies it
-  (`specforge_graph::GraphDelta`, re-exported as `specforge_project::GraphDelta`). A graph build computes it.
+- **Graph delta**: what an update or a reload changed in the graph: added and removed nodes (each with its
+  kind, file and line), modified nodes (the fields whose values differ, and apart from them which of its
+  kind, title, methods and outgoing edges differ), added and removed edges, and the affected files; source
+  positions ignored (`specforge_graph::GraphDelta`, re-exported as `specforge_project::GraphDelta`). A graph
+  build computes it. `specforge watch --format json` prints it and MCP sends it whole as
+  `specforge/graphChanged` (ADR 0058).
 - **Debounce rule**: changes that arrive less than 50 ms apart are one batch, due 50 ms after the last
   of them, each change once. Watch batches the file changes under every directory it watches as one
   stream, and the LSP batches edited documents, by the same rule (`specforge_watch::Coalescer`,
@@ -593,11 +596,12 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   target's project files (a mutation, ADR 0022), with how a writing tool writes (destructive,
   idempotent, open world) as MCP's annotations say it. An extension tool only reads: the host grants
   an extension no capability (ADR 0037).
-- **Prompt spec**: the single definition of an MCP prompt, from which its descriptor (its tool arguments'
-  names, descriptions and required) and reply are derived; it renders the read view its prompt is about
-  over the project view (the empty session's when nothing is served), adding only its instruction (tools named as the tool table names them), and refuses
-  with an McpError, sent as a JSON-RPC error's data since prompts have no isError (`specforge_mcp`'s
-  `PromptSpec` table).
+- **Prompt spec**: a core MCP prompt, one module under `specforge_mcp::prompts` implementing `CorePrompt`
+  once: its name, description, the spec type its payload is, its tool arguments and its typed payload,
+  rendered over the project view (the empty session's when nothing is served) with its instruction (tools
+  named as the tool table names them). Its descriptor and reading derive from it; `CORE_PROMPTS` lists each
+  once (each seen as a `PromptSpec`). It refuses with an McpError, sent as a JSON-RPC error's data since
+  prompts have no isError (ADR 0049, ADR 0058).
 - **Tool arguments**: the one typed struct a tool or prompt reads its call's arguments into
   (`#[derive(Arguments)]`, `specforge_mcp::args`, ADR 0033). Each field is an argument: its name, its
   doc comment as description, its type (how a value is read, and the JSON type listed), its default,
@@ -625,6 +629,11 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`Diagnostic`, `MigrationResult`, ...) or one a reply holds more than once (`SourceSpan`,
   `GraphProtocolSchema`, ...). Each MCP tool's schema is its own document, so a named shape is defined
   once per tool, never once per listing.
+- **MCP message**: a document the MCP server sends whose content SpecForge decides besides a tool reply: the
+  `initialize` and `server/discover` results, a listing's descriptors, the SpecForge notifications' params,
+  the McpError a refusal carries (`specforge_mcp::message::Message`), and a prompt's payload. Each is one
+  type deriving `Serialize` and `Shape` that names its spec type, and a test holds the two together; a frame
+  whose keys MCP fixes is MCP's and is not restated (ADR 0058).
 - **Surface call**: one MCP request that invokes a named tool, resource or prompt (`tools/call`,
   `resources/read`, `prompts/get`), run through one pipeline: read the request, find the entry (the
   core table, then, with the served project brought up to date, the extension surface table), record
@@ -649,7 +658,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   extension's resources), with the environment alone (`specforge://schema`) or with the diagnostics
   (`specforge://diagnostics`). After an update that changed it, each subscription hears
   `notifications/resources/updated` once, and a handshake subscriber of a graph view or of the
-  diagnostics then hears the delta (`specforge/graphChanged`, `specforge/diagnosticsChanged`).
+  diagnostics then hears the delta, whole (`specforge/graphChanged`: the graph delta;
+  `specforge/diagnosticsChanged`: the diagnostics added and removed, each as every surface presents one).
   Subscriptions belong to the connection and end with it or at shutdown
   (`specforge_mcp::subscriptions::Subscriptions`, ADR 0024 D6).
 - **MCP event**: what an MCP server records it did — a tool, prompt or listing invoked, a resource
