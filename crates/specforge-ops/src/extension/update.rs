@@ -20,7 +20,7 @@ use specforge_common::shape::Shape;
 use specforge_common::{Code, codes};
 use specforge_installed::{Installed, LockState};
 use specforge_package::PackageName;
-use specforge_package::VersionRequirement;
+use specforge_package::{LockedVersion, Reach};
 use specforge_wasm::WasmRuntime;
 use std::path::Path;
 
@@ -33,9 +33,9 @@ pub struct UpdateRequest<'a> {
     pub root: &'a Path,
     /// One extension by name; every locked extension when `None`.
     pub name: Option<&'a str>,
-    /// Allow a new major version (`--major`); otherwise an extension only
-    /// moves within its locked version's caret range.
-    pub major: bool,
+    /// How far each extension may move: within its locked version's caret range, or to any
+    /// newer version (`--major`). Never to its locked version or below.
+    pub reach: Reach,
     /// Accept a registry package with no publisher signature.
     pub allow_unsigned: bool,
     pub trust: Trust,
@@ -52,7 +52,8 @@ pub enum UpdateStatus {
         sha256: String,
         publisher: Publisher,
     },
-    /// Already at the newest version the request allows.
+    /// Nothing published is newer than its locked version within the request's reach (its locked
+    /// version may no longer be published).
     UpToDate { version: String },
     /// Not a registry install (`source` is the lock's, e.g.
     /// `local:<path>`): a registry never replaces it (ADR 0004 D3-b).
@@ -242,7 +243,8 @@ pub enum UpdateRow {
         from: String,
         to: String,
     },
-    /// Already at the newest version the request allows.
+    /// Nothing published is newer than its locked version within the request's reach (its locked
+    /// version may no longer be published).
     UpToDate { name: String, version: String },
     /// Not a registry install; a registry never replaces it (ADR 0004 D3-b).
     NotFromRegistry { name: String, source: String },
@@ -339,7 +341,7 @@ pub fn update(
                 source: entry.source.to_string(),
             }
         } else {
-            match newer(req, &fetch, &entry.name, &entry.version) {
+            match newer(req.reach, &fetch, &entry.name, &entry.version) {
                 Ok(None) => UpdateStatus::UpToDate {
                     version: entry.version.clone(),
                 },
@@ -388,31 +390,26 @@ pub fn update(
     Ok(outcome)
 }
 
-/// The newer package `name` (locked at `current`) moves to, fetched, or `None` when it is up to
-/// date: within the caret range of the locked version unless `--major`.
+/// The package `name` (locked at `locked`) moves to, fetched, or `None` when it is up to date:
+/// its upgrade target within `reach` ([`super::upgrade`]).
 fn newer<'a>(
-    req: &UpdateRequest,
+    reach: Reach,
     fetch: &Fetch<'a>,
     name: &PackageName,
-    current: &str,
+    locked: &str,
 ) -> Result<Option<Install<'a>>, OpError> {
-    // A new major version is a breaking change the user opts into.
-    let requirement = match semver::Version::parse(current) {
-        Ok(current) if !req.major => VersionRequirement::compatible_with(&current),
-        _ => VersionRequirement::Latest,
-    };
-    let latest = super::resolve_requirement(fetch.registry, name, &requirement)?;
-    if latest.to_string() == current {
+    let Some(target) = super::upgrade(fetch.registry, name, &LockedVersion::read(locked), reach)?
+    else {
         return Ok(None);
-    }
-    fetch.install(name, &latest).map(Some)
+    };
+    fetch.install(name, &target).map(Some)
 }
 
 #[cfg(test)]
 mod tests {
     use super::super::fixtures::{declaration_of, entry, greet, installed, project};
     use super::*;
-    use crate::registry::testing::{MemoryRegistry, Published, declaration};
+    use crate::registry::testing::{Asked, MemoryRegistry, Published, declaration};
     use specforge_installed::{LockSource, hex_sha256, lock_path};
     use specforge_test_macros::test as specforge_test;
 
@@ -435,11 +432,11 @@ mod tests {
         Published::new(b"\0asm old".to_vec(), declaration(name, version, &[]))
     }
 
-    fn request(root: &Path, major: bool) -> UpdateRequest<'_> {
+    fn request(root: &Path, reach: Reach) -> UpdateRequest<'_> {
         UpdateRequest {
             root,
             name: None,
-            major,
+            reach,
             allow_unsigned: true,
             trust: Trust::Refuse,
         }
@@ -464,7 +461,7 @@ mod tests {
             .serving(old("@sdk/greet", "0.0.9"))
             .serving(greet_published());
 
-        let outcome = update(&request(dir.path(), true), &registry, &runtime()).unwrap();
+        let outcome = update(&request(dir.path(), Reach::Major), &registry, &runtime()).unwrap();
 
         assert!(outcome.applied(), "{outcome:?}");
         assert_eq!(
@@ -498,7 +495,12 @@ mod tests {
             .serving(old("@sdk/greet", "0.0.9"))
             .serving(greet_published());
 
-        let outcome = update(&request(dir.path(), false), &registry, &runtime()).unwrap();
+        let outcome = update(
+            &request(dir.path(), Reach::Compatible),
+            &registry,
+            &runtime(),
+        )
+        .unwrap();
 
         // Asked for what ^0.0.9 admits: 0.1.0 is not it.
         assert_eq!(registry.listed(), [name("@sdk/greet")]);
@@ -536,7 +538,7 @@ mod tests {
                 declaration("@acme/liar", "1.1.0", &[]),
             ));
 
-        let outcome = update(&request(dir.path(), true), &registry, &runtime()).unwrap();
+        let outcome = update(&request(dir.path(), Reach::Major), &registry, &runtime()).unwrap();
 
         assert!(!outcome.applied());
         let failures: Vec<(&str, &str)> = outcome
@@ -575,7 +577,7 @@ mod tests {
         let lock_before = std::fs::read(lock_path(dir.path())).unwrap();
         let registry = MemoryRegistry::new().serving(greet_published());
 
-        let outcome = update(&request(dir.path(), true), &registry, &runtime()).unwrap();
+        let outcome = update(&request(dir.path(), Reach::Major), &registry, &runtime()).unwrap();
 
         assert!(!outcome.applied());
         let (name, error) = outcome.failures().next().unwrap();
@@ -608,7 +610,7 @@ mod tests {
             return;
         }
 
-        let result = update(&request(dir.path(), true), &registry, &runtime());
+        let result = update(&request(dir.path(), Reach::Major), &registry, &runtime());
         std::fs::set_permissions(dir.path(), mode(0o755)).unwrap();
 
         let error = result.unwrap_err();
@@ -644,7 +646,7 @@ mod tests {
             return;
         }
 
-        let result = update(&request(dir.path(), true), &registry, &runtime());
+        let result = update(&request(dir.path(), Reach::Major), &registry, &runtime());
         std::fs::set_permissions(&probe_dir, mode(0o755)).unwrap();
 
         let error = result.unwrap_err();
@@ -661,87 +663,199 @@ mod tests {
         );
     }
 
-    #[test]
-    fn pin_major_moves_a_pre_release_lock_to_a_lower_release() {
-        // Today --major asks for `latest`, which skips pre-releases, and any version other than the
-        // locked one counts as an update. T2 flips this: up to date.
+    /// Whether `registry` was asked to fetch anything.
+    fn fetched(registry: &MemoryRegistry) -> bool {
+        registry
+            .asked()
+            .iter()
+            .any(|asked| matches!(asked, Asked::Fetch(..)))
+    }
+
+    #[specforge_test(
+        behavior = "update_all_extensions",
+        verify = "an update never moves an extension to its locked version or below, and a locked version no longer published is up to date"
+    )]
+    fn major_never_moves_a_pre_release_lock_to_a_lower_release() {
+        // --major admits any version above 0.2.0-beta.1; 0.1.0 is below it.
         let dir = project(vec![entry("@sdk/greet", "0.2.0-beta.1", "registry", &[])]);
+        let lock_before = std::fs::read(lock_path(dir.path())).unwrap();
         let registry = MemoryRegistry::new()
             .serving(greet_published())
             .serving(old("@sdk/greet", "0.2.0-beta.1"));
 
-        let outcome = update(&request(dir.path(), true), &registry, &runtime()).unwrap();
+        let outcome = update(&request(dir.path(), Reach::Major), &registry, &runtime()).unwrap();
 
-        assert!(outcome.applied(), "{outcome:?}");
         assert_eq!(
-            outcome.updated().collect::<Vec<_>>(),
-            [("@sdk/greet", "0.2.0-beta.1", "0.1.0")]
+            status_of(&outcome, "@sdk/greet"),
+            &UpdateStatus::UpToDate {
+                version: "0.2.0-beta.1".into()
+            }
         );
-        let lock = specforge_installed::read_lock_file(&lock_path(dir.path())).unwrap();
-        assert_eq!(lock.entries[0].version, "0.1.0");
+        assert!(!fetched(&registry), "{:?}", registry.asked());
+        assert!(outcome.extension_upgrade_completed().is_empty());
+        assert_eq!(std::fs::read(lock_path(dir.path())).unwrap(), lock_before);
     }
 
-    #[test]
-    fn pin_major_moves_a_vanished_lock_to_a_lower_release() {
-        // 0.3.0 is no longer published; only 0.1.0 is. Today --major moves down to it. T2 flips
-        // this: up to date.
-        let dir = project(vec![entry("@sdk/greet", "0.3.0", "registry", &[])]);
-        let registry = MemoryRegistry::new().serving(greet_published());
+    #[specforge_test(
+        behavior = "update_all_extensions",
+        verify = "an update never moves an extension to its locked version or below, and a locked version no longer published is up to date"
+    )]
+    fn a_vanished_lock_with_nothing_newer_is_up_to_date() {
+        // 0.3.0 is no longer published; only 0.1.0 is.
+        for reach in [Reach::Compatible, Reach::Major] {
+            let dir = project(vec![entry("@sdk/greet", "0.3.0", "registry", &[])]);
+            let lock_before = std::fs::read(lock_path(dir.path())).unwrap();
+            let registry = MemoryRegistry::new().serving(greet_published());
 
-        let outcome = update(&request(dir.path(), true), &registry, &runtime()).unwrap();
+            let outcome = update(&request(dir.path(), reach), &registry, &runtime()).unwrap();
 
-        assert!(outcome.applied(), "{outcome:?}");
-        assert_eq!(
-            outcome.updated().collect::<Vec<_>>(),
-            [("@sdk/greet", "0.3.0", "0.1.0")]
-        );
+            assert!(outcome.applied(), "{reach:?}: {outcome:?}");
+            assert_eq!(
+                status_of(&outcome, "@sdk/greet"),
+                &UpdateStatus::UpToDate {
+                    version: "0.3.0".into()
+                },
+                "{reach:?}"
+            );
+            assert!(!fetched(&registry), "{reach:?}: {:?}", registry.asked());
+            assert!(outcome.extension_upgrade_completed().is_empty());
+            assert_eq!(std::fs::read(lock_path(dir.path())).unwrap(), lock_before);
+        }
     }
 
-    #[test]
-    fn pin_a_vanished_lock_fails_the_whole_update() {
-        // @x/gone 1.2.0 is no longer published; only 1.0.0 is. ^1.2.0 matches nothing: R-RES-004,
-        // and greet's upgrade (0.1.0-alpha.1 -> 0.1.0, inside ^0.1.0-alpha.1) is held back.
+    #[specforge_test(
+        behavior = "update_all_extensions",
+        verify = "an update never moves an extension to its locked version or below, and a locked version no longer published is up to date"
+    )]
+    fn a_vanished_lock_holds_back_no_other_upgrade() {
+        // @x/gone 1.2.0 is no longer published; only 1.0.0 is: it is up to date, and greet's
+        // upgrade (0.1.0-alpha.1 -> 0.1.0, inside ^0.1.0-alpha.1) is applied.
         let dir = project(vec![
             entry("@sdk/greet", "0.1.0-alpha.1", "registry", &[]),
             entry("@x/gone", "1.2.0", "registry", &[]),
         ]);
-        let lock_before = std::fs::read(lock_path(dir.path())).unwrap();
         let registry = MemoryRegistry::new()
             .serving(greet_published())
             .serving(old("@x/gone", "1.0.0"));
 
-        let outcome = update(&request(dir.path(), false), &registry, &runtime()).unwrap();
+        let outcome = update(
+            &request(dir.path(), Reach::Compatible),
+            &registry,
+            &runtime(),
+        )
+        .unwrap();
 
-        assert!(!outcome.applied());
+        assert!(outcome.applied(), "{outcome:?}");
         assert_eq!(
             outcome.updated().collect::<Vec<_>>(),
             [("@sdk/greet", "0.1.0-alpha.1", "0.1.0")]
         );
-        let failures: Vec<(&str, &str)> = outcome
-            .failures()
-            .map(|(n, e)| (n, e.code.as_ref()))
+        assert_eq!(
+            status_of(&outcome, "@x/gone"),
+            &UpdateStatus::UpToDate {
+                version: "1.2.0".into()
+            }
+        );
+        assert_eq!(
+            outcome.batch_update_completed(),
+            BatchUpdateCompleted {
+                updated_count: 1,
+                failed_count: 0,
+                skipped_count: 1,
+            }
+        );
+        assert_eq!(
+            outcome.extension_upgrade_completed(),
+            [UpgradeCompleted {
+                extension_name: "@sdk/greet".into(),
+                previous_version: "0.1.0-alpha.1".into(),
+                new_version: "0.1.0".into(),
+            }]
+        );
+        let lock = specforge_installed::read_lock_file(&lock_path(dir.path())).unwrap();
+        let locked: Vec<(&str, &str)> = lock
+            .entries
+            .iter()
+            .map(|e| (e.name.as_str(), e.version.as_str()))
             .collect();
-        assert_eq!(failures, [("@x/gone", "R-RES-004")]);
-        assert_eq!(std::fs::read(lock_path(dir.path())).unwrap(), lock_before);
+        assert_eq!(locked, [("@sdk/greet", "0.1.0"), ("@x/gone", "1.2.0")]);
     }
 
-    #[test]
+    #[specforge_test(
+        behavior = "update_all_extensions",
+        verify = "newer versions detected from registry"
+    )]
     fn an_unreadable_locked_version_moves_to_what_add_installs() {
         // A lock edited by hand to a version that is no SemVer: either reach moves it to what
         // `latest` picks (the highest release), which is what `specforge add <name>` installs.
-        for major in [false, true] {
+        for reach in [Reach::Compatible, Reach::Major] {
             let dir = project(vec![entry("@sdk/greet", "not-semver", "registry", &[])]);
             let registry = MemoryRegistry::new()
                 .serving(greet_published())
                 .serving(old("@sdk/greet", "0.2.0-beta.1"));
 
-            let outcome = update(&request(dir.path(), major), &registry, &runtime()).unwrap();
+            let outcome = update(&request(dir.path(), reach), &registry, &runtime()).unwrap();
 
-            assert!(outcome.applied(), "major: {major}: {outcome:?}");
+            assert!(outcome.applied(), "{reach:?}: {outcome:?}");
             assert_eq!(
                 outcome.updated().collect::<Vec<_>>(),
                 [("@sdk/greet", "not-semver", "0.1.0")],
-                "major: {major}"
+                "{reach:?}"
+            );
+        }
+    }
+
+    const T1_5: &[u8] = b"\0asm in-process @x/t 1.5.0";
+    const T2: &[u8] = b"\0asm in-process @x/t 2.0.0";
+    const P_BETA_2: &[u8] = b"\0asm in-process @x/p 2.0.0-beta.2";
+
+    #[specforge_test(
+        behavior = "update_all_extensions",
+        verify = "semver-compatible upgrades applied"
+    )]
+    fn an_update_moves_to_the_newest_version_within_its_reach() {
+        let runtime = crate::testing::candidates()
+            .binary(T1_5, declaring("@x/t", "1.5.0", &[]))
+            .binary(T2, declaring("@x/t", "2.0.0", &[]));
+        for (reach, want) in [(Reach::Compatible, "1.5.0"), (Reach::Major, "2.0.0")] {
+            let dir = project(vec![entry("@x/t", "1.4.0", "registry", &[])]);
+            let registry = MemoryRegistry::new()
+                .serving(old("@x/t", "1.4.0"))
+                .serving(served(&runtime, T1_5))
+                .serving(served(&runtime, T2));
+
+            let outcome = update(&request(dir.path(), reach), &registry, &runtime).unwrap();
+
+            assert!(outcome.applied(), "{reach:?}: {outcome:?}");
+            assert_eq!(
+                outcome.updated().collect::<Vec<_>>(),
+                [("@x/t", "1.4.0", want)],
+                "{reach:?}"
+            );
+        }
+    }
+
+    #[specforge_test(
+        behavior = "update_all_extensions",
+        verify = "an update never moves an extension to its locked version or below, and a locked version no longer published is up to date"
+    )]
+    fn a_pre_release_lock_moves_along_its_own_track() {
+        let runtime =
+            crate::testing::candidates().binary(P_BETA_2, declaring("@x/p", "2.0.0-beta.2", &[]));
+        for reach in [Reach::Compatible, Reach::Major] {
+            let dir = project(vec![entry("@x/p", "2.0.0-beta.1", "registry", &[])]);
+            let registry = MemoryRegistry::new()
+                .serving(old("@x/p", "1.4.0"))
+                .serving(old("@x/p", "2.0.0-beta.1"))
+                .serving(served(&runtime, P_BETA_2));
+
+            let outcome = update(&request(dir.path(), reach), &registry, &runtime).unwrap();
+
+            assert!(outcome.applied(), "{reach:?}: {outcome:?}");
+            assert_eq!(
+                outcome.updated().collect::<Vec<_>>(),
+                [("@x/p", "2.0.0-beta.1", "2.0.0-beta.2")],
+                "{reach:?}"
             );
         }
     }
@@ -751,7 +865,7 @@ mod tests {
         let dir = project(vec![entry("@sdk/greet", "0.0.9", "local:greet.wasm", &[])]);
         let registry = MemoryRegistry::new().serving(old("@sdk/greet", "9.9.9"));
 
-        let outcome = update(&request(dir.path(), true), &registry, &runtime()).unwrap();
+        let outcome = update(&request(dir.path(), Reach::Major), &registry, &runtime()).unwrap();
 
         assert!(registry.asked().is_empty());
         assert_eq!(
@@ -766,7 +880,7 @@ mod tests {
     fn no_lock_and_no_registry_fail_outright() {
         let empty = tempfile::tempdir().unwrap();
         let error = update(
-            &request(empty.path(), false),
+            &request(empty.path(), Reach::Compatible),
             &MemoryRegistry::new(),
             &runtime(),
         )
@@ -775,7 +889,12 @@ mod tests {
 
         let dir = project(vec![entry("@sdk/greet", "0.0.9", "registry", &[])]);
         let unconfigured = crate::registry::Unconfigured("update");
-        let error = update(&request(dir.path(), false), &unconfigured, &runtime()).unwrap_err();
+        let error = update(
+            &request(dir.path(), Reach::Compatible),
+            &unconfigured,
+            &runtime(),
+        )
+        .unwrap_err();
         assert!(error.is(NO_REGISTRY), "{error:?}");
     }
 
@@ -800,8 +919,12 @@ mod tests {
                 let refused = crate::config::refusal(&read.problems[0]);
 
                 let unconfigured = crate::registry::Unconfigured("update");
-                let error =
-                    update(&request(dir.path(), false), &unconfigured, &runtime()).unwrap_err();
+                let error = update(
+                    &request(dir.path(), Reach::Compatible),
+                    &unconfigured,
+                    &runtime(),
+                )
+                .unwrap_err();
 
                 assert_eq!(error, refused, "{config}, locked: {locked}");
                 assert_eq!(files_under(dir.path()), before, "{config}");
@@ -853,7 +976,8 @@ mod tests {
                     .serving(served(&runtime, B2))
             };
             let dir = coupled(a_first);
-            let outcome = update(&request(dir.path(), true), &together(), &runtime).unwrap();
+            let outcome =
+                update(&request(dir.path(), Reach::Major), &together(), &runtime).unwrap();
             assert!(outcome.applied(), "a first: {a_first}: {outcome:?}");
             let lock = specforge_installed::read_lock_file(&lock_path(dir.path())).unwrap();
             let locked: Vec<(&str, &str)> = lock
@@ -874,7 +998,7 @@ mod tests {
                 .serving(served(&runtime, B2));
             let dir = coupled(a_first);
             let lock_before = std::fs::read(lock_path(dir.path())).unwrap();
-            let outcome = update(&request(dir.path(), true), &apart, &runtime).unwrap();
+            let outcome = update(&request(dir.path(), Reach::Major), &apart, &runtime).unwrap();
             assert!(!outcome.applied(), "a first: {a_first}: {outcome:?}");
             let failures: Vec<(&str, &str, &str)> = outcome
                 .failures()

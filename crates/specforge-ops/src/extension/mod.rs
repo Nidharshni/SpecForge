@@ -26,7 +26,7 @@ pub use list::{
 pub use remove::{
     RemoveAction, RemoveDocument, RemoveOutcome, RemoveRequest, StrandedEntity, remove,
 };
-pub use resolve::{resolve, resolve_requirement};
+pub use resolve::{resolve, upgrade};
 pub use update::{
     BatchUpdateCompleted, BatchUpdateEvent, ExtensionUpdate, NO_LOCK, UpdateDocument,
     UpdateOutcome, UpdateRequest, UpdateRow, UpdateStatus, UpgradeCompleted, update,

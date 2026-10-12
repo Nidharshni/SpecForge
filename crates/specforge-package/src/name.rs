@@ -260,19 +260,6 @@ impl VersionRequirement {
             .map_err(|error| refused(error.to_string()))
     }
 
-    /// What `update` asks for when it keeps the major version: `^current`.
-    pub fn compatible_with(current: &Version) -> Self {
-        VersionRequirement::Range(VersionReq {
-            comparators: vec![semver::Comparator {
-                op: semver::Op::Caret,
-                major: current.major,
-                minor: Some(current.minor),
-                patch: Some(current.patch),
-                pre: current.pre.clone(),
-            }],
-        })
-    }
-
     /// The version this asks for without listing the package: `Some` for `Exact`.
     pub fn exact(&self) -> Option<&Version> {
         match self {
@@ -282,7 +269,7 @@ impl VersionRequirement {
     }
 
     /// The best of `published` this asks for, `None` when none qualifies. The one resolution
-    /// rule: ops `add`, `update` and every test fake call it.
+    /// rule: ops `add`, `upgrade_target` and every registry's search call it.
     pub fn pick<'a>(&self, published: &'a [Version]) -> Option<&'a Version> {
         match self {
             VersionRequirement::Latest => published
@@ -691,23 +678,6 @@ mod tests {
         assert_eq!(
             highest_matching(&published, &[&caret]).map(Version::to_string),
             Some("2.5.0".to_string())
-        );
-    }
-
-    #[test]
-    fn compatible_with_keeps_the_major_version() {
-        let current = Version::parse("1.2.3").unwrap();
-        let wanted = VersionRequirement::compatible_with(&current);
-        assert_eq!(wanted.to_string(), "^1.2.3");
-        let published = versions(&["1.2.3", "1.9.0", "2.0.0"]);
-        assert_eq!(
-            wanted.pick(&published).map(Version::to_string).as_deref(),
-            Some("1.9.0")
-        );
-        let with_build = Version::parse("1.0.0+build.1").unwrap();
-        assert_eq!(
-            VersionRequirement::compatible_with(&with_build).to_string(),
-            "^1.0.0"
         );
     }
 
