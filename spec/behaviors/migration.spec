@@ -109,7 +109,10 @@ behavior migrate_spec_files_in_place "Migrate Spec Files In Place" {
     specified. Each file MUST be migrated independently — a failure in one
     file MUST NOT prevent migration of others. Each file MUST be written
     atomically (write to temporary file, then rename) to prevent corruption
-    from interrupted migrations.
+    from interrupted migrations. Each file MUST be read once: its backup,
+    its diff and the text an automatic rollback restores are that one
+    read, so a save made while the migration runs is never split between
+    them.
 
     The system MUST report the number of files migrated, failed, and
     skipped via MigrationSummary. Skipped files are those already at the
@@ -143,6 +146,7 @@ behavior migrate_spec_files_in_place "Migrate Spec Files In Place" {
   verify unit "files already at target version are skipped with skippedCount incremented"
   verify unit "only the project's sources are migrated: under spec_root, without excluded files"
   verify unit "a kept migration records its files in .specforge/migration.json"
+  verify unit "each file is read once: its backup, its diff and what a rollback restores are that text"
 }
 
 behavior generate_migration_diff "Generate Migration Diff" {

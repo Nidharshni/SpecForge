@@ -328,20 +328,41 @@ fn diff_label(path: &Path, root: &Path) -> String {
         .join("/")
 }
 
-/// Run migration on a single file of the project at `root`. Returns the result,
-/// the backup it made and the diff, which labels the file with its path from
-/// `root` so that `patch -p1` applies it there.
+/// What migrating one file did.
+struct FileMigration {
+    result: MigrationResult,
+    backup: Option<MigrationBackup>,
+    diff: Option<MigrationDiff>,
+    /// The file as read, when this run rewrote it: what an automatic rollback restores.
+    original: Option<Original>,
+}
+
+impl FileMigration {
+    /// A file this run did not rewrite.
+    fn of(
+        result: MigrationResult,
+        backup: Option<MigrationBackup>,
+        diff: Option<MigrationDiff>,
+    ) -> Self {
+        Self {
+            result,
+            backup,
+            diff,
+            original: None,
+        }
+    }
+}
+
+/// Migrate one file of the project at `root`, reading it once: the version detected, the transform, the diff, the
+/// backup and what a rollback restores are all that one text. The diff labels the file with its path from `root`,
+/// so `patch -p1` applies it there.
 fn migrate_file(
     path: &Path,
     root: &Path,
     target_version: &FormatVersion,
     dry_run: bool,
     no_backup: bool,
-) -> (
-    MigrationResult,
-    Option<MigrationBackup>,
-    Option<MigrationDiff>,
-) {
+) -> FileMigration {
     let path_str = path.display().to_string();
     let label = diff_label(path, root);
 
@@ -349,7 +370,7 @@ fn migrate_file(
     let content = match std::fs::read_to_string(path) {
         Ok(c) => c,
         Err(e) => {
-            return (
+            return FileMigration::of(
                 MigrationResult {
                     file_path: path_str,
                     status: MigrationStatus::Failed,
@@ -371,7 +392,7 @@ fn migrate_file(
             .as_deref()
             .map(|s| format!(" — {s}"))
             .unwrap_or_default();
-        return (
+        return FileMigration::of(
             MigrationResult {
                 file_path: path_str,
                 status: MigrationStatus::Failed,
@@ -386,7 +407,7 @@ fn migrate_file(
 
     // Skip if already at target version
     if detected_version >= *target_version {
-        return (
+        return FileMigration::of(
             MigrationResult {
                 file_path: path_str,
                 status: MigrationStatus::Skipped,
@@ -421,7 +442,7 @@ fn migrate_file(
     };
 
     if dry_run {
-        return (
+        return FileMigration::of(
             MigrationResult {
                 file_path: path_str,
                 status: MigrationStatus::Migrated,
@@ -437,8 +458,8 @@ fn migrate_file(
     // Create backup
     let backup = if !no_backup {
         let backup_path = path.with_extension("spec.bak");
-        if let Err(e) = std::fs::copy(path, &backup_path) {
-            return (
+        if let Err(e) = std::fs::write(&backup_path, &content) {
+            return FileMigration::of(
                 MigrationResult {
                     file_path: path_str,
                     status: MigrationStatus::Failed,
@@ -461,7 +482,7 @@ fn migrate_file(
     // Atomic write: temp + rename
     let tmp_path = path.with_extension("spec.tmp");
     if let Err(e) = std::fs::write(&tmp_path, &transformed) {
-        return (
+        return FileMigration::of(
             MigrationResult {
                 file_path: path_str,
                 status: MigrationStatus::Failed,
@@ -477,7 +498,7 @@ fn migrate_file(
     if let Err(e) = std::fs::rename(&tmp_path, path) {
         // Clean up temp file on rename failure
         let _ = std::fs::remove_file(&tmp_path);
-        return (
+        return FileMigration::of(
             MigrationResult {
                 file_path: path_str,
                 status: MigrationStatus::Failed,
@@ -490,8 +511,8 @@ fn migrate_file(
         );
     }
 
-    (
-        MigrationResult {
+    FileMigration {
+        result: MigrationResult {
             file_path: path_str,
             status: MigrationStatus::Migrated,
             from_version: Some(detected_version),
@@ -500,7 +521,11 @@ fn migrate_file(
         },
         backup,
         diff,
-    )
+        original: Some(Original {
+            path: path.to_path_buf(),
+            text: content,
+        }),
+    }
 }
 
 /// Write `text` over `target` atomically (temp file, then rename).
@@ -680,12 +705,7 @@ pub fn migrate_project(
     let mut failed = 0;
 
     for target_path in &targets {
-        let before = if dry_run {
-            None
-        } else {
-            std::fs::read_to_string(target_path).ok()
-        };
-        let (result, backup, diff) = migrate_file(
+        let file = migrate_file(
             target_path,
             project_root,
             target_version,
@@ -693,28 +713,17 @@ pub fn migrate_project(
             no_backup,
         );
 
-        match result.status {
+        match file.result.status {
             MigrationStatus::Migrated => migrated += 1,
             MigrationStatus::Skipped => skipped += 1,
             MigrationStatus::Failed => failed += 1,
             _ => {}
         }
 
-        if result.status == MigrationStatus::Migrated
-            && let Some(text) = before
-        {
-            originals.push(Original {
-                path: target_path.clone(),
-                text,
-            });
-        }
-        if let Some(d) = diff {
-            diffs.push(d);
-        }
-        if let Some(b) = backup {
-            backups.push(b);
-        }
-        results.push(result);
+        originals.extend(file.original);
+        diffs.extend(file.diff);
+        backups.extend(file.backup);
+        results.push(file.result);
     }
 
     MigrationSummary {

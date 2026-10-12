@@ -115,3 +115,30 @@ fn restore_writes_back_the_texts_a_run_read_without_any_backup() {
         OLD
     );
 }
+
+#[specforge_test(
+    behavior = "migrate_spec_files_in_place",
+    verify = "each file is read once: its backup, its diff and what a rollback restores are that text"
+)]
+fn a_migrated_file_is_read_once() {
+    use sha2::Digest;
+    let dir = project();
+
+    let summary = migrate_project(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        &CURRENT_FORMAT_VERSION,
+        false,
+        false,
+    );
+
+    assert_eq!(summary.originals.len(), 1);
+    assert_eq!(summary.originals[0].text, OLD);
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("spec/a.spec.bak")).unwrap(),
+        OLD
+    );
+    assert_eq!(
+        summary.diffs[0].before_hash,
+        format!("{:x}", sha2::Sha256::digest(OLD.as_bytes()))
+    );
+}
