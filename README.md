@@ -188,6 +188,10 @@ The implementation is a Rust workspace (edition 2024) under [`crates/`](crates/)
 
 > Building the CLI uses the committed builtin blobs, so it needs no wasm target. Rebuilding the builtins after changing an extension needs `rustup target add wasm32-wasip2`.
 
+## Development
+
+Run `scripts/setup-hooks.sh` once per clone: it points git at the tracked pre-commit hook, which checks the staged files in seconds (no pending `.snap.new`, rustfmt, spec formatting, and that every test's `verify` text exists in its spec entity). Run `scripts/gate.sh` before a PR and `scripts/gate.sh full` before a merge.
+
 ## Documentation
 
 - **[Authoring Tutorial](docs/guides/authoring-spec-files.md)** — zero-to-hero guide to writing `.spec` files, with a complete [worked example](examples/todo-app/). Companions: [cookbook](docs/guides/spec-cookbook.md), [best practices](docs/guides/spec-best-practices.md), [troubleshooting](docs/guides/spec-troubleshooting.md).

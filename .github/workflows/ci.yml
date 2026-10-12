@@ -61,6 +61,11 @@ jobs:
       - name: Check spec formatting
         run: cargo run -q -p specforge-cli -- format --check spec integrations/rust/spec examples/todo-app examples/shop
 
+      # A test citing a verify text its entity does not declare (A016), found
+      # without running the tests; the pre-commit hook runs it too.
+      - name: Check test links
+        run: cargo run -q -p xtask --bin check-links
+
       - name: Run clippy
         run: |
           cargo clippy --workspace --all-targets -- -D warnings
