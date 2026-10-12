@@ -2522,3 +2522,33 @@ fn a_backslash_before_a_line_break_leaves_the_string_unclosed() {
         error.message
     );
 }
+
+/// A body left unclosed while a field's name is being typed, then two blocks.
+const HALF_TYPED_FIELD: &str = "behavior a1 \"A\" {\n  contract \"x\"\n  st\n\nbehavior b1 \"B\" {\n  contract \"y\"\n}\n\nbehavior c1 \"C\" {\n  contract \"z\"\n}\n";
+
+/// A method header typed without its parameter list, then a block.
+const HALF_TYPED_METHOD: &str = "port pay \"Pay\" {\n  direction inbound\n  method charge\n\nbehavior settle \"Settle\" {\n  contract \"Settles.\"\n}\n";
+
+/// A parameter list left open, then a block.
+const OPEN_PARAMETER_LIST: &str = "port pay \"Pay\" {\n  direction inbound\n  method charge(amount: String\n\nbehavior settle \"Settle\" {\n  contract \"Settles.\"\n}\n";
+
+#[test]
+fn a_half_typed_field_takes_the_forms_after_its_body() {
+    let result = parse(HALF_TYPED_FIELD, "test.spec");
+    let ids: Vec<&str> = result.entities.iter().map(|e| e.id.raw.as_str()).collect();
+    assert_eq!(ids, ["a1", "c1"], "errors: {:?}", result.errors);
+}
+
+#[test]
+fn a_half_typed_method_header_takes_the_forms_after_its_body() {
+    let result = parse(HALF_TYPED_METHOD, "test.spec");
+    let ids: Vec<&str> = result.entities.iter().map(|e| e.id.raw.as_str()).collect();
+    assert_eq!(ids, ["pay"], "errors: {:?}", result.errors);
+}
+
+#[test]
+fn an_open_parameter_list_takes_the_forms_after_its_body() {
+    let result = parse(OPEN_PARAMETER_LIST, "test.spec");
+    let ids: Vec<&str> = result.entities.iter().map(|e| e.id.raw.as_str()).collect();
+    assert_eq!(ids, ["pay"], "errors: {:?}", result.errors);
+}

@@ -309,3 +309,20 @@ fn client_support_reads_what_steers_the_reaction() {
     assert!(!nothing.tokens_refresh);
     assert!(!nothing.relative_patterns);
 }
+
+/// A body left unclosed while a field's name is typed, then two types.
+const HALF_TYPED: &str =
+    "type alpha \"A\" {\n  note\n\ntype beta \"B\" {}\n\ntype gamma \"C\" {}\n";
+
+#[test]
+fn the_entity_after_a_half_typed_body_is_not_navigable() {
+    let dir = TempDir::new().unwrap();
+    let (state, uri) = serving(&dir, HALF_TYPED);
+    let on_beta = Position::new(3, 6);
+    assert!(answers::definition(&state, &uri, on_beta).is_none());
+    let names_beta = answers::hover(&state, &uri, on_beta).is_some_and(|h| match h.contents {
+        tower_lsp::lsp_types::HoverContents::Markup(m) => m.value.contains("`beta`"),
+        _ => false,
+    });
+    assert!(!names_beta);
+}

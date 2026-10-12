@@ -502,3 +502,31 @@ invariant security "Security Invariant" {
         "should have at least 2 entities"
     );
 }
+
+#[test]
+fn an_unclosed_port_body_reports_no_syntax_error() {
+    let ctx = compile_with_builtins(
+        &["@specforge/software"],
+        &[(
+            "main.spec",
+            "spec \"t\" { version \"0.1.0\" }\nport pay \"Pay\" {\n  direction inbound\n  method charge(amount: string) -> string\n\nbehavior settle \"Settle\" {\n  contract \"Settles.\"\n}\n",
+        )],
+    );
+    let diagnostics = ctx.diagnostics();
+    let e001: Vec<_> = diagnostics.iter().filter(|d| d.code == "E001").collect();
+    assert!(e001.is_empty(), "{e001:?}");
+}
+
+#[test]
+fn an_unclosed_string_in_a_port_body_reports_no_syntax_error() {
+    let ctx = compile_with_builtins(
+        &["@specforge/software"],
+        &[(
+            "main.spec",
+            "spec \"t\" { version \"0.1.0\" }\nport pay \"Pay\" {\n  direction inbound\n  description \"Takes payments\n  method charge(amount: string) -> string\n}\n\nbehavior settle \"Settle\" {\n  contract \"Settles.\"\n}\n",
+        )],
+    );
+    let diagnostics = ctx.diagnostics();
+    let e001: Vec<_> = diagnostics.iter().filter(|d| d.code == "E001").collect();
+    assert!(e001.is_empty(), "{e001:?}");
+}

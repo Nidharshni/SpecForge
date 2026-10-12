@@ -2530,4 +2530,46 @@ mod emitter_tests {
         let out = fmt("port p \"P\" {\n  tags x @since   \"a  b\"\n}\n");
         assert!(out.contains("@since \"a  b\""), "{out}");
     }
+
+    // --- Plan 14 T0: what a broken document reads as today ---
+
+    const UNCLOSED_STRING: &str = "behavior a1 \"A\" {\n  contract \"x\n}\n\nbehavior b1 \"B\" {\n  contract    \"y\"\n}\n\nbehavior c1 \"C\" {\n  contract \"z\"\n}\n";
+
+    #[test]
+    fn an_unclosed_string_keeps_the_whole_file_verbatim() {
+        let result = format_source(UNCLOSED_STRING, &FormatConfig::default());
+        assert_eq!(result.formatted, UNCLOSED_STRING);
+        let w142: Vec<_> = result
+            .diagnostics
+            .iter()
+            .filter(|d| d.is(codes::W142))
+            .collect();
+        assert_eq!(w142.len(), 1);
+        assert!(
+            w142[0].message.starts_with("Parse error at lines 1-12,"),
+            "{}",
+            w142[0].message
+        );
+    }
+
+    const UNCLOSED_BODY: &str =
+        "behavior a1 \"A\" {\n  contract    \"x\"\n\nbehavior b1 \"B\" {\n  contract    \"y\"\n}\n";
+
+    #[test]
+    fn a_kept_unclosed_body_is_reported_at_its_error_line_only() {
+        let result = format_source(UNCLOSED_BODY, &FormatConfig::default());
+        assert!(
+            result
+                .formatted
+                .starts_with("behavior a1 \"A\" {\n  contract    \"x\"\n\nbehavior b1")
+        );
+        assert!(result.formatted.contains("  contract \"y\""));
+        let span = result
+            .diagnostics
+            .iter()
+            .find(|d| d.is(codes::W142))
+            .and_then(|d| d.span.clone())
+            .unwrap();
+        assert_eq!((span.start_line, span.end_line), (2, 2));
+    }
 }
