@@ -435,8 +435,7 @@ impl RegistryClient for MemoryClient {
             manifest_json,
             None,
         );
-        metadata.key_id = signature.key_id();
-        metadata.signature = signature.to_json();
+        metadata.signature = Some(signature.clone());
         self.store(registry, metadata, package.to_vec());
         Ok(format!(
             "{}{}",
@@ -478,14 +477,7 @@ fn package_metadata(
             )
         })
         .unwrap_or_default();
-    let (signature, key_id) = match key {
-        Some(key) => (
-            key.sign(&SignedContent::of(name, version, wasm, manifest))
-                .to_json(),
-            key.key_id(),
-        ),
-        None => (String::new(), String::new()),
-    };
+    let signature = key.map(|key| key.sign(&SignedContent::of(name, version, wasm, manifest)));
     PackageMetadata {
         name: name.to_string(),
         version: version.to_string(),
@@ -495,7 +487,6 @@ fn package_metadata(
         keywords,
         wasm_url: String::new(),
         signature,
-        key_id,
         manifest: manifest.to_string(),
         ..Default::default()
     }
@@ -594,12 +585,9 @@ pub fn assert_client_contract(
     );
     assert_eq!(metadata.description, "Contract tool", "K4: description");
     assert_eq!(metadata.keywords, ["contract"], "K4: keywords");
-    assert_eq!(metadata.key_id, key.key_id(), "K4: key_id");
     assert_eq!(
-        PackageSignature::parse(&metadata.signature)
-            .expect("K4: the signature parses as a PackageSignature")
-            .key_id(),
-        key.key_id(),
+        metadata.signature.as_ref().map(PackageSignature::key_id),
+        Some(key.key_id()),
         "K4: the signature is the publisher key's"
     );
     assert!(!metadata.wasm_url.is_empty(), "K4: wasm_url");

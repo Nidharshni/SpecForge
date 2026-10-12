@@ -1746,7 +1746,8 @@ R-TRUST-002: Invalid package signature
 
 The package's publisher signature doesn't verify: the Wasm binary or the
 manifest isn't what the publisher signed. Don't install the package.
-`--allow-unsigned` doesn't accept it.
+`--allow-unsigned` doesn't accept it. (A signature that isn't one at all makes
+the registry's answer unreadable: R009.)
 
 Owner: core
 Level: error
@@ -1769,13 +1770,11 @@ Level: error
 ## R-TRUST-004
 
 ```
-R-TRUST-004: Signature metadata mismatch
+R-TRUST-004: Registry answer mismatch
 
 The registry's answer doesn't match: it, or the manifest it serves, describes
-another package or version than the one requested, or the key ID it reports
-differs from the key ID inside the signature, so the registry metadata was
-edited apart from the signature or is stale. Don't install the package, and
-check the registry.
+another package or version than the one requested, or the binary declares other
+than the served declaration. Don't install the package, and check the registry.
 
 Owner: core
 Level: error

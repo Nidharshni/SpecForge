@@ -545,6 +545,21 @@ mod tests {
         ));
     }
 
+    #[specforge_test_macros::test(
+        behavior = "check_registry_reply",
+        verify = "a reply that is not the protocol's JSON is refused with R009, even with --allow-unsigned"
+    )]
+    fn a_malformed_signature_in_a_reply_is_refused_with_r009() {
+        let body = br#"{"name":"@a/b","version":"1.0.0","sha256":"ab","wasm_url":"/x","signature":{"sig":"x","public_key":"z","signed_at":"now"}}"#;
+        let error = read_reply::<PackageMetadata>(body, "@a/b@1.0.0").unwrap_err();
+        assert!(
+            matches!(&error, RegistryError::InvalidReply { message, .. }
+                if message.contains("`sig` is not 128 hex")),
+            "{error:?}"
+        );
+        assert_eq!(error.to_diagnostic().code, "R009");
+    }
+
     #[test]
     fn retry_after_delta_seconds() {
         let now = SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000_000);

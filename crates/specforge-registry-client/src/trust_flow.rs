@@ -199,8 +199,7 @@ mod tests {
             version: "1.0.0".to_string(),
             wasm_url: String::new(),
             sha256: sha256_hex(wasm),
-            signature: sig.to_json(),
-            key_id: sig.key_id(),
+            signature: Some(sig),
             manifest: manifest_json.to_string(),
             ..Default::default()
         }
@@ -212,8 +211,7 @@ mod tests {
             version: "1.0.0".to_string(),
             wasm_url: String::new(),
             sha256: "x".to_string(),
-            signature: String::new(),
-            key_id: String::new(),
+            signature: None,
             manifest: String::new(),
             ..Default::default()
         }

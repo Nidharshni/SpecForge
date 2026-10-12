@@ -70,13 +70,12 @@ fn signed_publish_round_trips_through_http_boundary() {
         .expect("metadata request")
         .json()
         .expect("metadata json");
-    assert_eq!(body["key_id"], key.key_id().as_str());
-    let signature = PackageSignature::parse(
-        body["signature"]
-            .as_str()
-            .expect("signature served as string"),
-    )
-    .expect("signature wire object");
+    assert!(
+        body.get("key_id").is_none(),
+        "the key id is not a wire field"
+    );
+    let signature: PackageSignature =
+        serde_json::from_value(body["signature"].clone()).expect("signature wire object");
     assert_eq!(signature.key_id(), key.key_id());
     assert!(!signature.signed_at().is_empty());
     let served_manifest = body["manifest"].as_str().expect("manifest served");

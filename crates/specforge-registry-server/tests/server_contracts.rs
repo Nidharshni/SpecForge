@@ -698,7 +698,6 @@ async fn the_server_answers_in_these_json_shapes() {
         keys_of(&metadata),
         [
             "description",
-            "key_id",
             "keywords",
             "manifest",
             "name",
@@ -710,6 +709,10 @@ async fn the_server_answers_in_these_json_shapes() {
             "version",
             "wasm_url"
         ]
+    );
+    assert_eq!(
+        keys_of(&metadata["signature"]),
+        ["public_key", "sig", "signed_at"]
     );
     assert_eq!(
         metadata["wasm_url"],
@@ -1019,8 +1022,7 @@ fn stored(state: &AppState, name: &str, declares_entities: bool) {
             keywords: String::new(),
             publisher: String::new(),
             published_at: "2026-01-01T00:00:00+00:00".to_string(),
-            signature: String::new(),
-            key_id: String::new(),
+            signature: None,
             manifest,
         })
         .unwrap();

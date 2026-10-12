@@ -444,13 +444,13 @@ catalog! {
         "The registry package carries no publisher signature, so where it came from can't be verified. Install it anyway only if you trust the source, with `--allow-unsigned`.";
     R_TRUST_002 = "R-TRUST-002": Error core,
         "Invalid package signature",
-        "The package's publisher signature doesn't verify: the Wasm binary or the manifest isn't what the publisher signed. Don't install the package. `--allow-unsigned` doesn't accept it.";
+        "The package's publisher signature doesn't verify: the Wasm binary or the manifest isn't what the publisher signed. Don't install the package. `--allow-unsigned` doesn't accept it. (A signature that isn't one at all makes the registry's answer unreadable: R009.)";
     R_TRUST_003 = "R-TRUST-003": Error core,
         "Publisher key changed",
         "The package is signed with a different key than the one pinned for it when it was first installed (trust on first use). That can be a key rotation or a compromised publisher. If you trust the new key, re-run with `--yes` or add it to `trusted_keys`.";
     R_TRUST_004 = "R-TRUST-004": Error core,
-        "Signature metadata mismatch",
-        "The registry's answer doesn't match: it, or the manifest it serves, describes another package or version than the one requested, or the key ID it reports differs from the key ID inside the signature, so the registry metadata was edited apart from the signature or is stale. Don't install the package, and check the registry.";
+        "Registry answer mismatch",
+        "The registry's answer doesn't match: it, or the manifest it serves, describes another package or version than the one requested, or the binary declares other than the served declaration. Don't install the package, and check the registry.";
     R_TRUST_005 = "R-TRUST-005": Error core,
         "Publisher key denied",
         "The package is signed with a key listed in `denied_keys` in your known-keys file. Remove the key from `denied_keys` only if you trust it again.";

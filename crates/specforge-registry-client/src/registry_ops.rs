@@ -6,7 +6,7 @@ use super::registry_client::{RegistryClient, RegistryError};
 use super::registry_config::{RegistryConfig, RegistryCredential};
 use specforge_package::{PackageName, Version};
 use specforge_protocol_types::ExtensionDeclaration;
-use specforge_registry_wire::{PackageMetadata, PackageSignature, SignedContent, sha256_hex};
+use specforge_registry_wire::{PackageMetadata, SignedContent, sha256_hex};
 
 /// Publish to a registry, signed with `key`.
 ///
@@ -92,45 +92,17 @@ pub enum TrustCheck {
 /// Verify a downloaded package's publisher signature against served metadata.
 ///
 /// Uses only data the client holds or the registry serves: the downloaded wasm
-/// bytes, the served manifest JSON, and the signature wire object — the
-/// registry is not the trust anchor (spec #21). Fails on: tampered wasm,
-/// tampered manifest, wrong key, or metadata inconsistency between the
-/// server-extracted key id and the signature object.
+/// bytes, the served manifest JSON, and the typed signature — the registry is
+/// not the trust anchor (spec #21). Fails (R-TRUST-002) when the signature
+/// doesn't verify: tampered wasm, tampered manifest or a wrong key. A signature
+/// that isn't one never gets here: the reply isn't readable (R009).
 pub fn verify_package_signature(
     response: &PackageMetadata,
     wasm_bytes: &[u8],
 ) -> Result<TrustCheck, Diagnostic> {
-    if response.signature.is_empty() {
+    let Some(signature) = &response.signature else {
         return Ok(TrustCheck::Unsigned);
-    }
-
-    let code = codes::R_TRUST_002;
-    let signature = PackageSignature::parse(&response.signature).map_err(|why| {
-        Diagnostic::new(
-            code,
-            format!(
-                "unparseable package signature for '{}': {why}",
-                response.name
-            ),
-        )
-        .with_suggestion("refuse this package; the registry response is malformed".to_string())
-    })?;
-
-    // Cross-check the server-extracted key id against the signature object:
-    // a mismatch means registry metadata was edited independently of the
-    // signature (or is stale).
-    let key_id = signature.key_id();
-    if !response.key_id.is_empty() && response.key_id != key_id {
-        return Err(Diagnostic::new(
-            codes::R_TRUST_004,
-            format!(
-                "metadata inconsistency for '{}': registry says key '{}' but signature carries '{}'",
-                response.name, response.key_id, key_id
-            ),
-        )
-        .with_suggestion("refuse this package and verify the registry".to_string()));
-    }
-
+    };
     let content = SignedContent::of(
         &response.name,
         &response.version,
@@ -139,7 +111,7 @@ pub fn verify_package_signature(
     );
     signature.verify(&content).map_err(|why| {
         Diagnostic::new(
-            code,
+            codes::R_TRUST_002,
             format!(
                 "signature verification failed for '{}': {why}",
                 response.name
@@ -149,6 +121,7 @@ pub fn verify_package_signature(
             "the package does not match its publisher signature; do not install it".to_string(),
         )
     })?;
-
-    Ok(TrustCheck::Verified { key_id })
+    Ok(TrustCheck::Verified {
+        key_id: signature.key_id(),
+    })
 }

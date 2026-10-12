@@ -14,7 +14,7 @@ use specforge_registry_client::testing::MemoryClient;
 use specforge_registry_client::{
     KnownKeys, RegistryConfig, SigningKey, load_known_keys_at, save_known_keys_at,
 };
-use specforge_registry_wire::{PackageMetadata, SignedContent, sha256_hex};
+use specforge_registry_wire::{PackageMetadata, PackageSignature, SignedContent, sha256_hex};
 use specforge_test_macros::test as specforge_test;
 use std::path::{Path, PathBuf};
 use tempfile::TempDir;
@@ -33,9 +33,8 @@ struct Reply {
     /// The downloaded bytes.
     wasm: Vec<u8>,
     manifest: String,
-    /// The wire signature object, empty when unsigned.
-    signature: String,
-    key_id: String,
+    /// The publisher signature, `None` when unsigned.
+    signature: Option<PackageSignature>,
     /// Where the metadata says the binary is; empty is where it is.
     wasm_url: String,
 }
@@ -47,8 +46,7 @@ impl Reply {
             sha256: sha256_hex(WASM),
             wasm: WASM.to_vec(),
             manifest: MANIFEST.to_string(),
-            signature: String::new(),
-            key_id: String::new(),
+            signature: None,
             wasm_url: String::new(),
         }
     }
@@ -61,8 +59,7 @@ impl Reply {
             wasm: wasm.to_vec(),
             sha256: sha256_hex(wasm),
             manifest: manifest.to_string(),
-            signature: signature.to_json(),
-            key_id: signature.key_id(),
+            signature: Some(signature),
             wasm_url: String::new(),
         }
     }
@@ -79,7 +76,6 @@ impl Reply {
             sha256: self.sha256,
             manifest: self.manifest,
             signature: self.signature,
-            key_id: self.key_id,
             wasm_url: self.wasm_url,
             ..Default::default()
         };
@@ -233,58 +229,6 @@ fn a_swapped_manifest_breaks_the_signature() {
 
     let error = project.fetch(true, Trust::AssumeYes).unwrap_err();
     assert_eq!(error.code, "R-TRUST-002", "{error:?}");
-}
-
-#[specforge_test(
-    behavior = "verify_publisher_signature",
-    verify = "a malformed signature object is refused"
-)]
-fn a_signature_object_that_is_not_json_is_refused() {
-    let served = Reply {
-        signature: "not a signature".to_string(),
-        ..Reply::unsigned()
-    };
-    let project = Project::on(served);
-
-    let error = project.fetch(true, Trust::AssumeYes).unwrap_err();
-    assert_eq!(error.code, "R-TRUST-002", "{error:?}");
-}
-
-#[specforge_test(
-    behavior = "check_registry_reply",
-    verify = "a key id the signature does not carry is refused"
-)]
-fn a_key_id_the_signature_does_not_carry_is_refused() {
-    let key = SigningKey::generate();
-    let served = Reply {
-        key_id: SigningKey::generate().key_id(),
-        ..Reply::signed(&key)
-    };
-    let project = Project::on(served);
-
-    let error = project.fetch(true, Trust::AssumeYes).unwrap_err();
-    assert_eq!(error.code, "R-TRUST-004", "{error:?}");
-}
-
-#[specforge_test(
-    behavior = "check_registry_reply",
-    verify = "a reply that is not the protocol's JSON is refused with R009, even with --allow-unsigned"
-)]
-fn an_unreadable_reply_pins_nothing_even_with_allow_unsigned() {
-    let key = SigningKey::generate();
-    let project = Project::on(Reply::signed(&key));
-    project.client.fail_next(
-        specforge_registry_client::testing::CallKind::Metadata,
-        None,
-        specforge_registry_client::RegistryError::InvalidReply {
-            subject: format!("{NAME}@{VERSION}"),
-            message: "x".to_string(),
-        },
-    );
-
-    let error = project.fetch(true, Trust::AssumeYes).unwrap_err();
-    assert_eq!(error.code, "R009", "{error:?}");
-    assert_eq!(project.pinned(), None);
 }
 
 #[specforge_test(

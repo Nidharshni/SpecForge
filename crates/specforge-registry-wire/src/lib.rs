@@ -49,13 +49,12 @@ pub struct PackageMetadata {
     /// Where the binary downloads from. The server answers [`path::download`] (relative to the base); a
     /// client hands it on absolute.
     pub wasm_url: String,
-    /// The publisher signature object (JSON: `sig`, `keyId`, `pubkey`, `signedAt`); empty when unsigned.
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub signature: String,
-    /// The signing key's short id, as the server read it from `signature`; empty when unsigned.
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub key_id: String,
-    /// The exact manifest uploaded with the package: its extension declaration (ADR 0012).
+    /// The publisher signature; absent when unsigned (a registry that refuses unsigned uploads serves none such).
+    /// Only a well-formed one reads: a reply carrying another is not this body.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signature: Option<PackageSignature>,
+    /// The exact manifest uploaded with the package: its extension declaration (ADR 0012). A string on purpose:
+    /// the signature covers these bytes.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub manifest: String,
 }
@@ -129,7 +128,7 @@ pub struct PublishReceipt {
     pub version: String,
     pub sha256: String,
     pub size_bytes: u64,
-    /// Empty when the upload carried no readable key id.
+    /// The id of the key whose signature the registry verified over the upload.
     pub key_id: String,
 }
 
@@ -270,8 +269,7 @@ mod tests {
             publisher: "acct_1".into(),
             published_at: "2026-10-08T00:00:00+00:00".into(),
             wasm_url: "/packages/@acme%2Ftool/1.0.0/download".into(),
-            signature: signature.to_json(),
-            key_id: signature.key_id(),
+            signature: Some(signature.clone()),
             manifest: "{}".into(),
         };
         is_this_json(
@@ -286,25 +284,34 @@ mod tests {
                 "publisher": "acct_1",
                 "published_at": "2026-10-08T00:00:00+00:00",
                 "wasm_url": "/packages/@acme%2Ftool/1.0.0/download",
-                "signature": signature.to_json(),
-                "key_id": signature.key_id(),
+                "signature": serde_json::from_str::<serde_json::Value>(&signature.to_json()).unwrap(),
                 "manifest": "{}",
             }),
         );
 
-        // An unsigned one omits the three optional strings.
+        // An unsigned one omits the signature and the manifest.
         let unsigned = PackageMetadata {
-            signature: String::new(),
-            key_id: String::new(),
+            signature: None,
             manifest: String::new(),
             ..signed
         };
         let value = serde_json::to_value(&unsigned).unwrap();
         let object = value.as_object().unwrap();
-        for key in ["signature", "key_id", "manifest"] {
+        for key in ["signature", "manifest"] {
             assert!(!object.contains_key(key), "{key}");
         }
         assert_eq!(object.len(), 9);
+
+        // A signature that isn't one makes the reply unreadable.
+        let malformed = json!({
+            "name": "@acme/tool", "version": "1.0.0", "sha256": "ab", "wasm_url": "/x",
+            "signature": {"sig": "x", "public_key": "z", "signed_at": "now"},
+        });
+        let error = serde_json::from_value::<PackageMetadata>(malformed).unwrap_err();
+        assert!(
+            error.to_string().contains("`sig` is not 128 hex"),
+            "{error}"
+        );
 
         // A reply with only the required four keys reads.
         let minimal: PackageMetadata = serde_json::from_value(

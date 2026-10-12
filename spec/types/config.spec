@@ -74,7 +74,8 @@ type VersionList "Version List" {
 }
 
 // GET {base}/packages/{name}/{version}: what a registry stores for one
-// version. signature, key_id and manifest are absent when empty.
+// version. signature and manifest are absent when empty; a signature
+// that isn't a PackageSignature makes the reply unreadable (R009).
 type PackageMetadata "Package Metadata" {
   name         string
   version      string
@@ -85,8 +86,7 @@ type PackageMetadata "Package Metadata" {
   publisher    string   @optional
   published_at string   @optional
   wasm_url     string
-  signature    string   @optional
-  key_id       string   @optional
+  signature    PackageSignature @optional
   manifest     string   @optional
   verify unit "PackageMetadata is the JSON a registry serves for one version"
 }
@@ -130,12 +130,14 @@ type SearchResults "Search Results" {
   verify unit "SearchResults is the JSON a registry answers a search with"
 }
 
-// PUT {base}/packages/{name}/{version}, answered 201.
+// PUT {base}/packages/{name}/{version}, answered 201: what the registry
+// stored, which the publishing client checks against what it sent.
 type PublishReceipt "Publish Receipt" {
   name       string
   version    string
   sha256     string
   size_bytes integer
+  // The key id of the signature the registry verified over the upload.
   key_id     string
   verify unit "PublishReceipt is the JSON a registry answers a publish with"
 }

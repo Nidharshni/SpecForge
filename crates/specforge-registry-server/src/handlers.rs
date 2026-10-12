@@ -123,7 +123,6 @@ async fn get_package_version(
         published_at: pkg.published_at,
         wasm_url,
         signature: pkg.signature,
-        key_id: pkg.key_id,
         manifest: pkg.manifest,
     }))
 }
@@ -683,9 +682,8 @@ async fn publish_package(
         Err(e) => return Err(ApiError::internal(ErrorCode::StorageError, e)),
     };
 
-    // The short key id of the verified signature. The full signature object
-    // is stored verbatim so clients can verify offline (spec #21: the
-    // registry is not the trust anchor).
+    // The verified signature is stored so clients can verify offline again
+    // (spec #21: the registry is not the trust anchor).
     let key_id = signature.key_id();
 
     // Insert into database — rusqlite is blocking: run it on the blocking
@@ -699,8 +697,7 @@ async fn publish_package(
         keywords,
         publisher: publisher_account,
         published_at: chrono::Utc::now().to_rfc3339(),
-        signature: signature.to_json(),
-        key_id: key_id.clone(),
+        signature: Some(signature),
         manifest: manifest_json,
     };
 
@@ -760,7 +757,7 @@ async fn publish_package(
             version,
             sha256: pkg.sha256,
             size_bytes: pkg.size_bytes,
-            key_id: pkg.key_id,
+            key_id,
         }),
     ))
 }
