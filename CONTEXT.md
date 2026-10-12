@@ -469,6 +469,14 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   `.specforgefmt.toml` from the document's directory up to its own project root, else the defaults;
   outside any project, the editor's tab settings. `specforge format`, MCP `specforge.format` and the
   LSP all format through `specforge_ops::format::document` (ADR 0021).
+- **Formatted document**: one `.spec` text formatted with its format configuration, whole or in the
+  blocks a range touches (`specforge_ops::format::document` → `FormattedDocument`): the formatted text,
+  the configuration and where it came from, what formatting reported (W141, W142), and the edits that
+  turn the text into it. Applied to the text, the edits give the formatted text byte for byte; they
+  may span line breaks (a blank line removed, a final newline added, CRLF made LF) and replace only
+  what formatting changes. The LSP turns them into positions through the document's line index. Not
+  the format run's outcome document (`FormatDocument`, what `specforge format --format json` and
+  `specforge.format` print) (ADR 0021 D8).
 - **Option table**: one enumerated argument an operation takes — its listed names in order, the
   aliases it also accepts, a one-line help per name, and its default — beside that operation
   (`specforge_ops::options::OptionTable`; `export::FORMAT`, `model::MODEL_FORMAT`, …). The CLI's
