@@ -285,6 +285,27 @@ impl VersionRequirement {
             }
         }
     }
+
+    /// The one of `items` whose version [`pick`](Self::pick) chooses, for callers that hold records
+    /// rather than versions (a registry's search lists a package's record at the version `latest`
+    /// picks). An item whose `version` is `None` (text that is no SemVer version) is never chosen;
+    /// of several items carrying the chosen version, the first.
+    pub fn pick_from<T>(
+        &self,
+        items: impl IntoIterator<Item = T>,
+        version: impl Fn(&T) -> Option<Version>,
+    ) -> Option<T> {
+        let items: Vec<(Version, T)> = items
+            .into_iter()
+            .filter_map(|item| version(&item).map(|v| (v, item)))
+            .collect();
+        let versions: Vec<Version> = items.iter().map(|(v, _)| v.clone()).collect();
+        let picked = self.pick(&versions)?.clone();
+        items
+            .into_iter()
+            .find(|(v, _)| *v == picked)
+            .map(|(_, item)| item)
+    }
 }
 
 /// The highest of `published` that every one of `requirements` matches, each read as semver reads a
@@ -634,6 +655,27 @@ mod tests {
             Some("1.2.0")
         );
         assert_eq!(picked("1.3.0", &["1.1.0", "1.2.0"]), None);
+    }
+
+    #[specforge_test(
+        behavior = "upgrade_wasm_extension",
+        verify = "one rule picks the version a requirement asks for"
+    )]
+    fn pick_from_chooses_the_record_pick_chooses() {
+        let version = |r: &(&str, &str)| Version::parse(r.1).ok();
+        let records = [("a", "1.4.0"), ("b", "2.0.0-beta.1"), ("c", "nope")];
+        assert_eq!(
+            VersionRequirement::Latest.pick_from(records, version),
+            Some(("a", "1.4.0"))
+        );
+        let none: [(&str, &str); 0] = [];
+        assert_eq!(VersionRequirement::Latest.pick_from(none, version), None);
+        // Of two records with the chosen version, the first.
+        let twins = [("first", "1.0.0"), ("second", "1.0.0"), ("old", "0.9.0")];
+        assert_eq!(
+            VersionRequirement::Latest.pick_from(twins, version),
+            Some(("first", "1.0.0"))
+        );
     }
 
     fn highest(published: &[&str], requirements: &[&str]) -> Option<String> {

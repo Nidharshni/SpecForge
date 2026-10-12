@@ -1,11 +1,12 @@
 //! A package registry in memory beside the `Registry` port, and the contract every adapter of the port
 //! keeps (ADR 0044), as `specforge_installed::testing` and `specforge_wasm::testing` sit beside theirs.
 
+use std::collections::BTreeMap;
 use std::sync::Mutex;
 
 use specforge_common::codes;
 use specforge_installed::hex_sha256;
-use specforge_package::{PackageName, Version};
+use specforge_package::{PackageName, Version, VersionRequirement};
 use specforge_protocol_types::{DeclaredCategory, ExtensionDeclaration};
 
 use super::{Found, Package, Published as Receipt, Publisher, Registry, Searched, Upload};
@@ -259,20 +260,18 @@ impl Registry for MemoryRegistry {
         })
     }
 
-    /// The latest version of each held package matching `query` in its name, description or keywords,
-    /// declaring `contributes` when given, sorted by name; every hit names the registry
-    /// [`IN_MEMORY_KEY`].
+    /// Each held package one of whose versions matches `query` in its name, description or keywords,
+    /// at the version `latest` picks, kept when that version declares `contributes`, sorted by name;
+    /// every hit names the registry [`IN_MEMORY_KEY`].
     fn search(
         &self,
         query: &str,
         contributes: Option<DeclaredCategory>,
     ) -> Result<Searched, OpError> {
         let needle = query.to_ascii_lowercase();
-        let held = self.held.lock().unwrap();
-        let mut latest: Vec<&Published> = Vec::new();
-        for published in held.iter() {
+        let matches_term = |published: &Published| {
             let handshake = &published.declaration.handshake;
-            let matches = published
+            published
                 .name()
                 .as_str()
                 .to_ascii_lowercase()
@@ -286,19 +285,23 @@ impl Registry for MemoryRegistry {
                 || handshake
                     .keywords
                     .iter()
-                    .any(|k| k.to_ascii_lowercase().contains(&needle));
-            if !matches || contributes.is_some_and(|c| !published.declaration.declares(c)) {
-                continue;
-            }
-            match latest.iter().position(|p| p.name() == published.name()) {
-                Some(at) if latest[at].version() >= published.version() => {}
-                Some(at) => latest[at] = published,
-                None => latest.push(published),
-            }
+                    .any(|k| k.to_ascii_lowercase().contains(&needle))
+        };
+        let held = self.held.lock().unwrap();
+        let mut by_name: BTreeMap<PackageName, Vec<&Published>> = BTreeMap::new();
+        for published in held.iter() {
+            by_name.entry(published.name()).or_default().push(published);
         }
-        latest.sort_by_key(|p| p.name().to_string());
+        let listed: Vec<&Published> = by_name
+            .into_values()
+            .filter(|versions| versions.iter().any(|p| matches_term(p)))
+            .filter_map(|versions| {
+                VersionRequirement::Latest.pick_from(versions, |p| Some(p.version()))
+            })
+            .filter(|p| contributes.is_none_or(|c| p.declaration.declares(c)))
+            .collect();
         Ok(Searched {
-            found: latest
+            found: listed
                 .into_iter()
                 .map(|p| Found {
                     name: p.name().to_string(),
@@ -338,7 +341,9 @@ pub fn contract_packages(key_id: &str) -> Vec<Published> {
 }
 
 /// The `Registry` contract (ADR 0044): what every adapter of the port does with `published` (built by
-/// [`contract_packages`]) published and nothing pinned. Panics naming the clause that failed.
+/// [`contract_packages`]) published and nothing pinned. Panics naming the clause that failed: C1–C7
+/// list, fetch and publish; R-S finds a package by its name and category; R-S2 lists a package once,
+/// at the version `specforge add <name>` installs from it.
 pub fn assert_registry_contract(registry: &dyn Registry, published: &[Published]) {
     let find = |name: &str, version: &str| {
         published
@@ -495,6 +500,21 @@ pub fn assert_registry_contract(registry: &dyn Registry, published: &[Published]
         searched.found.is_empty(),
         "R-S: not found under a category it does not declare: {searched:?}"
     );
+
+    // R-S2
+    let searched = registry
+        .search("contract/base", None)
+        .unwrap_or_else(|e| panic!("R-S2: search fails: {e:?}"));
+    let listed: Vec<(&str, &str)> = searched
+        .found
+        .iter()
+        .map(|f| (f.name.as_str(), f.version.as_str()))
+        .collect();
+    assert_eq!(
+        listed,
+        [("@contract/base", "1.1.0")],
+        "R-S2: a package is listed once, at the version `add` installs (the highest release), not 2.0.0-beta.1"
+    );
 }
 
 #[cfg(test)]
@@ -601,10 +621,11 @@ mod tests {
         assert!(!searched.failed());
     }
 
-    #[test]
-    fn pin_a_search_lists_the_highest_version_pre_release_included() {
-        // Today a search lists a package at its highest version, a pre-release included, where
-        // `add` installs the highest release. T3 flips this.
+    #[specforge_test_macros::test(
+        behavior = "search_registry",
+        verify = "a registry lists each package at the version add installs from it"
+    )]
+    fn a_search_lists_the_version_add_installs() {
         let registry = MemoryRegistry::new()
             .serving(Published::new(
                 b"\0asm".to_vec(),
@@ -620,7 +641,32 @@ mod tests {
             .iter()
             .map(|f| (f.name.as_str(), f.version.as_str()))
             .collect();
-        assert_eq!(found, [("@acme/tool", "2.0.0-beta.1")]);
+        assert_eq!(found, [("@acme/tool", "1.4.0")]);
+
+        // The category is judged on the listed version: 1.0.0 declares entities, the listed
+        // 2.0.0 does not.
+        let mut with_entities =
+            serde_json::to_value(declaration("@acme/cat", "1.0.0", &[])).unwrap();
+        with_entities["entities"] = serde_json::json!([{"name": "thing"}]);
+        let registry = MemoryRegistry::new()
+            .serving(Published::new(
+                b"\0asm".to_vec(),
+                serde_json::from_value(with_entities).unwrap(),
+            ))
+            .serving(Published::new(
+                b"\0asm".to_vec(),
+                declaration("@acme/cat", "2.0.0", &[]),
+            ));
+        assert!(
+            registry
+                .search("cat", Some(DeclaredCategory::Entities))
+                .unwrap()
+                .found
+                .is_empty()
+        );
+        // Under no category it is listed at 2.0.0.
+        let searched = registry.search("cat", None).unwrap();
+        assert_eq!(searched.found[0].version, "2.0.0");
     }
 
     #[test]

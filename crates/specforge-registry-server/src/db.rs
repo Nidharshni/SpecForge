@@ -48,23 +48,6 @@ pub struct TokenRecord {
     pub admin: bool,
 }
 
-/// Sort key for a version string: SemVer when parseable (pre-release
-/// ordering included), lexicographic fallback for legacy rows.
-fn semver_key(version: &str) -> (u64, u64, u64, u8, String) {
-    match semver::Version::parse(version) {
-        // the empty pre-release flag ranks a release above its own
-        // pre-releases; identifiers otherwise compare as strings (v1)
-        Ok(v) => (
-            v.major,
-            v.minor,
-            v.patch,
-            u8::from(v.pre.is_empty()),
-            v.pre.to_string(),
-        ),
-        Err(_) => (0, 0, 0, 1, version.to_string()),
-    }
-}
-
 impl Database {
     pub fn open(path: &Path) -> Result<Self, String> {
         let conn = Connection::open(path).map_err(|e| format!("failed to open database: {}", e))?;
@@ -225,23 +208,28 @@ impl Database {
         Ok(rows)
     }
 
-    /// The latest version of each package matching `query`, sorted by name; with `contributes`, only
-    /// those whose stored declaration declares that category (an unreadable manifest is not kept).
+    /// Each package one of whose versions matches `query`, at the version `specforge add <name>`
+    /// installs (`latest`), sorted by name; with `contributes`, only those whose listed version's
+    /// stored declaration declares that category (an unreadable manifest is not kept).
     pub fn search(
         &self,
         query: &str,
         limit: u32,
         contributes: Option<specforge_protocol_types::DeclaredCategory>,
     ) -> Result<Vec<PackageVersion>, String> {
-        use std::collections::HashMap;
+        use specforge_package::{Version, VersionRequirement};
+        use std::collections::BTreeMap;
 
         let conn = self.conn();
         let pattern = format!("%{query}%");
+        // Every non-yanked version of each package one of whose versions matches the term.
         let mut stmt = conn
             .prepare(
                 "SELECT name, version, sha256, size_bytes, description, keywords, publisher, published_at, manifest
                  FROM packages
-                 WHERE yanked = 0 AND (name LIKE ?1 OR description LIKE ?1 OR keywords LIKE ?1)",
+                 WHERE yanked = 0 AND name IN (
+                   SELECT name FROM packages
+                   WHERE yanked = 0 AND (name LIKE ?1 OR description LIKE ?1 OR keywords LIKE ?1))",
             )
             .map_err(|e| format!("search query failed: {e}"))?;
         let rows: Vec<PackageVersion> = stmt
@@ -264,25 +252,24 @@ impl Database {
             .filter_map(|r| r.ok())
             .collect();
 
-        // Latest per name by SemVer order — SQL MAX(version) is
-        // lexicographic and would rank 9.0.0 above 10.0.0.
-        let mut latest: HashMap<String, PackageVersion> = HashMap::new();
-        for p in rows {
-            match latest.get(&p.name) {
-                Some(current) if semver_key(&current.version) >= semver_key(&p.version) => {}
-                _ => {
-                    latest.insert(p.name.clone(), p);
-                }
-            }
+        // Each package at what `latest` picks, by SemVer (SQL MAX(version) is lexicographic and
+        // would rank 9.0.0 above 10.0.0); the map yields the names in order.
+        let mut by_name: BTreeMap<String, Vec<PackageVersion>> = BTreeMap::new();
+        for row in rows {
+            by_name.entry(row.name.clone()).or_default().push(row);
         }
-        let mut out: Vec<PackageVersion> = latest.into_values().collect();
+        let mut out: Vec<PackageVersion> = by_name
+            .into_values()
+            .filter_map(|versions| {
+                VersionRequirement::Latest.pick_from(versions, |p| Version::parse(&p.version).ok())
+            })
+            .collect();
         if let Some(category) = contributes {
             out.retain(|p| {
                 serde_json::from_str::<specforge_protocol_types::ExtensionDeclaration>(&p.manifest)
                     .is_ok_and(|d| d.declares(category))
             });
         }
-        out.sort_by(|a, b| a.name.cmp(&b.name));
         out.truncate(limit as usize);
         Ok(out)
     }
@@ -462,31 +449,28 @@ mod tests {
         assert_eq!(hits[0].version, "10.0.0", "10.0.0 must outrank 9.0.0");
     }
 
-    #[test]
-    fn search_orders_by_semver_including_prerelease() {
-        // SemVer: 2.0.0-beta.1 > 1.9.0 (major compare first; pre-release
-        // only breaks ties within the same version triple).
+    /// The version a search of `published` (all `pkg`) lists.
+    fn listed(published: &[&str]) -> String {
         let dir = tempfile::tempdir().unwrap();
         let db = Database::open(&dir.path().join("t.db")).unwrap();
-        db.insert_package(&pv("pkg", "2.0.0-beta.1")).unwrap();
-        db.insert_package(&pv("pkg", "1.9.0")).unwrap();
+        for version in published {
+            db.insert_package(&pv("pkg", version)).unwrap();
+        }
         let hits = db.search("pkg", 10, None).unwrap();
-        assert_eq!(hits[0].version, "2.0.0-beta.1");
-
-        // ...but a pre-release never outranks its own release triple.
-        db.insert_package(&pv("pkg", "2.0.0")).unwrap();
-        let hits = db.search("pkg", 10, None).unwrap();
-        assert_eq!(hits[0].version, "2.0.0");
+        assert_eq!(hits.len(), 1, "one row per package name: {published:?}");
+        hits[0].version.clone()
     }
 
-    #[test]
-    fn pin_search_ranks_pre_release_identifiers_as_text() {
-        // Today pre-release identifiers compare as text: beta.9 outranks beta.10. T3 flips this.
-        let dir = tempfile::tempdir().unwrap();
-        let db = Database::open(&dir.path().join("t.db")).unwrap();
-        db.insert_package(&pv("pkg", "2.0.0-beta.9")).unwrap();
-        db.insert_package(&pv("pkg", "2.0.0-beta.10")).unwrap();
-        let hits = db.search("pkg", 10, None).unwrap();
-        assert_eq!(hits[0].version, "2.0.0-beta.9");
+    #[specforge_test_macros::test(
+        behavior = "search_registry",
+        verify = "a registry lists each package at the version add installs from it"
+    )]
+    fn search_lists_the_version_add_installs() {
+        assert_eq!(listed(&["9.0.0", "10.0.0"]), "10.0.0");
+        // The highest release, not a pre-release of a higher version.
+        assert_eq!(listed(&["2.0.0-beta.1", "1.9.0"]), "1.9.0");
+        assert_eq!(listed(&["2.0.0-beta.1", "1.9.0", "2.0.0"]), "2.0.0");
+        // A pre-release only when there is no release; identifiers compare as SemVer, not text.
+        assert_eq!(listed(&["2.0.0-beta.9", "2.0.0-beta.10"]), "2.0.0-beta.10");
     }
 }

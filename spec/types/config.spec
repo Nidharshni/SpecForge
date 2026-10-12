@@ -108,8 +108,10 @@ type SearchQuery "Search Query" {
   verify unit "SearchQuery is the query string a registry search reads"
 }
 
-// GET {base}/search?q=&limit=&contributes=: the latest version of each
-// matching package; contributes keeps those whose declaration declares that
+// GET {base}/search?q=&limit=&contributes=: each package one of whose
+// versions matches q, at the version latest picks (the highest release, a
+// pre-release only when it has none: what specforge add <name> installs);
+// contributes keeps those whose listed version's declaration declares that
 // category.
 type SearchResults "Search Results" {
   results SearchHit[]

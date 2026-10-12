@@ -1,12 +1,12 @@
 //! A package registry in memory, behind the `RegistryClient` seam, and the contract every adapter of the
 //! seam keeps (ADR 0044).
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 use sha2::{Digest, Sha256};
 use specforge_package::PackageName;
-use specforge_package::Version;
+use specforge_package::{Version, VersionRequirement};
 use specforge_protocol_types::{DeclaredCategory, ExtensionDeclaration};
 use specforge_registry_wire::{
     DEFAULT_SEARCH_LIMIT, PackageMetadata, SearchHit, SearchQuery, path,
@@ -319,53 +319,48 @@ impl RegistryClient for MemoryClient {
             .contributes
             .as_deref()
             .and_then(DeclaredCategory::from_name);
-        let matches = |m: &Stored| {
-            let declares = category.is_none_or(|category| {
+        let matches_term = |m: &Stored| {
+            m.name.to_ascii_lowercase().contains(&needle)
+                || m.metadata
+                    .description
+                    .to_ascii_lowercase()
+                    .contains(&needle)
+                || m.metadata
+                    .keywords
+                    .iter()
+                    .any(|k| k.to_ascii_lowercase().contains(&needle))
+        };
+        let declares = |m: &Stored| {
+            category.is_none_or(|category| {
                 serde_json::from_str::<ExtensionDeclaration>(&m.metadata.manifest)
                     .is_ok_and(|d| d.declares(category))
-            });
-            declares
-                && (m.name.to_ascii_lowercase().contains(&needle)
-                    || m.metadata
-                        .description
-                        .to_ascii_lowercase()
-                        .contains(&needle)
-                    || m.metadata
-                        .keywords
-                        .iter()
-                        .any(|k| k.to_ascii_lowercase().contains(&needle)))
+            })
         };
         let state = self.state.lock().unwrap();
-        // The latest version of each matching package, by SemVer, then by name.
-        let mut latest: HashMap<&str, &Stored> = HashMap::new();
+        // Each package one of whose versions matches, at the version `latest` picks (what `add`
+        // installs), kept when that version declares the category; by name.
+        let mut by_name: BTreeMap<&str, Vec<&Stored>> = BTreeMap::new();
         for stored in state
             .registries
             .get(&key_of(registry))
             .into_iter()
             .flatten()
         {
-            if !matches(stored) {
-                continue;
-            }
-            let newer = match latest.get(stored.name.as_str()) {
-                Some(current) => {
-                    Version::parse(&stored.version).ok() > Version::parse(&current.version).ok()
-                }
-                None => true,
-            };
-            if newer {
-                latest.insert(&stored.name, stored);
-            }
+            by_name.entry(&stored.name).or_default().push(stored);
         }
-        let mut hits: Vec<SearchHit> = latest
+        let mut hits: Vec<SearchHit> = by_name
             .into_values()
+            .filter(|versions| versions.iter().any(|m| matches_term(m)))
+            .filter_map(|versions| {
+                VersionRequirement::Latest.pick_from(versions, |m| Version::parse(&m.version).ok())
+            })
+            .filter(|m| declares(m))
             .map(|m| SearchHit {
                 name: m.name.clone(),
                 version: m.version.clone(),
                 description: m.metadata.description.clone(),
             })
             .collect();
-        hits.sort_by(|a, b| a.name.cmp(&b.name));
         hits.truncate(DEFAULT_SEARCH_LIMIT as usize);
         Ok(hits)
     }
