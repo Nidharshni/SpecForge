@@ -215,10 +215,14 @@ impl Environment {
             registries.probe(&WasmVerdicts::probe_only(runtime));
         }
         let providers = Providers::register(read.config.raw.as_ref(), registries.declarations());
-        let structural_only = registries
-            .declarations()
-            .is_empty()
-            .then(|| structural_only_notice(&read.config.extensions, &read.problems));
+        let structural_only = registries.declarations().is_empty().then(|| {
+            structural_only_notice(
+                read.found,
+                installed.root(),
+                &read.config.extensions,
+                &read.problems,
+            )
+        });
         let spec_root = read.config.spec_root_in(installed.root());
         Environment {
             read,
@@ -458,11 +462,30 @@ fn config_problem_diagnostic(problem: &ConfigProblem) -> Diagnostic {
 /// kind, field or rule checks). Reported after the errors that caused it,
 /// if any: the config problems (E069) that left nothing to load, or the
 /// load errors (E028).
-fn structural_only_notice(configured: &[String], problems: &[ConfigProblem]) -> Diagnostic {
+fn structural_only_notice(
+    found: bool,
+    root: &Path,
+    configured: &[String],
+    problems: &[ConfigProblem],
+) -> Diagnostic {
     let (message, suggestion) = if problems.iter().any(ConfigProblem::loads_nothing) {
         (
             "specforge.json could not be read — operating in structural-only mode".to_string(),
             format!("fix specforge.json ({} above)", codes::E069),
+        )
+    } else if !found && root.as_os_str().is_empty() {
+        (
+            "no project — operating in structural-only mode".to_string(),
+            "create a project with: specforge init".to_string(),
+        )
+    } else if !found {
+        // A loose root: no specforge.json at or above the path.
+        (
+            format!(
+                "no specforge.json at or above {} — operating in structural-only mode",
+                root.display()
+            ),
+            "create a project here with: specforge init".to_string(),
         )
     } else if configured.is_empty() {
         (

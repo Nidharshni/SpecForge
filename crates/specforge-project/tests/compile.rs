@@ -89,10 +89,13 @@ fn the_context_view_keeps_the_spec_root_and_the_resolved_files() {
     assert_eq!(files, ["a.spec"]);
 }
 
-/// No extension configured: the compile still runs, structurally, and
-/// says so once, with an I002 info.
-#[test]
-fn a_loose_root_suggests_add_today() {
+/// A directory with no `specforge.json` at or above it is a loose root: the
+/// compile still runs, structurally, and its I002 says no project was found.
+#[specforge_test(
+    behavior = "locate_project_root",
+    verify = "a loose root's I002 says no project was found and suggests init"
+)]
+fn a_loose_root_says_no_project_was_found() {
     let dir = TempDir::new().unwrap();
     fs::write(dir.path().join("a.spec"), "thing alpha \"A\" {\n}\n").unwrap();
 
@@ -100,11 +103,20 @@ fn a_loose_root_suggests_add_today() {
 
     assert_eq!(codes(&diagnostics), ["I002"], "{diagnostics:?}");
     assert_eq!(
+        diagnostics[0].message,
+        format!(
+            "no specforge.json at or above {} — operating in structural-only mode",
+            dir.path().display()
+        )
+    );
+    assert_eq!(
         diagnostics[0].suggestion.as_deref(),
-        Some("enable kind-specific checks with: specforge add @specforge/software")
+        Some("create a project here with: specforge init")
     );
 }
 
+/// No extension configured: the compile still runs, structurally, and
+/// says so once, with an I002 info.
 #[specforge_test(
     behavior = "graceful_degradation_without_extensions",
     verify = "no extensions installed emits I002 info"
@@ -914,7 +926,7 @@ fn an_unusable_config_is_e069_then_i002_naming_it() {
     );
     assert!(env.config_found());
 
-    // No file at all: no problem, the old wording.
+    // No file at all: no problem, and the notice names the loose root.
     let empty = TempDir::new().unwrap();
     let env = specforge_project::Environment::load(
         &specforge_common::ProjectRoot::of(empty.path()).unwrap(),
@@ -925,7 +937,10 @@ fn an_unusable_config_is_e069_then_i002_naming_it() {
     let messages: Vec<&str> = env.diagnostics().map(|d| d.message.as_str()).collect();
     assert_eq!(
         messages,
-        ["no extensions configured — operating in structural-only mode"]
+        [format!(
+            "no specforge.json at or above {} — operating in structural-only mode",
+            empty.path().display()
+        )]
     );
 }
 
