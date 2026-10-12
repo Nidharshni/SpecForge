@@ -7,9 +7,7 @@
 use std::path::Path;
 
 use specforge_project::{SessionInputs, Watched};
-use tower_lsp::lsp_types::{
-    FileSystemWatcher, GlobPattern, OneOf, RelativePattern, Url, WatchKind,
-};
+use tower_lsp::lsp_types::{FileSystemWatcher, GlobPattern, OneOf, RelativePattern, WatchKind};
 
 /// The id the watchers are registered under, so they can be replaced.
 pub const REGISTRATION_ID: &str = "specforge-file-watcher";
@@ -37,7 +35,7 @@ pub fn file_watchers(inputs: &SessionInputs, relative_patterns: bool) -> Vec<Fil
     let pattern = |base: &Path, glob: &str| -> Option<FileSystemWatcher> {
         let pattern = if relative_patterns {
             GlobPattern::Relative(RelativePattern {
-                base_uri: OneOf::Right(Url::from_directory_path(base).ok()?),
+                base_uri: OneOf::Right(crate::uri::directory_uri(base)?),
                 pattern: glob.to_string(),
             })
         } else {

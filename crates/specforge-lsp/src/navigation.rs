@@ -16,7 +16,7 @@ use tower_lsp::lsp_types::{
 
 use crate::LspState;
 use crate::document::{LineIndex, Target};
-use crate::uri::{file_path_to_uri, uri_to_file_path};
+use crate::uri;
 use std::cell::RefCell;
 use std::sync::Arc;
 
@@ -62,7 +62,7 @@ impl<'s> Compiled<'s> {
     /// The session key of a document (`Environment::source_key` of its
     /// path).
     pub(crate) fn key(&self, uri: &Url) -> String {
-        self.state.source_key(&uri_to_file_path(uri))
+        self.state.source_key(&uri::path_of(uri).to_string_lossy())
     }
 
     /// The editor's version of the text the project was compiled from for
@@ -75,7 +75,7 @@ impl<'s> Compiled<'s> {
 
     /// The URI of a session file key.
     pub(crate) fn uri(&self, key: &str) -> Url {
-        file_path_to_uri(&self.state.file_path(key).to_string_lossy())
+        uri::uri_of(&self.state.file_path(key))
     }
 
     /// The line index of the text session file `file` was compiled from

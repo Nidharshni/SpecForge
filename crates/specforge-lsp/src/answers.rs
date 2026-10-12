@@ -441,7 +441,7 @@ pub fn formatting(
         insert_spaces: options.insert_spaces,
     };
     let doc = state.document(uri.as_str())?;
-    let file = uri.to_file_path().ok();
+    let file = crate::uri::file_path(uri);
     let place = file
         .as_deref()
         .map_or(format::Place::Detached, format::Place::File);

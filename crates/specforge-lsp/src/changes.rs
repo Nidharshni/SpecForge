@@ -16,7 +16,7 @@ use tower_lsp::lsp_types::{FileEvent, Url};
 use crate::LspState;
 use crate::navigation::Compiled;
 use crate::publish::Publication;
-use crate::uri::uri_to_file_path;
+use crate::uri;
 
 /// A change the client reports.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -106,14 +106,14 @@ impl Plan {
                     return None;
                 }
                 Some(Plan {
-                    released: Some(PathBuf::from(uri_to_file_path(&uri))),
+                    released: Some(uri::path_of(&uri)),
                     ..nothing
                 })
             }
             Change::Watched(events) => {
                 let paths: Vec<PathBuf> = events
                     .iter()
-                    .map(|event| PathBuf::from(uri_to_file_path(&event.uri)))
+                    .map(|event| uri::path_of(&event.uri))
                     .collect();
                 Plan::on_disk(session.changes(paths.iter().map(PathBuf::as_path)))
             }
@@ -193,10 +193,7 @@ impl Plan {
 fn buffer_of(state: &LspState, uri: &str) -> Option<Buffer> {
     let document = state.document(uri)?;
     let url = Url::parse(uri).ok()?;
-    Some(
-        Buffer::new(PathBuf::from(uri_to_file_path(&url)), document.text())
-            .at_version(document.version()),
-    )
+    Some(Buffer::new(uri::path_of(&url), document.text()).at_version(document.version()))
 }
 
 /// What applying a plan did.

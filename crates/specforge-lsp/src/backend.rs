@@ -81,14 +81,14 @@ fn workspace_root(params: &InitializeParams) -> Option<String> {
     params
         .root_uri
         .as_ref()
-        .and_then(|u| u.to_file_path().ok())
+        .and_then(crate::uri::file_path)
         .map(|p| p.to_string_lossy().to_string())
         .or_else(|| {
             params
                 .workspace_folders
                 .as_ref()
                 .and_then(|folders| folders.first())
-                .and_then(|f| f.uri.to_file_path().ok())
+                .and_then(|f| crate::uri::file_path(&f.uri))
                 .map(|p| p.to_string_lossy().to_string())
         })
 }
