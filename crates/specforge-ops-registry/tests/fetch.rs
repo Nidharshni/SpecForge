@@ -153,6 +153,31 @@ impl Project {
     }
 }
 
+// Plan 09 T0: characterization. Flipped by T2.
+#[test]
+fn pin_an_unreadable_known_keys_file_is_read_as_empty() {
+    let key = SigningKey::generate();
+    let project = Project::on(Reply::signed(&key));
+    std::fs::create_dir_all(project.known_keys().parent().unwrap()).unwrap();
+    // A trailing comma: not JSON.
+    std::fs::write(
+        project.known_keys(),
+        format!(
+            r#"{{"pins":{{}},"trusted_keys":[],"denied_keys":["{}"],}}"#,
+            key.key_id()
+        ),
+    )
+    .unwrap();
+
+    project
+        .fetch(false, Trust::Refuse)
+        .expect("today: the denied key passed");
+
+    let known = load_known_keys_at(&project.known_keys());
+    assert!(known.denied_keys.is_empty(), "today: the deny list is gone");
+    assert_eq!(project.pinned(), Some(key.key_id()));
+}
+
 fn pinned_at(path: &Path) -> Option<String> {
     load_known_keys_at(path).pin_for(NAME).map(str::to_string)
 }
