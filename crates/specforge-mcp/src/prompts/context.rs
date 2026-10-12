@@ -1,11 +1,62 @@
 //! `specforge://prompts/context`: what implementing one entity needs.
 
-use serde_json::{Value, json};
+use std::collections::BTreeMap;
+
+use serde::Serialize;
+use serde_json::Value;
+use specforge_common::shape::Shape;
 
 use crate::args::{Arguments, EntityIds};
-use crate::prompt::{PromptOutcome, Rendered};
+use crate::prompt::{CorePrompt, Prompted};
 use crate::tool::{ErrorCode, McpError};
 use specforge_ops::view::ProjectView;
+
+/// The context prompt (`McpContextPromptResult`).
+pub struct Prompt;
+
+impl CorePrompt for Prompt {
+    const NAME: &'static str = "specforge://prompts/context";
+    const DESCRIPTION: &'static str = "Get structured context for implementing an entity";
+    const SPEC: &'static str = "McpContextPromptResult";
+    const OPEN_VALUES: &'static [&'static str] =
+        &["$.fields", "$.structural_constraint_entities[].fields"];
+    type Args = Args;
+    type Payload = Payload;
+
+    fn render(view: ProjectView<'_>, args: Args) -> Result<Prompted<Payload>, Box<McpError>> {
+        render(view, args)
+    }
+}
+
+/// The context prompt's payload: what implementing one entity needs.
+#[derive(Debug, Serialize, Shape)]
+pub struct Payload {
+    pub entity_id: String,
+    pub kind: String,
+    /// The statement the extension declares (headline and normative);
+    /// empty for a kind that declares none.
+    pub contract_text: String,
+    /// Every field the entity declares, by name: an open value.
+    pub fields: BTreeMap<String, Value>,
+    pub upstream_entities: Vec<String>,
+    pub downstream_entities: Vec<String>,
+    pub verify_expectations: Vec<String>,
+    /// The entity IDs the request named as structural constraints.
+    pub structural_constraints: Vec<String>,
+    /// Each of them, whether or not an edge connects it to `entity_id`.
+    pub structural_constraint_entities: Vec<ConstraintEntity>,
+}
+
+/// An entity a request names as a structural constraint
+/// (`McpContextConstraint`).
+#[derive(Debug, Serialize, Shape)]
+pub struct ConstraintEntity {
+    pub entity_id: String,
+    pub kind: String,
+    pub title: String,
+    /// Every field it declares, by name: an open value.
+    pub fields: BTreeMap<String, Value>,
+}
 
 /// `specforge://prompts/context`'s arguments.
 #[derive(Debug, Arguments)]
@@ -16,7 +67,7 @@ pub struct Args {
     structural_constraints: EntityIds,
 }
 
-pub fn render(view: ProjectView<'_>, args: Args) -> PromptOutcome {
+fn render(view: ProjectView<'_>, args: Args) -> Result<Prompted<Payload>, Box<McpError>> {
     let graph = view.graph();
     let entity_id = args.entity_id.as_str();
     // The inspect read view, without the reported diagnostics (the prompt
@@ -29,17 +80,17 @@ pub fn render(view: ProjectView<'_>, args: Args) -> PromptOutcome {
     // The statement the extension declares (headline and normative), e.g.
     // a behavior's `contract`; empty for a kind that declares none.
     let contract_text = facts.headline.unwrap_or_default();
-    let upstream: Vec<&str> = facts
+    let upstream: Vec<String> = facts
         .references
         .incoming
         .iter()
-        .map(|r| r.peer.as_str())
+        .map(|r| r.peer.to_string())
         .collect();
-    let downstream: Vec<&str> = facts
+    let downstream: Vec<String> = facts
         .references
         .outgoing
         .iter()
-        .map(|r| r.peer.as_str())
+        .map(|r| r.peer.to_string())
         .collect();
     let verify_expectations: Vec<String> = facts
         .obligations
@@ -49,7 +100,7 @@ pub fn render(view: ProjectView<'_>, args: Args) -> PromptOutcome {
 
     // Structural constraints: entities the caller wants in the context even
     // when no edge connects them to this one.
-    let mut constraint_entities: Vec<Value> = Vec::new();
+    let mut constraint_entities: Vec<ConstraintEntity> = Vec::new();
     for constraint_id in &args.structural_constraints.0 {
         let Some(constraint) = graph.node(constraint_id) else {
             return Err(Box::new(
@@ -61,27 +112,27 @@ pub fn render(view: ProjectView<'_>, args: Args) -> PromptOutcome {
                 .with_argument("structural_constraints"),
             ));
         };
-        constraint_entities.push(json!({
-            "entity_id": constraint.id.raw,
-            "kind": constraint.kind.raw,
-            "title": constraint.title,
-            "fields": specforge_emitter::field_map_to_json(&constraint.fields),
-        }));
+        constraint_entities.push(ConstraintEntity {
+            entity_id: constraint.id.raw.to_string(),
+            kind: constraint.kind.raw.to_string(),
+            title: constraint.title.clone().unwrap_or_default(),
+            fields: specforge_emitter::field_map_to_json(&constraint.fields),
+        });
     }
 
-    let payload = json!({
-        "structural_constraints": args.structural_constraints.0,
-        "structural_constraint_entities": constraint_entities,
-        "entity_id": entity_id,
-        "kind": node.kind.raw,
-        "contract_text": contract_text,
+    let payload = Payload {
+        entity_id: entity_id.to_string(),
+        kind: node.kind.raw.to_string(),
+        contract_text: contract_text.to_string(),
         // Every field, whatever the kind names its text: an invariant's
         // `guarantee`, a decision's `rationale`.
-        "fields": specforge_emitter::field_map_to_json(&node.fields),
-        "upstream_entities": upstream,
-        "downstream_entities": downstream,
-        "verify_expectations": verify_expectations
-    });
+        fields: specforge_emitter::field_map_to_json(&node.fields),
+        upstream_entities: upstream,
+        downstream_entities: downstream,
+        verify_expectations,
+        structural_constraints: args.structural_constraints.0.clone(),
+        structural_constraint_entities: constraint_entities,
+    };
 
     let instruction = format!(
         "You are implementing the entity '{}' (kind: {}). \
@@ -90,7 +141,7 @@ pub fn render(view: ProjectView<'_>, args: Args) -> PromptOutcome {
         entity_id, node.kind.raw
     );
 
-    Ok(Rendered {
+    Ok(Prompted {
         instruction,
         payload,
     })

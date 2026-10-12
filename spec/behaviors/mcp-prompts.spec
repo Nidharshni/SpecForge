@@ -31,8 +31,11 @@ behavior serve_mcp_prompt "Serve MCP Prompt" {
     fresh_graph        "a prompt renders the graph a tool call would see"
   }
   contract   """
-    Every core prompt is one Prompt spec: prompts/list derives its arguments
-    from the typed arguments prompts/get reads, so a listed argument is read
+    Every core prompt is one module: its name, description, typed arguments,
+    the spec type its payload is and its typed payload are stated there
+    once; prompts/list derives its arguments from the typed arguments
+    prompts/get reads, and the payload is serialized from its type in the
+    type's field order, so a listed argument is read
     and a required one is one the prompt cannot render without. MCP sends
     prompt arguments as strings; a count is read from a string. An
     argument the prompt does not declare MUST be refused as invalid input
@@ -58,6 +61,8 @@ behavior serve_mcp_prompt "Serve MCP Prompt" {
   verify unit "an unknown prompt records no mcp_prompt_invoked event"
   verify unit "a stateless prompts/get renders without initialize"
   verify unit "every tool a prompt or the server's instructions name is a core tool, named as tools/list names it"
+  verify unit "each core prompt is one module: its name, description, arguments, spec type and typed payload are stated there once"
+  verify unit "each prompt's payload is the spec type its module names"
 }
 
 behavior provide_mcp_context_prompt "Provide MCP Context Prompt" {
@@ -69,7 +74,7 @@ behavior provide_mcp_context_prompt "Provide MCP Context Prompt" {
     mcp_tool_idempotency,
   ]
   category   query
-  types      [McpPromptDescriptor, Graph, McpContextPromptResult]
+  types      [McpPromptDescriptor, Graph, McpContextPromptResult, McpContextConstraint]
   ports      [McpProtocol, CompilerApi]
   produces   [mcp_prompt_invoked]
   requires {

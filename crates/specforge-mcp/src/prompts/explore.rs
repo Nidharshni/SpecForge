@@ -1,12 +1,30 @@
 //! `specforge://prompts/explore`: where to start exploring the graph. It
 //! renders the exploration (`specforge_ops::explore`).
 
-use specforge_ops::explore::{ExplorationRequest, explore};
+use specforge_ops::explore::{ExplorationDocument, ExplorationRequest, explore};
 
 use crate::args::Arguments;
-use crate::prompt::{PromptOutcome, Rendered};
+use crate::prompt::{CorePrompt, Prompted};
 use crate::tool::McpError;
 use specforge_ops::view::ProjectView;
+
+/// The explore prompt (`McpExplorePromptResult`).
+pub struct Prompt;
+
+impl CorePrompt for Prompt {
+    const NAME: &'static str = "specforge://prompts/explore";
+    const DESCRIPTION: &'static str = "Discover exploration starting points in the graph";
+    const SPEC: &'static str = "McpExplorePromptResult";
+    type Args = Args;
+    type Payload = ExplorationDocument;
+
+    fn render(
+        view: ProjectView<'_>,
+        args: Args,
+    ) -> Result<Prompted<ExplorationDocument>, Box<McpError>> {
+        render(view, args)
+    }
+}
 
 /// `specforge://prompts/explore`'s arguments.
 #[derive(Debug, Arguments)]
@@ -24,15 +42,18 @@ const INSTRUCTION: &str = "Explore the spec graph using the data below. \
      then investigate unconnected entities that may need relationships. \
      Use starting_points for top-down traversal.";
 
-pub fn render(view: ProjectView<'_>, args: Args) -> PromptOutcome {
+fn render(
+    view: ProjectView<'_>,
+    args: Args,
+) -> Result<Prompted<ExplorationDocument>, Box<McpError>> {
     let request = ExplorationRequest {
         entity_id: args.entity_id.as_deref(),
         kind: args.kind.as_deref(),
         depth: args.depth,
     };
     let exploration = explore(&view, &request).map_err(McpError::from)?;
-    Ok(Rendered {
+    Ok(Prompted {
         instruction: INSTRUCTION.to_string(),
-        payload: serde_json::to_value(exploration.document()).expect("a document serializes"),
+        payload: exploration.document(),
     })
 }

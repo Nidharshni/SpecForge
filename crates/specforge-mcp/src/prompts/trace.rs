@@ -3,15 +3,40 @@
 
 use std::collections::BTreeSet;
 
-use serde_json::json;
+use serde::Serialize;
+use specforge_common::shape::Shape;
 use specforge_ops::plan::PlanError;
 use specforge_ops::trace::{Target, trace};
 
 use crate::args::{AgentPlan, Arguments};
-use crate::prompt::{PromptOutcome, Rendered};
+use crate::prompt::{CorePrompt, Prompted};
 use crate::tool::{ErrorCode, McpError};
 use crate::tools::trace::{Gap, analyze_plan};
 use specforge_ops::view::ProjectView;
+
+/// The trace prompt (`McpTracePromptResult`).
+pub struct Prompt;
+
+impl CorePrompt for Prompt {
+    const NAME: &'static str = "specforge://prompts/trace";
+    const DESCRIPTION: &'static str = "Identify traceability gaps for a plan";
+    const SPEC: &'static str = "McpTracePromptResult";
+    type Args = Args;
+    type Payload = Payload;
+
+    fn render(view: ProjectView<'_>, args: Args) -> Result<Prompted<Payload>, Box<McpError>> {
+        render(view, args)
+    }
+}
+
+/// The trace prompt's payload: the dependency chain of a plan or of one
+/// entity, and what in it is unverified.
+#[derive(Debug, Serialize, Shape)]
+pub struct Payload {
+    pub coverage_gaps: Vec<Gap>,
+    pub unverified_entities: Vec<String>,
+    pub affected_entities: Vec<String>,
+}
 
 /// `specforge://prompts/trace`'s arguments.
 #[derive(Debug, Arguments)]
@@ -22,7 +47,7 @@ pub struct Args {
     entity_id: Option<String>,
 }
 
-pub fn render(view: ProjectView<'_>, args: Args) -> PromptOutcome {
+fn render(view: ProjectView<'_>, args: Args) -> Result<Prompted<Payload>, Box<McpError>> {
     // A plan's entries, or the one entity, seed the trace; the gaps are the
     // plan's, or the entity's chain's missing links.
     let (seeds, coverage_gaps, subject) = match (&args.plan, args.entity_id.as_deref()) {
@@ -69,16 +94,17 @@ pub fn render(view: ProjectView<'_>, args: Args) -> PromptOutcome {
     // The affected entities that count toward coverage and are not proven
     // (the coverage view's one definition of unverified).
     let coverage = view.coverage().map_err(McpError::from)?;
-    let unverified: Vec<&String> = affected
+    let unverified: Vec<String> = affected
         .iter()
         .filter(|id| coverage.is_unverified(id))
+        .cloned()
         .collect();
 
-    let payload = json!({
-        "coverage_gaps": coverage_gaps,
-        "unverified_entities": unverified,
-        "affected_entities": affected,
-    });
+    let payload = Payload {
+        coverage_gaps,
+        unverified_entities: unverified,
+        affected_entities: affected.into_iter().collect(),
+    };
 
     let instruction = format!(
         "Trace the dependency chain for {}. \
@@ -87,7 +113,7 @@ pub fn render(view: ProjectView<'_>, args: Args) -> PromptOutcome {
         subject
     );
 
-    Ok(Rendered {
+    Ok(Prompted {
         instruction,
         payload,
     })

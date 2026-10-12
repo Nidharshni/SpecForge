@@ -992,31 +992,42 @@ type McpSpecForSourceEntity {
   verify unit "McpSpecForSourceEntity schema is valid"
 }
 
-// The implement prompt provides structured context for agents, NOT generated
-// code or instructions. Per vision: "SpecForge provides context, agents
-// produce output." The structural_constraints field contains graph-derived structural
-// hints (invariants to satisfy, edge constraints, field expectations) — never
-// implementation directives or code suggestions.
+// The context prompt's payload: structured context for an agent, NOT
+// generated code or instructions ("SpecForge provides context, agents
+// produce output").
 type McpContextPromptResult "Context Prompt Result" {
-  entity_id              string   @readonly
-  kind                   string   @readonly
-  // The field the extension declares headline and normative (a behavior's
-  // contract); empty when the entity's kind declares none.
-  contract_text          string
-  upstream_entities      string[]
-  downstream_entities    string[]
-  verify_expectations    string[]
-  // Graph-derived structural constraints: invariants, edge constraints, field
-  // expectations — NOT implementation directives or code suggestions.
-  structural_constraints string[] @optional
-  affected_entities      string[] @optional
+  entity_id                      string                 @readonly
+  kind                           string                 @readonly
+  /// The field the extension declares headline and normative (a behavior's
+  /// contract); empty when the entity's kind declares none.
+  contract_text                  string
+  /// Every field the entity declares, by name (an open value: an
+  /// extension's fields).
+  fields                         object
+  upstream_entities              string[]
+  downstream_entities            string[]
+  verify_expectations            string[]
+  /// The entity IDs the request named as structural constraints.
+  structural_constraints         string[]
+  /// Each of them, whether or not an edge connects it to entity_id.
+  structural_constraint_entities McpContextConstraint[]
   verify unit "Context Prompt Result conforms to schema"
+}
+
+type McpContextConstraint "An entity a context request names as a structural constraint" {
+  entity_id string @readonly
+  kind      string @readonly
+  title     string
+  /// Every field it declares, by name (an open value).
+  fields    object
+  verify unit "McpContextConstraint schema is valid"
 }
 
 type McpReviewPromptResult "Review Prompt Result" {
   entity_id        string              @readonly
   findings         McpReviewFinding[]
-  coverage_summary McpCoverageResult[] @optional
+  /// The coverage view's rows of the reviewed entities, as specforge.coverage lists them.
+  coverage_summary McpCoverageResult[]
   verify unit "Review Prompt Result conforms to schema"
 }
 
@@ -1024,7 +1035,6 @@ type McpReviewFinding {
   entity_id   string @readonly
   severity    string
   message     string
-  gap_context string @optional
   verify unit "McpReviewFinding schema is valid"
 }
 

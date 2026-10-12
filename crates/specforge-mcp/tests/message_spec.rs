@@ -462,17 +462,8 @@ fn shape(schema: &Value) -> String {
     }
 }
 
-/// The prompt payloads typed so far, each with the spec type it is. Plan 07
-/// T7 replaces this with the `CORE_PROMPTS` walk.
-fn prompt_payloads() -> Vec<(&'static str, &'static Value)> {
-    vec![(
-        "McpInferPromptResult",
-        specforge_common::shape::document::<specforge_mcp::prompts::infer::Payload>(),
-    )]
-}
-
-/// One walk over every core tool's reply and every message the server
-/// sends: per spec type reached, its violations.
+/// One walk over every core tool's reply, every core prompt's payload and
+/// every message the server sends: per spec type reached, its violations.
 fn report() -> &'static Report {
     static REPORT: OnceLock<Report> = OnceLock::new();
     REPORT.get_or_init(|| {
@@ -480,8 +471,9 @@ fn report() -> &'static Report {
         for document in specforge_mcp::message::documents() {
             check_type(document.spec, document.schema, document.schema, &mut report);
         }
-        for (spec, schema) in prompt_payloads() {
-            check_type(spec, schema, schema, &mut report);
+        for prompt in specforge_mcp::prompts::CORE_PROMPTS {
+            let schema = prompt.payload_schema();
+            check_type(prompt.spec_payload(), schema, schema, &mut report);
         }
         for tool in specforge_mcp::tools::CORE_TOOLS {
             let ReplySpec::Type(name) = tool.spec_reply() else {
@@ -534,7 +526,6 @@ fn every_mcp_type_is_sent() {
             file.as_str() == "mcp.spec"
                 && name.starts_with("Mcp")
                 && !report.reached.contains(*name)
-                && !PROTOCOL_AND_PROMPT_TYPES.contains(&name.as_str())
         })
         .map(|(name, _)| name)
         .collect();
@@ -542,6 +533,27 @@ fn every_mcp_type_is_sent() {
         unreached.is_empty(),
         "Mcp types of mcp.spec no tool reply, prompt payload or message reaches: {unreached:?}"
     );
+}
+
+#[specforge_test(
+    behavior = "serve_mcp_prompt",
+    verify = "each prompt's payload is the spec type its module names"
+)]
+fn every_prompt_payload_is_its_spec_type() {
+    let report = report();
+    for prompt in specforge_mcp::prompts::CORE_PROMPTS {
+        let violations = report
+            .violations
+            .get(prompt.spec_payload())
+            .cloned()
+            .unwrap_or_default();
+        assert!(
+            report.reached.contains(prompt.spec_payload()) && violations.is_empty(),
+            "{}:\n  {}",
+            prompt.spec_payload(),
+            violations.join("\n  ")
+        );
+    }
 }
 
 #[specforge_test(
@@ -565,18 +577,6 @@ fn every_sent_document_is_its_spec_type() {
     }
 }
 
-/// `Mcp*` types of mcp.spec nothing typed reaches yet: each ticket of plan
-/// 07 that types a document removes its names; T7 deletes the list.
-const PROTOCOL_AND_PROMPT_TYPES: &[&str] = &[
-    "McpContextPromptResult",
-    "McpReviewPromptResult",
-    "McpReviewFinding",
-    "McpTracePromptResult",
-    "McpTraceGap",
-    "McpExplorePromptResult",
-    "McpRelationshipPath",
-];
-
 macro_rules! message_type {
     ($($test:ident => $name:literal, $verify:literal),* $(,)?) => {$(
         #[specforge_test(type = $name, verify = $verify)]
@@ -599,6 +599,14 @@ message_type! {
     mcp_resource_template_descriptor => "McpResourceTemplateDescriptor", "McpResourceTemplateDescriptor schema is valid",
     mcp_prompt_descriptor => "McpPromptDescriptor", "McpPromptDescriptor schema is valid",
     mcp_prompt_argument => "McpPromptArgument", "McpPromptArgument schema is valid",
+    mcp_context_prompt_result => "McpContextPromptResult", "Context Prompt Result conforms to schema",
+    mcp_context_constraint => "McpContextConstraint", "McpContextConstraint schema is valid",
+    mcp_review_prompt_result => "McpReviewPromptResult", "Review Prompt Result conforms to schema",
+    mcp_review_finding => "McpReviewFinding", "McpReviewFinding schema is valid",
+    mcp_trace_prompt_result => "McpTracePromptResult", "Trace Prompt Result conforms to schema",
+    mcp_trace_gap => "McpTraceGap", "McpTraceGap schema is valid",
+    mcp_explore_prompt_result => "McpExplorePromptResult", "Explore Prompt Result conforms to schema",
+    mcp_relationship_path => "McpRelationshipPath", "McpRelationshipPath schema is valid",
     mcp_infer_overview => "McpInferOverview", "Infer Prompt Result conforms to schema",
     mcp_infer_guide_kind => "McpInferGuideKind", "McpInferGuideKind schema is valid",
     mcp_infer_kind_guide => "McpInferKindGuide", "McpInferKindGuide schema is valid",

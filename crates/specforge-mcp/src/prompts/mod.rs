@@ -1,12 +1,11 @@
 //! The core prompts: the `prompts/get` adapter of the request pipeline
 //! ([`crate::surface_call`]) over the Prompt spec table ([`CORE_PROMPTS`]).
 
-mod context;
-mod explore;
+pub mod context;
+pub mod explore;
 pub mod infer;
-mod review;
-mod table;
-mod trace;
+pub mod review;
+pub mod trace;
 
 use serde_json::Value;
 
@@ -18,11 +17,19 @@ use crate::state::McpState;
 use crate::surface_call::{Found, Invocation, Surface};
 use crate::target::{Call, TargetSpec};
 use crate::tool::McpError;
-pub use table::CORE_PROMPTS;
+
+/// The core prompts, in listing order.
+pub static CORE_PROMPTS: &[&dyn PromptSpec] = &[
+    &context::Prompt,
+    &review::Prompt,
+    &trace::Prompt,
+    &explore::Prompt,
+    &infer::Prompt,
+];
 
 /// The core prompt named `name`.
-pub fn core_prompt(name: &str) -> Option<&'static PromptSpec> {
-    CORE_PROMPTS.iter().find(|p| p.name == name)
+pub fn core_prompt(name: &str) -> Option<&'static dyn PromptSpec> {
+    CORE_PROMPTS.iter().copied().find(|p| p.name() == name)
 }
 
 /// `prompts/get`: the core prompt table (no extension declares a prompt).
@@ -35,11 +42,11 @@ impl Surface for Prompts {
     const EXTENDED: bool = false;
     const UNKNOWN: &'static str = "Unknown prompt";
 
-    type Core = &'static PromptSpec;
+    type Core = &'static dyn PromptSpec;
     type Extension = std::convert::Infallible;
     type Outcome = PromptOutcome;
 
-    fn core(name: &str) -> Option<&'static PromptSpec> {
+    fn core(name: &str) -> Option<&'static dyn PromptSpec> {
         core_prompt(name)
     }
 
@@ -47,12 +54,12 @@ impl Surface for Prompts {
         None
     }
 
-    fn target(found: &Found<&'static PromptSpec, std::convert::Infallible>) -> TargetSpec {
+    fn target(found: &Found<&'static dyn PromptSpec, std::convert::Infallible>) -> TargetSpec {
         found.core_entry().target()
     }
 
     fn invoked(
-        found: &Found<&'static PromptSpec, std::convert::Infallible>,
+        found: &Found<&'static dyn PromptSpec, std::convert::Infallible>,
         invocation: &Invocation,
     ) -> Option<McpEvent> {
         let spec = found.core_entry();
@@ -64,7 +71,7 @@ impl Surface for Prompts {
                 .map(str::to_string)
         };
         Some(McpEvent::McpPromptInvoked {
-            prompt_name: spec.name.to_string(),
+            prompt_name: spec.name().to_string(),
             entity_id: argument("entity_id"),
             kind: argument("kind"),
         })
@@ -72,18 +79,18 @@ impl Surface for Prompts {
 
     fn run(
         call: &mut Call<'_>,
-        found: &Found<&'static PromptSpec, std::convert::Infallible>,
+        found: &Found<&'static dyn PromptSpec, std::convert::Infallible>,
         invocation: &Invocation,
     ) -> PromptOutcome {
         let spec = found.core_entry();
         if let Some(error) = spec.undeclared(&invocation.arguments) {
             return Err(Box::new(error));
         }
-        (spec.render)(call.view(), invocation.arguments.clone())
+        spec.get(call.view(), &invocation.arguments)
     }
 
     fn refused(
-        _: &Found<&'static PromptSpec, std::convert::Infallible>,
+        _: &Found<&'static dyn PromptSpec, std::convert::Infallible>,
         error: McpError,
         _: &mut dyn EventSink,
     ) -> PromptOutcome {
@@ -95,7 +102,7 @@ impl Surface for Prompts {
     }
 
     fn completed(
-        _: &Found<&'static PromptSpec, std::convert::Infallible>,
+        _: &Found<&'static dyn PromptSpec, std::convert::Infallible>,
         _: &Invocation,
         _: &PromptOutcome,
     ) -> Option<McpEvent> {
@@ -104,7 +111,7 @@ impl Surface for Prompts {
 
     fn envelope(
         _: Revision,
-        found: &Found<&'static PromptSpec, std::convert::Infallible>,
+        found: &Found<&'static dyn PromptSpec, std::convert::Infallible>,
         _: &Invocation,
         outcome: PromptOutcome,
         id: Option<Value>,

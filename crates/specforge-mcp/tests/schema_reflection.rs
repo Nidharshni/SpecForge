@@ -68,7 +68,7 @@ fn each_core_prompt_lists_exactly_the_arguments_its_handler_reads() {
     let mut served = crate::support::TestProject::new().serve_components();
     let mut drift = Vec::new();
     for prompt in specforge_mcp::prompts::CORE_PROMPTS {
-        let declared = (prompt.arguments)();
+        let declared = prompt.arguments();
         let listed: Vec<String> = prompt
             .descriptor()
             .arguments
@@ -77,13 +77,16 @@ fn each_core_prompt_lists_exactly_the_arguments_its_handler_reads() {
             .collect();
         let read: Vec<&str> = declared.iter().map(|argument| argument.name).collect();
         if listed != read {
-            drift.push(format!("{}: lists {listed:?}, reads {read:?}", prompt.name));
+            drift.push(format!(
+                "{}: lists {listed:?}, reads {read:?}",
+                prompt.name()
+            ));
         }
         if declared
             .iter()
             .any(|argument| argument.description.is_empty())
         {
-            drift.push(format!("{}: an argument has no description", prompt.name));
+            drift.push(format!("{}: an argument has no description", prompt.name()));
         }
         // A listed required argument is one the prompt cannot render
         // without: a request with only the others is refused naming it.
@@ -100,7 +103,7 @@ fn each_core_prompt_lists_exactly_the_arguments_its_handler_reads() {
                 .collect();
             let reply = crate::support::get_prompt(
                 &mut served,
-                prompt.name,
+                prompt.name(),
                 serde_json::Value::Object(others),
             );
             let error = &reply["error"];
@@ -108,7 +111,7 @@ fn each_core_prompt_lists_exactly_the_arguments_its_handler_reads() {
                 || error["message"] != format!("Missing required parameter: {missing}")
                 || error["data"]["argument"] != *missing
             {
-                drift.push(format!("{}: without {missing}: {reply}", prompt.name));
+                drift.push(format!("{}: without {missing}: {reply}", prompt.name()));
             }
         }
     }
@@ -116,7 +119,7 @@ fn each_core_prompt_lists_exactly_the_arguments_its_handler_reads() {
     assert!(
         specforge_mcp::prompts::CORE_PROMPTS
             .iter()
-            .all(|p| !(p.arguments)().is_empty()),
+            .all(|p| !p.arguments().is_empty()),
         "every prompt declares its arguments"
     );
 }
@@ -215,4 +218,49 @@ fn search_advertises_field_value_references() {
             "specforge.search reads '{expected}' (search.rs) but does not advertise it"
         );
     }
+}
+
+/// What one core prompt module states, read from its `CorePrompt` consts and
+/// its `Args`.
+fn stated<P: specforge_mcp::prompt::CorePrompt>() -> (&'static str, &'static str, Vec<String>) {
+    use specforge_mcp::args::Arguments;
+    (
+        P::NAME,
+        P::DESCRIPTION,
+        <P::Args as Arguments>::declared()
+            .into_iter()
+            .map(|argument| argument.name.to_string())
+            .collect(),
+    )
+}
+
+#[specforge_test(
+    behavior = "serve_mcp_prompt",
+    verify = "each core prompt is one module: its name, description, arguments, spec type and typed payload are stated there once"
+)]
+fn each_core_prompt_is_one_module() {
+    use specforge_mcp::prompts::{context, explore, infer, review, trace};
+    let modules = [
+        stated::<context::Prompt>(),
+        stated::<review::Prompt>(),
+        stated::<trace::Prompt>(),
+        stated::<explore::Prompt>(),
+        stated::<infer::Prompt>(),
+    ];
+    let listed = specforge_mcp::prompts::CORE_PROMPTS;
+    assert_eq!(listed.len(), modules.len());
+    for (prompt, (name, description, arguments)) in listed.iter().zip(modules) {
+        let descriptor = prompt.descriptor();
+        assert_eq!(descriptor.name, name);
+        assert_eq!(descriptor.description, description);
+        let listed_arguments: Vec<String> =
+            descriptor.arguments.into_iter().map(|a| a.name).collect();
+        assert_eq!(listed_arguments, arguments, "{name}");
+        assert!(name.starts_with("specforge://prompts/"), "{name}");
+        assert!(prompt.spec_payload().starts_with("Mcp"), "{name}");
+    }
+    let mut names: Vec<&str> = listed.iter().map(|p| p.name()).collect();
+    names.sort_unstable();
+    names.dedup();
+    assert_eq!(names.len(), listed.len(), "names are unique");
 }

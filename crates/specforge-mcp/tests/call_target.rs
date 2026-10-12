@@ -1193,7 +1193,7 @@ fn every_core_entry_with_nothing_served_answers_or_refuses_as_its_target_declare
     assert_eq!(probed_tools, tools);
     let prompts: Vec<&str> = specforge_mcp::prompts::CORE_PROMPTS
         .iter()
-        .map(|prompt| prompt.name)
+        .map(|prompt| prompt.name())
         .collect();
     assert_eq!(probed(Entry::Prompt), prompts);
     for resource in specforge_mcp::resources::CORE_RESOURCES {

@@ -12,16 +12,24 @@ pub struct Document {
     pub open_values: &'static [&'static str],
 }
 
-/// Every document the server sends besides a tool reply.
+/// Every document the server sends besides a tool reply: the messages,
+/// then each core prompt's payload.
 pub fn sent() -> Vec<Document> {
-    specforge_mcp::message::documents()
+    let messages = specforge_mcp::message::documents()
         .into_iter()
         .map(|document| Document {
             owner: document.spec.to_string(),
             schema: document.schema,
             open_values: document.open_values,
-        })
-        .collect()
+        });
+    let prompts = specforge_mcp::prompts::CORE_PROMPTS
+        .iter()
+        .map(|prompt| Document {
+            owner: prompt.spec_payload().to_string(),
+            schema: prompt.payload_schema(),
+            open_values: prompt.open_values(),
+        });
+    messages.chain(prompts).collect()
 }
 
 /// Every core tool's reply (those with an outputSchema), then every
