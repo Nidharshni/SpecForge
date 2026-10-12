@@ -33,3 +33,4 @@ tests/spec/
 
 # Planning notes from planning sessions: their decisions live in docs/adr/
 /.planning/
+*.snap.new

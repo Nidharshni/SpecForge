@@ -12,7 +12,18 @@ path = "src/build_builtins.rs"
 name = "snapshot-builtins"
 path = "src/snapshot_builtins.rs"
 
+[[bin]]
+name = "check-links"
+path = "src/check_links.rs"
+
 [dependencies]
+specforge-common = { workspace = true }
+specforge-coverage = { path = "../crates/specforge-coverage" }
+specforge-project = { workspace = true }
+proc-macro2 = { version = "1", features = ["span-locations"] }
+strsim = { workspace = true }
+syn = { version = "2", features = ["full", "visit"] }
+walkdir = { workspace = true }
 specforge-component = { path = "../crates/specforge-component" }
 serde = "1.0"
 specforge-emitter = { path = "../crates/specforge-emitter" }
