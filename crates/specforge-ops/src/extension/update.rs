@@ -1213,7 +1213,12 @@ mod tests {
                 row(
                     "@a/gone",
                     UpdateStatus::Failed(
-                        OpError::diagnostic(codes::E063, "no registry").with_suggestion("add one"),
+                        OpError::coded(
+                            crate::OpErrorKind::PreconditionFailed,
+                            codes::E063,
+                            "no registry",
+                        )
+                        .with_suggestion("add one"),
                     ),
                 ),
             ],

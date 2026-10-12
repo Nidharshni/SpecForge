@@ -128,7 +128,8 @@ fn a_version_the_registry_holds_is_refused_with_r007() {
         &client,
         &key(),
     )
-    .unwrap_err();
+    .unwrap_err()
+    .to_diagnostic();
     assert_eq!(err.severity, Severity::Error);
     assert_eq!(err.code, "R007");
     assert!(
@@ -202,7 +203,8 @@ fn publish_threads_credential_to_client() {
         &anonymous,
         &key(),
     )
-    .unwrap_err();
+    .unwrap_err()
+    .to_diagnostic();
     assert_eq!(err.code, "R001");
     assert_eq!(
         publishes(&anonymous)
@@ -435,7 +437,8 @@ fn a_receipt_for_another_upload_is_refused() {
         &WrongReceipt(client()),
         &key(),
     )
-    .unwrap_err();
+    .unwrap_err()
+    .to_diagnostic();
     assert_eq!(error.code, "R009", "{error:?}");
     assert!(error.message.contains("receipt"), "{error:?}");
 }

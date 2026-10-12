@@ -564,12 +564,6 @@ impl ErrorCode {
             | ErrorCode::PreconditionFailed => error_codes::INTERNAL_ERROR,
         }
     }
-
-    /// The code a failure reported with diagnostic `code` carries: the
-    /// kind operations give it ([`OpErrorKind::of_diagnostic`]).
-    pub fn for_diagnostic(code: &str) -> Self {
-        OpErrorKind::of_diagnostic(code).into()
-    }
 }
 
 /// The code an operation's failure kind is reported as: total, one arm per
@@ -646,16 +640,6 @@ impl McpError {
             data: None,
             reported: Vec::new(),
         }
-    }
-
-    /// A failure reported as `diagnostic`, its code mapped by
-    /// [`ErrorCode::for_diagnostic`].
-    pub fn from_diagnostic(diagnostic: &Diagnostic) -> Self {
-        Self::new(
-            ErrorCode::for_diagnostic(&diagnostic.code),
-            diagnostic.message.clone(),
-        )
-        .with_diagnostic(diagnostic)
     }
 
     /// Invalid input: an argument the tool cannot use.
@@ -1037,10 +1021,13 @@ mod tests {
         assert_eq!(json["data"]["suggestion"], "pick another");
         assert!(json.get("diagnostic").is_none(), "{json}");
 
-        let error: McpError =
-            OpError::diagnostic(specforge_common::codes::E062, "the budget is too small")
-                .with_suggestion("raise it")
-                .into();
+        let error: McpError = OpError::coded(
+            specforge_ops::OpErrorKind::InvalidInput,
+            specforge_common::codes::E062,
+            "the budget is too small",
+        )
+        .with_suggestion("raise it")
+        .into();
         let json = serde_json::to_value(&error).unwrap();
         assert_eq!(json["code"], "invalid_input");
         assert_eq!(json["diagnostic"]["code"], "E062");

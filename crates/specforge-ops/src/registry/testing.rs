@@ -206,7 +206,7 @@ impl MemoryRegistry {
             } else {
                 ""
             };
-            return Err(OpError::diagnostic(
+            return Err(OpError::coded(crate::OpErrorKind::PermissionDenied,
                 codes::R_TRUST_003,
                 format!(
                     "key change rejected for '{name}': {what} but package is signed '{key_id}'{also}"
@@ -247,7 +247,8 @@ impl Registry for MemoryRegistry {
             .map(Published::version)
             .collect();
         if versions.is_empty() && !self.listing_none.contains(name) {
-            return Err(OpError::diagnostic(
+            return Err(OpError::coded(
+                crate::OpErrorKind::ExtensionNotFound,
                 codes::R_RES_001,
                 format!("package '{name}' not found in the registry"),
             )
@@ -278,14 +279,16 @@ impl Registry for MemoryRegistry {
             .iter()
             .find(|p| p.name() == *name && p.version() == *version)
         else {
-            return Err(OpError::diagnostic(
+            return Err(OpError::coded(
+                crate::OpErrorKind::ExtensionNotFound,
                 codes::R006,
                 format!("Package not found: {name}@{version}"),
             )
             .with_suggestion("Verify the package name and version."));
         };
         if published.key_id.is_none() && !policy.allow_unsigned {
-            return Err(OpError::diagnostic(
+            return Err(OpError::coded(
+                crate::OpErrorKind::PermissionDenied,
                 codes::R_TRUST_001,
                 format!("package '{name}' is not signed"),
             )
@@ -309,7 +312,8 @@ impl Registry for MemoryRegistry {
     /// refuse them.
     fn pin(&self, pins: &[KeyPin]) -> Result<(), OpError> {
         if self.refusing_pins {
-            return Err(OpError::diagnostic(
+            return Err(OpError::coded(
+                crate::OpErrorKind::PermissionDenied,
                 codes::R_TRUST_006,
                 "the known-keys store can't be saved",
             )
@@ -332,7 +336,8 @@ impl Registry for MemoryRegistry {
             .iter()
             .any(|p| p.name() == *package.name && p.version() == *package.version)
         {
-            return Err(OpError::diagnostic(
+            return Err(OpError::coded(
+                crate::OpErrorKind::Conflict,
                 codes::R007,
                 format!(
                     "Version {} already exists for package {}.",

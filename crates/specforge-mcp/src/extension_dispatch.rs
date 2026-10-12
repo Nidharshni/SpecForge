@@ -229,7 +229,7 @@ fn output_result(output: CommandOutput) -> ToolOutcome {
 /// A failed extension call as an MCP error: the diagnostic the runtime
 /// reported, in `diagnostic`.
 fn failed_call(diagnostic: &specforge_common::Diagnostic) -> McpError {
-    McpError::from_diagnostic(diagnostic)
+    McpError::new(ErrorCode::InternalError, diagnostic.message.clone()).with_diagnostic(diagnostic)
 }
 
 /// How long since `started`, in whole milliseconds.

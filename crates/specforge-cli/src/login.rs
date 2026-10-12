@@ -105,7 +105,8 @@ fn login(
         source.token_file.is_some(),
     ];
     if given.iter().filter(|g| **g).count() != 1 {
-        return refuse(&OpError::diagnostic(
+        return refuse(&OpError::coded(
+            specforge_ops::OpErrorKind::InvalidInput,
             codes::R_LOGIN_001,
             "login takes exactly one token source: --token <TOKEN>, --token-env <VAR> or --token-file <PATH>",
         ));
@@ -142,7 +143,7 @@ fn login(
             match probe.credential(alias) {
                 Ok(Some(credential)) => credential,
                 Ok(None) => unreachable!("a reference was just set"),
-                Err(diag) => return refuse(&OpError::from(diag)),
+                Err(diag) => return refuse(&specforge_ops_registry::unusable_credential(diag)),
             }
         }
         (None, None) => unreachable!("exactly one source was checked"),
@@ -151,7 +152,7 @@ fn login(
     let client = Retrying::new(HttpRegistryClient::new());
     let expires_at = match client.authenticate(&registry, &credential) {
         Ok(expires_at) => expires_at,
-        Err(error) => return refuse(&OpError::from(error.to_diagnostic())),
+        Err(error) => return refuse(&specforge_ops_registry::failure(error)),
     };
 
     // Store credentials: a secret goes into the OS keyring (0600-file fallback) and the file keeps
@@ -164,13 +165,17 @@ fn login(
         None => {
             if let Err(message) = store.set_token(alias, credential.token().to_string(), expires_at)
             {
-                return refuse(&OpError::diagnostic(codes::R_LOGIN_002, message));
+                return refuse(&OpError::coded(
+                    specforge_ops::OpErrorKind::PreconditionFailed,
+                    codes::R_LOGIN_002,
+                    message,
+                ));
             }
         }
     }
 
     if let Err(diag) = write_credentials(&cred_path, &store) {
-        return refuse(&OpError::from(diag));
+        return refuse(&OpError::of(specforge_ops::OpErrorKind::Internal, diag));
     }
 
     let kept = match store.registries.get(alias) {
@@ -252,7 +257,7 @@ fn logout(
     }
 
     if let Err(diag) = write_credentials(&cred_path, &store) {
-        return refuse(&OpError::from(diag));
+        return refuse(&OpError::of(specforge_ops::OpErrorKind::Internal, diag));
     }
 
     match format {

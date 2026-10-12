@@ -22,7 +22,8 @@ pub fn resolve(registry: &dyn Registry, package: &PackageRef) -> Result<Version,
     let published = published(registry, name)?;
     requirement.pick(&published).cloned().ok_or_else(|| {
         let available: Vec<String> = published.iter().map(Version::to_string).collect();
-        OpError::diagnostic(
+        OpError::coded(
+            crate::OpErrorKind::InvalidInput,
             codes::R_RES_004,
             format!(
                 "no version of '{name}' satisfies '{requirement}'. Available: {}",
@@ -52,7 +53,8 @@ pub fn upgrade(
 fn published(registry: &dyn Registry, name: &PackageName) -> Result<Vec<Version>, OpError> {
     let published = registry.versions(name)?;
     if published.is_empty() {
-        return Err(OpError::diagnostic(
+        return Err(OpError::coded(
+            crate::OpErrorKind::ExtensionNotFound,
             codes::R_RES_002,
             format!("no versions published for '{name}'"),
         ));

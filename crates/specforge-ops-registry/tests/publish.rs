@@ -489,6 +489,7 @@ fn an_unset_token_variable_is_r010_before_any_request() {
         .unwrap_err();
 
     assert_eq!(error.code, "R010", "{error:?}");
+    assert_eq!(error.kind, specforge_ops::OpErrorKind::PreconditionFailed);
     assert!(
         error.message.contains("P16_UNSET_TOKEN_VARIABLE"),
         "{error:?}"
@@ -566,5 +567,6 @@ fn an_unreadable_token_file_is_r011_before_any_request() {
         .unwrap_err();
 
     assert_eq!(error.code, "R011", "{error:?}");
+    assert_eq!(error.kind, specforge_ops::OpErrorKind::PreconditionFailed);
     assert!(world.client.calls().is_empty());
 }

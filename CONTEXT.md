@@ -494,8 +494,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   independent of surface. An operation that writes names the files it changed on disk in its
   outcome (`specforge_ops::Writes`), recorded where it wrote. It fails with an `OpError` whose kind
   (`OpErrorKind`: invalid input, not found, conflict, schema mismatch, compilation failed, …) is
-  decided in ops where it is raised — a recorded test report that cannot be used included
-  (`specforge_ops::report`) — and never by a surface; its code is what the CLI prints. Its outcome prints as one outcome document on
+  stated where it is raised — at the operation's own raise site (`OpError::coded`), or where a lower
+  crate's diagnostic crosses into ops (`OpError::of`), a recorded test report that cannot be used included
+  (`specforge_ops::report`) — never by a table of codes and never by a surface; its code is what the CLI prints. Its outcome prints as one outcome document on
   every surface (ADR 0052). The CLI and MCP
   are adapters over it (`specforge-ops`); the CLI ends every core command through one renderer
   (`specforge_cli::outcome`: the refusal, the exit code) and writes it through its **Terminal**

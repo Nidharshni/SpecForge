@@ -137,10 +137,14 @@ fn a_failed_install_puts_back_the_binary_the_lock_and_the_config() {
     let config_file = dir.path().join("specforge.json");
     let before = snapshot(dir.path());
     let failed = attempt(&Installed::at(dir.path()))
-        .commit_with(Some(&config_file), || -> Result<(), Diagnostic> {
-            std::fs::write(&config_file, "half written").unwrap();
-            Err(Diagnostic::new(codes::E069, "the config cannot be edited"))
-        })
+        .commit_with(
+            Some(&config_file),
+            || -> Result<(), Diagnostic> {
+                std::fs::write(&config_file, "half written").unwrap();
+                Err(Diagnostic::new(codes::E069, "the config cannot be edited"))
+            },
+            std::convert::identity,
+        )
         .unwrap_err();
     assert_eq!(failed.error.code, "E069");
     assert!(failed.left.is_empty());
@@ -198,10 +202,14 @@ fn a_failed_uninstall_puts_back_the_directory_the_lock_and_the_config() {
     let mut change = installed.change().unwrap();
     change.uninstall(&name("@acme/a"));
     let failed = change
-        .commit_with(Some(&config_file), || -> Result<(), Diagnostic> {
-            std::fs::write(&config_file, "{\"extensions\":[]}").unwrap();
-            Err(Diagnostic::new(codes::E069, "the config cannot be edited"))
-        })
+        .commit_with(
+            Some(&config_file),
+            || -> Result<(), Diagnostic> {
+                std::fs::write(&config_file, "{\"extensions\":[]}").unwrap();
+                Err(Diagnostic::new(codes::E069, "the config cannot be edited"))
+            },
+            std::convert::identity,
+        )
         .unwrap_err();
     assert_eq!(failed.error.code, "E069");
     assert!(failed.left.is_empty());
@@ -249,12 +257,16 @@ fn a_rollback_that_cannot_restore_a_file_names_it() {
     change.install(Module::new(b"newer".to_vec()), pin("@acme/a"));
 
     let failed = change
-        .commit_with(Some(&config_file), || -> Result<(), Diagnostic> {
-            // The scope directory can no longer be changed: the rollback
-            // cannot take the new module away nor bring the old one back.
-            std::fs::set_permissions(&scope, mode(0o555)).unwrap();
-            Err(Diagnostic::new(codes::E069, "the config cannot be edited"))
-        })
+        .commit_with(
+            Some(&config_file),
+            || -> Result<(), Diagnostic> {
+                // The scope directory can no longer be changed: the rollback
+                // cannot take the new module away nor bring the old one back.
+                std::fs::set_permissions(&scope, mode(0o555)).unwrap();
+                Err(Diagnostic::new(codes::E069, "the config cannot be edited"))
+            },
+            std::convert::identity,
+        )
         .unwrap_err();
     std::fs::set_permissions(&scope, mode(0o755)).unwrap();
 
@@ -273,9 +285,11 @@ fn a_failing_last_step_puts_back_the_binaries_and_the_lock() {
     change.install(Module::new(b"other".to_vec()), pin("@acme/b"));
 
     let failed = change
-        .commit_with(None, || -> Result<(), Diagnostic> {
-            Err(Diagnostic::new(codes::R_TRUST_006, "x"))
-        })
+        .commit_with(
+            None,
+            || -> Result<(), Diagnostic> { Err(Diagnostic::new(codes::R_TRUST_006, "x")) },
+            std::convert::identity,
+        )
         .unwrap_err();
 
     assert_eq!(failed.error.code, "R-TRUST-006");
@@ -294,11 +308,15 @@ fn a_config_the_last_step_leaves_as_it_was_is_not_changed() {
     change.install(Module::new(b"newer".to_vec()), pin("@acme/a"));
 
     let committed = change
-        .commit_with(Some(&config_file), || -> Result<(), Diagnostic> {
-            let same = std::fs::read(&config_file).unwrap();
-            std::fs::write(&config_file, same).unwrap();
-            Ok(())
-        })
+        .commit_with(
+            Some(&config_file),
+            || -> Result<(), Diagnostic> {
+                let same = std::fs::read(&config_file).unwrap();
+                std::fs::write(&config_file, same).unwrap();
+                Ok(())
+            },
+            std::convert::identity,
+        )
         .unwrap();
 
     assert_eq!(committed.changed, [module, root.join("specforge.lock")]);
@@ -307,10 +325,14 @@ fn a_config_the_last_step_leaves_as_it_was_is_not_changed() {
     let committed = installed
         .change()
         .unwrap()
-        .commit_with(Some(&config_file), || -> Result<(), Diagnostic> {
-            std::fs::write(&config_file, "{\"extensions\":[\"@acme/a\"]}").unwrap();
-            Ok(())
-        })
+        .commit_with(
+            Some(&config_file),
+            || -> Result<(), Diagnostic> {
+                std::fs::write(&config_file, "{\"extensions\":[\"@acme/a\"]}").unwrap();
+                Ok(())
+            },
+            std::convert::identity,
+        )
         .unwrap();
     assert_eq!(committed.changed, [config_file]);
 }

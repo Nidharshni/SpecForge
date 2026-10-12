@@ -32,7 +32,8 @@ impl Candidate {
     /// when they are no extension. `publish` and `extension validate` read a
     /// binary through it.
     pub fn read(runtime: &dyn WasmRuntime, bytes: &[u8]) -> Result<Candidate, OpError> {
-        let loaded = declaration_of(bytes, runtime)?;
+        let loaded = declaration_of(bytes, runtime)
+            .map_err(|why| OpError::of(OpErrorKind::InvalidInput, why))?;
         Ok(Candidate {
             declaration: loaded.declaration,
             warnings: loaded.warnings,
@@ -52,7 +53,8 @@ impl Candidate {
             ));
         };
         let loaded = declaration_of(bytes, runtime).map_err(|why| {
-            OpError::diagnostic(
+            OpError::coded(
+                crate::OpErrorKind::Internal,
                 codes::E028,
                 format!("the builtin '{name}' does not load: {}", why.message),
             )
@@ -142,8 +144,12 @@ impl Installable {
     /// Its declared name as the package name it installs under: E072 when it
     /// is none, before anything is written (ADR 0036).
     pub fn package(&self) -> Result<PackageName, OpError> {
-        PackageName::declared_by(&self.candidate.declaration)
-            .map_err(|why| OpError::from(specforge_common::package::invalid(&why)))
+        PackageName::declared_by(&self.candidate.declaration).map_err(|why| {
+            OpError::of(
+                OpErrorKind::InvalidInput,
+                specforge_common::package::invalid(&why),
+            )
+        })
     }
 }
 
@@ -166,14 +172,19 @@ impl LocalFile {
     /// component>`.
     pub fn read(runtime: &dyn WasmRuntime, path: &Path) -> Result<LocalFile, OpError> {
         if !path.exists() {
-            return Err(OpError::diagnostic(
+            return Err(OpError::coded(
+                crate::OpErrorKind::FileNotFound,
                 codes::E054,
                 format!("file not found: {}", path.display()),
             ));
         }
         let path = binary_at(path)?;
         let module = Module::read(&path).map_err(|e| {
-            OpError::diagnostic(codes::E054, format!("cannot read {}: {e}", path.display()))
+            OpError::coded(
+                crate::OpErrorKind::InvalidInput,
+                codes::E054,
+                format!("cannot read {}: {e}", path.display()),
+            )
         })?;
         Ok(LocalFile {
             binary: Installable::read(runtime, module)?,

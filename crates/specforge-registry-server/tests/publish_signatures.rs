@@ -119,7 +119,9 @@ fn a_rate_limited_publish_is_r003() {
     };
 
     publish("1.0.0").expect("the first publish is inside the window");
-    let diagnostic = publish("1.0.1").expect_err("the second is rate limited");
+    let diagnostic = publish("1.0.1")
+        .expect_err("the second is rate limited")
+        .to_diagnostic();
     assert_eq!(diagnostic.code, "R003", "{diagnostic:?}");
     assert!(
         diagnostic.message.contains("rate limited"),
