@@ -32,7 +32,9 @@ expression: mcp_snap
     "enhancements": {
       "milestone": [
         {
-          "edge_types": [],
+          "edge_types": [
+            "MilestoneIncludesBehavior"
+          ],
           "extension": "@specforge/software",
           "fields": [
             "behaviors"
@@ -41,7 +43,10 @@ expression: mcp_snap
       ],
       "module": [
         {
-          "edge_types": [],
+          "edge_types": [
+            "ModuleConsumesPort",
+            "ModuleDefinesPort"
+          ],
           "extension": "@specforge/software",
           "fields": [
             "ports",
