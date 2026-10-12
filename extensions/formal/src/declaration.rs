@@ -343,41 +343,6 @@ fn enhancements(c: &mut ContributionsBuilder) {
                 .edge("BehaviorRefinesBehavior")
                 .target_kind("behavior");
         });
-        e.edge_type("BehaviorRequiresInvariant", |e| {
-            e.description("Behavior requires an invariant as precondition")
-                .source_kind("behavior")
-                .target_kind("invariant")
-                .edge_style("solid")
-                .edge_color("#1A237E");
-        });
-        e.edge_type("BehaviorEnsuresInvariant", |e| {
-            e.description("Behavior ensures an invariant as postcondition")
-                .source_kind("behavior")
-                .target_kind("invariant")
-                .edge_style("solid")
-                .edge_color("#1A237E");
-        });
-        e.edge_type("BehaviorMaintainsInvariant", |e| {
-            e.description("Behavior maintains an invariant as frame invariant throughout execution")
-                .source_kind("behavior")
-                .target_kind("invariant")
-                .edge_style("dashed")
-                .edge_color("#1A237E");
-        });
-        e.edge_type("BehaviorSatisfiesProperty", |e| {
-            e.description("Behavior satisfies a temporal property")
-                .source_kind("behavior")
-                .target_kind("property")
-                .edge_style("solid")
-                .edge_color("#0D47A1");
-        });
-        e.edge_type("BehaviorRefinesBehavior", |e| {
-            e.description("Concrete behavior refines an abstract behavior (specification layering)")
-                .source_kind("behavior")
-                .target_kind("behavior")
-                .edge_style("dashed")
-                .edge_color("#4A148C");
-        });
     });
     c.enhance("event", "@specforge/formal", |e| {
         e.field("follows_protocol", |f| {
@@ -395,20 +360,6 @@ fn enhancements(c: &mut ContributionsBuilder) {
         e.field("sync", |f| {
             f.field_type(FieldType::StringList)
                 .description("Synchronization constraints for event processing");
-        });
-        e.edge_type("EventFollowsProtocol", |e| {
-            e.description("Event follows a synchronization protocol")
-                .source_kind("event")
-                .target_kind("protocol")
-                .edge_style("solid")
-                .edge_color("#004D40");
-        });
-        e.edge_type("EventParticipatesInProcess", |e| {
-            e.description("Event participates in a process")
-                .source_kind("event")
-                .target_kind("process")
-                .edge_style("solid")
-                .edge_color("#006064");
         });
     });
     c.enhance("invariant", "@specforge/formal", |e| {

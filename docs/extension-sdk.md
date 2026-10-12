@@ -240,7 +240,7 @@ Every contribution is a builder call. The SDK adds the matching Wasm exports and
 | `c.kind(name, \|k\| ..)` | an entity kind; `k.field(..)` its fields | `entities` |
 | `c.edge(label, \|e\| ..)` | an edge type (`source_kind`, `target_kind`, DOT style) | `edges` |
 | `c.shared_field(name, \|f\| ..)` | a field every kind of the extension has | `shared_fields` |
-| `c.enhance(kind, owner, \|e\| ..)` | fields and edge types on another extension's kind | `enhancements` |
+| `c.enhance(kind, owner, \|e\| ..)` | fields and verify kinds on another extension's kind | `enhancements` |
 | `c.rule(code, \|r\| ..)` | a declarative rule, or a custom one with `r.validate(..)` | `validation_rules` |
 | `c.command(id, \|cmd\| ..)` | a CLI command (also an MCP tool) and its handler | `surfaces` |
 | `c.mcp_tool(..)`, `c.mcp_resource(..)` | an MCP tool or resource and its handler | `surfaces` |

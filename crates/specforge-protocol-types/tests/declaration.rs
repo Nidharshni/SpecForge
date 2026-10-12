@@ -225,6 +225,15 @@ fn an_unknown_item_key_is_reported() {
                     }]
                 }]),
             }),
+            DeclaredCategory::Enhancements => Ok(DescribeResponse {
+                category: category.name().to_string(),
+                items: json!([{
+                    "target_kind": "x",
+                    "source_extension": "@a/b",
+                    "fields": [],
+                    "edge_types": [{ "label": "L" }],
+                }]),
+            }),
             other => answer(&declared, other),
         },
         |key| unknown.push(key),
@@ -244,6 +253,12 @@ fn an_unknown_item_key_is_reported() {
                 category: "entities",
                 item: "x.fields[f]".to_string(),
                 key: "requird".to_string(),
+            },
+            // A 1.2 guest's enhancement `edge_types`: ignored, reported.
+            UnknownKey {
+                category: "enhancements",
+                item: "x".to_string(),
+                key: "edge_types".to_string(),
             },
             UnknownKey {
                 category: "surfaces",

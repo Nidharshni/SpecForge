@@ -1,0 +1,163 @@
+---
+source: crates/specforge-cli/tests/check_surfaces.rs
+assertion_line: 119
+expression: "normalized(&doc, dir.path())"
+---
+{
+  "exit": 0,
+  "stdout": [
+    {
+      "code": "W138",
+      "column": null,
+      "file": null,
+      "line": null,
+      "message": "extension '@specforge/software': describe 'enhancements' item 'module' has the key 'edge_types', which the protocol does not define; it is ignored",
+      "severity": "Warning",
+      "span": null,
+      "suggestion": "check the key's spelling against the protocol's descriptors (docs/extension-protocol.md), or update specforge if the extension needs a newer host",
+      "title": "Unknown describe key"
+    },
+    {
+      "code": "W138",
+      "column": null,
+      "file": null,
+      "line": null,
+      "message": "extension '@specforge/software': describe 'enhancements' item 'milestone' has the key 'edge_types', which the protocol does not define; it is ignored",
+      "severity": "Warning",
+      "span": null,
+      "suggestion": "check the key's spelling against the protocol's descriptors (docs/extension-protocol.md), or update specforge if the extension needs a newer host",
+      "title": "Unknown describe key"
+    },
+    {
+      "code": "W138",
+      "column": null,
+      "file": null,
+      "line": null,
+      "message": "extension '@specforge/testing': describe 'enhancements' item 'behavior' has the key 'edge_types', which the protocol does not define; it is ignored",
+      "severity": "Warning",
+      "span": null,
+      "suggestion": "check the key's spelling against the protocol's descriptors (docs/extension-protocol.md), or update specforge if the extension needs a newer host",
+      "title": "Unknown describe key"
+    },
+    {
+      "code": "W138",
+      "column": null,
+      "file": null,
+      "line": null,
+      "message": "extension '@specforge/testing': describe 'enhancements' item 'invariant' has the key 'edge_types', which the protocol does not define; it is ignored",
+      "severity": "Warning",
+      "span": null,
+      "suggestion": "check the key's spelling against the protocol's descriptors (docs/extension-protocol.md), or update specforge if the extension needs a newer host",
+      "title": "Unknown describe key"
+    },
+    {
+      "code": "W138",
+      "column": null,
+      "file": null,
+      "line": null,
+      "message": "extension '@specforge/testing': describe 'enhancements' item 'event' has the key 'edge_types', which the protocol does not define; it is ignored",
+      "severity": "Warning",
+      "span": null,
+      "suggestion": "check the key's spelling against the protocol's descriptors (docs/extension-protocol.md), or update specforge if the extension needs a newer host",
+      "title": "Unknown describe key"
+    },
+    {
+      "code": "W138",
+      "column": null,
+      "file": null,
+      "line": null,
+      "message": "extension '@specforge/testing': describe 'enhancements' item 'type' has the key 'edge_types', which the protocol does not define; it is ignored",
+      "severity": "Warning",
+      "span": null,
+      "suggestion": "check the key's spelling against the protocol's descriptors (docs/extension-protocol.md), or update specforge if the extension needs a newer host",
+      "title": "Unknown describe key"
+    },
+    {
+      "code": "W138",
+      "column": null,
+      "file": null,
+      "line": null,
+      "message": "extension '@specforge/testing': describe 'enhancements' item 'port' has the key 'edge_types', which the protocol does not define; it is ignored",
+      "severity": "Warning",
+      "span": null,
+      "suggestion": "check the key's spelling against the protocol's descriptors (docs/extension-protocol.md), or update specforge if the extension needs a newer host",
+      "title": "Unknown describe key"
+    },
+    {
+      "code": "W138",
+      "column": null,
+      "file": null,
+      "line": null,
+      "message": "extension '@specforge/testing': describe 'enhancements' item 'constraint' has the key 'edge_types', which the protocol does not define; it is ignored",
+      "severity": "Warning",
+      "span": null,
+      "suggestion": "check the key's spelling against the protocol's descriptors (docs/extension-protocol.md), or update specforge if the extension needs a newer host",
+      "title": "Unknown describe key"
+    },
+    {
+      "code": "W138",
+      "column": null,
+      "file": null,
+      "line": null,
+      "message": "extension '@specforge/testing': describe 'enhancements' item 'failure_mode' has the key 'edge_types', which the protocol does not define; it is ignored",
+      "severity": "Warning",
+      "span": null,
+      "suggestion": "check the key's spelling against the protocol's descriptors (docs/extension-protocol.md), or update specforge if the extension needs a newer host",
+      "title": "Unknown describe key"
+    },
+    {
+      "code": "W002",
+      "column": 1,
+      "file": "main.spec",
+      "line": 4,
+      "message": "type 'Money' is not referenced by any behavior, port, or type",
+      "origin": "@specforge/software",
+      "severity": "Warning",
+      "span": {
+        "end_col": 2,
+        "end_line": 8,
+        "file": "main.spec",
+        "start_col": 1,
+        "start_line": 4
+      },
+      "suggestion": null,
+      "title": "Unreferenced type"
+    },
+    {
+      "code": "W004",
+      "column": 1,
+      "file": "main.spec",
+      "line": 4,
+      "message": "type 'Money' is testable but declares no verify obligations",
+      "origin": "@specforge/testing",
+      "severity": "Warning",
+      "span": {
+        "end_col": 2,
+        "end_line": 8,
+        "file": "main.spec",
+        "start_col": 1,
+        "start_line": 4
+      },
+      "suggestion": null,
+      "title": "Untested testable entity"
+    },
+    {
+      "code": "W010",
+      "column": 1,
+      "file": "main.spec",
+      "line": 4,
+      "message": "type 'Money' field 'amount' has unknown annotation '@min'",
+      "origin": "@specforge/software",
+      "severity": "Warning",
+      "span": {
+        "end_col": 2,
+        "end_line": 8,
+        "file": "main.spec",
+        "start_col": 1,
+        "start_line": 4
+      },
+      "suggestion": null,
+      "title": "Unknown field annotation"
+    }
+  ]
+}

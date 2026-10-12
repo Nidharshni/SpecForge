@@ -2,7 +2,8 @@
 
 **Status:** accepted (2026-10-12). Supersedes ADR 0007's round-6 amendments "an open edge type takes the kinds of
 its writers" and "an undeclared edge type names every writer"; amends ADR 0019 (the record's edge counts), ADR 0020
-(D1's edge-scoped rule, D2's input, D5's cycle rule) and ADR 0032 (the inverse pairs).
+(D1's edge-scoped rule, D2's input, D5's cycle rule) and ADR 0032 (the inverse pairs). Protocol 1.3.0: an enhancement
+declares no edge types (D7).
 
 Which edge type an edge is, and where an edge type starts and ends, was answered four ways: the rule set kept the
 *names* of the fields that write a label; the rule check counted edges to or from the far end's kinds, whatever
@@ -34,10 +35,15 @@ reader needs an edge type's endpoints"; the rule set had read them since 2026-10
   its extensions are the build's.
 - **D6. A field's inverse fields are resolved once** (`FieldRegistry::inverse_fields`: fields of the target kind);
   trace and the graph's bidirectional pairs read them.
+- **D7. An edge type is declared in `edges` only.** `EntityEnhancementDescriptor::edge_types` is gone (protocol
+  1.3.0): an enhancement's fields name an edge type as their `edge`, and `edges` declares it. A 1.2 guest's
+  `edge_types` key on an enhancement is W138 and ignored. Doctor lists, for each enhancement, the distinct edge types
+  its fields write, in field order.
 
 Rejected: widening declared ends to their writers (the schema would publish ends no extension declared); typing
 edges inside each rule (two readers, two mappings); a W021 for a dangling `inverse_of` (two builtin declarations
-would warn).
+would warn); registering the enhancement's `edge_types` as a second declaration site (formal's seven would be W018
+against itself).
 
 ## Consequences
 
@@ -50,6 +56,10 @@ would warn).
   `edge_writers` (no `edge_peer_kinds`, no `edge_fields`).
 - An `inverse_of` that names no field of the target kind is no inverse: it no longer exempts a pair from W061 nor
   counts as declared from the other side in trace.
+
+- Doctor's enhancement listing names the edge types the fields write (software's `milestone` gains
+  `edge MilestoneIncludesBehavior`, `module` gains `edge ModuleConsumesPort, edge ModuleDefinesPort`); formal's lines
+  are unchanged. Every builtin is re-vendored once for protocol 1.3.0.
 
 ## What would reopen it
 

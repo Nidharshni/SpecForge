@@ -363,11 +363,7 @@ pub fn diagnose_with(view: &ProjectView, z3_available: bool) -> DoctorReport {
                 .push(EnhancementEntry {
                     extension: declaration.name().to_string(),
                     fields: enhancement.fields.iter().map(|f| f.name.clone()).collect(),
-                    edge_types: enhancement
-                        .edge_types
-                        .iter()
-                        .map(|e| e.label.clone())
-                        .collect(),
+                    edge_types: written_edge_types(&enhancement.fields),
                     verify_kinds: enhancement.verify_kinds.clone(),
                 });
         }
@@ -529,6 +525,17 @@ fn keyword_of(diagnostic: &Diagnostic) -> Option<String> {
     }
 }
 
+/// The distinct edge types the fields write, in field order.
+fn written_edge_types(fields: &[specforge_protocol_types::FieldDescriptor]) -> Vec<String> {
+    let mut edge_types: Vec<String> = Vec::new();
+    for edge in fields.iter().filter_map(|f| f.edge.as_deref()) {
+        if !edge_types.iter().any(|seen| seen == edge) {
+            edge_types.push(edge.to_string());
+        }
+    }
+    edge_types
+}
+
 fn z3_on_path() -> bool {
     std::process::Command::new("z3")
         .arg("--version")
@@ -581,6 +588,34 @@ mod tests {
             ..Default::default()
         }];
         declaration
+    }
+
+    #[test]
+    fn enhancements_list_the_edge_types_their_fields_write() {
+        use specforge_protocol_types::{EntityEnhancementDescriptor, FieldDescriptor};
+        let field = |name: &str, edge: Option<&str>| FieldDescriptor {
+            name: name.into(),
+            edge: edge.map(str::to_string),
+            ..Default::default()
+        };
+        let mut declaration = Fixture::declaration("@acme/a", "1.0.0");
+        declaration.enhancements = vec![EntityEnhancementDescriptor {
+            target_kind: "behavior".into(),
+            source_extension: "@acme/a".into(),
+            fields: vec![
+                field("requires", Some("Requires")),
+                field("note", None),
+                field("also_requires", Some("Requires")),
+                field("ensures", Some("Ensures")),
+            ],
+            ..Default::default()
+        }];
+        let fixture = Fixture::new().declarations(vec![declaration]);
+
+        let report = diagnose_with(&fixture.view(), true);
+
+        let entry = &report.enhancements["behavior"][0];
+        assert_eq!(entry.edge_types, ["Requires", "Ensures"]);
     }
 
     #[specforge_test(

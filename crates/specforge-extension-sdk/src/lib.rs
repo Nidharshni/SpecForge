@@ -783,7 +783,6 @@ impl EnhancementBuilder {
             target_kind: target_kind.to_string(),
             source_extension: source_extension.to_string(),
             fields: Vec::new(),
-            edge_types: Vec::new(),
             verify_kinds: None,
         })
     }
@@ -796,12 +795,6 @@ impl EnhancementBuilder {
     /// Make the target kind testable, accepting `verify` obligations of these kinds.
     pub fn verify_kinds(&mut self, kinds: &[&str]) -> &mut Self {
         self.0.verify_kinds = Some(kinds.iter().map(|k| k.to_string()).collect());
-        self
-    }
-    pub fn edge_type(&mut self, label: &str, f: impl FnOnce(&mut EdgeBuilder)) -> &mut Self {
-        let mut b = EdgeBuilder::new(label);
-        f(&mut b);
-        self.0.edge_types.push(b.0);
         self
     }
 }

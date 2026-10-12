@@ -1,0 +1,47 @@
+---
+source: crates/specforge-cli/tests/parity.rs
+assertion_line: 752
+expression: cli_snap
+---
+{
+  "check": {
+    "diagnostics": [
+      "Warning W138",
+      "Warning W138"
+    ],
+    "ok": true
+  },
+  "config": {
+    "extensions": [
+      "@specforge/software",
+      "@sdk/greet"
+    ],
+    "name": "demo",
+    "registries": [
+      {
+        "alias": "offline",
+        "default_registry": true,
+        "url": "http://127.0.0.1:9/v1"
+      }
+    ],
+    "spec_root": "spec",
+    "version": "0.1.0"
+  },
+  "files": {
+    ".specforge/extensions/@sdk/greet/extension.wasm": "<binary>",
+    "spec/main.spec": "behavior alpha \"Alpha\" {\n  category \"core\"\n  contract \"The system MUST work\"\n}\n",
+    "specforge.lock": "{\n  \"lockfile_version\": 1,\n  \"entries\": [\n    {\n      \"name\": \"@sdk/greet\",\n      \"version\": \"0.1.0\",\n      \"source\": \"local:[BLOB]\",\n      \"wasm_hash\": \"[SHA256]\"\n    }\n  ]\n}"
+  },
+  "ok": true,
+  "payload": {
+    "added": [
+      {
+        "action": "already_present",
+        "extension": "@sdk/greet",
+        "specifier": "[BLOB]",
+        "version": "0.1.0"
+      }
+    ],
+    "files_written": []
+  }
+}

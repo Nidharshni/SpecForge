@@ -1,0 +1,144 @@
+---
+source: crates/specforge-cli/tests/parity.rs
+assertion_line: 752
+expression: cli_snap
+---
+{
+  "check": {
+    "diagnostics": [
+      "Warning W002",
+      "Warning W003",
+      "Warning W004",
+      "Warning W138",
+      "Warning W138",
+      "Warning W138",
+      "Warning W138",
+      "Warning W138",
+      "Warning W138",
+      "Warning W138",
+      "Warning W138",
+      "Warning W138"
+    ],
+    "ok": true
+  },
+  "config": {
+    "extensions": [
+      "@specforge/software",
+      "@specforge/testing"
+    ],
+    "name": "cov",
+    "spec_root": "spec"
+  },
+  "files": {
+    "spec/a.spec": "type widget \"Widget\" {\n  id string @unique\n  verify unit \"widget valid\"\n}\ninvariant soft \"Softly unverified\" {\n  guarantee \"x\"\n  risk low\n}\n",
+    "specforge-report.json": "{\"runner\":\"r\",\"results\":{}}"
+  },
+  "ok": false,
+  "payload": {
+    "gate": {
+      "min": 50.0,
+      "pct": 0.0,
+      "proven": 0,
+      "status": "below",
+      "total": 2
+    },
+    "ok": false,
+    "passes": [
+      {
+        "findings": [
+          {
+            "code": "A001",
+            "column": 1,
+            "file": "a.spec",
+            "line": 5,
+            "message": "invariant 'soft' declares no verify obligations",
+            "origin": "@specforge/testing",
+            "severity": "Warning",
+            "span": {
+              "end_col": 2,
+              "end_line": 8,
+              "file": "a.spec",
+              "start_col": 1,
+              "start_line": 5
+            },
+            "suggestion": "add a `verify unit` or `verify property` statement",
+            "title": "Testable entity without obligations"
+          },
+          {
+            "code": "A002",
+            "column": 1,
+            "file": "a.spec",
+            "line": 5,
+            "message": "invariant 'soft' declares no verify obligations",
+            "origin": "@specforge/testing",
+            "severity": "Warning",
+            "span": {
+              "end_col": 2,
+              "end_line": 8,
+              "file": "a.spec",
+              "start_col": 1,
+              "start_line": 5
+            },
+            "suggestion": "add a `verify property` or `verify unit` obligation",
+            "title": "Invariant without obligations"
+          },
+          {
+            "code": "A015",
+            "column": 1,
+            "file": "a.spec",
+            "line": 1,
+            "message": "type 'widget' has 1 obligation(s) no passing test proves: \"widget valid\"",
+            "origin": "@specforge/testing",
+            "severity": "Warning",
+            "span": {
+              "end_col": 2,
+              "end_line": 4,
+              "file": "a.spec",
+              "start_col": 1,
+              "start_line": 1
+            },
+            "suggestion": "link a test to each obligation by its text (`verify = \"...\"` in the test's annotation)",
+            "title": "Unproven obligations"
+          }
+        ],
+        "pass": "@specforge/testing:coverage",
+        "summary": {
+          "discharge_funnel": {
+            "entities_proven": 0,
+            "entities_with_obligations": 1,
+            "formally_discharged": 0,
+            "report_failures": 0
+          },
+          "entities_analyzed": 2,
+          "extension": "@specforge/testing",
+          "invariant_enforced": 0,
+          "invariant_unreferenced": 1,
+          "invariants": [
+            {
+              "risk": "low",
+              "total": 1,
+              "unverified": 1
+            }
+          ],
+          "obligation_kinds": {
+            "unit": 1
+          },
+          "obligations": 1,
+          "pass": "coverage",
+          "test_results": {
+            "entities_proven": 0,
+            "entities_recorded": 0,
+            "obligations_proven": 0,
+            "runner": "r",
+            "tests_failed": 0,
+            "tests_recorded": 0
+          },
+          "testable_exempt": 0,
+          "testable_proven": 0,
+          "testable_total": 2,
+          "testable_verified": 1
+        }
+      }
+    ]
+  }
+}
