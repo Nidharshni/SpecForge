@@ -72,6 +72,7 @@ behavior mcp_initialize "MCP Initialize" {
   verify unit "all core resources registered before accepting requests"
   verify unit "returns MCP-compliant init response"
   verify unit "compiles project when projectRoot is provided"
+  verify integration "a client that names no projectRoot is served the project at or above the path specforge mcp was started with"
   verify unit "initialize and server/discover give the same capabilities and instructions"
   verify unit "initialize answers the negotiated revision, the server's capabilities, its name and version and its instructions, and no listing"
   verify contract "MCP Initialize: MCP initialization holds — compiler_api_available, wasm_runtime_available, capabilities_returned, surface_contributions_merged, mcp_initialized_emitted"
@@ -917,6 +918,8 @@ behavior serve_mcp_over_stdio "Serve MCP over Stdio" {
   verify unit "the end of the input disconnects the client"
   verify unit "a failed write ends the connection and disconnects the client"
   verify unit "a failed read ends the connection and disconnects the client"
+  verify integration "specforge mcp serves its standard input and output and exits 0 when its input ends"
+  verify integration "a client reading specforge mcp's output line by line gets each response before it sends its next request, the notifications it queued after it"
   verify integration "specforge mcp answers a line that is not UTF-8 instead of ending the session"
   verify contract "Serve MCP over Stdio: stdio transport holds — connection_open, one_line_per_message, response_first, connection_ended"
 }

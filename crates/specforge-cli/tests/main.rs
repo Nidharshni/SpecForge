@@ -15,7 +15,6 @@ mod determinism;
 mod docs_truth;
 mod e2e_cross_extension;
 mod e2e_edges;
-mod e2e_mcp;
 mod e2e_multi_entity;
 mod e2e_query;
 mod e2e_schema;
@@ -35,6 +34,7 @@ mod format_corpus;
 mod init;
 mod inspect_views;
 mod installed_extensions;
+mod mcp;
 mod mcp_add;
 #[allow(deprecated)]
 mod migrate;
