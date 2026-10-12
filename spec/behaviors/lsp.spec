@@ -310,7 +310,9 @@ behavior hover_diagnostic "Hover a Diagnostic" {
     code with the catalogue's title, the catalogue's explanation and the
     link to the code's section of docs/diagnostics.md. A code the catalogue
     does not have shows its code and message only. The entity hover that
-    follows does not list that diagnostic again.
+    follows does not list that diagnostic again. A region the formatter
+    left unformatted (W142) is such a diagnostic while the document is the
+    text formatting reported it on.
   """
   verify unit "hovering a diagnostic shows its catalogued title and explanation"
   verify unit "an uncatalogued diagnostic's hover shows its code and message only"
@@ -485,7 +487,10 @@ behavior emit_live_diagnostics "Live Diagnostics" {
     compiled from, none for a file compiled from disk, so a client drops a
     list a newer edit superseded. A file's list is published under the one
     URI the client names it by (the one it opened the document with, else
-    the file's own file: URI), never under two spellings of one file.
+    the file's own file: URI), never under two spellings of one file. The
+    list is the project's diagnostics for the file and, while the open
+    document is the text formatting reported on, the formatter's
+    (lsp_format_document).
     A diagnostic without a span about no
     entity is published on the
     document being edited, else on the last one such a diagnostic went on

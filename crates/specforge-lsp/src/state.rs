@@ -1,6 +1,6 @@
 use crate::answers::ClientSupport;
 use crate::document::Document;
-use crate::files::{Files, Publish};
+use crate::files::{Files, Findings, Publish};
 use crate::publish::Publication;
 use specforge_graph::Graph;
 use specforge_ops::view::ProjectView;
@@ -344,6 +344,12 @@ impl LspState {
     /// ([`Files::publish_compile`]).
     pub fn publish(&mut self, publication: Publication) -> Vec<Publish> {
         self.files.publish_compile(publication)
+    }
+
+    /// Record what formatting reported and answer what to send now
+    /// ([`Files::publish_formatter`]).
+    pub fn publish_formatting(&mut self, findings: Findings) -> Option<Publish> {
+        self.files.publish_formatter(findings)
     }
 
     /// Keep `files` keyed under the spec root readers see: called by `show_environment`,

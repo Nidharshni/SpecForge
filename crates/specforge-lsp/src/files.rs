@@ -1,7 +1,7 @@
 //! What the server and the editor share about each file, by the file's session key
 //! (ADR 0056): the open document (the editor's buffer), the URI the client names the file
-//! by, and the diagnostics last published for it, each labelled with the buffer version it
-//! belongs to. Everything is found by the key ([`Files::key_of`] is the one rule from a URI to
+//! by, and the diagnostics last published for it in two layers, each labelled with the buffer
+//! version it belongs to. Everything is found by the key ([`Files::key_of`] is the one rule from a URI to
 //! it); the URI is kept only to name the file back to the client. It is the one writer of what
 //! the editor is shown: a publish is what one of its writes answers.
 
@@ -36,6 +36,8 @@ struct Entry {
     open: Option<Document>,
     /// What the project reports for the file, as last published.
     compile: Layer,
+    /// What formatting the open document reported, at the version it formatted.
+    formatter: Option<Layer>,
 }
 
 /// One writer's diagnostics for a file, labelled with the version of the buffer they are
@@ -56,6 +58,18 @@ pub struct Publish {
     pub uri: Url,
     pub diagnostics: Vec<lsp::Diagnostic>,
     pub version: Option<i32>,
+}
+
+/// What formatting the open document `key` reported (a W142 per region kept verbatim):
+/// positions in its buffer at `version`.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Findings {
+    pub key: String,
+    pub version: Option<i32>,
+    /// As hover reads them back.
+    pub placed: Vec<Diagnostic>,
+    /// As the client receives them.
+    pub sent: Vec<lsp::Diagnostic>,
 }
 
 impl Files {
@@ -119,12 +133,13 @@ impl Files {
         }
     }
 
-    /// The client closed `uri`. Its buffer goes; the file keeps the URI it was opened with,
-    /// and its compile layer, until a publish clears it.
+    /// The client closed `uri`. Its buffer and its formatter layer go; the file keeps the URI
+    /// it was opened with, and its compile layer, until a publish clears it.
     pub(crate) fn close(&mut self, uri: &Url) {
         let key = self.key_of(uri);
         if let Some(entry) = self.by_key.get_mut(&key) {
             entry.open = None;
+            entry.formatter = None;
         }
     }
 
@@ -157,6 +172,19 @@ impl Files {
             .map_or(&[], |entry| entry.compile.placed.as_slice())
     }
 
+    /// What formatting reported for the open document `key`, while the document is still the
+    /// text it formatted (positions in it, through its own line index); empty otherwise.
+    pub fn formatter_diagnostics(&self, key: &str) -> &[Diagnostic] {
+        match self.by_key.get(key) {
+            Some(Entry {
+                open: Some(document),
+                formatter: Some(layer),
+                ..
+            }) if layer.version == document.version() => &layer.placed,
+            _ => &[],
+        }
+    }
+
     /// Every compile diagnostic last published, file by file in key order: what the hover's
     /// entity facts report.
     pub fn published(&self) -> impl Iterator<Item = &Diagnostic> {
@@ -181,8 +209,10 @@ impl Files {
     }
 
     /// Record what the project reports now as each file's compile layer, and answer what to
-    /// send, in key order. Each file's whole list goes under the URI the client names the file
-    /// by. A file that is not open and was sent an empty list is forgotten.
+    /// send, in key order. Each file's whole list is its compile layer, plus its formatter
+    /// layer when that belongs to the same version (a formatter layer of another version is
+    /// dropped: the buffer moved since it was formatted). It goes under the URI the client
+    /// names the file by. A file that is not open and was sent an empty list is forgotten.
     pub(crate) fn publish_compile(&mut self, publication: Publication) -> Vec<Publish> {
         let mut sends = Vec::new();
         for (key, file) in publication.files {
@@ -196,6 +226,11 @@ impl Files {
                 sent: file.diagnostics,
                 version: file.version,
             };
+            if let Some(formatter) = &entry.formatter
+                && formatter.version != entry.compile.version
+            {
+                entry.formatter = None;
+            }
             sends.push(entry.publish());
             if entry.open.is_none() && entry.listed().is_empty() {
                 self.by_key.remove(&key);
@@ -205,6 +240,27 @@ impl Files {
             self.anchor = publication.anchor;
         }
         sends
+    }
+
+    /// Record `findings` as its open document's formatter layer, and answer what to send now.
+    /// `None` when the document is no longer at `findings.version` (it moved since it was
+    /// formatted), when the layer did not change, or when the compile layer belongs to another
+    /// version: the publish of that version's compile then sends both.
+    pub(crate) fn publish_formatter(&mut self, findings: Findings) -> Option<Publish> {
+        let entry = self.by_key.get_mut(&findings.key)?;
+        if entry.open.as_ref()?.version() != findings.version {
+            return None;
+        }
+        let layer = (!findings.sent.is_empty()).then_some(Layer {
+            placed: findings.placed,
+            sent: findings.sent,
+            version: findings.version,
+        });
+        if entry.formatter == layer {
+            return None;
+        }
+        entry.formatter = layer;
+        (entry.compile.version == findings.version).then(|| entry.publish())
     }
 
     // ---- environment loads -------------------------------------------------------------
@@ -242,12 +298,22 @@ impl Entry {
             path,
             open: None,
             compile: Layer::default(),
+            formatter: None,
         }
     }
 
-    /// The whole list the client is shown.
+    /// The whole list the client is shown: the compile layer, then the formatter layer of the
+    /// same version.
     fn listed(&self) -> Vec<lsp::Diagnostic> {
-        self.compile.sent.clone()
+        let mut list = self.compile.sent.clone();
+        if let Some(formatter) = self
+            .formatter
+            .as_ref()
+            .filter(|f| f.version == self.compile.version)
+        {
+            list.extend(formatter.sent.iter().cloned());
+        }
+        list
     }
 
     fn publish(&self) -> Publish {

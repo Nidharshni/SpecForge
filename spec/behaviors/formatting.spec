@@ -394,7 +394,12 @@ behavior lsp_format_document "LSP Format Document" {
     errors, the server MUST format well-formed regions and leave error
     regions unchanged, consistent with format_with_parse_errors.
     Diagnostics the formatter reports MUST be published alongside the
-    document's compile diagnostics, never in place of them.
+    document's compile diagnostics, never in place of them, and stay
+    published with them while the document is the text they were
+    reported on: a later publish of the document keeps them and an edit
+    drops them. A publish MUST carry diagnostics of one document version:
+    formatting a document typed since its last compile publishes its
+    findings with the compile of that text.
   """
   verify unit "formatting request returns TextEdit list"
   verify integration "formatting keeps the document's compile diagnostics published"

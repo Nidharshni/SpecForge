@@ -14,13 +14,14 @@ use specforge_ops::navigate::{
 };
 use tower_lsp::jsonrpc::{Error, ErrorCode};
 use tower_lsp::lsp_types::{
-    ClientCapabilities, CodeActionOrCommand, CodeActionResponse, CompletionResponse, Diagnostic,
+    ClientCapabilities, CodeActionOrCommand, CodeActionResponse, CompletionResponse,
     DocumentSymbolResponse, FormattingOptions, GotoDefinitionResponse, Hover, HoverContents,
     Location, LocationLink, MarkupContent, MarkupKind, Position, PrepareRenameResponse, Range,
     SemanticTokens, SemanticTokensResult, SymbolInformation, TextEdit, Url, WorkspaceEdit,
 };
 
 use crate::document::{LineIndex, Target};
+use crate::files::Findings;
 use crate::navigation::{
     Compiled, fix_to_code_action, outline_to_document_symbols, symbol_kind_from_entity,
 };
@@ -112,12 +113,18 @@ fn entity_under_cursor(compiled: &Compiled, key: &str, position: Position) -> Op
 pub fn hover(state: &LspState, uri: &Url, position: Position) -> Option<Hover> {
     let key = state.key_of(uri);
     let files = state.files();
-    files.document(&key)?;
+    let doc = files.document(&key)?;
     let compiled = Compiled::new(state);
-    let shown = compiled
+    let mut shown = compiled
         .index_of(&key)
         .map(|index| hover::diagnostics_at(files.compile_diagnostics(&key), &index, position))
         .unwrap_or_default();
+    // The formatter's findings are positions in the buffer it formatted, which is this one.
+    shown.extend(hover::diagnostics_at(
+        files.formatter_diagnostics(&key),
+        doc.index(),
+        position,
+    ));
     let published: Vec<specforge_common::Diagnostic> = files.published().cloned().collect();
     let about = match compiled.target(&key, position) {
         Some(Target::Entity { id, .. }) => {
@@ -417,16 +424,14 @@ pub fn semantic_tokens(state: &LspState, uri: &Url) -> Option<SemanticTokensResu
     }))
 }
 
-/// What formatting the open document `uri` answers: its edits, the
-/// diagnostics to publish beside the compile's when formatting reported any,
-/// and the notice that the project's configuration overrode the editor's
-/// settings.
+/// What formatting the open document `uri` answers: its edits, what formatting
+/// reported (for the store to publish beside the compile's), and the notice
+/// that the project's configuration overrode the editor's settings.
 pub struct Formatted {
     pub edits: Vec<TextEdit>,
-    /// The document's whole list to publish now (a publish replaces it): the
-    /// compile's diagnostics and the formatter's, with the document's
-    /// version. `None`: nothing to publish.
-    pub publish: Option<(Vec<Diagnostic>, Option<i32>)>,
+    /// What formatting reported, positions in the document at its version
+    /// (`LspState::publish_formatting`).
+    pub findings: Findings,
     /// The configuration key and the message, sent once per configuration
     /// (`LspState::first_format_notice`).
     pub notice: Option<(String, String)>,
@@ -452,29 +457,21 @@ pub fn formatting(
         .as_deref()
         .map_or(format::Place::Detached, format::Place::File);
     let formatted = format::document(place, doc.text(), lines, Some(editor));
-    // A publish replaces the document's list: the formatter's diagnostics go
-    // alongside the compile ones, not in their place. The compile's are
-    // positions in the text it compiled, the formatter's in the document it
-    // formatted.
-    let publish = (!formatted.diagnostics.is_empty()).then(|| {
-        let compiled = Compiled::new(state);
-        let diagnostics: Vec<Diagnostic> = state
-            .files()
-            .compile_diagnostics(&key)
+    // The formatter's diagnostics are positions in the document it formatted;
+    // the store publishes them beside the compile's, never in their place.
+    let findings = Findings {
+        version: doc.version(),
+        sent: formatted
+            .diagnostics
             .iter()
-            .map(|d| diagnostic_to_lsp(d, |span| compiled.range(span)))
-            .chain(
-                formatted
-                    .diagnostics
-                    .iter()
-                    .map(|d| diagnostic_to_lsp(d, |span| Some(doc.index().range(span)))),
-            )
-            .collect();
-        (diagnostics, doc.version())
-    });
+            .map(|d| diagnostic_to_lsp(d, |span| Some(doc.index().range(span))))
+            .collect(),
+        placed: formatted.diagnostics.clone(),
+        key,
+    };
     Some(Formatted {
         edits: lsp_edits(formatted.edits(), doc.index()),
-        publish,
+        findings,
         notice: overridden_editor_options(&formatted, editor),
     })
 }

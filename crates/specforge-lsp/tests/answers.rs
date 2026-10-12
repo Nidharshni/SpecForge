@@ -250,7 +250,7 @@ fn rename_waits_for_the_compile_of_its_document() {
 #[test]
 fn formatting_answers_its_edits_and_what_to_publish() {
     let text = "behavior login \"Login\" {\n  invariants [session_limit]\n}\n\n}}}\n";
-    let state = crate::served::buffers(&[("/buffer/format_keeps.spec", text)]);
+    let mut state = crate::served::buffers(&[("/buffer/format_keeps.spec", text)]);
     let uri = crate::served::uri_of_path("/buffer/format_keeps.spec");
     let options = tower_lsp::lsp_types::FormattingOptions {
         tab_size: 2,
@@ -259,18 +259,31 @@ fn formatting_answers_its_edits_and_what_to_publish() {
     };
 
     let formatted = answers::formatting(&state, &uri, &options, None).expect("an open document");
+    let codes_of = |list: &[tower_lsp::lsp_types::Diagnostic]| {
+        let mut codes: Vec<String> = list
+            .iter()
+            .filter_map(|d| match d.code.as_ref()? {
+                tower_lsp::lsp_types::NumberOrString::String(code) => Some(code.clone()),
+                tower_lsp::lsp_types::NumberOrString::Number(_) => None,
+            })
+            .collect();
+        codes.sort();
+        codes
+    };
+    assert_eq!(codes_of(&formatted.findings.sent), ["W142"]);
+    assert_eq!(formatted.findings.version, Some(1));
     // The formatter's W142 goes beside the compile's E001 and E003, which
     // a publish would otherwise erase.
-    let (published, _) = formatted.publish.expect("formatting reported something");
-    let mut codes: Vec<String> = published
-        .iter()
-        .filter_map(|d| match d.code.as_ref()? {
-            tower_lsp::lsp_types::NumberOrString::String(code) => Some(code.clone()),
-            tower_lsp::lsp_types::NumberOrString::Number(_) => None,
-        })
-        .collect();
-    codes.sort();
-    assert_eq!(codes, ["E001", "E003", "W142"], "{published:?}");
+    let send = state
+        .publish_formatting(formatted.findings.clone())
+        .expect("formatting reported something");
+    assert_eq!(codes_of(&send.diagnostics), ["E001", "E003", "W142"]);
+    assert_eq!((send.uri, send.version), (uri.clone(), Some(1)));
+    assert_eq!(
+        state.publish_formatting(formatted.findings),
+        None,
+        "nothing changed"
+    );
     // Outside a project the editor's settings are the ones that apply.
     assert_eq!(formatted.notice, None);
 

@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 use specforge_extension_sdk::prelude::*;
 use specforge_lsp::changes::{Applied, Change};
+use specforge_lsp::files::{Findings, Publish};
 use specforge_lsp::reaction::Reaction;
 use specforge_lsp::{ClientSupport, LspState, answers};
 use specforge_project::{RuntimeSource, SharedRuntime};
@@ -261,6 +262,19 @@ impl Served {
             .and_then(|doc| doc.version())
             .unwrap_or(1);
         state.change_document(uri, version, &[crate::whole(text)]);
+    }
+
+    /// The editor changed the document it opened as `uri` to `text` at `version`; nothing is
+    /// compiled.
+    pub fn change_to(&mut self, uri: &Url, version: i32, text: &str) {
+        self.state
+            .blocking_write()
+            .change_document(uri, version, &[crate::whole(text)]);
+    }
+
+    /// What formatting found is recorded (`LspState::publish_formatting`); what to send now.
+    pub fn publish_formatting(&mut self, findings: Findings) -> Option<Publish> {
+        self.state.blocking_write().publish_formatting(findings)
     }
 
     /// `type_text`, then `apply(Change::Edited([file]))`.

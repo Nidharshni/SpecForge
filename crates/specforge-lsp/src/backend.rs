@@ -303,14 +303,20 @@ impl Backend {
         let Some(formatted) = formatted else {
             return Ok(None);
         };
-        if let Some((diagnostics, version)) = formatted.publish {
+        let (send, notice) = {
+            let mut state = self.state.write().await;
+            let send = state.publish_formatting(formatted.findings);
+            let notice = formatted
+                .notice
+                .filter(|(configuration, _)| state.first_format_notice(configuration));
+            (send, notice)
+        };
+        if let Some(send) = send {
             self.client
-                .publish_diagnostics(uri.clone(), diagnostics, version)
+                .publish_diagnostics(send.uri, send.diagnostics, send.version)
                 .await;
         }
-        if let Some((configuration, message)) = formatted.notice
-            && self.state.write().await.first_format_notice(&configuration)
-        {
+        if let Some((_, message)) = notice {
             self.client.log_message(MessageType::INFO, message).await;
         }
         Ok(Some(formatted.edits))
