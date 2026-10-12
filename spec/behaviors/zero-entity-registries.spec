@@ -486,6 +486,8 @@ behavior registry_build_edges "Registry Build Registers Edge Types" {
   verify unit "source/target kind constraints recorded"
   verify unit "a field's edge label no edge type declares is registered as an edge from the field's kind to its target kind"
   verify unit "an edge label several kinds write without declaring it names every writer, in load order"
+  verify unit "an edge type names every field that writes it: a kind's own, shared and enhancement fields alike"
+  verify unit "a field that writes a declared edge type from a kind outside its declared source kind, or to a kind outside its declared target kind, is W021 and writes no edge of that type"
   verify unit "an edge label a later extension declares again is W018 and the first in load order keeps it"
   verify contract "Registry Build Registers Edge Types: edge type registration holds — declarations_in_load_order, edge_types_registered, every_writer_named, first_wins"
 }

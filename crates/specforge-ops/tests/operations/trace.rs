@@ -329,6 +329,20 @@ fn trace_expectations_come_from_the_registries() {
     );
 }
 
+// Pins today's rule (an `inverse_of` the target kind lacks is still an
+// inverse label); flips in T5 (`an_inverse_is_a_field_of_the_target_kind`).
+#[test]
+fn trace_an_inverse_the_target_kind_lacks_is_no_inverse_today() {
+    let expected = expectations();
+    let invariants = expected
+        .for_kind("behavior")
+        .iter()
+        .find(|e| e.label == "invariants")
+        .expect("invariants is expected of behaviors");
+    // `invariant` has no `enforced_by` field.
+    assert_eq!(invariants.inverse_labels, vec!["enforced_by"]);
+}
+
 // B:compute_traceability_chain — human output marks each missing link.
 #[specforge_test(behavior = "compute_traceability_chain")]
 fn trace_human_output_marks_missing_links() {
