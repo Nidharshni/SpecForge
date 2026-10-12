@@ -1,3 +1,4 @@
+use super::build::{BuildPart, Reported};
 use crate::{
     EdgeRegistry, EdgeRegistryEntry, EdgeWriter, FieldRegistry, FieldRegistryEntry, KindRegistry,
     KindRegistryEntry, UnknownFieldType,
@@ -17,7 +18,7 @@ pub(crate) fn keyword(kind: &EntityKindDescriptor) -> &str {
 /// (ADR 0041), plus the diagnostics of doing so.
 pub(crate) fn populate(
     declarations: &[ExtensionDeclaration],
-) -> (KindRegistry, FieldRegistry, EdgeRegistry, Vec<Diagnostic>) {
+) -> (KindRegistry, FieldRegistry, EdgeRegistry, Vec<Reported>) {
     let mut kind_reg = KindRegistry::new();
     let mut field_reg = FieldRegistry::new();
     let mut edge_reg = EdgeRegistry::new();
@@ -66,7 +67,7 @@ fn apply_entity_enhancements(
     loaded_extensions: &[String],
     kind_reg: &mut KindRegistry,
     field_reg: &mut FieldRegistry,
-) -> Vec<Diagnostic> {
+) -> Vec<Reported> {
     let mut diagnostics = Vec::new();
 
     for (ext_name, enhancement) in enhancements {
@@ -78,11 +79,14 @@ fn apply_entity_enhancements(
             if owner_absent {
                 continue;
             }
-            diagnostics.push(Diagnostic::new(
-                codes::I004,
-                format!(
-                    "extension '{}': entity enhancement targets unknown kind '{}' (extension may not be installed)",
-                    ext_name, enhancement.target_kind
+            diagnostics.push(Reported::new(
+                BuildPart::Registries,
+                Diagnostic::new(
+                    codes::I004,
+                    format!(
+                        "extension '{}': entity enhancement targets unknown kind '{}' (extension may not be installed)",
+                        ext_name, enhancement.target_kind
+                    ),
                 ),
             ));
             continue;
@@ -119,7 +123,7 @@ fn apply_entity_enhancements(
 fn register_entity_kinds(
     registry: &mut KindRegistry,
     declaration: &ExtensionDeclaration,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<Reported>,
 ) {
     for kind in &declaration.entities {
         let keyword = keyword(kind);
@@ -134,7 +138,8 @@ fn register_entity_kinds(
         };
         if let Some(existing) = registry.register(entry) {
             // Duplicate — first extension wins (already registered), emit E026
-            diagnostics.push(
+            diagnostics.push(Reported::new(
+                BuildPart::Collision,
                 Diagnostic::new(
                     codes::E026,
                     format!(
@@ -147,7 +152,7 @@ fn register_entity_kinds(
                 .with_data(DiagnosticData::ShadowedKeyword {
                     keyword: keyword.to_string(),
                 }),
-            );
+            ));
             // Restore the first registration (it wins)
             registry.register(existing);
         }
@@ -159,7 +164,7 @@ fn register_entity_kinds(
 fn register_fields(
     registry: &mut FieldRegistry,
     declaration: &ExtensionDeclaration,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<Reported>,
 ) {
     for kind in &declaration.entities {
         // Extension-level shared fields first
@@ -190,7 +195,7 @@ fn register_single_field(
     kind_name: &str,
     field: &FieldDescriptor,
     source_extension: &str,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<Reported>,
 ) {
     match FieldRegistryEntry::new(kind_name, source_extension, field.clone()) {
         Ok(entry) => {
@@ -198,21 +203,27 @@ fn register_single_field(
             if let Some(role) = field.proof_role.as_deref()
                 && entry.proof_role().is_none()
             {
-                diagnostics.push(Diagnostic::new(
-                    codes::W021,
-                    format!(
-                        "extension '{}': field '{}' on kind '{}' declares proof_role '{}': expected 'bound' or 'claim'",
-                        source_extension, field.name, kind_name, role
+                diagnostics.push(Reported::new(
+                    BuildPart::Registries,
+                    Diagnostic::new(
+                        codes::W021,
+                        format!(
+                            "extension '{}': field '{}' on kind '{}' declares proof_role '{}': expected 'bound' or 'claim'",
+                            source_extension, field.name, kind_name, role
+                        ),
                     ),
                 ));
             }
             registry.register(entry);
         }
-        Err(UnknownFieldType(name)) => diagnostics.push(Diagnostic::new(
-            codes::W019,
-            format!(
-                "extension '{}': unknown field type '{}' for field '{}' on kind '{}'",
-                source_extension, name, field.name, kind_name
+        Err(UnknownFieldType(name)) => diagnostics.push(Reported::new(
+            BuildPart::Registries,
+            Diagnostic::new(
+                codes::W019,
+                format!(
+                    "extension '{}': unknown field type '{}' for field '{}' on kind '{}'",
+                    source_extension, name, field.name, kind_name
+                ),
             ),
         )),
     }
@@ -224,7 +235,7 @@ fn register_single_field(
 fn lifecycle_field(
     kind: &EntityKindDescriptor,
     declaration: &ExtensionDeclaration,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<Reported>,
 ) -> Option<String> {
     let name = kind.lifecycle_field.as_ref()?;
     let declared = kind
@@ -235,13 +246,16 @@ fn lifecycle_field(
     if declared {
         return Some(name.clone());
     }
-    diagnostics.push(Diagnostic::new(
-        codes::W021,
-        format!(
-            "extension '{}': kind '{}' declares lifecycle_field '{}', which is not one of its fields",
-            declaration.name(),
-            keyword(kind),
-            name
+    diagnostics.push(Reported::new(
+        BuildPart::Registries,
+        Diagnostic::new(
+            codes::W021,
+            format!(
+                "extension '{}': kind '{}' declares lifecycle_field '{}', which is not one of its fields",
+                declaration.name(),
+                keyword(kind),
+                name
+            ),
         ),
     ));
     None
@@ -251,7 +265,7 @@ fn lifecycle_field(
 fn register_edge_types(
     registry: &mut EdgeRegistry,
     declaration: &ExtensionDeclaration,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<Reported>,
 ) {
     for edge in &declaration.edges {
         let entry = EdgeRegistryEntry {
@@ -260,14 +274,17 @@ fn register_edge_types(
             writers: Vec::new(),
         };
         if let Some(existing) = registry.register(entry) {
-            diagnostics.push(Diagnostic::new(
-                codes::W018,
-                format!(
-                    "edge type '{}' from '{}' duplicates '{}' from '{}' (first wins)",
-                    edge.label,
-                    declaration.name(),
-                    existing.declared.label,
-                    existing.source_extension
+            diagnostics.push(Reported::new(
+                BuildPart::Collision,
+                Diagnostic::new(
+                    codes::W018,
+                    format!(
+                        "edge type '{}' from '{}' duplicates '{}' from '{}' (first wins)",
+                        edge.label,
+                        declaration.name(),
+                        existing.declared.label,
+                        existing.source_extension
+                    ),
                 ),
             ));
             // Restore first registration

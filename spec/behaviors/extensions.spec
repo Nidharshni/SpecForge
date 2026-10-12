@@ -162,7 +162,11 @@ behavior build_registries_from_declarations "Build Registries From Declarations"
     kept), the kind, field and edge registries, the rules, the surfaces and
     the graph inputs (registry_build_graph_inputs). It MUST report its
     diagnostics in one order: the declarations' own, the registries', the
-    custom rules' probes, then the surfaces'. A custom rule whose function
+    custom rules' probes, then the surfaces'. Each diagnostic MUST say what
+    it is about: a declaration (E030, W021, W145), the peers (E073, E027),
+    the registries (W019, W021, I004, W017), a rule (W150, W147, W112), a
+    surface (E055), or a collision of two contributions on one name (E026,
+    W018, W023, E039). A custom rule whose function
     its extension cannot answer through is W112, after the registries'
     diagnostics, once, when the build is probed in the runtime its
     extensions loaded in. It MUST be pure: the probe, through the
@@ -187,6 +191,7 @@ behavior build_registries_from_declarations "Build Registries From Declarations"
   verify unit "the declarations' own diagnostics come in a fixed order: E030, W021, the peers' E073 and E027, the cycles' E027, W145"
   verify unit "the registry build reports its diagnostics in one order: the declarations', the registries', the custom rules' probes, the surfaces'"
   verify unit "probing the build reports each custom rule whose function cannot answer once, as W112 after the registries' diagnostics"
+  verify unit "the registry build says what each of its diagnostics is about: a declaration, the peers, the registries, a rule, a surface or a collision"
   verify integration "every loaded declaration is registered before a compile checks anything"
 }
 

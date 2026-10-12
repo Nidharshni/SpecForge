@@ -183,14 +183,20 @@ impl Rules {
     /// The rules `declarations` declare (load order), checked and resolved
     /// against `registries`, plus an E006 rule for every `required` field.
     ///
-    /// Diagnostics, in order: per extension and per rule in declaration
-    /// order, W112 (the rule cannot work as declared, not registered); then
-    /// W023 for a code a later extension declares again. Pure.
+    /// Diagnostics, per extension and per rule in declaration order, W150,
+    /// W147 or W112 (the rule cannot work as declared, not registered). Pure.
     pub(crate) fn build(
         declarations: &[ExtensionDeclaration],
         registries: Registries<'_>,
     ) -> (Rules, Vec<Diagnostic>) {
         build::build(declarations, registries)
+    }
+
+    /// W023 for a code a later extension declares again, once per repeat
+    /// ([`Self::build`] does not report it: it is a collision of two
+    /// extensions, which the registry build reports after the rules').
+    pub(crate) fn duplicate_codes(declarations: &[ExtensionDeclaration]) -> Vec<Diagnostic> {
+        build::duplicate_codes(declarations)
     }
 
     /// Run every rule over `input`: each rule in order, its entities by id

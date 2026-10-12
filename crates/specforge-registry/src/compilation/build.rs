@@ -28,6 +28,59 @@ use crate::{
 /// checks, and its diagnostics are the compile's.
 pub const CHECK_PHASE: &str = "check";
 
+/// What a diagnostic of the registry build is about (CONTEXT "Setup part").
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum BuildPart {
+    /// One declaration on its own: its identity and shape (E030), its
+    /// consistency with the loaded declarations (W021), the order of its
+    /// passes (W145).
+    Declaration,
+    /// A peer requirement among the loaded declarations: E073, E027, a
+    /// cycle's E027 (ADR 0041).
+    Peers,
+    /// What the kind, field and edge registries hold: an unknown field type
+    /// (W019), a field declaration that cannot be used as declared (W021), an
+    /// enhancement of an unknown kind (I004), a testable kind that cannot
+    /// declare obligations (W017).
+    Registries,
+    /// A declared rule: a code its extension may not use (W150), a property
+    /// its check does not read (W147), a rule that cannot work or whose
+    /// custom function does not answer its probe (W112).
+    Rules,
+    /// An extension's surfaces: an MCP tool whose schema is not an object
+    /// (E055).
+    Surfaces,
+    /// Two contributions claim one name and the first registration wins: a
+    /// kind keyword (E026), an edge label (W018), a rule code (W023), a
+    /// command, MCP tool or resource name (E039).
+    Collision,
+}
+
+/// One diagnostic of the build and what it is about.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct Reported {
+    pub(crate) part: BuildPart,
+    pub(crate) diagnostic: Diagnostic,
+}
+
+impl Reported {
+    pub(crate) fn new(part: BuildPart, diagnostic: Diagnostic) -> Self {
+        Self { part, diagnostic }
+    }
+
+    fn tagged(&self) -> (BuildPart, &Diagnostic) {
+        (self.part, &self.diagnostic)
+    }
+}
+
+/// `diagnostic`s tagged with `part`.
+fn about(
+    part: BuildPart,
+    diagnostics: impl IntoIterator<Item = Diagnostic>,
+) -> impl Iterator<Item = Reported> {
+    diagnostics.into_iter().map(move |d| Reported::new(part, d))
+}
+
 /// One pass an extension declares, with that extension.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeclaredPass {
@@ -72,14 +125,14 @@ pub struct RegistryBuild {
     /// E030 identity and shape, W021 self-consistency, the peers' E073 and
     /// E027 (a cycle's after the declarations'), W145 pass cycles — in that
     /// order, extension by extension within each.
-    declaration_diagnostics: Vec<Diagnostic>,
+    declaration_diagnostics: Vec<Reported>,
     /// Populate (E026, W018, W019, W021, I004), W017, the rule set's (W150,
     /// W147 or W112 per declared rule), then W023 — in that order.
-    registry_diagnostics: Vec<Diagnostic>,
+    registry_diagnostics: Vec<Reported>,
     /// The custom rules' probes (W112), set by [`Self::probe`]; empty until then.
     probe_diagnostics: Vec<Diagnostic>,
     /// Refused MCP tools (E055) and surface registration conflicts (E039).
-    surface_diagnostics: Vec<Diagnostic>,
+    surface_diagnostics: Vec<Reported>,
 }
 
 impl RegistryBuild {
@@ -136,19 +189,25 @@ impl RegistryBuild {
         self.probe_diagnostics = self.rules.probe(verdicts);
     }
 
-    /// Every diagnostic the build reports, in its one order: the
-    /// declarations' own (E030, W021, E073 and E027, W145), the registries'
-    /// (E026, W018, W019, W021, I004; W017; W150, W147 or W112 per rule;
-    /// W023), the custom rules' probes (W112), then the surfaces' (E055,
-    /// E039); each group extension by extension in load order.
+    /// Every diagnostic the build reports with what it is about, in its one
+    /// order: the declarations' own (E030, W021, E073 and E027, W145), the
+    /// registries' (E026, W018, W019, W021, I004; W017; W150, W147 or W112
+    /// per rule; W023), the custom rules' probes (W112), then the surfaces'
+    /// (E055, E039); each group extension by extension in load order.
     /// `specforge check` reports them right after the environment's own,
     /// before any source (ADR 0012 D11, amended).
-    pub fn diagnostics(&self) -> impl Iterator<Item = &Diagnostic> {
+    pub fn reported(&self) -> impl Iterator<Item = (BuildPart, &Diagnostic)> {
         self.declaration_diagnostics
             .iter()
-            .chain(&self.registry_diagnostics)
-            .chain(&self.probe_diagnostics)
-            .chain(&self.surface_diagnostics)
+            .map(Reported::tagged)
+            .chain(self.registry_diagnostics.iter().map(Reported::tagged))
+            .chain(self.probe_diagnostics.iter().map(|d| (BuildPart::Rules, d)))
+            .chain(self.surface_diagnostics.iter().map(Reported::tagged))
+    }
+
+    /// [`Self::reported`] without the parts.
+    pub fn diagnostics(&self) -> impl Iterator<Item = &Diagnostic> {
+        self.reported().map(|(_, diagnostic)| diagnostic)
     }
 
     /// The declarations the build was made from, in load order.
@@ -189,16 +248,19 @@ impl RegistryBuild {
 pub fn build_registries(declarations: Vec<ExtensionDeclaration>) -> RegistryBuild {
     let mut declarations = peers::in_load_order(declarations);
     // The declarations themselves: E030, W021, the peers' E073 and E027, then W145.
-    let mut declaration_diagnostics: Vec<Diagnostic> =
-        declarations.iter().flat_map(shape).collect();
+    let mut declaration_diagnostics: Vec<Reported> =
+        about(BuildPart::Declaration, declarations.iter().flat_map(shape)).collect();
     for declaration in &declarations {
-        declaration_diagnostics.extend(consistency(declaration, &declarations));
+        declaration_diagnostics.extend(about(
+            BuildPart::Declaration,
+            consistency(declaration, &declarations),
+        ));
     }
-    declaration_diagnostics.extend(peers::check(&declarations));
+    declaration_diagnostics.extend(about(BuildPart::Peers, peers::check(&declarations)));
     let mut passes = Vec::new();
     for declaration in &declarations {
         let (ordered, cycle) = order_passes(declaration.name(), &declaration.passes);
-        declaration_diagnostics.extend(cycle);
+        declaration_diagnostics.extend(about(BuildPart::Declaration, cycle));
         passes.extend(ordered.into_iter().map(|pass| DeclaredPass {
             extension: declaration.name().to_string(),
             pass,
@@ -210,18 +272,21 @@ pub fn build_registries(declarations: Vec<ExtensionDeclaration>) -> RegistryBuil
     let mut surface_diagnostics = Vec::new();
     for declaration in &mut declarations {
         let name = declaration.name().to_string();
-        surface_diagnostics.extend(refuse_malformed_tool_schemas(
-            &name,
-            &mut declaration.surfaces,
+        surface_diagnostics.extend(about(
+            BuildPart::Surfaces,
+            refuse_malformed_tool_schemas(&name, &mut declaration.surfaces),
         ));
     }
 
     let (kinds, fields, edges, mut registry_diagnostics) = populate(&declarations);
     // W017: a testable kind that can't declare obligations.
-    registry_diagnostics.extend(validate_extension_testability(&kinds));
+    registry_diagnostics.extend(about(
+        BuildPart::Registries,
+        validate_extension_testability(&kinds),
+    ));
 
-    // The rule set: W112 for a rule that cannot work as declared, then
-    // W023 for a code two extensions declare; E006 rules for required
+    // The rule set: W150, W147 or W112 per declared rule, then W023 for a
+    // code two extensions declare; E006 rules for required
     // fields come after the declared rules.
     let (rules, rule_diagnostics) = Rules::build(
         &declarations,
@@ -231,14 +296,18 @@ pub fn build_registries(declarations: Vec<ExtensionDeclaration>) -> RegistryBuil
             edges: &edges,
         },
     );
-    registry_diagnostics.extend(rule_diagnostics);
+    registry_diagnostics.extend(about(BuildPart::Rules, rule_diagnostics));
+    registry_diagnostics.extend(about(
+        BuildPart::Collision,
+        Rules::duplicate_codes(&declarations),
+    ));
 
     let surface_inputs: Vec<(String, _)> = declarations
         .iter()
         .map(|d| (d.name().to_string(), d.surfaces.clone()))
         .collect();
     let (surfaces, duplicates) = register_surface_contributions(&surface_inputs);
-    surface_diagnostics.extend(duplicates);
+    surface_diagnostics.extend(about(BuildPart::Collision, duplicates));
 
     RegistryBuild {
         declarations,

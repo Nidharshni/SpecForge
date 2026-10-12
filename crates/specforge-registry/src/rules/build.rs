@@ -1,7 +1,7 @@
 //! Declared descriptor → [`Rule`]: its shape checked (W112 for a rule that
 //! cannot work as declared), its references resolved against the
-//! registries, then the host's E006 rules and W023 for a code two
-//! extensions declare.
+//! registries, then the host's E006 rules. ([`duplicate_codes`] is W023, which the
+//! registry build reports as a collision.)
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 
@@ -46,7 +46,6 @@ pub(super) fn build(
     // Code order (stable: a code declared for several kinds keeps its
     // declaration order).
     rules.sort_by(|a: &Rule, b: &Rule| a.code.cmp(&b.code));
-    diagnostics.extend(duplicate_codes(declarations));
     rules.extend(required_field_rules(registries));
     (Rules { rules }, diagnostics)
 }
@@ -482,7 +481,7 @@ fn required_field_rules(registries: Registries<'_>) -> Vec<Rule> {
 /// per repeat, naming the code, that extension and the first one. A code
 /// one extension repeats is not reported. Every declared rule counts,
 /// including one W112 rejects.
-fn duplicate_codes(declarations: &[ExtensionDeclaration]) -> Vec<Diagnostic> {
+pub(super) fn duplicate_codes(declarations: &[ExtensionDeclaration]) -> Vec<Diagnostic> {
     let mut first: HashMap<&str, &str> = HashMap::new();
     let mut diagnostics = Vec::new();
     for declaration in declarations {
