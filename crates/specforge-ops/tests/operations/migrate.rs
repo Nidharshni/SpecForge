@@ -7,8 +7,10 @@ use std::sync::Arc;
 
 use specforge_extension_sdk::{ContributionsBuilder, ExtensionMeta};
 use specforge_migrate::migrate_project;
-use specforge_ops::OpErrorKind;
-use specforge_ops::migrate::{MigrationInput, Request, invoke_hooks, parse_target, rollback, run};
+use specforge_ops::migrate::{
+    Failure, MigrationInput, Request, invoke_hooks, parse_target, rollback, run,
+};
+use specforge_ops::{OpError, OpErrorKind};
 use specforge_parser::CURRENT_FORMAT_VERSION;
 use specforge_protocol_types::{ExtensionDeclaration, FieldType, PeerDependency, SandboxPolicy};
 use specforge_registry::build_registries;
@@ -242,52 +244,60 @@ fn a_migration_whose_hook_fails_is_rolled_back() {
     );
 }
 
-#[test]
-fn a_failed_migration_names_its_kind() {
+#[specforge_test(
+    behavior = "provide_mcp_migrate_tool",
+    verify = "a failed migration's error names its cause: a hook, a changed graph, a project that does not compile, or files that could not be migrated"
+)]
+fn a_failed_migration_names_its_cause() {
+    let root = |dir: &tempfile::TempDir| specforge_common::ProjectRoot::of(dir.path()).unwrap();
+
     // Applied: nothing failed, no failure.
     let dir = project();
-    let outcome = run(
-        &request(&specforge_common::ProjectRoot::of(dir.path()).unwrap()),
-        None,
-    );
+    let outcome = run(&request(&root(&dir)), None);
     assert!(outcome.ok());
     assert_eq!(outcome.failure(), None);
 
-    // A file that cannot migrate: the run failed on its own side.
+    // A file that cannot migrate: it is not what it should hold.
     let dir = project();
     std::fs::write(
         dir.path().join("bad.spec"),
         "// specforge-format: 99.0\nbehavior bad \"Bad\" {\n}\n",
     )
     .unwrap();
-    let outcome = run(
-        &request(&specforge_common::ProjectRoot::of(dir.path()).unwrap()),
-        None,
-    );
+    let outcome = run(&request(&root(&dir)), None);
     let failure = outcome.failure().expect("a file failed to migrate");
     assert!(!outcome.ok());
+    assert!(
+        matches!(&failure, Failure::FilesFailed { files } if files.len() == 1 && files[0].0.ends_with("bad.spec")),
+        "{failure:?}"
+    );
+    let error = OpError::from(failure);
     assert_eq!(
-        (
-            failure.kind,
-            failure.code.as_ref(),
-            failure.message.as_str()
-        ),
-        (
-            OpErrorKind::Internal,
-            "migration_failed",
-            "the migration failed"
-        )
+        (error.kind, error.code.as_ref()),
+        (OpErrorKind::SchemaMismatch, "migration_file_failed")
+    );
+    assert!(
+        error
+            .message
+            .starts_with("1 file(s) could not be migrated: ")
+            && error.message.contains("bad.spec"),
+        "{}",
+        error.message
     );
 
-    // A hook that fails: rolled back, the project never compiled again.
+    // A hook that fails: rolled back.
     let dir = project_with_extension();
     let runtime = Arc::new(hooked(|_| Err("trapped".into())));
-    let outcome = run(
-        &request(&specforge_common::ProjectRoot::of(dir.path()).unwrap()),
-        Some(runtime.clone()),
-    );
+    let outcome = run(&request(&root(&dir)), Some(runtime));
     assert!(outcome.rollback.is_some() && !outcome.ok());
-    assert_eq!(outcome.failure().unwrap().kind, OpErrorKind::Internal);
+    let failure = outcome.failure().expect("rolled back");
+    assert!(matches!(failure, Failure::HookFailed { .. }), "{failure:?}");
+    let error = OpError::from(failure);
+    assert_eq!(
+        (error.kind, error.code.as_ref()),
+        (OpErrorKind::Internal, "migration_hook_failed")
+    );
+    assert!(error.message.contains("trapped"), "{}", error.message);
 
     // A hook that leaves the project not compiling: rolled back with the
     // errors the migrated project reported.
@@ -295,20 +305,42 @@ fn a_failed_migration_names_its_kind() {
     let runtime = Arc::new(hooked(|input| {
         std::fs::write(&input.files[0], "behavior {\n").map_err(|e| e.to_string())
     }));
-    let outcome = run(
-        &request(&specforge_common::ProjectRoot::of(dir.path()).unwrap()),
-        Some(runtime.clone()),
-    );
+    let outcome = run(&request(&root(&dir)), Some(runtime));
     assert!(outcome.post_errors().next().is_some(), "{outcome:?}");
     assert!(outcome.rollback.is_some());
     let failure = outcome.failure().expect("rolled back");
-    assert_eq!(
-        (failure.kind, failure.message.as_str()),
-        (
-            OpErrorKind::CompilationFailed,
-            "the migrated project does not compile"
-        )
+    assert!(
+        matches!(failure, Failure::DoesNotCompile { errors } if errors > 0),
+        "{failure:?}"
     );
+    let error = OpError::from(failure);
+    assert_eq!(
+        (error.kind, error.code.as_ref()),
+        (OpErrorKind::CompilationFailed, "migration_does_not_compile")
+    );
+
+    // A hook that adds an entity: the graph changed (W054), rolled back.
+    let dir = project_with_extension();
+    let runtime = Arc::new(hooked(|input| {
+        let path = &input.files[0];
+        let mut migrated = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+        migrated.push_str("behavior added \"Added\" {\n}\n");
+        std::fs::write(path, migrated).map_err(|e| e.to_string())
+    }));
+    let outcome = run(&request(&root(&dir)), Some(runtime));
+    assert!(!outcome.structural_differences().is_empty(), "{outcome:?}");
+    assert!(outcome.post_errors().next().is_none());
+    let failure = outcome.failure().expect("rolled back");
+    assert!(
+        matches!(failure, Failure::ChangedGraph { differences } if differences > 0),
+        "{failure:?}"
+    );
+    let error = OpError::from(failure);
+    assert_eq!(
+        (error.kind, error.code.as_ref()),
+        (OpErrorKind::CompilationFailed, "migration_changed_graph")
+    );
+    assert!(error.message.contains("W054"), "{}", error.message);
 }
 
 #[specforge_test(

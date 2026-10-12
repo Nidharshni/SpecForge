@@ -364,24 +364,15 @@ impl Registry for MemoryRegistry {
         query: &str,
         contributes: Option<DeclaredCategory>,
     ) -> Result<Searched, OpError> {
-        let needle = query.to_ascii_lowercase();
         let matches_term = |published: &Published| {
             let handshake = &published.declaration.handshake;
-            published
-                .name()
-                .as_str()
-                .to_ascii_lowercase()
-                .contains(&needle)
-                || handshake
-                    .description
-                    .as_deref()
-                    .unwrap_or_default()
-                    .to_ascii_lowercase()
-                    .contains(&needle)
-                || handshake
-                    .keywords
-                    .iter()
-                    .any(|k| k.to_ascii_lowercase().contains(&needle))
+            let keywords: Vec<&str> = handshake.keywords.iter().map(String::as_str).collect();
+            specforge_package::search::matches(
+                query,
+                published.name().as_str(),
+                handshake.description.as_deref().unwrap_or_default(),
+                &keywords,
+            )
         };
         let held = self.held.lock().unwrap();
         let mut by_name: BTreeMap<PackageName, Vec<&Published>> = BTreeMap::new();

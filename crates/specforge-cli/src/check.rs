@@ -96,7 +96,7 @@ fn run_in(
         Ok(compiled) => compiled,
         Err(error) => return Refusal::of(format).report(terminal, &error),
     };
-    let outcome = match check(&ProjectView::of(&compiled), compiled.diagnostics(), options) {
+    let outcome = match check(&ProjectView::of(&compiled), options) {
         Ok(outcome) => outcome,
         Err(error) => return Refusal::of(format).report(terminal, &error.into()),
     };

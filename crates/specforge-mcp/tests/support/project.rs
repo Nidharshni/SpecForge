@@ -91,9 +91,7 @@ impl TestProject {
             self.enabled.as_deref().unwrap_or_default(),
             &specforge_installed::Builtins(specforge_component::builtins::BUILTIN_EXTENSIONS),
         );
-        let mut server = McpServer::new();
-        server.state_mut().extension_runtime = Some(runtime);
-        self.initialized(server)
+        self.initialized(McpServer::new().with_extension_runtime(runtime))
     }
 
     /// An initialized server over this project with no host runtime: the

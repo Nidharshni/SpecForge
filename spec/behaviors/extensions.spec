@@ -50,7 +50,9 @@ behavior load_extension_manifests "Load Extension Manifests" {
     entity types, edge types, validation rules and optional peer
     dependencies, from the binary itself. Missing extensions or unloadable
     .wasm binaries MUST produce a diagnostic, not a crash. A builtin loads
-    from the binary. Any other entry names an installed extension by its
+    from the binary the host embeds; the builtins are one table, each by
+    the directory its crate lives in under extensions/ (specforge_component).
+    Any other entry names an installed extension by its
     bare name (a legacy name@version entry names the same extension): it
     MUST load from .specforge/extensions/<name>/extension.wasm under that
     name, on every surface, only when the binary's hash is the one its
@@ -105,6 +107,7 @@ behavior load_extension_manifests "Load Extension Manifests" {
   verify unit "the extension load and the lock plan resolve an entry by one rule"
   verify integration "a .wasm file entry that is missing, is not a component, names another extension or repeats a loaded one produces E028 naming the entry"
   verify unit "missing extension produces diagnostic"
+  verify unit "every builtin is listed once, by the directory its crate lives in"
   verify unit "a declaration declares entity types and validations"
   verify integration "two extensions loaded and registries populated without collision"
   verify unit "unloadable extension binary produces diagnostic instead of crash"
@@ -696,7 +699,12 @@ behavior search_registry "Search Registry" {
   }
   contract   """
     When specforge search is invoked, the system MUST query all configured
-    registries with the search term. Each registry lists a package once,
+    registries with the search term. A search matches a package when the
+    query is an ASCII case-insensitive substring of its name, its
+    description or one of its keywords; % and _ in the query are text. The
+    server, the in-memory client and the in-memory registry MUST match by
+    this one rule (specforge_package::search::matches).
+    Each registry lists a package once,
     when any of its versions matches the term, at the version specforge
     add <name> would install from it (latest: the highest release, a
     pre-release only when the package has none). Results MUST be
@@ -724,6 +732,7 @@ behavior search_registry "Search Registry" {
   verify unit "with no registry configured, search makes no network call and reports how to configure one"
   verify unit "an unusable specforge.json is refused with the refusal add gives, before any network call"
   verify unit "queries all configured registries"
+  verify unit "a search matches a case-insensitive substring of a package's name, description or one keyword, wildcards included as text"
   verify unit "filters by declared category"
   verify unit "a registry lists each package at the version add installs from it"
   verify unit "each failed registry is reported once, and search fails when every registry failed"
@@ -772,6 +781,11 @@ behavior publish_to_registry "Publish to Registry" {
     version it refuses stays publishable; it judges no key's trust
     (ADR 0061). A version the registry
     already holds MUST be refused (R007): a published version is immutable.
+    On the registry server, the first accepted publish into a scope claims
+    the scope for its publisher; only that publisher publishes into it
+    after. A publish the registry refuses (an invalid upload, a duplicate
+    version, a storage failure) claims no scope: the claim and the version
+    are recorded together or not at all.
     A registry's refusal MUST reach the publisher as R008 naming the
     registry's code and reason. Publish MUST check that the registry's
     receipt names what it uploaded.
@@ -804,6 +818,8 @@ behavior publish_to_registry "Publish to Registry" {
   verify unit "publish checks the registry's receipt against what it uploaded"
   verify unit "SHA256 computed and included in upload"
   verify unit "a version already published is refused with R007"
+  verify integration "the first publish into a scope claims it, and only its publisher publishes there after"
+  verify integration "a publish the registry refuses claims no scope"
   verify unit "successful publish returns registry URL"
   verify unit "unauthenticated publish produces ExtensionError"
   verify unit "the registry refuses a name or version that is not a package name or version"

@@ -330,7 +330,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   `specforge-registry-wire`, which `specforge-registry-server` and `specforge-registry-client` both compile against
   (ADR 0044, ADR 0061). A registry's refusal (HTTP 400) carries a typed code and reaches the user as R008; an
   answer that isn't the call's wire type is R009. A test reaches a registry through the real server in process or
-  an in-memory client, never through JSON written by hand.
+  an in-memory client, never through JSON written by hand. A search matches by one rule, an ASCII
+  case-insensitive substring of a package's name, description or one keyword
+  (`specforge_package::search::matches`), on the server and in both in-memory registries.
 - **Registry for a package**: the one configured registry that serves a package name: the first
   `registries` entry whose `scope_filter` is the name's scope, else the first marked
   `default_registry`; with neither, none does, and the operation refuses with R-OPS-001 before any
@@ -364,7 +366,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`Peers::load_order`); a cycle among required peers is E027 and its extensions load together in
   entry order (ADR 0041).
 - **Extension specifier**: an `add` argument (also each of `specforge.add_extension`'s
-  `specifiers` and `init --extensions`'): a builtin's name, a local path, a `git+` URL, or a package
+  `specifiers` and `init --extensions`'): a builtin's name, a local path (a `.wasm` file, or an
+  extension's crate directory, read as the component its crate builds:
+  `specforge_ops::extension::binary_at`), a `git+` URL, or a package
   reference `@scope/name[@requirement]` (`PackageRef`), read once by
   `specforge_ops::extension::parse`. An add takes one or more and adds them as one change, judged on
   the whole set (one lock plan, ADR 0041); a specifier naming an extension an earlier one of the same
@@ -508,7 +512,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Outcome document**: the one typed JSON document of an operation's outcome, defined in ops beside
   the operation and deriving `Serialize` and `Shape`: the outcome itself when it is plain data
   (`stats::Stats`), else its `document()` (`AddDocument`, `RemoveDocument`, `UpdateDocument`,
-  `InitDocument`, `ExtensionsDocument`, `MigrateDocument`, `AnalyzeDocument`, `DoctorDocument`, …).
+  `InitDocument`, `ExtensionsDocument`, `MigrateDocument`, `AnalyzeDocument`, `DoctorDocument`,
+  `explain::Explanation`, …).
   The CLI prints it under `--format json` and MCP answers it as the tool reply; a surface adds only
   what it alone knows, typed and flattened beside it (MCP's `note` on an add, a mutation's
   `files_written`, the CLI's credential health on doctor), and never renames, drops or re-derives a
@@ -722,8 +727,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   `McpServer::with_events`). Events never leave the process: a client learns what a call wrote from
   its reply (ADR 0022 D7, ADR 0057). The CLI, the LSP and the operations keep no event.
 - **Diagnostic catalog**: the one table of diagnostic codes (`specforge_diagnostics`'s `catalog!`):
-  each code's title, owner, level and explanation. It generates `CATALOG`, which `specforge explain`,
-  MCP `specforge.explain`, diagnostics JSON titles, doctor and the LSP hover read and from which
+  each code's title, owner, level and explanation. It generates `CATALOG`, which the explain operation
+  (`specforge_ops::explain`: `specforge explain` and MCP `specforge.explain`, one document),
+  diagnostics JSON titles, doctor and the LSP hover read and from which
   `docs/diagnostics.md` is generated, and a **code constant** for every core code.
 - **Code constant**: a core diagnostic code as a typed value, `specforge_diagnostics::codes::W112`
   (`Code`, at a fixed level; `GradedCode` for an `A###` finding whose pass sets the severity). Its

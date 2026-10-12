@@ -1150,11 +1150,11 @@ fn analyze_of_another_project_leaves_the_served_one() {
 
     let (mut server, _ext, _served) = fake_extension::initialized(FakeExtension::new());
     let served_root = server
-        .state_mut()
+        .state()
         .project_root()
         .map(std::path::Path::to_path_buf);
     assert!(served_root.is_some());
-    let served_nodes = server.state_mut().graph().node_count();
+    let served_nodes = server.state().graph().node_count();
 
     let other = tempfile::tempdir().unwrap();
     std::fs::write(
@@ -1182,7 +1182,7 @@ fn analyze_of_another_project_leaves_the_served_one() {
             .map(std::path::Path::to_path_buf),
         served_root
     );
-    assert_eq!(server.state_mut().graph().node_count(), served_nodes);
+    assert_eq!(server.state().graph().node_count(), served_nodes);
 }
 
 // --- specforge.stats ---
@@ -2443,7 +2443,19 @@ fn explain_an_uncatalogued_code_is_invalid_input() {
         let resp = call_tool(&mut server, "specforge.explain", json!({"code": code}));
         let error = crate::tool_errors::mcp_error(&resp);
         assert_eq!(error["code"], "invalid_input", "{code}: {error}");
-        assert!(error["message"].as_str().unwrap().contains(code), "{error}");
+        assert_eq!(error["argument"], "code", "{code}: {error}");
+        assert_eq!(
+            error["message"],
+            format!("unknown diagnostic code: {code}"),
+            "{error}"
+        );
+        assert!(
+            error["data"]["suggestion"]
+                .as_str()
+                .unwrap()
+                .starts_with("codes are E###"),
+            "{error}"
+        );
     }
 }
 

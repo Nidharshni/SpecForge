@@ -87,6 +87,19 @@ pub struct Specified {
     pub source: Source,
 }
 
+impl Specified {
+    /// This specifier with a relative local path read from `base`: a surface with no working
+    /// directory of its own (MCP) reads such a path from the project's root.
+    pub fn relative_to(mut self, base: &std::path::Path) -> Self {
+        if let Source::Local(path) = &mut self.source
+            && path.is_relative()
+        {
+            *path = base.join(&*path);
+        }
+        self
+    }
+}
+
 /// A source as its specifier would spell it.
 impl From<Source> for Specified {
     fn from(source: Source) -> Self {
@@ -1135,28 +1148,76 @@ mod tests {
             format!("file not found: {}", missing.display())
         );
         assert_eq!(files_under(dir.path()), before);
+        assert_eq!(files_under(dir.path()), before);
+    }
 
+    #[test]
+    fn an_empty_directory_is_no_extension_crate() {
+        use crate::config::testing::files_under;
+        let dir = project_with(EMPTY_PROJECT);
+        let before = files_under(dir.path());
         let scratch = tempfile::tempdir().unwrap();
         let directory = scratch.path().join("a-directory");
         std::fs::create_dir(&directory).unwrap();
+
         let error = add(
             &local_request(
                 &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
                 &directory,
             ),
-            &registry,
+            &crate::registry::Unconfigured("add"),
             &runtime(),
         )
         .unwrap_err();
-        assert_eq!(error.code, "E054");
+
+        assert_eq!(error.code, "E040");
         assert!(
-            error
-                .message
-                .starts_with(&format!("cannot read {}: ", directory.display())),
+            error.message.starts_with("no built component in"),
             "{}",
             error.message
         );
         assert_eq!(files_under(dir.path()), before);
+    }
+
+    #[specforge_test(
+        behavior = "add_extension_to_existing_project",
+        verify = "a local crate directory installs the component its crate builds"
+    )]
+    fn a_crate_directory_installs_its_built_component() {
+        let dir = project_with(EMPTY_PROJECT);
+        let scratch = tempfile::tempdir().unwrap();
+        let krate = scratch.path().join("greet-ext");
+        let release = krate.join("target/wasm32-wasip2/release");
+        std::fs::create_dir_all(&release).unwrap();
+        std::fs::write(
+            krate.join("Cargo.toml"),
+            "[package]\nname = \"greet-ext\"\nversion = \"0.1.0\"\n",
+        )
+        .unwrap();
+        let component = release.join("greet_ext.wasm");
+        std::fs::write(&component, GREET).unwrap();
+
+        let added = add(
+            &local_request(
+                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                &krate,
+            ),
+            &crate::registry::Unconfigured("add"),
+            &runtime(),
+        )
+        .unwrap();
+
+        assert!(
+            matches!(added.added[0].outcome, AddOutcome::Installed { .. }),
+            "{:?}",
+            added.added[0].outcome
+        );
+        let lock = std::fs::read_to_string(dir.path().join("specforge.lock")).unwrap();
+        assert!(
+            lock.contains("local:")
+                && lock.contains("greet-ext/target/wasm32-wasip2/release/greet_ext.wasm\""),
+            "{lock}"
+        );
     }
 
     #[test]

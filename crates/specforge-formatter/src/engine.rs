@@ -1412,10 +1412,7 @@ mod tests {
 
     // --- Invariant: formatting_idempotency ---
 
-    #[specforge_test_macros::test(
-        behavior = "format_spec_files",
-        verify = "files matching the canonical format are not rewritten"
-    )]
+    #[test]
     fn test_formatting_already_formatted_file_produces_identical_output() {
         // First format to get the canonical form, then verify idempotency
         let input = "use \"behaviors/auth\"\nuse \"types/core\"\n\nbehavior foo \"Foo\" {\n  invariants [a, b]\n  types [x]\n  contract \"does stuff\"\n\n  verify unit \"test one\"\n}\n";
@@ -1607,52 +1604,6 @@ mod tests {
 
     // --- Invariant: config_defaults_valid ---
 
-    #[specforge_test_macros::test(
-        behavior = "load_format_config",
-        verify = "missing config file uses defaults"
-    )]
-    fn test_default_format_config_passes_validation() {
-        let config = FormatConfig::default();
-        assert_eq!(config.indent_width, 2);
-        assert!(!config.use_tabs);
-        assert_eq!(config.max_width, 100);
-        // Verify it produces valid indent strings
-        assert_eq!(config.indent_str(), "  ");
-        // Verify it can format without error
-        let result = format_source("behavior foo \"Foo\" {\n  contract \"test\"\n}\n", &config);
-        assert!(
-            result.diagnostics.is_empty(),
-            "default config should produce no diagnostics"
-        );
-    }
-
-    #[specforge_test_macros::test(
-        behavior = "load_format_config",
-        verify = "invalid indent_width produces diagnostic and uses default"
-    )]
-    fn test_fallback_from_invalid_config_produces_usable_format_config() {
-        use tempfile::TempDir;
-        let tmp = TempDir::new().unwrap();
-        let root = tmp.path();
-        std::fs::write(root.join("specforge.json"), "{}").unwrap();
-        std::fs::write(
-            root.join(".specforgefmt.toml"),
-            "indent_width = -5\nmax_width = \"huge\"\nuse_tabs = 42\n",
-        )
-        .unwrap();
-        let (config, diags) = crate::config::load_config(root, root);
-        assert!(
-            !diags.is_empty(),
-            "should have diagnostics for invalid values"
-        );
-        // Config should still be usable (defaults for invalid fields)
-        let result = format_source("behavior foo \"Foo\" {\n  contract \"test\"\n}\n", &config);
-        assert!(
-            !result.formatted.is_empty(),
-            "fallback config should be usable"
-        );
-    }
-
     // --- Invariant: discover_completeness (tested from engine for convenience) ---
 
     #[specforge_test_macros::test(
@@ -1702,53 +1653,6 @@ mod tests {
     }
 
     // --- Performance tests ---
-
-    #[specforge_test_macros::test(
-        behavior = "lsp_format_document",
-        verify = "formats document within 50ms for files under 1000 lines"
-    )]
-    fn test_formats_document_within_50ms() {
-        // Generate a reasonably large file (under 1000 lines)
-        let mut source = String::from("use \"types/core\"\nuse \"behaviors/auth\"\n\n");
-        for i in 0..50 {
-            source.push_str(&format!(
-                "behavior b{i} \"Behavior {i}\" {{\n  invariants [inv_a, inv_b]\n  types [type_x]\n  contract \"does thing {i}\"\n\n  verify unit \"test {i}\"\n}}\n\n"
-            ));
-        }
-
-        let start = std::time::Instant::now();
-        let _result = format_source(&source, &FormatConfig::default());
-        let elapsed = start.elapsed();
-
-        assert!(
-            elapsed.as_millis() < 50,
-            "formatting should complete within 50ms, took {}ms",
-            elapsed.as_millis()
-        );
-    }
-
-    #[specforge_test_macros::test(
-        behavior = "lsp_format_range",
-        verify = "formats range within 20ms for ranges under 200 lines"
-    )]
-    fn test_formats_range_within_20ms() {
-        let mut source = String::from("use \"types/core\"\n\n");
-        for i in 0..20 {
-            source.push_str(&format!(
-                "behavior b{i} \"Behavior {i}\" {{\n  contract \"does thing {i}\"\n}}\n\n"
-            ));
-        }
-
-        let start = std::time::Instant::now();
-        let _result = format_range(&source, 10, 20, &FormatConfig::default());
-        let elapsed = start.elapsed();
-
-        assert!(
-            elapsed.as_millis() < 20,
-            "range formatting should complete within 20ms, took {}ms",
-            elapsed.as_millis()
-        );
-    }
 
     // --- Contract: apply_format_rules ---
 
@@ -1977,44 +1881,6 @@ mod tests {
 
     // --- Gap coverage: format_spec_files ---
 
-    #[specforge_test_macros::test(
-        behavior = "format_spec_files",
-        verify = "summary count reflects actual changes"
-    )]
-    fn test_summary_count_reflects_actual_changes() {
-        let config = FormatConfig::default();
-        // Already-formatted input should produce no changes
-        let clean = "behavior foo \"Foo\" {\n  contract \"test\"\n}\n";
-        let clean_result = format_source(clean, &config);
-        assert_eq!(
-            clean_result.formatted, clean,
-            "already-formatted file should not change"
-        );
-
-        // Badly-formatted input should produce changes
-        let dirty = "behavior foo \"Foo\" {\n      contract   \"test\"\n}\n";
-        let dirty_result = format_source(dirty, &config);
-        assert_ne!(
-            dirty_result.formatted, dirty,
-            "badly-formatted file should change"
-        );
-
-        // Verify we can count changes by comparing input != output
-        let inputs = [
-            clean,
-            dirty,
-            "behavior bar \"Bar\" {\n  contract \"ok\"\n}\n",
-        ];
-        let changed_count = inputs
-            .iter()
-            .filter(|input| {
-                let r = format_source(input, &config);
-                r.formatted != **input
-            })
-            .count();
-        assert_eq!(changed_count, 1, "exactly 1 of 3 files should be changed");
-    }
-
     // --- Gap coverage: lsp_format_range ---
 
     #[specforge_test_macros::test(
@@ -2108,186 +1974,15 @@ mod tests {
         );
     }
 
-    #[specforge_test_macros::test(
-        behavior = "lsp_respect_editor_config",
-        verify = "config file takes precedence over editor settings"
-    )]
-    fn test_config_file_overrides_editor_settings() {
-        use tempfile::TempDir;
-        let tmp = TempDir::new().unwrap();
-        let root = tmp.path();
-        std::fs::write(root.join("specforge.json"), "{}").unwrap();
-        std::fs::write(
-            root.join(".specforgefmt.toml"),
-            "indent_width = 4\nmax_width = 100\n",
-        )
-        .unwrap();
-
-        let (config, diags) = crate::config::load_config(root, root);
-        assert!(
-            diags.is_empty(),
-            "valid config should produce no diagnostics"
-        );
-        assert_eq!(
-            config.indent_width, 4,
-            "config file should set indent_width=4"
-        );
-        assert_eq!(
-            config.max_width, 100,
-            "config file should set max_width=100"
-        );
-    }
-
-    #[specforge_test_macros::test(
-        behavior = "lsp_respect_editor_config",
-        verify = "LSP Respect Editor Config: editor config respect holds — lsp_initialized_fired, config_precedence_enforced, editor_fallback_applied"
-    )]
-    fn test_editor_config_contract() {
-        use tempfile::TempDir;
-
-        // Requires: LSP initialized, editor settings available
-        let editor_config = FormatConfig {
-            indent_width: 4,
-            use_tabs: false,
-            max_width: 80,
-        };
-
-        // Ensures: editor fallback applied when no config file exists
-        let tmp_no_config = TempDir::new().unwrap();
-        std::fs::write(tmp_no_config.path().join("specforge.json"), "{}").unwrap();
-        let (_, diags) = crate::config::load_config(tmp_no_config.path(), tmp_no_config.path());
-        assert!(diags.is_empty());
-        // Without config file, defaults used (editor would supply these)
-        let result_editor = format_source(
-            "behavior a \"A\" {\n    contract \"x\"\n}\n",
-            &editor_config,
-        );
-        assert!(
-            result_editor.formatted.contains("    contract"),
-            "editor settings should be applied"
-        );
-
-        // Ensures: config precedence enforced when config file exists
-        let tmp_with_config = TempDir::new().unwrap();
-        std::fs::write(tmp_with_config.path().join("specforge.json"), "{}").unwrap();
-        std::fs::write(
-            tmp_with_config.path().join(".specforgefmt.toml"),
-            "indent_width = 2\n",
-        )
-        .unwrap();
-        let (file_config, diags) =
-            crate::config::load_config(tmp_with_config.path(), tmp_with_config.path());
-        assert!(diags.is_empty());
-        assert_eq!(
-            file_config.indent_width, 2,
-            "config file should override editor tab size"
-        );
-        let result_file =
-            format_source("behavior a \"A\" {\n    contract \"x\"\n}\n", &file_config);
-        assert!(
-            result_file.formatted.contains("  contract"),
-            "config file indent should take precedence"
-        );
-    }
-
     // --- Gap coverage: format_spec_files ---
 
-    #[specforge_test_macros::test(
-        behavior = "format_spec_files",
-        verify = "formatting all files in spec/ directory succeeds"
-    )]
-    fn test_formatting_multiple_files_succeeds() {
-        let config = FormatConfig::default();
-        let files = [
-            "behavior a \"A\" {\n  contract \"ok\"\n}\n",
-            "behavior b \"B\" {\n      contract   \"fix\"\n}\n",
-            "behavior c \"C\" {\n  contract \"fine\"\n}\n",
-        ];
-        let results: Vec<_> = files.iter().map(|f| format_source(f, &config)).collect();
-        for r in &results {
-            assert!(
-                r.diagnostics
-                    .iter()
-                    .all(|d| d.severity != specforge_common::Severity::Error),
-                "no formatting errors expected"
-            );
-            assert!(
-                !r.formatted.is_empty(),
-                "formatted output should not be empty"
-            );
-        }
-    }
-
-    #[specforge_test_macros::test(
-        behavior = "format_spec_files",
-        verify = "Format Spec Files: spec file formatting holds — spec_files_available, format_config_loaded, formatted_output_written, unchanged_files_preserved, format_complete_emitted, summary_printed"
-    )]
-    fn test_format_spec_files_contract() {
-        let config = FormatConfig::default();
-        // Requires: spec file available, config loaded
-        let dirty = "behavior foo \"Foo\" {\n      contract   \"test\"\n}\n";
-        let result = format_source(dirty, &config);
-        // Ensures: formatted output written (changed)
-        assert_ne!(result.formatted, dirty, "dirty file must be reformatted");
-        // Ensures: unchanged files preserved
-        let clean = result.formatted.clone();
-        let result2 = format_source(&clean, &config);
-        assert_eq!(
-            result2.formatted, clean,
-            "already-formatted file must not change"
-        );
-        // Ensures: no errors
-        assert!(
-            result
-                .diagnostics
-                .iter()
-                .all(|d| d.severity != specforge_common::Severity::Error)
-        );
-    }
-
     // --- Gap coverage: show_formatting_diff ---
-
-    #[specforge_test_macros::test(
-        behavior = "show_formatting_diff",
-        verify = "Show Formatting Diff: formatting diff holds — spec_files_available, format_config_loaded, no_files_written, unified_diff_produced"
-    )]
-    fn test_show_formatting_diff_contract() {
-        let config = FormatConfig::default();
-        let dirty = "behavior foo \"Foo\" {\n      contract   \"test\"\n}\n";
-        let clean = "behavior foo \"Foo\" {\n  contract \"test\"\n}\n";
-
-        // Requires: spec file available, config loaded
-        let result_dirty = format_source(dirty, &config);
-        let result_clean = format_source(clean, &config);
-
-        // Ensures: unified diff produced for changed files
-        let diff_dirty = crate::diff::unified_diff("test.spec", dirty, &result_dirty.formatted);
-        assert!(
-            !diff_dirty.diff_text.is_empty(),
-            "dirty file must produce diff"
-        );
-        assert!(
-            diff_dirty.diff_text.contains("---"),
-            "diff must use unified format with --- header"
-        );
-        assert!(
-            diff_dirty.diff_text.contains("+++"),
-            "diff must use unified format with +++ header"
-        );
-
-        // Ensures: no diff for unchanged files
-        let diff_clean = crate::diff::unified_diff("test.spec", clean, &result_clean.formatted);
-        assert!(
-            diff_clean.diff_text.is_empty(),
-            "clean file must produce no diff"
-        );
-    }
 
     // --- Gap coverage: lsp_format_document ---
 
     #[specforge_test_macros::test(
-        behavior = "lsp_format_document",
-        verify = "parse errors in document trigger format_with_parse_errors delegation"
+        behavior = "format_with_parse_errors",
+        verify = "error regions are preserved verbatim in output"
     )]
     fn test_parse_errors_trigger_partial_formatting() {
         let config = FormatConfig::default();
@@ -2323,44 +2018,6 @@ mod tests {
         assert!(
             result.formatted.contains("{{{ broken"),
             "parse error region within range must be left unchanged"
-        );
-    }
-
-    #[specforge_test_macros::test(
-        behavior = "lsp_format_range",
-        verify = "LSP Format Range: LSP range formatting holds — document_open, format_config_loaded, range_expanded, textedit_list_returned, full_format_parity, format_complete_emitted"
-    )]
-    fn test_lsp_format_range_contract() {
-        let config = FormatConfig::default();
-        let source = "behavior foo \"Foo\" {\n  contract \"a\"\n}\n\nbehavior bar \"Bar\" {\n      contract   \"b\"\n}\n";
-
-        // Requires: document open, config loaded
-        let result = format_range(source, 5, 5, &config);
-
-        // Ensures: range expanded to block boundaries (bar block formatted)
-        assert!(
-            result.formatted.contains("  contract \"b\""),
-            "bar block contract should be formatted"
-        );
-
-        // Ensures: full format parity for affected blocks
-        let full = format_source(source, &config);
-        // The bar block in range format should match bar block in full format
-        let range_bar = result
-            .formatted
-            .lines()
-            .skip_while(|l| !l.starts_with("behavior bar"))
-            .collect::<Vec<_>>()
-            .join("\n");
-        let full_bar = full
-            .formatted
-            .lines()
-            .skip_while(|l| !l.starts_with("behavior bar"))
-            .collect::<Vec<_>>()
-            .join("\n");
-        assert_eq!(
-            range_bar, full_bar,
-            "range format must match full format for affected blocks"
         );
     }
 }

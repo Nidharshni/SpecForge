@@ -102,3 +102,13 @@ already_present, planned), plus `duplicate` (`duplicate_of`: the earlier specifi
 that names the extension the same way), and every entry names its `specifier` as given. MCP's
 `note` (D2) sits beside `added`, once per reply; the CLI's `files_written` lists the files of the
 whole set. The spec type is `McpAddExtensionResult { added: McpAddedExtension[], note? }`.
+
+## Amendment (round 7, plan 16): explain is one document
+
+- **D9. `specforge explain` is an operation** (`specforge_ops::explain`) whose outcome,
+  `Explanation` (spec type `McpExplainResult`), `specforge.explain` answers and
+  `specforge explain --format json` prints. Both surfaces read the code the same way (any case,
+  trimmed) and refuse an uncatalogued code with the operation's `unknown_code` (MCP:
+  `invalid_input` on argument `code`). The human rendering ends with the docs link the document
+  carries. The CLI's refusal document follows D1's rule too: `suggestion` is absent when the
+  refusal has none, never `null`.

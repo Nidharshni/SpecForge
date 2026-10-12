@@ -30,7 +30,7 @@ expression: mcp_snap
   },
   "ok": false,
   "payload": {
-    "code": "internal_error",
+    "code": "schema_mismatch",
     "data": {
       "backups": [],
       "diffs": [],
@@ -75,7 +75,7 @@ expression: mcp_snap
       "structural_differences": [],
       "to_version": "1.0"
     },
-    "message": "the migration failed",
+    "message": "1 file(s) could not be migrated: [ROOT]/spec/bad.spec: E019: unsupported format version 99.0 (max supported: 1.0) — Use a format version between 1.0 and 1.0.",
     "tool": "specforge.migrate"
   }
 }

@@ -590,9 +590,8 @@ fn rename_edits_the_files_under_a_configured_spec_root() {
         r#"{"name":"t","version":"0.1.0","extensions":["@specforge/software"],"spec_root":"spec"}"#,
     )
     .unwrap();
-    server
-        .state_mut()
-        .serve(&specforge_common::ProjectRoot::of(&root).unwrap());
+    // The next call brings the served project up to date with the config just written.
+    call_tool(&mut server, "specforge.validate", json!({}));
     assert!(server.state().graph().node("token_unique").is_some());
 
     let parsed = rename(

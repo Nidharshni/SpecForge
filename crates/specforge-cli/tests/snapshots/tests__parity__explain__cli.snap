@@ -1,0 +1,38 @@
+---
+source: crates/specforge-cli/tests/parity.rs
+expression: cli_snap
+---
+{
+  "check": {
+    "diagnostics": [],
+    "ok": true
+  },
+  "config": {
+    "extensions": [
+      "@specforge/software"
+    ],
+    "name": "demo",
+    "registries": [
+      {
+        "alias": "offline",
+        "default_registry": true,
+        "url": "http://127.0.0.1:9/v1"
+      }
+    ],
+    "spec_root": "spec",
+    "version": "0.1.0"
+  },
+  "files": {
+    "spec/main.spec": "behavior alpha \"Alpha\" {\n  category \"core\"\n  contract \"The system MUST work\"\n}\n"
+  },
+  "ok": true,
+  "payload": {
+    "code": "W018",
+    "docs": "https://github.com/leaderiop/SpecForge/blob/main/docs/diagnostics.md#w018",
+    "explanation": "Two extensions register an edge type with the same label; the first-registered extension's definition wins and the later one is ignored. Rename one of the conflicting edge types to avoid the collision.",
+    "level": "warning",
+    "owner": "core",
+    "retired": false,
+    "title": "Duplicate edge type"
+  }
+}

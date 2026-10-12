@@ -18,7 +18,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::auth;
-use crate::db::PackageVersion;
+use crate::db::{PackageVersion, PublishRefused};
 use crate::publish::publish_target;
 use crate::state::AppState;
 use crate::storage::LocalStorage;
@@ -481,6 +481,32 @@ async fn publish_package(
         ));
     }
 
+    // --- Namespace ownership (spec #21, T6): first publish wins ---
+    // A read-only check, so a stranger's upload to an owned scope is refused before its body is
+    // read. The scope is claimed only by the publish that stores a package, in one transaction with
+    // the version (`Database::publish`).
+    {
+        let scope = package
+            .scope()
+            .expect("publish_target refuses unscoped names")
+            .to_string();
+        let st = state.clone();
+        let owner = tokio::task::spawn_blocking(move || st.database.get_scope_owner(&scope))
+            .await
+            .expect("scope owner query panicked");
+        if let Some((owner_hash, owner_account)) = owner
+            && owner_hash != token_record.token_hash
+        {
+            return Err(ApiError::forbidden_code(
+                ErrorCode::ScopeOwned,
+                format!(
+                    "scope '{}' is owned by publisher '{owner_account}' — only the owning publisher may publish into it",
+                    package.scope().unwrap_or_default()
+                ),
+            ));
+        }
+    }
+
     // Parse multipart form
     let mut wasm_bytes: Option<Vec<u8>> = None;
     let mut declaration_json: Option<String> = None;
@@ -502,51 +528,14 @@ async fn publish_package(
         }
     }
 
-    // --- Namespace ownership (spec #21, T6): first claim wins ---
+    // The publisher account recorded with the version: the scope owner's, which for the one
+    // publishing into a scope it owns (or claims with this publish) is its own.
     let scope = package
         .scope()
         .expect("publish_target refuses unscoped names")
         .to_string();
     let account_id = account_id_for(&token_record.token_hash);
-    let claimed_now = {
-        let claim = {
-            let st = state.clone();
-            let scope = scope.clone();
-            let token_hash = token_record.token_hash.clone();
-            let account_id = account_id.clone();
-            tokio::task::spawn_blocking(move || {
-                st.database.claim_scope(&scope, &token_hash, &account_id)
-            })
-            .await
-            .expect("scope claim panicked")
-        };
-        match claim {
-            Ok(claimed) => claimed,
-            Err(e) => return Err(ApiError::internal(ErrorCode::StorageError, e)),
-        }
-    };
-    if !claimed_now
-        && let Some((owner_hash, owner_account)) = {
-            let st = state.clone();
-            let scope = scope.clone();
-            tokio::task::spawn_blocking(move || st.database.get_scope_owner(&scope))
-                .await
-                .expect("scope owner query panicked")
-        }
-        && owner_hash != token_record.token_hash
-    {
-        return Err(ApiError::forbidden_code(
-            ErrorCode::ScopeOwned,
-            format!(
-                "scope '{scope}' is owned by publisher '{owner_account}' — only the owning publisher may publish into it"
-            ),
-        ));
-    }
-    let publisher_account = state
-        .database
-        .get_scope_owner(&scope)
-        .map(|(_, account)| account)
-        .unwrap_or_else(|| account_id.clone());
+    let publisher_account = account_id.clone();
 
     // --- Publish validation contract (spec #21, T3) ---
     // 1. Signed packages only: the signature field must be present.
@@ -701,15 +690,25 @@ async fn publish_package(
         manifest: manifest_json,
     };
 
-    // Run the insert on the blocking pool, but keep the temp path
-    // available so a lost race (UNIQUE violation) can discard its blob.
+    // Claim the scope and record the version in one transaction on the blocking pool, keeping the
+    // temp path so a refusal (a lost version race, a scope claimed meanwhile) discards its blob.
     let insert_state = Arc::clone(&state);
     let insert_pkg = pkg.clone();
+    let (claim_scope, claim_token, claim_account) = (
+        scope.clone(),
+        token_record.token_hash.clone(),
+        account_id.clone(),
+    );
     let discard_temp = |p: &PathBuf| LocalStorage::discard_temp(p);
-    let insert_result = {
+    let published = {
         let temp = temp_path.clone();
         tokio::task::spawn_blocking(move || {
-            let result = insert_state.database.insert_package(&insert_pkg);
+            let result = insert_state.database.publish(
+                &insert_pkg,
+                &claim_scope,
+                &claim_token,
+                &claim_account,
+            );
             if result.is_err() {
                 discard_temp(&temp);
             }
@@ -718,9 +717,23 @@ async fn publish_package(
         .await
         .expect("database insert task panicked")
     };
-    if let Err(e) = insert_result {
-        return Err(ApiError::conflict(ErrorCode::DuplicateVersion, e));
-    }
+    let claimed = match published {
+        Ok(claimed) => claimed,
+        Err(PublishRefused::ScopeOwned { account }) => {
+            return Err(ApiError::forbidden_code(
+                ErrorCode::ScopeOwned,
+                format!(
+                    "scope '{scope}' is owned by publisher '{account}' — only the owning publisher may publish into it"
+                ),
+            ));
+        }
+        Err(PublishRefused::DuplicateVersion(why)) => {
+            return Err(ApiError::conflict(ErrorCode::DuplicateVersion, why));
+        }
+        Err(PublishRefused::Storage(why)) => {
+            return Err(ApiError::internal(ErrorCode::DbError, why));
+        }
+    };
 
     // 3. Atomic rename — the moment the blob becomes visible.
     let commit_state = Arc::clone(&state);
@@ -739,10 +752,14 @@ async fn publish_package(
         let rollback_state = Arc::clone(&state);
         let rollback_name = name.clone();
         let rollback_version = version.clone();
+        let rollback_scope = scope.clone();
         let _ = tokio::task::spawn_blocking(move || {
-            rollback_state
-                .database
-                .delete_package(&rollback_name, &rollback_version)
+            rollback_state.database.withdraw(
+                &rollback_name,
+                &rollback_version,
+                &rollback_scope,
+                claimed,
+            )
         })
         .await;
         return Err(ApiError::internal(ErrorCode::StorageError, e));
@@ -872,16 +889,28 @@ async fn admin_list_tokens(
 async fn admin_revoke_token(
     State(state): State<Arc<AppState>>,
     _admin: AdminToken,
-    Path(prefix): Path<String>,
-) -> Json<TokenRevoked> {
+    Path(id): Path<String>,
+) -> Result<Json<TokenRevoked>, ApiError> {
     let revoked = {
         let st = state.clone();
-        let prefix = prefix.clone();
-        tokio::task::spawn_blocking(move || auth::revoke_token(&st.database, &prefix))
+        tokio::task::spawn_blocking(move || auth::revoke_token(&st.database, &id))
             .await
             .expect("token revocation panicked")
     };
-    Json(TokenRevoked { revoked })
+    match revoked {
+        Ok(revoked) => Ok(Json(TokenRevoked { revoked })),
+        Err(crate::db::RevokeRefused::NotAnId) => Err(ApiError::bad_request(
+            ErrorCode::BadRequest,
+            "a token id is the 8 hex digits the listing shows",
+        )),
+        Err(crate::db::RevokeRefused::Ambiguous) => Err(ApiError::conflict(
+            ErrorCode::BadRequest,
+            "ambiguous token id: two live tokens share it",
+        )),
+        Err(crate::db::RevokeRefused::Storage(why)) => {
+            Err(ApiError::internal(ErrorCode::DbError, why))
+        }
+    }
 }
 
 /// Registry-assigned publisher identity: deterministic per issuing token.

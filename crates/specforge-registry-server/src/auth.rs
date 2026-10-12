@@ -30,8 +30,9 @@ pub fn list_tokens(db: &Database) -> Result<Vec<TokenRecord>, String> {
     db.list_tokens()
 }
 
-pub fn revoke_token(db: &Database, prefix: &str) -> bool {
-    db.revoke_token_by_prefix(prefix)
+/// Revoke the token whose id (8 hex digits of its hash) is `id`; never a pattern.
+pub fn revoke_token(db: &Database, id: &str) -> Result<bool, crate::db::RevokeRefused> {
+    db.revoke_token(id)
 }
 
 pub fn validate_bearer(db: &Database, auth_header: &str) -> Option<TokenRecord> {

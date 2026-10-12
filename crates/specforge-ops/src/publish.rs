@@ -2,7 +2,7 @@
 //! (ADR 0012), uploaded to the registry that serves its name (ADR 0045).
 //! Every check that needs no registry runs before the registry is asked.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use specforge_common::{Code, Diagnostic, Severity, codes};
 use specforge_package::{PackageName, Version};
@@ -64,7 +64,7 @@ fn run(
     runtime: &dyn WasmRuntime,
     warnings: &mut Vec<Diagnostic>,
 ) -> Result<PublishOutcome, OpError> {
-    let wasm = read(&binary_at(extension)?)?;
+    let wasm = read(&crate::extension::binary_at(extension)?)?;
     let (declaration, diagnostics) = declare(runtime, &wasm)?;
     *warnings = diagnostics
         .iter()
@@ -119,85 +119,6 @@ fn identity(declaration: &ExtensionDeclaration) -> Result<(PackageName, Version)
     Ok((name, version))
 }
 
-/// The binary `path` names: a `.wasm` component as given, or, for a
-/// directory, the component its crate builds
-/// (`target/wasm32-wasip2/release/<crate>.wasm`, the only `.wasm` there
-/// when the crate's name can't be read).
-pub fn binary_at(path: &Path) -> Result<PathBuf, OpError> {
-    if !path.is_dir() {
-        if path.is_file() {
-            return Ok(path.to_path_buf());
-        }
-        return Err(OpError::coded(
-            OpErrorKind::PreconditionFailed,
-            UNREADABLE,
-            format!("no extension binary at {}", path.display()),
-        )
-        .with_suggestion("name a .wasm component, or the extension's crate directory"));
-    }
-    let release = path.join("target/wasm32-wasip2/release");
-    let not_built = || {
-        OpError::coded(
-            OpErrorKind::PreconditionFailed,
-            UNREADABLE,
-            format!(
-                "no built component in {}: build the extension first",
-                release.display()
-            ),
-        )
-        .with_suggestion("cargo build --release --target wasm32-wasip2")
-    };
-    if let Some(name) = crate_name(&path.join("Cargo.toml")) {
-        let built = release.join(format!("{}.wasm", name.replace('-', "_")));
-        if built.is_file() {
-            return Ok(built);
-        }
-    }
-    let mut built: Vec<PathBuf> = std::fs::read_dir(&release)
-        .map_err(|_| not_built())?
-        .filter_map(|e| e.ok().map(|e| e.path()))
-        .filter(|p| p.extension().is_some_and(|e| e == "wasm"))
-        .collect();
-    built.sort();
-    match built.len() {
-        0 => Err(not_built()),
-        1 => Ok(built.remove(0)),
-        _ => Err(OpError::coded(
-            OpErrorKind::PreconditionFailed,
-            UNREADABLE,
-            format!(
-                "{} holds several components ({}): name the one to publish",
-                release.display(),
-                built
-                    .iter()
-                    .filter_map(|p| p.file_name()?.to_str())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-        )),
-    }
-}
-
-/// The `[package]` name of the crate whose manifest is `cargo_toml`.
-fn crate_name(cargo_toml: &Path) -> Option<String> {
-    let text = std::fs::read_to_string(cargo_toml).ok()?;
-    let mut in_package = false;
-    for line in text.lines() {
-        let line = line.trim();
-        if line.starts_with('[') {
-            in_package = line == "[package]";
-            continue;
-        }
-        if in_package
-            && let Some(value) = line.strip_prefix("name")
-            && let Some(value) = value.trim_start().strip_prefix('=')
-        {
-            return Some(value.trim().trim_matches('"').to_string());
-        }
-    }
-    None
-}
-
 /// Load `wasm` and read its declaration, with what the registry build
 /// alone reports of it (its load warnings, W153 and W138, first). A binary
 /// that isn't a loadable extension is E028. Missing peers (E027) are left
@@ -250,31 +171,4 @@ fn refuse_errors(
         ),
     )
     .with_suggestion("fix the declaration in the extension's source and rebuild it"))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn a_crate_directory_names_its_built_component() {
-        let dir = tempfile::tempdir().unwrap();
-        std::fs::write(
-            dir.path().join("Cargo.toml"),
-            "[package]\nname = \"my-ext\"\nversion = \"0.1.0\"\n",
-        )
-        .unwrap();
-        let error = binary_at(dir.path()).unwrap_err();
-        assert!(
-            error.message.contains("build the extension first"),
-            "{error:?}"
-        );
-        let release = dir.path().join("target/wasm32-wasip2/release");
-        std::fs::create_dir_all(&release).unwrap();
-        std::fs::write(release.join("other.wasm"), b"x").unwrap();
-        std::fs::write(release.join("my_ext.wasm"), b"x").unwrap();
-        assert_eq!(binary_at(dir.path()).unwrap(), release.join("my_ext.wasm"));
-        let file = release.join("other.wasm");
-        assert_eq!(binary_at(&file).unwrap(), file);
-        assert!(binary_at(&dir.path().join("missing.wasm")).is_err());
-    }
 }

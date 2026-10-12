@@ -163,19 +163,27 @@ impl<D> Written<D> {
     }
 }
 
-/// `{"error", "code", "suggestion"}`, and `files_written` when the
-/// operation left files written ([`OpError::writes`], named from `root`
-/// when given).
-pub(crate) fn error_document(error: &OpError, root: Option<&Path>) -> serde_json::Value {
-    let mut document = serde_json::json!({
-        "error": error.message,
-        "code": error.code,
-        "suggestion": error.suggestion,
-    });
-    if !error.writes.is_empty() {
-        document["files_written"] = serde_json::json!(files_written(&error.writes, root));
+/// `{error, code}`, `suggestion` when the refusal has one, `files_written` when it left files
+/// written ([`OpError::writes`], named from `root` when given): a refusal printed under
+/// `--format json`.
+#[derive(Debug, serde::Serialize)]
+pub(crate) struct ErrorDocument<'a> {
+    error: &'a str,
+    code: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    suggestion: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    files_written: Option<Vec<String>>,
+}
+
+/// The document a refusal prints under `--format json`.
+pub(crate) fn error_document<'a>(error: &'a OpError, root: Option<&Path>) -> ErrorDocument<'a> {
+    ErrorDocument {
+        error: &error.message,
+        code: &error.code,
+        suggestion: error.suggestion.as_deref(),
+        files_written: (!error.writes.is_empty()).then(|| files_written(&error.writes, root)),
     }
-    document
 }
 
 /// `error[CODE]: message`, `  hint: suggestion` when there is one,
@@ -272,13 +280,20 @@ mod tests {
         verify = "under --format json a refusal is the error document on stdout and nothing on stderr"
     )]
     fn error_document_carries_files_written_only_when_written() {
-        let plain = error_document(&OpError::diagnostic(codes::E003, "gone"), None);
+        let json = |document: ErrorDocument| serde_json::to_value(document).unwrap();
+        let plain = OpError::diagnostic(codes::E003, "gone");
         assert_eq!(
-            plain,
-            serde_json::json!({"error": "gone", "code": "E003", "suggestion": null})
+            json(error_document(&plain, None)),
+            serde_json::json!({"error": "gone", "code": "E003"})
+        );
+        let hinted = OpError::diagnostic(codes::E003, "gone").with_suggestion("look again");
+        assert_eq!(
+            json(error_document(&hinted, None)),
+            serde_json::json!({"error": "gone", "code": "E003", "suggestion": "look again"})
         );
 
-        let written = error_document(&failed_after_writing(), Some(Path::new("/p")));
+        let failed = failed_after_writing();
+        let written = json(error_document(&failed, Some(Path::new("/p"))));
         assert_eq!(written["code"], "E032");
         assert_eq!(written["suggestion"], "check the permissions");
         assert_eq!(

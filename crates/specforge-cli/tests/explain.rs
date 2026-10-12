@@ -8,7 +8,10 @@ fn specforge() -> Command {
     assert_cmd::cargo_bin_cmd!("specforge")
 }
 
-#[test]
+#[specforge_test_macros::test(
+    behavior = "explain_diagnostic_code",
+    verify = "specforge explain prints the catalogued entry with its docs link, and a retired code with the entry that replaced it"
+)]
 fn explain_prints_a_catalogued_code_case_insensitively() {
     let out = specforge().args(["explain", "e001"]).output().unwrap();
     assert_eq!(out.status.code(), Some(0), "a catalogued code exits 0");
@@ -18,9 +21,17 @@ fn explain_prints_a_catalogued_code_case_insensitively() {
     assert!(plain.contains("E001: Parse error"), "stdout: {plain}");
     assert!(plain.contains("Owner: core"), "stdout: {plain}");
     assert!(plain.contains("Level: error"), "stdout: {plain}");
+    assert_eq!(
+        plain.lines().last(),
+        Some("Docs: https://github.com/leaderiop/SpecForge/blob/main/docs/diagnostics.md#e001"),
+        "stdout: {plain}"
+    );
 }
 
-#[test]
+#[specforge_test_macros::test(
+    behavior = "explain_diagnostic_code",
+    verify = "specforge explain prints the catalogued entry with its docs link, and a retired code with the entry that replaced it"
+)]
 fn explain_points_a_retired_code_at_its_replacement() {
     let out = specforge().args(["explain", "E047"]).output().unwrap();
     assert_eq!(out.status.code(), Some(0), "a retired code exits 0");
@@ -39,7 +50,10 @@ fn explain_points_a_retired_code_at_its_replacement() {
 
 /// Colour follows the one rule: a pipe and `NO_COLOR` are plain, and
 /// `CLICOLOR_FORCE` bolds the code even into a pipe.
-#[test]
+#[specforge_test_macros::test(
+    behavior = "print_diagnostics_structured",
+    verify = "specforge explain bolds the code only where its output is coloured"
+)]
 fn explain_is_plain_into_a_pipe_and_bold_when_forced() {
     let out = specforge()
         .env("NO_COLOR", "1")
@@ -64,7 +78,10 @@ fn explain_is_plain_into_a_pipe_and_bold_when_forced() {
     assert!(stdout.starts_with("\x1b[1mE001"), "stdout: {stdout:?}");
 }
 
-#[test]
+#[specforge_test_macros::test(
+    behavior = "explain_diagnostic_code",
+    verify = "an uncatalogued code is refused with unknown_code on both surfaces"
+)]
 fn explain_rejects_an_unknown_code_with_format_hints() {
     let out = specforge().args(["explain", "Z999"]).output().unwrap();
     assert_eq!(out.status.code(), Some(1), "an unknown code exits 1");
@@ -86,5 +103,50 @@ fn explain_rejects_an_unknown_code_with_format_hints() {
     assert!(
         stderr.contains("E900-E998, W900-W998 and I900-I998 are third-party extensions'"),
         "the third-party range hint is printed: {stderr}"
+    );
+
+    // Under --format json the refusal is the error document on stdout, nothing on stderr.
+    let out = specforge()
+        .args(["explain", "Z999", "--format", "json"])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(1));
+    assert!(out.stderr.is_empty(), "{:?}", out.stderr);
+    let document: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(document["code"], "unknown_code");
+    assert_eq!(document["error"], "unknown diagnostic code: Z999");
+    assert!(
+        document["suggestion"]
+            .as_str()
+            .unwrap()
+            .starts_with("codes are E###"),
+        "{document}"
+    );
+}
+
+#[test]
+fn explain_reads_its_code_as_specforge_explain_does() {
+    let out = specforge().args(["explain", " e001"]).output().unwrap();
+    assert_eq!(out.status.code(), Some(0));
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert!(stdout.contains("Parse error"), "stdout: {stdout}");
+}
+
+#[specforge_test_macros::test(
+    behavior = "explain_diagnostic_code",
+    verify = "specforge explain --format json prints the document specforge.explain answers"
+)]
+fn explain_prints_its_document_under_format_json() {
+    let out = specforge()
+        .args(["explain", "e001", "--format", "json"])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(0));
+    let document: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(document["code"], "E001");
+    assert_eq!(document["retired"], false);
+    assert_eq!(
+        document["docs"],
+        "https://github.com/leaderiop/SpecForge/blob/main/docs/diagnostics.md#e001"
     );
 }

@@ -206,7 +206,6 @@ dependencies = [
  "serde",
  "serde_json",
  "specforge-extension-sdk",
- "wit-bindgen",
 ]
 
 [[package]]

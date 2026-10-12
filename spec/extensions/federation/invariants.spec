@@ -31,13 +31,13 @@ invariant cross_project_reference_safety "Cross-Project Reference Safety" {
     boundaries. A local project graph MUST be independently valid without
     any remote project dependencies — remote projects provide additional
     context but are never required for local validation. Missing remote
-    projects MUST degrade gracefully with an I012 info diagnostic, never
+    projects MUST degrade gracefully with an info diagnostic, never
     an error.
   """
   risk      medium
   verify property "no cycles exist across project boundaries"
   verify unit "local graph validates independently without remote projects"
-  verify unit "missing remote project produces I012 info, not error"
+  verify unit "missing remote project produces an info diagnostic, not an error"
 }
 
 invariant federated_graph_traversal_integrity "Federated Graph Traversal Integrity" {

@@ -365,8 +365,11 @@ behavior provide_mcp_migrate_tool "Provide MCP Migrate Tool" {
     whether the migration was rolled back. The result (and a failed call's
     data) MUST carry ok, the verdict specforge migrate exits by: false when
     a file failed to migrate or the migration was rolled back. A failed
-    migration is compilation_failed when the migrated project reported
-    errors, else internal_error. A path naming a directory that is no project
+    migration's error names its cause: a migration hook that failed
+    (internal_error), a migrated project whose graph changed (W054) or that
+    does not compile (compilation_failed), or files that could not be
+    migrated (schema_mismatch); its data is the migration document. A path
+    naming a directory that is no project
     MUST be migrated as specforge migrate migrates it. A project with nothing to
     migrate MUST be reported as already at the target version, without
     running hooks or validation.
@@ -378,6 +381,7 @@ behavior provide_mcp_migrate_tool "Provide MCP Migrate Tool" {
   verify unit "a malformed or unsupported target_version is refused without modifying files"
   verify unit "the result reports the hooks run, the structural differences and whether the migration was rolled back"
   verify unit "ok is the verdict specforge migrate exits by, and a failed migration's kind is the operation's"
+  verify unit "a failed migration's error names its cause: a hook, a changed graph, a project that does not compile, or files that could not be migrated"
   verify unit "a directory that is no project is migrated as specforge migrate migrates it"
   verify contract "Provide MCP Migrate Tool: MCP migrate tool holds — filesystem_available, migrations_applied, post_migration_validated, dry_run_safe, mutation_completed_emitted, tool_invoked_emitted"
 }

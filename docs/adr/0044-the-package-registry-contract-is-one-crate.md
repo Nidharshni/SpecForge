@@ -111,3 +111,15 @@ filter reads `ExtensionDeclaration::declares`.
 
 **Amended by ADR 0059 (2026-10-12), to D4:** `MemoryRegistry` decides a publisher against its own pins and the
 lock's key, and records pins through `pin`. The contract gains C8-C10, and C3 states that a fetch writes nothing.
+
+## Amendment (round 7, plan 16): one search rule; a claim and a revocation that cannot overreach
+
+- **Search matches by one rule**, `specforge_package::search::matches`: an ASCII case-insensitive
+  substring of the name, the description or one keyword; `%` and `_` are text. The server's SQL is
+  an escaped prefilter and the rule decides; `MemoryClient` and `MemoryRegistry` call the same
+  function, and `assert_client_contract` holds the server and `MemoryClient` to it.
+- **A scope is claimed by the publish that stores a package**: the claim and the version insert
+  are one transaction (`Database::publish`), after the whole upload validated. A refused upload,
+  a lost version race or a failed blob commit (`Database::withdraw`) leaves the scope as it was.
+- **An admin revokes a token by its id** (the 8 hex digits the listing shows); any other segment
+  is refused (400), and an id two live tokens share revokes neither (409).

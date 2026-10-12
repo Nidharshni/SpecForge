@@ -305,8 +305,10 @@ behavior provide_mcp_explain_tool "Provide MCP Explain Tool" {
     prints for it, as data: the code, its title, its owner (core or the
     emitting extension), its level, its explanation and the link to its
     section of docs/diagnostics.md. A retired code returns retired true and
-    the entry of the code that replaced it, if any. A code the catalogue
-    does not have MUST be an invalid_input error naming the code argument.
+    the entry of the code that replaced it, if any. It is the operation
+    specforge explain runs (explain_diagnostic_code). A code the catalogue
+    neither has nor retired MUST be an invalid_input error naming the code
+    argument, its suggestion the code forms.
   """
   verify unit "specforge.explain returns the catalogued title, owner, level, explanation and docs link"
   verify unit "a retired code names the code that replaced it"

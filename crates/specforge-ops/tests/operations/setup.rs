@@ -214,7 +214,7 @@ fn doctor_reports_every_setup_diagnostic_the_environment_reports() {
 fn doctor_fails_whenever_check_fails_on_a_setup_diagnostic() {
     for (name, (_dir, project)) in scenarios() {
         let view = ProjectView::of(&project);
-        let checked = check(&view, project.diagnostics(), &CheckOptions::default()).unwrap();
+        let checked = check(&view, &CheckOptions::default()).unwrap();
         let report = diagnose_with(&view, true);
         let setup_failed = view
             .env()

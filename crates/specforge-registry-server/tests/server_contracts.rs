@@ -356,6 +356,90 @@ mod ownership {
         multipart_body(&manifest, WASM, Some(&signed(&manifest, WASM)))
     }
 
+    /// The hash of the token labelled `label`.
+    fn hash_of(state: &AppState, label: &str) -> String {
+        auth::list_tokens(&state.database)
+            .unwrap()
+            .into_iter()
+            .find(|t| t.label == label)
+            .unwrap()
+            .token_hash
+    }
+
+    #[specforge_test_macros::test(
+        behavior = "publish_to_registry",
+        verify = "a publish the registry refuses claims no scope"
+    )]
+    #[tokio::test]
+    async fn a_refused_upload_claims_no_scope() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = app_state(dir.path(), 10_000);
+        let router = app_clone(&state);
+        let token_a = auth::create_token(&state.database, None, "pub-a", Some(90), false);
+        let token_b = auth::create_token(&state.database, None, "pub-b", Some(90), false);
+
+        let manifest = r#"{"handshake":{"protocol_version":"1","name":"@fresh/x","version":"1.0.0","peer_dependencies":[],"sandbox_policy":null}}"#;
+        let response = router
+            .clone()
+            .oneshot(put_request(
+                &token_a,
+                "@fresh%2Fx",
+                "1.0.0",
+                multipart_body(manifest, WASM, None),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(json_of(response).await["error"]["code"], "UNSIGNED_PACKAGE");
+
+        let response = router
+            .clone()
+            .oneshot(put_request(
+                &token_b,
+                "@fresh%2Fy",
+                "1.0.0",
+                signed_for("@fresh/y", "1.0.0"),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let (owner, _) = state.database.get_scope_owner("@fresh").unwrap();
+        assert_eq!(owner, hash_of(&state, "pub-b"));
+    }
+
+    // The duplicate check before the claim already refuses this one; the true race (a version stored
+    // between that check and the insert) is covered at the database in `db.rs` (T16).
+    #[tokio::test]
+    async fn a_duplicate_version_claims_no_scope() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = app_state(dir.path(), 10_000);
+        let router = app_clone(&state);
+        let token_a = auth::create_token(&state.database, None, "pub-a", Some(90), false);
+
+        // The version is already stored, under no scope.
+        stored(&state, "@fresh/x", false);
+        let response = router
+            .clone()
+            .oneshot(put_request(
+                &token_a,
+                "@fresh%2Fx",
+                "1.0.0",
+                signed_for("@fresh/x", "1.0.0"),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+        assert_eq!(
+            json_of(response).await["error"]["code"],
+            "DUPLICATE_VERSION"
+        );
+        assert_eq!(state.database.get_scope_owner("@fresh"), None);
+    }
+
+    #[specforge_test_macros::test(
+        behavior = "publish_to_registry",
+        verify = "the first publish into a scope claims it, and only its publisher publishes there after"
+    )]
     #[tokio::test]
     async fn first_publish_claims_scope_and_blocks_other_tokens() {
         let dir = tempfile::tempdir().unwrap();
@@ -1079,4 +1163,124 @@ async fn search_filters_by_declared_category() {
             .contains("surfaces"),
         "{body}"
     );
+}
+
+/// A package stored with the given description and keywords.
+fn stored_described(state: &AppState, name: &str, description: &str, keywords: &str) {
+    let manifest = serde_json::json!({
+        "handshake": {
+            "protocol_version": "1.0.0",
+            "name": name,
+            "version": "1.0.0",
+            "peer_dependencies": [],
+            "sandbox_policy": null
+        },
+    })
+    .to_string();
+    state
+        .database
+        .insert_package(&specforge_registry_server::db::PackageVersion {
+            name: name.to_string(),
+            version: "1.0.0".to_string(),
+            sha256: "00".to_string(),
+            size_bytes: 1,
+            description: description.to_string(),
+            keywords: keywords.to_string(),
+            publisher: String::new(),
+            published_at: "2026-01-01T00:00:00+00:00".to_string(),
+            signature: None,
+            manifest,
+        })
+        .unwrap();
+}
+
+#[specforge_test_macros::test(
+    behavior = "search_registry",
+    verify = "a search matches a case-insensitive substring of a package's name, description or one keyword, wildcards included as text"
+)]
+#[tokio::test]
+async fn search_matches_as_the_fakes_do() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = app_state(dir.path(), 100);
+    stored_described(&state, "@a/myxext", "plain", "");
+    stored_described(&state, "@a/words", "plain", "alpha,beta");
+    let router = app_clone(&state);
+    let hits = |query: &'static str| {
+        let router = router.clone();
+        async move {
+            let (status, body) = get_json(&router, &format!("/v1/search?q={query}")).await;
+            assert_eq!(status, StatusCode::OK, "{query}");
+            body["results"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|r| r["name"].as_str().unwrap().to_string())
+                .collect::<Vec<_>>()
+        }
+    };
+    for query in ["my_ext", "%25", "a%2Cb"] {
+        assert!(hits(query).await.is_empty(), "{query}");
+    }
+    assert_eq!(hits("xext").await, ["@a/myxext"]);
+}
+
+#[tokio::test]
+async fn revoking_takes_a_token_id() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = app_state(dir.path(), 100);
+    let router = app_clone(&state);
+    let admin = auth::create_token(&state.database, None, "admin", Some(90), true);
+    let one = auth::create_token(&state.database, None, "one", Some(90), false);
+    let two = auth::create_token(&state.database, None, "two", Some(90), false);
+    let verify = |token: String| {
+        let router = router.clone();
+        async move {
+            router
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/v1/auth/verify")
+                        .header("authorization", format!("Bearer {token}"))
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap()
+                .status()
+        }
+    };
+    let delete = |segment: String| {
+        let router = router.clone();
+        let admin = admin.clone();
+        async move {
+            router
+                .oneshot(
+                    Request::builder()
+                        .method("DELETE")
+                        .uri(format!("/v1/admin/tokens/{segment}"))
+                        .header("authorization", format!("Bearer {admin}"))
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap()
+                .status()
+        }
+    };
+
+    assert_eq!(delete("%25".to_string()).await, StatusCode::BAD_REQUEST);
+    assert_eq!(verify(one.clone()).await, StatusCode::OK);
+    assert_eq!(verify(two.clone()).await, StatusCode::OK);
+    assert_eq!(verify(admin.clone()).await, StatusCode::OK);
+
+    let id = auth::list_tokens(&state.database)
+        .unwrap()
+        .into_iter()
+        .find(|t| t.label == "one")
+        .unwrap()
+        .token_hash[..8]
+        .to_string();
+    assert_eq!(delete(id).await, StatusCode::OK);
+    assert_eq!(verify(one).await, StatusCode::UNAUTHORIZED);
+    assert_eq!(verify(two).await, StatusCode::OK);
 }

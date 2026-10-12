@@ -5,8 +5,7 @@ expression: "format!(\"exit: {:?}\\nstdout:\\n{}stderr:\\n{}\", ghost.code, ghos
 exit: Some(1)
 stdout:
 {
-  "code": "E003",
   "error": "unresolved entity 'ghost' — not found in graph",
-  "suggestion": null
+  "code": "E003"
 }
 stderr:

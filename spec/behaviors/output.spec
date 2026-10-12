@@ -458,6 +458,37 @@ behavior name_enumerated_options_once "Name Enumerated Options Once" {
   verify integration "the analysis passes the CLI accepts are the project's"
 }
 
+behavior explain_diagnostic_code "Explain a Diagnostic Code" {
+  features   [diagnostic_reporting]
+  invariants [diagnostic_determinism, zero_domain_knowledge_core]
+  category   query
+  types      [McpExplainResult]
+  requires {
+    code_given "The caller names a diagnostic code"
+  }
+  ensures {
+    entry_printed   "The catalogued entry, or the retired code and its replacement, is printed with its docs link"
+    one_document    "Under --format json the CLI prints the document specforge.explain answers"
+    unknown_refused "A code the catalog neither has nor retired is refused with unknown_code"
+  }
+  contract   """
+    specforge explain <code> and specforge.explain MUST be one operation
+    (specforge_ops::explain) over the diagnostic catalog: the code is read
+    in any case with surrounding whitespace ignored; a catalogued code
+    answers its code, title, owner, level, explanation and docs link; a
+    retired code answers retired true and the entry of the code that
+    replaced it, if any. The CLI MUST print the entry as text, its last
+    line the docs link, and under --format json the document
+    specforge.explain answers (McpExplainResult), nothing else. A code the
+    catalog neither has nor retired MUST be refused with unknown_code
+    (invalid input) and the code forms as its suggestion, on both surfaces.
+  """
+  verify unit "specforge explain prints the catalogued entry with its docs link, and a retired code with the entry that replaced it"
+  verify integration "specforge explain --format json prints the document specforge.explain answers"
+  verify unit "specforge explain reads the code as specforge.explain does: any case, surrounding whitespace ignored"
+  verify unit "an uncatalogued code is refused with unknown_code on both surfaces"
+}
+
 behavior print_diagnostics_structured "Print Diagnostics Structured" {
   features   [diagnostic_reporting]
   invariants [multi_error_collection, diagnostic_determinism, zero_domain_knowledge_core]
@@ -552,8 +583,9 @@ behavior report_command_outcome "Report a Command's Outcome" {
     as error[CODE]: message, then "  hint: " and the suggestion when there
     is one, then "  wrote: " and each file the failed operation left
     written; under --format json it MUST instead be the
-    error document {error, code, suggestion} (and files_written when files
-    were left written) on stdout, with nothing on stderr. A command run
+    error document {error, code}, with suggestion when the refusal has one
+    and files_written when files were left written, on stdout, with
+    nothing on stderr. A command run
     outside any project where it needs one MUST refuse with no_project.
     Every core command whose output has a human and a JSON form MUST take
     --format human|json (human by default; trace's is json); no core

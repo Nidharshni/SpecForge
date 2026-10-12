@@ -12,7 +12,7 @@
 
 ## Overview
 
-An extension is a Rust crate compiled to `wasm32-wasip2`, depending on `specforge-extension-sdk` and `wit-bindgen`.
+An extension is a Rust crate compiled to `wasm32-wasip2`, depending on `specforge-extension-sdk` alone (`component_guest!` brings its own bindings).
 The SDK provides:
 
 - **Protocol types** -- re-exported from `specforge-protocol-types`, shared with the host
@@ -68,7 +68,6 @@ crate-type = ["cdylib"]
 
 [dependencies]
 specforge-extension-sdk = "1.0.0"
-wit-bindgen = "0.30"
 ```
 
 ### Compile Target
@@ -534,6 +533,7 @@ An extension is tested natively (`cargo test`, no wasm build) at three depths:
 
 ```toml
 [dev-dependencies]
+specforge-extension-sdk = { version = "0.1", features = ["testing"] }   # MockHost, call_every_command
 specforge-wasm = { version = "0.1", features = ["testing"] }
 specforge-protocol-types = "0.1"
 specforge-test = "0.1"   # to link a test to the obligation it proves

@@ -562,8 +562,9 @@ mod tests {
 
     /// The host's production source: the compiler, the CLI, the servers, the
     /// build tooling. It names a code only through `codes::*`. A guest's
-    /// source ([`GUEST_OWNERS`]) is read as one.
+    /// source ([`guest_owners`]) is read as one.
     fn host_source() -> Vec<(String, Vec<String>)> {
+        let owners = guest_owners();
         let mut files = Vec::new();
         for top in ["crates", "xtask", "integrations"] {
             files.extend(production_source(top));
@@ -576,7 +577,7 @@ mod tests {
                 catalog_skipped.push(rel.clone());
                 return false;
             }
-            !GUEST_OWNERS.iter().any(|(dir, _)| rel.starts_with(dir))
+            !owners.iter().any(|(dir, _)| rel.starts_with(dir.as_str()))
         });
         catalog_skipped.sort();
         assert_eq!(
@@ -592,23 +593,32 @@ mod tests {
     /// are string literals, attributed by directory and nothing else. The
     /// coverage crate is shared source of the testing extension (ADR 0004
     /// D2-f).
-    const GUEST_OWNERS: &[(&str, &str)] = &[
-        ("crates/specforge-coverage/src", "@specforge/testing"),
-        ("extensions/cargo-test/src", "@specforge/cargo-test"),
-        ("extensions/formal/src", "@specforge/formal"),
-        ("extensions/governance/src", "@specforge/governance"),
-        ("extensions/product/src", "@specforge/product"),
-        ("extensions/rust/src", "@specforge/rust"),
-        ("extensions/software/src", "@specforge/software"),
-        ("extensions/testing/src", "@specforge/testing"),
-        ("extensions/typescript/src", "@specforge/typescript"),
-        ("extensions/vitest/src", "@specforge/vitest"),
-    ];
+    fn guest_owners() -> Vec<(String, String)> {
+        let mut owners = vec![(
+            "crates/specforge-coverage/src".to_string(),
+            "@specforge/testing".to_string(),
+        )];
+        let mut extensions: Vec<String> = std::fs::read_dir(workspace_root().join("extensions"))
+            .expect("extensions/")
+            .flatten()
+            .filter(|entry| entry.path().join("src").is_dir())
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .collect();
+        extensions.sort();
+        owners.extend(extensions.into_iter().map(|name| {
+            (
+                format!("extensions/{name}/src"),
+                format!("@specforge/{name}"),
+            )
+        }));
+        owners.sort();
+        owners
+    }
 
     /// One code literal an extension's source writes.
     struct GuestSite {
         code: String,
-        owner: &'static str,
+        owner: String,
         location: String,
         /// The literal is compared against (`d.code == "E059"`, a `matches!`
         /// pattern), so it doesn't keep a catalog entry alive.
@@ -619,8 +629,8 @@ mod tests {
     /// directory's owner. The third-party ranges are never catalogued.
     fn guest_sites() -> Vec<GuestSite> {
         let mut sites = Vec::new();
-        for (dir, owner) in GUEST_OWNERS {
-            for (rel, lines) in production_source(dir) {
+        for (dir, owner) in guest_owners() {
+            for (rel, lines) in production_source(&dir) {
                 for (index, line) in lines.iter().enumerate() {
                     for (code, range) in code_literals(line) {
                         if is_third_party(code) {
@@ -628,7 +638,7 @@ mod tests {
                         }
                         sites.push(GuestSite {
                             code: code.to_string(),
-                            owner,
+                            owner: owner.clone(),
                             location: format!("{rel}:{}", index + 1),
                             consumer: is_literal_consumer(line, &range),
                         });
@@ -856,37 +866,6 @@ mod tests {
         );
     }
 
-    /// Every directory an extension's guest code lives in is attributed to
-    /// its extension, by name and nothing else.
-    #[test]
-    fn guest_sources_are_attributed_exactly() {
-        let root = workspace_root();
-        let mut with_source: Vec<String> = std::fs::read_dir(root.join("extensions"))
-            .expect("extensions/")
-            .flatten()
-            .filter(|entry| entry.path().join("src").is_dir())
-            .map(|entry| format!("extensions/{}/src", entry.file_name().to_string_lossy()))
-            .collect();
-        with_source.sort();
-        let mut listed: Vec<&str> = GUEST_OWNERS
-            .iter()
-            .map(|(dir, _)| *dir)
-            .filter(|dir| dir.starts_with("extensions/"))
-            .collect();
-        listed.sort();
-        assert_eq!(
-            with_source, listed,
-            "GUEST_OWNERS lists exactly the extensions' source directories"
-        );
-        for (dir, owner) in GUEST_OWNERS {
-            assert!(root.join(dir).is_dir(), "{dir} exists");
-            if let Some(name) = dir.strip_prefix("extensions/") {
-                let name = name.trim_end_matches("/src");
-                assert_eq!(*owner, format!("@specforge/{name}"), "{dir}");
-            }
-        }
-    }
-
     /// C2: a code that is only compared against isn't emitted, so a catalog
     /// entry can't outlive its last emitter through a consumer.
     #[test]
@@ -964,7 +943,7 @@ mod tests {
     /// registered code is reported somewhere. The host's reports are its
     /// `codes::X` references (a constant exists only for a core code, so the
     /// owner needs no guess); the guests' are string literals, owned by
-    /// their directory ([`GUEST_OWNERS`]).
+    /// their directory ([`guest_owners`]).
     #[specforge_test(
         invariant = "diagnostic_code_uniqueness",
         verify = "Diagnostic Code Uniqueness guarantee holds"

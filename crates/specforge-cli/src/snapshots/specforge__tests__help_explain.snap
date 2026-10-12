@@ -4,12 +4,18 @@ expression: command.clone().render_long_help().to_string()
 ---
 Explain a diagnostic code
 
-Usage: specforge explain <CODE>
+Usage: specforge explain [OPTIONS] <CODE>
 
 Arguments:
   <CODE>
-          Diagnostic code (e.g., E001, W010)
+          Diagnostic code (e.g., E001, W010), any case
 
 Options:
+      --format <FORMAT>
+          Output format: human or json
+          
+          [default: human]
+          [possible values: human, json]
+
   -h, --help
           Print help
