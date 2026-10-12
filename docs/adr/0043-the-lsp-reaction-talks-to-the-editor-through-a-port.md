@@ -43,6 +43,8 @@ the reaction sends, through JSON-RPC, several of them waiting seconds for messag
 - **D6. Formatting's publish stays on the request path.** `textDocument/formatting` publishes the
   formatter's W142 beside the compile's diagnostics through the client directly; queueing a format
   behind a running update would stall it for no gained behaviour. It is the one handler-side publish.
+  (ADR 0056: the formatter's findings are recorded as the document's formatter layer; the request sends what
+  the store answers, which is the whole list only when the compile layer is at the same version.)
 - **D7. The reaction takes its runtime source.** Production passes `RuntimeSource::project()`, tests the
   in-process runtime: the `WasmRuntime` seam, not a parameter of the backend.
   `ProjectSession::begin_open(root, source)` is the one way to open in two steps.
