@@ -6,7 +6,7 @@ use super::registry_client::{RegistryClient, RegistryError};
 use super::registry_config::{RegistryConfig, RegistryCredential};
 use specforge_package::{PackageName, Version};
 use specforge_protocol_types::ExtensionDeclaration;
-use specforge_registry_wire::{PackageMetadata, SignedContent, sha256_hex};
+use specforge_registry_wire::{PackageMetadata, PublishReceipt, SignedContent, path, sha256_hex};
 
 /// Publish to a registry, signed with `key`.
 ///
@@ -27,8 +27,8 @@ pub fn publish_to_registry(
 ) -> Result<String, Diagnostic> {
     // What is published is a package: a name and a version (ADR 0036).
     let invalid = |message: String| RegistryError::InvalidPackage { message }.to_diagnostic();
-    PackageName::declared_by(declaration).map_err(|why| invalid(why.to_string()))?;
-    Version::parse(declaration.version()).map_err(|why| {
+    let name = PackageName::declared_by(declaration).map_err(|why| invalid(why.to_string()))?;
+    let version = Version::parse(declaration.version()).map_err(|why| {
         invalid(format!(
             "'{}' is not a SemVer version: {why}",
             declaration.version()
@@ -51,7 +51,7 @@ pub fn publish_to_registry(
     );
     let signature = key.sign(&content);
 
-    client
+    let receipt = client
         .publish(
             package,
             declaration,
@@ -60,7 +60,26 @@ pub fn publish_to_registry(
             registry,
             credential,
         )
-        .map_err(|e| e.to_diagnostic())
+        .map_err(|e| e.to_diagnostic())?;
+    let expected = PublishReceipt {
+        name: declaration.name().to_string(),
+        version: declaration.version().to_string(),
+        sha256: content.wasm_sha256().to_string(),
+        size_bytes: package.len() as u64,
+        key_id: signature.key_id(),
+    };
+    if receipt != expected {
+        return Err(RegistryError::InvalidReply {
+            subject: format!("{name}@{version}"),
+            message: format!("its receipt describes another upload than the one sent: {receipt:?}"),
+        }
+        .to_diagnostic());
+    }
+    Ok(format!(
+        "{}{}",
+        registry.url.trim_end_matches('/'),
+        path::version(&name, &version)
+    ))
 }
 
 /// Verify SHA256 integrity of downloaded bytes against an expected hash.

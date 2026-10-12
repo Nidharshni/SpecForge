@@ -4,8 +4,8 @@ use reqwest::StatusCode;
 use reqwest::blocking::{Client, RequestBuilder, Response};
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, RETRY_AFTER};
 use specforge_registry_wire::{
-    ErrorBody, ErrorCode, PackageMetadata, PackageSignature, SearchHit, SearchQuery, SearchResults,
-    TokenVerified, VersionList, form, path,
+    ErrorBody, ErrorCode, PackageMetadata, PackageSignature, PublishReceipt, SearchHit,
+    SearchQuery, SearchResults, TokenVerified, VersionList, form, path,
 };
 
 use super::registry_client::{RegistryClient, RegistryError};
@@ -159,7 +159,7 @@ impl RegistryClient for HttpRegistryClient {
         signature: &PackageSignature,
         registry: &RegistryConfig,
         credential: Option<&RegistryCredential>,
-    ) -> Result<String, RegistryError> {
+    ) -> Result<PublishReceipt, RegistryError> {
         let name =
             PackageName::declared_by(declaration).map_err(|why| RegistryError::InvalidPackage {
                 message: why.to_string(),
@@ -202,7 +202,9 @@ impl RegistryClient for HttpRegistryClient {
 
         let resp = self.send(request, &url)?;
         match resp.status() {
-            StatusCode::OK | StatusCode::CREATED => Ok(url),
+            StatusCode::OK | StatusCode::CREATED => {
+                read_reply(&bytes_of(resp)?, &format!("{name}@{version}"))
+            }
             StatusCode::CONFLICT => Err(RegistryError::DuplicateVersion {
                 name: declaration.name().to_string(),
                 version: declaration.version().to_string(),

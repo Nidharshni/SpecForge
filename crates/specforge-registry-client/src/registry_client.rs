@@ -5,7 +5,7 @@ use specforge_package::PackageName;
 use specforge_package::Version;
 use specforge_protocol_types::ExtensionDeclaration;
 use specforge_registry_wire::{
-    ErrorCode, PackageMetadata, PackageSignature, SearchHit, SearchQuery,
+    ErrorCode, PackageMetadata, PackageSignature, PublishReceipt, SearchHit, SearchQuery,
 };
 
 /// Errors that can occur during registry operations.
@@ -166,7 +166,8 @@ pub trait RegistryClient: Send + Sync {
     ) -> Result<Vec<SearchHit>, RegistryError>;
 
     /// Upload `package` with `manifest_json` (the exact text `signature` covers) and `signature`; `credential`,
-    /// when given, authenticates it as an `Authorization: Bearer` header. A publish is always signed.
+    /// when given, authenticates it as an `Authorization: Bearer` header. A publish is always signed. The
+    /// registry's receipt: what it stored.
     fn publish(
         &self,
         package: &[u8],
@@ -175,7 +176,7 @@ pub trait RegistryClient: Send + Sync {
         signature: &PackageSignature,
         registry: &RegistryConfig,
         credential: Option<&RegistryCredential>,
-    ) -> Result<String, RegistryError>;
+    ) -> Result<PublishReceipt, RegistryError>;
 
     /// Validate that the given credential authenticates successfully.
     /// Returns the server-reported expiry (RFC3339), when the registry tracks one.

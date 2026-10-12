@@ -350,3 +350,92 @@ fn the_memory_client_refuses_a_signature_that_does_not_verify() {
         .unwrap_err();
     assert!(matches!(error, RegistryError::NotFound { .. }), "{error:?}");
 }
+
+/// A registry that answers every publish with a receipt for another binary, and everything else as `inner`.
+struct WrongReceipt(MemoryClient);
+
+impl RegistryClient for WrongReceipt {
+    fn versions(
+        &self,
+        name: &PackageName,
+        registry: &RegistryConfig,
+        credential: Option<&RegistryCredential>,
+    ) -> Result<Vec<String>, RegistryError> {
+        self.0.versions(name, registry, credential)
+    }
+
+    fn metadata(
+        &self,
+        name: &PackageName,
+        version: &Version,
+        registry: &RegistryConfig,
+        credential: Option<&RegistryCredential>,
+    ) -> Result<PackageMetadata, RegistryError> {
+        self.0.metadata(name, version, registry, credential)
+    }
+
+    fn download(
+        &self,
+        wasm_url: &str,
+        registry: &RegistryConfig,
+        credential: Option<&RegistryCredential>,
+    ) -> Result<Vec<u8>, RegistryError> {
+        self.0.download(wasm_url, registry, credential)
+    }
+
+    fn search(
+        &self,
+        query: &specforge_registry_wire::SearchQuery,
+        registry: &RegistryConfig,
+        credential: Option<&RegistryCredential>,
+    ) -> Result<Vec<specforge_registry_wire::SearchHit>, RegistryError> {
+        self.0.search(query, registry, credential)
+    }
+
+    fn publish(
+        &self,
+        package: &[u8],
+        declaration: &ExtensionDeclaration,
+        manifest_json: &str,
+        signature: &PackageSignature,
+        registry: &RegistryConfig,
+        credential: Option<&RegistryCredential>,
+    ) -> Result<specforge_registry_wire::PublishReceipt, RegistryError> {
+        let mut receipt = self.0.publish(
+            package,
+            declaration,
+            manifest_json,
+            signature,
+            registry,
+            credential,
+        )?;
+        receipt.sha256 = "0".repeat(64);
+        Ok(receipt)
+    }
+
+    fn authenticate(
+        &self,
+        registry: &RegistryConfig,
+        credential: &RegistryCredential,
+    ) -> Result<Option<String>, RegistryError> {
+        self.0.authenticate(registry, credential)
+    }
+}
+
+#[specforge_test_macros::test(
+    behavior = "publish_to_registry",
+    verify = "publish checks the registry's receipt against what it uploaded"
+)]
+fn a_receipt_for_another_upload_is_refused() {
+    let error = publish_to_registry(
+        b"fake-wasm-bytes",
+        &minimal_manifest(),
+        &default_registry(),
+        Some(&accepted()),
+        &WrongReceipt(client()),
+        &key(),
+    )
+    .unwrap_err();
+    assert_eq!(error.code, "R009", "{error:?}");
+    assert!(error.message.contains("receipt"), "{error:?}");
+}

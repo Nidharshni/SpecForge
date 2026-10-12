@@ -8,8 +8,8 @@ use specforge_package::PackageName;
 use specforge_package::Version;
 use specforge_protocol_types::{DeclaredCategory, ExtensionDeclaration};
 use specforge_registry_wire::{
-    DEFAULT_SEARCH_LIMIT, ErrorCode, PackageMetadata, PackageSignature, SearchHit, SearchQuery,
-    SignedContent, path, sha256_hex,
+    DEFAULT_SEARCH_LIMIT, ErrorCode, PackageMetadata, PackageSignature, PublishReceipt, SearchHit,
+    SearchQuery, SignedContent, path, sha256_hex,
 };
 
 use crate::registry_client::{RegistryClient, RegistryError};
@@ -378,7 +378,7 @@ impl RegistryClient for MemoryClient {
         signature: &PackageSignature,
         registry: &RegistryConfig,
         credential: Option<&RegistryCredential>,
-    ) -> Result<String, RegistryError> {
+    ) -> Result<PublishReceipt, RegistryError> {
         let name =
             PackageName::declared_by(declaration).map_err(|why| RegistryError::InvalidPackage {
                 message: why.to_string(),
@@ -436,12 +436,15 @@ impl RegistryClient for MemoryClient {
             None,
         );
         metadata.signature = Some(signature.clone());
+        let receipt = PublishReceipt {
+            name: declaration.name().to_string(),
+            version: version.to_string(),
+            sha256: metadata.sha256.clone(),
+            size_bytes: package.len() as u64,
+            key_id: signature.key_id(),
+        };
         self.store(registry, metadata, package.to_vec());
-        Ok(format!(
-            "{}{}",
-            key_of(registry),
-            path::version(&name, &version)
-        ))
+        Ok(receipt)
     }
 
     fn authenticate(
@@ -722,7 +725,7 @@ pub fn assert_client_contract(
         next_wasm,
         &manifest,
     ));
-    client
+    let receipt = client
         .publish(
             next_wasm,
             &next,
@@ -732,6 +735,17 @@ pub fn assert_client_contract(
             Some(credential),
         )
         .expect("K11: the same version, correctly signed, publishes");
+    assert_eq!(
+        receipt,
+        PublishReceipt {
+            name: "@contract/tool".into(),
+            version: "2.0.0".into(),
+            sha256: sha256_hex(next_wasm),
+            size_bytes: next_wasm.len() as u64,
+            key_id: key.key_id(),
+        },
+        "K11: the receipt names what was stored"
+    );
 }
 
 /// The private client contract (plan 16): what every `RegistryClient` adapter does against a registry that
