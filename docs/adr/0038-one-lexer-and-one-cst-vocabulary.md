@@ -200,3 +200,10 @@ grammar crate leaves each top-level body of those files unclosed and requires ev
   would compile clean.
 - **A recovery pass in the parser** (end the body before the next form line and reparse the pieces, as D2 does
   for strings): the formatter and every other reader of the CST would still see tree-sitter's reading.
+
+## Amendment: one reading of a broken document (2026-10-12, architecture round 7, plan 14)
+
+D2's recovery now cuts the source before every form start the grammar's tree missed, not only after an
+unclosed string, and the parser and the formatter read its pieces (`specforge_parser::cst`). D6's rule is
+asked in one walk of a document (`lex::form_starts`) by recovery and the LSP's document; D8's scanner also
+ends a field left without its value, `)` and `>`. See ADR 0063.

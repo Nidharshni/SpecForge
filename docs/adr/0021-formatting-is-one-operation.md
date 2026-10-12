@@ -110,3 +110,9 @@ rules live in ops and `specforge-common`.
 - Formatting in the editor reaches what `specforge format` writes in one pass, blank lines, final
   newline and line endings included; its edits replace only what changes. A range format removes a
   blank line inside its block, and changes nothing outside it.
+
+## Amendment: the formatter reads what the parser reads (2026-10-12, architecture round 7, plan 14)
+
+The engine reads a source through the parser's recovery (`specforge_parser::cst`): every form the parser
+reads whole is formatted, and a form it could not is kept with one W142 spanning its lines, as D5 already
+required (the code spanned the error node's lines). See ADR 0063 D5.
