@@ -2532,11 +2532,16 @@ const HALF_TYPED_METHOD: &str = "port pay \"Pay\" {\n  direction inbound\n  meth
 /// A parameter list left open, then a block.
 const OPEN_PARAMETER_LIST: &str = "port pay \"Pay\" {\n  direction inbound\n  method charge(amount: String\n\nbehavior settle \"Settle\" {\n  contract \"Settles.\"\n}\n";
 
-#[test]
-fn a_half_typed_field_takes_the_forms_after_its_body() {
+#[specforge_test(
+    behavior = "recover_from_syntax_errors",
+    verify = "a body member left half-typed ends where the next top-level form starts"
+)]
+fn a_half_typed_field_ends_its_body_at_the_next_form() {
     let result = parse(HALF_TYPED_FIELD, "test.spec");
     let ids: Vec<&str> = result.entities.iter().map(|e| e.id.raw.as_str()).collect();
-    assert_eq!(ids, ["a1", "c1"], "errors: {:?}", result.errors);
+    assert_eq!(ids, ["a1", "b1", "c1"], "errors: {:?}", result.errors);
+    assert_eq!(result.errors.len(), 1, "errors: {:?}", result.errors);
+    assert_eq!(result.errors[0].span.start_line, 3);
 }
 
 #[test]
@@ -2547,8 +2552,8 @@ fn a_half_typed_method_header_takes_the_forms_after_its_body() {
 }
 
 #[test]
-fn an_open_parameter_list_takes_the_forms_after_its_body() {
+fn an_open_parameter_list_ends_its_body_at_the_next_form() {
     let result = parse(OPEN_PARAMETER_LIST, "test.spec");
     let ids: Vec<&str> = result.entities.iter().map(|e| e.id.raw.as_str()).collect();
-    assert_eq!(ids, ["pay"], "errors: {:?}", result.errors);
+    assert_eq!(ids, ["pay", "settle"], "errors: {:?}", result.errors);
 }
