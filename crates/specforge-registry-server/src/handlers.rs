@@ -10,9 +10,9 @@ use specforge_package::PackageName;
 use specforge_package::Version;
 use specforge_registry_wire::path::route;
 use specforge_registry_wire::{
-    ErrorBody, PackageMetadata, PublishReceipt, SearchHit, SearchQuery, SearchResults, TokenIssued,
-    TokenList, TokenRequest, TokenRevoked, TokenSummary, TokenVerified, VersionList, Yanked, code,
-    form, path,
+    ErrorBody, PackageMetadata, PackageSignature, PublishReceipt, SearchHit, SearchQuery,
+    SearchResults, TokenIssued, TokenList, TokenRequest, TokenRevoked, TokenSummary, TokenVerified,
+    VersionList, Yanked, code, form, path,
 };
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -654,12 +654,11 @@ async fn publish_package(
         Err(e) => return Err(ApiError::internal(code::STORAGE_ERROR, e)),
     };
 
-    // Extract the short key id from the signature wire object for display
-    // and indexing. The full signature object is stored verbatim so clients
-    // can verify offline (spec #21: the registry is not the trust anchor).
-    let key_id = serde_json::from_str::<serde_json::Value>(&signature_json)
-        .ok()
-        .and_then(|v| v.get("keyId").and_then(|k| k.as_str()).map(str::to_string))
+    // The short key id of the signature, for display and indexing. The full
+    // signature object is stored verbatim so clients can verify offline
+    // (spec #21: the registry is not the trust anchor).
+    let key_id = PackageSignature::parse(&signature_json)
+        .map(|signature| signature.key_id())
         .unwrap_or_default();
 
     // Insert into database — rusqlite is blocking: run it on the blocking

@@ -6,8 +6,8 @@ use axum::http::{Request, StatusCode};
 use specforge_registry_server::state::{AppState, PublishLimits};
 use specforge_registry_server::{auth, handlers};
 use specforge_registry_wire::{
-    ErrorBody, PackageMetadata, PublishReceipt, SearchResults, TokenVerified, VersionList, Yanked,
-    form,
+    ErrorBody, PackageMetadata, PublishReceipt, SearchResults, SignedContent, TokenVerified,
+    VersionList, Yanked, form,
 };
 use std::sync::Arc;
 use tower::ServiceExt as _;
@@ -37,6 +37,26 @@ fn app(state: Arc<AppState>) -> axum::Router {
 
 fn app_clone(state: &Arc<AppState>) -> axum::Router {
     handlers::router(Arc::clone(state))
+}
+
+/// A publisher signature over `manifest` and `wasm` for the name and version the manifest's handshake states
+/// (empty when it states none), made as `specforge publish` makes one.
+fn signed(manifest: &str, wasm: &[u8]) -> String {
+    let value: serde_json::Value = serde_json::from_str(manifest).unwrap_or_default();
+    let field = |key: &str| {
+        value["handshake"][key]
+            .as_str()
+            .unwrap_or_default()
+            .to_string()
+    };
+    specforge_registry_client::SigningKey::from_bytes(&[7; 32])
+        .sign(&SignedContent::of(
+            &field("name"),
+            &field("version"),
+            wasm,
+            manifest,
+        ))
+        .to_json()
 }
 
 fn multipart_body(manifest: &str, wasm: &[u8], signature: Option<&str>) -> Body {
@@ -95,11 +115,7 @@ async fn name_mismatch_is_rejected() {
             &raw,
             "@test%2Fsigned-ext",
             "2.0.0",
-            multipart_body(
-                VALID_MANIFEST,
-                WASM,
-                Some(r#"{"sig":"x","keyId":"y","pubkey":"z","signedAt":"now"}"#),
-            ),
+            multipart_body(VALID_MANIFEST, WASM, Some(&signed(VALID_MANIFEST, WASM))),
         ))
         .await
         .unwrap();
@@ -128,7 +144,7 @@ async fn non_wasm_bytes_are_rejected() {
             multipart_body(
                 VALID_MANIFEST,
                 b"not a wasm module",
-                Some(r#"{"sig":"x","keyId":"y","pubkey":"z","signedAt":"now"}"#),
+                Some(&signed(VALID_MANIFEST, b"not a wasm module")),
             ),
         ))
         .await
@@ -159,7 +175,7 @@ async fn invalid_manifest_schema_is_rejected() {
             multipart_body(
                 r#"{"description":"no name or version"}"#,
                 WASM,
-                Some(r#"{"sig":"x","keyId":"y","pubkey":"z","signedAt":"now"}"#),
+                Some(&signed(r#"{"description":"no name or version"}"#, WASM)),
             ),
         ))
         .await
@@ -182,8 +198,7 @@ async fn publish_rate_limit_returns_429() {
     let raw = auth::create_token(&state.database, None, "pub", Some(90), false);
     let router = app(state);
 
-    // The signature object content is irrelevant to the validation contract;
-    // dedup prevents version reuse, so vary versions per attempt.
+    // Dedup prevents version reuse, so vary versions per attempt.
     for version in ["1.0.0", "1.0.1"] {
         let manifest = VALID_MANIFEST.replace("1.0.0", version);
         let response = router
@@ -192,11 +207,7 @@ async fn publish_rate_limit_returns_429() {
                 &raw,
                 "@test%2Fsigned-ext",
                 version,
-                multipart_body(
-                    &manifest,
-                    WASM,
-                    Some(r#"{"sig":"x","keyId":"y","pubkey":"z","signedAt":"now"}"#),
-                ),
+                multipart_body(&manifest, WASM, Some(&signed(&manifest, WASM))),
             ))
             .await
             .unwrap();
@@ -210,11 +221,7 @@ async fn publish_rate_limit_returns_429() {
             &raw,
             "@test%2Fsigned-ext",
             "1.0.2",
-            multipart_body(
-                &manifest,
-                WASM,
-                Some(r#"{"sig":"x","keyId":"y","pubkey":"z","signedAt":"now"}"#),
-            ),
+            multipart_body(&manifest, WASM, Some(&signed(&manifest, WASM))),
         ))
         .await
         .unwrap();
@@ -346,11 +353,7 @@ mod ownership {
         let manifest = format!(
             r#"{{"handshake":{{"protocol_version":"1","name":"{name}","version":"{version}","peer_dependencies":[],"sandbox_policy":null}}}}"#
         );
-        multipart_body(
-            &manifest,
-            WASM,
-            Some(r#"{"sig":"aa","keyId":"bb","pubkey":"cc","signedAt":"now"}"#),
-        )
+        multipart_body(&manifest, WASM, Some(&signed(&manifest, WASM)))
     }
 
     #[tokio::test]
@@ -466,8 +469,6 @@ async fn json_of(response: axum::response::Response) -> serde_json::Value {
     .unwrap()
 }
 
-const SIGNATURE: &str = r#"{"sig":"x","keyId":"y","pubkey":"z","signedAt":"now"}"#;
-
 #[specforge_test_macros::test(
     behavior = "publish_to_registry",
     verify = "the registry refuses a manifest that is not an extension declaration"
@@ -484,7 +485,7 @@ async fn a_manifest_that_is_not_a_declaration_is_refused() {
             &raw,
             "@test%2Fsigned-ext",
             "1.0.0",
-            multipart_body(legacy, WASM, Some(SIGNATURE)),
+            multipart_body(legacy, WASM, Some(&signed(legacy, WASM))),
         ))
         .await
         .unwrap();
@@ -515,7 +516,7 @@ async fn description_and_keywords_come_from_the_declaration() {
             &raw,
             "@test%2Fsigned-ext",
             "1.0.0",
-            multipart_body(manifest, WASM, Some(SIGNATURE)),
+            multipart_body(manifest, WASM, Some(&signed(manifest, WASM))),
         ))
         .await
         .unwrap();
@@ -671,7 +672,7 @@ async fn the_server_answers_in_these_json_shapes() {
             &token,
             "@test%2Fsigned-ext",
             "1.0.0",
-            multipart_body(VALID_MANIFEST, WASM, Some(SIGNATURE)),
+            multipart_body(VALID_MANIFEST, WASM, Some(&signed(VALID_MANIFEST, WASM))),
         ))
         .await
         .unwrap();
@@ -796,11 +797,6 @@ async fn publish_signed_ext(
     (status, json_of(response).await)
 }
 
-fn sha256_hex(bytes: &[u8]) -> String {
-    use sha2::{Digest, Sha256};
-    hex::encode(Sha256::digest(bytes))
-}
-
 // bug: plan 12 §3 R1, flipped by T4
 #[tokio::test]
 async fn signatures_that_are_not_signatures_are_stored_today() {
@@ -808,20 +804,20 @@ async fn signatures_that_are_not_signatures_are_stored_today() {
     let state = app_state(dir.path(), 100);
     let token = auth::create_token(&state.database, None, "pub", Some(90), false);
     let router = app_clone(&state);
-    for (version, signature, key_id) in [
+    for (version, signature) in [
         (
             "1.0.0",
             r#"{"sig":"x","keyId":"y","pubkey":"z","signedAt":"now"}"#,
-            "y",
         ),
-        ("1.0.1", "hello", ""),
-        ("1.0.2", r#"{"sig":"aa"}"#, ""),
+        ("1.0.1", "hello"),
+        ("1.0.2", r#"{"sig":"aa"}"#),
     ] {
         let manifest = VALID_MANIFEST.replace("1.0.0", version);
         let (status, receipt) =
             publish_signed_ext(&router, &token, version, &manifest, WASM, signature).await;
         assert_eq!(status, StatusCode::CREATED, "{version}: {receipt}");
-        assert_eq!(receipt["key_id"], key_id, "{version}");
+        // The key id is read through the typed signature: none of these has one.
+        assert_eq!(receipt["key_id"], "", "{version}");
     }
 }
 
@@ -831,21 +827,14 @@ async fn a_signature_over_other_bytes_is_stored_today() {
     let dir = tempfile::tempdir().unwrap();
     let state = app_state(dir.path(), 100);
     let token = auth::create_token(&state.database, None, "pub", Some(90), false);
-    let key = specforge_registry_client::SigningKey::from_bytes(&[7; 32]);
-    let signature = key.sign_package(
-        "@test/signed-ext",
-        "1.0.0",
-        &sha256_hex(b"\0asm-other"),
-        &sha256_hex(VALID_MANIFEST.as_bytes()),
-        "2026-10-11T00:00:00+00:00",
-    );
+    let signature = signed(VALID_MANIFEST, b"\0asm-other");
     let (status, receipt) = publish_signed_ext(
         &app_clone(&state),
         &token,
         "1.0.0",
         VALID_MANIFEST,
         WASM,
-        &serde_json::to_string(&signature).unwrap(),
+        &signature,
     )
     .await;
     assert_eq!(status, StatusCode::CREATED, "{receipt}");
@@ -857,22 +846,15 @@ async fn a_signature_of_another_version_is_stored_today() {
     let dir = tempfile::tempdir().unwrap();
     let state = app_state(dir.path(), 100);
     let token = auth::create_token(&state.database, None, "pub", Some(90), false);
-    let key = specforge_registry_client::SigningKey::from_bytes(&[7; 32]);
     // Made for 1.0.0, replayed with the 1.0.1 manifest at 1.0.1.
-    let signature = key.sign_package(
-        "@test/signed-ext",
-        "1.0.0",
-        &sha256_hex(WASM),
-        &sha256_hex(VALID_MANIFEST.as_bytes()),
-        "2026-10-11T00:00:00+00:00",
-    );
+    let signature = signed(VALID_MANIFEST, WASM);
     let (status, receipt) = publish_signed_ext(
         &app_clone(&state),
         &token,
         "1.0.1",
         &VALID_MANIFEST.replace("1.0.0", "1.0.1"),
         WASM,
-        &serde_json::to_string(&signature).unwrap(),
+        &signature,
     )
     .await;
     assert_eq!(status, StatusCode::CREATED, "{receipt}");

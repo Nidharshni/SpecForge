@@ -2,7 +2,6 @@
 //! signed upload (ADR 0045). Each test runs the adapter over a recording in-memory client (ADR 0044) as a
 //! user whose files live in a temporary directory, never in `~/.specforge`.
 
-use sha2::{Digest, Sha256};
 use specforge_ops::OpErrorKind;
 use specforge_ops::extension::Trust;
 use specforge_ops::registry::testing::declaration;
@@ -13,9 +12,8 @@ use specforge_package::Version;
 use specforge_protocol_types::ExtensionDeclaration;
 use specforge_registry_client::credentials::{CredentialEntry, CredentialStore};
 use specforge_registry_client::testing::{CallKind, MemoryClient};
-use specforge_registry_client::{
-    PackageSignature, RegistryError, verify_signature, write_credentials,
-};
+use specforge_registry_client::{RegistryError, write_credentials};
+use specforge_registry_wire::SignedContent;
 use specforge_test_macros::test as specforge_test;
 use tempfile::TempDir;
 
@@ -95,13 +93,6 @@ impl Pkg {
             declaration: &self.declaration,
         }
     }
-}
-
-fn sha256(bytes: &[u8]) -> String {
-    Sha256::digest(bytes)
-        .iter()
-        .map(|b| format!("{b:02x}"))
-        .collect()
 }
 
 #[specforge_test(
@@ -336,16 +327,16 @@ fn a_package_is_signed_with_the_users_key() {
         .unwrap();
 
     let call = world.client.calls().remove(0);
-    let signature: PackageSignature = serde_json::from_str(&call.signature.unwrap()).unwrap();
-    assert_eq!(signature.key_id, published.key_id);
-    verify_signature(
-        "@acme/x",
-        "1.0.0",
-        &sha256(package.upload().wasm),
-        &sha256(call.manifest.unwrap().as_bytes()),
-        &signature,
-    )
-    .unwrap();
+    let signature = call.signature.unwrap();
+    assert_eq!(signature.key_id(), published.key_id);
+    signature
+        .verify(&SignedContent::of(
+            "@acme/x",
+            "1.0.0",
+            package.upload().wasm,
+            &call.manifest.unwrap(),
+        ))
+        .unwrap();
 }
 
 #[test]

@@ -188,26 +188,19 @@ mod tests {
     use crate::SigningKey;
 
     fn signed_response(key: &SigningKey, manifest_json: &str, wasm: &[u8]) -> PackageMetadata {
-        use sha2::{Digest, Sha256};
-        let hash = |d: &[u8]| {
-            let mut h = Sha256::new();
-            h.update(d);
-            hex::encode(h.finalize())
-        };
-        let sig = key.sign_package(
-            "@acme/tool",
-            "1.0.0",
-            &hash(wasm),
-            &hash(manifest_json.as_bytes()),
-            "2026-09-24T00:00:00+00:00",
+        use chrono::TimeZone;
+        use specforge_registry_wire::{SignedContent, sha256_hex};
+        let sig = key.sign_at(
+            &SignedContent::of("@acme/tool", "1.0.0", wasm, manifest_json),
+            chrono::Utc.with_ymd_and_hms(2026, 9, 24, 0, 0, 0).unwrap(),
         );
         PackageMetadata {
             name: "@acme/tool".to_string(),
             version: "1.0.0".to_string(),
             wasm_url: String::new(),
-            sha256: hash(wasm),
-            signature: serde_json::to_string(&sig).unwrap(),
-            key_id: sig.key_id.clone(),
+            sha256: sha256_hex(wasm),
+            signature: sig.to_json(),
+            key_id: sig.key_id(),
             manifest: manifest_json.to_string(),
             ..Default::default()
         }
@@ -401,8 +394,4 @@ mod tests {
             check_and_pin("@acme/tool", &response, tampered, true, &always, &store).unwrap_err();
         assert_eq!(err.code, "R-TRUST-002");
     }
-
-    // Keep the unused import referenced when hex is only used in helpers.
-    #[allow(unused_imports)]
-    use sha2::Digest as _;
 }

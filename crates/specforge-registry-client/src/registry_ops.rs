@@ -1,38 +1,29 @@
 #![allow(clippy::result_large_err)]
 
-use sha2::{Digest, Sha256};
 use specforge_common::{Diagnostic, codes};
 
 use super::registry_client::{RegistryClient, RegistryError};
 use super::registry_config::{RegistryConfig, RegistryCredential};
 use specforge_package::{PackageName, Version};
 use specforge_protocol_types::ExtensionDeclaration;
-use specforge_registry_wire::PackageMetadata;
+use specforge_registry_wire::{PackageMetadata, PackageSignature, SignedContent, sha256_hex};
 
-/// Compute the hex-encoded SHA256 digest of the given data.
-fn hex_sha256(data: &[u8]) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(data);
-    format!("{:x}", hasher.finalize())
-}
-
-/// Publish to a registry, optionally signing the package.
+/// Publish to a registry, signed with `key`.
 ///
 /// The package's manifest is its declaration (ADR 0012), serialized once —
-/// the uploaded bytes, the `manifest_sha256` inside the signature payload,
-/// and the stored manifest are byte-identical.
-/// When `signing` is provided, the upload carries a [`PackageSignature`] over
-/// `{name, version, wasm_sha256, manifest_sha256, signed_at}`.
-/// `credential`, when provided, authenticates the upload.
-/// A version the registry already holds is refused by the registry (R007): a
-/// published version is immutable. Returns the registry URL on success.
+/// the uploaded bytes, the manifest digest the signature covers, and the
+/// stored manifest are byte-identical. The upload carries `key`'s
+/// [`PackageSignature`] over its [`SignedContent`]. `credential`, when
+/// provided, authenticates the upload. A version the registry already holds
+/// is refused by the registry (R007): a published version is immutable.
+/// Returns the registry URL on success.
 pub fn publish_to_registry(
     package: &[u8],
     declaration: &ExtensionDeclaration,
     registry: &RegistryConfig,
     credential: Option<&RegistryCredential>,
     client: &dyn RegistryClient,
-    signing: Option<&crate::SigningKey>,
+    key: &crate::SigningKey,
 ) -> Result<String, Diagnostic> {
     // What is published is a package: a name and a version (ADR 0036).
     let invalid = |message: String| RegistryError::InvalidPackage { message }.to_diagnostic();
@@ -51,25 +42,21 @@ pub fn publish_to_registry(
         )
     })?;
 
-    // Sign when a key is provided: the payload binds the exact uploaded
-    // manifest bytes and the wasm hash to the publisher key.
-    let signature = signing.map(|key| {
-        let signature = key.sign_package(
-            declaration.name(),
-            declaration.version(),
-            &hex_sha256(package),
-            &hex_sha256(manifest_json.as_bytes()),
-            &chrono::Utc::now().to_rfc3339(),
-        );
-        serde_json::to_string(&signature).expect("signature serialization cannot fail")
-    });
+    // The signature binds the exact uploaded manifest bytes and the wasm hash to the publisher key.
+    let content = SignedContent::of(
+        declaration.name(),
+        declaration.version(),
+        package,
+        &manifest_json,
+    );
+    let signature = key.sign(&content);
 
     client
         .publish(
             package,
             declaration,
             &manifest_json,
-            signature.as_deref(),
+            &signature,
             registry,
             credential,
         )
@@ -78,7 +65,7 @@ pub fn publish_to_registry(
 
 /// Verify SHA256 integrity of downloaded bytes against an expected hash.
 pub fn verify_registry_integrity(data: &[u8], expected_sha256: &str) -> Result<(), Diagnostic> {
-    let actual = hex_sha256(data);
+    let actual = sha256_hex(data);
     if actual == expected_sha256 {
         Ok(())
     } else {
@@ -118,47 +105,44 @@ pub fn verify_package_signature(
     }
 
     let code = codes::R_TRUST_002;
-    let signature: crate::PackageSignature =
-        serde_json::from_str(&response.signature).map_err(|e| {
-            Diagnostic::new(
-                code,
-                format!(
-                    "unparseable package signature for '{}': {}",
-                    response.name, e
-                ),
-            )
-            .with_suggestion("refuse this package; the registry response is malformed".to_string())
-        })?;
+    let signature = PackageSignature::parse(&response.signature).map_err(|why| {
+        Diagnostic::new(
+            code,
+            format!(
+                "unparseable package signature for '{}': {why}",
+                response.name
+            ),
+        )
+        .with_suggestion("refuse this package; the registry response is malformed".to_string())
+    })?;
 
     // Cross-check the server-extracted key id against the signature object:
     // a mismatch means registry metadata was edited independently of the
     // signature (or is stale).
-    if !response.key_id.is_empty() && response.key_id != signature.key_id {
+    let key_id = signature.key_id();
+    if !response.key_id.is_empty() && response.key_id != key_id {
         return Err(Diagnostic::new(
             codes::R_TRUST_004,
             format!(
                 "metadata inconsistency for '{}': registry says key '{}' but signature carries '{}'",
-                response.name, response.key_id, signature.key_id
+                response.name, response.key_id, key_id
             ),
         )
         .with_suggestion("refuse this package and verify the registry".to_string()));
     }
 
-    let manifest_sha256 = hex_sha256(response.manifest.as_bytes());
-    let wasm_sha256 = hex_sha256(wasm_bytes);
-    crate::verify_signature(
+    let content = SignedContent::of(
         &response.name,
         &response.version,
-        &wasm_sha256,
-        &manifest_sha256,
-        &signature,
-    )
-    .map_err(|message| {
+        wasm_bytes,
+        &response.manifest,
+    );
+    signature.verify(&content).map_err(|why| {
         Diagnostic::new(
             code,
             format!(
-                "signature verification failed for '{}': {}",
-                response.name, message
+                "signature verification failed for '{}': {why}",
+                response.name
             ),
         )
         .with_suggestion(
@@ -166,28 +150,5 @@ pub fn verify_package_signature(
         )
     })?;
 
-    Ok(TrustCheck::Verified {
-        key_id: signature.key_id,
-    })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn hex_sha256_produces_correct_hash() {
-        // Known SHA256 of empty byte slice
-        let hash = hex_sha256(b"");
-        assert_eq!(
-            hash,
-            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-        );
-    }
-
-    #[test]
-    fn hex_sha256_deterministic() {
-        let data = b"hello world";
-        assert_eq!(hex_sha256(data), hex_sha256(data));
-    }
+    Ok(TrustCheck::Verified { key_id })
 }

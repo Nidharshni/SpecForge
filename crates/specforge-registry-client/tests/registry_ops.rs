@@ -7,7 +7,7 @@ use specforge_registry_client::testing::{Call, CallKind, MemoryClient, package};
 use specforge_registry_client::{
     RegistryClient, RegistryConfig, RegistryCredential, RegistryError, SigningKey,
 };
-use specforge_registry_wire::{PackageMetadata, path};
+use specforge_registry_wire::{PackageMetadata, PackageSignature, SignedContent, path};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -40,6 +40,11 @@ const TOKEN: &str = "publisher-token";
 
 fn accepted() -> RegistryCredential {
     RegistryCredential::new("default", TOKEN)
+}
+
+/// The publisher's signing key.
+fn key() -> SigningKey {
+    SigningKey::from_bytes(&[7; 32])
 }
 
 fn client() -> MemoryClient {
@@ -86,7 +91,7 @@ fn publish_computes_sha256() {
         &registry,
         Some(&accepted()),
         &client,
-        None,
+        &key(),
     )
     .unwrap();
     assert!(url.contains("@test"));
@@ -121,7 +126,7 @@ fn a_version_the_registry_holds_is_refused_with_r007() {
         &registry,
         Some(&accepted()),
         &client,
-        None,
+        &key(),
     )
     .unwrap_err();
     assert_eq!(err.severity, Severity::Error);
@@ -156,7 +161,7 @@ fn publish_returns_registry_url_on_success() {
         &registry,
         Some(&accepted()),
         &client,
-        None,
+        &key(),
     )
     .unwrap();
     assert_eq!(url, expected);
@@ -176,7 +181,7 @@ fn publish_threads_credential_to_client() {
         &registry,
         Some(&credential),
         &client,
-        None,
+        &key(),
     )
     .unwrap();
     assert_eq!(
@@ -195,7 +200,7 @@ fn publish_threads_credential_to_client() {
         &registry,
         None,
         &anonymous,
-        None,
+        &key(),
     )
     .unwrap_err();
     assert_eq!(err.code, "R001");
@@ -284,38 +289,36 @@ fn publish_signs_package_when_key_provided() {
         &registry,
         Some(&accepted()),
         &client,
-        Some(&key),
+        &key,
     )
     .unwrap();
 
-    let sigs: Vec<Option<String>> = publishes(&client)
-        .into_iter()
-        .map(|call| call.signature)
-        .collect();
-    assert_eq!(sigs.len(), 1);
-    let sig: specforge_registry_client::PackageSignature =
-        serde_json::from_str(sigs[0].as_deref().expect("signature present")).unwrap();
-    assert_eq!(sig.key_id, key.key_id());
-    assert_eq!(sig.public_key, key.public_key_hex());
+    let calls = publishes(&client);
+    assert_eq!(calls.len(), 1);
+    let sig: &PackageSignature = calls[0].signature.as_ref().expect("signature present");
+    let manifest_json = calls[0].manifest.as_deref().expect("manifest sent");
+    sig.verify(&SignedContent::of(
+        "@test/ext",
+        "1.0.0",
+        b"wasm-bytes",
+        manifest_json,
+    ))
+    .expect("the signature verifies over what was uploaded");
+    assert_eq!(sig.key_id(), key.key_id());
 }
 
 // bug: plan 12 §3 R2, flipped by T4
 #[test]
 fn the_memory_client_stores_a_signature_that_does_not_verify_today() {
-    use sha2::{Digest, Sha256};
-    let sha256 = |bytes: &[u8]| hex::encode(Sha256::digest(bytes));
     let registry = default_registry();
     let declaration = minimal_manifest();
     let manifest = serde_json::to_string(&declaration).unwrap();
-    let key = SigningKey::from_bytes(&[7; 32]);
-    let signature = key.sign_package(
+    let signature = key().sign(&SignedContent::of(
         "@test/ext",
         "1.0.0",
-        &sha256(b"\0asm other"),
-        &sha256(manifest.as_bytes()),
-        "2026-10-11T00:00:00+00:00",
-    );
-    let signature = serde_json::to_string(&signature).unwrap();
+        b"\0asm other",
+        &manifest,
+    ));
     let client = client();
 
     client
@@ -323,7 +326,7 @@ fn the_memory_client_stores_a_signature_that_does_not_verify_today() {
             b"\0asm wasm",
             &declaration,
             &manifest,
-            Some(&signature),
+            &signature,
             &registry,
             Some(&accepted()),
         )
@@ -336,30 +339,5 @@ fn the_memory_client_stores_a_signature_that_does_not_verify_today() {
             None,
         )
         .unwrap();
-    assert_eq!(served.signature, signature);
-}
-
-// B:publish_to_registry — verify unit "unsigned publish sends no signature"
-#[test]
-fn publish_without_key_sends_no_signature() {
-    let registry = default_registry();
-    let manifest = minimal_manifest();
-    let client = client();
-
-    publish_to_registry(
-        b"wasm-bytes",
-        &manifest,
-        &registry,
-        Some(&accepted()),
-        &client,
-        None,
-    )
-    .unwrap();
-    assert_eq!(
-        publishes(&client)
-            .into_iter()
-            .map(|call| call.signature)
-            .collect::<Vec<_>>(),
-        vec![None]
-    );
+    assert_eq!(served.signature, signature.to_json());
 }

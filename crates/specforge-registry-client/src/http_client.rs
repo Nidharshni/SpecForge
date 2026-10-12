@@ -4,8 +4,8 @@ use reqwest::StatusCode;
 use reqwest::blocking::{Client, RequestBuilder, Response};
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, RETRY_AFTER};
 use specforge_registry_wire::{
-    ErrorBody, PackageMetadata, SearchHit, SearchQuery, SearchResults, TokenVerified, VersionList,
-    form, path,
+    ErrorBody, PackageMetadata, PackageSignature, SearchHit, SearchQuery, SearchResults,
+    TokenVerified, VersionList, form, path,
 };
 
 use super::registry_client::{RegistryClient, RegistryError};
@@ -162,7 +162,7 @@ impl RegistryClient for HttpRegistryClient {
         package: &[u8],
         declaration: &ExtensionDeclaration,
         manifest_json: &str,
-        signature: Option<&str>,
+        signature: &PackageSignature,
         registry: &RegistryConfig,
         credential: Option<&RegistryCredential>,
     ) -> Result<String, RegistryError> {
@@ -190,7 +190,12 @@ impl RegistryClient for HttpRegistryClient {
                 .map(|d| d.as_nanos())
                 .unwrap_or(0)
         );
-        let body = form::body(&boundary, manifest_json, package, signature);
+        let body = form::body(
+            &boundary,
+            manifest_json,
+            package,
+            Some(&signature.to_json()),
+        );
 
         let mut request = self
             .client

@@ -6,7 +6,7 @@ use std::time::Duration;
 use specforge_package::PackageName;
 use specforge_package::Version;
 use specforge_protocol_types::ExtensionDeclaration;
-use specforge_registry_wire::{PackageMetadata, SearchHit, SearchQuery};
+use specforge_registry_wire::{PackageMetadata, PackageSignature, SearchHit, SearchQuery};
 
 use crate::registry_client::{RegistryClient, RegistryError};
 use crate::registry_config::{RegistryConfig, RegistryCredential};
@@ -147,7 +147,7 @@ impl<C: RegistryClient> RegistryClient for Retrying<C> {
         package: &[u8],
         declaration: &ExtensionDeclaration,
         manifest_json: &str,
-        signature: Option<&str>,
+        signature: &PackageSignature,
         registry: &RegistryConfig,
         credential: Option<&RegistryCredential>,
     ) -> Result<String, RegistryError> {

@@ -4,7 +4,7 @@ use super::registry_config::{RegistryConfig, RegistryCredential};
 use specforge_package::PackageName;
 use specforge_package::Version;
 use specforge_protocol_types::ExtensionDeclaration;
-use specforge_registry_wire::{PackageMetadata, SearchHit, SearchQuery};
+use specforge_registry_wire::{PackageMetadata, PackageSignature, SearchHit, SearchQuery};
 
 /// Errors that can occur during registry operations.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -134,19 +134,14 @@ pub trait RegistryClient: Send + Sync {
         credential: Option<&RegistryCredential>,
     ) -> Result<Vec<SearchHit>, RegistryError>;
 
-    /// Publish an extension package (Wasm binary + manifest) to the registry.
-    ///
-    /// `manifest_json` is the exact serialization uploaded as the `manifest`
-    /// multipart field — the signature (when present) covers its SHA256.
-    /// `signature`, when provided, is the wire signature object JSON from
-    /// [`crate::signing::PackageSignature`]. `credential`, when provided,
-    /// authenticates the upload as an `Authorization: Bearer` header.
+    /// Upload `package` with `manifest_json` (the exact text `signature` covers) and `signature`; `credential`,
+    /// when given, authenticates it as an `Authorization: Bearer` header. A publish is always signed.
     fn publish(
         &self,
         package: &[u8],
         declaration: &ExtensionDeclaration,
         manifest_json: &str,
-        signature: Option<&str>,
+        signature: &PackageSignature,
         registry: &RegistryConfig,
         credential: Option<&RegistryCredential>,
     ) -> Result<String, RegistryError>;

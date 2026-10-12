@@ -252,6 +252,12 @@ mod tests {
         verify = "PackageMetadata is the JSON a registry serves for one version"
     )]
     fn package_metadata_is_this_json() {
+        use chrono::TimeZone;
+        let signature = PackageSignature::sign(
+            &ed25519_dalek::SigningKey::from_bytes(&[7; 32]),
+            &SignedContent::of("@acme/tool", "1.0.0", b"\0asm", "{}"),
+            chrono::Utc.with_ymd_and_hms(2026, 10, 8, 0, 0, 0).unwrap(),
+        );
         let signed = PackageMetadata {
             name: "@acme/tool".into(),
             version: "1.0.0".into(),
@@ -262,8 +268,8 @@ mod tests {
             publisher: "acct_1".into(),
             published_at: "2026-10-08T00:00:00+00:00".into(),
             wasm_url: "/packages/@acme%2Ftool/1.0.0/download".into(),
-            signature: r#"{"sig":"x","keyId":"k1","pubkey":"z","signedAt":"now"}"#.into(),
-            key_id: "k1".into(),
+            signature: signature.to_json(),
+            key_id: signature.key_id(),
             manifest: "{}".into(),
         };
         is_this_json(
@@ -278,8 +284,8 @@ mod tests {
                 "publisher": "acct_1",
                 "published_at": "2026-10-08T00:00:00+00:00",
                 "wasm_url": "/packages/@acme%2Ftool/1.0.0/download",
-                "signature": r#"{"sig":"x","keyId":"k1","pubkey":"z","signedAt":"now"}"#,
-                "key_id": "k1",
+                "signature": signature.to_json(),
+                "key_id": signature.key_id(),
                 "manifest": "{}",
             }),
         );

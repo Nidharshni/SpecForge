@@ -4,17 +4,17 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
-use sha2::{Digest, Sha256};
 use specforge_package::PackageName;
 use specforge_package::Version;
 use specforge_protocol_types::{DeclaredCategory, ExtensionDeclaration};
 use specforge_registry_wire::{
-    DEFAULT_SEARCH_LIMIT, PackageMetadata, SearchHit, SearchQuery, path,
+    DEFAULT_SEARCH_LIMIT, PackageMetadata, PackageSignature, SearchHit, SearchQuery, SignedContent,
+    path, sha256_hex,
 };
 
 use crate::registry_client::{RegistryClient, RegistryError};
 use crate::registry_config::{RegistryConfig, RegistryCredential};
-use crate::{PackageSignature, SigningKey, TrustCheck};
+use crate::{SigningKey, TrustCheck};
 
 /// One call a [`MemoryClient`] answered (or failed), in order.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -26,8 +26,8 @@ pub struct Call {
     pub subject: String,
     /// What the call sent: a read's credential, a publish's or an authenticate's.
     pub credential: Option<RegistryCredential>,
-    /// A publish's signature object.
-    pub signature: Option<String>,
+    /// A publish's signature.
+    pub signature: Option<PackageSignature>,
     /// A publish's manifest JSON.
     pub manifest: Option<String>,
 }
@@ -375,7 +375,7 @@ impl RegistryClient for MemoryClient {
         package: &[u8],
         declaration: &ExtensionDeclaration,
         manifest_json: &str,
-        signature: Option<&str>,
+        signature: &PackageSignature,
         registry: &RegistryConfig,
         credential: Option<&RegistryCredential>,
     ) -> Result<String, RegistryError> {
@@ -390,7 +390,7 @@ impl RegistryClient for MemoryClient {
         self.begin(
             Call {
                 credential: credential.cloned(),
-                signature: signature.map(str::to_string),
+                signature: Some(signature.clone()),
                 manifest: Some(manifest_json.to_string()),
                 ..Self::call(
                     CallKind::Publish,
@@ -423,12 +423,8 @@ impl RegistryClient for MemoryClient {
             manifest_json,
             None,
         );
-        if let Some(signature) = signature {
-            metadata.key_id = serde_json::from_str::<PackageSignature>(signature)
-                .map(|s| s.key_id)
-                .unwrap_or_default();
-            metadata.signature = signature.to_string();
-        }
+        metadata.key_id = signature.key_id();
+        metadata.signature = signature.to_json();
         self.store(registry, metadata, package.to_vec());
         Ok(format!(
             "{}{}",
@@ -454,10 +450,6 @@ impl RegistryClient for MemoryClient {
     }
 }
 
-fn sha256_hex(data: &[u8]) -> String {
-    hex::encode(Sha256::digest(data))
-}
-
 fn package_metadata(
     name: &str,
     version: &str,
@@ -475,19 +467,11 @@ fn package_metadata(
         })
         .unwrap_or_default();
     let (signature, key_id) = match key {
-        Some(key) => {
-            let signature = key.sign_package(
-                name,
-                version,
-                &sha256,
-                &sha256_hex(manifest.as_bytes()),
-                &chrono::Utc::now().to_rfc3339(),
-            );
-            (
-                serde_json::to_string(&signature).expect("a signature serializes"),
-                key.key_id(),
-            )
-        }
+        Some(key) => (
+            key.sign(&SignedContent::of(name, version, wasm, manifest))
+                .to_json(),
+            key.key_id(),
+        ),
         None => (String::new(), String::new()),
     };
     PackageMetadata {
@@ -564,7 +548,7 @@ pub fn assert_client_contract(
             registry,
             Some(credential),
             client,
-            Some(&key),
+            &key,
         )
         .unwrap_or_else(|d| panic!("K2: publishing {version} fails: {d:?}"));
         let expected = format!(
@@ -599,9 +583,12 @@ pub fn assert_client_contract(
     assert_eq!(metadata.description, "Contract tool", "K4: description");
     assert_eq!(metadata.keywords, ["contract"], "K4: keywords");
     assert_eq!(metadata.key_id, key.key_id(), "K4: key_id");
-    assert!(
-        serde_json::from_str::<PackageSignature>(&metadata.signature).is_ok(),
-        "K4: the signature parses as a PackageSignature"
+    assert_eq!(
+        PackageSignature::parse(&metadata.signature)
+            .expect("K4: the signature parses as a PackageSignature")
+            .key_id(),
+        key.key_id(),
+        "K4: the signature is the publisher key's"
     );
     assert!(!metadata.wasm_url.is_empty(), "K4: wasm_url");
 
@@ -629,12 +616,18 @@ pub fn assert_client_contract(
 
     // K7
     let manifest = serde_json::to_string(declaration).unwrap();
+    let signature = key.sign(&SignedContent::of(
+        "@contract/tool",
+        "1.1.0",
+        wasm,
+        &manifest,
+    ));
     let error = client
         .publish(
             wasm,
             declaration,
             &manifest,
-            None,
+            &signature,
             registry,
             Some(credential),
         )
@@ -674,8 +667,14 @@ pub fn assert_client_contract(
     // K10
     let next = contract_declaration("2.0.0");
     let manifest = serde_json::to_string(&next).unwrap();
+    let signature = key.sign(&SignedContent::of(
+        "@contract/tool",
+        "2.0.0",
+        b"\0asm next",
+        &manifest,
+    ));
     let error = client
-        .publish(b"\0asm next", &next, &manifest, None, registry, None)
+        .publish(b"\0asm next", &next, &manifest, &signature, registry, None)
         .unwrap_err();
     assert!(
         matches!(error, RegistryError::Unauthorized { .. }),
@@ -756,7 +755,7 @@ pub fn assert_private_client_contract(
         registry,
         Some(credential),
         client,
-        Some(&key),
+        &key,
     )
     .expect("K-P3: publishing with the credential");
     let metadata = client
