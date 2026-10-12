@@ -270,9 +270,14 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   `add` installs and `publish` uploads it; a `specforge.json` entry and a lock entry are read as one.
 - **Version requirement**: which version of a package is asked for: `latest` (the highest release,
   a pre-release only when there is none), one full version, or a SemVer requirement read as Cargo
-  reads one (`VersionRequirement`); `pick` is the one rule that chooses among published versions,
-  run by ops for `add` and `update`. The `Registry` port lists versions and fetches one; it does not
-  resolve.
+  reads one (`VersionRequirement`); `pick` is the one rule that chooses among published versions:
+  ops runs it for `add`, and every registry's search lists a package at what it picks for `latest`
+  (`pick_from`). The `Registry` port lists versions and fetches one; it does not resolve.
+- **Upgrade target**: what `update` moves a locked registry extension to: the highest published version
+  newer than the locked one that the update's reach admits, `^locked` (`Reach::Compatible`) or any
+  (`Reach::Major`, `--major`), a pre-release only on the locked pre-release's own `MAJOR.MINOR.PATCH`. None
+  means up to date, never a lower version; a lock version that is not SemVer moves to what `latest` picks
+  (`specforge_package::upgrade_target`, ADR 0036 as amended).
 - **Peer requirement**: what an extension declares it needs from another extension: the peer's name,
   a SemVer range read as Cargo reads one, and whether the peer may be absent
   (`specforge_package::peers::PeerRequirement`, ADR 0050). One rule judges it (`peers::verdict`): an
