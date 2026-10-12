@@ -179,13 +179,14 @@ fn a_signature_the_client_would_refuse_is_refused_and_the_version_stays_publisha
         .download(&metadata.wasm_url, &registry, None)
         .unwrap();
     let home = tempfile::tempdir().unwrap();
-    let trusted = specforge_registry_client::trust_flow::check_and_pin(
+    let trusted = specforge_registry_client::trust_flow::check(
         "@test/signed-ext",
         &metadata,
         &bytes,
         false,
         &|_| false,
         &home.path().join("known-keys.json"),
+        None,
     )
     .expect("the published package verifies");
     assert!(matches!(

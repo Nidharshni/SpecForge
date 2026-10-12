@@ -55,15 +55,19 @@ pub fn known_keys_path() -> PathBuf {
     crate::credentials::user_dir().join("known-keys.json")
 }
 
-/// Load the trust store at `path`; a missing file is an empty store.
-pub fn load_known_keys_at(path: &std::path::Path) -> KnownKeys {
-    std::fs::read_to_string(path)
-        .ok()
-        .and_then(|content| serde_json::from_str(&content).ok())
-        .unwrap_or_default()
+/// The trust store at `path`. A missing file is an empty store. A file that can't be read, or isn't
+/// the store's JSON, is an error saying why: a store read as empty would trust any key and drop
+/// `denied_keys`.
+pub fn load_known_keys_at(path: &std::path::Path) -> Result<KnownKeys, String> {
+    match std::fs::read_to_string(path) {
+        Ok(content) => serde_json::from_str(&content).map_err(|e| e.to_string()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(KnownKeys::default()),
+        Err(e) => Err(e.to_string()),
+    }
 }
 
-/// Persist the trust store to `path`.
+/// Save the store to `path` whole: written beside it, owner-only (0600 on Unix), then renamed over
+/// it, so a failed save leaves the previous file as it was.
 pub fn save_known_keys_at(path: &std::path::Path, keys: &KnownKeys) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
@@ -71,9 +75,17 @@ pub fn save_known_keys_at(path: &std::path::Path, keys: &KnownKeys) -> Result<()
     }
     let json = serde_json::to_string_pretty(keys)
         .map_err(|e| format!("failed to serialize known keys: {}", e))?;
-    std::fs::write(path, json).map_err(|e| format!("failed to write {}: {}", path.display(), e))?;
-    restrict_permissions(path);
-    Ok(())
+    let mut temp_name = path.file_name().unwrap_or_default().to_os_string();
+    temp_name.push(".tmp");
+    let temp = path.with_file_name(temp_name);
+    let saved = std::fs::write(&temp, json).and_then(|()| {
+        restrict_permissions(&temp);
+        std::fs::rename(&temp, path)
+    });
+    saved.map_err(|e| {
+        let _ = std::fs::remove_file(&temp);
+        format!("failed to write {}: {}", path.display(), e)
+    })
 }
 
 #[cfg(unix)]
@@ -92,7 +104,7 @@ mod tests {
     #[test]
     fn missing_file_loads_empty_store() {
         let dir = tempfile::tempdir().unwrap();
-        let store = load_known_keys_at(&dir.path().join("known-keys.json"));
+        let store = load_known_keys_at(&dir.path().join("known-keys.json")).unwrap();
         assert_eq!(store, KnownKeys::default());
         assert!(store.pin_for("@acme/x").is_none());
     }
@@ -108,11 +120,45 @@ mod tests {
         store.denied_keys.push("key-3333".to_string());
         save_known_keys_at(&path, &store).unwrap();
 
-        let loaded = load_known_keys_at(&path);
+        let loaded = load_known_keys_at(&path).unwrap();
         assert_eq!(loaded.pin_for("@acme/x"), Some("key-1111"));
         assert!(loaded.is_trusted("key-2222"));
         assert!(loaded.is_denied("key-3333"));
         assert!(!loaded.is_denied("key-1111"));
+    }
+
+    #[test]
+    fn a_malformed_store_is_an_error_naming_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("known-keys.json");
+        std::fs::write(&path, r#"{"pins":{},}"#).unwrap();
+
+        let why = load_known_keys_at(&path).unwrap_err();
+
+        assert!(why.contains("trailing comma"), "{why}");
+        // A path that is a directory can't be read either.
+        assert!(load_known_keys_at(dir.path()).is_err());
+    }
+
+    #[test]
+    fn a_save_replaces_the_file_whole() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("known-keys.json");
+        let mut store = KnownKeys::default();
+        store.pin("@acme/x", "key-1111");
+        save_known_keys_at(&path, &store).unwrap();
+        store.pin("@acme/x", "key-2222");
+        save_known_keys_at(&path, &store).unwrap();
+
+        assert_eq!(
+            load_known_keys_at(&path).unwrap().pin_for("@acme/x"),
+            Some("key-2222")
+        );
+        let files: Vec<_> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .map(|e| e.unwrap().file_name())
+            .collect();
+        assert_eq!(files, ["known-keys.json"], "no temp file is left beside it");
     }
 
     #[test]

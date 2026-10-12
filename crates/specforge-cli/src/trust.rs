@@ -35,6 +35,7 @@ mod tests {
             package: "@x/a".into(),
             pinned: "k1".into(),
             offered: "k2".into(),
+            source: specforge_registry_client::PinSource::User,
         }
     }
 

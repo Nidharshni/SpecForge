@@ -778,7 +778,7 @@ fn add_installs_a_signed_package_and_pins_its_key() {
         "{}",
         String::from_utf8_lossy(&output.stdout)
     );
-    let known = specforge_registry_client::load_known_keys_at(&known_keys(&home));
+    let known = specforge_registry_client::load_known_keys_at(&known_keys(&home)).unwrap();
     assert_eq!(known.pin_for("@sdk/greet"), Some(key.key_id().as_str()));
     let lock = std::fs::read_to_string(dir.path().join("specforge.lock")).unwrap();
     assert!(
@@ -807,7 +807,7 @@ fn add_refuses_a_package_signed_by_another_key_than_the_pinned_one() {
     let output = add_greet(&dir, &home, &["--allow-unsigned"]);
 
     assert_refused(&output, &dir, "R-TRUST-003");
-    let known = specforge_registry_client::load_known_keys_at(&known_keys(&home));
+    let known = specforge_registry_client::load_known_keys_at(&known_keys(&home)).unwrap();
     assert_eq!(known.pin_for("@sdk/greet"), Some(pinned.key_id().as_str()));
 }
 
@@ -1501,6 +1501,7 @@ impl Trusting {
 
     fn pinned(&self, name: &str) -> Option<String> {
         specforge_registry_client::load_known_keys_at(&known_keys(&self.home))
+            .unwrap()
             .pin_for(name)
             .map(str::to_string)
     }

@@ -1795,11 +1795,14 @@ Level: error
 ## R-TRUST-006
 
 ```
-R-TRUST-006: Known-keys file not writable
+R-TRUST-006: Known-keys file unusable
 
-The publisher key pinned for the package couldn't be saved to
-`~/.specforge/known-keys.json`. Check the permissions on that file and its
-directory.
+Your known-keys file (`~/.specforge/known-keys.json`) can't be read as the store
+of publisher pins, or the pins an install accepted can't be saved to it. Nothing
+is installed either way: a store read as empty would trust any key and lose your
+`denied_keys`, and an install whose pin can't be saved is put back. Fix the
+file's JSON, or move it aside (every package is then trusted on first use
+again), and check the permissions on the file and its directory.
 
 Owner: core
 Level: error

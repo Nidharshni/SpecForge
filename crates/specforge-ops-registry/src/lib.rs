@@ -349,16 +349,40 @@ impl Registry for ConfiguredRegistry {
         declaration_names(name, version, &declaration)?; // 3
 
         // Publisher signature and the TOFU pin policy.
-        let trusted = specforge_registry_client::trust_flow::check_and_pin(
+        let known_keys = self.user.known_keys();
+        let trusted = specforge_registry_client::trust_flow::check(
             &metadata.name,
             &metadata,
             &wasm,
             allow_unsigned,
             &self.decider(trust),
-            &self.user.known_keys(),
+            &known_keys,
+            None,
         )
         .map_err(OpError::from)?; // 4
         self.fetched.lock().unwrap().extend(trusted.diagnostics);
+        // Until the lock plan pins what it accepted (ADR 0059), the fetch records the pin itself.
+        let pin = match &trusted.accepted {
+            Accepted::Signed {
+                key_id,
+                first_use: true,
+            } => Some(specforge_registry_client::NewPin {
+                package: &metadata.name,
+                key_id,
+                replaces: None,
+            }),
+            Accepted::Repinned { key_id, previous } => Some(specforge_registry_client::NewPin {
+                package: &metadata.name,
+                key_id,
+                replaces: Some(previous),
+            }),
+            Accepted::Signed { .. } | Accepted::Unsigned => None,
+        };
+        if let Some(pin) = pin {
+            let repinned = specforge_registry_client::trust_flow::record(&[pin], &known_keys)
+                .map_err(OpError::from)?;
+            self.fetched.lock().unwrap().extend(repinned);
+        }
 
         Ok(Package {
             name: name.clone(),
@@ -368,10 +392,7 @@ impl Registry for ConfiguredRegistry {
             declaration,
             publisher: match trusted.accepted {
                 Accepted::Unsigned => Publisher::Unsigned,
-                Accepted::Signed { key_id, pinned_now } => Publisher::Signed {
-                    key_id,
-                    first_use: pinned_now,
-                },
+                Accepted::Signed { key_id, first_use } => Publisher::Signed { key_id, first_use },
                 Accepted::Repinned { key_id, previous } => Publisher::Repinned { key_id, previous },
             },
         })

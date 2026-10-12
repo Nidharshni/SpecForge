@@ -153,33 +153,40 @@ impl Project {
     }
 }
 
-// Plan 09 T0: characterization. Flipped by T2.
-#[test]
-fn pin_an_unreadable_known_keys_file_is_read_as_empty() {
+#[specforge_test(
+    behavior = "pin_publisher_key",
+    verify = "a known-keys store that can't be read refuses the install and is left as it was"
+)]
+fn an_unreadable_known_keys_file_refuses_the_fetch_and_is_left_as_it_was() {
     let key = SigningKey::generate();
     let project = Project::on(Reply::signed(&key));
     std::fs::create_dir_all(project.known_keys().parent().unwrap()).unwrap();
     // A trailing comma: not JSON.
-    std::fs::write(
-        project.known_keys(),
-        format!(
-            r#"{{"pins":{{}},"trusted_keys":[],"denied_keys":["{}"],}}"#,
-            key.key_id()
-        ),
-    )
-    .unwrap();
+    let broken = format!(
+        r#"{{"pins":{{}},"trusted_keys":[],"denied_keys":["{}"],}}"#,
+        key.key_id()
+    );
+    std::fs::write(project.known_keys(), &broken).unwrap();
 
-    project
-        .fetch(false, Trust::Refuse)
-        .expect("today: the denied key passed");
+    let error = project.fetch(false, Trust::Refuse).unwrap_err();
 
-    let known = load_known_keys_at(&project.known_keys());
-    assert!(known.denied_keys.is_empty(), "today: the deny list is gone");
-    assert_eq!(project.pinned(), Some(key.key_id()));
+    assert_eq!(error.code, "R-TRUST-006", "{error:?}");
+    assert!(
+        error.message.contains("trailing comma"),
+        "{}",
+        error.message
+    );
+    assert_eq!(
+        std::fs::read_to_string(project.known_keys()).unwrap(),
+        broken
+    );
 }
 
 fn pinned_at(path: &Path) -> Option<String> {
-    load_known_keys_at(path).pin_for(NAME).map(str::to_string)
+    load_known_keys_at(path)
+        .unwrap()
+        .pin_for(NAME)
+        .map(str::to_string)
 }
 
 #[specforge_test(
@@ -397,7 +404,7 @@ fn a_registry_answering_with_another_package_is_refused() {
     assert_eq!(error.code, "R-TRUST-004", "{error:?}");
     assert!(error.message.contains("@evil/tool"), "{error:?}");
     assert_eq!(project.pinned(), Some(pinned.key_id()));
-    let known = load_known_keys_at(&project.known_keys());
+    let known = load_known_keys_at(&project.known_keys()).unwrap();
     assert_eq!(
         known.pin_for("@evil/tool"),
         None,

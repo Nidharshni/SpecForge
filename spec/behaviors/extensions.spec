@@ -935,6 +935,7 @@ behavior pin_publisher_key "Pin Publisher Key" {
     repin_reported      "A re-pinned key is reported as W156 naming both key ids"
     first_use_named     "A first-use pin is named in the operation's outcome (the publisher is pinned now)"
     surface_decides     "Whether to accept a key change is asked of the surface that can ask (the CLI's terminal); MCP and --format json refuse it"
+    store_fails_closed  "A known-keys store that can't be read refuses the install with R-TRUST-006 and is left as it was"
   }
   contract   """
     Trust on first use: the first time a signed package verifies, its
@@ -958,6 +959,7 @@ behavior pin_publisher_key "Pin Publisher Key" {
   verify integration "consent to a key change is reported as W156"
   verify integration "a key change is decided by the surface that can ask"
   verify unit "the CLI asks its terminal about a key change: yes at the prompt consents, and with nobody to ask nothing is asked"
+  verify integration "a known-keys store that can't be read refuses the install and is left as it was"
 }
 
 behavior configure_registries "Configure Registries" {
