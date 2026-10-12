@@ -26,6 +26,7 @@ mod publish;
 mod query;
 mod review;
 mod schema;
+mod setup;
 mod stats;
 mod trace;
 mod trace_support;

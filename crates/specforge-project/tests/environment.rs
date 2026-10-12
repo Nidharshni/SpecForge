@@ -200,3 +200,50 @@ fn an_environment_assembles_from_the_parts_it_is_given() {
         ["the configured extension did not load — operating in structural-only mode"]
     );
 }
+
+/// Characterization: an entry's load diagnostics are not together today.
+#[test]
+fn the_load_reports_failures_and_unpinned_entries_before_every_warning() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path();
+    std::fs::write(
+        root.join("specforge.json"),
+        json!({"extensions": ["@acme/a", "@acme/missing", "@acme/b"]}).to_string(),
+    )
+    .unwrap();
+    specforge_installed::testing::install(root, &["@acme/a", "@acme/b"]);
+    // `@acme/b`'s lock entry pins no hash: it loads with W149.
+    let mut lock = match Installed::at(root).lock().clone() {
+        specforge_installed::LockState::Read(lock) => lock,
+        other => panic!("{other:?}"),
+    };
+    for entry in &mut lock.entries {
+        if entry.name.as_str() == "@acme/b" {
+            entry.wasm_hash = String::new();
+        }
+    }
+    specforge_installed::write_lock_file(&lock, &root.join("specforge.lock")).unwrap();
+    // `@acme/a` asks for more execution time than the host grants: W153.
+    let rt: SharedRuntime = Arc::new(
+        InProcessRuntime::new()
+            .with(|| {
+                let mut meta = ExtensionMeta::new("@acme/a", "1.0.0");
+                meta.sandbox_policy = Some(SandboxPolicy {
+                    max_execution_ms: Some(120_000),
+                    ..Default::default()
+                });
+                ContributionsBuilder::new(meta)
+            })
+            .with(|| ContributionsBuilder::new(ExtensionMeta::new("@acme/b", "1.0.0"))),
+    );
+
+    let env = Environment::load(&specforge_common::ProjectRoot::of(root).unwrap(), Some(rt));
+
+    // Today the failures and notices come first, then every warning.
+    assert_eq!(
+        codes_among(&env, &["W153", "E028", "W149"]),
+        ["E028", "W149", "W153"],
+        "{:#?}",
+        env.diagnostics().collect::<Vec<_>>()
+    );
+}

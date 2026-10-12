@@ -697,6 +697,8 @@ behavior run_doctor_check "Run Doctor Check" {
   verify unit "doctor lists all enhancements grouped by entity kind"
   verify unit "doctor reports conflicts with resolution suggestions"
   verify unit "doctor detects shadowed grammar-level constructs"
+  verify unit "doctor reports every diagnostic the environment reports as one finding, with the part of the setup it is about and the diagnostic's severity"
+  verify integration "doctor fails whenever check fails on a diagnostic of the project's setup"
   verify unit "doctor --format json produces valid JSON output"
   verify unit "doctor reports an extension that fails to load (E028, E070) as an error"
   verify unit "doctor reports a missing or changed installed binary once, with the remedy its load gives"
