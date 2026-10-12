@@ -139,7 +139,7 @@ link) as depending on it. Fixed here: only a `depends_on` reference is a depende
   the CLI writes E028 to stderr as one `{code, message}` object, the shape commands write
   their own errors in, rather than the diagnostic line.
 - **Extension-command errors go to stderr; core commands' `--format json` errors go to
-  stdout.** Core commands print `{"error", "code", "suggestion"}` on stdout under `json`
+  stdout.** Core commands print `{"error", "code"}`, with `"suggestion"` when there is one, on stdout under `json`
   (`specforge_cli::outcome::Refusal`), extension commands print `ProductSurfaceError` on
   stderr. The difference is known and kept for now: changing core's would break every script
   reading core errors from stdout, for no consumer that needs the two alike. Reopen it when
