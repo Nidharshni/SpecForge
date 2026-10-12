@@ -30,9 +30,8 @@ printf 'invariant   unformatted_one   "X"   {\n guarantee "g"\n}\n' >spec/zz_unf
 git add spec/zz_unformatted.spec
 expect refused "an unformatted .spec"
 
-f=$(rg -l 'verify = "' crates/specforge-registry/tests | head -1)
-sed -i.bak '0,/verify = "/s//verify = "NOT DECLARED /' "$f" 2>/dev/null || perl -0pi -e 's/verify = "/verify = "NOT DECLARED /' "$f"
-rm -f "$f.bak"
+f=$(grep -rl 'verify = "' crates/specforge-registry/tests | head -1)
+perl -0pi -e 's/verify = "/verify = "NOT DECLARED /' "$f"
 git add "$f"
 expect refused "a verify text the spec does not declare"
 
