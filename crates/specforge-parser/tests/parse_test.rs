@@ -2492,8 +2492,45 @@ fn the_blocks_after_an_unclosed_body_are_parsed() {
     assert!(result.entities[0].fields.get("status").is_some());
     assert_eq!(result.errors.len(), 1, "errors: {:?}", result.errors);
     let error = &result.errors[0];
-    assert!(error.message.contains("missing '}'"), "{}", error.message);
-    assert_eq!((error.span.start_line, error.span.start_col), (2, 14));
+    assert_eq!(
+        error.message,
+        "syntax error: unclosed block — missing closing '}'; it was ended before the block on line 4"
+    );
+    assert_eq!((error.span.start_line, error.span.start_col), (1, 16));
+}
+
+#[specforge_test(
+    behavior = "recover_from_syntax_errors",
+    verify = "an unclosed body is reported at its opening brace, naming the line where it was ended"
+)]
+fn an_unclosed_body_at_the_end_names_no_line() {
+    let result = parse("behavior a \"A\" {\n  status done\n", "test.spec");
+    assert_eq!(result.errors.len(), 1, "errors: {:?}", result.errors);
+    let error = &result.errors[0];
+    assert_eq!(
+        error.message,
+        "syntax error: unclosed block — missing closing '}'"
+    );
+    assert_eq!((error.span.start_line, error.span.start_col), (1, 16));
+}
+
+#[specforge_test(
+    behavior = "recover_from_syntax_errors",
+    verify = "an unclosed body is reported at its opening brace, naming the line where it was ended"
+)]
+fn an_unclosed_string_takes_its_bodys_error() {
+    let source = "port pay \"Pay\" {\n  direction inbound\n  description \"\"\"Takes payments\n  method charge(amount: String) -> String\n\nbehavior settle \"Settle\" {\n  contract \"Settles.\"\n}\n";
+    let result = parse(source, "test.spec");
+    let ids: Vec<&str> = result.entities.iter().map(|e| e.id.raw.as_str()).collect();
+    assert!(ids.contains(&"settle"), "entities: {ids:?}");
+    assert_eq!(result.errors.len(), 1, "errors: {:?}", result.errors);
+    assert!(
+        result.errors[0]
+            .message
+            .contains("unclosed triple-quoted string"),
+        "{}",
+        result.errors[0].message
+    );
 }
 
 #[specforge_test(
@@ -2541,7 +2578,12 @@ fn a_half_typed_field_ends_its_body_at_the_next_form() {
     let ids: Vec<&str> = result.entities.iter().map(|e| e.id.raw.as_str()).collect();
     assert_eq!(ids, ["a1", "b1", "c1"], "errors: {:?}", result.errors);
     assert_eq!(result.errors.len(), 1, "errors: {:?}", result.errors);
-    assert_eq!(result.errors[0].span.start_line, 3);
+    let error = &result.errors[0];
+    assert_eq!(
+        error.message,
+        "syntax error: unclosed block — missing closing '}'; it was ended before the block on line 5"
+    );
+    assert_eq!((error.span.start_line, error.span.start_col), (1, 17));
 }
 
 #[specforge_test(

@@ -90,9 +90,6 @@ type GraphInputs {
   // kind), each pair written lesser label first, sorted: a two-hop cycle
   // through both labels of one pair is not a reference cycle
   bidirectional_pairs      string[] @readonly
-  // Kinds whose bodies an extension parses: the core grammar's parse
-  // errors inside their entities are not reported
-  body_parser_kinds        string[] @readonly
   // kind.field of every registered reference field (none while no kind is
   // registered): its one value links as an edge
   single_reference_fields  string[] @readonly

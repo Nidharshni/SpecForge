@@ -172,13 +172,12 @@ impl RegistryBuild {
         &self.surfaces
     }
 
-    /// What the graph build reads of these declarations: body-parser kinds,
-    /// single and absent-target reference fields, inverse pairs, value
-    /// coercions and derived references (ADR 0032, amended). The one place
-    /// they are derived; `Environment::graph_config` adds the provider
-    /// schemes.
+    /// What the graph build reads of these declarations: single and
+    /// absent-target reference fields, inverse pairs, value coercions and
+    /// derived references (ADR 0032, amended). The one place they are
+    /// derived; `Environment::graph_config` adds the provider schemes.
     pub fn graph_inputs(&self) -> GraphInputs {
-        graph_inputs::derive(&self.declarations, &self.kinds, &self.fields)
+        graph_inputs::derive(&self.kinds, &self.fields)
     }
 
     /// Ask `verdicts` once for each `custom` rule's function, on an entity

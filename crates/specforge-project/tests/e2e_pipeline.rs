@@ -82,12 +82,10 @@ fn compile_with_builtins(
     )
 }
 
-// B:extension_owned_body_syntax — verify unit "port method body syntax does not surface parse errors"
-#[specforge_test(
-    behavior = "extension_owned_body_syntax",
-    verify = "extension-owned body syntax does not surface E001 parse errors"
-)]
-fn port_method_body_does_not_surface_parse_errors() {
+// Port method signatures are read by the core grammar: no E001, and none is
+// hidden (a kind's has_body_parser flag suppresses nothing).
+#[test]
+fn port_method_body_reads_without_a_parse_error() {
     let ctx = compile_with_builtins(
         &["@specforge/software"],
         &[(
@@ -106,9 +104,8 @@ port TaskRepository "Repo" {
     );
     let diagnostics = ctx.diagnostics();
 
-    // Port method signatures are extension-owned body syntax. The core grammar
-    // cannot parse them, but they must NOT surface as E001 parse errors to the
-    // user — the `port` entity itself parses fine (direction, category, verify).
+    // Port method signatures are read by the core grammar: no E001, and none
+    // is hidden — the `port` entity parses fine (direction, category, verify).
     let e001: Vec<_> = diagnostics.iter().filter(|d| d.code == "E001").collect();
     assert!(
         e001.is_empty(),
@@ -117,12 +114,8 @@ port TaskRepository "Repo" {
     );
 }
 
-// B:extension_owned_body_syntax — verify unit "type inline-union field syntax does not surface parse errors"
-#[specforge_test(
-    behavior = "extension_owned_body_syntax",
-    verify = "extension-owned body syntax does not surface E001 parse errors"
-)]
-fn type_inline_union_field_does_not_surface_parse_errors() {
+#[test]
+fn type_inline_union_field_reads_without_a_parse_error() {
     let ctx = compile_with_builtins(
         &["@specforge/software"],
         &[(
@@ -137,9 +130,8 @@ type Manifest "M" {
     );
     let diagnostics = ctx.diagnostics();
 
-    // Inline union field types (`string | string[]`) are extension-owned body
-    // syntax the core grammar does not parse, but they must NOT surface as E001
-    // parse errors — the `type` entity itself still resolves its other fields.
+    // Inline union field types (`string | string[]`) are read by the core
+    // grammar: no E001 — the `type` entity still resolves its other fields.
     let e001: Vec<_> = diagnostics.iter().filter(|d| d.code == "E001").collect();
     assert!(
         e001.is_empty(),
@@ -194,15 +186,11 @@ port Broken "Broken" {
     );
 }
 
-// Syntax the core grammar really fails on (a parenthesised annotation, a
-// literal union, an inline object): the E001s it produces inside a `type`
-// body are suppressed because `type` declares a body parser (plan 01, D10:
-// the suppression was dead code, filtering a vector that held no E001).
-#[specforge_test(
-    behavior = "extension_owned_body_syntax",
-    verify = "extension-owned body syntax does not surface E001 parse errors"
-)]
-fn type_body_syntax_the_grammar_rejects_does_not_surface_parse_errors() {
+// A parenthesised annotation and an inline object in a `type` body are syntax
+// the core grammar does not read. Their E001s are reported like any other: a
+// kind's has_body_parser flag hides nothing.
+#[test]
+fn type_body_syntax_the_grammar_rejects_is_reported() {
     let ctx = compile_with_builtins(
         &["@specforge/software"],
         &[(
@@ -218,10 +206,7 @@ fn type_body_syntax_the_grammar_rejects_does_not_surface_parse_errors() {
     let diagnostics = ctx.diagnostics();
 
     let e001: Vec<_> = diagnostics.iter().filter(|d| d.code == "E001").collect();
-    assert!(
-        e001.is_empty(),
-        "a body-parser kind's body must not produce E001 parse errors, got: {e001:?}"
-    );
+    assert_eq!(e001.len(), 2, "{e001:?}");
     assert!(
         ctx.graph().node("Money").is_some(),
         "the type itself is still in the graph"
@@ -503,8 +488,11 @@ invariant security "Security Invariant" {
     );
 }
 
-#[test]
-fn an_unclosed_port_body_reports_no_syntax_error() {
+#[specforge_test(
+    behavior = "recover_from_syntax_errors",
+    verify = "a string or body left unclosed is reported in every entity, whatever its kind"
+)]
+fn an_unclosed_port_body_reports_its_syntax_error() {
     let ctx = compile_with_builtins(
         &["@specforge/software"],
         &[(
@@ -514,11 +502,21 @@ fn an_unclosed_port_body_reports_no_syntax_error() {
     );
     let diagnostics = ctx.diagnostics();
     let e001: Vec<_> = diagnostics.iter().filter(|d| d.code == "E001").collect();
-    assert!(e001.is_empty(), "{e001:?}");
+    assert_eq!(e001.len(), 1, "{e001:?}");
+    let span = e001[0].span.as_ref().expect("a span");
+    assert_eq!((span.start_line, span.start_col), (2, 16));
+    assert!(
+        e001[0].message.contains("unclosed block"),
+        "{}",
+        e001[0].message
+    );
 }
 
-#[test]
-fn an_unclosed_string_in_a_port_body_reports_no_syntax_error() {
+#[specforge_test(
+    behavior = "recover_from_syntax_errors",
+    verify = "a string or body left unclosed is reported in every entity, whatever its kind"
+)]
+fn an_unclosed_string_in_a_port_body_reports_its_syntax_error() {
     let ctx = compile_with_builtins(
         &["@specforge/software"],
         &[(
@@ -528,5 +526,12 @@ fn an_unclosed_string_in_a_port_body_reports_no_syntax_error() {
     );
     let diagnostics = ctx.diagnostics();
     let e001: Vec<_> = diagnostics.iter().filter(|d| d.code == "E001").collect();
-    assert!(e001.is_empty(), "{e001:?}");
+    assert_eq!(e001.len(), 1, "{e001:?}");
+    let span = e001[0].span.as_ref().expect("a span");
+    assert_eq!((span.start_line, span.start_col), (4, 15));
+    assert!(
+        e001[0].message.contains("unclosed string"),
+        "{}",
+        e001[0].message
+    );
 }

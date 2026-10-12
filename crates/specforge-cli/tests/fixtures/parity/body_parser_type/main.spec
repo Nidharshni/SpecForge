@@ -1,8 +1,8 @@
-// A type body in the software extension's own syntax. The type keyword has
-// a body parser, so the core grammar's E001s inside it are meant to be
-// suppressed (plan 01, D10).
+// A type body in the software extension's own syntax. The core grammar
+// reads every line of it as a field, so its parse errors, if any, would be
+// reported like any other.
 type Money "Money" {
-  amount   Decimal @min(0)
-  currency "USD" | "EUR"
-  meta     { key: string }
+  amount   Decimal @min
+  currency "USD"
+  meta     string
 }

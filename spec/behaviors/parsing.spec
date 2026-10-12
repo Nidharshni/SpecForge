@@ -68,7 +68,11 @@ behavior recover_from_syntax_errors "Recover From Syntax Errors" {
     for the members it reaches, and the parser cuts the source before every
     form start the grammar's tree still missed (the same form-start rule,
     form_starts) and parses each piece alone, so every form after a broken
-    one is parsed.
+    one is parsed. An unclosed body is reported at its opening brace,
+    naming the line where it was ended; a body whose closing brace an
+    unclosed string took is reported by the string alone. No parse error is
+    hidden: a string or body left unclosed is reported in every entity,
+    whatever its kind.
   """
   requires {
     error_recovery_enabled "SourceParser is initialized with error-recovery mode enabled"
@@ -89,6 +93,8 @@ behavior recover_from_syntax_errors "Recover From Syntax Errors" {
   verify unit "the grammar resumes at every top-level form of the repository's spec after an unclosed body"
   verify unit "a body member left half-typed ends where the next top-level form starts"
   verify unit "the parser resumes at every form start the grammar's tree missed"
+  verify unit "an unclosed body is reported at its opening brace, naming the line where it was ended"
+  verify integration "a string or body left unclosed is reported in every entity, whatever its kind"
   verify unit "completely invalid syntax produces error with location"
   verify unit "missing opening brace produces a parse error"
   verify contract "Recover From Syntax Errors: syntax error recovery holds — error_recovery_enabled, valid_utf8_input, valid_blocks_preserved, errors_collected"
@@ -438,33 +444,4 @@ behavior provide_indentation_queries "Provide Indentation Queries" {
   verify unit "indents.scm indents after opening bracket"
   verify unit "indents.scm dedents on closing bracket"
   verify integration "indents.scm loads in Tree-sitter runtime and produces expected indent/dedent"
-}
-
-// -- Extension Body Parsing ---------------------------------------------------
-
-behavior extension_owned_body_syntax "Extension-Owned Body Syntax" {
-  features   [extension_body_parsing]
-  invariants [zero_domain_knowledge_core]
-  category   validation
-  types      [Entity, KindRegistryEntry, Diagnostic]
-  requires {
-    all_files_parsed_ready "All entity blocks have been parsed"
-    kinds_registered       "The loaded extensions' entity kinds are registered, with their has_body_parser flags"
-  }
-  ensures {
-    body_errors_suppressed "E001 parse errors inside an entity whose kind declares has_body_parser are not reported"
-    other_errors_reported  "Every other E001 is reported unchanged"
-  }
-  contract   """
-    An extension may declare that it owns an entity kind's body syntax
-    (the kind's has_body_parser flag): software's type and port bodies
-    hold field types and method signatures the core grammar does not
-    parse. An E001 parse error that starts inside an entity of such a
-    kind, in the same file, MUST NOT be reported, on a full build and
-    on every incremental rebuild (which uses the file's current
-    entities). The entity's other fields are parsed by the core field
-    parser as usual; no extension code runs on the body. Extensions
-    cannot contribute body parsers or grammars (ADR 0004 D5-a, ADR 0050).
-  """
-  verify integration "extension-owned body syntax does not surface E001 parse errors"
 }

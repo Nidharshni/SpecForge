@@ -81,10 +81,11 @@ fn parse_syntax(
     };
     let pieces = cst.pieces();
     let recovered = pieces.len() > 1 || pieces[0].unclosed().is_some();
-    for piece in pieces {
+    for (n, piece) in pieces.iter().enumerate() {
         let mut ctx = ParseContext::new(piece.text(), file_sym);
         ctx.row_offset = piece.row();
         ctx.limit = piece.unclosed().map(|_| piece.source_len());
+        ctx.next_piece_row = pieces.get(n + 1).map(|next| next.row());
         ctx.walk(piece.root());
         // Errors past the piece come from the appended delimiter, and an
         // error around the opening quote is the grammar tripping over the
@@ -189,9 +190,24 @@ struct ParseContext<'a> {
     /// Bytes of the piece that are real source; past this is the appended
     /// closing delimiter, and positions there clamp to its start.
     limit: Option<usize>,
+    /// The source row (0-based) of the next piece, if one follows: where
+    /// this piece's last body was ended.
+    next_piece_row: Option<usize>,
     imports: Vec<ImportDeclaration>,
     entities: Vec<Entity>,
     errors: Vec<ParseError>,
+}
+
+/// The top-level block `missing` is the closing `}` of: an entity, spec or
+/// define block, or a full ref, that is a child of the source file.
+fn top_level_body(missing: Node<'_>) -> Option<Node<'_>> {
+    let parent = missing.parent()?;
+    let top = match parent.kind() {
+        kind::ENTITY_BLOCK | kind::SPEC_BLOCK | kind::DEFINE_BLOCK => parent,
+        kind::REF_FULL => parent.parent()?,
+        _ => return None,
+    };
+    (top.parent()?.kind() == kind::SOURCE_FILE).then_some(parent)
 }
 
 impl<'a> ParseContext<'a> {
@@ -201,6 +217,7 @@ impl<'a> ParseContext<'a> {
             file_sym,
             row_offset: 0,
             limit: None,
+            next_piece_row: None,
             imports: Vec::new(),
             entities: Vec::new(),
             errors: Vec::new(),
@@ -296,6 +313,36 @@ impl<'a> ParseContext<'a> {
         }
     }
 
+    /// The error for a top-level body left unclosed: at its `{`, naming the
+    /// line of the form where it was ended, if one follows.
+    fn unclosed_body_error(&self, block: Node) -> ParseError {
+        let mut cursor = block.walk();
+        let open = block
+            .children(&mut cursor)
+            .find(|c| c.kind() == "{")
+            .unwrap_or(block);
+        let form = if block.kind() == kind::REF_FULL {
+            block.parent().unwrap_or(block)
+        } else {
+            block
+        };
+        let mut next = form.next_named_sibling();
+        while next.is_some_and(|n| n.kind() == kind::COMMENT) {
+            next = next.and_then(|n| n.next_named_sibling());
+        }
+        let line = next
+            .map(|n| n.start_position().row + self.row_offset)
+            .or(self.next_piece_row)
+            .map(|row| format!("; it was ended before the block on line {}", row + 1))
+            .unwrap_or_default();
+        ParseError {
+            message: format!("syntax error: unclosed block — missing closing '}}'{line}"),
+            span: self.span(open),
+            expected: Some("a closing '}'".to_string()),
+            found: None,
+        }
+    }
+
     /// Report every outermost ERROR or MISSING node under `node` that no
     /// already-reported error covers.
     fn report_unreported_errors(&mut self, node: Node) {
@@ -303,6 +350,18 @@ impl<'a> ParseContext<'a> {
             let span = self.span(node);
             let covered = self.errors.iter().any(|e| span_within(&span, &e.span));
             if covered {
+                return;
+            }
+            if node.is_missing()
+                && node.kind() == "}"
+                && let Some(block) = top_level_body(node)
+            {
+                // Past the piece's source, the appended closing quote took
+                // the body's `}`: the string's error stands for both.
+                if self.limit.is_none_or(|limit| node.start_byte() < limit) {
+                    let error = self.unclosed_body_error(block);
+                    self.errors.push(error);
+                }
                 return;
             }
             if node.is_missing() {
