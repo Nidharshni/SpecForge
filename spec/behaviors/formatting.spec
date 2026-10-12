@@ -294,7 +294,10 @@ behavior apply_format_rules "Apply Format Rules" {
     The formatting rule engine MUST walk the CST and emit formatting
     decisions for each whitespace region: keep, replace, insert, or remove.
     Rules cover indentation, spacing, alignment, wrapping, blank lines,
-    comments and imports. String literals, triple-quoted ones included, are
+    comments and imports. The formatted text ends every line with LF
+    (CRLF line endings become LF, inside string literals too) and ends with
+    exactly one newline; no blank line opens or closes it, and a blank text
+    formats to the empty text. String literals, triple-quoted ones included, are
     kept byte-for-byte: their text is a field's value. Statements keep their source
     order; only runs of imports are sorted. Field keys align to the longest
     key plus one; annotations of single-line values align in one column;
@@ -321,6 +324,7 @@ behavior apply_format_rules "Apply Format Rules" {
   verify unit "comment rules normalize spacing around inline comments"
   verify unit "multiline string literals are kept byte-for-byte"
   verify property "two files differing only in whitespace produce identical output after formatting"
+  verify unit "the formatted text has LF line endings and exactly one final newline"
   verify contract "Apply Format Rules: format rule application holds — cst_available, format_config_loaded, contribution_registry_available, deterministic_output, no_domain_logic, extension_rules_applied"
 }
 
@@ -392,6 +396,8 @@ behavior lsp_format_document "LSP Format Document" {
   verify unit "TextEdit coordinates are 0-indexed lines and columns"
   verify unit "TextEdit operations in a response do not overlap"
   verify integration "LSP format produces same result as CLI format"
+  verify integration "editor formatting reaches the text specforge format writes in one pass: blank lines removed, final newline added, CRLF made LF"
+  verify property "applying the formatting edits to the document gives the formatted text byte for byte"
   verify integration "parse errors in document trigger format_with_parse_errors delegation"
   verify performance "formats document within 50ms for files under 1000 lines"
   verify contract "LSP Format Document: LSP document formatting holds — document_open, format_config_loaded, textedit_list_returned, cli_parity_enforced, format_complete_emitted"
@@ -432,6 +438,7 @@ behavior lsp_format_range "LSP Format Range" {
   """
   verify unit "range is expanded to block boundaries"
   verify unit "range formatting matches full formatting for affected blocks"
+  verify unit "range formatting changes no byte outside the blocks it touches"
   verify integration "parse errors within range are left unchanged per format_with_parse_errors"
   verify unit "a region left unformatted is reported at its document lines"
   verify performance "formats range within 20ms for ranges under 200 lines"

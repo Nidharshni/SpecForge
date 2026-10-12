@@ -335,6 +335,162 @@ async fn lsp_format_matches_cli_format() {
     assert!(edited.contains("\n    contract"), "{edited}");
 }
 
+/// The round-7 probe rows (A-C1), as files of one project.
+const CONVERGE: [(&str, &str); 7] = [
+    (
+        "spec/body_blank.spec",
+        "behavior a \"A\" {\n\n  contract \"x\"\n}\n",
+    ),
+    (
+        "spec/between_blocks.spec",
+        "behavior a \"A\" {\n  contract \"x\"\n}\n\n\nbehavior b \"B\" {\n  contract \"y\"\n}\n",
+    ),
+    (
+        "spec/leading.spec",
+        "\n\n\nbehavior a \"A\" {\n  contract \"x\"\n}\n",
+    ),
+    (
+        "spec/trailing.spec",
+        "behavior a \"A\" {\n  contract \"x\"\n}\n\n\n",
+    ),
+    (
+        "spec/no_final_newline.spec",
+        "behavior a \"A\" {\n  contract \"x\"\n}",
+    ),
+    (
+        "spec/crlf.spec",
+        "behavior a \"A\" {\r\n  contract \"x\"\r\n}\r\n",
+    ),
+    (
+        "spec/misindented.spec",
+        "behavior a \"A\" {\n      contract \"x\"\n}\n",
+    ),
+];
+
+#[specforge_test(
+    behavior = "lsp_format_document",
+    verify = "editor formatting reaches the text specforge format writes in one pass: blank lines removed, final newline added, CRLF made LF"
+)]
+#[specforge_test(
+    invariant = "format_rule_determinism",
+    verify = "same input and config produce identical output across CLI and LSP"
+)]
+#[tokio::test]
+#[ignore = "fixed by T2"]
+async fn editor_formatting_reaches_the_cli_text_in_one_pass() {
+    use crate::session::{Session, uri_of};
+    use specforge_ops::format::{Mode, Request, run};
+    let (_dir, root) = format_project(&CONVERGE);
+    let outcome = run(&Request {
+        root: &specforge_common::ProjectRoot::of(&root).unwrap(),
+        paths: &[],
+        mode: Mode::Check,
+    });
+    let (mut session, _) = Session::start(Some(&root)).await;
+    for (path, text) in CONVERGE {
+        let file = root.join(path);
+        let uri = uri_of(&file);
+        session.open(&uri, text).await;
+        session.diagnostics(&uri).await;
+        let cli = &outcome
+            .changes
+            .iter()
+            .find(|c| c.path == file)
+            .unwrap_or_else(|| panic!("{path} would change"))
+            .after;
+
+        let edits = session.format(&uri).await;
+        let edited = apply_edits(text, edits.as_array().expect("an edit list"));
+        assert_eq!(&edited, cli, "{path}: {edits}");
+
+        // One pass: the result is canonical, so the next request has nothing to do.
+        session
+            .did_change(&uri, 2, vec![serde_json::json!({ "text": edited })])
+            .await;
+        session.diagnostics(&uri).await;
+        assert_eq!(session.format(&uri).await, serde_json::json!([]), "{path}");
+    }
+}
+
+#[specforge_test(
+    behavior = "lsp_format_range",
+    verify = "range formatting matches full formatting for affected blocks"
+)]
+#[tokio::test]
+#[ignore = "fixed by T2"]
+async fn range_formatting_removes_a_blank_line_in_its_block() {
+    let text =
+        "behavior a \"A\" {\n  contract \"x\"\n}\n\nbehavior b \"B\" {\n\n  contract \"y\"\n}\n";
+    let (_dir, root) = format_project(&[("spec/r.spec", text)]);
+    let (mut session, uri) = open_in(&root, "spec/r.spec").await;
+
+    let edits = session.range_formatting(&uri, 2, 4, 7).await["result"].clone();
+
+    assert_eq!(
+        apply_edits(text, edits.as_array().expect("an edit list")),
+        "behavior a \"A\" {\n  contract \"x\"\n}\n\nbehavior b \"B\" {\n  contract \"y\"\n}\n",
+        "{edits}"
+    );
+}
+
+/// Two blocks, CRLF, `b` misindented.
+const CRLF_TWO: &str = "behavior a \"A\" {\r\n  contract \"x\"\r\n}\r\n\r\nbehavior b \"B\" {\r\n      contract \"y\"\r\n}\r\n";
+/// Two blocks, `b` misindented, no final newline.
+const UNTERMINATED_TWO: &str =
+    "behavior a \"A\" {\n  contract \"x\"\n}\n\nbehavior b \"B\" {\n      contract \"y\"\n}";
+
+#[specforge_test(
+    behavior = "lsp_format_range",
+    verify = "range formatting changes no byte outside the blocks it touches"
+)]
+#[tokio::test]
+async fn range_formatting_changes_nothing_outside_its_blocks() {
+    let (_dir, root) = format_project(&[
+        ("spec/crlf.spec", CRLF_TWO),
+        ("spec/open.spec", UNTERMINATED_TWO),
+    ]);
+    let (mut session, _) = crate::session::Session::start(Some(&root)).await;
+    for (path, text) in [
+        ("spec/crlf.spec", CRLF_TWO),
+        ("spec/open.spec", UNTERMINATED_TWO),
+    ] {
+        let uri = crate::session::uri_of(&root.join(path));
+        session.open(&uri, text).await;
+        session.diagnostics(&uri).await;
+
+        let edits = session.range_formatting(&uri, 2, 4, 6).await["result"].clone();
+        let edited = apply_edits(text, edits.as_array().expect("an edit list"));
+
+        // Block `a` (lines 0-3) is outside the range: byte for byte, its CRLF included.
+        let block_b = text.match_indices('\n').nth(3).unwrap().0 + 1;
+        assert!(edited.starts_with(&text[..block_b]), "{path}: {edited:?}");
+        assert_eq!(edited.lines().nth(5), Some("  contract \"y\""), "{path}");
+        // The final newline is the whole document's to add, not a range's.
+        assert_eq!(edited.ends_with('\n'), text.ends_with('\n'), "{path}");
+    }
+}
+
+#[specforge_test(
+    behavior = "lsp_format_document",
+    verify = "TextEdit coordinates are 0-indexed lines and columns"
+)]
+#[tokio::test]
+async fn formatting_edits_are_zero_based_utf16_positions() {
+    // `é` is 2 bytes and 1 UTF-16 unit.
+    let text = "behavior a \"Café\"   {\n  contract \"x\"\n}\n";
+    let (_dir, root) = format_project(&[("spec/a.spec", text)]);
+    let (mut session, uri) = open_in(&root, "spec/a.spec").await;
+
+    // Today: the whole first line is replaced; its end is UTF-16 column 21 (22 bytes).
+    assert_eq!(
+        session.format(&uri).await,
+        serde_json::json!([{
+            "range": {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 21}},
+            "newText": "behavior a \"Café\" {"
+        }])
+    );
+}
+
 #[specforge_test(
     behavior = "lsp_format_range",
     verify = "a region left unformatted is reported at its document lines"

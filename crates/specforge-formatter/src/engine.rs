@@ -1271,6 +1271,62 @@ mod tests {
         assert_eq!(span.end_col, 4);
     }
 
+    const CRLF_TWO: &str = "behavior a \"A\" {\r\n  contract \"x\"\r\n}\r\n\r\nbehavior b \"B\" {\r\n      contract \"y\"\r\n}\r\n";
+
+    #[specforge_test_macros::test(
+        behavior = "lsp_format_range",
+        verify = "range formatting changes no byte outside the blocks it touches"
+    )]
+    #[ignore = "fixed by T1"]
+    fn a_range_keeps_every_byte_outside_its_blocks() {
+        let config = FormatConfig::default();
+        assert_eq!(
+            format_range(CRLF_TWO, 4, 6, &config).formatted,
+            "behavior a \"A\" {\r\n  contract \"x\"\r\n}\r\n\r\nbehavior b \"B\" {\n  contract \"y\"\n}\n"
+        );
+        assert_eq!(
+            format_range(CRLF_TWO, 0, 2, &config).formatted,
+            "behavior a \"A\" {\n  contract \"x\"\n}\n\r\nbehavior b \"B\" {\r\n      contract \"y\"\r\n}\r\n"
+        );
+    }
+
+    #[specforge_test_macros::test(
+        behavior = "lsp_format_range",
+        verify = "range formatting changes no byte outside the blocks it touches"
+    )]
+    fn a_range_on_the_unterminated_last_line_adds_no_newline() {
+        let source = "behavior a \"A\" {\n  contract \"x\"\n}\n\nbehavior b \"B\" {\n      contract \"y\"\n}";
+        assert_eq!(
+            format_range(source, 4, 6, &FormatConfig::default()).formatted,
+            "behavior a \"A\" {\n  contract \"x\"\n}\n\nbehavior b \"B\" {\n  contract \"y\"\n}"
+        );
+    }
+
+    #[specforge_test_macros::test(
+        behavior = "apply_format_rules",
+        verify = "the formatted text has LF line endings and exactly one final newline"
+    )]
+    fn the_formatted_text_has_lf_endings_and_one_final_newline() {
+        let canonical = "behavior a \"A\" {\n  contract \"x\"\n}\n";
+        for input in [
+            "behavior a \"A\" {\r\n  contract \"x\"\r\n}\r\n",
+            "behavior a \"A\" {\n  contract \"x\"\n}",
+            "\n\n\nbehavior a \"A\" {\n  contract \"x\"\n}\n\n\n",
+            "behavior a \"A\" {\r\n  contract \"x\"\r\n}",
+        ] {
+            assert_eq!(fmt(input), canonical, "{input:?}");
+        }
+        assert_eq!(fmt(""), "");
+        assert_eq!(fmt("\n\n"), "");
+        assert_eq!(fmt("// c\r\n"), "// c\n");
+        // A triple-quoted string's lines end in LF too (the parser reads it so).
+        let string = fmt("behavior a \"A\" {\r\n  contract \"\"\"\r\n    x\r\n  \"\"\"\r\n}");
+        assert!(
+            !string.contains('\r') && string.ends_with("}\n"),
+            "{string:?}"
+        );
+    }
+
     // --- Slice 10: compute_edits ---
 
     #[specforge_test_macros::test(
