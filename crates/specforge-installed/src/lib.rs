@@ -138,6 +138,17 @@ impl Installed {
         };
         format!("specforge add {specifier}")
     }
+
+    /// The publisher key id the lock records for `name`'s registry install;
+    /// `None` when the lock holds no registry install of it, or holds one
+    /// without a key (unsigned, or locked before signing), or can't be read.
+    pub fn locked_key(&self, name: &PackageName) -> Option<&str> {
+        self.lock
+            .entries()
+            .iter()
+            .find(|e| e.name == *name && e.source.is_registry())
+            .and_then(|e| e.key_id.as_deref())
+    }
 }
 
 #[cfg(test)]
@@ -181,6 +192,44 @@ mod tests {
                 PathBuf::from("/p/tools/greet.wasm"),
             ],
             "a builtin has no module and a name that is no package has none either"
+        );
+    }
+
+    #[test]
+    fn the_lock_answers_the_key_of_a_registry_install_only() {
+        let entry = |name: &str, source: &str, key: Option<&str>| LockFileEntry {
+            name: PackageName::parse(name).unwrap(),
+            version: "1.0.0".to_string(),
+            source: LockSource::parse(source),
+            wasm_hash: "hash".to_string(),
+            key_id: key.map(str::to_string),
+            peer_dependencies: Vec::new(),
+        };
+        let lock = LockFile {
+            entries: vec![
+                entry("@a/signed", "registry", Some("k1")),
+                entry("@a/unsigned", "registry", None),
+                entry("@a/local", "local:a.wasm", Some("k2")),
+            ],
+            ..Default::default()
+        };
+        let installed = Installed::with_lock(Path::new("/p"), LockState::Read(lock));
+        let key = |name: &str| installed.locked_key(&PackageName::parse(name).unwrap());
+
+        assert_eq!(key("@a/signed"), Some("k1"));
+        assert_eq!(key("@a/unsigned"), None);
+        assert_eq!(key("@a/local"), None, "a local install has no publisher");
+        assert_eq!(key("@a/absent"), None);
+        let unreadable = Installed::with_lock(
+            Path::new("/p"),
+            LockState::Unreadable(specforge_common::Diagnostic::new(
+                specforge_common::codes::E033,
+                "x",
+            )),
+        );
+        assert_eq!(
+            unreadable.locked_key(&PackageName::parse("@a/signed").unwrap()),
+            None
         );
     }
 

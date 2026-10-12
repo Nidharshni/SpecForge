@@ -772,10 +772,8 @@ fn apply<'a>(
                 named(several, specifier(at), error)
             })?;
             checked.commit_with(&config_path, || {
-                let edit = crate::config::enable(req.root.dir(), &names)?;
-                let changed = !edit.appended.is_empty();
-                enabled = Some(edit);
-                Ok(changed)
+                enabled = Some(crate::config::enable(req.root.dir(), &names)?);
+                Ok(())
             })?
         }
         _ => {

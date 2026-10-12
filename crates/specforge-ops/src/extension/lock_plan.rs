@@ -316,15 +316,15 @@ impl Checked<'_> {
             .map_err(|failed| OpError::from(failed.error).with_writes(Writes::of(failed.left)))
     }
 
-    /// [`Self::commit`], then `edit`, the `specforge.json` write at `config` that goes with it
-    /// (`Ok(changed)`). All or nothing, `edit` included.
+    /// [`Self::commit`], then `edit`, the `specforge.json` write at `config` that goes with it.
+    /// All or nothing, `edit` included.
     pub(crate) fn commit_with(
         self,
         config: &Path,
-        edit: impl FnOnce() -> Result<bool, OpError>,
+        edit: impl FnOnce() -> Result<(), OpError>,
     ) -> Result<Writes, OpError> {
         self.change
-            .commit_with(config, edit)
+            .commit_with(Some(config), edit)
             .map(|committed| Writes::of(committed.changed))
             .map_err(|failed| failed.error.with_writes(Writes::of(failed.left)))
     }
