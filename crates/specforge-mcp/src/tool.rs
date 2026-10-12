@@ -15,10 +15,10 @@ use specforge_common::{Diagnostic, Severity};
 use specforge_graph::Graph;
 
 use crate::args::{Argument, Arguments};
+use crate::events::EventSink;
 use crate::mutation::{Mutation, MutationArgs, MutationReply};
 use crate::protocol::{JsonRpcError, JsonRpcResponse, error_codes};
 use crate::reply::{Answered, Object, Source, Text};
-use crate::surface_call::Ran;
 use crate::target::{Call, Input, TargetSpec};
 use crate::types::McpToolDescriptor;
 use specforge_ops::{OpError, OpErrorKind};
@@ -254,13 +254,15 @@ pub trait Handled: Sized {
     /// A call refused before its handler ran (an undeclared name, arguments
     /// that do not read, a call target that refused): the refusal as it is
     /// for a read; for a mutation a failed mutation that wrote nothing
-    /// ([`crate::mutation::refused`]).
-    fn refused(error: Box<McpError>, tool: &'static str) -> Ran<ToolOutcome>;
+    /// ([`crate::mutation::refused`], recorded into `events`).
+    fn refused(error: Box<McpError>, tool: &'static str, events: &mut dyn EventSink)
+    -> ToolOutcome;
     /// The rest of a call whose handler ran: a read's reply checked against
     /// its schema; a mutation completed ([`crate::mutation::complete`]: the
     /// target brought up to date, the reply sent once and checked, its events
-    /// recorded), `preview` read from its arguments beforehand.
-    fn finish(self, call: &mut Call<'_>, tool: &'static str, preview: bool) -> Ran<ToolOutcome>;
+    /// recorded through the call), `preview` read from its arguments
+    /// beforehand.
+    fn finish(self, call: &mut Call<'_>, tool: &'static str, preview: bool) -> ToolOutcome;
 }
 
 impl Handled for Answered<Text> {
@@ -271,12 +273,12 @@ impl Handled for Answered<Text> {
         None
     }
 
-    fn refused(error: Box<McpError>, _: &'static str) -> Ran<ToolOutcome> {
-        Ran::of(ToolOutcome::Refused(error))
+    fn refused(error: Box<McpError>, _: &'static str, _: &mut dyn EventSink) -> ToolOutcome {
+        ToolOutcome::Refused(error)
     }
 
-    fn finish(self, _: &mut Call<'_>, _: &'static str, _: bool) -> Ran<ToolOutcome> {
-        Ran::of(crate::reply::text(self))
+    fn finish(self, _: &mut Call<'_>, _: &'static str, _: bool) -> ToolOutcome {
+        crate::reply::text(self)
     }
 }
 
@@ -288,18 +290,13 @@ impl<R: Object + Serialize + 'static> Handled for Answered<R> {
         Some(crate::reply::output_schema::<R>())
     }
 
-    fn refused(error: Box<McpError>, _: &'static str) -> Ran<ToolOutcome> {
-        Ran::of(ToolOutcome::Refused(error))
+    fn refused(error: Box<McpError>, _: &'static str, _: &mut dyn EventSink) -> ToolOutcome {
+        ToolOutcome::Refused(error)
     }
 
-    fn finish(self, _: &mut Call<'_>, tool: &'static str, _: bool) -> Ran<ToolOutcome> {
+    fn finish(self, _: &mut Call<'_>, tool: &'static str, _: bool) -> ToolOutcome {
         let schema = Self::output_schema().expect("a typed reply has an outputSchema");
-        Ran::of(crate::reply::conforming(
-            tool,
-            Source::Core,
-            schema,
-            crate::reply::structured(self),
-        ))
+        crate::reply::conforming(tool, Source::Core, schema, crate::reply::structured(self))
     }
 }
 
@@ -312,17 +309,19 @@ impl<R: MutationReply> Handled for Mutation<R> {
         Some(crate::mutation::output_schema::<R>())
     }
 
-    fn refused(error: Box<McpError>, tool: &'static str) -> Ran<ToolOutcome> {
-        let (outcome, events) = crate::mutation::refused(tool, error);
-        Ran { outcome, events }
+    fn refused(
+        error: Box<McpError>,
+        tool: &'static str,
+        events: &mut dyn EventSink,
+    ) -> ToolOutcome {
+        crate::mutation::refused(tool, error, events)
     }
 
-    fn finish(self, call: &mut Call<'_>, tool: &'static str, preview: bool) -> Ran<ToolOutcome> {
+    fn finish(self, call: &mut Call<'_>, tool: &'static str, preview: bool) -> ToolOutcome {
         // `complete` owns the order: refresh, send once, check against the
         // schema, record the events.
         let schema = Self::output_schema().expect("a mutation has an outputSchema");
-        let (outcome, events) = crate::mutation::complete::<R>(call, tool, schema, preview, self);
-        Ran { outcome, events }
+        crate::mutation::complete::<R>(call, tool, schema, preview, self)
     }
 }
 
@@ -350,9 +349,10 @@ pub trait ToolSpec: Sync {
     /// declares is refused first, then its arguments are read, its input
     /// given and its reply finished. The request pipeline's; a test cannot
     /// build a `Call`.
-    fn run(&self, call: &mut Call<'_>, arguments: &Value) -> Ran<ToolOutcome>;
-    /// The outcome of a call refused before it ran.
-    fn refused(&self, error: McpError) -> Ran<ToolOutcome>;
+    fn run(&self, call: &mut Call<'_>, arguments: &Value) -> ToolOutcome;
+    /// The outcome of a call refused before it ran; a refused mutation
+    /// records into `events`.
+    fn refused(&self, error: McpError, events: &mut dyn EventSink) -> ToolOutcome;
 
     /// `Mutation` for a mutation, else its effect's group.
     fn category(&self) -> Category {
@@ -466,31 +466,33 @@ impl<T: CoreTool> ToolSpec for T {
         <T::Returns as Handled>::TYPED
     }
 
-    fn run(&self, call: &mut Call<'_>, arguments: &Value) -> Ran<ToolOutcome> {
+    fn run(&self, call: &mut Call<'_>, arguments: &Value) -> ToolOutcome {
         // A name the tool and its target do not declare is refused before
         // anything is read (a refused mutation is a failed one).
         if let Some(error) = self.undeclared(arguments) {
-            return self.refused(error);
+            return self.refused(error, call.events());
         }
         let args = match crate::args::read::<T::Args>(arguments) {
             Ok(args) => args,
             // Arguments that do not read cannot say they asked for a preview.
-            Err(refused) => return <T::Returns as Handled>::refused(refused, T::NAME),
+            Err(refused) => {
+                return <T::Returns as Handled>::refused(refused, T::NAME, call.events());
+            }
         };
         // Read before the handler takes the arguments (ADR 0022).
         let preview = <T::Args as Previews<T::Returns>>::previews(&args);
-        let returned = match <T::Input as Input>::given(call) {
-            // The input borrows the call; what the handler returns does not.
-            Ok(input) => T::call(input, args),
+        // The input borrows the call; what the handler returns does not.
+        let returned = <T::Input as Input>::given(call).map(|input| T::call(input, args));
+        match returned {
+            Ok(returned) => returned.finish(call, T::NAME, preview),
             // The call target refused a call with no project before this
             // runs; unreachable, answered rather than panicked.
-            Err(refused) => return <T::Returns as Handled>::refused(refused, T::NAME),
-        };
-        returned.finish(call, T::NAME, preview)
+            Err(refused) => <T::Returns as Handled>::refused(refused, T::NAME, call.events()),
+        }
     }
 
-    fn refused(&self, error: McpError) -> Ran<ToolOutcome> {
-        <T::Returns as Handled>::refused(Box::new(error), T::NAME)
+    fn refused(&self, error: McpError, events: &mut dyn EventSink) -> ToolOutcome {
+        <T::Returns as Handled>::refused(Box::new(error), T::NAME, events)
     }
 }
 
@@ -1090,6 +1092,7 @@ mod tests {
 #[cfg(test)]
 mod spec_tests {
     use super::*;
+    use crate::events::testing::EventLog;
     use crate::mutation::{Mutated, NoDiagnostics, Written};
     use crate::reply::Answer;
     use crate::state::McpState;
@@ -1204,30 +1207,32 @@ mod spec_tests {
     )]
     fn a_core_tool_runs_its_handler_on_its_input() {
         let tool = spec(&ReadProbe);
+        let log = EventLog::new();
         let mut state = McpState::new();
+        state.events = Box::new(log.clone());
         let mut call = Call::new(&mut state, CallTarget::Unscoped);
 
-        let ran = tool.run(&mut call, &json!({"name": "a"}));
+        let outcome = tool.run(&mut call, &json!({"name": "a"}));
         let ToolOutcome::Done {
             payload: Payload::Json(reply),
             ..
-        } = ran.outcome
+        } = outcome
         else {
             panic!("the probe answers a structured reply");
         };
         assert_eq!(reply, json!({"name": "a"}));
-        assert!(ran.events.is_empty());
+        assert!(log.is_empty());
 
         // Arguments that do not read never reach the handler.
-        let ran = tool.run(&mut call, &json!({"name": 3}));
-        let ToolOutcome::Refused(error) = ran.outcome else {
+        let outcome = tool.run(&mut call, &json!({"name": 3}));
+        let ToolOutcome::Refused(error) = outcome else {
             panic!("a name that is no string is refused");
         };
         assert_eq!(error.code, ErrorCode::InvalidInput);
         assert_eq!(error.argument.as_deref(), Some("name"));
 
-        let ran = tool.run(&mut call, &json!({"name": "a", "bogus": 1}));
-        let ToolOutcome::Refused(error) = ran.outcome else {
+        let outcome = tool.run(&mut call, &json!({"name": "a", "bogus": 1}));
+        let ToolOutcome::Refused(error) = outcome else {
             panic!("an undeclared name is refused");
         };
         assert_eq!(error.message, "unknown argument 'bogus'");
@@ -1242,27 +1247,29 @@ mod spec_tests {
         assert!(tool.is_mutation());
         assert_eq!(tool.category(), Category::Mutation);
 
-        let ran = tool.refused(McpError::new(ErrorCode::InvalidInput, "no"));
-        let ToolOutcome::Refused(error) = ran.outcome else {
+        let mut log = EventLog::new();
+        let outcome = tool.refused(McpError::new(ErrorCode::InvalidInput, "no"), &mut log);
+        let ToolOutcome::Refused(error) = outcome else {
             panic!("a refused call is a failure");
         };
         assert_eq!(error.data, Some(json!({"files_written": []})));
-        let names: Vec<_> = ran.events.iter().map(|(name, _)| name.as_str()).collect();
-        assert_eq!(names, vec!["mcp_mutation_completed"]);
-        assert_eq!(ran.events[0].1["success"], false);
+        assert_eq!(log.names(), vec!["mcp_mutation_completed"]);
+        assert_eq!(log.named("mcp_mutation_completed")[0]["success"], false);
 
         // A preview reaches `complete` as one: no event, no `files_written`.
+        let log = EventLog::new();
         let mut state = McpState::new();
+        state.events = Box::new(log.clone());
         let mut call = Call::new(&mut state, CallTarget::Unscoped);
-        let ran = tool.run(&mut call, &json!({"dry_run": true}));
+        let outcome = tool.run(&mut call, &json!({"dry_run": true}));
         let ToolOutcome::Done {
             payload: Payload::Json(reply),
             ..
-        } = ran.outcome
+        } = outcome
         else {
             panic!("a preview answers its reply");
         };
         assert_eq!(reply, json!({"ok": true}));
-        assert!(ran.events.is_empty());
+        assert!(log.is_empty());
     }
 }

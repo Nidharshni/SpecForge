@@ -3,17 +3,17 @@
 //! the `WasmRuntime` seam the call's project was compiled in (ADR 0017 D8,
 //! ADR 0013): an explicit tool's `mcp__` export ([`mcp_tool_adapter`]), a
 //! command's `cmd__` export ([`command_adapter`]) and a resource's `mcp__`
-//! export ([`resource_adapter`]). The dispatch event is recorded when the
-//! export returned, whatever it answered.
+//! export ([`resource_adapter`]). The dispatch event is recorded through the
+//! call's event sink when the export returned, whatever it answered.
 
 use serde_json::{Value, json};
 use specforge_ops::command::{CommandFormat, ExtensionCommand, RunError};
 use specforge_protocol_types::CommandOutput;
 use specforge_wasm::runtime::WasmRuntime;
 
+use crate::events::McpEvent;
 use crate::reply::Source;
 use crate::resources::{ReadOutcome, ResourceText};
-use crate::surface_call::Ran;
 use crate::surface_table::{ResourceEntry, ToolEntry, ToolKind};
 use crate::target::{Call, ProjectRef};
 use crate::tool::{ErrorCode, McpError, ToolOutcome};
@@ -22,15 +22,15 @@ use crate::tool::{ErrorCode, McpError, ToolOutcome};
 /// project: an explicit tool's arguments its declared schema refuses are
 /// refused first, the project resolved after; a command's are normalized by
 /// its run.
-pub(crate) fn run_tool(call: &Call<'_>, entry: &ToolEntry, arguments: &Value) -> Ran<ToolOutcome> {
-    match &entry.kind {
+pub(crate) fn run_tool(call: &mut Call<'_>, entry: &ToolEntry, arguments: &Value) -> ToolOutcome {
+    let (outcome, dispatched) = match &entry.kind {
         ToolKind::McpTool {
             export,
             input_schema,
             output_schema,
         } => {
             if let Err(refused) = check_input(input_schema, arguments) {
-                return Ran::of(refused);
+                return refused;
             }
             match call.project() {
                 Ok(project) => mcp_tool_adapter(
@@ -40,25 +40,33 @@ pub(crate) fn run_tool(call: &Call<'_>, entry: &ToolEntry, arguments: &Value) ->
                     output_schema.as_ref(),
                     arguments,
                 ),
-                Err(refused) => Ran::of(refused.into()),
+                Err(refused) => (refused.into(), None),
             }
         }
         ToolKind::Command(command) => match call.project() {
             Ok(project) => command_adapter(&project, command, arguments),
-            Err(refused) => Ran::of(refused.into()),
+            Err(refused) => (refused.into(), None),
         },
+    };
+    if let Some(event) = dispatched {
+        call.events().record(event);
     }
+    outcome
 }
 
 /// The extension resource `entry`, read at `uri` over the call's project. A
 /// failed read is the read's error (E028 in `diagnostic`), and no dispatch
 /// is recorded.
-pub(crate) fn read_resource(call: &Call<'_>, entry: &ResourceEntry, uri: &str) -> Ran<ReadOutcome> {
+pub(crate) fn read_resource(call: &mut Call<'_>, entry: &ResourceEntry, uri: &str) -> ReadOutcome {
     // The project the resource reads, in the runtime it was compiled in.
-    match call.project() {
+    let (outcome, dispatched) = match call.project() {
         Ok(project) => resource_adapter(project.runtime.as_ref(), entry, uri),
-        Err(refused) => Ran::of(Err(Box::new(refused))),
+        Err(refused) => (Err(Box::new(refused)), None),
+    };
+    if let Some(event) = dispatched {
+        call.events().record(event);
     }
+    outcome
 }
 
 /// An explicit tool's arguments checked against the input schema it
@@ -81,14 +89,15 @@ fn check_input(schema: &Value, arguments: &Value) -> Result<(), ToolOutcome> {
 }
 
 /// An explicit tool: its `mcp__` export called with the arguments, its
-/// output checked against the output schema it declares.
+/// output checked against the output schema it declares. The tool's
+/// outcome, and its dispatch event when its export returned.
 fn mcp_tool_adapter(
     runtime: &dyn WasmRuntime,
     entry: &ToolEntry,
     export: &str,
     output_schema: Option<&Value>,
     arguments: &Value,
-) -> Ran<ToolOutcome> {
+) -> (ToolOutcome, Option<McpEvent>) {
     let started = std::time::Instant::now();
     let result = match specforge_wasm::ExtensionCalls::new(runtime).call_mcp_tool(
         &entry.extension,
@@ -107,7 +116,7 @@ fn mcp_tool_adapter(
             None => ToolOutcome::ok(value),
         },
         // A failed call is the tool's error, and no dispatch is recorded.
-        Err(error) => return Ran::of(failed_call(&error.diagnostic()).into()),
+        Err(error) => return (failed_call(&error.diagnostic()).into(), None),
     };
     // A tool whose export returned is a dispatched tool; it succeeded when
     // its output is the tool's result.
@@ -117,10 +126,10 @@ fn mcp_tool_adapter(
         "durationMs": elapsed_ms(started),
         "success": result.succeeded(),
     });
-    Ran {
-        outcome: result,
-        events: vec![("surface_mcp_tool_dispatched".to_string(), event)],
-    }
+    (
+        result,
+        Some(McpEvent::new("surface_mcp_tool_dispatched", event)),
+    )
 }
 
 /// A command's run as a tool result, and its dispatch event when its export
@@ -134,7 +143,7 @@ fn command_adapter(
     project: &ProjectRef<'_>,
     command: &ExtensionCommand,
     arguments: &Value,
-) -> Ran<ToolOutcome> {
+) -> (ToolOutcome, Option<McpEvent>) {
     let given = arguments.as_object().cloned().unwrap_or_default();
     let started = std::time::Instant::now();
     match specforge_ops::command::run(&project.view(), command, &given, CommandFormat::Json) {
@@ -145,14 +154,14 @@ fn command_adapter(
                 "exitCode": output.exit_code,
                 "durationMs": elapsed_ms(started),
             });
-            Ran {
-                outcome: output_result(output),
-                events: vec![("surface_command_dispatched".to_string(), event)],
-            }
+            (
+                output_result(output),
+                Some(McpEvent::new("surface_command_dispatched", event)),
+            )
         }
-        Err(RunError::Args(refused)) => Ran::of(ToolOutcome::failed(refused.to_json())),
-        Err(RunError::Call(error)) => Ran::of(failed_call(&error.diagnostic()).into()),
-        Err(RunError::NoProject(error)) => Ran::of(McpError::from(error).into()),
+        Err(RunError::Args(refused)) => (ToolOutcome::failed(refused.to_json()), None),
+        Err(RunError::Call(error)) => (failed_call(&error.diagnostic()).into(), None),
+        Err(RunError::NoProject(error)) => (McpError::from(error).into(), None),
     }
 }
 
@@ -165,7 +174,7 @@ fn resource_adapter(
     runtime: &dyn WasmRuntime,
     entry: &ResourceEntry,
     uri: &str,
-) -> Ran<ReadOutcome> {
+) -> (ReadOutcome, Option<McpEvent>) {
     let started = std::time::Instant::now();
     match specforge_wasm::ExtensionCalls::new(runtime).read_mcp_resource(
         &entry.extension,
@@ -175,22 +184,23 @@ fn resource_adapter(
         // A read whose export answered its content is a dispatched
         // resource; a failed call is the read's error, and no dispatch is
         // recorded.
-        Ok(read) => Ran {
-            events: vec![(
-                "surface_mcp_resource_dispatched".to_string(),
+        Ok(read) => {
+            let event = McpEvent::new(
+                "surface_mcp_resource_dispatched",
                 json!({
                     "extensionName": entry.extension,
                     "uriTemplate": entry.uri_template,
                     "mimeType": read.mime_type,
                     "durationMs": elapsed_ms(started),
                 }),
-            )],
-            outcome: Ok(ResourceText {
+            );
+            let text = ResourceText {
                 text: read.content,
                 mime_type: read.mime_type,
-            }),
-        },
-        Err(error) => Ran::of(Err(Box::new(failed_call(&error.diagnostic())))),
+            };
+            (Ok(text), Some(event))
+        }
+        Err(error) => (Err(Box::new(failed_call(&error.diagnostic()))), None),
     }
 }
 

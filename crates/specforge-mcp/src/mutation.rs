@@ -28,8 +28,8 @@ use specforge_common::shape::{Object, Shape};
 use specforge_common::{Diagnostic, DiagnosticList};
 use specforge_ops::{OpError, Writes};
 
+use crate::events::{EventSink, McpEvent};
 use crate::reply::Answer;
-use crate::surface_call::Event;
 use crate::target::Call;
 use crate::tool::{McpError, Payload, ToolOutcome};
 
@@ -353,16 +353,17 @@ fn property_names(schema: &Value) -> std::collections::BTreeSet<String> {
 ///   `mcp_mutation_completed` (`files_changed`, `entities_affected`,
 ///   `success` = what the client got).
 ///
-/// Returns the reply and the events to record, in order.
+/// Returns the reply; the events are recorded through the call's sink, in
+/// order.
 pub(crate) fn complete<R: MutationReply>(
     call: &mut Call<'_>,
     tool: &str,
     schema: &Value,
     preview: bool,
     mutation: Mutation<R>,
-) -> (ToolOutcome, Vec<Event>) {
+) -> ToolOutcome {
     if preview {
-        return (previewed(tool, schema, mutation), Vec::new());
+        return previewed(tool, schema, mutation);
     }
     let wrote = match &mutation {
         Ok(mutated) => !mutated.written.files.is_empty(),
@@ -377,15 +378,21 @@ pub(crate) fn complete<R: MutationReply>(
         root.as_deref(),
         mutation,
         diagnostics.filter(|_| reads),
+        call.events(),
     )
 }
 
 /// A mutation refused before its handler ran (arguments that do not parse, a
 /// call target with no project): a failed mutation that wrote nothing
 /// (`data.files_written: []`, `mcp_mutation_completed` with `success:
-/// false`). Arguments that do not parse cannot say they asked for a preview.
-pub(crate) fn refused(tool: &str, error: impl Into<Box<McpError>>) -> (ToolOutcome, Vec<Event>) {
-    failure(tool, None, Failed::from(error.into()))
+/// false`, recorded into `events`). Arguments that do not parse cannot say
+/// they asked for a preview.
+pub(crate) fn refused(
+    tool: &str,
+    error: impl Into<Box<McpError>>,
+    events: &mut dyn EventSink,
+) -> ToolOutcome {
+    failure(tool, None, Failed::from(error.into()), events)
 }
 
 /// A preview's reply, checked against `schema`.
@@ -401,15 +408,17 @@ fn previewed<R: MutationReply>(tool: &str, schema: &Value, mutation: Mutation<R>
     }
 }
 
-/// What a call that was no preview sends and records. `root` names its
-/// files, and `diagnostics` are the target's when its report reads them.
+/// What a call that was no preview sends, its events recorded into
+/// `events`. `root` names its files, and `diagnostics` are the target's
+/// when its report reads them.
 fn finished<R: MutationReply>(
     tool: &str,
     schema: &Value,
     root: Option<&Path>,
     mutation: Mutation<R>,
     diagnostics: Option<Vec<Diagnostic>>,
-) -> (ToolOutcome, Vec<Event>) {
+    events: &mut dyn EventSink,
+) -> ToolOutcome {
     match mutation {
         Ok(Mutated { answer, written }) => {
             let files = named(root, &written.files);
@@ -425,20 +434,25 @@ fn finished<R: MutationReply>(
                     }
                     sent => sent,
                 };
-            let events = events(tool, outcome.succeeded(), &written);
-            (outcome, events)
+            record(events, tool, outcome.succeeded(), &written);
+            outcome
         }
-        Err(failed) => failure(tool, root, failed),
+        Err(failed) => failure(tool, root, failed, events),
     }
 }
 
 /// A failure that is no preview: its McpError with `data.files_written`,
 /// `success: false`.
-fn failure(tool: &str, root: Option<&Path>, failed: Failed) -> (ToolOutcome, Vec<Event>) {
+fn failure(
+    tool: &str,
+    root: Option<&Path>,
+    failed: Failed,
+    events: &mut dyn EventSink,
+) -> ToolOutcome {
     let Failed { mut error, files } = failed;
     error.set_data_field(FILES_WRITTEN, Value::from(named(root, &files)));
-    let written = Written::files(files);
-    (ToolOutcome::Refused(error), events(tool, false, &written))
+    record(events, tool, false, &Written::files(files));
+    ToolOutcome::Refused(error)
 }
 
 /// `answer` sent as a `WrittenReply` (structured payload,
@@ -466,21 +480,17 @@ fn sent<R: Object + Serialize, A: AfterWrite>(
     }
 }
 
-/// The domain events when `success`, then `mcp_mutation_completed`
-/// (`files_changed` = the files written, `entities_affected` = the entities
-/// changed, `success`).
-fn events(tool: &str, success: bool, written: &Written) -> Vec<Event> {
-    let mut events: Vec<Event> = Vec::new();
+/// Record the domain events when `success`, in order, then
+/// `mcp_mutation_completed` (`files_changed` = the files written,
+/// `entities_affected` = the entities changed, `success`).
+fn record(events: &mut dyn EventSink, tool: &str, success: bool, written: &Written) {
     if success {
-        events.extend(
-            written
-                .events
-                .iter()
-                .map(|event| (event.name().to_string(), event.params())),
-        );
+        for event in &written.events {
+            events.record(McpEvent::new(event.name(), event.params()));
+        }
     }
-    events.push((
-        "mcp_mutation_completed".to_string(),
+    events.record(McpEvent::new(
+        "mcp_mutation_completed",
         json!({
             "toolName": tool,
             "files_changed": written.files.len(),
@@ -488,7 +498,6 @@ fn events(tool: &str, success: bool, written: &Written) -> Vec<Event> {
             "success": success,
         }),
     ));
-    events
 }
 
 /// `files` named from `root` ([`Writes::names_under`]), else displayed
@@ -506,16 +515,13 @@ fn named(root: Option<&Path>, files: &Writes) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::events::testing::EventLog;
     use crate::tool::ErrorCode;
     use specforge_common::{Diagnostic, Severity};
 
-    /// The `mcp_mutation_completed` payloads among `events`.
-    fn completed(events: &[Event]) -> Vec<Value> {
-        events
-            .iter()
-            .filter(|(name, _)| name == "mcp_mutation_completed")
-            .map(|(_, params)| params.clone())
-            .collect()
+    /// The `mcp_mutation_completed` payloads `log` kept.
+    fn completed(log: &EventLog) -> Vec<Value> {
+        log.named("mcp_mutation_completed")
     }
 
     fn payload(outcome: &ToolOutcome) -> Value {
@@ -580,17 +586,19 @@ mod tests {
         let failure = McpError::new(ErrorCode::InternalError, "failed to write /p/a.spec");
         let schema = output_schema::<Probe>();
 
-        let (outcome, events) = finished::<Probe>(
+        let mut log = EventLog::new();
+        let outcome = finished::<Probe>(
             "specforge.format",
             schema,
             Some(Path::new("/p")),
             Err(Failed::after(failure, Writes::from_iter(["/p/b.spec"]))),
             None,
+            &mut log,
         );
 
-        assert!(!events.iter().any(|(name, _)| name == "extension_added"));
+        assert!(log.named("extension_added").is_empty());
         assert_eq!(
-            completed(&events),
+            completed(&log),
             [
                 json!({"toolName": "specforge.format", "files_changed": 1, "entities_affected": 0, "success": false})
             ]
@@ -606,16 +614,17 @@ mod tests {
         let written = Written::files(Writes::from_iter(["/p/specforge.json"])).with_event(added());
         let schema = output_schema::<Probe>();
 
-        let (outcome, events) = finished(
+        let mut log = EventLog::new();
+        let outcome = finished(
             "specforge.add_extension",
             schema,
             Some(Path::new("/p")),
             Ok(Mutated::new(probe("x"), written)),
             None,
+            &mut log,
         );
 
-        let names: Vec<&str> = events.iter().map(|(name, _)| name.as_str()).collect();
-        assert_eq!(names, ["extension_added", "mcp_mutation_completed"]);
+        assert_eq!(log.names(), ["extension_added", "mcp_mutation_completed"]);
         assert_eq!(
             payload(&outcome),
             json!({"name": "x", "files_written": ["specforge.json"]})
@@ -649,16 +658,18 @@ mod tests {
     #[test]
     fn a_mutation_that_wrote_nothing_lists_no_file() {
         let schema = output_schema::<Probe>();
-        let (outcome, events) = finished(
+        let mut log = EventLog::new();
+        let outcome = finished(
             "specforge.migrate",
             schema,
             Some(Path::new("/p")),
             Ok(Mutated::new(probe("x"), Written::nothing())),
             None,
+            &mut log,
         );
         assert_eq!(payload(&outcome), json!({"name": "x", "files_written": []}));
         assert_eq!(
-            completed(&events),
+            completed(&log),
             [
                 json!({"toolName": "specforge.migrate", "files_changed": 0, "entities_affected": 0, "success": true})
             ]
@@ -697,7 +708,7 @@ mod tests {
 
         let w001 = Diagnostic::untyped("W001", Severity::Warning, "careful");
         let schema = output_schema::<FreshProbe>();
-        let (outcome, _) = finished(
+        let outcome = finished(
             "specforge.rename",
             schema,
             Some(Path::new("/p")),
@@ -706,6 +717,7 @@ mod tests {
                 Written::files(Writes::from_iter(["/p/a.spec"])),
             )),
             Some(vec![w001.clone()]),
+            &mut EventLog::new(),
         );
         let sent = payload(&outcome);
         assert_eq!(
@@ -732,7 +744,8 @@ mod tests {
             "properties": {"other": {"type": "string"}},
             "required": ["other"],
         });
-        let (outcome, events) = finished(
+        let mut log = EventLog::new();
+        let outcome = finished(
             "specforge.migrate",
             &schema,
             Some(Path::new("/p")),
@@ -741,13 +754,14 @@ mod tests {
                 Written::files(Writes::from_iter(["/p/a.spec"])),
             )),
             None,
+            &mut log,
         );
         let error = payload(&outcome);
         assert_eq!(error["code"], "schema_mismatch");
         assert_eq!(error["data"]["files_written"], json!(["a.spec"]));
         assert!(error["data"]["violations"].is_array());
         assert_eq!(
-            completed(&events),
+            completed(&log),
             [
                 json!({"toolName": "specforge.migrate", "files_changed": 1, "entities_affected": 0, "success": false})
             ]
@@ -765,9 +779,17 @@ mod tests {
         let failed = Failed::from(error);
         assert_eq!(failed.files.len(), 1);
         let schema = output_schema::<Probe>();
-        let (_, events) = finished::<Probe>("specforge.rename", schema, None, Err(failed), None);
+        let mut log = EventLog::new();
+        finished::<Probe>(
+            "specforge.rename",
+            schema,
+            None,
+            Err(failed),
+            None,
+            &mut log,
+        );
         assert_eq!(
-            completed(&events),
+            completed(&log),
             [
                 json!({"toolName": "specforge.rename", "files_changed": 1, "entities_affected": 0, "success": false})
             ]

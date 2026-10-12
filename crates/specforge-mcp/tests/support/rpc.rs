@@ -89,62 +89,6 @@ pub fn resource(server: &mut McpServer, uri: &str) -> (Value, Value) {
     (response["result"]["contents"][0].clone(), parsed)
 }
 
-/// The params of every `name` event, oldest first, each without its
-/// `timestamp` once that is checked to be RFC 3339 (`mcp_initialized` has
-/// none).
-pub fn events(server: &McpServer, name: &str) -> Vec<Value> {
-    server
-        .state()
-        .events
-        .iter()
-        .filter(|e| e.name == name)
-        .map(|e| {
-            let mut params = e.params.clone();
-            if name != "mcp_initialized" {
-                let stamp = params
-                    .as_object_mut()
-                    .and_then(|o| o.remove("timestamp"))
-                    .unwrap_or_else(|| panic!("{name} has no timestamp: {}", e.params));
-                let stamp = stamp.as_str().unwrap_or_default();
-                assert!(
-                    chrono::DateTime::parse_from_rfc3339(stamp).is_ok(),
-                    "{name} timestamp is not RFC 3339: {stamp}"
-                );
-            }
-            params
-        })
-        .collect()
-}
-
-/// `mcp_mutation_completed`'s params (without `timestamp`, as [`events`]
-/// returns them) for `tool`.
-pub fn completed(tool: &str, files: usize, entities: usize, success: bool) -> Value {
-    json!({
-        "toolName": tool,
-        "files_changed": files,
-        "entities_affected": entities,
-        "success": success,
-    })
-}
-
-/// Panics unless an `mcp_tool_invoked` event names `tool`.
-pub fn assert_tool_invoked(server: &McpServer, tool: &str) {
-    let invoked = events(server, "mcp_tool_invoked");
-    assert!(
-        invoked.iter().any(|p| p["toolName"] == tool),
-        "no mcp_tool_invoked for {tool}: {invoked:?}"
-    );
-}
-
-/// Panics unless an `mcp_prompt_invoked` event names `prompt`.
-pub fn assert_prompt_invoked(server: &McpServer, prompt: &str) {
-    let invoked = events(server, "mcp_prompt_invoked");
-    assert!(
-        invoked.iter().any(|p| p["promptName"] == prompt),
-        "no mcp_prompt_invoked for {prompt}: {invoked:?}"
-    );
-}
-
 /// The core tools as `tools/list` describes them, in listing order.
 pub fn core_tools() -> Vec<specforge_mcp::types::McpToolDescriptor> {
     specforge_mcp::tools::CORE_TOOLS

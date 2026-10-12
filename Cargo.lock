@@ -3003,6 +3003,7 @@ dependencies = [
  "specforge-formatter",
  "specforge-graph",
  "specforge-installed",
+ "specforge-mcp",
  "specforge-mcp-macros",
  "specforge-ops",
  "specforge-ops-registry",

@@ -3,10 +3,11 @@ mod views;
 
 use serde_json::{Value, json};
 
+use crate::events::{EventSink, McpEvent};
 use crate::lifecycle::Revision;
 use crate::protocol::{JsonRpcError, JsonRpcResponse};
 use crate::state::McpState;
-use crate::surface_call::{Event, Found, Invocation, Ran, Surface};
+use crate::surface_call::{Found, Invocation, Surface};
 use crate::surface_table::ResourceEntry;
 use crate::target::{Call, TargetSpec};
 use crate::tool::{ErrorCode, McpError};
@@ -44,7 +45,10 @@ impl Surface for Resources {
         }
     }
 
-    fn invoked(_: &Found<&'static ResourceSpec, ResourceEntry>, _: &Invocation) -> Option<Event> {
+    fn invoked(
+        _: &Found<&'static ResourceSpec, ResourceEntry>,
+        _: &Invocation,
+    ) -> Option<McpEvent> {
         None
     }
 
@@ -52,9 +56,9 @@ impl Surface for Resources {
         call: &mut Call<'_>,
         found: &Found<&'static ResourceSpec, ResourceEntry>,
         invocation: &Invocation,
-    ) -> Ran<ReadOutcome> {
+    ) -> ReadOutcome {
         match found {
-            Found::Core(spec) => Ran::of((spec.read)(call.view(), &invocation.name)),
+            Found::Core(spec) => (spec.read)(call.view(), &invocation.name),
             Found::Extension(entry) => {
                 crate::extension_dispatch::read_resource(call, entry, &invocation.name)
             }
@@ -64,8 +68,9 @@ impl Surface for Resources {
     fn refused(
         _: &Found<&'static ResourceSpec, ResourceEntry>,
         error: McpError,
-    ) -> Ran<ReadOutcome> {
-        Ran::of(Err(Box::new(error)))
+        _: &mut dyn EventSink,
+    ) -> ReadOutcome {
+        Err(Box::new(error))
     }
 
     fn unknown(revision: Revision, uri: &str) -> JsonRpcError {
@@ -80,11 +85,11 @@ impl Surface for Resources {
         _: &Found<&'static ResourceSpec, ResourceEntry>,
         invocation: &Invocation,
         outcome: &ReadOutcome,
-    ) -> Option<Event> {
+    ) -> Option<McpEvent> {
         // A read that returned content: its format is its MIME type.
         let text = outcome.as_ref().ok()?;
-        Some((
-            "mcp_resource_read".to_string(),
+        Some(McpEvent::new(
+            "mcp_resource_read",
             json!({"resourceUri": invocation.name, "format": text.mime_type}),
         ))
     }

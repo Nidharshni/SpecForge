@@ -19,8 +19,8 @@ use serde_json::{Value, json};
 use specforge_common::Diagnostic;
 use specforge_project::{GraphDelta, Update, UpdateKind};
 
+use crate::events::{EventSink, McpEvent};
 use crate::protocol::id_text;
-use crate::types::McpEvent;
 
 /// What a resource's content changes with: the one rule both eras read.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -175,24 +175,24 @@ impl Subscriptions {
     /// unsubscribes or the connection ends. False when it already did. The
     /// request checked that the server serves `uri`. Records
     /// `mcp_subscription_created`.
-    pub fn subscribe(&mut self, uri: &str, events: &mut Vec<McpEvent>) -> bool {
+    pub fn subscribe(&mut self, uri: &str, events: &mut dyn EventSink) -> bool {
         if self.resources.iter().any(|held| held == uri) {
             return false;
         }
         self.resources.push(uri.to_string());
-        events.push(subscription_event("mcp_subscription_created", uri, None));
+        events.record(subscription_event("mcp_subscription_created", uri, None));
         true
     }
 
     /// `resources/unsubscribe`: the client no longer hears about `uri`; its
     /// other subscriptions stay. False when it did not. Records
     /// `mcp_subscription_removed`.
-    pub fn unsubscribe(&mut self, uri: &str, events: &mut Vec<McpEvent>) -> bool {
+    pub fn unsubscribe(&mut self, uri: &str, events: &mut dyn EventSink) -> bool {
         let Some(position) = self.resources.iter().position(|held| held == uri) else {
             return false;
         };
         self.resources.remove(position);
-        events.push(subscription_event("mcp_subscription_removed", uri, None));
+        events.record(subscription_event("mcp_subscription_removed", uri, None));
         true
     }
 
@@ -200,7 +200,7 @@ impl Subscriptions {
     /// the order first named), queueing its acknowledgement before anything
     /// else on it. A stream already open under `id` ends first. Records
     /// `mcp_subscription_created` per resource.
-    pub fn listen(&mut self, id: Value, uris: Vec<String>, events: &mut Vec<McpEvent>) {
+    pub fn listen(&mut self, id: Value, uris: Vec<String>, events: &mut dyn EventSink) {
         self.end(&id, events);
         let mut named = Vec::with_capacity(uris.len());
         for uri in uris {
@@ -210,7 +210,7 @@ impl Subscriptions {
         }
         self.outbox.push(wire::acknowledged(&id, &named));
         for uri in &named {
-            events.push(subscription_event(
+            events.record(subscription_event(
                 "mcp_subscription_created",
                 uri,
                 Some(&id),
@@ -222,13 +222,13 @@ impl Subscriptions {
     /// The client cancelled the listen request `id`: its stream ends, and
     /// nothing more is sent on it, not even a response. False when no stream
     /// had that id. Records `mcp_subscription_removed` per resource.
-    pub fn end(&mut self, id: &Value, events: &mut Vec<McpEvent>) -> bool {
+    pub fn end(&mut self, id: &Value, events: &mut dyn EventSink) -> bool {
         let Some(position) = self.streams.iter().position(|open| &open.id == id) else {
             return false;
         };
         let ended = self.streams.remove(position);
         for uri in &ended.uris {
-            events.push(subscription_event(
+            events.record(subscription_event(
                 "mcp_subscription_removed",
                 uri,
                 Some(&ended.id),
@@ -241,15 +241,15 @@ impl Subscriptions {
     /// and every stream ends, each removal recorded. The queue stays: the
     /// host sends it after the last response. How many subscriptions ended
     /// (a stream counts one per resource).
-    pub fn disconnect(&mut self, events: &mut Vec<McpEvent>) -> usize {
+    pub fn disconnect(&mut self, events: &mut dyn EventSink) -> usize {
         let mut ended = 0;
         for uri in self.resources.drain(..) {
-            events.push(subscription_event("mcp_subscription_removed", &uri, None));
+            events.record(subscription_event("mcp_subscription_removed", &uri, None));
             ended += 1;
         }
         for stream in self.streams.drain(..) {
             for uri in &stream.uris {
-                events.push(subscription_event(
+                events.record(subscription_event(
                     "mcp_subscription_removed",
                     uri,
                     Some(&stream.id),
@@ -277,7 +277,7 @@ impl Subscriptions {
     /// subscribed resource changes with the graph; `specforge/diagnosticsChanged`
     /// when the diagnostics changed and `specforge://diagnostics` is
     /// subscribed. Records `mcp_delta_notified` per delta queued.
-    pub fn updated(&mut self, changes: &Changes<'_>, events: &mut Vec<McpEvent>) {
+    pub fn updated(&mut self, changes: &Changes<'_>, events: &mut dyn EventSink) {
         for stream in &self.streams {
             for uri in &stream.uris {
                 if changes.touched(Watched::of(uri)) {
@@ -295,7 +295,7 @@ impl Subscriptions {
             |watched: Watched| self.resources.iter().any(|uri| Watched::of(uri) == watched);
         if !changes.graph.is_empty() && subscribed(Watched::Graph) {
             self.outbox.push(wire::graph_changed(changes.graph));
-            events.push(McpEvent::new(
+            events.record(McpEvent::new(
                 "mcp_delta_notified",
                 json!({
                     "notificationType": "graph",
@@ -310,7 +310,7 @@ impl Subscriptions {
             && subscribed(Watched::Diagnostics)
         {
             self.outbox.push(wire::diagnostics_changed(delta));
-            events.push(McpEvent::new(
+            events.record(McpEvent::new(
                 "mcp_delta_notified",
                 json!({
                     "notificationType": "diagnostics",

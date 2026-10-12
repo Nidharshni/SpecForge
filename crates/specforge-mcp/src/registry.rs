@@ -6,6 +6,7 @@
 
 use serde_json::{Value, json};
 
+use crate::events::McpEvent;
 use crate::lifecycle::Revision;
 use crate::protocol::JsonRpcResponse;
 use crate::resources::{CORE_RESOURCES, ResourceSpec};
@@ -102,8 +103,8 @@ pub fn handle_list_prompts(state: &mut McpState, id: Option<Value>) -> JsonRpcRe
 
 /// Record a listing: which registry, and how many entries the client got.
 fn push_discovery(state: &mut McpState, discovery_type: &str, result_count: usize) {
-    state.push_event(
+    state.events.record(McpEvent::new(
         "mcp_discovery_invoked",
         json!({"discoveryType": discovery_type, "resultCount": result_count}),
-    );
+    ));
 }

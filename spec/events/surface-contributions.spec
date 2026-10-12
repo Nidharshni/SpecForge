@@ -10,6 +10,7 @@ event commands_auto_promoted "Commands Auto-Promoted" {
   payload {
     promotedCount integer
     conflictCount integer
+    timestamp     timestamp
   }
   verify integration "emits commands_auto_promoted with correct promoted and conflict counts"
 }
@@ -21,6 +22,7 @@ event surface_command_dispatched "Surface Command Dispatched" {
     commandId     string
     exitCode      integer
     durationMs    integer
+    timestamp     timestamp
   }
   verify integration "emits surface_command_dispatched with correct commandId and exitCode"
 }
@@ -32,6 +34,7 @@ event surface_mcp_tool_dispatched "Surface MCP Tool Dispatched" {
     toolName      string
     durationMs    integer
     success       boolean
+    timestamp     timestamp
   }
   verify integration "emits surface_mcp_tool_dispatched with correct toolName and success"
 }
@@ -43,6 +46,7 @@ event surface_mcp_resource_dispatched "Surface MCP Resource Dispatched" {
     uriTemplate   string
     mimeType      string @optional
     durationMs    integer
+    timestamp     timestamp
   }
   verify integration "emits surface_mcp_resource_dispatched with correct uriTemplate"
 }

@@ -31,7 +31,7 @@ fn init_server_with_kinds() -> Served {
 /// A server over a project whose one extension declares an MCP tool
 /// (`test.list_items`) and an MCP resource (`specforge://test/items`) and
 /// no command, served through the runtime seam.
-fn init_server_with_surfaces() -> (McpServer, std::sync::Arc<FakeExtension>, TempDir) {
+fn init_server_with_surfaces() -> (Logged, std::sync::Arc<FakeExtension>, TempDir) {
     fake_extension::initialized(FakeExtension::declaring(json!({
         "mcp_tools": [{
             "name": "test.list_items",
@@ -114,13 +114,7 @@ fn capabilities_include_extension_counts() {
         .filter(|t| t["name"].as_str().unwrap().starts_with("ext."))
         .collect();
     assert_eq!(ext_tools.len(), 2, "{ext_tools:?}");
-    let initialized: Vec<&Value> = server
-        .state()
-        .events
-        .iter()
-        .filter(|e| e.name == "mcp_initialized")
-        .map(|e| &e.params)
-        .collect();
+    let initialized = events(&server, "mcp_initialized");
     let [initialized] = initialized.as_slice() else {
         panic!("{initialized:?}")
     };
@@ -732,30 +726,24 @@ fn explicit_mcp_tool_wins_over_auto_promoted() {
 )]
 fn event_commands_auto_promoted() {
     let (server, _ext, _dir) = fake_extension::initialized(FakeExtension::new());
-    let events: Vec<Value> = server
-        .state()
-        .events
+    let promoted: Vec<Value> = server
+        .log()
+        .recorded()
         .iter()
-        .filter(|e| e.name == "commands_auto_promoted")
-        .map(|e| {
-            let mut params = e.params.clone();
+        .filter(|recorded| recorded.name() == "commands_auto_promoted")
+        .map(|recorded| {
+            let mut params = recorded.payload();
             assert!(params["timestamp"].is_string(), "{params}");
             params.as_object_mut().unwrap().remove("timestamp");
             params
         })
         .collect();
-    assert_eq!(events, [json!({"promotedCount": 1, "conflictCount": 1})]);
+    assert_eq!(promoted, [json!({"promotedCount": 1, "conflictCount": 1})]);
 
     // A project whose extensions contribute no command promotes nothing
     // and says nothing.
     let (server, _ext, _dir) = init_server_with_surfaces();
-    assert!(
-        !server
-            .state()
-            .events
-            .iter()
-            .any(|e| e.name == "commands_auto_promoted")
-    );
+    assert!(events(&server, "commands_auto_promoted").is_empty());
 }
 
 #[specforge_test(
@@ -1402,13 +1390,7 @@ fn over_mcp_a_refused_argument_is_the_commands_invalid_input_object() {
         );
     }
     assert!(ext.calls().is_empty(), "no export ran: {:?}", ext.calls());
-    let dispatched = server
-        .state()
-        .events
-        .iter()
-        .filter(|e| e.name == "surface_command_dispatched")
-        .count();
-    assert_eq!(dispatched, 0);
+    assert!(events(&server, "surface_command_dispatched").is_empty());
 }
 
 #[specforge_test(
@@ -1540,14 +1522,11 @@ fn a_resource_outside_specforge_ext_is_read_through_its_export() {
             json!({"uri": "acme://doc/1"})
         )]
     );
-    let dispatched: Vec<&Value> = server
-        .state()
-        .events
-        .iter()
-        .filter(|e| e.name == "surface_mcp_resource_dispatched")
-        .map(|e| &e.params["uriTemplate"])
+    let dispatched: Vec<Value> = events(&server, "surface_mcp_resource_dispatched")
+        .into_iter()
+        .map(|e| e["uriTemplate"].clone())
         .collect();
-    assert_eq!(dispatched, [&json!("acme://doc/{id}")]);
+    assert_eq!(dispatched, [json!("acme://doc/{id}")]);
     // Another scheme's URI no template names is still unknown.
     let resp = read_resource(&mut server, "acme://other/1");
     assert_eq!(resp["error"]["code"], -32002, "{resp}");

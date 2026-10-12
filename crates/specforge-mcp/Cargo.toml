@@ -31,9 +31,16 @@ specforge-protocol-types = { path = "../specforge-protocol-types" }
 specforge-wasm = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-chrono = "0.4.41"
+chrono = { version = "0.4.41", optional = true }
+
+[features]
+# `specforge_mcp::events::testing::EventLog`: a sink that keeps every event
+# a server records, stamped, for tests (`McpServer::with_events`).
+testing = ["dep:chrono"]
 
 [dev-dependencies]
+specforge-mcp = { path = ".", features = ["testing"] }
+chrono = "0.4.41"
 specforge-extension-sdk = { path = "../specforge-extension-sdk" }
 # Candidates served in process (`specforge_ops::testing`).
 specforge-ops = { workspace = true, features = ["testing"] }

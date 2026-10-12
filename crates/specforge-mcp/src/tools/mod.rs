@@ -35,10 +35,11 @@ pub(crate) mod validate;
 
 use serde_json::{Value, json};
 
+use crate::events::{EventSink, McpEvent};
 use crate::lifecycle::Revision;
 use crate::protocol::JsonRpcResponse;
 use crate::state::McpState;
-use crate::surface_call::{Event, Found, Invocation, Ran, Surface};
+use crate::surface_call::{Found, Invocation, Surface};
 use crate::surface_table::ToolEntry;
 use crate::target::{Call, TargetSpec};
 use crate::tool::{Category, McpError, ToolOutcome, ToolSpec, envelope, spec};
@@ -143,7 +144,7 @@ impl Surface for Tools {
     fn invoked(
         found: &Found<&'static dyn ToolSpec, ToolEntry>,
         invocation: &Invocation,
-    ) -> Option<Event> {
+    ) -> Option<McpEvent> {
         // The category it is listed with: no second lookup.
         let category = match found {
             Found::Core(spec) => spec.category().as_str(),
@@ -161,14 +162,14 @@ impl Surface for Tools {
         {
             event["entityId"] = Value::from(entity_id);
         }
-        Some(("mcp_tool_invoked".to_string(), event))
+        Some(McpEvent::new("mcp_tool_invoked", event))
     }
 
     fn run(
         call: &mut Call<'_>,
         found: &Found<&'static dyn ToolSpec, ToolEntry>,
         invocation: &Invocation,
-    ) -> Ran<ToolOutcome> {
+    ) -> ToolOutcome {
         match found {
             Found::Core(tool) => tool.run(call, &invocation.arguments),
             Found::Extension(entry) => {
@@ -180,11 +181,12 @@ impl Surface for Tools {
     fn refused(
         found: &Found<&'static dyn ToolSpec, ToolEntry>,
         error: McpError,
-    ) -> Ran<ToolOutcome> {
+        events: &mut dyn EventSink,
+    ) -> ToolOutcome {
         match found {
             // A refused mutation is a failed one: it wrote nothing, and says so.
-            Found::Core(tool) => tool.refused(error),
-            Found::Extension(_) => Ran::of(error.into()),
+            Found::Core(tool) => tool.refused(error, events),
+            Found::Extension(_) => error.into(),
         }
     }
 
@@ -199,7 +201,7 @@ impl Surface for Tools {
         _: &Found<&'static dyn ToolSpec, ToolEntry>,
         _: &Invocation,
         _: &ToolOutcome,
-    ) -> Option<Event> {
+    ) -> Option<McpEvent> {
         None
     }
 

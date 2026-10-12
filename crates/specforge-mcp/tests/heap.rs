@@ -87,7 +87,6 @@ fn round(server: &mut McpServer) {
     behavior = "mcp_event_record",
     verify = "a server keeps no event: what it holds does not grow with the requests it answers"
 )]
-#[ignore = "fixed by T1"]
 fn a_server_keeps_no_event() {
     let dir = tempfile::TempDir::new().unwrap();
     std::fs::write(

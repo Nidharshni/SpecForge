@@ -4,16 +4,18 @@
 //!
 //! The pin is unlinked: it holds what dispatch does today.
 
+use std::ops::DerefMut;
+
 use serde_json::{Value, json};
 use specforge_mcp::McpServer;
 
 use crate::support::replies::writing;
-use crate::support::{call, call_tool};
+use crate::support::{Logged, Logs, call, call_tool, logged};
 use crate::tool_errors::mcp_error;
 
 /// A server that serves no project: initialize names none.
-fn serving_nothing() -> McpServer {
-    let mut server = McpServer::new();
+fn serving_nothing() -> Logged {
+    let mut server = logged(McpServer::new());
     let reply = call(&mut server, "initialize", json!({}));
     assert!(reply["error"].is_null(), "{reply}");
     server
@@ -21,16 +23,16 @@ fn serving_nothing() -> McpServer {
 
 /// The names of the events recorded since `before`, an invocation by its
 /// category and a mutation's completion by its success.
-fn events_since(server: &McpServer, before: usize) -> String {
-    let names: Vec<String> = server.state().events[before..]
+fn events_since(server: &impl Logs, before: usize) -> String {
+    let names: Vec<String> = server.log().recorded()[before..]
         .iter()
-        .map(|event| match event.name.as_str() {
+        .map(|event| match event.name().as_str() {
             "mcp_tool_invoked" => format!(
                 "mcp_tool_invoked:{}",
-                event.params["category"].as_str().unwrap_or("-")
+                event.payload()["category"].as_str().unwrap_or("-")
             ),
             "mcp_mutation_completed" => {
-                format!("mcp_mutation_completed:{}", event.params["success"])
+                format!("mcp_mutation_completed:{}", event.payload()["success"])
             }
             other => other.to_string(),
         })
@@ -57,8 +59,13 @@ fn outcome(response: &Value) -> String {
     )
 }
 
-fn line(label: &str, server: &mut McpServer, tool: &str, arguments: Value) -> String {
-    let before = server.state().events.len();
+fn line(
+    label: &str,
+    server: &mut (impl Logs + DerefMut<Target = McpServer>),
+    tool: &str,
+    arguments: Value,
+) -> String {
+    let before = server.log().len();
     let response = call_tool(server, tool, arguments);
     format!(
         "{label} {tool} => {} | events: {}",

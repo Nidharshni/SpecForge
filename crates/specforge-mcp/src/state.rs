@@ -5,10 +5,10 @@ use specforge_registry::RegistryBuild;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use crate::events::{Discard, EventSink, McpEvent};
 use crate::lifecycle::Revision;
 use crate::subscriptions::{Changes, Subscriptions};
 use crate::surface_table::ExtensionSurfaceTable;
-use crate::types::McpEvent;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ServerPhase {
@@ -41,7 +41,10 @@ pub struct McpState {
     /// Project compiled when the client's `initialize` names no `projectRoot`
     /// (the `specforge mcp <path>` argument).
     pub default_project_root: Option<PathBuf>,
-    pub events: Vec<McpEvent>,
+    /// Where the server's events go (ADR 0057): [`Discard`] unless the host
+    /// gave another sink ([`crate::McpServer::with_events`]). Every module
+    /// records through it.
+    pub(crate) events: Box<dyn EventSink>,
     /// Who hears about what (ADR 0024 D6). Read through
     /// [`Self::subscriptions`]; changed only by the subscription requests,
     /// an update of the served project, cancellation, disconnect and
@@ -70,7 +73,7 @@ impl McpState {
             last_update: None,
             surfaces: ExtensionSurfaceTable::empty(),
             default_project_root: None,
-            events: Vec::new(),
+            events: Box::new(Discard),
             subscriptions: Subscriptions::new(),
             extension_runtime: None,
         }
@@ -154,12 +157,6 @@ impl McpState {
     pub fn accepts_batches(&self) -> bool {
         self.phase == ServerPhase::Initialized
             && self.protocol_version == crate::lifecycle::BATCHING_PROTOCOL_VERSION
-    }
-
-    /// Record an event. Object payloads without a `timestamp` get one (RFC
-    /// 3339, UTC) — except `mcp_initialized`, whose spec payload has none.
-    pub fn push_event(&mut self, name: impl Into<String>, params: serde_json::Value) {
-        self.events.push(McpEvent::new(name, params));
     }
 
     /// Serve the project at `root` as it is on disk now, its config and
@@ -248,13 +245,13 @@ impl McpState {
             );
             let stats = self.surfaces.stats();
             if stats.declared > 0 {
-                self.push_event(
+                self.events.record(McpEvent::new(
                     "commands_auto_promoted",
                     serde_json::json!({
                         "promotedCount": stats.promoted,
                         "conflictCount": stats.conflicts,
                     }),
-                );
+                ));
             }
         }
         // Subscribers hear what changed (ADR 0024 D6), here because every
@@ -262,7 +259,7 @@ impl McpState {
         let after = before.as_ref().map(|_| self.diagnostics());
         let diagnostics = before.as_deref().zip(after.as_deref());
         self.subscriptions
-            .updated(&Changes::of(&update, diagnostics), &mut self.events);
+            .updated(&Changes::of(&update, diagnostics), &mut *self.events);
         self.last_update = Some(update);
     }
 
@@ -271,7 +268,7 @@ impl McpState {
     pub fn shutdown(&mut self) -> usize {
         self.phase = ServerPhase::ShuttingDown;
         // The queue stays: the host sends it after the shutdown response.
-        let released = self.subscriptions.disconnect(&mut self.events);
+        let released = self.subscriptions.disconnect(&mut *self.events);
         self.session = ProjectSession::detached();
         self.generation += 1;
         self.surfaces = ExtensionSurfaceTable::empty();
@@ -287,5 +284,48 @@ pub(crate) fn assert_converged(update: &Update, project: &str) {
             false,
             "an update of {project} diverged from a cold rebuild: {divergence}"
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use crate::McpServer;
+    use crate::events::testing::EventLog;
+
+    /// The replies to `initialize`, `ping` and a listing.
+    fn replies(server: &mut McpServer) -> Vec<String> {
+        [
+            json!({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}),
+            json!({"jsonrpc": "2.0", "id": 2, "method": "ping"}),
+            json!({"jsonrpc": "2.0", "id": 3, "method": "prompts/list"}),
+        ]
+        .iter()
+        .map(|request| {
+            server
+                .handle_message(&request.to_string())
+                .expect("a request has a reply")
+        })
+        .collect()
+    }
+
+    #[test]
+    fn a_server_records_into_discard_unless_given_a_sink() {
+        let log = EventLog::new();
+        let mut logging = McpServer::new().with_events(log.clone());
+        let mut call = |method: &str| {
+            let request = json!({"jsonrpc": "2.0", "id": 1, "method": method, "params": {}});
+            logging.handle_message(&request.to_string());
+        };
+        call("initialize");
+        assert_eq!(log.names(), ["mcp_initialized"]);
+        call("prompts/list");
+        assert_eq!(log.names(), ["mcp_initialized", "mcp_discovery_invoked"]);
+
+        // A server given no sink answers the same, and keeps nothing.
+        let mut discarding = McpServer::new();
+        let mut logged = McpServer::new().with_events(EventLog::new());
+        assert_eq!(replies(&mut discarding), replies(&mut logged));
     }
 }

@@ -76,6 +76,7 @@ event mcp_initialized "MCP Initialized" {
     surface_tools_registered     integer @optional
     surface_resources_registered integer @optional
     auto_promoted_tools          integer @optional
+    timestamp                    timestamp
   }
   verify integration "mcp initialization emits event with tool counts"
 }
