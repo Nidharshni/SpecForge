@@ -452,6 +452,51 @@ mod tests {
 
     #[specforge_test(
         behavior = "update_all_extensions",
+        verify = "an upgrade whose required peer no entry enables is refused, and update enables nothing"
+    )]
+    #[ignore = "fixed by T2"]
+    fn an_upgrade_whose_required_peer_no_entry_enables_is_refused() {
+        use super::super::fixtures::enabled_project;
+        let dir = enabled_project(vec![entry("@x/a", "1.0.0", "registry", &[])]);
+        let (lock_before, config_before) = (
+            std::fs::read(lock_path(dir.path())).unwrap(),
+            std::fs::read(dir.path().join("specforge.json")).unwrap(),
+        );
+        // 1.1.0 requires `@specforge/testing`, which no entry enables.
+        let registry = MemoryRegistry::new()
+            .serving(old("@x/a", "1.0.0"))
+            .serving(Published::new(
+                b"\0asm new".to_vec(),
+                declaration("@x/a", "1.1.0", &[("@specforge/testing", "^1.0")]),
+            ));
+
+        let outcome = update(
+            &request(
+                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                Reach::Compatible,
+            ),
+            &registry,
+            &crate::testing::probes(),
+        )
+        .unwrap();
+
+        assert!(!outcome.applied(), "{outcome:?}");
+        let (name, error) = outcome.failures().next().unwrap();
+        assert_eq!(name, "@x/a");
+        assert_eq!(error.code, "E027", "{error:?}");
+        assert_eq!(
+            error.message,
+            "extension '@x/a' requires peer dependency '@specforge/testing' ^1.0 which is not installed"
+        );
+        assert_eq!(std::fs::read(lock_path(dir.path())).unwrap(), lock_before);
+        assert_eq!(
+            std::fs::read(dir.path().join("specforge.json")).unwrap(),
+            config_before
+        );
+    }
+
+    #[specforge_test(
+        behavior = "update_all_extensions",
         verify = "lock file records new binary hashes after update"
     )]
     fn an_update_installs_the_newer_binary_and_locks_its_hash() {

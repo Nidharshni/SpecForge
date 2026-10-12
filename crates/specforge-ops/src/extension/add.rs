@@ -1469,8 +1469,7 @@ mod tests {
 
         assert_eq!(error.code, "E027");
         assert!(
-            error.message.contains("'@specforge/software' ^2.0")
-                && error.message.contains("embeds @specforge/software 1.0.0"),
+            error.message.contains("'@specforge/software' ^2.0"),
             "{}",
             error.message
         );
@@ -1490,6 +1489,293 @@ mod tests {
         )
         .unwrap_err();
         assert_eq!(error.code, "E027");
+    }
+
+    /// The project's peer set (ADR 0041, amendment round 7) is what an add is judged against.
+    /// These helpers serve the probe extensions of `testing::probes`.
+    fn wasm_file(dir: &Path, name: &str, bytes: &[u8]) -> PathBuf {
+        let path = dir.join(name);
+        std::fs::write(&path, bytes).unwrap();
+        path
+    }
+
+    /// A registry publishing `bytes` as the package they declare.
+    fn registry_publishing(bytes: &[u8]) -> MemoryRegistry {
+        let declared = crate::publish::declare(&testing::probes(), bytes)
+            .unwrap()
+            .0;
+        MemoryRegistry::new().serving(Published::new(bytes.to_vec(), declared))
+    }
+
+    /// Add `source` to the project at `dir`, allowing unsigned packages.
+    fn add_one(
+        dir: &Path,
+        source: Source,
+        registry: &dyn Registry,
+    ) -> Result<Added, crate::OpError> {
+        let root = specforge_common::ProjectRoot::of(dir).unwrap();
+        add(
+            &AddRequest {
+                root: &root,
+                extensions: vec![source.into()],
+                allow_unsigned: true,
+                trust: Trust::Refuse,
+                dry_run: false,
+            },
+            registry,
+            &testing::probes(),
+        )
+    }
+
+    fn package(name: &str) -> Source {
+        Source::Registry(PackageRef::parse(name).unwrap())
+    }
+
+    #[specforge_test(
+        behavior = "add_extension_to_existing_project",
+        verify = "add judges the project's peer set as the add leaves it: its builtins, installed extensions and .wasm file entries"
+    )]
+    #[ignore = "fixed by T2"]
+    fn an_install_requiring_a_builtin_out_of_range_is_refused_from_any_source() {
+        use crate::config::testing::files_under;
+        let files = tempfile::tempdir().unwrap();
+        let config = r#"{"name": "p", "version": "0.1.0", "extensions": ["@specforge/software"]}"#;
+        let local = Source::Local(wasm_file(
+            files.path(),
+            "needs.wasm",
+            testing::NEEDS_SOFTWARE_9,
+        ));
+        let registry = registry_publishing(testing::NEEDS_SOFTWARE_9);
+        for (source, registry) in [
+            (
+                local,
+                &crate::registry::Unconfigured("add") as &dyn Registry,
+            ),
+            (package("@probe/needs-software"), &registry),
+        ] {
+            let dir = project_with(config);
+            let before = files_under(dir.path());
+
+            let error = add_one(dir.path(), source, registry).unwrap_err();
+
+            assert_eq!(error.code, "E027", "{error:?}");
+            assert_eq!(
+                error.message,
+                "extension '@probe/needs-software' requires peer dependency '@specforge/software' ^9.0 but version 1.0.0 is installed"
+            );
+            assert_eq!(
+                error.suggestion.as_deref(),
+                Some(
+                    "'@specforge/software' is the builtin this specforge embeds, at 1.0.0: install a version of '@probe/needs-software' that accepts it"
+                )
+            );
+            assert_eq!(files_under(dir.path()), before);
+        }
+        let software = PackageName::parse("@specforge/software").unwrap();
+        assert!(
+            !registry
+                .asked()
+                .contains(&crate::registry::testing::Asked::Versions(software)),
+            "a builtin is never unified: {:?}",
+            registry.asked()
+        );
+    }
+
+    #[specforge_test(
+        behavior = "add_extension_to_existing_project",
+        verify = "an install whose required peer is not installed is refused with E027 before anything is written"
+    )]
+    #[ignore = "fixed by T2"]
+    fn an_install_whose_required_peer_is_not_installed_is_refused() {
+        use crate::config::testing::files_under;
+        let files = tempfile::tempdir().unwrap();
+        let local = Source::Local(wasm_file(files.path(), "dep.wasm", testing::DEP_1));
+        let registry = registry_publishing(testing::DEP_1);
+        for (source, registry) in [
+            (
+                local,
+                &crate::registry::Unconfigured("add") as &dyn Registry,
+            ),
+            (package("@probe/dep"), &registry),
+        ] {
+            let dir = project_with(EMPTY_PROJECT);
+            let before = files_under(dir.path());
+
+            let error = add_one(dir.path(), source, registry).unwrap_err();
+
+            assert_eq!(error.code, "E027", "{error:?}");
+            assert_eq!(
+                error.message,
+                "extension '@probe/dep' requires peer dependency '@probe/base' ^1.0 which is not installed"
+            );
+            assert_eq!(
+                error.suggestion.as_deref(),
+                Some("install it with: specforge add @probe/base")
+            );
+            assert_eq!(files_under(dir.path()), before);
+        }
+    }
+
+    #[specforge_test(
+        behavior = "add_extension_to_existing_project",
+        verify = "enabling a builtin that an enabled extension's peer range does not accept is refused with E027"
+    )]
+    #[ignore = "fixed by T2"]
+    fn enabling_a_builtin_an_enabled_extension_rejects_is_refused() {
+        use crate::config::testing::files_under;
+        // `@probe/needs-software` installed by hand, requiring software ^9.
+        let mut locked = entry("@probe/needs-software", "1.0.0", "local:needs.wasm", &[]);
+        locked.wasm_hash = specforge_installed::hex_sha256(testing::NEEDS_SOFTWARE_9);
+        locked.peer_dependencies = vec![PeerDependency {
+            name: "@specforge/software".to_string(),
+            version: "^9.0".to_string(),
+            optional: false,
+        }];
+        let dir = project(vec![locked]);
+        std::fs::write(
+            installed(dir.path(), "@probe/needs-software"),
+            testing::NEEDS_SOFTWARE_9,
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path().join("specforge.json"),
+            r#"{"name": "p", "version": "0.1.0", "extensions": ["@probe/needs-software"]}"#,
+        )
+        .unwrap();
+        let before = files_under(dir.path());
+
+        let error = add_one(
+            dir.path(),
+            Source::Builtin("@specforge/software"),
+            &crate::registry::Unconfigured("add"),
+        )
+        .unwrap_err();
+
+        assert_eq!(error.code, "E027", "{error:?}");
+        assert!(
+            error.message.starts_with(
+                "enabling '@specforge/software' 1.0.0 breaks '@probe/needs-software': "
+            ),
+            "{}",
+            error.message
+        );
+        assert_eq!(files_under(dir.path()), before);
+    }
+
+    #[specforge_test(
+        behavior = "add_extension_to_existing_project",
+        verify = "an install that breaks a .wasm file entry, or that a .wasm file entry does not satisfy, is refused with E027"
+    )]
+    #[ignore = "fixed by T2"]
+    fn an_install_that_breaks_a_file_entry_or_that_a_file_entry_does_not_satisfy_is_refused() {
+        use crate::config::testing::files_under;
+        let files = tempfile::tempdir().unwrap();
+        let unconfigured = crate::registry::Unconfigured("add");
+
+        // (a) `dep.wasm` wants `@probe/base` ^1; installing base 2.0.0 breaks it.
+        let dir = project_with(r#"{"name": "p", "version": "0.1.0", "extensions": ["dep.wasm"]}"#);
+        wasm_file(dir.path(), "dep.wasm", testing::DEP_1);
+        let base = Source::Local(wasm_file(files.path(), "base.wasm", testing::BASE_2));
+        let before = files_under(dir.path());
+        let error = add_one(dir.path(), base, &unconfigured).unwrap_err();
+        assert_eq!(error.code, "E027", "{error:?}");
+        assert!(
+            error
+                .message
+                .starts_with("installing '@probe/base' 2.0.0 breaks '@probe/dep': "),
+            "{}",
+            error.message
+        );
+        assert_eq!(files_under(dir.path()), before);
+
+        // (b) `base.wasm` is 2.0.0; the dep installed beside it wants ^1.
+        let dir = project_with(r#"{"name": "p", "version": "0.1.0", "extensions": ["base.wasm"]}"#);
+        wasm_file(dir.path(), "base.wasm", testing::BASE_2);
+        let dep = Source::Local(wasm_file(files.path(), "dep.wasm", testing::DEP_1));
+        let before = files_under(dir.path());
+        let error = add_one(dir.path(), dep, &unconfigured).unwrap_err();
+        assert_eq!(error.code, "E027", "{error:?}");
+        assert_eq!(
+            error.message,
+            "extension '@probe/dep' requires peer dependency '@probe/base' ^1.0 but version 2.0.0 is installed"
+        );
+        assert_eq!(files_under(dir.path()), before);
+    }
+
+    #[specforge_test(
+        behavior = "add_extension_to_existing_project",
+        verify = "an install enables the builtins it requires first, whatever its source"
+    )]
+    #[ignore = "fixed by T3"]
+    fn an_install_enables_the_builtins_it_requires_first() {
+        let files = tempfile::tempdir().unwrap();
+        let local = Source::Local(wasm_file(
+            files.path(),
+            "needs.wasm",
+            testing::NEEDS_SOFTWARE_1,
+        ));
+        let registry = registry_publishing(testing::NEEDS_SOFTWARE_1);
+        for (source, registry) in [
+            (
+                local,
+                &crate::registry::Unconfigured("add") as &dyn Registry,
+            ),
+            (package("@probe/needs-software"), &registry),
+        ] {
+            let dir = project_with(EMPTY_PROJECT);
+
+            let added = add_one(dir.path(), source, registry).unwrap();
+
+            let config = specforge_common::read_project_config(dir.path()).config;
+            assert_eq!(
+                config.extensions,
+                ["@specforge/software", "@probe/needs-software"]
+            );
+            assert!(
+                added
+                    .writes
+                    .names_under(dir.path())
+                    .contains(&"specforge.json".to_string()),
+                "{:?}",
+                added.writes
+            );
+        }
+    }
+
+    /// Pinned: today the builtin walk words a builtin's mismatch its own way. T3 deletes the walk
+    /// and check's wording takes over.
+    #[test]
+    fn pin_a_builtins_embedded_mismatch_has_its_own_wording() {
+        let dir = project_with(EMPTY_PROJECT);
+        let runtime = serving_builtin(
+            serving_builtin(
+                runtime(),
+                "@specforge/formal",
+                declaring(
+                    "@specforge/formal",
+                    "1.0.0",
+                    &[("@specforge/software", "^2.0", false)],
+                ),
+            ),
+            "@specforge/software",
+            declaring("@specforge/software", "1.0.0", &[]),
+        );
+
+        let error = add(
+            &builtin_request(
+                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                "@specforge/formal",
+            ),
+            &crate::registry::Unconfigured("add"),
+            &runtime,
+        )
+        .unwrap_err();
+
+        assert!(
+            error.message.contains("embeds @specforge/software 1.0.0"),
+            "{}",
+            error.message
+        );
     }
 
     #[test]

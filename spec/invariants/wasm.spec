@@ -41,6 +41,7 @@ invariant peer_dependency_satisfaction "Peer Dependency Satisfaction" {
   verify unit "unsatisfied peer dependency produces an error diagnostic"
   verify unit "peer with wrong version range produces an error diagnostic"
   verify unit "one rule judges a peer: its range read as SemVer, then the version its peer is installed at"
+  verify unit "add, init and update judge the set check judges: the extensions the project's entries load"
 }
 
 // -- Cache & Isolation Invariants ---------------------------------------------

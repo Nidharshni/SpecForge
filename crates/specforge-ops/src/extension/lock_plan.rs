@@ -1084,14 +1084,42 @@ mod tests {
         );
     }
 
+    /// Pinned: today a peer no lock entry has is left to `check`. T2 refuses it (E027).
     #[test]
-    fn a_peer_that_is_not_locked_is_left_to_check() {
+    fn pin_a_missing_peer_is_left_to_check() {
         let installed = nowhere(Vec::new());
         let runtime = runtime();
         let mut plan = LockPlan::new(&installed, Verb::Install).unwrap();
         plan.stage(local(&runtime, APP_NEEDS_BASE_2, "app.wasm"));
 
         assert!(plan.check().is_ok());
+    }
+
+    /// Pinned: today the gate judges every lock entry, enabled or not. T2 judges what the
+    /// project's entries load, so a locked extension no entry enables is not judged.
+    #[test]
+    fn pin_the_gate_judges_a_locked_extension_no_entry_enables() {
+        let installed = nowhere(vec![
+            entry("@acme/base", "1.0.0", "registry", &[]),
+            entry(
+                "@acme/other",
+                "1.0.0",
+                "registry",
+                &[("@acme/base", "^1.0")],
+            ),
+        ]);
+        let runtime = runtime();
+        let mut plan = LockPlan::new(&installed, Verb::Install).unwrap();
+        plan.stage(local(&runtime, BASE, "base.wasm"));
+
+        let err = refused(plan);
+
+        assert_eq!(err.code, "E027", "{err:?}");
+        assert!(
+            err.message
+                .starts_with("installing '@acme/base' 2.0.0 breaks '@acme/other'"),
+            "{err:?}"
+        );
     }
 
     #[test]
@@ -1416,6 +1444,44 @@ mod tests {
         let borrowed: Vec<(&str, &PeerDependency)> =
             requirers.iter().map(|(n, p)| (*n, p)).collect();
         unify("@shared/lib", &versions(vs), &borrowed)
+    }
+
+    /// Pinned: a pre-release is unified only when every requirer's range names its
+    /// `MAJOR.MINOR.PATCH`, each range read on its own; build metadata is ordered; R-RES-005 lists
+    /// `Available:` in the registry's order. T5 keeps every answer.
+    #[test]
+    fn pin_unify_takes_a_pre_release_only_when_every_range_names_it() {
+        let published = ["1.0.0", "1.5.0", "2.0.0-beta.1"];
+        // (a) no range names the beta's triple.
+        let result = unified(
+            &published,
+            &[req("@a/ext", ">=1.0.0"), req("@b/ext", "^1.0")],
+        );
+        assert_eq!(result.unwrap(), "1.5.0");
+        // (b) both do.
+        let result = unified(
+            &published,
+            &[
+                req("@a/ext", ">=2.0.0-beta.1"),
+                req("@b/ext", "^2.0.0-beta.1"),
+            ],
+        );
+        assert_eq!(result.unwrap(), "2.0.0-beta.1");
+        // (c) one does: merged into one requirement the beta would pass, read apart it does not.
+        let result = unified(
+            &published,
+            &[req("@a/ext", ">=2.0.0-beta.1"), req("@b/ext", ">=1.0.0")],
+        );
+        assert_eq!(result.unwrap_err().code, "R-RES-005");
+        // (d) semver's total order.
+        let result = unified(
+            &["1.0.0+build.2", "1.0.0+build.1"],
+            &[req("@a/ext", "^1.0")],
+        );
+        assert_eq!(result.unwrap(), "1.0.0+build.2");
+        // (e) the registry's order.
+        let err = unified(&["2.0.0", "1.0.0"], &[req("@a/ext", "^3.0")]).unwrap_err();
+        assert!(err.message.ends_with("Available: 2.0.0, 1.0.0"), "{err:?}");
     }
 
     #[test]

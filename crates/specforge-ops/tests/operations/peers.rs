@@ -191,3 +191,204 @@ fn check_reports_a_cycle_among_required_peers() {
     assert_eq!(peers.len(), 1, "{:?}", report.findings);
     assert_eq!(peers[0].check, cycles[0].message);
 }
+
+/// What a case adds.
+enum Adds {
+    /// A `.wasm` file with these bytes.
+    Local(&'static [u8]),
+    /// A builtin.
+    Builtin(&'static str),
+}
+
+/// An extension installed by hand: name, module bytes, locked version and locked peers.
+type Locked = (
+    &'static str,
+    &'static [u8],
+    &'static str,
+    &'static [(&'static str, &'static str)],
+);
+
+/// One case of the table: name, config entries, files under the root, extensions installed by
+/// hand, what is added, and the code the add is refused with (`None`: it passes).
+type Case = (
+    &'static str,
+    &'static [&'static str],
+    &'static [(&'static str, &'static [u8])],
+    &'static [Locked],
+    Adds,
+    Option<&'static str>,
+);
+
+/// Rewrite the lock entry of `name` to record `version` and `peers`.
+fn lock_record(root: &Path, name: &str, version: &str, peers: &[(&str, &str)]) {
+    let path = root.join("specforge.lock");
+    let mut lock: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    for entry in lock["entries"].as_array_mut().unwrap() {
+        if entry["name"] == name {
+            entry["version"] = version.into();
+            entry["peer_dependencies"] = peers
+                .iter()
+                .map(|(peer, range)| {
+                    serde_json::json!({"name": peer, "version": range, "optional": false})
+                })
+                .collect();
+        }
+    }
+    std::fs::write(&path, lock.to_string()).unwrap();
+}
+
+#[specforge_test(
+    behavior = "add_extension_to_existing_project",
+    verify = "add and check agree: an add check would report E027 or E073 for is refused, and an add that passes leaves none"
+)]
+#[ignore = "fixed by T3"]
+fn add_and_check_agree_on_the_project_peer_set() {
+    use specforge_ops::extension::{self, AddRequest, Source, Trust};
+    use specforge_ops::testing::{
+        BASE_1, BASE_2, DEP_1, NEEDS_SOFTWARE_1, NEEDS_SOFTWARE_9, probes,
+    };
+
+    let cases: Vec<Case> = vec![
+        (
+            "builtin out of range",
+            &["@specforge/software"],
+            &[],
+            &[],
+            Adds::Local(NEEDS_SOFTWARE_9),
+            Some("E027"),
+        ),
+        (
+            "builtin not enabled",
+            &[],
+            &[],
+            &[],
+            Adds::Local(NEEDS_SOFTWARE_1),
+            None,
+        ),
+        (
+            "enabling breaks an installed one",
+            &["@probe/needs-software"],
+            &[],
+            &[(
+                "@probe/needs-software",
+                NEEDS_SOFTWARE_9,
+                "1.0.0",
+                &[("@specforge/software", "^9.0")],
+            )],
+            Adds::Builtin("@specforge/software"),
+            Some("E027"),
+        ),
+        (
+            "breaks a file entry",
+            &["dep.wasm"],
+            &[("dep.wasm", DEP_1)],
+            &[],
+            Adds::Local(BASE_2),
+            Some("E027"),
+        ),
+        (
+            "file entry does not satisfy",
+            &["base.wasm"],
+            &[("base.wasm", BASE_2)],
+            &[],
+            Adds::Local(DEP_1),
+            Some("E027"),
+        ),
+        (
+            "missing non-builtin",
+            &[],
+            &[],
+            &[],
+            Adds::Local(DEP_1),
+            Some("E027"),
+        ),
+        (
+            "satisfied pair",
+            &["base.wasm"],
+            &[("base.wasm", BASE_1)],
+            &[],
+            Adds::Local(DEP_1),
+            None,
+        ),
+        (
+            "locked, not enabled",
+            &[],
+            &[],
+            &[("@probe/dep", DEP_1, "1.0.0", &[("@probe/base", "^1.0")])],
+            Adds::Local(BASE_2),
+            None,
+        ),
+    ];
+
+    for (case, config, files, locked, adds, refused) in cases {
+        let dir = project(config);
+        for (path, bytes) in files {
+            std::fs::write(dir.path().join(path), bytes).unwrap();
+        }
+        for (name, bytes, version, peers) in locked {
+            specforge_installed::testing::install_module(dir.path(), name, bytes);
+            lock_record(dir.path(), name, version, peers);
+        }
+        let outside = tempfile::tempdir().unwrap();
+        let source = match adds {
+            Adds::Local(bytes) => {
+                let file = outside.path().join("added.wasm");
+                std::fs::write(&file, bytes).unwrap();
+                Source::Local(file)
+            }
+            Adds::Builtin(name) => Source::Builtin(name),
+        };
+        let before = snapshot(dir.path());
+
+        let result = extension::add(
+            &AddRequest {
+                root: &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                extensions: vec![source.into()],
+                allow_unsigned: false,
+                trust: Trust::Refuse,
+                dry_run: false,
+            },
+            &specforge_ops::registry::Unconfigured("test"),
+            &probes(),
+        );
+
+        match refused {
+            Some(code) => {
+                let error = result.unwrap_err();
+                assert_eq!(error.code, code, "{case}: {error:?}");
+                assert_eq!(snapshot(dir.path()), before, "{case}: nothing written");
+            }
+            None => {
+                result.unwrap_or_else(|error| panic!("{case}: {error:?}"));
+                let compiled = CompiledProject::compile(
+                    &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                    Some(Arc::new(probes())),
+                );
+                let all = compiled.diagnostics();
+                let peers: Vec<_> = all
+                    .iter()
+                    .filter(|d| matches!(d.code.as_str(), "E027" | "E073"))
+                    .collect();
+                assert!(peers.is_empty(), "{case}: {peers:?}");
+            }
+        }
+    }
+}
+
+/// Every file under `root` with its bytes.
+fn snapshot(root: &Path) -> std::collections::BTreeMap<std::path::PathBuf, Vec<u8>> {
+    let mut files = std::collections::BTreeMap::new();
+    let mut dirs = vec![root.to_path_buf()];
+    while let Some(dir) = dirs.pop() {
+        for entry in std::fs::read_dir(&dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                dirs.push(path);
+            } else {
+                files.insert(path.clone(), std::fs::read(&path).unwrap());
+            }
+        }
+    }
+    files
+}

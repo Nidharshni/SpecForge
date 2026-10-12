@@ -940,3 +940,77 @@ fn add_from_a_subdirectory_adds_to_the_project_it_is_in() {
     assert_eq!(changed_since(root, &before), ["specforge.json"]);
     assert!(!sub.join("specforge.json").exists());
 }
+
+#[specforge_test_macros::test(
+    behavior = "non_interactive_init",
+    verify = "init refuses local extensions the lock plan refuses before it writes anything"
+)]
+#[ignore = "fixed by T2"]
+fn init_refuses_a_local_file_the_embedded_builtin_does_not_satisfy() {
+    use specforge_ops::init;
+    let scratch = TempDir::new().unwrap();
+    let needs = scratch.path().join("needs.wasm");
+    std::fs::write(&needs, testing::NEEDS_SOFTWARE_9).unwrap();
+    let dir = scratch.path().join("never");
+    let extensions = vec![
+        needs.display().to_string(),
+        "@specforge/software".to_string(),
+    ];
+    let request = init::Request {
+        dir: &dir,
+        name: Some("demo"),
+        version: init::DEFAULT_VERSION,
+        extensions: &extensions,
+    };
+
+    let error = init::plan(&request, &testing::probes()).unwrap_err();
+
+    assert_eq!(error.code, "E027", "{error:?}");
+    assert_eq!(
+        error.message,
+        "extension '@probe/needs-software' requires peer dependency '@specforge/software' ^9.0 but version 1.0.0 is installed"
+    );
+    assert!(!dir.join("specforge.json").exists());
+}
+
+#[specforge_test_macros::test(
+    behavior = "non_interactive_init",
+    verify = "init enables the builtins a local file requires before it"
+)]
+#[ignore = "fixed by T3"]
+fn init_enables_the_builtins_a_local_file_requires() {
+    use specforge_ops::init;
+    let scratch = TempDir::new().unwrap();
+    let needs = scratch.path().join("needs.wasm");
+    std::fs::write(&needs, testing::NEEDS_SOFTWARE_1).unwrap();
+    let dir = scratch.path().join("proj");
+    let extensions = vec![needs.display().to_string()];
+    let request = init::Request {
+        dir: &dir,
+        name: Some("demo"),
+        version: init::DEFAULT_VERSION,
+        extensions: &extensions,
+    };
+    let runtime = testing::probes();
+
+    let plan = init::plan(&request, &runtime).unwrap();
+
+    assert_eq!(
+        plan.extensions,
+        [
+            "@specforge/software",
+            "@probe/needs-software",
+            "@specforge/testing"
+        ]
+    );
+    init::apply(&dir, plan).unwrap();
+    let compiled = CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(&dir).unwrap(),
+        Some(Arc::new(runtime)),
+    );
+    assert!(
+        !compiled.diagnostics().iter().any(|d| d.code == "E027"),
+        "{:?}",
+        compiled.diagnostics()
+    );
+}
