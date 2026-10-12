@@ -34,8 +34,10 @@ Every registry install performs four checks, in order:
 1. **Integrity** — the downloaded wasm bytes must match the `sha256` the
    registry reports (transfer-level check).
 2. **Publisher signature** — packages uploaded via `specforge publish` carry an
-   Ed25519 signature over the canonical payload
-   `{name, version, wasmSha256, manifestSha256, signedAt}`. The client
+   Ed25519 signature object `{sig, public_key, signed_at}` over the canonical payload
+   `{name, version, wasmSha256, manifestSha256, signedAt}`. The registry refuses an upload
+   whose signature isn't one or doesn't verify over it (`INVALID_SIGNATURE`), so a stored
+   package's signature verified once already. The client
    re-derives the payload from the **downloaded wasm bytes** and the
    **manifest the registry serves** (the package's extension declaration,
    which `specforge publish` derives from the binary; ADR 0012) and verifies the signature with the public
@@ -61,7 +63,8 @@ it can only replay previously signed packages (see [residual risks](#residual-ri
 | Manifest published before extension declarations (it carries `manifestVersion`) | **Always refused** ([R-OPS-004](diagnostics.md#r-ops-004)), suggesting to re-publish the package with this version of `specforge publish` |
 | Binary declares other than the served declaration | **Always refused** ([R-TRUST-004](diagnostics.md#r-trust-004)), naming the first category that differs |
 | Package unsigned | Refused. `--allow-unsigned` accepts the risk explicitly |
-| Signature invalid (tampered wasm/manifest) | **Always refused** — `--allow-unsigned` does not bypass a broken signature |
+| Signature doesn't verify (tampered wasm/manifest) | **Always refused** ([R-TRUST-002](diagnostics.md#r-trust-002)): `--allow-unsigned` does not bypass a broken signature |
+| Registry answer isn't the protocol's JSON (e.g. a signature that isn't one) | **Always refused** ([R009](diagnostics.md#r009)), before any key is pinned |
 | Key differs from the pinned key | Refused with both key ids; interactive re-pin offered (`y/N`); `--yes` accepts non-interactively for CI |
 | Key on your `denied_keys` list | Refused outright (config-level revocation) |
 | Key on your `trusted_keys` allowlist | Accepted without a prior pin (pre-seeded trust) |
@@ -120,8 +123,9 @@ registry install, so pins are auditable per project.
   high-assurance setups.
 - **No key transparency**: v1 has no log proving a publisher uses one key
   consistently across all users. Compare pins with your team out of band.
-- **Unsigned packages**: registries may accept them (enforcement is a server
-  policy). `specforge add` refuses them unless you pass `--allow-unsigned`.
+- **Unsigned packages**: the reference registry refuses them, and refuses a
+  signature that doesn't verify; another registry may not. `specforge add`
+  refuses an unsigned package unless you pass `--allow-unsigned`.
 
 ## Runtime sandbox note
 

@@ -94,3 +94,17 @@ or a dry run of an exact version, asks nothing and shows nothing.
 of every builtin") now holds for the protocol types themselves: the package names and the peer rule moved to
 `specforge-package`, which the wire crate depends on. `specforge_registry_wire::declares` is gone: a search
 filter reads `ExtensionDeclaration::declares`.
+
+## Amendment (architecture round 7, plan 12): the signature is part of the contract, and refusals are typed
+
+- **D1.** The crate also holds the package signature (`signature`: `PackageSignature`, `SignedContent`,
+  `sha256_hex`), its parse and its verification, which both ends run (ADR 0061). It therefore also depends on
+  `serde_json`, `sha2`, `hex`, `ed25519-dalek` and `chrono` (and on `specforge-package`, ADR 0050). D1's rejection of
+  "a module in the client" stands for its first reason: the registry would link the keyring and reqwest. It now links
+  ed25519 on purpose.
+- **D2.** "Anything else a network error" is narrowed: a 400 is `Refused` carrying the registry's `ErrorCode` and
+  message (R008), and a 2xx body that isn't the call's wire type is `InvalidReply` (R009). Other statuses read
+  as before. `PackageMetadata` carries the typed signature and no `key_id`; the error body's `code` is `ErrorCode`;
+  the client reads the publish receipt.
+- **D4.** The client contract gains K11: a publish whose signature does not verify is refused and stores nothing,
+  over HTTP and in memory.
