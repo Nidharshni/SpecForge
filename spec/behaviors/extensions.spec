@@ -839,6 +839,7 @@ behavior check_registry_reply "Check Registry Reply" {
     reply_received "The registry answered a request for name@version and its download passed the SHA256 check"
   }
   ensures {
+    reply_readable         "A reply that isn't the registry protocol's JSON (a malformed publisher signature among them) is refused with R009, even with --allow-unsigned"
     reply_names_request    "A reply naming another package or version than the one requested is refused with R-TRUST-004"
     key_id_consistent      "A reply whose key id differs from the key id inside its signature is refused with R-TRUST-004"
     manifest_names_request "A served manifest naming another package or version is refused with R-TRUST-004"
@@ -847,6 +848,9 @@ behavior check_registry_reply "Check Registry Reply" {
     declaration_matches    "A binary whose declaration differs from the served one is refused with R-TRUST-004 naming the first differing category"
   }
   contract   """
+    A reply that isn't the registry protocol's JSON for the request (a
+    publisher signature that isn't one among them) MUST be refused (R009)
+    before anything else is checked: no flag accepts it.
     Before a registry package's signature is checked or its key pinned,
     the system MUST refuse the reply when it describes another package or
     version than the one requested, or when its manifest does: the
@@ -864,6 +868,7 @@ behavior check_registry_reply "Check Registry Reply" {
     package is refused (R-TRUST-004) naming the first differing category.
     A refused reply pins no key and installs nothing.
   """
+  verify unit "a reply that is not the protocol's JSON is refused with R009, even with --allow-unsigned"
   verify integration "a reply for another package is refused and pins nothing"
   verify integration "a key id the signature does not carry is refused"
   verify integration "a manifest that cannot be read is refused and pins nothing"

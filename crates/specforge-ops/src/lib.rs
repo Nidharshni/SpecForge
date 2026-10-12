@@ -142,6 +142,7 @@ impl OpErrorKind {
             (codes::R007, OpErrorKind::Conflict),
             (codes::R004, OpErrorKind::Timeout),
             (codes::R008, OpErrorKind::InvalidInput),
+            (codes::R009, OpErrorKind::SchemaMismatch),
         ];
         KINDS
             .iter()

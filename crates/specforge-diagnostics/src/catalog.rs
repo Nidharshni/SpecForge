@@ -481,6 +481,9 @@ catalog! {
     R008: Error core,
         "Registry refused the request",
         "The registry read the request and refused it (HTTP 400), naming its reason and code: for a publish, a package that isn't signed or whose signature isn't one or doesn't verify over the uploaded binary and manifest (INVALID_SIGNATURE), a binary that isn't a Wasm module, or a manifest that isn't an extension declaration or names another package. Nothing was stored, and the version can still be published. Fix what the message names and try again; sending the same request again is refused the same way.";
+    R009: Error core,
+        "Registry reply unreadable",
+        "The registry answered with a body that isn't the JSON the registry protocol defines for that request, such as a publisher signature that isn't an Ed25519 signature object, or a publish receipt that describes another upload than the one sent. The registry is broken, or the URL isn't a SpecForge registry. Nothing is installed and no key is pinned, and `--allow-unsigned` doesn't accept such a package. Check the registry.";
     R010: Error core,
         "Registry token variable not set",
         "The registry's credential is a reference to an environment variable (`specforge login --token-env`, or a `token_env` entry in `~/.specforge/credentials.json`) that isn't set, or is blank, where the command runs. Set it, or log in again with another source.";

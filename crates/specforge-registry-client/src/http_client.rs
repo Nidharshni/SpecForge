@@ -76,9 +76,7 @@ impl RegistryClient for HttpRegistryClient {
         let resp = self.send(authorized(self.client.get(&url), credential), &url)?;
         match resp.status() {
             StatusCode::OK => {
-                let body: VersionList = resp.json().map_err(|e| RegistryError::NetworkError {
-                    message: format!("invalid response body: {}", e),
-                })?;
+                let body: VersionList = read_reply(&bytes_of(resp)?, name.as_str())?;
                 Ok(body.versions)
             }
             _ => Err(failure_of(resp, name.as_str())),
@@ -98,9 +96,7 @@ impl RegistryClient for HttpRegistryClient {
         match resp.status() {
             StatusCode::OK => {
                 let mut body: PackageMetadata =
-                    resp.json().map_err(|e| RegistryError::NetworkError {
-                        message: format!("invalid response body: {}", e),
-                    })?;
+                    read_reply(&bytes_of(resp)?, &format!("{name}@{version}"))?;
                 if body.wasm_url.starts_with('/') {
                     // the server may return a root-relative download path;
                     // resolve it against the configured registry base
@@ -148,9 +144,7 @@ impl RegistryClient for HttpRegistryClient {
         let resp = self.send(authorized(self.client.get(&url), credential), &url)?;
         match resp.status() {
             StatusCode::OK => {
-                let body: SearchResults = resp.json().map_err(|e| RegistryError::NetworkError {
-                    message: format!("invalid search response: {}", e),
-                })?;
+                let body: SearchResults = read_reply(&bytes_of(resp)?, &query.q)?;
                 Ok(body.results)
             }
             _ => Err(failure_of(resp, &query.q)),
@@ -232,14 +226,32 @@ impl RegistryClient for HttpRegistryClient {
         let resp = self.send(request, &url)?;
         match resp.status() {
             StatusCode::OK => {
-                let body: TokenVerified = resp.json().map_err(|e| RegistryError::NetworkError {
-                    message: format!("invalid auth response: {}", e),
-                })?;
+                let body: TokenVerified = read_reply(&bytes_of(resp)?, &registry.url)?;
                 Ok(body.expires_at)
             }
             _ => Err(failure_of(resp, &registry.url)),
         }
     }
+}
+
+/// The body of `resp`; a transport failure while reading it is a `NetworkError`.
+fn bytes_of(resp: Response) -> Result<Vec<u8>, RegistryError> {
+    resp.bytes()
+        .map(|bytes| bytes.to_vec())
+        .map_err(|e| RegistryError::NetworkError {
+            message: format!("failed to read the response body: {e}"),
+        })
+}
+
+/// `body` read as `T`, the wire type a call answers with; a body that isn't one is `InvalidReply` naming `subject`.
+fn read_reply<T: serde::de::DeserializeOwned>(
+    body: &[u8],
+    subject: &str,
+) -> Result<T, RegistryError> {
+    serde_json::from_slice(body).map_err(|e| RegistryError::InvalidReply {
+        subject: subject.to_string(),
+        message: e.to_string(),
+    })
 }
 
 /// `request` with `credential` as its bearer token, when there is one.
@@ -511,6 +523,26 @@ mod tests {
                 message: "registry answered 400 Bad Request".into()
             }
         );
+    }
+
+    #[specforge_test_macros::test(
+        behavior = "check_registry_reply",
+        verify = "a reply that is not the protocol's JSON is refused with R009, even with --allow-unsigned"
+    )]
+    fn a_reply_that_is_not_the_protocols_json_is_refused() {
+        let error =
+            read_reply::<PackageMetadata>(br#"{"name":"@a/b","version":"1.0.0"}"#, "@a/b@1.0.0")
+                .unwrap_err();
+        assert!(
+            matches!(&error, RegistryError::InvalidReply { subject, message }
+                if subject == "@a/b@1.0.0" && message.contains("sha256")),
+            "{error:?}"
+        );
+        assert_eq!(error.to_diagnostic().code, "R009");
+        assert!(matches!(
+            read_reply::<VersionList>(b"<html>", "@a/b").unwrap_err(),
+            RegistryError::InvalidReply { .. }
+        ));
     }
 
     #[test]

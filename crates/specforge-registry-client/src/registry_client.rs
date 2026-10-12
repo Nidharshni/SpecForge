@@ -43,6 +43,12 @@ pub enum RegistryError {
         code: ErrorCode,
         message: String,
     },
+    /// The registry answered with a body that isn't the wire type of the call: a malformed publisher signature
+    /// among them (R009).
+    InvalidReply {
+        subject: String,
+        message: String,
+    },
 }
 
 impl RegistryError {
@@ -95,6 +101,16 @@ impl RegistryError {
             )
             .with_suggestion(
                 "fix what the registry names and try again; sending the same request again is refused the same way"
+                    .to_string(),
+            ),
+            RegistryError::InvalidReply { subject, message } => Diagnostic::new(
+                codes::R009,
+                format!(
+                    "the registry's answer for {subject} is not the registry protocol's JSON: {message}"
+                ),
+            )
+            .with_suggestion(
+                "install nothing from this registry until it is fixed, and check that its URL is a SpecForge registry"
                     .to_string(),
             ),
         }

@@ -267,6 +267,27 @@ fn a_key_id_the_signature_does_not_carry_is_refused() {
 }
 
 #[specforge_test(
+    behavior = "check_registry_reply",
+    verify = "a reply that is not the protocol's JSON is refused with R009, even with --allow-unsigned"
+)]
+fn an_unreadable_reply_pins_nothing_even_with_allow_unsigned() {
+    let key = SigningKey::generate();
+    let project = Project::on(Reply::signed(&key));
+    project.client.fail_next(
+        specforge_registry_client::testing::CallKind::Metadata,
+        None,
+        specforge_registry_client::RegistryError::InvalidReply {
+            subject: format!("{NAME}@{VERSION}"),
+            message: "x".to_string(),
+        },
+    );
+
+    let error = project.fetch(true, Trust::AssumeYes).unwrap_err();
+    assert_eq!(error.code, "R009", "{error:?}");
+    assert_eq!(project.pinned(), None);
+}
+
+#[specforge_test(
     behavior = "verify_publisher_signature",
     verify = "an unsigned package is refused without --allow-unsigned"
 )]
