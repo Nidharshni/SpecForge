@@ -771,7 +771,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "refinement.concrete_entity": "behavior"
     },
     "bidirectional_pairs": [],
-    "body_parser_kinds": [],
     "derived_references": [],
     "field_coercions": {
       "axiom.assumes": "List",

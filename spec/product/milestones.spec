@@ -306,7 +306,6 @@ milestone extension_ecosystem "Phase 11: Extension Ecosystem" {
     extension_registry,
     registry_authentication,
     test_result_collection,
-    extension_body_parsing,
     pe_planning_insights,
     pe_external_blockers,
   ]

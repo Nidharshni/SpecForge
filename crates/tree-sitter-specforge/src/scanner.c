@@ -16,11 +16,13 @@
 // recovers by inserting the body's MISSING "}" before it. The tree keeps
 // the error, and every form after the body.
 //
-// Tree-sitter inserts one MISSING token per error, so a nested block, list
-// or expression group left open inside that body is ended first by a
-// second token, `_close`, zero-width too and valid there as the
-// alternative to its closing bracket; the body's MISSING "}" then reports
-// the error for them all.
+// Tree-sitter inserts one MISSING token per error, so whatever a member
+// left open inside that body is ended first by a second token, `_close`,
+// zero-width too and valid there as the alternative to what the member
+// waits for: a list's `]`, a nested block's or expression group's `}`, a
+// parameter list's or parenthesized expression's `)`, a generic's `>`, or
+// a field's value. The body's MISSING "}" then reports the error for them
+// all.
 
 #include "tree_sitter/alloc.h"
 #include "tree_sitter/parser.h"

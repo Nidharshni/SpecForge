@@ -122,6 +122,42 @@ behavior c {
 
 #[specforge_test_macros::test(
     behavior = "recover_from_syntax_errors",
+    verify = "a body member left half-typed ends where the next top-level form starts"
+)]
+fn a_half_typed_member_ends_at_the_next_form() {
+    for member in [
+        "  st",                                             // a field's name, no value
+        "  method charge(amount: String",                   // an open parameter list
+        "  method charge(amount: String) -> Result<String", // an open generic
+        "  method on(cb: fn(String",                        // an open function type
+        "  guard expr { (latency < 10ms",                   // an open parenthesis
+    ] {
+        let source = format!(
+            "port p \"P\" {{\n  direction inbound\n{member}\n\nbehavior b \"B\" {{\n  status done\n}}\n"
+        );
+        let tree = parse(&source);
+        assert_eq!(
+            top_level(&source, &tree),
+            pairs(&[
+                ("entity_block", "port p \"P\" {"),
+                ("entity_block", "behavior b \"B\" {"),
+            ]),
+            "{member}: {}",
+            tree.root_node().to_sexp()
+        );
+        let root = tree.root_node();
+        let mut cursor = root.walk();
+        let blocks: Vec<Node> = root.named_children(&mut cursor).collect();
+        assert!(
+            misses_a_brace(blocks[0]),
+            "{member}: the body reports its error"
+        );
+        assert!(!blocks[1].has_error(), "{member}");
+    }
+}
+
+#[specforge_test_macros::test(
+    behavior = "recover_from_syntax_errors",
     verify = "an unclosed body ends at a form indented no deeper than the form it opened"
 )]
 fn indented_forms_end_an_unclosed_body() {
@@ -188,6 +224,100 @@ fn the_grammar_resumes_after_every_unclosed_body_of_the_corpora() {
         lost.is_empty(),
         "forms lost after an unclosed body: {lost:#?}"
     );
+}
+
+#[specforge_test_macros::test(
+    behavior = "recover_from_syntax_errors",
+    verify = "a body member left half-typed ends where the next top-level form starts"
+)]
+fn the_grammar_resumes_after_every_half_typed_body_of_the_corpora() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut files = Vec::new();
+    for corpus in ["spec", "integrations/rust/spec", "examples"] {
+        spec_files(&root.join(corpus), &mut files);
+    }
+    let mut lost = Vec::new();
+    let mut half_typed = 0;
+    for file in files {
+        let source = std::fs::read_to_string(&file).unwrap();
+        let tree = parse(&source);
+        let expected = form_starts(&tree);
+        let root_node = tree.root_node();
+        let mut cursor = root_node.walk();
+        for form in root_node.named_children(&mut cursor) {
+            let Some((value_from, field_to, close)) = last_field_and_close(form) else {
+                continue;
+            };
+            // `_close` ends the field only before a form line: a form that
+            // ends the file has none to end it at.
+            let mut next = form.next_named_sibling();
+            while next.is_some_and(|n| n.kind() == kind::COMMENT) {
+                next = next.and_then(|n| n.next_named_sibling());
+            }
+            if next.is_none() {
+                continue;
+            }
+            half_typed += 1;
+            // The last field loses its value (and annotations), the body its
+            // `}`: bytes become spaces, so offsets and lines stay.
+            let mut bytes = source.clone().into_bytes();
+            for byte in &mut bytes[value_from..field_to] {
+                if *byte != b'\n' {
+                    *byte = b' ';
+                }
+            }
+            bytes[close] = b' ';
+            let broken = String::from_utf8(bytes).unwrap();
+            let got = form_starts(&parse(&broken));
+            if got != expected {
+                let line = source[..value_from].matches('\n').count() + 1;
+                lost.push(format!(
+                    "{}:{line}: expected {} top-level forms, got {}",
+                    file.display(),
+                    expected.len(),
+                    got.len()
+                ));
+            }
+        }
+    }
+    assert!(
+        half_typed > 300,
+        "found only {half_typed} bodies ending in a field"
+    );
+    assert!(
+        lost.is_empty(),
+        "forms lost after a half-typed field: {lost:#?}"
+    );
+}
+
+/// The root's named children other than comments, as (kind, start byte).
+fn form_starts(tree: &Tree) -> Vec<(String, usize)> {
+    let root = tree.root_node();
+    let mut cursor = root.walk();
+    root.named_children(&mut cursor)
+        .filter(|n| n.kind() != kind::COMMENT)
+        .map(|n| (n.kind().to_string(), n.start_byte()))
+        .collect()
+}
+
+/// For a top-level entity block whose last member is a field with a value:
+/// the byte where that value starts, where the field ends, and the body's
+/// closing `}`.
+fn last_field_and_close(node: Node) -> Option<(usize, usize, usize)> {
+    if node.kind() != kind::ENTITY_BLOCK {
+        return None;
+    }
+    let close = closing_brace(node)?;
+    let mut cursor = node.walk();
+    let last = node
+        .named_children(&mut cursor)
+        .filter(|n| n.kind() != kind::COMMENT)
+        .last()?;
+    if last.kind() != kind::FIELD {
+        return None;
+    }
+    let value = last.child_by_field_name(tree_sitter_specforge::field::VALUE)?;
+    Some((value.start_byte(), last.end_byte(), close))
 }
 
 /// The byte offset of a top-level block's closing `}`, for a block with a body.

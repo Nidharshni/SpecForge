@@ -123,7 +123,6 @@ fn graph_inputs(env: &Environment) -> Value {
         })
         .collect();
     json!({
-        "body_parser_kinds": sorted(config.body_parser_kinds.iter().map(|k| json!(k)).collect()),
         "single_reference_fields": sorted(
             config.single_reference_fields.iter().map(|(k, f)| json!([k, f])).collect()
         ),

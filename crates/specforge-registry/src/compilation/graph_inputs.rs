@@ -6,34 +6,17 @@
 use std::collections::{BTreeSet, HashMap, HashSet};
 
 use specforge_graph::{DerivedFrom, DerivedReference, FieldCoercion, GraphInputs};
-use specforge_protocol_types::ExtensionDeclaration;
 
-use super::populate::keyword;
 use crate::{FieldRegistry, FieldType, KindRegistry};
 
-pub(super) fn derive(
-    declarations: &[ExtensionDeclaration],
-    kinds: &KindRegistry,
-    fields: &FieldRegistry,
-) -> GraphInputs {
+pub(super) fn derive(kinds: &KindRegistry, fields: &FieldRegistry) -> GraphInputs {
     GraphInputs {
         bidirectional_pairs: bidirectional_pairs(fields),
-        body_parser_kinds: body_parser_kinds(declarations),
         single_reference_fields: single_reference_fields(kinds, fields),
         absent_reference_targets: absent_reference_targets(kinds, fields),
         field_coercions: field_coercions(fields),
         derived_references: derived_references(fields),
     }
-}
-
-/// Kinds a declaration says carry a body parser, by keyword.
-fn body_parser_kinds(declarations: &[ExtensionDeclaration]) -> HashSet<String> {
-    declarations
-        .iter()
-        .flat_map(|d| d.entities.iter())
-        .filter(|k| k.has_body_parser)
-        .map(|k| keyword(k).to_string())
-        .collect()
 }
 
 /// Every registered `reference` field, while some kind is registered.

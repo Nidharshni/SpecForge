@@ -309,3 +309,35 @@ fn client_support_reads_what_steers_the_reaction() {
     assert!(!nothing.tokens_refresh);
     assert!(!nothing.relative_patterns);
 }
+
+/// A body left unclosed while a field's name is typed, then two types.
+const HALF_TYPED: &str =
+    "type alpha \"A\" {\n  note\n\ntype beta \"B\" {}\n\ntype gamma \"C\" {}\n";
+
+#[spec(
+    behavior = "go_to_definition",
+    verify = "the entity after a body being typed is navigated to"
+)]
+fn the_entity_after_a_half_typed_body_is_navigable() {
+    let dir = TempDir::new().unwrap();
+    let (mut state, uri) = serving(&dir, HALF_TYPED);
+    state.set_client(ClientSupport {
+        definition_links: true,
+        ..ClientSupport::default()
+    });
+    let on_beta = Position::new(3, 6);
+    let Some(GotoDefinitionResponse::Link(links)) = answers::definition(&state, &uri, on_beta)
+    else {
+        panic!("a link");
+    };
+    assert_eq!(quad(links[0].target_selection_range), (3, 5, 3, 9));
+    let hover = answers::hover(&state, &uri, on_beta).expect("a hover");
+    let tower_lsp::lsp_types::HoverContents::Markup(markup) = hover.contents else {
+        panic!("markup");
+    };
+    assert!(
+        markup.value.starts_with("**type** `beta`"),
+        "{}",
+        markup.value
+    );
+}

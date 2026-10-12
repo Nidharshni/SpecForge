@@ -305,9 +305,10 @@ term t_multi_resolution_query "multi-resolution query" {
 
 term t_body_parser "body parser" {
   definition """
-    An entity kind's has_body_parser flag: its extension owns the kind's
-    body syntax, so the core grammar's parse errors inside those entities
-    are not reported. Extensions cannot plug in body parsing code.
+    An entity kind's has_body_parser flag: its extension says the kind's
+    body carries syntax of its own. The core grammar reads every body and
+    every parse error in it is reported, whatever the flag says.
+    Extensions cannot plug in body parsing code.
   """
   see_also   [t_entity]
 }

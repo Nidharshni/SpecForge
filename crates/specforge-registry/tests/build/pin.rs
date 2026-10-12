@@ -177,8 +177,6 @@ fn graph_inputs(inputs: &GraphInputs) -> Value {
             })
         })
         .collect();
-    let mut body_parser_kinds: Vec<&String> = inputs.body_parser_kinds.iter().collect();
-    body_parser_kinds.sort();
     let mut single_reference_fields: Vec<String> = inputs
         .single_reference_fields
         .iter()
@@ -186,7 +184,6 @@ fn graph_inputs(inputs: &GraphInputs) -> Value {
         .collect();
     single_reference_fields.sort();
     json!({
-        "body_parser_kinds": body_parser_kinds,
         "single_reference_fields": single_reference_fields,
         "bidirectional_pairs": bidirectional_pairs,
         "absent_reference_targets": absent_reference_targets,

@@ -260,10 +260,6 @@ fn the_graph_inputs_contract_holds() {
     let inputs = build.graph_inputs();
 
     // registries_populated, registries_agree: each input says what the build holds.
-    assert_eq!(
-        inputs.body_parser_kinds,
-        ["doc".to_string()].into_iter().collect()
-    );
     assert!(
         inputs
             .single_reference_fields

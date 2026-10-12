@@ -261,7 +261,7 @@ Every contribution is a builder call. The SDK adds the matching Wasm exports and
 - `description(..)`, `keyword(..)` (the DSL keyword, default the name)
 - `testable(bool)`, `singleton(bool)`, `supports_verify(bool)`, `incremental(bool)`
 - `open_fields(bool)` -- unknown fields are accepted
-- `has_body_parser()` -- the kind's body syntax is its own: parse errors inside its entities are not reported
+- `has_body_parser()` -- declares that the kind's body carries syntax of its own; the core grammar reads every body and reports its parse errors whatever the flag says
 - `contract_target()`, `declares_types()`, `lifecycle_field(field)`, `verify_kinds(&[..])`, `inference_guide(..)`
 - LSP and DOT metadata, requested by the host only where it needs them: `semantic_token(..)`, `lsp_icon(..)`, `dot_shape(..)`, `dot_color(..)`, `dot_fillcolor(..)`
 - `field(name, |f| ..)` -- a field of the kind

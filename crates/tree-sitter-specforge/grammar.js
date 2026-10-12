@@ -25,9 +25,9 @@ module.exports = grammar({
   //                recovers by inserting the body's MISSING "}" before it.
   //   _in_body     never produced: valid wherever such a body may hold a
   //                member or close, so the scanner runs there.
-  //   _close       ends a nested block, list or expression group left open
-  //                inside that body, at the same line (tree-sitter inserts
-  //                one MISSING token per error; the body's reports it).
+  //   _close       ends whatever a body member left open (a bracket, or a
+  //                field's value) at the same line (tree-sitter inserts one
+  //                MISSING token per error; the body's reports it).
   externals: ($) => [$._form_start, $._in_body, $._close],
 
   word: ($) => $.identifier,
@@ -180,7 +180,9 @@ module.exports = grammar({
     field: ($) =>
       seq(
         field("key", choice($.identifier, alias("verify", $.identifier))),
-        field("value", $._value),
+        // A name typed before a form line has no value yet: `_close` ends
+        // the field there, and the body misses its "}" (ADR 0063 D2).
+        field("value", choice($._value, $._close)),
         repeat($.annotation),
       ),
 
@@ -220,7 +222,7 @@ module.exports = grammar({
         field("name", $.identifier),
         "(",
         optional(commaSep1($.parameter)),
-        ")",
+        choice(")", $._close),
         optional(seq("->", field("returns", $._type_ref))),
       ),
 
@@ -252,7 +254,7 @@ module.exports = grammar({
         "fn",
         "(",
         optional(commaSep1($._type_ref)),
-        ")",
+        choice(")", $._close),
         optional(seq("->", field("returns", $._type_ref))),
       ),
 
@@ -261,7 +263,7 @@ module.exports = grammar({
         field("base", $.identifier),
         "<",
         commaSep1($._type_ref),
-        ">",
+        choice(">", $._close),
       ),
 
     // Union-typed field declaration: query_scope string | string[]
@@ -354,7 +356,7 @@ module.exports = grammar({
       choice(
         $.number_with_unit,
         $.identifier,
-        seq("(", $._expression, ")"),
+        seq("(", $._expression, choice(")", $._close)),
         prec(4, seq("-", $.expr_atom)),
         prec(4, seq("not", $.expr_atom)),
       ),

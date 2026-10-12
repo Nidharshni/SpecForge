@@ -63,8 +63,16 @@ behavior recover_from_syntax_errors "Recover From Syntax Errors" {
     backslash before a line break leaves a string unclosed, as the grammar
     reads it. A body left unclosed ends, missing its closing brace, where
     the next line starts a top-level form indented no deeper than the form
-    the body opened (the same form-start rule, read by the grammar's
-    scanner), so the blocks after it are parsed.
+    the body opened, whatever member was being typed in it (a field's name
+    with no value, an open bracket); the grammar's scanner ends it there
+    for the members it reaches, and the parser cuts the source before every
+    form start the grammar's tree still missed (the same form-start rule,
+    form_starts) and parses each piece alone, so every form after a broken
+    one is parsed. An unclosed body is reported at its opening brace,
+    naming the line where it was ended; a body whose closing brace an
+    unclosed string took is reported by the string alone. No parse error is
+    hidden: a string or body left unclosed is reported in every entity,
+    whatever its kind.
   """
   requires {
     error_recovery_enabled "SourceParser is initialized with error-recovery mode enabled"
@@ -83,6 +91,10 @@ behavior recover_from_syntax_errors "Recover From Syntax Errors" {
   verify unit "an unclosed body ends where the next top-level form starts, missing its closing brace"
   verify unit "an unclosed body ends at a form indented no deeper than the form it opened"
   verify unit "the grammar resumes at every top-level form of the repository's spec after an unclosed body"
+  verify unit "a body member left half-typed ends where the next top-level form starts"
+  verify unit "the parser resumes at every form start the grammar's tree missed"
+  verify unit "an unclosed body is reported at its opening brace, naming the line where it was ended"
+  verify integration "a string or body left unclosed is reported in every entity, whatever its kind"
   verify unit "completely invalid syntax produces error with location"
   verify unit "missing opening brace produces a parse error"
   verify contract "Recover From Syntax Errors: syntax error recovery holds — error_recovery_enabled, valid_utf8_input, valid_blocks_preserved, errors_collected"
@@ -362,7 +374,11 @@ behavior lex_spec_text "Lex Spec Text" {
     Where a top-level form starts (an import, a spec, ref, define, union or
     entity block) is read from lexemes by one rule: the parser's recovery
     ends an unclosed string before such a line and the LSP's document closes
-    every body left open at one (ADR 0038 D6). The expression
+    every body left open at one (ADR 0038 D6). A document's form starts are
+    read in one walk (form_starts): a line that starts a top-level form at
+    most as deep as the last line begun with no bracket open closes every
+    bracket open before it; the parser's recovery and the LSP's document
+    both read that walk. The expression
     tokenizer of the prove pass (parse_expression) reads a sub-language with
     lexical rules of its own and is not built on the lexer; it MUST cut the
     expressions of the repository's spec into the same tokens (the
@@ -376,6 +392,7 @@ behavior lex_spec_text "Lex Spec Text" {
   verify unit "a line starts a top-level form exactly where the grammar reads one, on every spec file of the repository"
   verify unit "an unclosed triple-quoted string ends before the next line that starts a top-level form"
   verify unit "the grammar ends an unclosed body at exactly the lines the form-start rule reads as form starts"
+  verify unit "a document's form starts are the grammar's top-level nodes, and stay so with every body left unclosed"
 }
 
 behavior parse_define_blocks "Parse Define Blocks" {
@@ -427,33 +444,4 @@ behavior provide_indentation_queries "Provide Indentation Queries" {
   verify unit "indents.scm indents after opening bracket"
   verify unit "indents.scm dedents on closing bracket"
   verify integration "indents.scm loads in Tree-sitter runtime and produces expected indent/dedent"
-}
-
-// -- Extension Body Parsing ---------------------------------------------------
-
-behavior extension_owned_body_syntax "Extension-Owned Body Syntax" {
-  features   [extension_body_parsing]
-  invariants [zero_domain_knowledge_core]
-  category   validation
-  types      [Entity, KindRegistryEntry, Diagnostic]
-  requires {
-    all_files_parsed_ready "All entity blocks have been parsed"
-    kinds_registered       "The loaded extensions' entity kinds are registered, with their has_body_parser flags"
-  }
-  ensures {
-    body_errors_suppressed "E001 parse errors inside an entity whose kind declares has_body_parser are not reported"
-    other_errors_reported  "Every other E001 is reported unchanged"
-  }
-  contract   """
-    An extension may declare that it owns an entity kind's body syntax
-    (the kind's has_body_parser flag): software's type and port bodies
-    hold field types and method signatures the core grammar does not
-    parse. An E001 parse error that starts inside an entity of such a
-    kind, in the same file, MUST NOT be reported, on a full build and
-    on every incremental rebuild (which uses the file's current
-    entities). The entity's other fields are parsed by the core field
-    parser as usual; no extension code runs on the body. Extensions
-    cannot contribute body parsers or grammars (ADR 0004 D5-a, ADR 0050).
-  """
-  verify integration "extension-owned body syntax does not surface E001 parse errors"
 }

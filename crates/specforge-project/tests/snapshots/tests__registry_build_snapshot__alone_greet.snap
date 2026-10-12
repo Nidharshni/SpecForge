@@ -37,7 +37,6 @@ expression: "digest(&load(&runtime, &[\"@sdk/greet\"]))"
   "graph_inputs": {
     "absent_reference_targets": {},
     "bidirectional_pairs": [],
-    "body_parser_kinds": [],
     "derived_references": [],
     "field_coercions": {
       "greeting.style": "Text"

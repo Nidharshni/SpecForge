@@ -507,7 +507,7 @@ behavior format_with_parse_errors "Format Files with Parse Errors" {
   types      [FormatConfig, FormatDiff]
   ports      [FileSystem, LspProtocol]
   requires {
-    cst_with_errors "the .spec file has been parsed into a CST that contains tree-sitter ERROR or MISSING nodes"
+    cst_with_errors "the .spec file has been parsed into a CST that contains tree-sitter ERROR or MISSING nodes, or a string the parser's recovery ended"
   }
   ensures {
     no_crash                      "the formatter does not crash or produce corrupted output"
@@ -517,17 +517,19 @@ behavior format_with_parse_errors "Format Files with Parse Errors" {
   }
   contract   """
     When the formatter encounters a .spec file that contains parse errors,
-    it MUST NOT crash or produce corrupted output. The formatter MUST use
-    tree-sitter error recovery to format well-formed regions of the file
-    and leave error regions unchanged. An error region begins at the first
-    unparseable token (as identified by a tree-sitter ERROR or MISSING node)
-    and extends forward until the next token that begins a parseable
-    top-level statement (use directive, entity block, or comment). All
-    original whitespace within an error region MUST be preserved byte-for-byte.
-    A diagnostic MUST be emitted listing each file that could not be fully
-    formatted due to parse errors, including the line range of each error region.
-    The diagnostic MUST span the region it kept, from its first line's start
-    to its last line's end.
+    it MUST NOT crash or produce corrupted output. The formatter MUST read
+    the file's top-level forms as the parser reads them
+    (recover_from_syntax_errors: a string left unclosed, a body left
+    unclosed, a form start the grammar missed) and format every form the
+    parser reads whole. A form that holds a parse error (a tree-sitter ERROR
+    or MISSING node, or a string the parser's recovery ended) MUST be left
+    unchanged, from its first line to its last, blank lines after it
+    excluded; all original whitespace within it MUST be preserved
+    byte-for-byte, trailing whitespace aside. A diagnostic MUST be emitted
+    listing each file that could not be fully formatted due to parse errors,
+    one per form left unchanged (adjacent ones joined), including its line
+    range. The diagnostic MUST span the lines it kept, from its first line's
+    start to its last line's end, never past the document.
   """
   verify unit "file with syntax error is partially formatted without crash"
   verify unit "well-formed blocks in a file with errors are still formatted"
@@ -536,6 +538,8 @@ behavior format_with_parse_errors "Format Files with Parse Errors" {
   verify unit "error region ends before next parseable top-level statement"
   verify unit "whitespace within error regions is preserved byte-for-byte"
   verify unit "diagnostic lists files with parse errors and error line ranges"
+  verify unit "a form the parser could not read whole is kept as written and the forms after it are formatted"
+  verify unit "the diagnostic spans every line of the form it kept, never past the document"
   verify contract "Format Files with Parse Errors: formatting with parse errors holds — cst_with_errors, no_crash, well_formed_regions_formatted, error_regions_preserved, parse_error_diagnosed"
 }
 

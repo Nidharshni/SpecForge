@@ -130,10 +130,6 @@ fn derived_graph_inputs_match_the_manifests() {
     let build = build_registries(vec![software(), product()]);
     let inputs = build.graph_inputs();
 
-    assert_eq!(
-        inputs.body_parser_kinds,
-        ["type".to_string()].into_iter().collect()
-    );
     assert!(
         inputs
             .single_reference_fields

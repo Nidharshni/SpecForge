@@ -4790,10 +4790,6 @@ expression: "digest(&load(&runtime, &all))"
         "invariants"
       ]
     ],
-    "body_parser_kinds": [
-      "port",
-      "type"
-    ],
     "derived_references": [
       {
         "field": "types",

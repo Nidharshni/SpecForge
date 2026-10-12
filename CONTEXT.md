@@ -761,12 +761,20 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   on the repository's spec. The prove pass's expression tokenizer is the one
   other reader (ADR 0023, ADR 0038).
 - **Form start**: a line whose first lexemes open a top-level form of the grammar (an import, a spec,
-  ref, define, union or entity block), indented no deeper than the top-level line before it
-  (`specforge_parser::lex::starts_top_level_form`). The parser's recovery ends an unclosed string before
-  one, and the lexer an unclosed `"""…"""` (ADR 0038 D7); the LSP's document closes every body, block and list left open at one, and the grammar's scanner
-  ends an unclosed body there (its MISSING `}`), so a block being typed never takes the forms after it.
-  A test holds it to the grammar's top-level nodes on the repository's spec, both ways, and another holds
-  the scanner's copy to it (ADR 0038 D6, D8).
+  ref, define, union or entity block), indented no deeper than the last line begun with no bracket open
+  (`specforge_parser::lex::starts_top_level_form`, asked over a document by `lex::form_starts`). Such a
+  line closes every body, block, list and parameter list left open before it: the parser's recovery cuts
+  the source there when the grammar's tree missed it, the LSP's document closes its frames there, the
+  grammar's scanner ends an unclosed body there (its MISSING `}`), and the lexer ends an unclosed
+  `"""…"""` before it (ADR 0038 D7), so a block being typed never takes the forms after it. Tests hold it
+  to the grammar's top-level nodes on the repository's spec, both ways, and the scanner's copy to it
+  (ADR 0038 D6-D8, ADR 0063).
+- **Recovered syntax**: a `.spec` source as SpecForge reads its concrete syntax
+  (`specforge_parser::cst`): the grammar's tree of the whole text, or, when the tree missed a form start
+  or a string was left unclosed, one tree per piece cut before those form starts. The parser's walk and
+  the formatter read the same pieces, so the graph, the formatted text and the editor's document agree on
+  a broken document's forms; a form the grammar could not read whole carries an E001 (an unclosed body at
+  its `{`, an unclosed string at its quote) and is kept as written by the formatter (ADR 0063).
 - **Cursor**: what the LSP knows about a position in an open document, read from the document's lexemes
   (`specforge_parser::lex`) and their block structure, never from the graph: the word under it, whether
   it is in code, a string or a comment, the entity block, field and reference list around it, and the
