@@ -488,8 +488,9 @@ behavior notify_delta_subscribers "Notify Delta Subscribers" {
   contract   """
     After every update, the project session MUST report the GraphDelta
     and the files it affects with the update, for whoever holds the
-    session to deliver: specforge watch prints its counts, and MCP
-    notifies its subscribed clients (notify_graph_delta_via_mcp) and diffs
+    session to deliver: specforge watch prints it (whole, as each rebuilt
+    or rechecked line's delta under --format json; its counts in text),
+    and MCP notifies its subscribed clients (notify_graph_delta_via_mcp) and diffs
     the diagnostics into a DiagnosticsDelta itself
     (notify_diagnostics_delta_via_mcp). The session never waits on a
     subscriber, so a slow one cannot delay the compilation pipeline. The

@@ -13,9 +13,12 @@ use crate::terminal::{Terminal, errln, outln};
 use std::path::{Path, PathBuf};
 
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
+use serde::Serialize;
+use specforge_common::DiagnosticList;
+use specforge_common::shape::Shape;
 use specforge_ops::check::Counts;
 use specforge_ops::{OpError, OpErrorKind};
-use specforge_project::{ProjectSession, UpdateKind};
+use specforge_project::{GraphDelta, ProjectSession, UpdateKind};
 use specforge_watch::{Applied, DEFAULT_DEBOUNCE_WINDOW, Notify, SessionWatch, WatchEvent};
 
 // `specforge watch`'s command line.
@@ -132,20 +135,16 @@ fn print_ready(session: &ProjectSession, format: OutputFormat, terminal: &Termin
         errors, warnings, ..
     } = Counts::of(&diagnostics);
     if format == OutputFormat::Json {
-        outln!(
-            terminal,
-            "{}",
-            serde_json::json!({
-                "event": "ready",
-                "spec_root": spec_root.to_string_lossy(),
-                "files": session.project().file_count(),
-                "nodes": session.project().graph().node_count(),
-                "edges": session.project().graph().edge_count(),
-                "errors": errors,
-                "warnings": warnings,
-                "diagnostics": specforge_common::diagnostics_json(&diagnostics),
-            })
-        );
+        let line = Line::Ready(Ready {
+            spec_root: spec_root.to_string_lossy().into_owned(),
+            files: session.project().file_count(),
+            nodes: session.project().graph().node_count(),
+            edges: session.project().graph().edge_count(),
+            errors,
+            warnings,
+            diagnostics: DiagnosticList(diagnostics),
+        });
+        outln!(terminal, "{}", line.json());
     } else {
         outln!(
             terminal,
@@ -159,6 +158,66 @@ fn print_ready(session: &ProjectSession, format: OutputFormat, terminal: &Termin
         );
         outln!(terminal, "watching for changes (Ctrl-C to stop)");
     }
+}
+
+/// One line `specforge watch --format json` prints.
+#[derive(Serialize, Shape)]
+#[serde(tag = "event", rename_all = "snake_case")]
+enum Line<'a> {
+    Ready(Ready),
+    ExtensionsReloaded(Reloaded<'a>),
+    Rebuilt(Rebuild<'a>),
+    Rechecked(Rebuild<'a>),
+}
+
+impl Line<'_> {
+    /// The line as the JSON text it prints.
+    fn json(&self) -> String {
+        serde_json::to_string(self).expect("a watch line serializes")
+    }
+}
+
+/// The session as opened, and caught up with disk.
+#[derive(Serialize, Shape)]
+struct Ready {
+    spec_root: String,
+    files: usize,
+    nodes: usize,
+    edges: usize,
+    errors: usize,
+    warnings: usize,
+    diagnostics: DiagnosticList,
+}
+
+/// The extension environment loaded again.
+#[derive(Serialize, Shape)]
+struct Reloaded<'a> {
+    extensions: &'a [String],
+    files: usize,
+    nodes: usize,
+    errors: usize,
+    warnings: usize,
+    diagnostics: DiagnosticList,
+}
+
+/// An update of the sources (`rebuilt`) or of the check inputs
+/// (`rechecked`).
+#[derive(Serialize, Shape)]
+struct Rebuild<'a> {
+    changed: &'a [String],
+    rebuilt_files: &'a [String],
+    /// What the update changed in the graph: the GraphDelta MCP sends as
+    /// specforge/graphChanged's params.
+    delta: &'a GraphDelta,
+    errors: usize,
+    warnings: usize,
+    diagnostics: DiagnosticList,
+    changed_diagnostic_files: &'a [String],
+    verification_failed: bool,
+    /// `passed`, or the divergence; absent when the update was not
+    /// verified.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    verification: Option<String>,
 }
 
 /// One event's output: its stdout line, and, in text mode, the stderr line a
@@ -179,16 +238,15 @@ fn render(applied: &Applied, format: OutputFormat, stamp: u64) -> Rendered {
     } = Counts::of(&update.diagnostics);
     if update.kind == UpdateKind::Environment {
         let line = if format == OutputFormat::Json {
-            serde_json::json!({
-                "event": "extensions_reloaded",
-                "extensions": applied.extensions,
-                "files": applied.files,
-                "nodes": applied.nodes,
-                "errors": errors,
-                "warnings": warnings,
-                "diagnostics": specforge_common::diagnostics_json(&update.diagnostics),
+            Line::ExtensionsReloaded(Reloaded {
+                extensions: &applied.extensions,
+                files: applied.files,
+                nodes: applied.nodes,
+                errors,
+                warnings,
+                diagnostics: DiagnosticList(update.diagnostics.clone()),
             })
-            .to_string()
+            .json()
         } else {
             format!(
                 "[reload] extension environment changed: {} extension(s), {} file(s) | {} errors, {} warnings",
@@ -209,27 +267,26 @@ fn render(applied: &Applied, format: OutputFormat, stamp: u64) -> Rendered {
         _ => "rebuilt",
     };
     if format == OutputFormat::Json {
-        let line = serde_json::json!({
-            "event": event,
-            "changed": applied.changed,
-            "rebuilt_files": update.rebuilt_files,
-            "added_nodes": update.delta.added_nodes.len(),
-            "removed_nodes": update.delta.removed_nodes.len(),
-            "modified_nodes": update.delta.modified_nodes.len(),
-            "added_edges": update.delta.added_edges.len(),
-            "removed_edges": update.delta.removed_edges.len(),
-            "errors": errors,
-            "warnings": warnings,
-            "diagnostics": specforge_common::diagnostics_json(&update.diagnostics),
-            "changed_diagnostic_files": update.changed_diagnostic_files,
-            "verification_failed": update.divergence().is_some(),
-            "verification": match &update.verification {
-                None => serde_json::Value::Null,
-                Some(Ok(())) => "passed".into(),
-                Some(Err(msg)) => msg.clone().into(),
+        let rebuild = Rebuild {
+            changed: &applied.changed,
+            rebuilt_files: &update.rebuilt_files,
+            delta: &update.delta,
+            errors,
+            warnings,
+            diagnostics: DiagnosticList(update.diagnostics.clone()),
+            changed_diagnostic_files: &update.changed_diagnostic_files,
+            verification_failed: update.divergence().is_some(),
+            verification: match &update.verification {
+                None => None,
+                Some(Ok(())) => Some("passed".to_string()),
+                Some(Err(msg)) => Some(msg.clone()),
             },
-        })
-        .to_string();
+        };
+        let line = match update.kind {
+            UpdateKind::Checks => Line::Rechecked(rebuild),
+            _ => Line::Rebuilt(rebuild),
+        }
+        .json();
         Rendered {
             line,
             warning: None,
@@ -286,7 +343,7 @@ mod tests {
     }
 
     #[test]
-    fn a_rebuild_renders_todays_json_fields() {
+    fn a_rebuild_renders_its_json_fields() {
         let rendered = render(
             &applied(UpdateKind::Sources, Some(Ok(()))),
             OutputFormat::Json,
@@ -295,17 +352,13 @@ mod tests {
         assert_eq!(
             keys(&rendered.line),
             [
-                "added_edges",
-                "added_nodes",
                 "changed",
                 "changed_diagnostic_files",
+                "delta",
                 "diagnostics",
                 "errors",
                 "event",
-                "modified_nodes",
                 "rebuilt_files",
-                "removed_edges",
-                "removed_nodes",
                 "verification",
                 "verification_failed",
                 "warnings",
@@ -322,7 +375,6 @@ mod tests {
         behavior = "notify_delta_subscribers",
         verify = "watch --format json prints each rebuild's GraphDelta, the one MCP notifies"
     )]
-    #[ignore = "fixed by T8"]
     fn a_rebuild_prints_the_graph_delta() {
         let mut rebuilt = applied(UpdateKind::Sources, Some(Ok(())));
         rebuilt.update.delta = GraphDelta {
@@ -348,13 +400,35 @@ mod tests {
         let rendered = render(&applied(UpdateKind::Checks, None), OutputFormat::Json, 0);
         let value: serde_json::Value = serde_json::from_str(&rendered.line).unwrap();
         assert_eq!(value["event"], "rechecked");
-        assert_eq!(value["verification"], serde_json::Value::Null);
+        assert!(value.get("verification").is_none(), "{value}");
         let text = render(&applied(UpdateKind::Checks, None), OutputFormat::Human, 12);
         assert!(
             text.line.starts_with("[12] rechecked 1 file(s)"),
             "{}",
             text.line
         );
+    }
+
+    /// Every line `render` produces has no `null` and no key the line's
+    /// derived schema does not declare.
+    #[test]
+    fn every_watch_line_is_its_derived_shape() {
+        let schema = specforge_common::shape::document::<Line<'static>>();
+        let mut lines = Vec::new();
+        for kind in [
+            UpdateKind::Sources,
+            UpdateKind::Checks,
+            UpdateKind::Environment,
+        ] {
+            for verification in [None, Some(Ok(())), Some(Err("nodes differ".to_string()))] {
+                lines.push(render(&applied(kind, verification), OutputFormat::Json, 0).line);
+            }
+        }
+        for line in lines {
+            let value: serde_json::Value = serde_json::from_str(&line).unwrap();
+            let violations = specforge_common::shape::violations(schema, &value);
+            assert!(violations.is_empty(), "{line}: {violations:?}");
+        }
     }
 
     #[test]
