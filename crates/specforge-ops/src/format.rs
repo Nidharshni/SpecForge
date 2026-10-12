@@ -5,7 +5,7 @@
 //! A file that can't be read or written is recorded and the run goes on, so
 //! a failure on one file never leaves the others half-done. The surfaces
 //! present what happened: the CLI prints it, MCP returns it, the LSP turns
-//! it into edits.
+//! its edits into positions.
 
 use serde::Serialize;
 use specforge_common::shape::Shape;
@@ -14,11 +14,24 @@ use specforge_common::{
     walk_spec_files,
 };
 use specforge_formatter::config::{find_config_path, read_config_file};
-use specforge_formatter::{FormatConfig, TextEdit, compute_edits, format_range, format_source};
+use specforge_formatter::{FormatConfig, format_range, format_source};
 use std::collections::HashMap;
+use std::ops::Range;
 use std::path::{Path, PathBuf};
 
 use crate::{OpError, OpErrorKind};
+
+mod edits;
+
+/// One change to a document: the source's bytes `range` become `new_text`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Edit {
+    /// Byte offsets into the source the document was formatted from. Both ends lie on char
+    /// boundaries, and neither falls between a `\r` and the `\n` after it (no editor can name that
+    /// position).
+    pub range: Range<usize>,
+    pub new_text: String,
+}
 
 /// Where a document's text belongs, which decides its format configuration.
 #[derive(Debug, Clone, Copy)]
@@ -93,10 +106,18 @@ impl FormattedDocument<'_> {
         self.formatted != self.source
     }
 
-    /// The edits that turn the source into `formatted`: 0-based lines, byte
-    /// columns, non-overlapping, in order. A surface converts the columns.
-    pub fn edits(&self) -> Vec<TextEdit> {
-        compute_edits(self.source, &self.formatted)
+    /// The edits that turn the source into [`formatted`](Self::formatted), byte for byte: applied to the
+    /// source as an editor applies a response's edits (every range read in the source, all at once),
+    /// they give exactly `formatted`. They are in order, none overlaps or touches the next, none is a
+    /// no-op, and there are none when nothing changed.
+    ///
+    /// A line diff of the source and `formatted` (Myers), each change trimmed to the bytes it alters.
+    /// Line breaks are text like any other: a removed blank line, an added final newline and a `\r\n`
+    /// made `\n` are edits. Text formatting keeps is never replaced, so an editor keeps its cursor and
+    /// marks there. For a range, only the blocks the range touches change (`format_range`), so every
+    /// edit lies inside them.
+    pub fn edits(&self) -> Vec<Edit> {
+        edits::between(self.source, &self.formatted)
     }
 
     /// Whether every region parsed (no W142): the text is in canonical form
@@ -1316,11 +1337,9 @@ mod tests {
         insert_spaces: true,
     };
 
-    /// Whether `edits` are in order and none overlaps the next.
-    fn in_order_without_overlap(edits: &[TextEdit]) -> bool {
-        edits
-            .windows(2)
-            .all(|w| (w[1].start_line, w[1].start_col) >= (w[0].end_line, w[0].end_col))
+    /// Whether `edits` are in order and none overlaps or touches the next.
+    fn in_order_without_overlap(edits: &[Edit]) -> bool {
+        edits.windows(2).all(|w| w[0].range.end < w[1].range.start)
     }
 
     /// The W142 diagnostics of `doc`.
@@ -1344,33 +1363,76 @@ mod tests {
         let doc = document(Place::Detached, MISINDENTED, None, None);
 
         assert!(doc.changed());
+        // Only the four extra spaces of line 1, which starts at byte 21.
         assert_eq!(
             doc.edits(),
-            [TextEdit {
-                start_line: 1,
-                start_col: 0,
-                end_line: 1,
-                // The whole misindented line, in bytes.
-                end_col: 27,
-                new_text: "  contract \"does stuff\"".into(),
+            [Edit {
+                range: 23..27,
+                new_text: String::new()
             }]
         );
     }
 
     #[specforge_test(
         behavior = "lsp_format_document",
-        verify = "TextEdit coordinates are 0-indexed lines and columns"
+        verify = "applying the formatting edits to the document gives the formatted text byte for byte"
     )]
-    fn edit_coordinates_are_zero_based_lines_and_byte_columns() {
-        let edits = document(Place::Detached, MISINDENTED, None, None).edits();
-        assert_eq!((edits[0].start_line, edits[0].start_col), (1, 0));
-
-        // A multibyte line: the end column counts bytes, not characters.
+    fn edits_rebuild_the_formatted_text() {
+        let blank = |range: Range<usize>| Edit {
+            range,
+            new_text: String::new(),
+        };
+        let expected: [(&str, Vec<Edit>); 6] = [
+            (
+                "behavior a \"A\" {\n\n  contract \"x\"\n}\n",
+                vec![blank(17..18)],
+            ),
+            (
+                "\n\n\nbehavior a \"A\" {\n  contract \"x\"\n}\n",
+                vec![blank(0..3)],
+            ),
+            (
+                "behavior a \"A\" {\n  contract \"x\"\n}\n\n\n",
+                vec![blank(34..36)],
+            ),
+            (
+                "behavior a \"A\" {\n  contract \"x\"\n}",
+                vec![Edit {
+                    range: 33..33,
+                    new_text: "\n".into(),
+                }],
+            ),
+            (
+                "behavior a \"A\" {\r\n  contract \"x\"\r\n}\r\n",
+                vec![Edit {
+                    range: 16..37,
+                    new_text: "\n  contract \"x\"\n}\n".into(),
+                }],
+            ),
+            (
+                "behavior a \"A\" {\n      contract \"x\"\n}\n",
+                vec![blank(19..23)],
+            ),
+        ];
+        for (text, edits) in expected {
+            let doc = document(Place::Detached, text, None, None);
+            assert_eq!(doc.edits(), edits, "{text:?}");
+            assert_eq!(
+                edits::tests::apply(text, &doc.edits()),
+                doc.formatted,
+                "{text:?}"
+            );
+        }
+        // Two blank lines between blocks: which of the two goes is the diff's choice; the text is not.
+        let between = "behavior a \"A\" {\n  contract \"x\"\n}\n\n\nbehavior b \"B\" {\n  contract \"y\"\n}\n";
+        let doc = document(Place::Detached, between, None, None);
+        assert_eq!(edits::tests::apply(between, &doc.edits()), doc.formatted);
+        // A multibyte line: offsets count bytes, on char boundaries.
         let text = "behavior foo \"Foo\" {\n      contract \"é\"\n}\n";
-        let edits = document(Place::Detached, text, None, None).edits();
-        let line = text.lines().nth(1).unwrap();
-        assert_eq!(edits[0].end_col, line.len());
-        assert_ne!(line.len(), line.chars().count());
+        assert_eq!(
+            document(Place::Detached, text, None, None).edits(),
+            [blank(23..27)]
+        );
     }
 
     #[specforge_test(
@@ -1417,12 +1479,22 @@ mod tests {
         }
 
         let start = std::time::Instant::now();
-        document(Place::Detached, &source, None, None);
+        document(Place::Detached, &source, None, None).edits();
         let elapsed = start.elapsed();
-
         assert!(
             elapsed.as_millis() < 50,
             "formatting took {}ms",
+            elapsed.as_millis()
+        );
+
+        // The worst case for the line diff: every line differs.
+        let crlf = source.replace('\n', "\r\n");
+        let start = std::time::Instant::now();
+        document(Place::Detached, &crlf, None, None).edits();
+        let elapsed = start.elapsed();
+        assert!(
+            elapsed.as_millis() < 50,
+            "formatting a CRLF document took {}ms",
             elapsed.as_millis()
         );
     }
@@ -1452,6 +1524,10 @@ mod tests {
             Mode::Check,
         ));
         assert_eq!(outcome.changes[0].after, doc.formatted);
+        assert_eq!(
+            edits::tests::apply(MISINDENTED, &edits),
+            outcome.changes[0].after
+        );
         assert!(doc.complete());
     }
 
@@ -1464,12 +1540,17 @@ mod tests {
 
         let edits = document(Place::Detached, TWO_BLOCKS, Some(lines), None).edits();
 
-        assert_eq!(edits.len(), 1, "{edits:?}");
-        assert_eq!(edits[0].start_line, 6);
-        assert_eq!(edits[0].new_text, "  contract \"b\"");
+        let line = |n: usize| TWO_BLOCKS.match_indices('\n').nth(n - 1).unwrap().0 + 1;
+        assert_eq!(
+            edits,
+            [Edit {
+                range: line(6) + 2..line(6) + 6,
+                new_text: String::new()
+            }]
+        );
         // The whole document would also realign `foo` (lines 0–4).
         let full = document(Place::Detached, TWO_BLOCKS, None, None).edits();
-        assert!(full.iter().any(|e| e.start_line < 5), "{full:?}");
+        assert!(full.iter().any(|e| e.range.start < line(5)), "{full:?}");
     }
 
     #[specforge_test(
@@ -1561,7 +1642,8 @@ mod tests {
         assert_eq!(range.config.indent_width, 4);
         // range_expanded, textedit_list_returned: one block's edits, in order.
         let edits = range.edits();
-        assert!(edits.iter().all(|e| e.start_line >= 5), "{edits:?}");
+        let line = |n: usize| TWO_BLOCKS.match_indices('\n').nth(n - 1).unwrap().0 + 1;
+        assert!(edits.iter().all(|e| e.range.start >= line(5)), "{edits:?}");
         assert!(in_order_without_overlap(&edits), "{edits:?}");
         // full_format_parity: the block reads as full formatting has it.
         let tail = |text: &str| text.lines().skip(5).collect::<Vec<_>>().join("\n");

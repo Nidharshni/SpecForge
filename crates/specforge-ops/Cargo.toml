@@ -23,6 +23,7 @@ specforge-diagnostics = { path = "../specforge-diagnostics" }
 specforge-common = { workspace = true }
 specforge-emitter = { path = "../specforge-emitter" }
 specforge-formatter = { workspace = true }
+similar = { workspace = true }
 specforge-graph = { path = "../specforge-graph" }
 specforge-migrate = { workspace = true }
 specforge-parser = { workspace = true }

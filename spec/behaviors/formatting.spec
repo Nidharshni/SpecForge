@@ -373,14 +373,19 @@ behavior lsp_format_document "LSP Format Document" {
   }
   ensures {
     textedit_list_returned  "a list of non-overlapping TextEdit operations is returned"
-    cli_parity_enforced     "the result is identical to running specforge format on the same file"
+    cli_parity_enforced     "applying the returned edits to the document gives exactly the text specforge format writes for the same file"
     format_complete_emitted "format_complete event is produced after successful formatting"
   }
   contract   """
     When the LSP server receives a textDocument/formatting request,
     it MUST format the full document using the formatting engine and
-    return a list of TextEdit operations. The result MUST be identical
-    to running specforge format on the same file.
+    return a list of TextEdit operations. Applied to the document, the
+    edits MUST give exactly the text specforge format writes for the
+    same file, byte for byte, in one pass: an edit may span line breaks,
+    so blank lines are removed, a missing final newline is added and CRLF
+    line endings become LF. An edit replaces only the text formatting
+    changes, so text the formatter keeps, and an editor's cursor in it,
+    stays where it is.
     The configuration is the one specforge format uses for that file: the
     .specforgefmt.toml nearest the document's directory within its project,
     else the defaults (see lsp_respect_editor_config). TextEdit coordinates

@@ -376,7 +376,6 @@ const CONVERGE: [(&str, &str); 7] = [
     verify = "same input and config produce identical output across CLI and LSP"
 )]
 #[tokio::test]
-#[ignore = "fixed by T2"]
 async fn editor_formatting_reaches_the_cli_text_in_one_pass() {
     use crate::session::{Session, uri_of};
     use specforge_ops::format::{Mode, Request, run};
@@ -417,7 +416,6 @@ async fn editor_formatting_reaches_the_cli_text_in_one_pass() {
     verify = "range formatting matches full formatting for affected blocks"
 )]
 #[tokio::test]
-#[ignore = "fixed by T2"]
 async fn range_formatting_removes_a_blank_line_in_its_block() {
     let text =
         "behavior a \"A\" {\n  contract \"x\"\n}\n\nbehavior b \"B\" {\n\n  contract \"y\"\n}\n";
@@ -450,9 +448,17 @@ async fn range_formatting_changes_nothing_outside_its_blocks() {
         ("spec/open.spec", UNTERMINATED_TWO),
     ]);
     let (mut session, _) = crate::session::Session::start(Some(&root)).await;
-    for (path, text) in [
-        ("spec/crlf.spec", CRLF_TWO),
-        ("spec/open.spec", UNTERMINATED_TWO),
+    for (path, text, exact) in [
+        (
+            "spec/crlf.spec",
+            CRLF_TWO,
+            "behavior a \"A\" {\r\n  contract \"x\"\r\n}\r\n\r\nbehavior b \"B\" {\n  contract \"y\"\n}\n",
+        ),
+        (
+            "spec/open.spec",
+            UNTERMINATED_TWO,
+            "behavior a \"A\" {\n  contract \"x\"\n}\n\nbehavior b \"B\" {\n  contract \"y\"\n}",
+        ),
     ] {
         let uri = crate::session::uri_of(&root.join(path));
         session.open(&uri, text).await;
@@ -464,6 +470,7 @@ async fn range_formatting_changes_nothing_outside_its_blocks() {
         // Block `a` (lines 0-3) is outside the range: byte for byte, its CRLF included.
         let block_b = text.match_indices('\n').nth(3).unwrap().0 + 1;
         assert!(edited.starts_with(&text[..block_b]), "{path}: {edited:?}");
+        assert_eq!(edited, exact, "{path}");
         assert_eq!(edited.lines().nth(5), Some("  contract \"y\""), "{path}");
         // The final newline is the whole document's to add, not a range's.
         assert_eq!(edited.ends_with('\n'), text.ends_with('\n'), "{path}");
@@ -481,12 +488,12 @@ async fn formatting_edits_are_zero_based_utf16_positions() {
     let (_dir, root) = format_project(&[("spec/a.spec", text)]);
     let (mut session, uri) = open_in(&root, "spec/a.spec").await;
 
-    // Today: the whole first line is replaced; its end is UTF-16 column 21 (22 bytes).
+    // Only the two spaces formatting removes: after `"Café" ` (19 bytes, 18 UTF-16 units).
     assert_eq!(
         session.format(&uri).await,
         serde_json::json!([{
-            "range": {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 21}},
-            "newText": "behavior a \"Café\" {"
+            "range": {"start": {"line": 0, "character": 18}, "end": {"line": 0, "character": 20}},
+            "newText": ""
         }])
     );
 }

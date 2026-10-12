@@ -11,16 +11,6 @@ pub struct FormatResult {
     pub diagnostics: Vec<Diagnostic>,
 }
 
-/// A text edit with 0-indexed line/column coordinates (LSP-compatible).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TextEdit {
-    pub start_line: usize,
-    pub start_col: usize,
-    pub end_line: usize,
-    pub end_col: usize,
-    pub new_text: String,
-}
-
 /// Format a complete .spec source string.
 pub fn format_source(source: &str, config: &FormatConfig) -> FormatResult {
     let mut parser = Parser::new();
@@ -172,89 +162,6 @@ fn kept_region(first: usize, last: usize, last_line_len: usize) -> Diagnostic {
         end_line: last + 1,
         end_col: last_line_len + 1,
     })
-}
-
-/// Compute minimal TextEdit operations to transform `original` into `formatted`.
-pub fn compute_edits(original: &str, formatted: &str) -> Vec<TextEdit> {
-    if original == formatted {
-        return Vec::new();
-    }
-
-    let orig_lines: Vec<&str> = original.lines().collect();
-    let fmt_lines: Vec<&str> = formatted.lines().collect();
-
-    let mut edits = Vec::new();
-    let mut i = 0;
-    let mut j = 0;
-
-    while i < orig_lines.len() || j < fmt_lines.len() {
-        if i < orig_lines.len() && j < fmt_lines.len() && orig_lines[i] == fmt_lines[j] {
-            i += 1;
-            j += 1;
-            continue;
-        }
-
-        // Find the extent of the differing region
-        let diff_start_i = i;
-        let diff_start_j = j;
-
-        // Advance both until we find matching lines again
-        let mut found = false;
-        for look_ahead in 1..=20 {
-            // Check if orig[i + look_ahead] matches some line in fmt
-            if i + look_ahead < orig_lines.len() && j < fmt_lines.len() {
-                let mut fj = j;
-                while fj < fmt_lines.len() && fj - j <= look_ahead + 5 {
-                    if orig_lines[i + look_ahead] == fmt_lines[fj] {
-                        // Found sync point
-                        let end_line = i + look_ahead - 1;
-                        let end_col = if end_line < orig_lines.len() {
-                            orig_lines[end_line].len()
-                        } else {
-                            0
-                        };
-                        let new_text: String = fmt_lines[diff_start_j..fj].join("\n");
-                        edits.push(TextEdit {
-                            start_line: diff_start_i,
-                            start_col: 0,
-                            end_line: i + look_ahead - 1,
-                            end_col,
-                            new_text,
-                        });
-                        i += look_ahead;
-                        j = fj;
-                        found = true;
-                        break;
-                    }
-                    fj += 1;
-                }
-                if found {
-                    break;
-                }
-            }
-        }
-
-        if !found {
-            // Replace all remaining lines
-            let end_line = orig_lines.len().saturating_sub(1);
-            let end_col = if end_line < orig_lines.len() {
-                orig_lines[end_line].len()
-            } else {
-                0
-            };
-            let new_text: String = fmt_lines[diff_start_j..].join("\n");
-            edits.push(TextEdit {
-                start_line: diff_start_i,
-                start_col: 0,
-                end_line,
-                end_col,
-                new_text,
-            });
-            break;
-        }
-    }
-
-    edits
 }
 
 /// Collect error regions (start_row, end_row) from the CST.
@@ -1319,37 +1226,6 @@ mod tests {
         );
     }
 
-    // --- Slice 10: compute_edits ---
-
-    #[specforge_test_macros::test(
-        behavior = "lsp_format_document",
-        verify = "formatting request returns TextEdit list"
-    )]
-    fn test_compute_edits_no_changes() {
-        let edits = compute_edits("hello\nworld\n", "hello\nworld\n");
-        assert!(edits.is_empty());
-    }
-
-    #[specforge_test_macros::test(
-        behavior = "lsp_format_document",
-        verify = "formatting request returns TextEdit list"
-    )]
-    fn test_compute_edits_single_line_change() {
-        let edits = compute_edits("  hello\n", "hello\n");
-        assert!(!edits.is_empty());
-        assert_eq!(edits[0].start_line, 0);
-    }
-
-    #[specforge_test_macros::test(
-        behavior = "lsp_format_document",
-        verify = "TextEdit coordinates are 0-indexed lines and columns"
-    )]
-    fn test_textedit_coordinates_are_zero_indexed() {
-        let edits = compute_edits("  line1\n  line2\n", "line1\nline2\n");
-        assert!(!edits.is_empty());
-        assert_eq!(edits[0].start_line, 0); // 0-indexed
-    }
-
     // --- Behavior: maintain_format_idempotency ---
 
     #[specforge_test_macros::test(
@@ -2086,43 +1962,6 @@ mod tests {
         assert_eq!(changed_count, 1, "exactly 1 of 3 files should be changed");
     }
 
-    // --- Gap coverage: lsp_format_document ---
-
-    #[specforge_test_macros::test(
-        behavior = "lsp_format_document",
-        verify = "TextEdit operations in a response do not overlap"
-    )]
-    fn test_textedit_operations_do_not_overlap() {
-        let original = "behavior foo \"Foo\" {\n      contract   \"a\"\n      types   [x, y]\n}\n\nbehavior bar \"Bar\" {\n      contract   \"b\"\n}\n";
-        let formatted = format_source(original, &FormatConfig::default()).formatted;
-        let edits = compute_edits(original, &formatted);
-
-        // Verify no overlapping ranges
-        for i in 0..edits.len() {
-            for j in (i + 1)..edits.len() {
-                let a = &edits[i];
-                let b = &edits[j];
-                // a ends before b starts OR b ends before a starts
-                let no_overlap = (a.end_line < b.start_line
-                    || (a.end_line == b.start_line && a.end_col <= b.start_col))
-                    || (b.end_line < a.start_line
-                        || (b.end_line == a.start_line && b.end_col <= a.start_col));
-                assert!(
-                    no_overlap,
-                    "TextEdit {i} ({}:{}-{}:{}) overlaps with TextEdit {j} ({}:{}-{}:{})",
-                    a.start_line,
-                    a.start_col,
-                    a.end_line,
-                    a.end_col,
-                    b.start_line,
-                    b.start_col,
-                    b.end_line,
-                    b.end_col
-                );
-            }
-        }
-    }
-
     // --- Gap coverage: lsp_format_range ---
 
     #[specforge_test_macros::test(
@@ -2440,29 +2279,6 @@ mod tests {
 
     #[specforge_test_macros::test(
         behavior = "lsp_format_document",
-        verify = "LSP format produces same result as CLI format"
-    )]
-    fn test_lsp_format_matches_cli_format() {
-        let config = FormatConfig::default();
-        let source = "behavior foo \"Foo\" {\n      contract   \"test\"\n      types   [x]\n}\n";
-
-        // CLI-style: format_source
-        let cli_result = format_source(source, &config);
-
-        // LSP-style: compute_edits then apply
-        let edits = compute_edits(source, &cli_result.formatted);
-        // Verify edits exist for dirty input
-        assert!(!edits.is_empty(), "dirty file should produce edits");
-        // The formatting engine produces the same output regardless of how it's invoked
-        assert_eq!(
-            cli_result.formatted,
-            format_source(source, &config).formatted,
-            "LSP and CLI must produce same formatted output"
-        );
-    }
-
-    #[specforge_test_macros::test(
-        behavior = "lsp_format_document",
         verify = "parse errors in document trigger format_with_parse_errors delegation"
     )]
     fn test_parse_errors_trigger_partial_formatting() {
@@ -2480,47 +2296,6 @@ mod tests {
         assert!(
             result.formatted.contains("{{{ invalid syntax"),
             "error region must be preserved verbatim"
-        );
-    }
-
-    #[specforge_test_macros::test(
-        behavior = "lsp_format_document",
-        verify = "LSP Format Document: LSP document formatting holds — document_open, format_config_loaded, textedit_list_returned, cli_parity_enforced, format_complete_emitted"
-    )]
-    fn test_lsp_format_document_contract() {
-        let config = FormatConfig::default();
-        let source = "behavior foo \"Foo\" {\n      contract   \"test\"\n}\n";
-
-        // Requires: document open, config loaded
-        let result = format_source(source, &config);
-
-        // Ensures: TextEdit list returned (non-overlapping)
-        let edits = compute_edits(source, &result.formatted);
-        assert!(!edits.is_empty(), "dirty document must produce TextEdits");
-        for i in 0..edits.len() {
-            for j in (i + 1)..edits.len() {
-                let a = &edits[i];
-                let b = &edits[j];
-                let no_overlap = (a.end_line < b.start_line
-                    || (a.end_line == b.start_line && a.end_col <= b.start_col))
-                    || (b.end_line < a.start_line
-                        || (b.end_line == a.start_line && b.end_col <= a.start_col));
-                assert!(no_overlap, "TextEdits must not overlap");
-            }
-        }
-
-        // Ensures: CLI parity
-        let cli = format_source(source, &config).formatted;
-        assert_eq!(result.formatted, cli, "LSP format must match CLI format");
-
-        // Ensures: already-formatted produces no edits
-        let clean_edits = compute_edits(
-            &result.formatted,
-            &format_source(&result.formatted, &config).formatted,
-        );
-        assert!(
-            clean_edits.is_empty(),
-            "already-formatted document must produce no edits"
         );
     }
 
