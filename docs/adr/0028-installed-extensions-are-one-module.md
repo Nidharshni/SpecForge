@@ -139,7 +139,7 @@ module: the listing and remove must not pay for it); one row per entry (the list
 extensions by name, and remove's ambiguity rule needs the entries of one name together).
 
 Consequences: `specforge doctor` and `specforge.doctor` list every extension the listing lists, by
-name, with `status`; their load findings are in extension-name order. A `.wasm` file entry that did
+name, with `status`; their load findings are in the environment's order, entry by entry (amended by ADR 0054). A `.wasm` file entry that did
 not load has no version. A builtin is `builtin` even when a stray lock entry names it, and an
 extension a named entry loads is never `file:` because a refused `.wasm` file entry declares the same
 name. `specforge remove` and `specforge.remove_extension` remove an entry the project cannot load,
