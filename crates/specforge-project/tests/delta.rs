@@ -350,3 +350,57 @@ fn validate_delta_correctness_contract() {
     assert_eq!(delta.applies(&old, &new), Ok(()));
     assert!(GraphDelta::default().applies(&old, &new).is_err());
 }
+
+/// A graph holding `x`, of kind `kind`, with a field named `kind` holding
+/// `field` when given.
+fn graph_with_kind_field(kind: &str, field: Option<&str>) -> Graph {
+    let mut node = make_node("x", kind, "a.spec", 1);
+    if let Some(field) = field {
+        node.fields
+            .push(Sym::new("kind"), FieldValue::String(field.to_string()));
+    }
+    let mut graph = Graph::new();
+    graph.add_node(node);
+    graph
+}
+
+/// Pin: today a changed field named `kind` and a changed entity kind both
+/// read `changed_fields == ["kind"]`. Deleted by the ticket that tells
+/// fields and aspects apart.
+#[test]
+fn a_field_named_kind_reads_as_the_kind_today() {
+    let field_changed = compute_graph_delta(
+        &graph_with_kind_field("type", Some("struct")),
+        &graph_with_kind_field("type", Some("enum")),
+    );
+    assert_eq!(field_changed.modified_nodes[0].changed_fields, ["kind"]);
+
+    let kind_changed = compute_graph_delta(
+        &graph_with_kind_field("type", None),
+        &graph_with_kind_field("event", None),
+    );
+    assert_eq!(kind_changed.modified_nodes[0].changed_fields, ["kind"]);
+}
+
+#[specforge_test(
+    behavior = "compute_graph_delta",
+    verify = "a field named like an aspect is a changed field, never the aspect"
+)]
+#[ignore = "fixed by T1"]
+fn a_field_named_like_an_aspect_is_a_field() {
+    let field_changed = compute_graph_delta(
+        &graph_with_kind_field("type", Some("struct")),
+        &graph_with_kind_field("type", Some("enum")),
+    );
+    assert_eq!(field_changed.modified_nodes[0].changed_fields, ["kind"]);
+
+    let kind_changed = compute_graph_delta(
+        &graph_with_kind_field("type", None),
+        &graph_with_kind_field("event", None),
+    );
+    assert!(
+        kind_changed.modified_nodes[0].changed_fields.is_empty(),
+        "{:?}",
+        kind_changed.modified_nodes[0]
+    );
+}

@@ -422,6 +422,7 @@ behavior compute_graph_delta "Compute Graph Delta" {
   verify unit "added and removed edges appear in delta"
   verify unit "affected files listed in delta"
   verify unit "shifted expression positions are not a modification"
+  verify unit "a field named like an aspect is a changed field, never the aspect"
   verify contract "Compute Graph Delta: graph delta computation holds — previous_graph_available"
 }
 
@@ -495,6 +496,7 @@ behavior notify_delta_subscribers "Notify Delta Subscribers" {
     (provide_semantic_tokens, behaviors/lsp.spec).
   """
   verify unit "an update reports its delta and the files it affects"
+  verify unit "watch --format json prints each rebuild's GraphDelta, the one MCP notifies"
   verify contract "Notify Delta Subscribers: delta reporting holds — graph_delta_computed_fired, affected_files_delivered, delta_subscribers_notified_emitted"
 }
 

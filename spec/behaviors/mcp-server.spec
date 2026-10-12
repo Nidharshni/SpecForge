@@ -66,6 +66,7 @@ behavior mcp_initialize "MCP Initialize" {
   verify unit "all core resources registered before accepting requests"
   verify unit "returns MCP-compliant init response"
   verify unit "compiles project when projectRoot is provided"
+  verify unit "initialize answers the negotiated revision, the server's capabilities, its name and version and its instructions, and no listing"
   verify contract "MCP Initialize: MCP initialization holds — compiler_api_available, wasm_runtime_available, capabilities_returned, surface_contributions_merged, mcp_initialized_emitted"
 }
 

@@ -708,11 +708,9 @@ fn node_change(id: &str) -> NodeChange {
     }
 }
 
-// B:notify_graph_delta_via_mcp — verify unit "formats notification as JSON-RPC"
-#[specforge_test(
-    behavior = "notify_graph_delta_via_mcp",
-    verify = "notification includes GraphDelta payload"
-)]
+/// Pin: today a graph delta is sent as node IDs only. Deleted by the ticket
+/// that sends the whole delta.
+#[test]
 fn the_graph_delta_names_nodes_by_id() {
     let mut subscriptions = Subscriptions::new();
     let mut events = EventLog::new();
@@ -754,11 +752,9 @@ fn the_graph_delta_names_nodes_by_id() {
     assert_eq!(sent[1]["params"]["removed_nodes"], json!(["alpha"]));
 }
 
-// B:notify_diagnostics_delta_via_mcp — verify unit "formats notification as JSON-RPC"
-#[specforge_test(
-    behavior = "notify_diagnostics_delta_via_mcp",
-    verify = "payload includes added and removed diagnostics"
-)]
+/// Pin: today a diagnostic is sent as code, severity and message. Deleted by
+/// the ticket that sends whole diagnostics.
+#[test]
 fn the_diagnostics_delta_names_what_was_added_and_removed() {
     let warning = Diagnostic::untyped("W001", Severity::Warning, "test warning");
     let delta = GraphDelta::default();
@@ -792,6 +788,89 @@ fn the_diagnostics_delta_names_what_was_added_and_removed() {
         json!({
             "added": [],
             "removed": [{"code": "W001", "severity": "Warning", "message": "test warning"}],
+        })
+    );
+}
+
+#[specforge_test(
+    behavior = "notify_graph_delta_via_mcp",
+    verify = "notification includes GraphDelta payload"
+)]
+#[ignore = "fixed by T3"]
+fn graph_changed_sends_the_whole_delta() {
+    use specforge_project::{EdgeChange, ModifiedNodeChange};
+    let mut subscriptions = Subscriptions::new();
+    let mut events = EventLog::new();
+    subscriptions.subscribe("specforge://graph", &mut events);
+
+    let delta = GraphDelta {
+        added_nodes: vec![node_change("alpha")],
+        removed_nodes: vec![node_change("beta")],
+        modified_nodes: vec![ModifiedNodeChange {
+            id: "gamma".to_string(),
+            changed_fields: vec!["status".to_string()],
+            file: "test.spec".to_string(),
+            line: 1,
+        }],
+        added_edges: vec![EdgeChange {
+            source: "alpha".to_string(),
+            target: "gamma".to_string(),
+            label: "depends_on".to_string(),
+        }],
+        removed_edges: vec![EdgeChange {
+            source: "beta".to_string(),
+            target: "gamma".to_string(),
+            label: "depends_on".to_string(),
+        }],
+        affected_files: vec!["test.spec".to_string()],
+    };
+    subscriptions.updated(&Changes::new(&delta, false, None), &mut events);
+    let sent = subscriptions.drain();
+    assert_eq!(
+        sent[1],
+        json!({
+            "jsonrpc": "2.0",
+            "method": "specforge/graphChanged",
+            "params": serde_json::to_value(&delta).unwrap(),
+        })
+    );
+}
+
+#[specforge_test(
+    behavior = "notify_diagnostics_delta_via_mcp",
+    verify = "payload includes added and removed diagnostics"
+)]
+#[ignore = "fixed by T3"]
+fn diagnostics_changed_sends_whole_diagnostics() {
+    let warning = Diagnostic::untyped("W001", Severity::Warning, "test warning")
+        .with_span(SourceSpan {
+            file: "a.spec".into(),
+            start_line: 3,
+            start_col: 1,
+            end_line: 3,
+            end_col: 9,
+        })
+        .with_suggestion("do the other thing");
+    let delta = GraphDelta::default();
+    let mut subscriptions = Subscriptions::new();
+    let mut events = EventLog::new();
+    subscriptions.subscribe("specforge://diagnostics", &mut events);
+
+    subscriptions.updated(
+        &Changes::new(&delta, false, Some((&[], std::slice::from_ref(&warning)))),
+        &mut events,
+    );
+    assert_eq!(
+        subscriptions.drain()[1],
+        json!({
+            "jsonrpc": "2.0",
+            "method": "specforge/diagnosticsChanged",
+            "params": {
+                "added": serde_json::to_value(specforge_common::diagnostics_json(
+                    std::slice::from_ref(&warning)
+                )).unwrap(),
+                "removed": [],
+            },
         })
     );
 }

@@ -141,6 +141,72 @@ fn initialize_returns_capabilities() {
     assert!(result["prompts"].is_array());
 }
 
+/// Pin: today `initialize` carries the three listings. Deleted by the ticket
+/// that makes it MCP's InitializeResult.
+#[test]
+fn initialize_carries_the_listings_today() {
+    let mut server = McpServer::new();
+    let resp = call(
+        &mut server,
+        "initialize",
+        json!({"protocolVersion": "2025-03-26"}),
+    );
+    let result = &resp["result"];
+    let tools = result["tools"].as_array().unwrap();
+    assert_eq!(tools.len(), 34);
+    assert_eq!(
+        tools
+            .iter()
+            .filter(|t| t.get("outputSchema").is_some())
+            .count(),
+        30
+    );
+    assert_eq!(result["resources"].as_array().unwrap().len(), 8);
+    assert_eq!(result["prompts"].as_array().unwrap().len(), 5);
+    assert!(result.get("instructions").is_none());
+}
+
+#[specforge_test(
+    behavior = "mcp_initialize",
+    verify = "initialize answers the negotiated revision, the server's capabilities, its name and version and its instructions, and no listing"
+)]
+#[ignore = "fixed by T4"]
+fn initialize_is_mcps_initialize_result() {
+    for revision in ["2025-03-26", "2025-06-18", "2025-11-25"] {
+        let mut server = McpServer::new();
+        let resp = call(
+            &mut server,
+            "initialize",
+            json!({"protocolVersion": revision}),
+        );
+        let mut keys: Vec<&str> = resp["result"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(String::as_str)
+            .collect();
+        keys.sort_unstable();
+        assert_eq!(
+            keys,
+            [
+                "capabilities",
+                "instructions",
+                "protocolVersion",
+                "serverInfo"
+            ],
+            "{revision}"
+        );
+        assert_eq!(resp["result"]["protocolVersion"], revision);
+    }
+    let mut server = McpServer::new();
+    let init = call(&mut server, "initialize", json!({}));
+    let discover = call(&mut server, "server/discover", json!({}));
+    assert_eq!(
+        init["result"]["instructions"],
+        discover["result"]["instructions"]
+    );
+}
+
 // B:mcp_initialize — verify unit "registers tools"
 #[specforge_test(
     behavior = "mcp_initialize",

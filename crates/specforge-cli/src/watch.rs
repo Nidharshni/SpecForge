@@ -318,6 +318,31 @@ mod tests {
         assert_eq!(value["changed"], serde_json::json!(["a.spec"]));
     }
 
+    #[specforge_test_macros::test(
+        behavior = "notify_delta_subscribers",
+        verify = "watch --format json prints each rebuild's GraphDelta, the one MCP notifies"
+    )]
+    #[ignore = "fixed by T8"]
+    fn a_rebuild_prints_the_graph_delta() {
+        let mut rebuilt = applied(UpdateKind::Sources, Some(Ok(())));
+        rebuilt.update.delta = GraphDelta {
+            added_nodes: vec![specforge_project::NodeChange {
+                id: "beta".to_string(),
+                kind: "behavior".to_string(),
+                file: "b.spec".to_string(),
+                line: 1,
+            }],
+            affected_files: vec!["b.spec".to_string()],
+            ..GraphDelta::default()
+        };
+        let rendered = render(&rebuilt, OutputFormat::Json, 0);
+        let value: serde_json::Value = serde_json::from_str(&rendered.line).unwrap();
+        assert_eq!(
+            value["delta"],
+            serde_json::to_value(&rebuilt.update.delta).unwrap()
+        );
+    }
+
     #[test]
     fn a_check_input_renders_rechecked() {
         let rendered = render(&applied(UpdateKind::Checks, None), OutputFormat::Json, 0);

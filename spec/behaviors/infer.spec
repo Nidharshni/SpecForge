@@ -375,6 +375,7 @@ behavior provide_infer_plan_scope "Provide Infer Prompt Plan Scope" {
   verify unit "plan excludes already-analyzed files"
   verify unit "plan's target directory defaults to the project's spec root"
   verify unit "plan pages the file lists 50 at a time from the cursor"
+  verify unit "the last page of a plan has no next cursor, and a page lists only files"
   verify unit "plan refuses a specforge-infer.json it cannot use with E071"
 }
 

@@ -280,6 +280,33 @@ fn plan_scope_caps_file_lists_at_50() {
     assert_eq!(content["plan"]["next_cursor"], 50);
 }
 
+#[specforge_test(
+    behavior = "provide_infer_plan_scope",
+    verify = "the last page of a plan has no next cursor, and a page lists only files"
+)]
+#[ignore = "fixed by T6"]
+fn the_last_plan_page_has_no_next_cursor() {
+    let mut state = plan_state_with_sources(60);
+    let first = plan_payload(&mut state, json!({"scope": "plan"}));
+    assert_eq!(first["scope"], "plan");
+    assert_eq!(first["next_cursor"], 50);
+    let last = plan_payload(&mut state, json!({"scope": "plan", "cursor": 50}));
+    assert_eq!(last["scope"], "plan");
+    assert!(last.get("next_cursor").is_none(), "{last}");
+    assert_eq!(last["unanalyzed_files"].as_array().unwrap().len(), 10);
+    assert_eq!(last["unanalyzed_total"], 60);
+    for page in [&first, &last] {
+        assert!(
+            page["unanalyzed_files"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|f| f.as_str().unwrap().ends_with(".rs")),
+            "a page lists only files: {page}"
+        );
+    }
+}
+
 #[test]
 fn file_scope_lists_the_entities_anchored_to_the_file() {
     // auth_login (auth.spec) is anchored to src/auth.rs:3; cache_get, which
