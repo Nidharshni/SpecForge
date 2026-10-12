@@ -705,7 +705,6 @@ mod tests {
     use specforge_graph::{FieldMap, Graph, Node};
     use specforge_parser::{EntityId, EntityKind, FieldValue};
     use specforge_registry::{FieldRegistry, FieldRegistryEntry, KindRegistry};
-    use std::path::Path;
 
     fn span(file: &str) -> SourceSpan {
         SourceSpan {
@@ -782,7 +781,6 @@ mod tests {
             kind_registry: &kind_registry,
             field_registry: &field_registry,
             entities: &specforge_project::snapshot::EntitySnapshot::default(),
-            project_root: Some(Path::new(".")),
             test_results: None,
             proved_claims: Some(&empty_proved),
         };
@@ -1066,7 +1064,6 @@ mod tests {
             kind_registry: &kind_registry,
             field_registry: &field_registry,
             entities: &specforge_project::snapshot::EntitySnapshot::default(),
-            project_root: Some(Path::new(".")),
             test_results: None,
             proved_claims: Some(&empty_proved),
         };

@@ -41,7 +41,6 @@ pub(crate) fn run(
         kind_registry: registries.kinds(),
         field_registry: registries.fields(),
         entities,
-        project_root: Some(env.root()),
         // A compile has no test results and no proof.
         test_results: None,
         proved_claims: None,

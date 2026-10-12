@@ -13,7 +13,6 @@ use specforge_protocol_types::{PassInput, PassOutput, PassSeverity, PassTestResu
 use specforge_registry::{FieldRegistry, KindRegistry};
 use specforge_wasm::ExtensionCalls;
 use std::collections::HashSet;
-use std::path::Path;
 
 use crate::coverage::TestReport;
 use crate::snapshot::EntitySnapshot;
@@ -26,8 +25,6 @@ pub struct AnalysisContext<'a> {
     /// The graph's entity snapshot (ADR 0019): what the passes receive,
     /// each entity with its standing (who is exempt).
     pub entities: &'a EntitySnapshot,
-    /// Project root as given to the tool, when known.
-    pub project_root: Option<&'a Path>,
     /// Parsed `--test-results` report, when provided; forwarded to extension
     /// passes (the coverage pass scores proof from it).
     pub test_results: Option<&'a TestReport>,

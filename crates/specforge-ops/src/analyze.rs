@@ -453,7 +453,6 @@ fn analyze_via(
         kind_registry: registries.kinds(),
         field_registry: registries.fields(),
         entities: view.entities(),
-        project_root: view.root(),
         test_results: report.as_deref(),
         proved_claims: None,
     };

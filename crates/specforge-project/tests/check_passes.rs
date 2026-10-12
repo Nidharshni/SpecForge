@@ -291,7 +291,6 @@ fn a_pass_without_the_check_phase_runs_only_under_analyze() {
         kind_registry: registries.kinds(),
         field_registry: registries.fields(),
         entities: compiled.entities(),
-        project_root: Some(dir.path()),
         test_results: None,
         proved_claims: None,
     };
