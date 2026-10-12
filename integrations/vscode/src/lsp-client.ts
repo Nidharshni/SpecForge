@@ -248,6 +248,16 @@ export async function startClient(
         }
         return await enhanceHover(result);
       },
+      // The formatter writes LF line endings, but VS Code keeps a document's own line ending whatever text
+      // an edit inserts: a CRLF document is told to switch, so it ends as `specforge format` writes it
+      // (ADR 0021 D8).
+      provideDocumentFormattingEdits: async (document, options, token, next) => {
+        const edits = await next(document, options, token);
+        if (!edits || document.eol !== vscode.EndOfLine.CRLF) {
+          return edits;
+        }
+        return [...edits, vscode.TextEdit.setEndOfLine(vscode.EndOfLine.LF)];
+      },
     },
   };
 

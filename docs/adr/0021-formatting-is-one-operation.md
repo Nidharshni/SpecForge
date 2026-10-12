@@ -24,13 +24,13 @@ which files were the project's:
 
 - `document(place, text, lines, editor) -> FormattedDocument` formats one document (whole, or the
   blocks `lines` touch) with the configuration `specforge format` uses for its file, and reports
-  the edits, the configuration used and the diagnostics (W141, W142 spanned at the document's lines).
+  the edits that turn the document into the formatted text (D8), the configuration used and the diagnostics (W141, W142 spanned at the document's lines).
 - `run(request) -> Outcome` formats the project's sources (or the named paths) through the same
   implementation, one configuration per configuration file, and reports changes, typed failures
   (read or write) and one diagnostics list.
 
 The surfaces keep presentation: the CLI prints and picks the exit code, MCP builds its payload, the
-LSP converts byte columns to UTF-16 and publishes diagnostics. The formatter crate is the text
+LSP converts the edits' byte offsets to positions and publishes diagnostics. The formatter crate is the text
 engine (source and `FormatConfig` in, text and diagnostics out, plus reading a config file); project
 rules live in ops and `specforge-common`.
 
@@ -74,6 +74,21 @@ rules live in ops and `specforge-common`.
   one), else `internal_error`, and lists each file's own code in `data.failures`; the CLI prints each
   failure as every operation's failure (`error[file_unreadable]: failed to read …`,
   `error[file_unwritable]: …`).
+- **D8. A document's edits are the formatted document's, byte for byte.** *(Round 7, plan 02.)*
+  `specforge_formatter::compute_edits` built edits that never crossed a line break: an editor could not
+  remove a blank line, add a final newline or make a CRLF line LF, so a file the editor formatted
+  failed `format --check` (D1), and the tests that claimed LSP/CLI parity compared `format_source` with
+  itself. `FormattedDocument::edits` builds them now: byte ranges of the source with their text, in
+  order, none touching, none a no-op, no end between a `\r` and its `\n`; applied to the source they give
+  `formatted` exactly. They come from a line diff (Myers, `similar`, the diff `--diff` prints), each
+  changed run of lines one edit trimmed to the characters it changes, so text formatting keeps, and an
+  editor's cursor in it, stays (not one whole-document edit: clients that apply edits literally would
+  lose the cursor and marks on every format). A property test over the repository's specs and fixtures,
+  under ten layouts, holds the invariant. `compute_edits` and the engine's `TextEdit` are deleted: the
+  engine is text in, text out. A range format leaves every byte outside the blocks it touches as it was;
+  the blocks it touches read as full formatting writes them (LF). The canonical text is LF; VS Code keeps
+  a document's own line ending whatever an edit inserts, so its extension adds an end-of-line edit when
+  it formats a whole CRLF document.
 
 ## Consequences
 
@@ -92,3 +107,6 @@ rules live in ops and `specforge-common`.
   blank lines between blocks leaves them as they are.
 - The LSP's byte-to-UTF-16 conversion of format edits is the LSP document module's (ADR 0023,
   `LineIndex`).
+- Formatting in the editor reaches what `specforge format` writes in one pass, blank lines, final
+  newline and line endings included; its edits replace only what changes. A range format removes a
+  blank line inside its block, and changes nothing outside it.

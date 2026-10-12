@@ -69,6 +69,7 @@ strsim = "0.11.1"
 walkdir = "2.5.0"
 toml = "0.8.22"
 glob = "0.3.2"
+similar = "2.7"
 
 # Build
 cc = "1.2.56"

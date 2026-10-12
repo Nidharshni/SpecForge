@@ -464,24 +464,22 @@ pub fn formatting(
         (diagnostics, doc.version())
     });
     Some(Formatted {
-        edits: formatter_edits_to_lsp(formatted.edits(), doc.index()),
+        edits: lsp_edits(formatted.edits(), doc.index()),
         publish,
         notice: overridden_editor_options(&formatted, editor),
     })
 }
 
-/// Formatter edits (0-based lines, byte columns of the formatted document)
-/// as LSP edits.
-fn formatter_edits_to_lsp(
-    edits: Vec<specforge_formatter::TextEdit>,
-    index: &LineIndex,
-) -> Vec<TextEdit> {
+/// A formatted document's edits (byte ranges of the open document's text,
+/// which `index` indexes) as LSP edits: its positions, UTF-16 columns
+/// (ADR 0023 D3).
+fn lsp_edits(edits: Vec<format::Edit>, index: &LineIndex) -> Vec<TextEdit> {
     edits
         .into_iter()
         .map(|e| TextEdit {
             range: Range {
-                start: index.position_at(e.start_line, e.start_col),
-                end: index.position_at(e.end_line, e.end_col),
+                start: index.position(e.range.start),
+                end: index.position(e.range.end),
             },
             new_text: e.new_text,
         })
