@@ -126,10 +126,10 @@ type McpResourceTemplateDescriptor {
 // source). inputSchema and outputSchema are JSON Schema documents: open
 // values. outputSchema is listed from 2025-06-18, for a tool with one.
 type McpToolDescriptor {
-  name         string          @readonly
+  name         string @readonly
   description  string
   inputSchema  object
-  outputSchema object          @optional
+  outputSchema object @optional
   /// The tool's role, never where it comes from.
   category     McpToolCategory
   /// "core" for built-in tools, the extension's name for contributed tools.
@@ -998,8 +998,8 @@ type McpSpecForSourceEntity {
 // generated code or instructions ("SpecForge provides context, agents
 // produce output").
 type McpContextPromptResult "Context Prompt Result" {
-  entity_id                      string                 @readonly
-  kind                           string                 @readonly
+  entity_id                      string @readonly
+  kind                           string @readonly
   /// The field the extension declares headline and normative (a behavior's
   /// contract); empty when the entity's kind declares none.
   contract_text                  string
@@ -1026,7 +1026,7 @@ type McpContextConstraint "An entity a context request names as a structural con
 }
 
 type McpReviewPromptResult "Review Prompt Result" {
-  entity_id        string              @readonly
+  entity_id        string @readonly
   findings         McpReviewFinding[]
   /// The coverage view's rows of the reviewed entities, as specforge.coverage lists them.
   coverage_summary McpCoverageResult[]
@@ -1034,9 +1034,9 @@ type McpReviewPromptResult "Review Prompt Result" {
 }
 
 type McpReviewFinding {
-  entity_id   string @readonly
-  severity    string
-  message     string
+  entity_id string @readonly
+  severity  string
+  message   string
   verify unit "McpReviewFinding schema is valid"
 }
 
@@ -1152,7 +1152,7 @@ type McpInferFileKind {
 }
 
 type McpInferPlan "Infer prompt, scope plan: the prioritized inference plan" {
-  scope                 "plan" @literal
+  scope                 "plan"  @literal
   target_spec_directory string
   progress              McpInferSummary
   cursor                integer

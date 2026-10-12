@@ -186,14 +186,14 @@ type NodeChange {
 }
 
 type ModifiedNodeChange {
-  id              string       @readonly
+  id              string  @readonly
   /// The fields whose values differ, by name, sorted: a field named kind or
   /// methods is a field here.
   changed_fields  string[]
   /// What else differs, sorted: its kind, title, methods or outgoing edges.
   changed_aspects NodeAspect[]
-  file            string       @readonly
-  line            integer      @readonly
+  file            string  @readonly
+  line            integer @readonly
   verify unit "ModifiedNodeChange schema is valid"
 }
 

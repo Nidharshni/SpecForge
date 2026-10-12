@@ -85,8 +85,8 @@ behavior state_mcp_messages_as_spec_types "State MCP Messages as Spec Types" {
   types      [McpError, GraphDelta, DiagnosticsDelta]
   ports      [McpProtocol]
   ensures {
-    one_definition  "Each document the server sends whose content SpecForge decides is serialized from one typed definition"
-    spec_states_it  "Its spec type states the same keys, required keys and value types, and a test holds them together"
+    one_definition "Each document the server sends whose content SpecForge decides is serialized from one typed definition"
+    spec_states_it "Its spec type states the same keys, required keys and value types, and a test holds them together"
   }
   contract   """
     Every document the MCP server sends whose content SpecForge decides
