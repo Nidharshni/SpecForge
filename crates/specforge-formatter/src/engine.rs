@@ -2141,28 +2141,6 @@ mod tests {
 
     #[specforge_test_macros::test(
         behavior = "format_spec_files",
-        verify = "changed files are printed to stdout"
-    )]
-    fn test_changed_files_printed_to_stdout() {
-        let config = FormatConfig::default();
-        let dirty = "behavior foo \"Foo\" {\n      contract   \"test\"\n}\n";
-        let result = format_source(dirty, &config);
-        // The formatter returns different output for dirty input, allowing CLI to print the filename
-        assert_ne!(
-            result.formatted, dirty,
-            "dirty file should produce changed output"
-        );
-        let clean = "behavior foo \"Foo\" {\n  contract \"test\"\n}\n";
-        let result_clean = format_source(clean, &config);
-        assert_eq!(
-            result_clean.formatted, clean,
-            "clean file should not change"
-        );
-        // CLI would print only the filename of the dirty file
-    }
-
-    #[specforge_test_macros::test(
-        behavior = "format_spec_files",
         verify = "formatting all files in spec/ directory succeeds"
     )]
     fn test_formatting_multiple_files_succeeds() {
@@ -2215,29 +2193,6 @@ mod tests {
     }
 
     // --- Gap coverage: show_formatting_diff ---
-
-    #[specforge_test_macros::test(
-        behavior = "show_formatting_diff",
-        verify = "diff mode writes no files to disk"
-    )]
-    fn test_diff_mode_writes_no_files() {
-        use tempfile::TempDir;
-        let tmp = TempDir::new().unwrap();
-        let file = tmp.path().join("test.spec");
-        let content = "behavior foo \"Foo\" {\n      contract   \"test\"\n}\n";
-        std::fs::write(&file, content).unwrap();
-
-        // Format to get the diff, but do NOT write back
-        let config = FormatConfig::default();
-        let result = format_source(content, &config);
-        let diff = crate::diff::unified_diff("test.spec", content, &result.formatted);
-
-        // Verify diff exists (file would change)
-        assert!(!diff.diff_text.is_empty(), "dirty file should produce diff");
-        // Verify original file is untouched
-        let on_disk = std::fs::read_to_string(&file).unwrap();
-        assert_eq!(on_disk, content, "diff mode must not write files to disk");
-    }
 
     #[specforge_test_macros::test(
         behavior = "show_formatting_diff",

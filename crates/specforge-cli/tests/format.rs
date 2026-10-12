@@ -132,13 +132,19 @@ fn format_prints_changed_file_names() {
         "bad.spec",
         "behavior foo \"Foo\" {\n      contract \"stuff\"\n}\n",
     );
+    write_spec(
+        root,
+        "good.spec",
+        "behavior bar \"Bar\" {\n  contract \"stuff\"\n}\n",
+    );
 
     Command::cargo_bin("specforge")
         .unwrap()
         .args(["format", "--path", root.to_str().unwrap()])
         .assert()
         .success()
-        .stdout(predicate::str::contains("bad.spec"));
+        .stdout(predicate::str::contains("bad.spec"))
+        .stdout(predicate::str::contains("good.spec").not());
 }
 
 // --- Slice 9: check_formatting ---
