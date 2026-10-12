@@ -46,8 +46,9 @@ pub use vocabulary::{CheckKind, ConstraintKind, FieldType, ProofRole};
 /// `docs/extension-protocol.md` ("Protocol versions") lists what each
 /// version guarantees; 1.2.0 is ADR 0050's: the declared categories are the
 /// only describe categories, and the handshake says `providers` instead of
-/// carrying contribution flags.
-pub const PROTOCOL_VERSION: &str = "1.2.0";
+/// carrying contribution flags; 1.3.0 is ADR 0060's: an enhancement declares
+/// no edge types (an edge type is declared once, in `edges`).
+pub const PROTOCOL_VERSION: &str = "1.3.0";
 
 /// Errors that can occur during the extension protocol lifecycle.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -353,15 +354,13 @@ pub type SharedFieldDescriptor = FieldDescriptor;
 
 // ── Entity Enhancement Descriptor ──
 
-/// Describes fields and edge types added to a foreign entity kind.
+/// Describes fields added to a foreign entity kind.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct EntityEnhancementDescriptor {
     pub target_kind: String,
     pub source_extension: String,
     #[serde(default)]
     pub fields: Vec<FieldDescriptor>,
-    #[serde(default)]
-    pub edge_types: Vec<EdgeTypeDescriptor>,
     /// Makes the target kind testable with these `verify` kinds.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub verify_kinds: Option<Vec<String>>,

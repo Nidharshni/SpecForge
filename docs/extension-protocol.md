@@ -47,14 +47,14 @@ The handshake is the first call the host makes after loading a Wasm binary. It e
 **Input:**
 
 ```json
-{ "host_version": "1.2.0" }
+{ "host_version": "1.3.0" }
 ```
 
 **Output** (`specforge_protocol_types::HandshakeResponse`):
 
 ```json
 {
-  "protocol_version": "1.2.0",
+  "protocol_version": "1.3.0",
   "name": "@specforge/software",
   "version": "1.0.0",
   "peer_dependencies": [
@@ -118,7 +118,7 @@ A category whose answer fails or doesn't parse as its descriptors fails the exte
 | `entities` | Entity kind descriptors (keyword, fields, LSP and DOT metadata) | Always |
 | `edges` | Edge type descriptors (label, source/target kind, visual style) | Always |
 | `shared_fields` | Field descriptors every kind of the extension gets (a kind's own field of the same name wins) | Always |
-| `enhancements` | Fields, edge types and verify kinds added to other extensions' entity kinds | Always |
+| `enhancements` | Fields and verify kinds added to other extensions' entity kinds | Always |
 | `validation_rules` | Declarative and custom validation rule descriptors | Always |
 | `surfaces` | One descriptor of the CLI commands, MCP tools and MCP resources, or none | Always |
 | `collectors` | Test result collector descriptors | Always |
@@ -602,6 +602,7 @@ The host-function surface is versioned alongside the wire protocol (`protocol_ve
 | `1.0.0` | `host_query_graph`, `host_emit_diagnostic`, `host_read_file`, `host_emit_file`, `host_http_get`, `host_add_graph_node`, `host_add_graph_edge` |
 | `1.1.0` | the same as `1.0.0` |
 | `1.2.0` | the same as `1.0.0` |
+| `1.3.0` | the same as `1.0.0` |
 
 ### Protocol Versions
 
@@ -619,6 +620,7 @@ or answered.
 | `1.0.0` | The baseline: the handshake, describe and operate payloads of this document. |
 | `1.1.0` | A validation rule's optional `target_extension` (ADR 0020). Field text (ADR 0019): every field an entity writes has one text, the same in a pass's `PassEntity.fields`, a validator's `ValidatorField.value` and what declarative rules match (see "Field text" in `extension-sdk.md`). A written field is present even when empty (`""`). A validator's field `value` is always a string (a variant list, mixed list, expression or type union was `null`). `PassEntity.exempt` follows the host's one obligation rule: a `no_verify_statements` rule without a target kind obliges every kind that accepts `verify` statements (an entity of a kind that accepts none is exempt). |
 | `1.2.0` | The declared categories are the only describe categories (`fields`, `grammars`, `body_parsers` are gone); the handshake request carries only `host_version`; the handshake response carries `providers` and no `contribution_flags`; a pass's `PassEntity` says `owes_none` where it said `exempt` (ADR 0050). A 1.2 host loads every 1.x guest and ignores an older guest's flags; a 1.1 host cannot read a 1.2 guest's handshake. |
+| `1.3.0` | An enhancement declares no `edge_types`: an edge type is declared once, in `edges` (an enhancement's fields name it as their `edge`). A 1.3 host reports a 1.2 guest's enhancement `edge_types` key as W138 and ignores it (ADR 0060). |
 
 A host of `1.0.x` still loads a `1.1.0` guest and hands it the `1.0.0` values; a guest that needs the
 `1.1.0` values can read `host_version` in its handshake request.

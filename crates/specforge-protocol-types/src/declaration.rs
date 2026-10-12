@@ -361,10 +361,7 @@ static EDGE: Shape = Shape {
 };
 static ENHANCEMENT: Shape = Shape {
     fields: struct_fields::<EntityEnhancementDescriptor>,
-    nested: &[
-        ("fields", Nested::List(&FIELD)),
-        ("edge_types", Nested::List(&EDGE)),
-    ],
+    nested: &[("fields", Nested::List(&FIELD))],
 };
 static CONSTRAINT: Shape = Shape {
     fields: struct_fields::<FieldConstraintDescriptor>,
