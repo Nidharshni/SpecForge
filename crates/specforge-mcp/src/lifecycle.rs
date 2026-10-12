@@ -1,5 +1,7 @@
+use serde::Serialize;
 use serde_json::Value;
 use specforge_common::ProjectRoot;
+use specforge_common::shape::Shape;
 use std::path::PathBuf;
 
 use crate::events::{InitFailure, McpEvent};
@@ -7,10 +9,59 @@ use crate::protocol::{JsonRpcResponse, error_codes};
 use crate::state::{McpState, ServerPhase};
 use crate::tool::CoreTool;
 use crate::tools::{inspect, query, search, validate};
-use crate::types::{
-    McpCapabilities, McpCapabilityFlags, McpPromptCapability, McpResourceCapability, McpServerInfo,
-    McpToolCapability,
-};
+
+/// What `initialize` answers: MCP's InitializeResult (2025-03-26 to
+/// 2025-11-25). Tools, resources and prompts are discovered by their list
+/// methods, under the revision of the request that lists them.
+#[derive(Debug, Clone, Serialize, Shape)]
+#[serde(rename_all = "camelCase")]
+pub struct InitializeResult {
+    pub protocol_version: String,
+    pub capabilities: ServerCapabilities,
+    pub server_info: ServerInfo,
+    pub instructions: String,
+}
+
+/// What `server/discover` answers (MCP 2026-07-28), beside the revision's
+/// `resultType` and `_meta` (`modern::decorate`).
+#[derive(Debug, Clone, Serialize, Shape)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoverResult {
+    pub supported_versions: Vec<String>,
+    pub capabilities: ServerCapabilities,
+    pub instructions: String,
+}
+
+/// The capabilities the server offers, in either era.
+#[derive(Debug, Clone, Serialize, Shape)]
+pub struct ServerCapabilities {
+    pub tools: ListChanged,
+    pub resources: ResourcesCapability,
+    pub prompts: ListChanged,
+}
+
+/// A capability that may announce its list changing.
+#[derive(Debug, Clone, Copy, Serialize, Shape)]
+#[serde(rename_all = "camelCase")]
+#[shape(define)]
+pub struct ListChanged {
+    pub list_changed: bool,
+}
+
+/// The resources capability: subscriptions, and the list changing.
+#[derive(Debug, Clone, Copy, Serialize, Shape)]
+#[serde(rename_all = "camelCase")]
+pub struct ResourcesCapability {
+    pub subscribe: bool,
+    pub list_changed: bool,
+}
+
+/// The server's name and version, as `serverInfo` gives them.
+#[derive(Debug, Clone, Serialize, Shape)]
+pub struct ServerInfo {
+    pub name: String,
+    pub version: String,
+}
 
 /// The stateless revisions the server speaks, latest first: a request
 /// names one in its `_meta` and needs no `initialize` (MCP 2026-07-28).
@@ -108,15 +159,6 @@ pub fn handle_initialize(
     state.protocol_version =
         negotiate_protocol_version(params.get("protocolVersion").and_then(Value::as_str));
 
-    let capabilities = McpCapabilities {
-        protocol_version: state.protocol_version.into(),
-        capabilities: capability_flags(),
-        server_info: server_info(),
-        tools: crate::registry::listed_tools(state).collect(),
-        resources: crate::registry::listed_resources(state).collect(),
-        prompts: crate::prompts::descriptors(),
-    };
-
     // The extension surfaces are the table's entries.
     let surfaces = state.surfaces();
     let surface_tools = surfaces.tools().len();
@@ -137,8 +179,15 @@ pub fn handle_initialize(
         auto_promoted_tools,
     });
 
-    let value = serde_json::to_value(capabilities).unwrap();
-    JsonRpcResponse::success(id, value)
+    JsonRpcResponse::sent(
+        id,
+        &InitializeResult {
+            protocol_version: state.protocol_version.to_string(),
+            capabilities: capabilities(),
+            server_info: server_info(),
+            instructions: instructions(),
+        },
+    )
 }
 
 /// Serve the project at or above `start` (the server's PATH, or the
@@ -162,27 +211,39 @@ pub fn serve_project(state: &mut McpState, start: Option<PathBuf>) {
 }
 
 /// The capabilities the server offers, in either era.
-fn capability_flags() -> McpCapabilityFlags {
-    McpCapabilityFlags {
-        tools: McpToolCapability {
+pub fn capabilities() -> ServerCapabilities {
+    ServerCapabilities {
+        tools: ListChanged {
             list_changed: false,
         },
-        resources: McpResourceCapability {
+        resources: ResourcesCapability {
             subscribe: true,
             list_changed: false,
         },
-        prompts: McpPromptCapability {
+        prompts: ListChanged {
             list_changed: false,
         },
     }
 }
 
 /// The server's name and version, as `serverInfo` gives them.
-pub fn server_info() -> McpServerInfo {
-    McpServerInfo {
+pub fn server_info() -> ServerInfo {
+    ServerInfo {
         name: "specforge-mcp".into(),
         version: env!("CARGO_PKG_VERSION").into(),
     }
+}
+
+/// What the server tells a client's model about itself: `initialize`'s and
+/// `server/discover`'s `instructions`, naming tools as the tool table does.
+pub fn instructions() -> String {
+    format!(
+        "SpecForge compiles .spec files into a graph of entities. Query it with {}, {} and {}; check it with {}.",
+        query::Tool::NAME,
+        search::Tool::NAME,
+        inspect::Tool::NAME,
+        validate::Tool::NAME,
+    )
 }
 
 /// `server/discover` (MCP 2026-07-28): the stateless revisions the server
@@ -190,20 +251,16 @@ pub fn server_info() -> McpServerInfo {
 /// handshake revisions are not listed: a client reaches them through
 /// `initialize`, never through per-request `_meta`.
 pub fn handle_discover(id: Option<Value>) -> JsonRpcResponse {
-    let instructions = format!(
-        "SpecForge compiles .spec files into a graph of entities. Query it with {}, {} and {}; check it with {}.",
-        query::Tool::NAME,
-        search::Tool::NAME,
-        inspect::Tool::NAME,
-        validate::Tool::NAME,
-    );
-    JsonRpcResponse::success(
+    JsonRpcResponse::sent(
         id,
-        serde_json::json!({
-            "supportedVersions": MODERN_PROTOCOL_VERSIONS,
-            "capabilities": capability_flags(),
-            "instructions": instructions,
-        }),
+        &DiscoverResult {
+            supported_versions: MODERN_PROTOCOL_VERSIONS
+                .iter()
+                .map(ToString::to_string)
+                .collect(),
+            capabilities: capabilities(),
+            instructions: instructions(),
+        },
     )
 }
 

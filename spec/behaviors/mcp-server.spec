@@ -22,7 +22,7 @@ use "types/output"
 
 behavior mcp_initialize "MCP Initialize" {
   features   [mcp_lifecycle]
-  types      [McpCapabilities, CompilerConfig]
+  types      [McpInitializeResult, CompilerConfig]
   category   command
   ports      [CompilerApi, WasmRuntime]
   produces   [mcp_initialized, mcp_initialization_failed]
@@ -38,8 +38,8 @@ behavior mcp_initialize "MCP Initialize" {
     wasm_runtime_available "WasmRuntime port is available for loading extension manifests"
   }
   ensures {
-    capabilities_returned        "McpCapabilities returned containing all registered tools, resources, and prompts"
-    surface_contributions_merged "Surface-contributed tools and resources merged with core before advertisement"
+    capabilities_returned        "McpInitializeResult returned: the negotiated revision, the server's capabilities, its name and version and its instructions"
+    surface_contributions_merged "Surface-contributed tools and resources merged with core before the list methods answer"
     mcp_initialized_emitted      "mcp_initialized event emitted on success, mcp_initialization_failed on failure"
   }
   contract   """
@@ -49,9 +49,13 @@ behavior mcp_initialize "MCP Initialize" {
     there is none. It MUST compile that project's graph, load all
     extension manifests, register all tools/resources/prompts from
     installed extensions (including surface-contributed MCP tools and
-    resources from extension manifests), and return McpCapabilities.
-    Surface-contributed tools and resources MUST be merged with core
-    tools and resources before capability advertisement. The server
+    resources from extension manifests), merged with the core ones, before
+    it answers, and answer McpInitializeResult: the negotiated revision,
+    the capabilities it offers (tools, resources with subscribe, prompts,
+    none announcing list changes), its name and version, and the
+    instructions server/discover gives. It MUST NOT list tools, resources
+    or prompts in its answer: the list methods list them, under the
+    revision of the request. The server
     MUST NOT accept tool/resource calls before initialization completes.
     The server MUST negotiate the protocol revision: it answers with the
     version the client requested when it supports that version
@@ -66,6 +70,7 @@ behavior mcp_initialize "MCP Initialize" {
   verify unit "all core resources registered before accepting requests"
   verify unit "returns MCP-compliant init response"
   verify unit "compiles project when projectRoot is provided"
+  verify unit "initialize and server/discover give the same capabilities and instructions"
   verify unit "initialize answers the negotiated revision, the server's capabilities, its name and version and its instructions, and no listing"
   verify contract "MCP Initialize: MCP initialization holds — compiler_api_available, wasm_runtime_available, capabilities_returned, surface_contributions_merged, mcp_initialized_emitted"
 }
@@ -676,7 +681,7 @@ behavior follow_negotiated_mcp_revision "Follow the Negotiated MCP Revision" {
   features   [mcp_protocol_compliance]
   invariants [mcp_structured_error_responses]
   category   command
-  types      [McpCapabilities]
+  types      [McpInitializeResult]
   ports      [McpProtocol]
   produces   [mcp_protocol_error_handled]
   requires {
@@ -731,7 +736,7 @@ behavior serve_stateless_mcp_requests "Serve Stateless MCP Requests" {
   features   [mcp_protocol_compliance]
   invariants [mcp_structured_error_responses]
   category   command
-  types      [McpCapabilities]
+  types      [McpDiscoverResult]
   ports      [McpProtocol, CompilerApi]
   produces   [mcp_protocol_error_handled]
   requires {
@@ -842,7 +847,7 @@ behavior guard_mcp_reinitialization "Guard MCP Reinitialization" {
   features   [mcp_protocol_compliance]
   invariants [mcp_structured_error_responses]
   category   command
-  types      [McpCapabilities]
+  types      [McpInitializeResult]
   ports      [McpProtocol]
   produces   [mcp_protocol_error_handled]
   requires {

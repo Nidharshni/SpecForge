@@ -57,15 +57,50 @@ type McpError "MCP Structured Error Response" {
   verify unit "MCP Structured Error Response conforms to schema"
 }
 
-type McpCapabilities "MCP Server Capabilities" {
-  tools                  McpToolDescriptor[]
-  resources              McpResourceDescriptor[]
-  prompts                McpPromptDescriptor[]
-  subscriptions          boolean
-  server_name            string
-  server_version         string
-  graph_protocol_version string
-  verify unit "MCP Server Capabilities conforms to schema"
+// What initialize answers (MCP's InitializeResult, 2025-03-26 to
+// 2025-11-25), under MCP's wire names. Tools, resources and prompts are
+// discovered by their list methods, never by initialize.
+type McpInitializeResult "MCP Initialize Result" {
+  protocolVersion string
+  capabilities    McpServerCapabilities
+  serverInfo      McpServerInfo
+  /// What the server tells the client's model about itself, naming tools as
+  /// tools/list names them; server/discover gives the same text.
+  instructions    string
+  verify unit "McpInitializeResult schema is valid"
+}
+
+// What server/discover answers (MCP 2026-07-28), beside the revision's
+// resultType and _meta.
+type McpDiscoverResult "MCP Discover Result" {
+  supportedVersions string[]
+  capabilities      McpServerCapabilities
+  instructions      string
+  verify unit "McpDiscoverResult schema is valid"
+}
+
+type McpServerCapabilities {
+  tools     McpListChanged
+  resources McpResourcesCapability
+  prompts   McpListChanged
+  verify unit "McpServerCapabilities schema is valid"
+}
+
+type McpListChanged {
+  listChanged boolean
+  verify unit "McpListChanged schema is valid"
+}
+
+type McpResourcesCapability {
+  subscribe   boolean
+  listChanged boolean
+  verify unit "McpResourcesCapability schema is valid"
+}
+
+type McpServerInfo {
+  name    string @readonly
+  version string @readonly
+  verify unit "McpServerInfo schema is valid"
 }
 
 type McpResourceDescriptor {

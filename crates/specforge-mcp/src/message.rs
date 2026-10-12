@@ -41,10 +41,20 @@ fn sent<M: Message>() -> SentDocument {
 /// Every message type the server sends, in protocol order.
 pub fn documents() -> Vec<SentDocument> {
     vec![
+        sent::<crate::lifecycle::InitializeResult>(),
+        sent::<crate::lifecycle::DiscoverResult>(),
         sent::<specforge_project::GraphDelta>(),
         sent::<crate::subscriptions::DiagnosticsDelta>(),
         sent::<crate::tool::McpError>(),
     ]
+}
+
+impl Message for crate::lifecycle::InitializeResult {
+    const SPEC: &'static str = "McpInitializeResult";
+}
+
+impl Message for crate::lifecycle::DiscoverResult {
+    const SPEC: &'static str = "McpDiscoverResult";
 }
 
 impl Message for specforge_project::GraphDelta {

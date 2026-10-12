@@ -125,16 +125,24 @@ fn contract_initialize() {
     assert_eq!(result["serverInfo"]["version"], env!("CARGO_PKG_VERSION"));
     assert_eq!(result["capabilities"]["resources"]["subscribe"], true);
 
-    // capabilities_returned: every registered tool, resource and prompt.
-    let names = |key: &str, field: &str| -> Vec<String> {
-        result[key]
+    // capabilities_returned: initialize lists nothing; the list methods
+    // list every registered tool, resource and prompt.
+    for key in ["tools", "resources", "prompts"] {
+        assert!(
+            result.get(key).is_none(),
+            "initialize lists {key}: {result}"
+        );
+    }
+    assert!(result["instructions"].is_string(), "{result}");
+    let mut names = |method: &str, key: &str, field: &str| -> Vec<String> {
+        call(&mut server, method, json!({}))["result"][key]
             .as_array()
             .unwrap()
             .iter()
             .map(|d| d[field].as_str().unwrap().to_string())
             .collect()
     };
-    let tools = names("tools", "name");
+    let tools = names("tools/list", "tools", "name");
     for core in [
         "specforge.query",
         "specforge.export",
@@ -148,10 +156,10 @@ fn contract_initialize() {
             "{core} missing: {tools:?}"
         );
     }
-    let resources = names("resources", "uri");
+    let resources = names("resources/list", "resources", "uri");
     assert!(resources.contains(&"specforge://graph".to_string()));
     assert!(resources.contains(&"specforge://diagnostics".to_string()));
-    let prompts = names("prompts", "name");
+    let prompts = names("prompts/list", "prompts", "name");
     assert!(prompts.contains(&"specforge://prompts/context".to_string()));
 
     // surface_contributions_merged: after the core tools and resources come
@@ -163,8 +171,8 @@ fn contract_initialize() {
     );
     let core_resources = specforge_mcp::resources::CORE_RESOURCES.len();
     assert_eq!(
-        resources[core_resources..],
-        ["specforge://ext/cmds/summary"]
+        resources.last().map(String::as_str),
+        Some("specforge://ext/cmds/summary")
     );
 
     // compiler_api_available: the project root was located and used.
@@ -199,7 +207,9 @@ fn contract_initialize() {
         })]
     );
     assert_eq!(tools.len(), core_tools + 2);
-    assert_eq!(resources.len(), core_resources + 1);
+    // resources/list lists the five plain core resources (the three
+    // templates are listed by resources/templates/list) and the extension's.
+    assert_eq!(resources.len(), 5 + 1);
 
     // Tool calls are accepted once initialized.
     let after = call_tool(&mut server, "specforge.stats", json!({}));

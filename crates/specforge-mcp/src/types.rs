@@ -2,50 +2,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct McpCapabilities {
-    pub protocol_version: String,
-    pub capabilities: McpCapabilityFlags,
-    pub server_info: McpServerInfo,
-    // Convenience arrays — not required by MCP spec but useful for CLI auto-init
-    pub tools: Vec<McpToolDescriptor>,
-    pub resources: Vec<McpResourceDescriptor>,
-    pub prompts: Vec<McpPromptDescriptor>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct McpCapabilityFlags {
-    pub tools: McpToolCapability,
-    pub resources: McpResourceCapability,
-    pub prompts: McpPromptCapability,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct McpToolCapability {
-    pub list_changed: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct McpResourceCapability {
-    pub subscribe: bool,
-    pub list_changed: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct McpPromptCapability {
-    pub list_changed: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct McpServerInfo {
-    pub name: String,
-    pub version: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct McpToolDescriptor {
     pub name: String,
     pub description: String,

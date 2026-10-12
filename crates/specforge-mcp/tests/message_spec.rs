@@ -556,7 +556,6 @@ fn every_sent_document_is_its_spec_type() {
 /// `Mcp*` types of mcp.spec nothing typed reaches yet: each ticket of plan
 /// 07 that types a document removes its names; T7 deletes the list.
 const PROTOCOL_AND_PROMPT_TYPES: &[&str] = &[
-    "McpCapabilities",
     "McpResourceDescriptor",
     "McpToolDescriptor",
     "McpToolAnnotations",
@@ -582,6 +581,12 @@ macro_rules! message_type {
 }
 
 message_type! {
+    mcp_initialize_result => "McpInitializeResult", "McpInitializeResult schema is valid",
+    mcp_discover_result => "McpDiscoverResult", "McpDiscoverResult schema is valid",
+    mcp_server_capabilities => "McpServerCapabilities", "McpServerCapabilities schema is valid",
+    mcp_list_changed => "McpListChanged", "McpListChanged schema is valid",
+    mcp_resources_capability => "McpResourcesCapability", "McpResourcesCapability schema is valid",
+    mcp_server_info => "McpServerInfo", "McpServerInfo schema is valid",
     graph_delta => "GraphDelta", "GraphDelta schema is valid",
     node_change => "NodeChange", "NodeChange schema is valid",
     modified_node_change => "ModifiedNodeChange", "ModifiedNodeChange schema is valid",
