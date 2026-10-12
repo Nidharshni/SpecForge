@@ -129,3 +129,6 @@ builtin's or a `.wasm` file entry's version, today `check`'s), or a resolver for
 
 **Amended by ADR 0050 (2026-10-11):** D1's module is `specforge_package::peers`, beside the package types in the
 host-side crate `specforge-package`; `PeerDependency`, the wire's text, stays in the protocol types.
+
+**Amended by ADR 0059 (2026-10-12), to amendment A1:** the plan also owns the trust pins its fetches decided: it
+pins them through the registry port as the last step of its change, and a refused plan pins nothing.

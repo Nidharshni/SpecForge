@@ -198,6 +198,26 @@ type RegistryPackage "Registry Package" {
   verify unit "RegistryPackage is what a package that passed the fetch policy hands an operation"
 }
 
+// How a fetch decides a package's publisher (specforge_ops::registry::TrustPolicy):
+// the caller's choices and the key the project's lock records for the name,
+// which is the pin when the user has none of their own.
+type TrustPolicy "Trust Policy" {
+  allow_unsigned boolean
+  trust          string
+  locked_key     string @optional
+  verify unit "TrustPolicy is what a fetch decides a publisher by: the caller's choices and the key the lock records"
+}
+
+// A publisher key a committed lock plan pins for a package name
+// (specforge_ops::registry::KeyPin); replaces is the key a consented key
+// change replaced.
+type KeyPin "Key Pin" {
+  name     PackageName
+  key_id   string
+  replaces string @optional
+  verify unit "KeyPin is what a committed lock plan pins for a package name"
+}
+
 // What the Registry port's search answers (specforge_ops::registry::Searched):
 // each package found, with the registry it was found in, and the diagnostic
 // of each registry that failed.

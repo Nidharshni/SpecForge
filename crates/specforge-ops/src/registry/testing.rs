@@ -9,7 +9,10 @@ use specforge_installed::hex_sha256;
 use specforge_package::{PackageName, Version, VersionRequirement};
 use specforge_protocol_types::{DeclaredCategory, ExtensionDeclaration};
 
-use super::{Found, Package, Published as Receipt, Publisher, Registry, Searched, Upload};
+use super::{
+    Found, KeyPin, Package, Published as Receipt, Publisher, Registry, Searched, TrustPolicy,
+    Upload,
+};
 use crate::OpError;
 use crate::extension::Trust;
 
@@ -99,13 +102,19 @@ pub enum Asked {
 /// `specforge_ops_registry::ConfiguredRegistry`. It serves what it publishes as the configured registry
 /// serves a package that passed the fetch policy, refuses as it refuses (both are held to
 /// [`assert_registry_contract`]), and records what it was asked and what it accepted. It verifies no
-/// signature and pins no key. A publish is signed by the key id `"in-memory"`.
+/// signature; it decides a publisher against its own pins and the policy's locked key as the configured
+/// registry does, and records pins only through [`Registry::pin`]. A publish is signed by the key id
+/// `"in-memory"`.
 #[derive(Debug, Default)]
 pub struct MemoryRegistry {
     held: Mutex<Vec<Published>>,
     listing_none: Vec<PackageName>,
     asked: Mutex<Vec<Asked>>,
     accepted: Mutex<Vec<(PackageName, Version)>>,
+    /// The user's pins: what `pinning` set up and `pin` recorded.
+    pins: Mutex<BTreeMap<PackageName, String>>,
+    /// `pin` refuses with R-TRUST-006 and records nothing.
+    refusing_pins: bool,
 }
 
 /// The publisher key id a [`MemoryRegistry`] signs what it accepts with.
@@ -141,6 +150,76 @@ impl MemoryRegistry {
                 Asked::Fetch(..) => None,
             })
             .collect()
+    }
+
+    /// `name` already pinned to `key_id` for the user.
+    pub fn pinning(self, name: &str, key_id: &str) -> Self {
+        self.pins.lock().unwrap().insert(
+            PackageName::parse(name).expect("a package name"),
+            key_id.to_string(),
+        );
+        self
+    }
+
+    /// What is pinned now, by name.
+    pub fn pins(&self) -> BTreeMap<PackageName, String> {
+        self.pins.lock().unwrap().clone()
+    }
+
+    /// Every `pin` refused with R-TRUST-006, recording nothing: a known-keys store that can't be saved.
+    pub fn refusing_pins(mut self) -> Self {
+        self.refusing_pins = true;
+        self
+    }
+
+    /// The publisher of a package signed by `key_id`: held to the user's pin for `name`, else to the
+    /// key the project's lock records, else accepted on first use. A key change is consented to
+    /// under `Trust::AssumeYes` only.
+    fn decide(
+        &self,
+        name: &PackageName,
+        key_id: &str,
+        policy: TrustPolicy<'_>,
+    ) -> Result<Publisher, OpError> {
+        let signed = |first_use| Publisher::Signed {
+            key_id: key_id.to_string(),
+            first_use,
+        };
+        let users = self.pins.lock().unwrap().get(name).cloned();
+        let (expected, from_lock) = match (users, policy.locked_key) {
+            (Some(pinned), _) => (pinned, false),
+            (None, Some(locked)) => (locked.to_string(), true),
+            (None, None) => return Ok(signed(true)),
+        };
+        if expected == key_id {
+            return Ok(signed(from_lock));
+        }
+        if policy.trust != Trust::AssumeYes {
+            let what = if from_lock {
+                format!("specforge.lock records '{expected}'")
+            } else {
+                format!("pinned '{expected}'")
+            };
+            let locked_too = !from_lock && policy.locked_key == Some(key_id);
+            let also = if locked_too {
+                " (the key specforge.lock records)"
+            } else {
+                ""
+            };
+            return Err(OpError::diagnostic(
+                codes::R_TRUST_003,
+                format!(
+                    "key change rejected for '{name}': {what} but package is signed '{key_id}'{also}"
+                ),
+            )
+            .with_suggestion(format!(
+                "if you trust the new key, re-run with --yes (or add '{key_id}' to trusted_keys)"
+            )));
+        }
+        Ok(Publisher::Repinned {
+            key_id: key_id.to_string(),
+            previous: expected,
+        })
     }
 
     /// A package this registry knows but lists no version of: `versions` answers `Ok(vec![])`, as a
@@ -180,13 +259,15 @@ impl Registry for MemoryRegistry {
     /// The package published as `name@version`: R006 "Package not found: {name}@{version}" when there is none,
     /// R-TRUST-001 "package '{name}' is not signed" (suggestion "re-run with --allow-unsigned to accept the
     /// risk") when unsigned and `!allow_unsigned`; else its bytes, `hex_sha256(bytes)`, its declaration and
-    /// key id. `trust` is not read: no key is pinned here.
+    /// publisher. A signed package's publisher is decided against the key expected for `name` (the
+    /// user's pin, else `policy.locked_key`): first use without one, `first_use: false` when it
+    /// matches the user's pin, a key change otherwise (`Repinned` under `Trust::AssumeYes`, else
+    /// R-TRUST-003). Nothing is pinned: that is [`Registry::pin`].
     fn fetch(
         &self,
         name: &PackageName,
         version: &Version,
-        allow_unsigned: bool,
-        _trust: Trust,
+        policy: TrustPolicy<'_>,
     ) -> Result<Package, OpError> {
         self.asked
             .lock()
@@ -203,27 +284,42 @@ impl Registry for MemoryRegistry {
             )
             .with_suggestion("Verify the package name and version."));
         };
-        if published.key_id.is_none() && !allow_unsigned {
+        if published.key_id.is_none() && !policy.allow_unsigned {
             return Err(OpError::diagnostic(
                 codes::R_TRUST_001,
                 format!("package '{name}' is not signed"),
             )
             .with_suggestion("re-run with --allow-unsigned to accept the risk"));
         }
+        let publisher = match &published.key_id {
+            None => Publisher::Unsigned,
+            Some(key_id) => self.decide(name, key_id, policy)?,
+        };
         Ok(Package {
             name: name.clone(),
             version: version.clone(),
             sha256: hex_sha256(&published.wasm),
             wasm: published.wasm.clone(),
             declaration: published.declaration.clone(),
-            publisher: match &published.key_id {
-                Some(key_id) => Publisher::Signed {
-                    key_id: key_id.clone(),
-                    first_use: false,
-                },
-                None => Publisher::Unsigned,
-            },
+            publisher,
         })
+    }
+
+    /// Record each pin for the user, all or none; R-TRUST-006 (and nothing recorded) when told to
+    /// refuse them.
+    fn pin(&self, pins: &[KeyPin]) -> Result<(), OpError> {
+        if self.refusing_pins {
+            return Err(OpError::diagnostic(
+                codes::R_TRUST_006,
+                "the known-keys store can't be saved",
+            )
+            .with_suggestion("check permissions on the file"));
+        }
+        let mut held = self.pins.lock().unwrap();
+        for pin in pins {
+            held.insert(pin.name.clone(), pin.key_id.clone());
+        }
+        Ok(())
     }
 
     /// Hold `package` as a version signed by [`IN_MEMORY_KEY`]. A version already held is R007
@@ -340,6 +436,11 @@ pub fn contract_packages(key_id: &str) -> Vec<Published> {
     ]
 }
 
+/// The policy the contract fetches under: nobody consents to a key change, no key is locked.
+fn refuse(allow_unsigned: bool) -> TrustPolicy<'static> {
+    TrustPolicy::new(allow_unsigned, Trust::Refuse)
+}
+
 /// The `Registry` contract (ADR 0044): what every adapter of the port does with `published` (built by
 /// [`contract_packages`]) published and nothing pinned. Panics naming the clause that failed: C1–C7
 /// list, fetch and publish; R-S finds a package by its name and category; R-S2 lists a package once,
@@ -375,35 +476,30 @@ pub fn assert_registry_contract(registry: &dyn Registry, published: &[Published]
     let one_one = Version::parse("1.1.0").unwrap();
     let expected = find("@contract/base", "1.1.0");
     let fetched = registry
-        .fetch(&base, &one_one, false, Trust::Refuse)
+        .fetch(&base, &one_one, refuse(false))
         .unwrap_or_else(|e| panic!("C3: fetch of base 1.1.0 fails: {e:?}"));
     assert_eq!(fetched.name, base, "C3: name");
     assert_eq!(fetched.version, one_one, "C3: version");
     assert_eq!(fetched.wasm, expected.wasm, "C3: the published bytes");
     assert_eq!(fetched.sha256, hex_sha256(&fetched.wasm), "C3: sha256");
     assert_eq!(fetched.declaration, expected.declaration, "C3: declaration");
-    assert_eq!(
-        fetched.publisher.key_id(),
-        expected.key_id.as_deref(),
-        "C3: the signer"
-    );
+    let signer = expected.key_id.clone().expect("base is signed");
+    let first_use = Publisher::Signed {
+        key_id: signer.clone(),
+        first_use: true,
+    };
+    assert_eq!(fetched.publisher, first_use, "C3: the signer, on first use");
     let again = registry
-        .fetch(&base, &one_one, false, Trust::Refuse)
+        .fetch(&base, &one_one, refuse(false))
         .unwrap_or_else(|e| panic!("C3: a second fetch under the same key fails: {e:?}"));
     assert_eq!(
-        again.publisher.key_id(),
-        expected.key_id.as_deref(),
-        "C3: the same signer again"
+        again.publisher, first_use,
+        "C3: a fetch pins nothing, so the same signer is a first use again"
     );
 
     // C4
     let error = registry
-        .fetch(
-            &base,
-            &Version::parse("9.9.9").unwrap(),
-            false,
-            Trust::Refuse,
-        )
+        .fetch(&base, &Version::parse("9.9.9").unwrap(), refuse(false))
         .unwrap_err();
     assert!(error.is(codes::R006), "C4: an unknown version: {error:?}");
     assert!(
@@ -416,8 +512,7 @@ pub fn assert_registry_contract(registry: &dyn Registry, published: &[Published]
         .fetch(
             &PackageName::parse("@contract/app").unwrap(),
             &Version::parse("1.0.0").unwrap(),
-            false,
-            Trust::Refuse,
+            refuse(false),
         )
         .unwrap_or_else(|e| panic!("C5: fetch of app fails: {e:?}"));
     let peers = app.declaration.peers();
@@ -428,15 +523,13 @@ pub fn assert_registry_contract(registry: &dyn Registry, published: &[Published]
     // C6
     let plain = PackageName::parse("@contract/plain").unwrap();
     let one = Version::parse("1.0.0").unwrap();
-    let error = registry
-        .fetch(&plain, &one, false, Trust::Refuse)
-        .unwrap_err();
+    let error = registry.fetch(&plain, &one, refuse(false)).unwrap_err();
     assert!(
         error.is(codes::R_TRUST_001),
         "C6: an unsigned package: {error:?}"
     );
     let allowed = registry
-        .fetch(&plain, &one, true, Trust::Refuse)
+        .fetch(&plain, &one, refuse(true))
         .unwrap_or_else(|e| panic!("C6: unsigned allowed fails: {e:?}"));
     assert_eq!(
         allowed.publisher,
@@ -465,7 +558,7 @@ pub fn assert_registry_contract(registry: &dyn Registry, published: &[Published]
         .unwrap_or_else(|e| panic!("C7: versions of a published package: {e:?}"));
     assert_eq!(listed, vec![fresh_version.clone()], "C7: it is listed");
     let served = registry
-        .fetch(&fresh, &fresh_version, false, Trust::Refuse)
+        .fetch(&fresh, &fresh_version, refuse(false))
         .unwrap_or_else(|e| panic!("C7: fetch of a published package: {e:?}"));
     assert_eq!(served.wasm, wasm, "C7: its bytes are served");
     assert_eq!(served.declaration, declaration, "C7: its declaration");
@@ -480,6 +573,106 @@ pub fn assert_registry_contract(registry: &dyn Registry, published: &[Published]
         again.kind,
         crate::OpErrorKind::Conflict,
         "C7: a held version is a conflict"
+    );
+
+    // C8: a pin is recorded
+    registry
+        .pin(&[KeyPin {
+            name: base.clone(),
+            key_id: signer.clone(),
+            replaces: None,
+        }])
+        .unwrap_or_else(|e| panic!("C8: pin fails: {e:?}"));
+    let pinned = registry
+        .fetch(&base, &one_one, refuse(false))
+        .unwrap_or_else(|e| panic!("C8: fetch after a pin fails: {e:?}"));
+    assert_eq!(
+        pinned.publisher,
+        Publisher::Signed {
+            key_id: signer.clone(),
+            first_use: false
+        },
+        "C8: the pinned signer is accepted as pinned"
+    );
+
+    // C9: a key change is decided, not written
+    let app_name = PackageName::parse("@contract/app").unwrap();
+    let app_version = Version::parse("1.0.0").unwrap();
+    let app_signer = find("@contract/app", "1.0.0")
+        .key_id
+        .clone()
+        .expect("app is signed");
+    registry
+        .pin(&[KeyPin {
+            name: app_name.clone(),
+            key_id: "contract-other".to_string(),
+            replaces: None,
+        }])
+        .unwrap_or_else(|e| panic!("C9: pin fails: {e:?}"));
+    let error = registry
+        .fetch(&app_name, &app_version, refuse(false))
+        .unwrap_err();
+    assert!(
+        error.is(codes::R_TRUST_003),
+        "C9: another key than the pinned one: {error:?}"
+    );
+    assert!(
+        error.message.contains("contract-other") && error.message.contains(&app_signer),
+        "C9: the message names both keys: {error:?}"
+    );
+    let consented = registry
+        .fetch(
+            &app_name,
+            &app_version,
+            TrustPolicy::new(false, Trust::AssumeYes),
+        )
+        .unwrap_or_else(|e| panic!("C9: a consented key change fails: {e:?}"));
+    assert_eq!(
+        consented.publisher,
+        Publisher::Repinned {
+            key_id: app_signer.clone(),
+            previous: "contract-other".to_string()
+        },
+        "C9: consent replaces the pin"
+    );
+    let error = registry
+        .fetch(&app_name, &app_version, refuse(false))
+        .unwrap_err();
+    assert!(
+        error.is(codes::R_TRUST_003),
+        "C9: the consented fetch pinned nothing: {error:?}"
+    );
+
+    // C10: the lock's key is the pin when the user has none
+    let error = registry
+        .fetch(
+            &fresh,
+            &fresh_version,
+            refuse(false).locked(Some("contract-other")),
+        )
+        .unwrap_err();
+    assert!(
+        error.is(codes::R_TRUST_003),
+        "C10: another key than the lock's: {error:?}"
+    );
+    assert!(
+        error.message.contains("specforge.lock"),
+        "C10: the message names the lock: {error:?}"
+    );
+    let locked = registry
+        .fetch(
+            &fresh,
+            &fresh_version,
+            refuse(false).locked(Some(receipt.key_id.as_str())),
+        )
+        .unwrap_or_else(|e| panic!("C10: the locked key is accepted: {e:?}"));
+    assert_eq!(
+        locked.publisher,
+        Publisher::Signed {
+            key_id: receipt.key_id.clone(),
+            first_use: true
+        },
+        "C10: the lock's key is accepted, and still pinned when the install is written"
     );
 
     // R-S
@@ -543,12 +736,7 @@ mod tests {
         .signed_by("key-1");
         let registry = MemoryRegistry::new().serving(published.clone());
         let package = registry
-            .fetch(
-                &published.name(),
-                &published.version(),
-                false,
-                Trust::Refuse,
-            )
+            .fetch(&published.name(), &published.version(), refuse(false))
             .unwrap();
         assert_eq!(package.name, published.name());
         assert_eq!(package.version, published.version());
@@ -565,7 +753,7 @@ mod tests {
         ));
         let name = PackageName::parse("@acme/tool").unwrap();
         registry.versions(&name).unwrap();
-        let _ = registry.fetch(&name, &Version::new(2, 0, 0), true, Trust::Refuse);
+        let _ = registry.fetch(&name, &Version::new(2, 0, 0), refuse(true));
         assert_eq!(
             registry.asked(),
             [
@@ -597,9 +785,7 @@ mod tests {
         assert_eq!(receipt.url, "memory://@acme/tool/1.0.0");
         assert!(!receipt.key_created);
         assert_eq!(registry.versions(&name).unwrap(), vec![version.clone()]);
-        let served = registry
-            .fetch(&name, &version, false, Trust::Refuse)
-            .unwrap();
+        let served = registry.fetch(&name, &version, refuse(false)).unwrap();
         assert_eq!(served.publisher.key_id(), Some(IN_MEMORY_KEY));
         assert_eq!(registry.published(), [(name, version)]);
     }
@@ -667,6 +853,65 @@ mod tests {
         // Under no category it is listed at 2.0.0.
         let searched = registry.search("cat", None).unwrap();
         assert_eq!(searched.found[0].version, "2.0.0");
+    }
+
+    #[test]
+    fn it_decides_a_key_change_by_the_policy_and_pins_only_through_pin() {
+        let published = Published::new(
+            b"\0asm tool".to_vec(),
+            declaration("@acme/tool", "1.0.0", &[]),
+        )
+        .signed_by("k2");
+        let registry = MemoryRegistry::new()
+            .serving(published.clone())
+            .pinning("@acme/tool", "k1");
+        let (name, version) = (published.name(), published.version());
+
+        let refused = registry.fetch(&name, &version, refuse(false)).unwrap_err();
+        assert!(refused.is(codes::R_TRUST_003), "{refused:?}");
+        let consented = registry
+            .fetch(&name, &version, TrustPolicy::new(false, Trust::AssumeYes))
+            .unwrap();
+        assert_eq!(
+            consented.publisher,
+            Publisher::Repinned {
+                key_id: "k2".into(),
+                previous: "k1".into()
+            }
+        );
+        assert_eq!(registry.pins()[&name], "k1", "a fetch pins nothing");
+
+        registry
+            .pin(&[consented.publisher.pin(&name).unwrap()])
+            .unwrap();
+        assert_eq!(registry.pins()[&name], "k2");
+        assert_eq!(
+            registry
+                .fetch(&name, &version, refuse(false))
+                .unwrap()
+                .publisher,
+            Publisher::Signed {
+                key_id: "k2".into(),
+                first_use: false
+            }
+        );
+    }
+
+    #[test]
+    fn it_refuses_every_pin_when_told_to() {
+        let registry = MemoryRegistry::new().refusing_pins();
+        let name = PackageName::parse("@acme/tool").unwrap();
+
+        let error = registry
+            .pin(&[KeyPin {
+                name,
+                key_id: "k1".into(),
+                replaces: None,
+            }])
+            .unwrap_err();
+
+        assert!(error.is(codes::R_TRUST_006), "{error:?}");
+        assert!(registry.pins().is_empty());
     }
 
     #[test]

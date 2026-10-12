@@ -447,7 +447,7 @@ catalog! {
         "The package's publisher signature doesn't verify: the Wasm binary or the manifest isn't what the publisher signed. Don't install the package. `--allow-unsigned` doesn't accept it. (A signature that isn't one at all makes the registry's answer unreadable: R009.)";
     R_TRUST_003 = "R-TRUST-003": Error core,
         "Publisher key changed",
-        "The package is signed with a different key than the one pinned for it when it was first installed (trust on first use). That can be a key rotation or a compromised publisher. If you trust the new key, re-run with `--yes` or add it to `trusted_keys`.";
+        "The package is signed with a different key than the one expected for it: the key pinned for it when you first installed it (trust on first use), or, when you have no pin for it, the key the project's `specforge.lock` records. That can be a key rotation or a compromised publisher. If you trust the new key, re-run with `--yes` or add it to `trusted_keys`.";
     R_TRUST_004 = "R-TRUST-004": Error core,
         "Registry answer mismatch",
         "The registry's answer doesn't match: it, or the manifest it serves, describes another package or version than the one requested, or the binary declares other than the served declaration. Don't install the package, and check the registry.";
@@ -455,8 +455,8 @@ catalog! {
         "Publisher key denied",
         "The package is signed with a key listed in `denied_keys` in your known-keys file. Remove the key from `denied_keys` only if you trust it again.";
     R_TRUST_006 = "R-TRUST-006": Error core,
-        "Known-keys file not writable",
-        "The publisher key pinned for the package couldn't be saved to `~/.specforge/known-keys.json`. Check the permissions on that file and its directory.";
+        "Known-keys file unusable",
+        "Your known-keys file (`~/.specforge/known-keys.json`) can't be read as the store of publisher pins, or the pins an install accepted can't be saved to it. Nothing is installed either way: a store read as empty would trust any key and lose your `denied_keys`, and an install whose pin can't be saved is put back. Fix the file's JSON, or move it aside (every package is then trusted on first use again), and check the permissions on the file and its directory.";
     R001: Error core,
         "Registry authentication failed",
         "The registry rejected the request as unauthenticated (HTTP 401). Log in again with `specforge login --registry <alias> --token <TOKEN>`. `specforge publish` refuses before any request when there is no credential for the registry that serves the package: none stored for its alias and `SPECFORGE_REGISTRY_TOKEN` unset or blank.";
@@ -771,5 +771,5 @@ catalog! {
         "`specforge add` or `specforge update` accepted a registry package that carries no publisher signature, because `--allow-unsigned` was given; it is reported when the package is fetched, whether or not the install then goes ahead. Where it came from can't be verified, and no publisher key is pinned for it, so a later signed version is pinned on first use. Install signed packages where you can; ask the publisher to sign with `specforge publish`.";
     W156: Warning core,
         "Publisher key re-pinned",
-        "A registry package is signed with a different key than the one pinned for it, and the change was accepted (`--yes`, a yes at the prompt, or the new key on `trusted_keys`), so the new key is now pinned. That is what a key rotation looks like, and also what a compromised publisher looks like: confirm the change with the publisher if you did not expect it. The message names both key ids.";
+        "A registry package is signed with a different key than the one pinned for it, the change was accepted (`--yes`, a yes at the prompt, or the new key on `trusted_keys`), and the install was written, so the new key is now pinned. It is reported when the pin is saved: an install that is refused or fails pins nothing and reports none. That is what a key rotation looks like, and also what a compromised publisher looks like: confirm the change with the publisher if you did not expect it. The message names both key ids.";
 }

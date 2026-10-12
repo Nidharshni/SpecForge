@@ -7,9 +7,8 @@
 //! package is fetched and checked before anything is written, and if one
 //! fails, nothing is applied. The binaries and the lock are one change
 //! (`specforge_installed::Change`): a failure puts the previous ones back.
-//! (A publisher key
-//! pinned while checking a signature stays pinned: it records trust, not
-//! a change to the project.)
+//! The publisher keys the update's fetches accepted are pinned with it, once it is written: an
+//! update that is not applied pins nothing (ADR 0059).
 
 use super::Trust;
 use super::lock_plan::{Fetch, Install, LockPlan, Verb};
@@ -324,6 +323,7 @@ pub fn update(
     // the whole update leaves it, whatever order the lock lists the extensions in.
     let mut plan = LockPlan::new(&installed, Verb::Update)?;
     let fetch = Fetch {
+        installed: &installed,
         registry,
         runtime,
         allow_unsigned: req.allow_unsigned,

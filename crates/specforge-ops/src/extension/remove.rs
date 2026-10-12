@@ -252,7 +252,7 @@ fn remove_named(req: &Removing, extension: &ProjectExtension) -> Result<RemoveOu
             let mut change = req.installed.change().map_err(OpError::from)?;
             change.uninstall(&locked.name);
             let committed = change
-                .commit_with(&config_file, drop_entry)
+                .commit_with(Some(&config_file), || drop_entry().map(|_| ()))
                 .map_err(|failed| failed.error.with_writes(Writes::of(failed.left)))?;
             outcome.writes = Writes::of(committed.changed);
         }

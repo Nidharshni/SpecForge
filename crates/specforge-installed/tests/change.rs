@@ -137,7 +137,7 @@ fn a_failed_install_puts_back_the_binary_the_lock_and_the_config() {
     let config_file = dir.path().join("specforge.json");
     let before = snapshot(dir.path());
     let failed = attempt(&Installed::at(dir.path()))
-        .commit_with(&config_file, || -> Result<bool, Diagnostic> {
+        .commit_with(Some(&config_file), || -> Result<(), Diagnostic> {
             std::fs::write(&config_file, "half written").unwrap();
             Err(Diagnostic::new(codes::E069, "the config cannot be edited"))
         })
@@ -198,7 +198,7 @@ fn a_failed_uninstall_puts_back_the_directory_the_lock_and_the_config() {
     let mut change = installed.change().unwrap();
     change.uninstall(&name("@acme/a"));
     let failed = change
-        .commit_with(&config_file, || -> Result<bool, Diagnostic> {
+        .commit_with(Some(&config_file), || -> Result<(), Diagnostic> {
             std::fs::write(&config_file, "{\"extensions\":[]}").unwrap();
             Err(Diagnostic::new(codes::E069, "the config cannot be edited"))
         })
@@ -249,7 +249,7 @@ fn a_rollback_that_cannot_restore_a_file_names_it() {
     change.install(Module::new(b"newer".to_vec()), pin("@acme/a"));
 
     let failed = change
-        .commit_with(&config_file, || -> Result<bool, Diagnostic> {
+        .commit_with(Some(&config_file), || -> Result<(), Diagnostic> {
             // The scope directory can no longer be changed: the rollback
             // cannot take the new module away nor bring the old one back.
             std::fs::set_permissions(&scope, mode(0o555)).unwrap();
@@ -260,6 +260,59 @@ fn a_rollback_that_cannot_restore_a_file_names_it() {
 
     assert_eq!(failed.left, [module.parent().unwrap().to_path_buf()]);
     assert_eq!(failed.error.code, "E069");
+}
+
+#[test]
+fn a_failing_last_step_puts_back_the_binaries_and_the_lock() {
+    let dir = project_with_a(b"original");
+    let root = dir.path();
+    let before = snapshot(root);
+    let installed = Installed::at(root);
+    let mut change = installed.change().unwrap();
+    change.install(Module::new(b"newer".to_vec()), pin("@acme/a"));
+    change.install(Module::new(b"other".to_vec()), pin("@acme/b"));
+
+    let failed = change
+        .commit_with(None, || -> Result<(), Diagnostic> {
+            Err(Diagnostic::new(codes::R_TRUST_006, "x"))
+        })
+        .unwrap_err();
+
+    assert_eq!(failed.error.code, "R-TRUST-006");
+    assert!(failed.left.is_empty());
+    assert_eq!(snapshot(root), before);
+}
+
+#[test]
+fn a_config_the_last_step_leaves_as_it_was_is_not_changed() {
+    let dir = project_with_a(b"original");
+    let root = dir.path();
+    let config_file = root.join("specforge.json");
+    let module = module_of(root, "@acme/a");
+    let installed = Installed::at(root);
+    let mut change = installed.change().unwrap();
+    change.install(Module::new(b"newer".to_vec()), pin("@acme/a"));
+
+    let committed = change
+        .commit_with(Some(&config_file), || -> Result<(), Diagnostic> {
+            let same = std::fs::read(&config_file).unwrap();
+            std::fs::write(&config_file, same).unwrap();
+            Ok(())
+        })
+        .unwrap();
+
+    assert_eq!(committed.changed, [module, root.join("specforge.lock")]);
+
+    let installed = Installed::at(root);
+    let committed = installed
+        .change()
+        .unwrap()
+        .commit_with(Some(&config_file), || -> Result<(), Diagnostic> {
+            std::fs::write(&config_file, "{\"extensions\":[\"@acme/a\"]}").unwrap();
+            Ok(())
+        })
+        .unwrap();
+    assert_eq!(committed.changed, [config_file]);
 }
 
 #[test]

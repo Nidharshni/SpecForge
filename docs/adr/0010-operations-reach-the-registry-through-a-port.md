@@ -47,3 +47,7 @@ nor the LSP links.
 `publish`; the adapter also holds the publish credential and the signing key, read from the user's
 `~/.specforge` (`specforge_ops_registry::User`). `publish` is an operation in ops, and the CLI only
 presents it.
+
+**Amended by ADR 0059 (2026-10-12):** `fetch` takes a `TrustPolicy` (the caller's two choices and the key the
+lock records for the name) and writes nothing; the port gains `pin`, which saves the publisher keys a committed
+lock plan accepted. `check_and_pin` is split into `trust_flow::check` and `trust_flow::record`.

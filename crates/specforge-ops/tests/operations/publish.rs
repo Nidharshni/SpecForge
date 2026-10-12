@@ -7,7 +7,7 @@ use specforge_extension_sdk::{ContributionsBuilder, ExtensionMeta};
 use specforge_ops::extension::Trust;
 use specforge_ops::publish::{PublishReport, publish};
 use specforge_ops::registry::testing::{Asked, MemoryRegistry};
-use specforge_ops::registry::{Registry, Unconfigured};
+use specforge_ops::registry::{Registry, TrustPolicy, Unconfigured};
 use specforge_ops::testing::declaring;
 use specforge_package::{PackageName, Version};
 use specforge_test_macros::test as specforge_test;
@@ -225,7 +225,7 @@ fn a_publish_uploads_the_binary_and_the_declaration_read_from_it() {
     assert_eq!(outcome.published.registry, "in-memory");
 
     let held = registry
-        .fetch(&name, &version, false, Trust::Refuse)
+        .fetch(&name, &version, TrustPolicy::new(false, Trust::Refuse))
         .unwrap();
     assert_eq!(held.wasm, wasm);
     let declared = specforge_ops::publish::declare(&runtime, &wasm).unwrap().0;
@@ -320,8 +320,7 @@ fn what_publish_uploads_is_what_add_installs() {
         .fetch(
             &name,
             &Version::parse("1.0.0").unwrap(),
-            false,
-            Trust::Refuse,
+            TrustPolicy::new(false, Trust::Refuse),
         )
         .unwrap()
         .declaration;

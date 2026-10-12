@@ -1758,10 +1758,11 @@ Level: error
 ```
 R-TRUST-003: Publisher key changed
 
-The package is signed with a different key than the one pinned for it when it
-was first installed (trust on first use). That can be a key rotation or a
-compromised publisher. If you trust the new key, re-run with `--yes` or add it
-to `trusted_keys`.
+The package is signed with a different key than the one expected for it: the key
+pinned for it when you first installed it (trust on first use), or, when you
+have no pin for it, the key the project's `specforge.lock` records. That can be
+a key rotation or a compromised publisher. If you trust the new key, re-run with
+`--yes` or add it to `trusted_keys`.
 
 Owner: core
 Level: error
@@ -1795,11 +1796,14 @@ Level: error
 ## R-TRUST-006
 
 ```
-R-TRUST-006: Known-keys file not writable
+R-TRUST-006: Known-keys file unusable
 
-The publisher key pinned for the package couldn't be saved to
-`~/.specforge/known-keys.json`. Check the permissions on that file and its
-directory.
+Your known-keys file (`~/.specforge/known-keys.json`) can't be read as the store
+of publisher pins, or the pins an install accepted can't be saved to it. Nothing
+is installed either way: a store read as empty would trust any key and lose your
+`denied_keys`, and an install whose pin can't be saved is put back. Fix the
+file's JSON, or move it aside (every package is then trusted on first use
+again), and check the permissions on the file and its directory.
 
 Owner: core
 Level: error
@@ -3235,10 +3239,12 @@ Level: warning
 W156: Publisher key re-pinned
 
 A registry package is signed with a different key than the one pinned for it,
-and the change was accepted (`--yes`, a yes at the prompt, or the new key on
-`trusted_keys`), so the new key is now pinned. That is what a key rotation looks
-like, and also what a compromised publisher looks like: confirm the change with
-the publisher if you did not expect it. The message names both key ids.
+the change was accepted (`--yes`, a yes at the prompt, or the new key on
+`trusted_keys`), and the install was written, so the new key is now pinned. It
+is reported when the pin is saved: an install that is refused or fails pins
+nothing and reports none. That is what a key rotation looks like, and also what
+a compromised publisher looks like: confirm the change with the publisher if you
+did not expect it. The message names both key ids.
 
 Owner: core
 Level: warning

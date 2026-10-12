@@ -778,7 +778,7 @@ fn add_installs_a_signed_package_and_pins_its_key() {
         "{}",
         String::from_utf8_lossy(&output.stdout)
     );
-    let known = specforge_registry_client::load_known_keys_at(&known_keys(&home));
+    let known = specforge_registry_client::load_known_keys_at(&known_keys(&home)).unwrap();
     assert_eq!(known.pin_for("@sdk/greet"), Some(key.key_id().as_str()));
     let lock = std::fs::read_to_string(dir.path().join("specforge.lock")).unwrap();
     assert!(
@@ -807,7 +807,7 @@ fn add_refuses_a_package_signed_by_another_key_than_the_pinned_one() {
     let output = add_greet(&dir, &home, &["--allow-unsigned"]);
 
     assert_refused(&output, &dir, "R-TRUST-003");
-    let known = specforge_registry_client::load_known_keys_at(&known_keys(&home));
+    let known = specforge_registry_client::load_known_keys_at(&known_keys(&home)).unwrap();
     assert_eq!(known.pin_for("@sdk/greet"), Some(pinned.key_id().as_str()));
 }
 
@@ -1386,4 +1386,329 @@ fn add_from_a_private_registry_with_a_stored_credential() {
     let bare = TempDir::new().unwrap();
     let output = add_greet(&dir, &bare, &["--allow-unsigned"]);
     assert_refused(&output, &dir, "R001");
+}
+
+// ---------------------------------------------------------------
+// Plan 09: trust pins. These tests pin today's behaviour (a refused install
+// pins its publisher key); the ticket that fixes it flips them.
+// ---------------------------------------------------------------
+
+/// What `Trusting` holds in the registry and the project.
+struct TrustingSetup {
+    /// `home` pins `@sdk/greet` to k1.
+    pin_k1: bool,
+    /// The registry serves greet 0.1.0 signed by k2 instead of k1.
+    greet_signed_by_k2: bool,
+    /// The project locks `@x/a` (which needs greet `^0.1`).
+    lock_app: bool,
+    /// More packages the registry serves.
+    more: Vec<crate::published::Package>,
+}
+
+/// Plan 09's trust scenario. The registry serves `@sdk/greet` 0.1.0 (the greet binary) signed by `k1`,
+/// 0.2.0 (bytes that are no extension) signed by `k2`, and `@x/a` 1.0.0 (peer `@sdk/greet ^0.1`) signed
+/// by `k1`. The project locks greet 0.1.0 and `@x/a` 1.0.0, both with key `k1` (greet's module is not on
+/// disk, so adding 0.1.0 installs it again). `home` pins greet to `k1` when asked.
+struct Trusting {
+    _registry: specforge_registry_server::testing::LocalRegistry,
+    dir: TempDir,
+    home: TempDir,
+    k1: specforge_registry_client::SigningKey,
+    k2: specforge_registry_client::SigningKey,
+}
+
+fn trusting(setup: TrustingSetup) -> Trusting {
+    use crate::published::{Package, serve};
+    let k1 = specforge_registry_client::SigningKey::generate();
+    let k2 = specforge_registry_client::SigningKey::generate();
+    let greet_signer = if setup.greet_signed_by_k2 { &k2 } else { &k1 };
+    let mut packages = vec![
+        Package::new("@sdk/greet", "0.1.0", greet_wasm()).signed_by(greet_signer),
+        Package::new("@sdk/greet", "0.2.0", b"\0asm greet 0.2.0".to_vec()).signed_by(&k2),
+        Package::new("@x/a", "1.0.0", b"\0asm x/a".to_vec())
+            .with_peer("@sdk/greet", "^0.1")
+            .signed_by(&k1),
+    ];
+    packages.extend(setup.more);
+    let registry = serve(packages);
+    let dir = project_on(&registry);
+    let home = TempDir::new().unwrap();
+
+    let mut extensions = vec!["@specforge/software".to_string(), "@sdk/greet".to_string()];
+    let mut entries = vec![specforge_installed::LockFileEntry {
+        name: "@sdk/greet".parse().unwrap(),
+        version: "0.1.0".into(),
+        source: specforge_installed::LockSource::Registry,
+        wasm_hash: specforge_installed::hex_sha256(&greet_wasm()),
+        key_id: Some(k1.key_id()),
+        peer_dependencies: Vec::new(),
+    }];
+    if setup.lock_app {
+        extensions.push("@x/a".to_string());
+        entries.push(specforge_installed::LockFileEntry {
+            name: "@x/a".parse().unwrap(),
+            version: "1.0.0".into(),
+            source: specforge_installed::LockSource::Registry,
+            wasm_hash: specforge_installed::hex_sha256(b"\0asm x/a"),
+            key_id: Some(k1.key_id()),
+            peer_dependencies: vec![specforge_protocol_types::PeerDependency {
+                name: "@sdk/greet".into(),
+                version: "^0.1".into(),
+                optional: false,
+            }],
+        });
+    }
+    let config = serde_json::json!({
+        "name": "p",
+        "version": "0.1.0",
+        "extensions": extensions,
+        "registries": registry.config_entry(),
+    });
+    std::fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
+    specforge_installed::write_lock_file(
+        &specforge_installed::LockFile {
+            lockfile_version: 1,
+            entries,
+        },
+        &dir.path().join("specforge.lock"),
+    )
+    .unwrap();
+    if setup.pin_k1 {
+        let mut known = specforge_registry_client::KnownKeys::default();
+        known.pin("@sdk/greet", &k1.key_id());
+        std::fs::create_dir_all(home.path().join(".specforge")).unwrap();
+        specforge_registry_client::save_known_keys_at(&known_keys(&home), &known).unwrap();
+    }
+    Trusting {
+        _registry: registry,
+        dir,
+        home,
+        k1,
+        k2,
+    }
+}
+
+impl Trusting {
+    fn run(&self, args: &[&str]) -> std::process::Output {
+        specforge_cmd()
+            .args(args)
+            .arg("--path")
+            .arg(self.dir.path())
+            .env("HOME", self.home.path())
+            .output()
+            .unwrap()
+    }
+
+    fn pinned(&self, name: &str) -> Option<String> {
+        specforge_registry_client::load_known_keys_at(&known_keys(&self.home))
+            .unwrap()
+            .pin_for(name)
+            .map(str::to_string)
+    }
+
+    fn locked_key(&self, name: &str) -> Option<String> {
+        specforge_installed::read_lock_file(&self.dir.path().join("specforge.lock"))
+            .unwrap()
+            .entries
+            .into_iter()
+            .find(|e| e.name.as_str() == name)
+            .and_then(|e| e.key_id)
+    }
+}
+
+fn json_of(output: &std::process::Output) -> serde_json::Value {
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    serde_json::from_str(&stdout).unwrap_or_else(|e| panic!("not JSON ({e}): {stdout}"))
+}
+
+fn setup(pin_k1: bool) -> TrustingSetup {
+    TrustingSetup {
+        pin_k1,
+        greet_signed_by_k2: false,
+        lock_app: true,
+        more: Vec::new(),
+    }
+}
+
+#[specforge_test(
+    behavior = "pin_publisher_key",
+    verify = "a refused install pins no key, so the locked version installs again"
+)]
+fn a_refused_install_pins_no_key_so_the_locked_version_installs_again() {
+    let t = trusting(setup(true));
+
+    let refused = t.run(&["add", "@sdk/greet@0.2.0", "--yes", "--format", "json"]);
+
+    assert!(!refused.status.success());
+    assert_eq!(json_of(&refused)["code"], "R-RES-006");
+    assert!(
+        !stderr_of(&refused).contains("W156"),
+        "{}",
+        stderr_of(&refused)
+    );
+    assert_eq!(t.pinned("@sdk/greet"), Some(t.k1.key_id()));
+    assert_eq!(t.locked_key("@sdk/greet"), Some(t.k1.key_id()));
+    let again = t.run(&["add", "@sdk/greet@0.1.0", "--format", "json"]);
+    assert!(
+        again.status.success(),
+        "{}",
+        String::from_utf8_lossy(&again.stdout)
+    );
+    assert_eq!(
+        json_of(&again)["added"][0]["publisher"],
+        "pinned",
+        "{again:?}"
+    );
+}
+
+#[specforge_test(
+    behavior = "pin_publisher_key",
+    verify = "a refused update pins no key"
+)]
+fn a_refused_update_pins_no_key() {
+    let t = trusting(setup(true));
+
+    let output = t.run(&["update", "--major", "--yes", "--format", "json"]);
+
+    assert!(!output.status.success());
+    let json = json_of(&output);
+    assert_eq!(json["ok"], false, "{json}");
+    let greet = json["extensions"]
+        .as_array()
+        .or_else(|| json["results"].as_array())
+        .and_then(|rows| {
+            rows.iter()
+                .find(|row| row["extension"] == "@sdk/greet" || row["name"] == "@sdk/greet")
+        })
+        .unwrap_or_else(|| panic!("no greet row: {json}"));
+    assert_eq!(greet["status"], "failed", "{json}");
+    assert_eq!(greet["code"], "R-RES-006", "{json}");
+    assert!(
+        !stderr_of(&output).contains("W156"),
+        "{}",
+        stderr_of(&output)
+    );
+    assert_eq!(t.pinned("@sdk/greet"), Some(t.k1.key_id()));
+}
+
+#[test]
+fn a_refused_install_pins_no_first_use_key() {
+    let t = trusting(setup(false));
+
+    let output = t.run(&["add", "@sdk/greet@0.2.0", "--format", "json"]);
+
+    assert!(!output.status.success());
+    assert_eq!(json_of(&output)["code"], "R-TRUST-003");
+    assert!(
+        !known_keys(&t.home).exists(),
+        "a refused install creates no pin store"
+    );
+}
+
+#[specforge_test(
+    behavior = "pin_publisher_key",
+    verify = "with no pin of the user's, the key specforge.lock records is the pin"
+)]
+fn with_no_pin_the_key_the_lock_records_is_the_pin() {
+    let t = trusting(TrustingSetup {
+        greet_signed_by_k2: true,
+        ..setup(false)
+    });
+
+    let lock_before = std::fs::read(t.dir.path().join("specforge.lock")).unwrap();
+
+    let output = t.run(&["add", "@sdk/greet@0.1.0", "--format", "json"]);
+
+    assert!(!output.status.success());
+    let json = json_of(&output);
+    assert_eq!(json["code"], "R-TRUST-003", "{json}");
+    assert!(
+        json["error"]
+            .as_str()
+            .unwrap()
+            .contains(&format!("specforge.lock records '{}'", t.k1.key_id())),
+        "{json}"
+    );
+    assert!(!known_keys(&t.home).exists());
+    assert_eq!(
+        std::fs::read(t.dir.path().join("specforge.lock")).unwrap(),
+        lock_before
+    );
+    // The user can accept the key the registry serves now.
+    let accepted = t.run(&["add", "@sdk/greet@0.1.0", "--yes", "--format", "json"]);
+    assert!(
+        accepted.status.success(),
+        "{}",
+        String::from_utf8_lossy(&accepted.stdout)
+    );
+    assert_eq!(t.locked_key("@sdk/greet"), Some(t.k2.key_id()));
+    assert_eq!(t.pinned("@sdk/greet"), Some(t.k2.key_id()));
+}
+
+#[specforge_test(
+    behavior = "pin_publisher_key",
+    verify = "an install refused when its binary loads pins no key"
+)]
+fn an_install_refused_at_the_load_pins_no_key() {
+    let t = trusting(TrustingSetup {
+        lock_app: false,
+        ..setup(true)
+    });
+
+    let output = t.run(&["add", "@sdk/greet@0.2.0", "--yes", "--format", "json"]);
+
+    assert!(!output.status.success());
+    assert_eq!(json_of(&output)["code"], "E028");
+    assert!(
+        !stderr_of(&output).contains("W156"),
+        "{}",
+        stderr_of(&output)
+    );
+    assert_eq!(t.pinned("@sdk/greet"), Some(t.k1.key_id()));
+    assert_eq!(t.locked_key("@sdk/greet"), Some(t.k1.key_id()));
+}
+
+#[specforge_test(
+    behavior = "pin_publisher_key",
+    verify = "a refused add of several specifiers pins no key"
+)]
+fn a_refused_add_of_several_specifiers_pins_no_key() {
+    use crate::published::Package;
+    let t = trusting(TrustingSetup {
+        more: vec![Package::new("@x/plain", "1.0.0", b"\0asm plain".to_vec())],
+        ..setup(true)
+    });
+    let lock_before = std::fs::read(t.dir.path().join("specforge.lock")).unwrap();
+    let config_before = std::fs::read(t.dir.path().join("specforge.json")).unwrap();
+
+    let output = t.run(&[
+        "add",
+        "@sdk/greet@0.2.0",
+        "@x/plain@1.0.0",
+        "--yes",
+        "--format",
+        "json",
+    ]);
+
+    assert!(!output.status.success());
+    let json = json_of(&output);
+    assert_eq!(json["code"], "R-TRUST-001", "{json}");
+    assert!(
+        json["error"].as_str().unwrap().contains("@x/plain@1.0.0"),
+        "{json}"
+    );
+    assert_eq!(
+        std::fs::read(t.dir.path().join("specforge.lock")).unwrap(),
+        lock_before
+    );
+    assert_eq!(
+        std::fs::read(t.dir.path().join("specforge.json")).unwrap(),
+        config_before
+    );
+    assert!(
+        !stderr_of(&output).contains("W156"),
+        "{}",
+        stderr_of(&output)
+    );
+    assert_eq!(t.pinned("@sdk/greet"), Some(t.k1.key_id()));
 }

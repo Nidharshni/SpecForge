@@ -123,7 +123,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   version requirements and peer ranges is `specforge-package` (ADR 0050).
 - **Installed extension**: an extension placed in the project under
   `.specforge/extensions/<name>/extension.wasm` and pinned by its `specforge.lock` entry (version,
-  source `registry` or `local:<path>`, the SHA-256 of the binary). It loads only while its binary is
+  source `registry` or `local:<path>`, the SHA-256 of the binary and, for a signed registry package, its
+  publisher key id). It loads only while its binary is
   the one its entry pins (E070 otherwise; W149 when the entry pins no hash). A project's installed
   extensions are one value, its lock read once (`specforge_installed::Installed`); installing,
   updating and removing them is one **change** (`Installed::change`), written all at once or not at
@@ -161,7 +162,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   own peers, and every locked extension's peers on a staged one, unified against the registry an
   install came from (R-RES-006/005, ADR 0001) or, for a local file, refused with E027; a peer that
   is not locked is `check`'s. Lock order decides nothing. A registry install's binary loads only
-  after that and must declare what was published; then the plan is written as one change.
+  after that and must declare what was published; then the plan is written as one change, whose last
+  step pins the publisher keys its fetches accepted (`Registry::pin`): a refused or failed plan pins
+  nothing (ADR 0059).
 - **Setup part**: what part of a project's setup a diagnostic the environment reports is about: the
   config, the lock, one `extensions` entry, structural-only, the configured providers, one declaration,
   the peers, the registries, a rule, a surface, or a collision (two contributions claiming one name: a
@@ -248,7 +251,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   publish over HTTP, credentials in the OS keyring, publisher trust and package signing
   (`specforge-registry-client`). Not the Registry build, which is pure and needs none of it.
   Operations reach it only through the `Registry` port, which lists a package's versions, fetches
-  one and publishes one, by package name and version (ADR 0036, 0045); its adapter,
+  one, pins the publisher keys a committed install accepted, and publishes one, by package name and
+  version (ADR 0036, 0045, 0059); its adapter,
   `specforge_ops_registry::ConfiguredRegistry`, reads the project's registries, asks the one that
   serves a name and runs the fetch policy over the `RegistryClient` seam (ADR 0044). It is linked by
   the CLI and MCP, never the LSP (ADR 0010), and holds what needs the user's `~/.specforge`: the
@@ -265,11 +269,18 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   it; a publish takes `SPECFORGE_REGISTRY_TOKEN` first (ADR 0045 as amended).
 - **Fetch policy**: what a package passes before an operation sees it: the registry's reply reads as the protocol's JSON (R009 else;
   a malformed signature is that) and names the package and version asked for, the binary hashes to the served SHA-256, the served manifest reads as that
-  package's declaration (one from before ADR 0012 is refused), and the publisher signature verifies with a
-  key that matches its pin or is pinned now (`ConfiguredRegistry::fetch`; ADR 0010, 0012, 0044). A refused
-  package pins no key. Accepting an unsigned package (`--allow-unsigned`) is reported as W155 and a re-pinned
-  key as W156; a first-use pin is part of the outcome (`Publisher`). The check writes nothing to the terminal:
-  a key change is asked of the surface that can ask.
+  package's declaration (one from before ADR 0012 is refused), and the publisher signature verifies with the
+  expected key: the user's **key pin** for the name, else the key the project's `specforge.lock` records, else
+  any (trust on first use) (`ConfiguredRegistry::fetch`; ADR 0010, 0012, 0044, 0059). The fetch decides and
+  writes nothing: the decision is the package's `Publisher`, and the key is pinned when the lock plan that
+  fetched it commits. Accepting an unsigned package (`--allow-unsigned`) is reported as W155 at fetch, a
+  re-pin as W156 once it is saved. A known-keys store that can't be read refuses the fetch (R-TRUST-006). The
+  check writes nothing to the terminal: a key change is asked of the surface that can ask.
+- **Key pin**: the publisher key id a package name is held to, kept per user in `~/.specforge/known-keys.json`
+  (`pins`, beside the `trusted_keys` allowlist and the `denied_keys` deny list) and per project as the lock
+  entry's `key_id`. The user's pin wins; the lock's stands in when the user has none. Pins are written only by
+  a committed lock plan, through `Registry::pin`, after the binaries and the lock
+  (`specforge_ops::registry::KeyPin`, ADR 0059).
 - **Package signature**: a publisher's Ed25519 signature over a package's signed content (its name and version as
   declared, and the SHA-256 of the exact binary and manifest uploaded), with the public key and the time that verify it
   offline (`specforge_registry_wire::PackageSignature`, JSON `{sig, public_key, signed_at}`). Its key id is the first

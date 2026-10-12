@@ -390,7 +390,8 @@ pub struct Added {
     /// The files the add changed: `specforge.json` when an entry was added,
     /// and for the installs each module and `specforge.lock` when their bytes
     /// changed. Nothing for a dry run or extensions already present. A
-    /// trust pin the registry adapter keeps for the user is not one.
+    /// publisher key pinned for the user is not one: it is pinned with the
+    /// change, last.
     pub writes: Writes,
     /// How many extensions `specforge.json` enables after the add (`0`
     /// without one): `extension_added`'s `totalExtensions`.
@@ -468,6 +469,7 @@ pub fn add(
         steps.push(step);
     }
     let fetch = Fetch {
+        installed: &installed,
         registry,
         runtime,
         allow_unsigned: req.allow_unsigned,
@@ -772,10 +774,8 @@ fn apply<'a>(
                 named(several, specifier(at), error)
             })?;
             checked.commit_with(&config_path, || {
-                let edit = crate::config::enable(req.root.dir(), &names)?;
-                let changed = !edit.appended.is_empty();
-                enabled = Some(edit);
-                Ok(changed)
+                enabled = Some(crate::config::enable(req.root.dir(), &names)?);
+                Ok(())
             })?
         }
         _ => {

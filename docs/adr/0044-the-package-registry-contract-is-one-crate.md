@@ -108,3 +108,6 @@ filter reads `ExtensionDeclaration::declares`.
   the client reads the publish receipt.
 - **D4.** The client contract gains K11: a publish whose signature does not verify is refused and stores nothing,
   over HTTP and in memory.
+
+**Amended by ADR 0059 (2026-10-12), to D4:** `MemoryRegistry` decides a publisher against its own pins and the
+lock's key, and records pins through `pin`. The contract gains C8-C10, and C3 states that a fetch writes nothing.

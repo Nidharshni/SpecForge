@@ -1,12 +1,12 @@
-//! The package registry port the extension operations use. It lists a package's versions, fetches one and
-//! publishes one.
+//! The package registry port the extension operations use. It lists a package's versions, fetches one,
+//! pins the publisher keys a committed install accepted, and publishes one.
 //!
 //! SpecForge ships no registry (ADR 0004 N1): the only registries are the
 //! ones the project's `specforge.json` lists under `registries`. With none,
 //! a registry operation fails with E063 before it makes any network call.
 //!
 //! The operations name only the [`Registry`] trait. The adapter that talks
-//! HTTP, checks publisher signatures and pins keys is
+//! HTTP, checks publisher signatures and saves the user's key pins is
 //! `specforge_ops_registry::ConfiguredRegistry`, which only the surfaces that
 //! reach a registry (the CLI, MCP) link (ADR 0010).
 
@@ -75,16 +75,63 @@ pub struct Package {
     pub publisher: Publisher,
 }
 
-/// How the fetch policy accepted a package's publisher.
+/// How a fetch decides a package's publisher: the caller's two choices, and the key the project
+/// already records for the name. The adapter applies it (ADR 0010, 0044, 0059) and writes nothing;
+/// what it decided is the package's [`Publisher`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TrustPolicy<'a> {
+    /// Accept a package with no publisher signature (reported as W155).
+    pub allow_unsigned: bool,
+    /// How a key change is decided.
+    pub trust: Trust,
+    /// The publisher key `specforge.lock` records for the name's registry install
+    /// (`specforge_installed::Installed::locked_key`): the pin when the user has none of their own.
+    pub locked_key: Option<&'a str>,
+}
+
+impl TrustPolicy<'static> {
+    /// `allow_unsigned` and `trust`, with no key locked for the name.
+    pub const fn new(allow_unsigned: bool, trust: Trust) -> Self {
+        TrustPolicy {
+            allow_unsigned,
+            trust,
+            locked_key: None,
+        }
+    }
+}
+
+impl<'a> TrustPolicy<'a> {
+    /// This policy, expecting `key` as the lock's key for the name.
+    pub fn locked(self, key: Option<&'a str>) -> TrustPolicy<'a> {
+        TrustPolicy {
+            locked_key: key,
+            ..self
+        }
+    }
+}
+
+/// How the fetch policy accepted a package's publisher. A fetch decides it; the key it calls for is
+/// pinned only when the lock plan that fetched it commits ([`Registry::pin`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Publisher {
     /// Not signed; accepted because the caller allowed it (W155 was reported).
     Unsigned,
-    /// Signed by `key_id`, which matched its pin (`first_use: false`) or was pinned by this fetch
-    /// (`first_use: true`).
+    /// Signed by `key_id`. `first_use: false`: the user's pin. `first_use: true`: the user has no pin,
+    /// and the key is pinned when the install is written (trust on first use, or the key the lock
+    /// records).
     Signed { key_id: String, first_use: bool },
-    /// Signed by `key_id`, which replaced the pinned `previous` with consent (W156 was reported).
+    /// Signed by `key_id`, which replaces the pin `previous` (the user's, or the lock's) with consent;
+    /// pinned, and reported as W156, when the install is written.
     Repinned { key_id: String, previous: String },
+}
+
+/// A publisher key pinned for a package name when the lock plan that fetched it commits.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KeyPin {
+    pub name: PackageName,
+    pub key_id: String,
+    /// The key it replaces after consent (reported as W156); `None` on first use.
+    pub replaces: Option<String>,
 }
 
 impl Publisher {
@@ -93,6 +140,30 @@ impl Publisher {
         match self {
             Publisher::Unsigned => None,
             Publisher::Signed { key_id, .. } | Publisher::Repinned { key_id, .. } => Some(key_id),
+        }
+    }
+
+    /// The pin this acceptance calls for once `name`'s install is written: its key on first use or
+    /// after a consented change; none for a key already pinned or an unsigned package.
+    pub fn pin(&self, name: &PackageName) -> Option<KeyPin> {
+        match self {
+            Publisher::Signed {
+                key_id,
+                first_use: true,
+            } => Some(KeyPin {
+                name: name.clone(),
+                key_id: key_id.clone(),
+                replaces: None,
+            }),
+            Publisher::Repinned { key_id, previous } => Some(KeyPin {
+                name: name.clone(),
+                key_id: key_id.clone(),
+                replaces: Some(previous.clone()),
+            }),
+            Publisher::Signed {
+                first_use: false, ..
+            }
+            | Publisher::Unsigned => None,
         }
     }
 
@@ -120,7 +191,7 @@ pub enum Acceptance {
     Unsigned,
     /// Signed by the pinned key.
     Pinned,
-    /// Signed, and its key pinned by this fetch.
+    /// Signed, and its key pinned when the install was written.
     PinnedNow,
     /// Signed by a key that replaced the pin with consent (W156).
     Repinned,
@@ -232,7 +303,7 @@ pub const CONTRIBUTES: OptionTable<DeclaredCategory> = OptionTable {
 };
 
 /// The registry port the extension operations use. It lists a package's versions,
-/// fetches one and publishes one; it does not resolve a requirement (ADR 0036): ops
+/// fetches one, pins the publisher keys a committed install accepted and publishes one; it does not resolve a requirement (ADR 0036): ops
 /// does, with [`crate::extension::resolve`]. Each call asks the one registry that
 /// serves the name (ADR 0045).
 ///
@@ -242,18 +313,23 @@ pub trait Registry {
     /// Every version `name` publishes (unparseable ones dropped);
     /// R-RES-001 when the registry has no such package.
     fn versions(&self, name: &PackageName) -> Result<Vec<Version>, OpError>;
-    /// `name@version`, downloaded and integrity-checked, its publisher
-    /// signature checked under the TOFU pin policy: a package with none is
-    /// refused unless `allow_unsigned`; a changed key is decided by `trust`.
-    /// An answer for another package or version, or one whose manifest
-    /// can't be read, is refused.
+    /// `name@version`, downloaded and integrity-checked, its publisher signature checked and its
+    /// publisher decided under `policy`. A package with none is refused unless `allow_unsigned`.
+    /// The expected key is the user's pin for the name, else `policy.locked_key`, else none (trust
+    /// on first use). Another key is a key change, decided by `trust` (R-TRUST-003 when refused).
+    /// An answer for another package or version, or one whose manifest can't be read, is refused.
+    /// **Writes nothing**: the decision is [`Package::publisher`], pinned by [`Registry::pin`] once
+    /// the operation's lock plan commits.
     fn fetch(
         &self,
         name: &PackageName,
         version: &Version,
-        allow_unsigned: bool,
-        trust: Trust,
+        policy: TrustPolicy<'_>,
     ) -> Result<Package, OpError>;
+    /// Pin `pins` for the user, all or none: what a committed lock plan's fetches decided. Refused
+    /// with R-TRUST-006 when the pins can't be saved or the store can't be read, and nothing is
+    /// saved then. Each pin that replaces another is reported as W156 by an adapter that reports.
+    fn pin(&self, pins: &[KeyPin]) -> Result<(), OpError>;
     /// Publish `package` to the registry that serves its name (the one
     /// `fetch` asks for it), signed with the user's publisher key and
     /// authenticated as the user is to that registry.
@@ -292,7 +368,11 @@ impl Registry for Unconfigured {
         Err(no_registry(self.0))
     }
 
-    fn fetch(&self, _: &PackageName, _: &Version, _: bool, _: Trust) -> Result<Package, OpError> {
+    fn fetch(&self, _: &PackageName, _: &Version, _: TrustPolicy<'_>) -> Result<Package, OpError> {
+        Err(no_registry(self.0))
+    }
+
+    fn pin(&self, _: &[KeyPin]) -> Result<(), OpError> {
         Err(no_registry(self.0))
     }
 
@@ -308,6 +388,52 @@ impl Registry for Unconfigured {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[specforge_test_macros::test(
+        type = "KeyPin",
+        verify = "KeyPin is what a committed lock plan pins for a package name"
+    )]
+    fn a_publisher_names_the_pin_it_calls_for() {
+        let name = PackageName::parse("@acme/x").unwrap();
+        let signed = |first_use| Publisher::Signed {
+            key_id: "k2".into(),
+            first_use,
+        };
+
+        assert_eq!(
+            signed(true).pin(&name),
+            Some(KeyPin {
+                name: name.clone(),
+                key_id: "k2".into(),
+                replaces: None
+            })
+        );
+        assert_eq!(signed(false).pin(&name), None);
+        assert_eq!(
+            Publisher::Repinned {
+                key_id: "k2".into(),
+                previous: "k1".into()
+            }
+            .pin(&name),
+            Some(KeyPin {
+                name: name.clone(),
+                key_id: "k2".into(),
+                replaces: Some("k1".into())
+            })
+        );
+        assert_eq!(Publisher::Unsigned.pin(&name), None);
+    }
+
+    #[specforge_test_macros::test(
+        type = "TrustPolicy",
+        verify = "TrustPolicy is what a fetch decides a publisher by: the caller's choices and the key the lock records"
+    )]
+    fn a_trust_policy_names_the_lock_key_only_when_given() {
+        let policy = TrustPolicy::new(true, Trust::Refuse);
+
+        assert_eq!(policy.locked_key, None);
+        assert_eq!(policy.locked(Some("k")).locked_key, Some("k"));
+    }
 
     #[test]
     fn an_unconfigured_registry_refuses_a_publish_with_e063() {
