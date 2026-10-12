@@ -109,19 +109,32 @@ impl Sink {
         })
     }
 
-    /// Run one write on the stream. Once its reader has gone, nothing is
-    /// written; a reader that goes now (`BrokenPipe`) closes the stream. Any
-    /// other failure panics as `print!` does: a full disk is not a reader
-    /// that left.
-    fn emit(&mut self, write: impl FnOnce(&mut (dyn Write + Send)) -> io::Result<()>) {
+    /// Run one write and report a reader that has gone: once it has gone,
+    /// nothing is written and the result is `BrokenPipe`; a reader that goes
+    /// now (`BrokenPipe`) closes the stream and is reported. Any other
+    /// failure panics as `print!` does: a full disk is not a reader that
+    /// left.
+    fn reporting(
+        &mut self,
+        write: impl FnOnce(&mut (dyn Write + Send)) -> io::Result<()>,
+    ) -> io::Result<()> {
         if self.closed {
-            return;
+            return Err(io::ErrorKind::BrokenPipe.into());
         }
         match write(&mut *self.writer) {
-            Ok(()) => {}
-            Err(error) if error.kind() == io::ErrorKind::BrokenPipe => self.closed = true,
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == io::ErrorKind::BrokenPipe => {
+                self.closed = true;
+                Err(error)
+            }
             Err(error) => self.failed(&error),
         }
+    }
+
+    /// Run one write; a reader that has gone is not an error (`out!`,
+    /// `outln!`, …).
+    fn emit(&mut self, write: impl FnOnce(&mut (dyn Write + Send)) -> io::Result<()>) {
+        let _ = self.reporting(write);
     }
 
     /// A failed write panics as `print!` does.
@@ -248,18 +261,21 @@ impl Terminal {
         }
     }
 
-    /// The next line of input without its line ending, or `None` at the end
-    /// of input or on a read error (`specforge mcp`'s stdio loop).
-    pub(crate) fn read_line(&self) -> Option<String> {
-        let mut line = String::new();
-        match locked(&self.0.input).read_line(&mut line) {
-            Ok(0) | Err(_) => None,
-            Ok(_) => {
-                let trimmed = line.trim_end_matches(['\n', '\r']).len();
-                line.truncate(trimmed);
-                Some(line)
-            }
-        }
+    /// The whole input, held until the value drops: for a command that
+    /// serves its input to the end and asks nothing (`specforge mcp`). The
+    /// bytes are handed on as they are, never decoded. Asking (`ask`) while
+    /// it is held would wait for it.
+    pub(crate) fn input(&self) -> Input<'_> {
+        Input(locked(&self.0.input))
+    }
+
+    /// Stdout as a writer that reports what [`Self::write`] hides: a write
+    /// once the reader has gone, or one that finds it gone (`BrokenPipe`,
+    /// which closes the stream), fails with `BrokenPipe`; any other failure
+    /// panics as `print!` does (`specforge mcp`, whose transport stops at
+    /// the first failed write).
+    pub(crate) fn output(&self) -> Output<'_> {
+        Output(self)
     }
 
     /// A writer onto `stream` for code that wants `&mut dyn Write`
@@ -284,6 +300,39 @@ impl Terminal {
         for stream in [Stream::Out, Stream::Err] {
             locked(self.sink(stream)).emit(|writer| writer.flush());
         }
+    }
+}
+
+/// What [`Terminal::input`] gives.
+pub(crate) struct Input<'t>(MutexGuard<'t, Box<dyn BufRead + Send>>);
+
+impl Read for Input<'_> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.0.read(buf)
+    }
+}
+
+impl BufRead for Input<'_> {
+    fn fill_buf(&mut self) -> io::Result<&[u8]> {
+        self.0.fill_buf()
+    }
+
+    fn consume(&mut self, amount: usize) {
+        self.0.consume(amount)
+    }
+}
+
+/// What [`Terminal::output`] gives.
+pub(crate) struct Output<'t>(&'t Terminal);
+
+impl Write for Output<'_> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        locked(self.0.sink(Stream::Out)).reporting(|writer| writer.write_all(buf))?;
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        locked(self.0.sink(Stream::Out)).reporting(|writer| writer.flush())
     }
 }
 
@@ -440,11 +489,47 @@ mod tests {
         let (terminal, capture) = Terminal::captured("y\n", Facts::PIPED);
         assert!(!terminal.ask("Go? "));
         assert_eq!(capture.stderr(), "");
-        assert_eq!(
-            terminal.read_line().as_deref(),
-            Some("y"),
-            "input untouched"
+        assert_eq!(terminal.read_to_string().unwrap(), "y\n", "input untouched");
+    }
+
+    #[test]
+    fn output_reports_a_reader_that_has_gone() {
+        let attempts = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let terminal = Terminal::new(
+            BrokenPipeWriter(attempts.clone()),
+            io::sink(),
+            io::empty(),
+            Facts::PIPED,
         );
+        let mut output = terminal.output();
+
+        let error = output.write(b"one").unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::BrokenPipe);
+        assert!(terminal.closed());
+        let error = output.write(b"two").unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::BrokenPipe);
+        assert_eq!(
+            attempts.load(std::sync::atomic::Ordering::SeqCst),
+            1,
+            "nothing is written to a stream whose reader has gone"
+        );
+    }
+
+    #[test]
+    fn input_hands_the_bytes_on_as_they_are() {
+        let terminal = Terminal::new(
+            io::sink(),
+            io::sink(),
+            io::Cursor::new(b"\xff\xfe\nok\n".to_vec()),
+            Facts::PIPED,
+        );
+        let mut input = terminal.input();
+        let mut line = Vec::new();
+        input.read_until(b'\n', &mut line).unwrap();
+        assert_eq!(line, b"\xff\xfe\n");
+        line.clear();
+        input.read_until(b'\n', &mut line).unwrap();
+        assert_eq!(line, b"ok\n");
     }
 
     /// A reader that has gone: every write is a broken pipe.

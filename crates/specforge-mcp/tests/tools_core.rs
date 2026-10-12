@@ -312,6 +312,11 @@ fn export_graph_format() {
         .find(|n| n["id"] == "alpha")
         .unwrap();
     assert!(alpha["fields"].is_object());
+    assert_eq!(parsed["format_version"], "2.0");
+    assert!(parsed["schema"].is_object());
+    assert_eq!(alpha["file"], "test.spec");
+    assert_eq!(alpha["line"], 1);
+    assert_eq!(alpha["fields"]["contract"], "The system MUST do alpha");
 }
 
 // B:provide_mcp_export_tool — verify unit "exports context format"
@@ -459,6 +464,19 @@ fn search_returns_matches() {
     let results = parsed.as_array().unwrap();
     assert!(!results.is_empty());
     assert_eq!(results[0]["entity_id"], "alpha");
+
+    // Contract text is searched too: "system" is in no id or title of the
+    // fixture, only in alpha's contract.
+    let resp = call_tool(&mut server, "specforge.search", json!({"query": "system"}));
+    let by_contract: Value =
+        serde_json::from_str::<Value>(&tool_text(&resp)).unwrap()["results"].clone();
+    let ids: Vec<&str> = by_contract
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["entity_id"].as_str().unwrap())
+        .collect();
+    assert_eq!(ids, ["alpha"], "{by_contract}");
 }
 
 // B:provide_mcp_search_tool — verify unit "respects kind filter"
@@ -468,18 +486,42 @@ fn search_returns_matches() {
 )]
 fn search_respects_kind_filter() {
     let mut server = test_server();
-    let resp = call_tool(
-        &mut server,
-        "specforge.search",
-        json!({"query": "alpha", "kinds": ["feature"]}),
+    let mut hits = |arguments: Value| -> Vec<(String, String)> {
+        let resp = call_tool(&mut server, "specforge.search", arguments);
+        let parsed: Value =
+            serde_json::from_str::<Value>(&tool_text(&resp)).unwrap()["results"].clone();
+        parsed
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| {
+                (
+                    r["entity_id"].as_str().unwrap().to_string(),
+                    r["kind"].as_str().unwrap().to_string(),
+                )
+            })
+            .collect()
+    };
+    // Unfiltered, the query matches all three kinds.
+    let kinds: std::collections::BTreeSet<String> = hits(json!({"query": "a"}))
+        .into_iter()
+        .map(|(_, kind)| kind)
+        .collect();
+    assert_eq!(
+        kinds.iter().map(String::as_str).collect::<Vec<_>>(),
+        ["behavior", "feature", "invariant"]
     );
-    let text = tool_text(&resp);
-    let parsed: Value = serde_json::from_str::<Value>(&text).unwrap()["results"].clone();
-    // Alpha is a behavior, not a feature, so should not match with feature filter
-    let results = parsed.as_array().unwrap();
-    for r in results {
-        assert_eq!(r["kind"], "feature");
-    }
+    // The filter keeps what matches ...
+    assert_eq!(
+        hits(json!({"query": "a", "kinds": ["behavior"]})),
+        [("alpha".to_string(), "behavior".to_string())]
+    );
+    // ... and drops what does not: alpha is a behavior, not a feature.
+    assert!(
+        hits(json!({"query": "alpha", "kinds": ["feature"]}))
+            .iter()
+            .all(|(id, _)| id != "alpha")
+    );
 }
 
 // B:provide_mcp_search_tool — verify unit "respects limit"
@@ -489,14 +531,21 @@ fn search_respects_kind_filter() {
 )]
 fn search_respects_limit() {
     let mut server = test_server();
-    let resp = call_tool(
-        &mut server,
-        "specforge.search",
-        json!({"query": "a", "limit": 1}),
-    );
-    let text = tool_text(&resp);
-    let parsed: Value = serde_json::from_str::<Value>(&text).unwrap()["results"].clone();
-    assert!(parsed.as_array().unwrap().len() <= 1);
+    let mut ids = |arguments: Value| -> Vec<String> {
+        let resp = call_tool(&mut server, "specforge.search", arguments);
+        let parsed: Value =
+            serde_json::from_str::<Value>(&tool_text(&resp)).unwrap()["results"].clone();
+        parsed
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| r["entity_id"].as_str().unwrap().to_string())
+            .collect()
+    };
+    let unlimited = ids(json!({"query": "a"}));
+    assert_eq!(unlimited.len(), 3, "{unlimited:?}");
+    assert_eq!(unlimited[0], "alpha", "the prefix match comes first");
+    assert_eq!(ids(json!({"query": "a", "limit": 1})), ["alpha"]);
 }
 
 // B:provide_mcp_search_tool — verify unit "missing query returns error"
@@ -2006,6 +2055,60 @@ fn search_references_filter() {
     assert!(
         results.iter().all(|r| r["entity_id"] != "alpha"),
         "{parsed}"
+    );
+}
+
+/// `references` is one filter among the others, ANDed: the referrers of
+/// `alpha` narrowed by kind, by the query and by a field.
+#[specforge_test(
+    behavior = "provide_mcp_search_tool",
+    verify = "the references filter combines with the other filters"
+)]
+fn search_references_combines_with_the_other_filters() {
+    // `held`, an invariant, references alpha beside the feature beta_feature.
+    let mut server = project()
+        .file(
+            "held.spec",
+            "invariant held \"Held\" {\n    guarantee \"always\"\n    enforced_by [alpha]\n}\n",
+        )
+        .serve(&[extension().reference("invariant", "enforced_by", "behavior")]);
+    let mut ids = |arguments: Value| -> Vec<String> {
+        tool(&mut server, "specforge.search", arguments)["results"]
+            .as_array()
+            .unwrap_or_else(|| panic!("results"))
+            .iter()
+            .map(|r| r["entity_id"].as_str().unwrap().to_string())
+            .collect()
+    };
+    let mut referrers = ids(json!({"query": "", "references": "alpha"}));
+    referrers.sort();
+    assert_eq!(referrers, ["beta_feature", "held"], "the referrers alone");
+    assert_eq!(
+        ids(json!({"query": "", "references": "alpha", "kinds": ["invariant"]})),
+        ["held"],
+        "kinds narrows them"
+    );
+    assert_eq!(
+        ids(json!({"query": "beta", "references": "alpha"})),
+        ["beta_feature"],
+        "the query narrows them"
+    );
+    assert!(
+        ids(json!({"query": "zzz", "references": "alpha"})).is_empty(),
+        "no referrer matches zzz"
+    );
+    assert_eq!(
+        ids(json!({"query": "", "references": "alpha", "field": "guarantee", "value": "alw"})),
+        ["held"],
+        "a field narrows them"
+    );
+    assert!(
+        ids(json!({"query": "", "references": "alpha", "field": "guarantee", "value": "never"}))
+            .is_empty()
+    );
+    assert!(
+        ids(json!({"query": "", "references": "nope"})).is_empty(),
+        "an unknown target has no referrers"
     );
 }
 

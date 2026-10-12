@@ -215,7 +215,15 @@ fn brief_resource_returns_brief_graph() {
         assert!(node["id"].is_string());
         assert!(node["kind"].is_string());
         assert!(node.get("fields").is_none());
+        let mut keys: Vec<&String> = node.as_object().unwrap().keys().collect();
+        keys.sort();
+        assert_eq!(keys, ["id", "kind", "title"], "{node}");
     }
+    // The edges carry exactly source, target and label.
+    assert_eq!(
+        parsed["edges"],
+        json!([{"source": "beta", "target": "alpha", "label": "behaviors"}])
+    );
 }
 
 // B:expose_diagnostics_as_mcp_resource — verify unit "returns diagnostics array"

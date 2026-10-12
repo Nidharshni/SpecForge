@@ -142,7 +142,10 @@ fn evolve_project(root: &TempDir, entity: &str) {
 
 /// C9-01 acceptance: subscribe → recompile with changed content →
 /// notification delivered to the captured client sink.
-#[test]
+#[specforge_test(
+    behavior = "notify_graph_delta_via_mcp",
+    verify = "graph_changed notification sent after incremental rebuild"
+)]
 fn subscribe_recompile_delivers_graph_notification() {
     let dir = project();
     let mut server = init_with_project(&dir);

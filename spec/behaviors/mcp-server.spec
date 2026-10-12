@@ -1,9 +1,11 @@
 // MCP Server behaviors — Lifecycle, resources, and notifications
 //
-// 13 behaviors:
-//   - Lifecycle (3): initialize, shutdown, list resources/tools/prompts
-//   - Resources (6): graph, schema, context, brief, diagnostics, entity
-//   - Notifications (2): graph delta, diagnostics delta
+// Behaviors:
+//   - Lifecycle: initialize, shutdown, list resources/tools/prompts, read arguments
+//   - Resources: graph, schema, context, brief, diagnostics, entity
+//   - Notifications: graph delta, diagnostics delta
+//   - Protocol compliance: errors, revisions, stateless requests, listen, cancellation, reinitialization
+//   - Transport: serve over stdio
 
 use "events/compilation"
 use "events/mcp"
@@ -70,6 +72,7 @@ behavior mcp_initialize "MCP Initialize" {
   verify unit "all core resources registered before accepting requests"
   verify unit "returns MCP-compliant init response"
   verify unit "compiles project when projectRoot is provided"
+  verify integration "a client that names no projectRoot is served the project at or above the path specforge mcp was started with"
   verify unit "initialize and server/discover give the same capabilities and instructions"
   verify unit "initialize answers the negotiated revision, the server's capabilities, its name and version and its instructions, and no listing"
   verify contract "MCP Initialize: MCP initialization holds — compiler_api_available, wasm_runtime_available, capabilities_returned, surface_contributions_merged, mcp_initialized_emitted"
@@ -870,4 +873,53 @@ behavior guard_mcp_reinitialization "Guard MCP Reinitialization" {
   verify unit "no resources leaked on rejected reinitialization"
   verify contract "Guard MCP Reinitialization: MCP reinitialization guard holds — server_initialized, reinit_rejected, session_unaffected, error_handled_emitted"
   verify unit "can reinitialize after shutdown"
+}
+
+// ---------------------------------------------------------------------------
+// Section 4: Transport
+// ---------------------------------------------------------------------------
+
+behavior serve_mcp_over_stdio "Serve MCP over Stdio" {
+  features   [mcp_protocol_compliance]
+  invariants [mcp_structured_error_responses, mcp_subscription_cleanup]
+  category   command
+  types      [JsonRpcErrorCode]
+  ports      [McpProtocol]
+  produces   [mcp_protocol_error_handled, mcp_subscription_removed]
+  requires {
+    connection_open "A client started the server with its input and output connected (specforge mcp: its standard input and output)"
+  }
+  ensures {
+    one_line_per_message "Each line of input is one message; each response and each notification is one line of output"
+    response_first       "A message's response is written before the notifications it queued, and the output is flushed after each message"
+    connection_ended     "The end of the input, a failed read or a failed write ends the connection and disconnects the client"
+  }
+  contract   """
+    The MCP server MUST serve one client over its standard input and output
+    (MCP 2025-11-25, Transports: stdio). Each line of input, ended by a line
+    break or by the end of the input, is one JSON-RPC message: a request, a
+    notification or a batch. A line holding only JSON whitespace (space,
+    tab, carriage return, line feed) is skipped. A line that is not UTF-8
+    is not JSON: the server MUST answer it with -32700 Parse error and keep
+    serving. The response to a message, when it has one, MUST be written as
+    one line, then each notification that message queued, oldest first, one
+    line each; the output MUST be flushed after each message, and nothing
+    else is written to it. The connection ends at the end of the input, at
+    a failed read, or at a failed write or flush (the client stopped
+    reading), and its end MUST disconnect the client, ending every
+    subscription and listen stream. specforge mcp exits 0 however the
+    connection ends.
+  """
+  verify unit "each line of input is one message, and each response or notification is one line of output"
+  verify unit "a message's response is written before the notifications it queued"
+  verify unit "the output is flushed after each message"
+  verify unit "a line holding only whitespace is skipped"
+  verify unit "a line that is not UTF-8 is answered with -32700 Parse error and serving continues"
+  verify unit "the end of the input disconnects the client"
+  verify unit "a failed write ends the connection and disconnects the client"
+  verify unit "a failed read ends the connection and disconnects the client"
+  verify integration "specforge mcp serves its standard input and output and exits 0 when its input ends"
+  verify integration "a client reading specforge mcp's output line by line gets each response before it sends its next request, the notifications it queued after it"
+  verify integration "specforge mcp answers a line that is not UTF-8 instead of ending the session"
+  verify contract "Serve MCP over Stdio: stdio transport holds — connection_open, one_line_per_message, response_first, connection_ended"
 }

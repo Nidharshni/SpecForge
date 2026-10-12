@@ -1772,6 +1772,35 @@ fn format_contract() {
     assert!(invoked(&server, "specforge.format"));
 }
 
+#[specforge_test(
+    behavior = "provide_mcp_add_extension_tool",
+    verify = "specforge.add_extension adds extension to config"
+)]
+fn add_extension_adds_the_extension_to_config() {
+    // Enables nothing; the module is a local .wasm, so the add is offline.
+    let mut server = components_server();
+    let root = server.root().to_path_buf();
+    assert!(config_extensions(&root).is_empty());
+
+    let added = tool(
+        &mut server,
+        "specforge.add_extension",
+        json!({"specifiers": [greet_blob().to_str().unwrap()]}),
+    );
+
+    // One specifier, one entry in `added`.
+    assert_eq!(added["added"][0]["extension"], GREET, "{added}");
+    assert_eq!(added["added"][0]["action"], "installed", "{added}");
+    // specforge.json lists it, and its module is where the compile loads it.
+    assert_eq!(config_extensions(&root), [GREET]);
+    assert!(
+        root.join(".specforge/extensions")
+            .join(GREET)
+            .join("extension.wasm")
+            .is_file()
+    );
+}
+
 // B:provide_mcp_add_extension_tool — verify contract
 #[specforge_test(
     behavior = "provide_mcp_add_extension_tool",

@@ -522,7 +522,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   D4-a). A refusal (`OpError`) is not a verdict; a measuring command's refusal exits 2. Not to be
   confused with an entity's coverage **Verdict** (ADR 0029).
 - **Terminal**: where a core CLI command writes and whom it asks: its stdout, its stderr, the input a
-  prompt reads, whether each stream is coloured (`NO_COLOR`, then `CLICOLOR_FORCE`, then whether it is
+  prompt reads (or `specforge mcp` serves, byte for byte), whether each stream is coloured (`NO_COLOR`, then `CLICOLOR_FORCE`, then whether it is
   a terminal) and whether anyone can answer, fixed when `main` makes it from the process
   (`specforge_cli::terminal::Terminal`); a test captures one. A publisher key change and a collector's
   command are asked of it, nobody to ask being no; a reader that leaves stdout ends the output
@@ -653,6 +653,12 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   negotiated (`specforge_mcp::modern`). Every request is served under its revision, which travels
   with it from the router to the reply (`specforge_mcp::lifecycle::Revision`); the server state
   keeps only the negotiated one.
+- **Stdio transport**: how one MCP client and the server talk over a pair of byte streams (`specforge mcp`:
+  its standard input and output). Each line of input is one JSON-RPC message; a line of only JSON whitespace is
+  skipped, and one that is not UTF-8 is answered as a parse error. A message's response, then each notification it
+  queued, is written one line each, and the output is flushed. The end of the input, a failed read or a failed write
+  ends the connection, and its end disconnects the client (`specforge_mcp::stdio`, `McpServer::serve_stdio`). The
+  CLI only hands it the terminal's input and stdout; `specforge mcp` exits 0 however the connection ends.
 - **Subscription**: a client's interest in one resource the MCP server serves, made with
   `resources/subscribe` (the handshake revisions) or named by a `subscriptions/listen` stream
   (2026-07-28). A resource changes with the graph or the environment (the graph views, an
