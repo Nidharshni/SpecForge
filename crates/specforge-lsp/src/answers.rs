@@ -93,10 +93,10 @@ fn content_modified(file: &str) -> Error {
     }
 }
 
-/// The entity the cursor at `position` of the open document `uri` names
+/// The entity the cursor at `position` of the open document `key` names
 /// ([`Compiled::target`]): what references and rename act on.
-fn entity_under_cursor(compiled: &Compiled, uri: &Url, position: Position) -> Option<Sym> {
-    match compiled.target(uri, position)? {
+fn entity_under_cursor(compiled: &Compiled, key: &str, position: Position) -> Option<Sym> {
+    match compiled.target(key, position)? {
         Target::Entity { id, .. } => Some(id),
         _ => None,
     }
@@ -110,15 +110,16 @@ fn entity_under_cursor(compiled: &Compiled, uri: &Url, position: Position) -> Op
 /// joined by a rule. `None` for a document that is not open or a position
 /// with neither.
 pub fn hover(state: &LspState, uri: &Url, position: Position) -> Option<Hover> {
-    state.document(uri)?;
+    let key = state.key_of(uri);
+    let files = state.files();
+    files.document(&key)?;
     let compiled = Compiled::new(state);
     let shown = compiled
-        .index_of(&compiled.key(uri))
-        .map(|index| hover::diagnostics_at(state.diagnostics(uri.as_str()), &index, position))
+        .index_of(&key)
+        .map(|index| hover::diagnostics_at(files.compile_diagnostics(&key), &index, position))
         .unwrap_or_default();
-    let published: Vec<specforge_common::Diagnostic> =
-        state.published_diagnostics().cloned().collect();
-    let about = match compiled.target(uri, position) {
+    let published: Vec<specforge_common::Diagnostic> = files.published().cloned().collect();
+    let about = match compiled.target(&key, position) {
         Some(Target::Entity { id, .. }) => {
             specforge_ops::inspect::inspect(&state.view().reporting(&published), id.as_str())
                 .ok()
@@ -164,7 +165,8 @@ pub fn definition(
     position: Position,
 ) -> Option<GotoDefinitionResponse> {
     let compiled = Compiled::new(state);
-    match compiled.target(uri, position) {
+    let key = state.key_of(uri);
+    match compiled.target(&key, position) {
         Some(Target::Import { path }) => {
             if state.spec_root().as_os_str().is_empty() {
                 return None;
@@ -172,7 +174,7 @@ pub fn definition(
             // The source the compile resolves the import to, from its
             // first line: no text needed.
             let sources = state.source_keys();
-            let target = specforge_resolver::import_target(&sources, &compiled.key(uri), &path)?;
+            let target = specforge_resolver::import_target(&sources, &key, &path)?;
             Some(GotoDefinitionResponse::Scalar(Location {
                 uri: compiled.uri(target),
                 range: Range::default(),
@@ -212,7 +214,7 @@ pub fn references(
     include_declaration: bool,
 ) -> Option<Vec<Location>> {
     let compiled = Compiled::new(state);
-    let id = entity_under_cursor(&compiled, uri, position)?;
+    let id = entity_under_cursor(&compiled, &state.key_of(uri), position)?;
     let query = ReferenceQuery {
         direction: Direction::Incoming,
         include_declaration,
@@ -237,11 +239,15 @@ pub fn prepare_rename(
     uri: &Url,
     position: Position,
 ) -> tower_lsp::jsonrpc::Result<Option<PrepareRenameResponse>> {
-    let Some(cursor) = state.document(uri).and_then(|doc| doc.at(position)) else {
+    let file = state.key_of(uri);
+    let Some(cursor) = state
+        .files()
+        .document(&file)
+        .and_then(|doc| doc.at(position))
+    else {
         return Ok(None);
     };
     let compiled = Compiled::new(state);
-    let file = compiled.key(uri);
     // Any range it gives is a position in a text the editor no longer has
     // while the document is typed in (ADR 0023 D7).
     if compiled.is_stale(&file) {
@@ -267,12 +273,13 @@ pub fn rename(
     new_name: &str,
 ) -> tower_lsp::jsonrpc::Result<Option<WorkspaceEdit>> {
     let compiled = Compiled::new(state);
+    let key = state.key_of(uri);
     // The edits come from the compile: asked from a document typed in since,
     // the rename waits for it, whatever the cursor names (ADR 0023 D7).
-    if state.document(uri).is_some() && compiled.is_stale(&compiled.key(uri)) {
-        return Err(content_modified(&compiled.key(uri)));
+    if state.files().document(&key).is_some() && compiled.is_stale(&key) {
+        return Err(content_modified(&key));
     }
-    let Some(id) = entity_under_cursor(&compiled, uri, position) else {
+    let Some(id) = entity_under_cursor(&compiled, &key, position) else {
         return Ok(None);
     };
 
@@ -329,10 +336,11 @@ pub fn rename(
 /// 0016: the fixes MCP suggest_fixes returns for the same diagnostics).
 pub fn code_actions(state: &LspState, uri: &Url, range: Range) -> Option<CodeActionResponse> {
     let compiled = Compiled::new(state);
-    let file = compiled.key(uri);
+    let file = state.key_of(uri);
     // The request's range is the editor's own: positions in its buffer.
     let within = state
-        .document(uri)
+        .files()
+        .document(&file)
         .map(|doc| doc.index().span(Sym::new(&file), range));
     let query = FixQuery {
         file: Some(&file),
@@ -341,7 +349,7 @@ pub fn code_actions(state: &LspState, uri: &Url, range: Range) -> Option<CodeAct
     };
     let fixes = compiled
         .navigator()
-        .fixes(state.diagnostics(uri.as_str()), &query);
+        .fixes(state.files().compile_diagnostics(&file), &query);
     // A fix that cannot be placed whole (see `fix_to_code_action`) is not
     // offered.
     let actions: Vec<CodeActionOrCommand> = fixes
@@ -358,7 +366,7 @@ pub fn code_actions(state: &LspState, uri: &Url, range: Range) -> Option<CodeAct
 /// flat otherwise.
 pub fn document_symbols(state: &LspState, uri: &Url) -> Option<DocumentSymbolResponse> {
     let compiled = Compiled::new(state);
-    let entries = outline(&compiled.navigator(), &compiled.key(uri));
+    let entries = outline(&compiled.navigator(), &state.key_of(uri));
     if entries.is_empty() {
         return None;
     }
@@ -437,7 +445,8 @@ pub fn formatting(
         tab_size: options.tab_size as usize,
         insert_spaces: options.insert_spaces,
     };
-    let doc = state.document(uri)?;
+    let key = state.key_of(uri);
+    let doc = state.files().document(&key)?;
     let file = crate::uri::file_path(uri);
     let place = file
         .as_deref()
@@ -450,7 +459,8 @@ pub fn formatting(
     let publish = (!formatted.diagnostics.is_empty()).then(|| {
         let compiled = Compiled::new(state);
         let diagnostics: Vec<Diagnostic> = state
-            .diagnostics(uri.as_str())
+            .files()
+            .compile_diagnostics(&key)
             .iter()
             .map(|d| diagnostic_to_lsp(d, |span| compiled.range(span)))
             .chain(

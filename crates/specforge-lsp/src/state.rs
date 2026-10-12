@@ -1,25 +1,25 @@
 use crate::answers::ClientSupport;
 use crate::document::Document;
-use specforge_common::Diagnostic;
+use crate::files::{Files, Publish};
+use crate::publish::Publication;
 use specforge_graph::Graph;
 use specforge_ops::view::ProjectView;
 use specforge_project::coverage::RecordedCoverage;
 use specforge_project::{Environment, ProjectSession};
 use specforge_registry::{FieldRegistry, KindRegistry, RegistryBuild};
 use std::collections::{BTreeSet, HashMap, HashSet};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 use tower_lsp::lsp_types::{TextDocumentContentChangeEvent, Url};
 
-/// Shared LSP server state: open documents, the project session (the one
-/// `specforge watch` holds: environment, graph, per-file parses and
-/// diagnostics), and the diagnostics last published per URI.
+/// Shared LSP server state: the files the editor has open or was sent diagnostics for, the
+/// project session (the one `specforge watch` holds: environment, graph, per-file parses and
+/// diagnostics).
 pub struct LspState {
-    documents: HashMap<String, Document>,
-    diagnostics: HashMap<String, Vec<Diagnostic>>,
+    /// Every file the editor has open or was sent diagnostics for, by session key, keyed under
+    /// the spec root readers see (`LspState::rekey`).
+    files: Files,
     project: Project,
-    /// Where diagnostics without a span were last published.
-    anchor: Option<String>,
     /// [`LspState::token_signature`] as of the last recompile, so a
     /// recompile can tell whether the client's semantic tokens went stale.
     last_token_signature: u64,
@@ -66,10 +66,8 @@ impl LspState {
     /// A state with no project open (a detached session).
     pub fn new() -> Self {
         let mut state = Self {
-            documents: HashMap::new(),
-            diagnostics: HashMap::new(),
+            files: Files::default(),
             project: Project::Held(Box::new(ProjectSession::detached())),
-            anchor: None,
             last_token_signature: 0,
             shutdown: false,
             format_notices: HashSet::new(),
@@ -143,14 +141,27 @@ impl LspState {
         changed
     }
 
+    /// The session key of the file `uri` names ([`Files::key_of`]).
+    pub fn key_of(&self, uri: &Url) -> String {
+        self.files.key_of(uri)
+    }
+
+    /// The open document `uri` names, whatever spelling of it the client sends.
+    pub fn document(&self, uri: &Url) -> Option<&Document> {
+        self.files.document(&self.key_of(uri))
+    }
+
+    /// What the server and the editor share about each file.
+    pub fn files(&self) -> &Files {
+        &self.files
+    }
+
     /// `didOpen`: `uri` holding `text` at `version` (nothing after shutdown).
     pub fn open_document(&mut self, uri: &Url, text: &str, version: i32) {
         if self.shutdown {
             return;
         }
-        let mut document = Document::new(text.to_string());
-        document.set_version(version);
-        self.documents.insert(uri.to_string(), document);
+        self.files.open(uri, text, version);
     }
 
     /// `didChange`: `changes` applied in order to the open document `uri`, now at
@@ -161,52 +172,12 @@ impl LspState {
         version: i32,
         changes: &[TextDocumentContentChangeEvent],
     ) {
-        if let Some(document) = self.documents.get_mut(uri.as_str()) {
-            for change in changes {
-                document.apply_change(change.range, &change.text);
-            }
-            document.set_version(version);
-        }
+        self.files.change(uri, version, changes);
     }
 
     /// `didClose`.
     pub fn close_document(&mut self, uri: &Url) {
-        self.documents.remove(uri.as_str());
-        self.diagnostics.remove(uri.as_str());
-    }
-
-    /// The open document `uri` names.
-    pub fn document(&self, uri: &Url) -> Option<&Document> {
-        self.documents.get(uri.as_str())
-    }
-
-    pub(crate) fn open_uris(&self) -> Vec<&str> {
-        let mut uris: Vec<&str> = self.documents.keys().map(|s| s.as_str()).collect();
-        uris.sort();
-        uris
-    }
-
-    pub fn diagnostics(&self, uri: &str) -> &[Diagnostic] {
-        self.diagnostics
-            .get(uri)
-            .map(|v| v.as_slice())
-            .unwrap_or(&[])
-    }
-
-    /// Every diagnostic last published, URI by URI in URI order, each list
-    /// in published order: the copies the editor shows (a spanless one
-    /// placed at its first subject's name, its data kept), what the hover
-    /// reports about an entity.
-    pub fn published_diagnostics(&self) -> impl Iterator<Item = &Diagnostic> {
-        let mut uris: Vec<&String> = self.diagnostics.keys().collect();
-        uris.sort();
-        uris.into_iter()
-            .flat_map(|uri| self.diagnostics[uri].iter())
-    }
-
-    /// The URIs diagnostics were last published for.
-    pub fn published_uris(&self) -> Vec<String> {
-        self.diagnostics.keys().cloned().collect()
+        self.files.close(uri);
     }
 
     pub fn graph(&self) -> &Graph {
@@ -313,6 +284,7 @@ impl LspState {
                 source_keys: BTreeSet::new(),
                 recorded,
             };
+            self.rekey();
         }
     }
 
@@ -324,6 +296,7 @@ impl LspState {
         } else {
             session
         }));
+        self.rekey();
     }
 
     pub fn kind_registry(&self) -> &KindRegistry {
@@ -355,52 +328,28 @@ impl LspState {
         self.environment().spec_root()
     }
 
-    /// The session's key for a file's absolute path
-    /// ([`Environment::source_key`]): relative to the spec root when the
-    /// file is under it, else the path itself.
-    pub fn source_key(&self, path: &str) -> String {
-        self.environment().source_key(Path::new(path))
-    }
-
-    /// The absolute path of a session file key.
-    pub fn file_path(&self, key: &str) -> PathBuf {
-        self.spec_root().join(key)
-    }
-
     pub fn shutdown(&mut self) {
         self.shutdown = true;
-        self.documents.clear();
-        self.diagnostics.clear();
+        self.files.clear();
         // Dropping the session frees its graph and its Wasm runtime.
         self.project = Project::Held(Box::new(ProjectSession::detached()));
+        self.rekey();
     }
 
     pub fn is_shutdown(&self) -> bool {
         self.shutdown
     }
 
-    /// The open document diagnostics without a span were last published
-    /// on (`None` once it is closed).
-    pub fn anchor(&self) -> Option<&str> {
-        self.anchor
-            .as_deref()
-            .filter(|uri| self.documents.contains_key(*uri))
+    /// Record what the project reports now and answer what to send
+    /// ([`Files::publish_compile`]).
+    pub fn publish(&mut self, publication: Publication) -> Vec<Publish> {
+        self.files.publish_compile(publication)
     }
 
-    /// Keep what `publication` sends: each file's placed diagnostics (code
-    /// actions read them back; an empty list forgets the file), and where
-    /// diagnostics about no entity went, when any did.
-    pub fn record(&mut self, publication: &crate::publish::Publication) {
-        if let Some(anchor) = &publication.anchor {
-            self.anchor = Some(anchor.to_string());
-        }
-        for (uri, file) in &publication.files {
-            if file.placed.is_empty() {
-                self.diagnostics.remove(uri.as_str());
-            } else {
-                self.diagnostics
-                    .insert(uri.to_string(), file.placed.clone());
-            }
-        }
+    /// Keep `files` keyed under the spec root readers see: called by `show_environment`,
+    /// `set_session` and `shutdown`, the three places the environment changes.
+    fn rekey(&mut self) {
+        let spec_root = self.spec_root().to_path_buf();
+        self.files.rekey(&spec_root);
     }
 }

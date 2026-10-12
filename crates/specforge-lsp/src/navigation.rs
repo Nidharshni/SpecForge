@@ -16,7 +16,6 @@ use tower_lsp::lsp_types::{
 
 use crate::LspState;
 use crate::document::{LineIndex, Target};
-use crate::uri;
 use std::cell::RefCell;
 use std::sync::Arc;
 
@@ -59,23 +58,9 @@ impl<'s> Compiled<'s> {
         })
     }
 
-    /// The session key of a document (`Environment::source_key` of its
-    /// path).
-    pub(crate) fn key(&self, uri: &Url) -> String {
-        self.state.source_key(&uri::path_of(uri).to_string_lossy())
-    }
-
-    /// The editor's version of the text the project was compiled from for
-    /// the document `uri`: the version of the buffer the session holds for
-    /// it; `None` for a file compiled from disk, and while the session is
-    /// out for an update (nothing publishes then).
-    pub(crate) fn version(&self, uri: &Url) -> Option<i32> {
-        self.state.compiled_version(&self.key(uri))
-    }
-
-    /// The URI of a session file key.
+    /// The URI of a session file key: the one the client names it by.
     pub(crate) fn uri(&self, key: &str) -> Url {
-        uri::uri_of(&self.state.file_path(key))
+        self.state.files().uri(key)
     }
 
     /// The line index of the text session file `file` was compiled from
@@ -85,13 +70,13 @@ impl<'s> Compiled<'s> {
         if let Some(index) = self.indexes.borrow().get(&key) {
             return index.clone();
         }
-        let index = self.state.compiled_text(file).map(|text| {
-            let uri = self.uri(file);
-            match self.state.document(&uri) {
-                Some(doc) if doc.text() == &*text => Arc::clone(doc.index()),
-                _ => Arc::new(LineIndex::new(&text)),
-            }
-        });
+        let index =
+            self.state
+                .compiled_text(file)
+                .map(|text| match self.state.files().document(file) {
+                    Some(doc) if doc.text() == &*text => Arc::clone(doc.index()),
+                    _ => Arc::new(LineIndex::new(&text)),
+                });
         self.indexes.borrow_mut().insert(key, index.clone());
         index
     }
@@ -111,17 +96,16 @@ impl<'s> Compiled<'s> {
         })
     }
 
-    /// What the cursor at `position` of the open document `uri` names (ADR
+    /// What the cursor at `position` of the open document `key` names (ADR
     /// 0023 D5). Navigation is asked about the position only while the
     /// document is the compiled text; while it is stale, the cursor names
     /// what its own word names ([`crate::Cursor::named`], D7).
-    pub(crate) fn target(&self, uri: &Url, position: Position) -> Option<Target> {
-        let cursor = self.state.document(uri)?.at(position)?;
-        let file = self.key(uri);
-        if self.is_stale(&file) {
+    pub(crate) fn target(&self, key: &str, position: Position) -> Option<Target> {
+        let cursor = self.state.files().document(key)?.at(position)?;
+        if self.is_stale(key) {
             cursor.named(&self.state.view())
         } else {
-            cursor.target(&self.navigator(), &file)
+            cursor.target(&self.navigator(), key)
         }
     }
 
@@ -138,9 +122,9 @@ impl<'s> Compiled<'s> {
             let Some(compiled) = self.state.compiled_text(file) else {
                 return true;
             };
-            match self.state.document(&self.uri(file)) {
+            match self.state.files().document(file) {
                 Some(doc) => doc.text() != &*compiled,
-                None => std::fs::read_to_string(self.state.file_path(file))
+                None => std::fs::read_to_string(self.state.files().file_path(file))
                     .map_or(true, |disk| disk != *compiled),
             }
         })

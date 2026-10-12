@@ -68,11 +68,13 @@ fn each_diagnostic_goes_on_the_file_its_span_names() {
             ("b.spec", CLEAN),
         ],
     );
-    let a = uri(dir.path(), "a.spec");
     let b = uri(dir.path(), "b.spec");
     state.open_document(&b, CLEAN, 1);
-    let publication = Publication::of(&state, Some(&b), &[]);
-    let on_a = publication.files.get(&a).expect("a.spec is published");
+    let publication = Publication::of(&state, Some("b.spec"), &[]);
+    let on_a = publication
+        .files
+        .get("a.spec")
+        .expect("a.spec is published");
     let unresolved = on_a
         .diagnostics
         .iter()
@@ -88,8 +90,8 @@ fn each_diagnostic_goes_on_the_file_its_span_names() {
     );
     assert_eq!(on_a.placed.len(), on_a.diagnostics.len());
     // The edited document is a target even with nothing on it.
-    assert!(codes(publication.files.get(&b)).is_empty());
-    assert!(publication.files.contains_key(&b));
+    assert!(codes(publication.files.get("b.spec")).is_empty());
+    assert!(publication.files.contains_key("b.spec"));
 }
 
 /// Two behaviors that depend on each other (W061, a spanless cycle).
@@ -110,8 +112,8 @@ fn a_spanless_cycle_goes_on_the_first_entitys_name() {
     let cycle = uri(dir.path(), "cycle.spec");
     let other = uri(dir.path(), "other.spec");
     state.open_document(&other, "behavior gamma \"G\" {\n}\n", 1);
-    let publication = Publication::of(&state, Some(&other), &[]);
-    let w061 = publication.files[&cycle]
+    let publication = Publication::of(&state, Some("other.spec"), &[]);
+    let w061 = publication.files["cycle.spec"]
         .diagnostics
         .iter()
         .find(|d| d.code == Some(tower_lsp::lsp_types::NumberOrString::String("W061".into())))
@@ -123,7 +125,7 @@ fn a_spanless_cycle_goes_on_the_first_entitys_name() {
     assert_eq!(related[0].location.uri, cycle);
     assert_eq!(at(&related[0].location.range), (3, 9, 13), "beta's name");
     // What code actions read back carries the placed span.
-    let placed = publication.files[&cycle]
+    let placed = publication.files["cycle.spec"]
         .placed
         .iter()
         .find(|d| d.code == "W061")
@@ -142,26 +144,34 @@ fn a_diagnostic_about_nothing_goes_on_the_edited_document_else_the_anchor_else_t
     let b = uri(dir.path(), "b.spec");
     state.open_document(&a, "\n", 1);
     state.open_document(&b, "\n", 1);
-    let about_nothing = |publication: &Publication, file: &Url| {
+    let about_nothing = |publication: &Publication, file: &str| {
         codes(publication.files.get(file)).contains(&"I002".to_string())
     };
 
     // On the edited document.
-    let publication = Publication::of(&state, Some(&b), &[]);
-    assert!(about_nothing(&publication, &b), "{:?}", publication.files);
-    assert!(!about_nothing(&publication, &a));
-    assert_eq!(publication.anchor.as_ref(), Some(&b));
-    state.record(&publication);
+    let publication = Publication::of(&state, Some("b.spec"), &[]);
+    assert!(
+        about_nothing(&publication, "b.spec"),
+        "{:?}",
+        publication.files
+    );
+    assert!(!about_nothing(&publication, "a.spec"));
+    assert_eq!(publication.anchor.as_deref(), Some("b.spec"));
+    state.publish(publication.clone());
 
     // With no edit: on the anchor while it is open.
     let publication = Publication::of(&state, None, &[]);
-    assert!(about_nothing(&publication, &b));
-    state.record(&publication);
+    assert!(about_nothing(&publication, "b.spec"));
+    state.publish(publication.clone());
 
     // The anchor closed: on the first open document.
     state.close_document(&b);
     let publication = Publication::of(&state, None, &[]);
-    assert!(about_nothing(&publication, &a), "{:?}", publication.files);
+    assert!(
+        about_nothing(&publication, "a.spec"),
+        "{:?}",
+        publication.files
+    );
 }
 
 #[spec(
@@ -172,11 +182,10 @@ fn a_publish_clears_files_whose_diagnostics_are_gone() {
     let broken =
         "behavior alpha \"A\" {\n  contract \"x\"\n  category command\n  features [ghost]\n}\n";
     let (dir, mut state) = project(SOFTWARE, &[("a.spec", broken)]);
-    let a = uri(dir.path(), "a.spec");
     let publication = Publication::of(&state, None, &[]);
-    assert!(!codes(publication.files.get(&a)).is_empty());
-    state.record(&publication);
-    assert!(!state.diagnostics(a.as_str()).is_empty());
+    assert!(!codes(publication.files.get("a.spec")).is_empty());
+    state.publish(publication.clone());
+    assert!(!state.files().compile_diagnostics("a.spec").is_empty());
 
     // The reference is fixed: the file is sent an empty list, once.
     let fixed = "behavior alpha \"A\" {\n  contract \"x\"\n  category command\n}\n";
@@ -185,13 +194,13 @@ fn a_publish_clears_files_whose_diagnostics_are_gone() {
         CheckMode::Full,
     );
     let publication = Publication::of(&state, None, &[]);
-    let file = publication.files.get(&a).expect("a.spec is cleared");
+    let file = publication.files.get("a.spec").expect("a.spec is cleared");
     assert!(file.diagnostics.is_empty(), "{:?}", file.diagnostics);
-    state.record(&publication);
-    assert!(state.diagnostics(a.as_str()).is_empty());
+    state.publish(publication.clone());
+    assert!(state.files().compile_diagnostics("a.spec").is_empty());
     let publication = Publication::of(&state, None, &[]);
     assert!(
-        !publication.files.contains_key(&a),
+        !publication.files.contains_key("a.spec"),
         "a cleared file is not sent again"
     );
 }
@@ -201,16 +210,15 @@ fn a_publish_clears_files_whose_diagnostics_are_gone() {
     verify = "a define block's W143 is published as unnecessary code"
 )]
 fn a_define_block_is_published_as_unnecessary() {
-    let (dir, state) = project(
+    let (_dir, state) = project(
         SOFTWARE,
         &[(
             "a.spec",
             "define widget {\n  x \"y\"\n}\n\nbehavior b \"B\" {\n  features [ghost]\n}\n",
         )],
     );
-    let a = uri(dir.path(), "a.spec");
     let publication = Publication::of(&state, None, &[]);
-    let file = &publication.files[&a];
+    let file = &publication.files["a.spec"];
     let w143 = file
         .diagnostics
         .iter()

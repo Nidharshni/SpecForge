@@ -119,6 +119,13 @@ behavior document_open_close "Document Open/Close" {
     keeps the errors its file on disk has, and a file that left the project
     is cleared. The server MUST track which documents are open to determine
     the scope of incremental recompilation.
+    A document is the file its URI names, read percent-decoded: a client
+    may encode characters the server's own spelling leaves as they are
+    (VS Code writes `@` as `%40` and a Windows drive's `:` as `%3A`), and
+    both spellings MUST name one open document, one list of published
+    diagnostics and one staleness. Every answer and publish about the file
+    MUST name it by the URI the client opened it with. An environment load
+    that moves the spec root keeps every open document.
   """
   verify unit "didOpen registers document and triggers compilation"
   verify unit "didClose removes document and clears diagnostics"
@@ -476,7 +483,10 @@ behavior emit_live_diagnostics "Live Diagnostics" {
     diagnostics, and an empty list to each file that had some and has none
     now. Each file's list carries the version of the buffer the project was
     compiled from, none for a file compiled from disk, so a client drops a
-    list a newer edit superseded. A diagnostic without a span about no
+    list a newer edit superseded. A file's list is published under the one
+    URI the client names it by (the one it opened the document with, else
+    the file's own file: URI), never under two spellings of one file.
+    A diagnostic without a span about no
     entity is published on the
     document being edited, else on the last one such a diagnostic went on
     while it is open, else on the first open document. W143 (a define

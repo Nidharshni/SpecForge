@@ -5,6 +5,7 @@ pub mod changes;
 pub mod completion;
 mod document;
 pub mod editor;
+pub mod files;
 pub mod hover;
 mod navigation;
 pub mod publish;

@@ -43,7 +43,6 @@ fn has(codes: Option<Vec<String>>, code: &str) -> bool {
     behavior = "document_open_close",
     verify = "a document is one file whatever spelling of its URI the client sends"
 )]
-#[ignore = "fixed by 05-T4"]
 fn a_percent_encoded_document_is_published_and_fixed_under_its_own_uri() {
     let mut served = Served::new(&[(FILE, MISSPELT)]).open(&[]);
     let plain = served.uri(FILE);
@@ -77,7 +76,6 @@ fn a_percent_encoded_document_is_published_and_fixed_under_its_own_uri() {
     behavior = "rename_entity_id",
     verify = "rename from a buffer typed since the compile is refused as content modified"
 )]
-#[ignore = "fixed by 05-T4"]
 fn a_percent_encoded_document_typed_since_the_compile_is_not_renamed() {
     let mut served = Served::new(&[(FILE, MISSPELT)]).open(&[]);
     let encoded = encoded(&served, FILE);
@@ -107,7 +105,6 @@ fn a_percent_encoded_document_typed_since_the_compile_is_not_renamed() {
     behavior = "emit_live_diagnostics",
     verify = "each file's diagnostics are published under the URI the client named it by"
 )]
-#[ignore = "fixed by 05-T4"]
 fn closing_a_percent_encoded_document_publishes_under_its_own_uri() {
     let mut served = Served::new(&[(FILE, MISSPELT)]).open(&[]);
     let plain = served.uri(FILE);
@@ -140,7 +137,6 @@ async fn published(session: &mut Session, uri: &str, version: i64) -> Vec<Value>
     behavior = "lsp_format_document",
     verify = "formatting keeps the document's compile diagnostics published"
 )]
-#[ignore = "fixed by 05-T4"]
 #[tokio::test]
 async fn formatting_a_percent_encoded_document_keeps_its_compile_diagnostics() {
     let dir = tempfile::TempDir::new().unwrap();
@@ -195,4 +191,29 @@ fn a_document_is_found_after_its_key_moves() {
     assert!(answers::document_symbols(&state, &uri).is_some());
     let hover = hover_text(&state, &uri, Position::new(0, 6)).unwrap_or_default();
     assert!(hover.contains("alpha"), "{hover}");
+}
+
+#[spec(
+    behavior = "emit_live_diagnostics",
+    verify = "each file's diagnostics are published under the URI the client named it by"
+)]
+fn a_publication_follows_the_spelling_the_client_opened_with() {
+    let mut served = Served::new(&[(FILE, MISSPELT)]).open(&[]);
+    let plain = served.uri(FILE);
+    let encoded = encoded(&served, FILE);
+    served.open_document(&plain, MISSPELT);
+    served.close_uri(&plain);
+    served.sent();
+
+    served.open_document(&encoded, MISSPELT);
+    let sent = served.sent();
+    assert!(
+        has(last_codes(&sent, &encoded), "E003"),
+        "{:?}",
+        last_codes(&sent, &encoded)
+    );
+    assert!(
+        publications(&sent, &plain).is_empty(),
+        "nothing goes to the spelling the file was first opened with"
+    );
 }

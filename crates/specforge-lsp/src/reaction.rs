@@ -274,9 +274,10 @@ impl<E: Editor> Reaction<E> {
         let Some(publication) = publication else {
             return;
         };
-        self.state.blocking_write().record(&publication);
-        for (uri, file) in publication.files {
-            self.editor.publish(uri, file.diagnostics, file.version);
+        let sends = self.state.blocking_write().publish(publication);
+        for send in sends {
+            self.editor
+                .publish(send.uri, send.diagnostics, send.version);
         }
     }
 
