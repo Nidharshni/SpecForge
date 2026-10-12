@@ -2,14 +2,13 @@
 //! navigator over the session (open buffers first, then disk) and converts
 //! its answers, `SourceSpan`s, to LSP locations and UTF-16 ranges. What
 //! the answers are is navigation's to say (ADR 0016); `use`-path
-//! navigation is the LSP's own (MCP has no import tool).
+//! navigation is the resolver's `import_target` over the compile's sources
+//! (`answers::definition`).
 
 use specforge_common::{SourceSpan, Sym, structural};
 use specforge_ops::navigate::{Fix, FixKind, Navigator, OutlineEntry};
 use specforge_registry::KindRegistry;
-use specforge_resolver::resolve_import;
 use std::collections::HashMap;
-use std::path::Path;
 use tower_lsp::lsp_types::{
     CodeAction, CodeActionKind, DocumentSymbol, DocumentSymbolResponse, Location, Position, Range,
     SymbolInformation, SymbolKind, TextEdit, Url, WorkspaceEdit,
@@ -257,25 +256,6 @@ pub(crate) fn outline_to_document_symbols(
         }
     }
     DocumentSymbolResponse::Flat(symbols)
-}
-
-/// The file a `use` import path in `importing_file` (relative to
-/// `spec_root`) names, resolved as the compile resolves it (relative,
-/// bare, `index.spec`, never above the spec root): its first
-/// line, keyed relative to the spec root. `None` when it names no file.
-pub fn goto_import_definition(
-    import_path: &str,
-    importing_file: &str,
-    spec_root: &Path,
-) -> Option<SourceSpan> {
-    let target = resolve_import(spec_root, importing_file, import_path)?;
-    Some(SourceSpan {
-        file: Sym::new(&target),
-        start_line: 0,
-        start_col: 0,
-        end_line: 0,
-        end_col: 0,
-    })
 }
 
 /// The symbol kind of an entity kind: its extension-declared LSP icon

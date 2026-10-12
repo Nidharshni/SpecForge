@@ -1,41 +1,25 @@
 use specforge_common::{Diagnostic, Severity};
 use specforge_parser::{SpecFile, parse};
-use specforge_resolver::{resolve_import, resolve_imports};
+use specforge_resolver::{import_target, resolve_imports};
 use specforge_test_macros::test as specforge_test;
-use std::fs;
-use std::path::Path;
-use tempfile::TempDir;
+use std::collections::BTreeSet;
 
-/// The import diagnostics of the project under `root`, read and parsed as a
-/// compile reads it.
-fn resolve_dir(root: &Path) -> Vec<Diagnostic> {
-    let parsed: Vec<(String, SpecFile)> = specforge_common::discover_spec_files(root, &[])
-        .into_iter()
-        .map(|p| {
-            let key = p.strip_prefix(root).unwrap().to_string_lossy().into_owned();
-            let spec = parse(&fs::read_to_string(&p).unwrap(), &key);
-            (key, spec)
-        })
-        .collect();
-    let files: Vec<(&str, &SpecFile)> = parsed.iter().map(|(k, f)| (k.as_str(), f)).collect();
-    resolve_imports(root, &files, &|p: &Path| p.is_file())
+/// The import diagnostics of `files` (key, text), parsed as a compile parses
+/// them, `unreadable` held but unread.
+fn resolve(files: &[(&str, &str)], unreadable: &[&str]) -> Vec<Diagnostic> {
+    let parsed: Vec<(&str, SpecFile)> = files.iter().map(|(k, t)| (*k, parse(t, k))).collect();
+    let files: Vec<(&str, &SpecFile)> = parsed.iter().map(|(k, f)| (*k, f)).collect();
+    resolve_imports(&files, unreadable)
 }
 
-fn setup_project(files: &[(&str, &str)]) -> TempDir {
-    let dir = TempDir::new().unwrap();
-    for (path, content) in files {
-        let full = dir.path().join(path);
-        if let Some(parent) = full.parent() {
-            fs::create_dir_all(parent).unwrap();
-        }
-        fs::write(&full, content).unwrap();
-    }
-    dir
+/// A project's sources, as (key, text).
+fn setup_project<'a>(files: &[(&'a str, &'a str)]) -> Vec<(&'a str, &'a str)> {
+    files.to_vec()
 }
 
 #[specforge_test(
     behavior = "resolve_use_imports",
-    verify = "resolve use path to file on disk"
+    verify = "a use path resolves to the project source it names"
 )]
 fn resolve_use_import_to_file() {
     let dir = setup_project(&[
@@ -46,7 +30,7 @@ fn resolve_use_import_to_file() {
         ),
     ]);
 
-    let diagnostics = resolve_dir(dir.path());
+    let diagnostics = resolve(&dir, &[]);
 
     assert!(
         diagnostics.iter().all(|d| d.severity != Severity::Error),
@@ -62,7 +46,7 @@ fn resolve_use_import_to_file() {
 fn missing_import_produces_e025() {
     let dir = setup_project(&[("main.spec", "use \"nonexistent\"\nbehavior foo \"F\" { }")]);
 
-    let diagnostics = resolve_dir(dir.path());
+    let diagnostics = resolve(&dir, &[]);
 
     let errors: Vec<_> = diagnostics.iter().filter(|d| d.code == "E025").collect();
     assert_eq!(errors.len(), 1, "should produce E025 for missing import");
@@ -78,7 +62,7 @@ fn detect_direct_import_cycle() {
         ("b.spec", "use \"a\"\nbehavior beta \"B\" { }"),
     ]);
 
-    let diagnostics = resolve_dir(dir.path());
+    let diagnostics = resolve(&dir, &[]);
 
     let cycle_warnings: Vec<_> = diagnostics.iter().filter(|d| d.code == "W113").collect();
     assert!(
@@ -104,7 +88,7 @@ fn detect_transitive_import_cycle() {
         ("c.spec", "use \"a\"\nbehavior gamma \"G\" { }"),
     ]);
 
-    let diagnostics = resolve_dir(dir.path());
+    let diagnostics = resolve(&dir, &[]);
 
     let cycle_warnings: Vec<_> = diagnostics.iter().filter(|d| d.code == "W113").collect();
     assert!(
@@ -124,7 +108,7 @@ fn non_cyclic_files_still_resolve_when_cycle_exists() {
         ("clean.spec", "behavior gamma \"G\" { status \"ok\" }"),
     ]);
 
-    let diagnostics = resolve_dir(dir.path());
+    let diagnostics = resolve(&dir, &[]);
 
     // The cycle is reported, and the clean file takes no part in it.
     let w113: Vec<&str> = diagnostics
@@ -157,7 +141,7 @@ fn imports_across_nested_directories_resolve_correctly() {
         ),
     ]);
 
-    let diagnostics = resolve_dir(dir.path());
+    let diagnostics = resolve(&dir, &[]);
 
     assert!(
         diagnostics.iter().all(|d| d.severity != Severity::Error),
@@ -172,7 +156,7 @@ fn imports_across_nested_directories_resolve_correctly() {
 
 #[specforge_test(
     behavior = "resolve_use_imports",
-    verify = "resolve use path to file on disk"
+    verify = "a use path resolves to the project source it names"
 )]
 fn resolve_relative_dot_slash() {
     let dir = setup_project(&[
@@ -186,7 +170,7 @@ fn resolve_relative_dot_slash() {
         ),
     ]);
 
-    let diagnostics = resolve_dir(dir.path());
+    let diagnostics = resolve(&dir, &[]);
 
     assert!(
         diagnostics.iter().all(|d| d.severity != Severity::Error),
@@ -197,7 +181,7 @@ fn resolve_relative_dot_slash() {
 
 #[specforge_test(
     behavior = "resolve_use_imports",
-    verify = "resolve use path to file on disk"
+    verify = "a use path resolves to the project source it names"
 )]
 fn resolve_relative_dot_dot_slash() {
     let dir = setup_project(&[
@@ -211,7 +195,7 @@ fn resolve_relative_dot_dot_slash() {
         ),
     ]);
 
-    let diagnostics = resolve_dir(dir.path());
+    let diagnostics = resolve(&dir, &[]);
 
     assert!(
         diagnostics.iter().all(|d| d.severity != Severity::Error),
@@ -230,7 +214,7 @@ fn resolve_relative_escaping_spec_root() {
         "use \"../../escape\"\nbehavior user \"U\" { }",
     )]);
 
-    let diagnostics = resolve_dir(dir.path());
+    let diagnostics = resolve(&dir, &[]);
 
     let errors: Vec<_> = diagnostics.iter().filter(|d| d.code == "E025").collect();
     assert_eq!(
@@ -242,7 +226,7 @@ fn resolve_relative_escaping_spec_root() {
 
 #[specforge_test(
     behavior = "resolve_use_imports",
-    verify = "resolve use path to file on disk"
+    verify = "a use path resolves to the project source it names"
 )]
 fn resolve_directory_to_index_spec() {
     let dir = setup_project(&[
@@ -256,7 +240,7 @@ fn resolve_directory_to_index_spec() {
         ),
     ]);
 
-    let diagnostics = resolve_dir(dir.path());
+    let diagnostics = resolve(&dir, &[]);
 
     assert!(
         diagnostics.iter().all(|d| d.severity != Severity::Error),
@@ -268,7 +252,7 @@ fn resolve_directory_to_index_spec() {
 
 #[specforge_test(
     behavior = "resolve_use_imports",
-    verify = "resolve use path to file on disk"
+    verify = "a use path resolves to the project source it names"
 )]
 fn bare_path_precedence_over_index() {
     let dir = setup_project(&[
@@ -286,7 +270,7 @@ fn bare_path_precedence_over_index() {
         ),
     ]);
 
-    let diagnostics = resolve_dir(dir.path());
+    let diagnostics = resolve(&dir, &[]);
 
     assert!(
         diagnostics.iter().all(|d| d.severity != Severity::Error),
@@ -295,7 +279,11 @@ fn bare_path_precedence_over_index() {
     );
     // The import from main.spec resolves to models.spec, not models/index.spec.
     assert_eq!(
-        resolve_import(dir.path(), "main.spec", "models").as_deref(),
+        import_target(
+            &dir.iter().map(|(key, _)| *key).collect(),
+            "main.spec",
+            "models"
+        ),
         Some("models.spec")
     );
 }
@@ -310,7 +298,7 @@ fn extension_import_emits_i004() {
         "use \"@specforge/software\"\nbehavior foo \"F\" { }",
     )]);
 
-    let diagnostics = resolve_dir(dir.path());
+    let diagnostics = resolve(&dir, &[]);
 
     let infos: Vec<_> = diagnostics.iter().filter(|d| d.code == "I004").collect();
     assert_eq!(
@@ -339,7 +327,7 @@ fn missing_import_e025_with_suggestion() {
         ("main.spec", "use \"helperz\"\nbehavior foo \"F\" { }"),
     ]);
 
-    let diagnostics = resolve_dir(dir.path());
+    let diagnostics = resolve(&dir, &[]);
 
     let errors: Vec<_> = diagnostics.iter().filter(|d| d.code == "E025").collect();
     assert_eq!(errors.len(), 1);
@@ -366,14 +354,29 @@ fn missing_import_e025_no_suggestion() {
         ),
     ]);
 
-    let diagnostics = resolve_dir(dir.path());
+    let diagnostics = resolve(&dir, &[]);
 
     let errors: Vec<_> = diagnostics.iter().filter(|d| d.code == "E025").collect();
     assert_eq!(errors.len(), 1);
+    // A distant path suggests no file, but states the rule (ADR 0055 D4).
     assert!(
-        errors[0].suggestion.is_none(),
-        "distant path should not produce suggestion: {:?}",
+        errors[0]
+            .suggestion
+            .as_deref()
+            .is_some_and(|s| s.starts_with("a use path names a project source")),
+        "distant path should state the rule: {:?}",
         errors[0].suggestion
+    );
+    assert!(
+        matches!(
+            errors[0].data.as_deref(),
+            Some(specforge_common::DiagnosticData::UnresolvedImport {
+                did_you_mean: None,
+                ..
+            })
+        ),
+        "{:?}",
+        errors[0].data
     );
 }
 
@@ -389,7 +392,7 @@ fn pub_use_unknown_entity_w027() {
         ("barrel.spec", "pub use { NonExistent } from \"./foo\"\n"),
     ]);
 
-    let diagnostics = resolve_dir(dir.path());
+    let diagnostics = resolve(&dir, &[]);
 
     let warnings: Vec<_> = diagnostics.iter().filter(|d| d.code == "W027").collect();
     assert_eq!(
@@ -400,62 +403,20 @@ fn pub_use_unknown_entity_w027() {
     assert!(warnings[0].message.contains("NonExistent"));
 }
 
-// === symlink safety ===
-
-#[specforge_test(
-    behavior = "resolve_use_imports",
-    verify = "symlink pointing outside spec_root is rejected"
-)]
-fn symlink_outside_spec_root_rejected() {
-    // Create a temp dir with a spec_root subdirectory and a secret file outside it
-    let outer = TempDir::new().unwrap();
-    let spec_root = outer.path().join("specs");
-    let outside = outer.path().join("outside");
-    fs::create_dir_all(&spec_root).unwrap();
-    fs::create_dir_all(&outside).unwrap();
-    fs::write(
-        outside.join("secret.spec"),
-        r#"behavior secret "S" { contract "secret" }"#,
-    )
-    .unwrap();
-
-    // Create a symlink inside spec_root pointing to the outside directory
-    #[cfg(unix)]
-    std::os::unix::fs::symlink(&outside, spec_root.join("escape")).unwrap();
-    #[cfg(windows)]
-    std::os::windows::fs::symlink_dir(&outside, spec_root.join("escape")).unwrap();
-
-    // Discovery does NOT follow the symlink, so the symlinked file is
-    // never one of the files a compile reads.
-    let found = specforge_common::discover_spec_files(&spec_root, &[]);
-    assert!(
-        found.is_empty(),
-        "symlinked files outside spec_root should not be discovered: {found:?}"
-    );
-    assert!(resolve_dir(&spec_root).is_empty());
-}
-
 #[specforge_test(
     behavior = "resolve_use_imports",
     verify = "relative import traversing above spec_root is rejected"
 )]
 fn relative_import_path_traversal_rejected() {
-    let outer = TempDir::new().unwrap();
-    let spec_root = outer.path().join("specs");
-    fs::create_dir_all(spec_root.join("sub")).unwrap();
-    fs::write(
-        outer.path().join("outside.spec"),
-        r#"behavior outside "O" { contract "outside" }"#,
-    )
-    .unwrap();
-    // A spec file that tries to import ../../outside (above spec_root)
-    fs::write(
-        spec_root.join("sub").join("main.spec"),
-        "use \"../../outside\"\nbehavior inner \"I\" { }",
-    )
-    .unwrap();
-
-    let diagnostics = resolve_dir(&spec_root);
+    // A spec file that tries to import ../../outside (above the spec root);
+    // no such file is among the sources, whatever is on disk.
+    let diagnostics = resolve(
+        &[(
+            "sub/main.spec",
+            "use \"../../outside\"\nbehavior inner \"I\" { }",
+        )],
+        &[],
+    );
 
     let e025: Vec<_> = diagnostics.iter().filter(|d| d.code == "E025").collect();
     assert!(
@@ -476,7 +437,7 @@ fn w113_import_cycle_has_suggestion() {
         ("b.spec", "use \"a\"\nbehavior beta \"B\" { }"),
     ]);
 
-    let diagnostics = resolve_dir(dir.path());
+    let diagnostics = resolve(&dir, &[]);
 
     let w113s: Vec<_> = diagnostics.iter().filter(|d| d.code == "W113").collect();
     assert!(!w113s.is_empty(), "import cycle should produce W113");
@@ -502,7 +463,7 @@ fn use_import_may_spell_out_the_spec_extension() {
         ("other.spec", "use \"tokens\"\nbehavior bar \"B\" { }"),
     ]);
 
-    let diagnostics = resolve_dir(dir.path());
+    let diagnostics = resolve(&dir, &[]);
 
     assert!(
         !diagnostics.iter().any(|d| d.code == "E025"),
@@ -527,7 +488,7 @@ fn w113_names_each_cycle_the_same_way_on_every_run() {
     ]);
 
     for _ in 0..20 {
-        let diagnostics = resolve_dir(dir.path());
+        let diagnostics = resolve(&dir, &[]);
         let messages: Vec<&str> = diagnostics
             .iter()
             .filter(|d| d.code == "W113")
@@ -548,22 +509,22 @@ fn w113_names_each_cycle_the_same_way_on_every_run() {
 /// directory-index targets, relative to the spec root.
 #[specforge_test(
     behavior = "resolve_use_imports",
-    verify = "resolve use path to file on disk"
+    verify = "a use path resolves to the project source it names"
 )]
 fn resolve_one_import_by_the_compile_cascade() {
-    let dir = setup_project(&[
-        ("types.spec", "term t \"T\" {\n}\n"),
-        ("models/index.spec", "term m \"M\" {\n}\n"),
-        ("lib/shared/utils.spec", "term u \"U\" {\n}\n"),
-        ("sub/main.spec", "term main \"Main\" {\n}\n"),
+    let sources = BTreeSet::from([
+        "types.spec",
+        "models/index.spec",
+        "lib/shared/utils.spec",
+        "sub/main.spec",
     ]);
-    let root = dir.path();
-    let resolve = |import: &str| resolve_import(root, "sub/main.spec", import);
+    let resolve = |import: &str| import_target(&sources, "sub/main.spec", import);
 
-    assert_eq!(resolve("types").as_deref(), Some("types.spec"));
-    assert_eq!(resolve("types.spec").as_deref(), Some("types.spec"));
-    assert_eq!(resolve("../types").as_deref(), Some("types.spec"));
-    assert_eq!(resolve("models").as_deref(), Some("models/index.spec"));
+    assert_eq!(resolve("types"), Some("types.spec"));
+    assert_eq!(resolve("types.spec"), Some("types.spec"));
+    assert_eq!(resolve("../types"), Some("types.spec"));
+    assert_eq!(resolve("./main"), Some("sub/main.spec"));
+    assert_eq!(resolve("models"), Some("models/index.spec"));
     assert_eq!(resolve("@shared/utils"), None, "an extension import");
     assert_eq!(resolve("@specforge/software"), None, "an extension");
     assert_eq!(resolve("missing"), None);
@@ -576,18 +537,19 @@ fn resolve_one_import_by_the_compile_cascade() {
     verify = "an import reaching above spec_root by any cascade step produces E025"
 )]
 fn no_import_reaches_above_the_spec_root() {
-    let outer = TempDir::new().unwrap();
-    fs::write(outer.path().join("outside.spec"), "term o \"O\" {\n}\n").unwrap();
-    let root = outer.path().join("spec");
-    fs::create_dir_all(&root).unwrap();
-    for import in ["../outside", "sub/../../outside"] {
-        fs::write(
-            root.join("main.spec"),
-            format!("use \"{import}\"\nterm main \"Main\" {{\n}}\n"),
-        )
-        .unwrap();
-        assert_eq!(resolve_import(&root, "main.spec", import), None);
-        let diagnostics = resolve_dir(&root);
+    let sources = BTreeSet::from(["main.spec", "outside.spec"]);
+    for import in ["../outside", "sub/../../outside", "/outside"] {
+        assert_eq!(import_target(&sources, "main.spec", import), None);
+        let diagnostics = resolve(
+            &[
+                (
+                    "main.spec",
+                    &format!("use \"{import}\"\nterm main \"Main\" {{\n}}\n"),
+                ),
+                ("outside.spec", "term o \"O\" {\n}\n"),
+            ],
+            &[],
+        );
         assert!(
             diagnostics.iter().any(|d| d.code == "E025"),
             "{import}: {diagnostics:?}"
@@ -599,8 +561,7 @@ fn no_import_reaches_above_the_spec_root() {
 
 /// The W027 messages the project of `files` reports.
 fn w027_messages(files: &[(&str, &str)]) -> Vec<String> {
-    let dir = setup_project(files);
-    resolve_dir(dir.path())
+    resolve(files, &[])
         .iter()
         .filter(|d| d.code == "W027")
         .map(|d| d.message.clone())
@@ -719,4 +680,90 @@ fn pub_use_through_cycle_no_transitive_w027() {
     ]);
     assert_eq!(w027.len(), 1, "{w027:?}");
     assert!(w027[0].contains("'Beta'"), "{w027:?}");
+}
+
+#[specforge_test(
+    behavior = "resolve_use_imports",
+    verify = "a dotted import path names the file with .spec appended"
+)]
+fn a_dotted_import_path_names_the_file_with_spec_appended() {
+    let dir = setup_project(&[
+        ("api.v2.spec", "term v \"V\" {\n}\n"),
+        ("api.spec", "term w \"W\" {\n}\n"),
+        (
+            "main.spec",
+            "pub use { v } from \"api.v2\"\nuse \"api.v2\"\n",
+        ),
+    ]);
+
+    let diagnostics = resolve(&dir, &[]);
+
+    assert!(
+        !diagnostics
+            .iter()
+            .any(|d| d.code == "E025" || d.code == "W027"),
+        "{diagnostics:?}"
+    );
+}
+
+#[specforge_test(
+    behavior = "resolve_use_imports",
+    verify = "import paths match source paths exactly, whatever the file system's case rules"
+)]
+fn import_paths_match_source_paths_exactly() {
+    let dir = setup_project(&[
+        ("types.spec", "term t \"T\" {\n}\n"),
+        ("main.spec", "use \"Types\"\n"),
+    ]);
+
+    let diagnostics = resolve(&dir, &[]);
+
+    let e025: Vec<_> = diagnostics.iter().filter(|d| d.code == "E025").collect();
+    assert_eq!(e025.len(), 1, "{diagnostics:?}");
+    assert!(
+        matches!(
+            e025[0].data.as_deref(),
+            Some(specforge_common::DiagnosticData::UnresolvedImport { path, did_you_mean })
+                if path == "Types" && did_you_mean.as_deref() == Some("types")
+        ),
+        "{:?}",
+        e025[0].data
+    );
+}
+
+#[specforge_test(
+    behavior = "resolve_use_imports",
+    verify = "an import of a file that is no project source produces E025"
+)]
+fn an_import_of_a_key_no_source_has_is_e025() {
+    let diagnostics = resolve(&[("main.spec", "use \"drafts/x\"\n")], &[]);
+
+    let e025: Vec<_> = diagnostics.iter().filter(|d| d.code == "E025").collect();
+    assert_eq!(e025.len(), 1, "{diagnostics:?}");
+    assert_eq!(
+        e025[0].message,
+        "import target not found among the project's sources: drafts/x"
+    );
+    assert_eq!(
+        e025[0].suggestion.as_deref(),
+        Some(
+            "a use path names a project source: a .spec file under the spec root, not excluded and not under a skipped directory"
+        )
+    );
+}
+
+#[specforge_test(
+    behavior = "resolve_use_imports",
+    verify = "an import of an unreadable source reports only that source's E025"
+)]
+fn an_unreadable_key_is_a_source_with_no_exports() {
+    let diagnostics = resolve(
+        &[(
+            "c.spec",
+            "use \"bad\"\npub use { q } from \"bad\"\nterm c \"C\" {\n}\n",
+        )],
+        &["bad.spec"],
+    );
+
+    assert!(diagnostics.is_empty(), "{diagnostics:?}");
 }

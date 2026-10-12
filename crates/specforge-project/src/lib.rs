@@ -43,16 +43,14 @@ use sources::SourceCache;
 use snapshot::EntitySnapshot;
 use specforge_common::{
     ConfigProblem, ConfigRead, Diagnostic, ProjectConfig, ProjectRoot, codes, discover_spec_files,
-    is_discovered, read_project_config,
+    read_project_config,
 };
 use specforge_graph::{Graph, GraphBuild, GraphConfig};
 use specforge_installed::{Builtins, Installed};
-use specforge_parser::SpecFile;
 use specforge_registry::{
     RegistryBuild, build_registries,
     rules::{CustomVerdicts, NoVerdicts},
 };
-use specforge_resolver::resolve_imports;
 use specforge_wasm::WasmRuntime;
 use verdicts::WasmVerdicts;
 
@@ -415,14 +413,6 @@ impl Environment {
             .map(|setup| setup.diagnostic)
     }
 
-    /// Whether a file (its path relative to the spec root) is left out of
-    /// the project, as discovery leaves it out: not a `.spec` file, under a
-    /// skipped directory (`target`, `node_modules`, ...) or matched by an
-    /// `exclude` entry.
-    pub fn excludes(&self, relative: &str) -> bool {
-        !is_discovered(relative, &self.read.config.exclude)
-    }
-
     /// The project sources discovery finds now (`exclude` and the skipped
     /// directories applied).
     pub fn discover(&self) -> Vec<PathBuf> {
@@ -443,31 +433,12 @@ impl Environment {
     ) -> SourceBuild {
         let (sources, files) = SourceCache::read_all(&self.spec_root, discovered, held);
         let graph = GraphBuild::of(files, self.graph_config());
-        let imports = self.import_diagnostics(&sources, &graph);
+        let imports = sources.import_diagnostics(&graph);
         SourceBuild {
             sources,
             graph,
             imports,
         }
-    }
-
-    /// The import diagnostics of what `sources` and `graph` hold: E025 for
-    /// each source that could not be read, then the resolver's (E025,
-    /// I004, W113, W027). The same function after a cold read and after
-    /// every update.
-    pub(crate) fn import_diagnostics(
-        &self,
-        sources: &SourceCache,
-        graph: &GraphBuild,
-    ) -> Vec<Diagnostic> {
-        let files: Vec<(&str, &SpecFile)> = graph.files().collect();
-        sources
-            .unreadable()
-            .cloned()
-            .chain(resolve_imports(&self.spec_root, &files, &|path: &Path| {
-                path.is_file()
-            }))
-            .collect()
     }
 }
 

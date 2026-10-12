@@ -1349,3 +1349,43 @@ fn a_loose_path_is_opened_for_its_call_and_never_served() {
     assert_eq!(resp["result"]["isError"], false, "{resp}");
     assert_eq!(served_root(&server), Some(canonical(&nested)));
 }
+
+/// A file discovery does not find (an excluded `drafts/x.spec`) is no
+/// source: creating it moves nothing, and a call reports what a fresh
+/// compile reports (ADR 0055).
+#[specforge_test(
+    invariant = "incremental_correctness",
+    verify = "a file discovery does not find changes nothing a compile or a session reports"
+)]
+fn validate_reports_what_check_reports_when_an_excluded_import_target_appears() {
+    let dir = project(&[], "use \"drafts/x\"\n\nterm a \"A\" {\n}\n");
+    let config =
+        json!({"name": "served", "version": "0.1.0", "extensions": [], "exclude": ["drafts/"]});
+    fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
+    let fresh_codes = |root: &Path| -> Vec<String> {
+        let compiled = specforge_project::CompiledProject::compile(
+            &specforge_common::ProjectRoot::of(root).unwrap(),
+            None,
+        );
+        let mut codes: Vec<String> = compiled
+            .diagnostics()
+            .iter()
+            .map(|d| d.code.to_string())
+            .collect();
+        codes.sort();
+        codes
+    };
+    let mut server = McpServer::new();
+    initialize(&mut server, dir.path());
+
+    let mut served = validate_codes(&mut server, json!({}));
+    assert!(served.contains(&"E025".to_string()), "{served:?}");
+
+    fs::create_dir_all(dir.path().join("drafts")).unwrap();
+    fs::write(dir.path().join("drafts/x.spec"), "term x \"X\" {\n}\n").unwrap();
+    served = validate_codes(&mut server, json!({}));
+    served.sort();
+    let fresh = fresh_codes(dir.path());
+    assert!(fresh.contains(&"E025".to_string()), "{fresh:?}");
+    assert_eq!(served, fresh);
+}

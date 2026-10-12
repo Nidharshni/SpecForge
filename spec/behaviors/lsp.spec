@@ -829,21 +829,25 @@ behavior goto_import_definition "Go-to-Definition on Imports" {
   types      [SourceSpan]
   ports      [LspProtocol]
   requires {
-    imports_resolved "use import paths have been resolved to file system locations"
+    imports_resolved "use import paths are resolved against the sources the project was last compiled from"
   }
   ensures {
     target_file_navigated "navigation jumps to the first line of the resolved target .spec file"
   }
   contract   """
     When a user Ctrl+clicks on a `use` import path (e.g., `use behaviors/core`),
-    the LSP MUST navigate to the target .spec file, resolved as the
-    compile resolves imports (resolve_use_imports: relative, alias, bare,
-    index.spec, never above the spec root). The definition site MUST be
+    the LSP MUST navigate to the source it names, resolved as the
+    compile resolves imports (resolve_use_imports: relative, bare,
+    index.spec, never above the spec root) against the sources the
+    project was last compiled from, open documents included, saved or
+    not. A path that names no source (a missing file, an excluded one)
+    has no definition, whatever is on disk. The definition site MUST be
     the first line of the resolved file.
   """
   verify unit "go-to-def on use path navigates to target file"
   verify unit "go-to-def on non-existent use path returns no result"
   verify contract "Go-to-Definition on Imports: import go-to-definition holds — imports_resolved, target_file_navigated"
+  verify unit "go-to-def on a use path names only a project source, an open unsaved document included"
 }
 
 behavior code_action_replace_unresolved "Code Action: Replace an Unresolved Reference" {

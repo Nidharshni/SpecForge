@@ -300,9 +300,14 @@ Level: error
 ```
 E025: Import resolution failed
 
-A `use` import's target either can't be read from disk or doesn't resolve to any
-known `.spec` file. Fix the import path; a `did you mean` suggestion is included
-when a close match exists.
+Either a `.spec` file discovery found can't be read (not UTF-8, no permission):
+it is named, left out of the graph, and an import of it reports nothing more; or
+a `use` import names no source of the project: no `.spec` file by that path
+under the spec root that discovery keeps. A file an `exclude` entry leaves out,
+one under a skipped directory (`target`, `build`, ...), one above the spec root
+and one whose name differs only in case are no source. Fix the import path or
+the `exclude` entry; a `did you mean` suggestion is included when a close match
+exists.
 
 Owner: core
 Level: error
@@ -801,11 +806,13 @@ structure is checked (I002 says so), and `specforge add`, `specforge update` and
 `specforge remove` refuse (config_invalid) without changing anything. When a key
 has the wrong type (`name`, `version` or `spec_root` not a string, `exclude` not
 an array), that key's default is used; when an item of `extensions` or `exclude`
-isn't a string, that item is ignored; the rest of the file is used. Each problem
-is one E069, and `check` fails on it, so a broken config can't pass a CI that
-checks nothing. Fix the file: the message names the JSON error's line and
-column, or the key and the item. A missing `specforge.json` is not this: it is a
-project with the default config (`specforge doctor` says so).
+isn't a string, or an `exclude` item can match no source (empty, starting with
+`!`, with a `.` or `..` name, or not a glob pattern), that item is ignored; the
+rest of the file is used. Each problem is one E069, and `check` fails on it, so
+a broken config can't pass a CI that checks nothing. Fix the file: the message
+names the JSON error's line and column, or the key and the item. A missing
+`specforge.json` is not this: it is a project with the default config
+(`specforge doctor` says so).
 
 Owner: core
 Level: error

@@ -5,43 +5,50 @@ use std::path::{Component, Path, PathBuf};
 
 /// A `pub use` of one file: what it re-exports and from where.
 struct ReexportDeclaration {
-    /// The target file, relative to the spec root.
+    /// The target source's key.
     target_path: String,
     /// `None`: everything the target exports.
     bindings: Option<Vec<ImportBinding>>,
     span: specforge_common::SourceSpan,
 }
 
-/// Result of resolving a single import path.
-enum Target {
-    Found(PathBuf),
-    ExtensionStub { scope: String, name: String },
-    NotFound,
+/// What one `use` path names among a compile's sources.
+enum Named<'s> {
+    Source(&'s str),
+    Extension { scope: String, name: String },
+    Nothing,
 }
 
-/// The import diagnostics of a set of parsed files, keyed by their path
-/// relative to `spec_root`: per file in path order each import's E025
-/// (target not found or above the spec root) or I004 (`@scope/name`, an
-/// extension import); then one W113 per import cycle, named from its
-/// smallest path, in sorted order; then the W027s of selective re-exports
-/// (a file exports what it declares plus what its `pub use` re-exports,
-/// transitively; a re-export through an import-cycle participant uses only
-/// that file's declared set). `exists` says whether a candidate target file
-/// exists. Nothing is read or walked.
+/// The import diagnostics of a compile's sources, in this order: per parsed
+/// source in key order, each import's E025 (it names no source: no key by
+/// that path, or a path that leaves the spec root or is absolute) or I004
+/// (`@scope/name`, an extension import); then one W113 per import cycle,
+/// named from its smallest key, in sorted order; then the W027s of
+/// selective re-exports (a file exports what it declares plus what its
+/// `pub use` re-exports, transitively; a re-export through an import-cycle
+/// participant uses only that file's declared set).
+///
+/// `parsed` is each parsed source with its key; `unreadable` the keys of the
+/// sources the compile holds but could not read (each already E025). A key
+/// is a source exactly when one of the two holds it. An import of an
+/// unreadable source names it and reports nothing more, and a re-export
+/// from one reports no W027: what it exports is unknown.
 #[must_use]
-pub fn resolve_imports(
-    spec_root: &Path,
-    files: &[(&str, &SpecFile)],
-    exists: &dyn Fn(&Path) -> bool,
-) -> Vec<Diagnostic> {
-    let mut files: Vec<(&str, &SpecFile)> = files.to_vec();
+pub fn resolve_imports(parsed: &[(&str, &SpecFile)], unreadable: &[&str]) -> Vec<Diagnostic> {
+    let mut files: Vec<(&str, &SpecFile)> = parsed.to_vec();
     files.sort_by(|a, b| a.0.cmp(b.0));
     let mut diagnostics = Vec::new();
 
-    // Candidates for fuzzy suggestions (relative stems without .spec).
-    let candidates: Vec<&str> = files
+    let sources: BTreeSet<&str> = files
         .iter()
-        .map(|(path, _)| path.strip_suffix(".spec").unwrap_or(path))
+        .map(|(key, _)| *key)
+        .chain(unreadable.iter().copied())
+        .collect();
+
+    // Candidates for fuzzy suggestions (source keys without .spec).
+    let candidates: Vec<&str> = sources
+        .iter()
+        .map(|key| key.strip_suffix(".spec").unwrap_or(key))
         .collect();
 
     // Resolve imports and build the file dependency graph, tracking each
@@ -49,23 +56,21 @@ pub fn resolve_imports(
     let mut import_graph: BTreeMap<String, Vec<String>> = BTreeMap::new();
     let mut reexport_map: BTreeMap<String, Vec<ReexportDeclaration>> = BTreeMap::new();
     for (path, spec_file) in &files {
-        let importing_file = spec_root.join(path);
         let mut deps = Vec::new();
         let mut reexports = Vec::new();
         for import in &spec_file.imports {
-            match resolve_import_path(spec_root, &importing_file, import.path.as_str(), exists) {
-                Target::Found(ref target) => {
-                    let target_rel = relative(spec_root, target);
+            match name(&sources, path, import.path.as_str()) {
+                Named::Source(target) => {
                     if import.is_pub {
                         reexports.push(ReexportDeclaration {
-                            target_path: target_rel.clone(),
+                            target_path: target.to_string(),
                             bindings: import.bindings.clone(),
                             span: import.span.clone(),
                         });
                     }
-                    deps.push(target_rel);
+                    deps.push(target.to_string());
                 }
-                Target::ExtensionStub { scope, name } => {
+                Named::Extension { scope, name } => {
                     diagnostics.push(
                         Diagnostic::new(
                             codes::I004,
@@ -77,18 +82,26 @@ pub fn resolve_imports(
                         .with_span(import.span.clone()),
                     );
                 }
-                Target::NotFound => {
+                Named::Nothing => {
                     let close = find_close_match(import.path.as_str(), candidates.iter().copied());
                     let mut diagnostic = Diagnostic::new(
                         codes::E025,
-                        format!("import target not found: {}", import.path),
+                        format!(
+                            "import target not found among the project's sources: {}",
+                            import.path
+                        ),
                     )
                     .with_span(import.span.clone())
                     .with_data(DiagnosticData::UnresolvedImport {
                         path: import.path.to_string(),
                         did_you_mean: close.map(str::to_string),
                     });
-                    diagnostic.suggestion = close.map(|m| format!("did you mean '{}'?", m));
+                    diagnostic.suggestion = Some(match close {
+                        Some(m) => format!("did you mean '{}'?", m),
+                        None => "a use path names a project source: a .spec file under the spec \
+                                 root, not excluded and not under a skipped directory"
+                            .to_string(),
+                    });
                     diagnostics.push(diagnostic);
                 }
             }
@@ -131,140 +144,82 @@ pub fn resolve_imports(
     diagnostics
 }
 
-/// `path` relative to `spec_root`, as diagnostics and file keys print it.
-fn relative(spec_root: &Path, path: &Path) -> String {
-    if let Ok(rel) = path.strip_prefix(spec_root) {
-        return rel.to_string_lossy().to_string();
-    }
-    // A relative import's target is normalized; the spec root may not be.
-    let path = normalize_path(path);
-    path.strip_prefix(normalize_path(spec_root))
-        .unwrap_or(&path)
-        .to_string_lossy()
-        .to_string()
-}
-
-/// The file `use "<import_path>"` in `importing_file` (relative to
-/// `spec_root`) names, relative to `spec_root`, by the cascade
-/// [`resolve_imports`] uses (relative, then bare from the spec root;
-/// `path.spec`, then `path/index.spec`; never above the spec root). `None`
-/// for an extension import or a target that is not found.
+/// The key of the source `use "<import_path>"` in source `importing` names
+/// among `sources`, by the cascade [`resolve_imports`] uses: a relative path
+/// (`./`, `../`) from `importing`'s directory, any other path from the spec
+/// root; `<path>.spec` (`<path>` itself when it ends in `.spec`), else
+/// `<path>/index.spec`. Keys compare exactly. `None` for an extension
+/// import (`@scope/name`) or a path that names no source.
 #[must_use]
-pub fn resolve_import(spec_root: &Path, importing_file: &str, import_path: &str) -> Option<String> {
-    match resolve_import_path(
-        spec_root,
-        &spec_root.join(importing_file),
-        import_path,
-        &|p: &Path| p.is_file(),
-    ) {
-        Target::Found(target) => Some(relative(spec_root, &target)),
-        Target::ExtensionStub { .. } | Target::NotFound => None,
+pub fn import_target<'s>(
+    sources: &BTreeSet<&'s str>,
+    importing: &str,
+    import_path: &str,
+) -> Option<&'s str> {
+    match name(sources, importing, import_path) {
+        Named::Source(key) => Some(key),
+        Named::Extension { .. } | Named::Nothing => None,
     }
 }
 
-/// Import resolution cascade:
-/// 1. Relative paths (`./` or `../`) — resolve from importing file's parent
-/// 2. `@scope/name`: an extension import
-/// 3. Bare paths — resolve from spec_root
-///
-/// Each step applies index fallback: `path.spec` wins over `path/index.spec`.
-/// A target outside the spec root is not found, whichever step names it.
-fn resolve_import_path(
-    spec_root: &Path,
-    importing_file: &Path,
-    import_path: &str,
-    exists: &dyn Fn(&Path) -> bool,
-) -> Target {
-    match cascade(spec_root, importing_file, import_path, exists) {
-        Target::Found(target)
-            if !normalize_path(&target).starts_with(normalize_path(spec_root)) =>
-        {
-            Target::NotFound
-        }
-        other => other,
-    }
-}
-
-fn cascade(
-    spec_root: &Path,
-    importing_file: &Path,
-    import_path: &str,
-    exists: &dyn Fn(&Path) -> bool,
-) -> Target {
-    // Step 1: Relative paths
-    if import_path.starts_with("./") || import_path.starts_with("../") {
-        return try_resolve_relative(spec_root, importing_file, import_path, exists);
-    }
-
-    // Step 2: @-prefixed paths are extension stubs
+/// The one cascade (both public functions go through it).
+fn name<'s>(sources: &BTreeSet<&'s str>, importing: &str, import_path: &str) -> Named<'s> {
     if let Some(rest) = import_path.strip_prefix('@') {
-        return try_resolve_extension(rest);
+        return match rest.split_once('/') {
+            Some((scope, name)) => Named::Extension {
+                scope: scope.into(),
+                name: name.into(),
+            },
+            None => Named::Nothing,
+        };
     }
-
-    // Step 3: Bare paths — resolve from spec_root
-    try_resolve_bare(spec_root, import_path, exists)
+    let from = if import_path.starts_with("./") || import_path.starts_with("../") {
+        Path::new(importing).parent().unwrap_or(Path::new(""))
+    } else {
+        Path::new("")
+    };
+    let Some(base) = lexical_join(from, Path::new(import_path)) else {
+        return Named::Nothing;
+    };
+    candidates(&base)
+        .iter()
+        .find_map(|candidate| sources.get(candidate.to_string_lossy().as_ref()).copied())
+        .map_or(Named::Nothing, Named::Source)
 }
 
-/// Resolve a relative import (`./foo` or `../bar`) from the importing file's directory.
-fn try_resolve_relative(
-    spec_root: &Path,
-    importing_file: &Path,
-    import_path: &str,
-    exists: &dyn Fn(&Path) -> bool,
-) -> Target {
-    let base = importing_file.parent().unwrap_or(spec_root);
-    // Normalized first, so `..` cannot reach a file outside the spec root
-    // that the lexical path would not.
-    apply_index_fallback(&normalize_path(&base.join(import_path)), exists)
-}
-
-/// Recognize `@scope/name` as an extension import and return an ExtensionStub.
-fn try_resolve_extension(at_rest: &str) -> Target {
-    match at_rest.split_once('/') {
-        Some((scope, name)) => Target::ExtensionStub {
-            scope: scope.to_string(),
-            name: name.to_string(),
-        },
-        None => Target::NotFound,
-    }
-}
-
-/// Resolve a bare import path from spec_root.
-fn try_resolve_bare(spec_root: &Path, import_path: &str, exists: &dyn Fn(&Path) -> bool) -> Target {
-    apply_index_fallback(&spec_root.join(import_path), exists)
-}
-
-/// Try `path.spec` first, then `path/index.spec`. Returns `NotFound` if neither exists.
-fn apply_index_fallback(base: &Path, exists: &dyn Fn(&Path) -> bool) -> Target {
-    let with_ext = base.with_extension("spec");
-    if exists(&with_ext) {
-        return Target::Found(with_ext);
-    }
-    // Check for path as directory with index.spec
-    let index = base.join("index.spec");
-    if exists(&index) {
-        return Target::Found(index);
-    }
-    // Also try: maybe base already has the extension baked in by caller
-    if base.extension().is_some_and(|e| e == "spec") && exists(base) {
-        return Target::Found(base.to_path_buf());
-    }
-    Target::NotFound
-}
-
-/// Lexically normalize a path (resolve `.` and `..` without requiring filesystem existence).
-fn normalize_path(path: &Path) -> PathBuf {
-    let mut result = PathBuf::new();
-    for component in path.components() {
+/// `path` under `from` (both relative to the spec root), `.` and `..`
+/// resolved lexically; `None` when it leaves the spec root or is absolute.
+fn lexical_join(from: &Path, path: &Path) -> Option<PathBuf> {
+    let mut joined = PathBuf::new();
+    for component in from.components().chain(path.components()) {
         match component {
-            Component::ParentDir => {
-                result.pop();
-            }
+            Component::Normal(name) => joined.push(name),
             Component::CurDir => {}
-            other => result.push(other),
+            Component::ParentDir => {
+                if !joined.pop() {
+                    return None;
+                }
+            }
+            Component::RootDir | Component::Prefix(_) => return None,
         }
     }
-    result
+    Some(joined)
+}
+
+/// `<base>.spec` (`<base>` when its name ends in `.spec`), then
+/// `<base>/index.spec`; an empty base (the spec root) names only
+/// `index.spec`.
+fn candidates(base: &Path) -> Vec<PathBuf> {
+    let mut out = Vec::with_capacity(2);
+    if let Some(name) = base.file_name().map(|n| n.to_string_lossy()) {
+        out.push(if name.ends_with(".spec") {
+            base.to_path_buf()
+        } else {
+            base.with_file_name(format!("{name}.spec"))
+        });
+    }
+    out.push(base.join("index.spec"));
+    out
 }
 
 /// Every import cycle found by a depth-first walk in path order, each
@@ -399,10 +354,11 @@ fn compute_file_scopes(files: &[(&str, &SpecFile, &[ReexportDeclaration])]) -> V
         let mut additional_exports = HashSet::new();
 
         for reexport in reexports.iter() {
-            let target_exported = scopes
-                .get(&reexport.target_path)
-                .cloned()
-                .unwrap_or_default();
+            // A target with no scope is an unreadable source: what it
+            // exports is unknown, so nothing is reported against it.
+            let Some(target_exported) = scopes.get(&reexport.target_path).cloned() else {
+                continue;
+            };
 
             match &reexport.bindings {
                 None => {

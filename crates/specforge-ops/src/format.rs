@@ -1222,7 +1222,12 @@ mod tests {
 
         let sources: Vec<PathBuf> = CI_GATE
             .iter()
-            .flat_map(|(_, dir)| specforge_common::discover_spec_files(&workspace.join(dir), &[]))
+            .flat_map(|(_, dir)| {
+                specforge_common::discover_spec_files(
+                    &workspace.join(dir),
+                    &specforge_common::Exclude::default(),
+                )
+            })
             .collect();
         for target in &found {
             assert!(

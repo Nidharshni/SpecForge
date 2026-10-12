@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+use crate::{Exclude, ExcludeEntry, ExcludeError};
+
 /// What one `specforge.json` `extensions` entry enables: the one reading
 /// of an entry that the runtime loading extensions, the environment
 /// reading their declarations, the freshness inputs and the extension
@@ -98,9 +100,9 @@ pub struct ProjectConfig {
     pub version: Option<String>,
     pub spec_root: Option<String>,
     pub extensions: Vec<String>,
-    /// Path substrings excluded from `.spec` discovery (C4-04): matched
-    /// against the workspace-relative path by the shared discovery walker.
-    pub exclude: Vec<String>,
+    /// What `exclude` leaves out of the project's sources (ADR 0055 D7):
+    /// its usable entries, in file order; each unusable one is an E069.
+    pub exclude: Exclude,
     pub inference: InferenceConfig,
     pub raw: Option<serde_json::Value>,
 }
@@ -167,6 +169,14 @@ pub enum ConfigProblem {
         index: usize,
         json: String,
     },
+    /// An `exclude` item that can match no source. The item is ignored; the
+    /// other items are kept.
+    ExcludeEntry {
+        path: PathBuf,
+        index: usize,
+        entry: String,
+        error: ExcludeError,
+    },
 }
 
 impl ConfigProblem {
@@ -178,7 +188,7 @@ impl ConfigProblem {
             | ConfigProblem::NotJson { .. }
             | ConfigProblem::NotAnObject { .. } => true,
             ConfigProblem::WrongType { key, .. } => *key == "extensions",
-            ConfigProblem::ItemNotAString { .. } => false,
+            ConfigProblem::ItemNotAString { .. } | ConfigProblem::ExcludeEntry { .. } => false,
         }
     }
 
@@ -216,6 +226,16 @@ impl std::fmt::Display for ConfigProblem {
             } => write!(
                 f,
                 "\"{key}\"[{index}] in {} must be a string, found {json}",
+                path.display()
+            ),
+            ConfigProblem::ExcludeEntry {
+                path,
+                index,
+                entry,
+                error,
+            } => write!(
+                f,
+                "\"exclude\"[{index}] in {}, \"{entry}\", {error}",
                 path.display()
             ),
         }
@@ -294,7 +314,7 @@ pub fn parse_project_config(path: &Path, content: &str) -> ConfigRead {
             "version" => config.version = string_key(&path, "version", item, &mut problems),
             "spec_root" => config.spec_root = string_key(&path, "spec_root", item, &mut problems),
             "extensions" => config.extensions = list_key(&path, "extensions", item, &mut problems),
-            "exclude" => config.exclude = list_key(&path, "exclude", item, &mut problems),
+            "exclude" => config.exclude = exclude_key(&path, item, &mut problems),
             _ => {}
         }
     }
@@ -335,15 +355,15 @@ fn string_key(
     }
 }
 
-/// A key whose value must be an array of strings: its strings, with one
-/// problem per item that is not one; empty, and a problem, when it is not
-/// an array.
-fn list_key(
+/// A key whose value must be an array of strings: its strings with their
+/// index in the array, and one problem per item that is not one; empty, and
+/// a problem, when it is not an array.
+fn string_items(
     path: &Path,
     key: &'static str,
     value: &serde_json::Value,
     problems: &mut Vec<ConfigProblem>,
-) -> Vec<String> {
+) -> Vec<(usize, String)> {
     let Some(items) = value.as_array() else {
         problems.push(ConfigProblem::WrongType {
             path: path.to_path_buf(),
@@ -356,7 +376,7 @@ fn list_key(
         .iter()
         .enumerate()
         .filter_map(|(index, item)| match item.as_str() {
-            Some(text) => Some(text.to_string()),
+            Some(text) => Some((index, text.to_string())),
             None => {
                 problems.push(ConfigProblem::ItemNotAString {
                     path: path.to_path_buf(),
@@ -368,6 +388,42 @@ fn list_key(
             }
         })
         .collect()
+}
+
+/// A key whose value must be an array of strings: its strings, as
+/// [`string_items`] reads them.
+fn list_key(
+    path: &Path,
+    key: &'static str,
+    value: &serde_json::Value,
+    problems: &mut Vec<ConfigProblem>,
+) -> Vec<String> {
+    string_items(path, key, value, problems)
+        .into_iter()
+        .map(|(_, text)| text)
+        .collect()
+}
+
+/// The `exclude` key: its usable entries, with one problem per item that is
+/// not a string and one per string that can match no source.
+fn exclude_key(
+    path: &Path,
+    value: &serde_json::Value,
+    problems: &mut Vec<ConfigProblem>,
+) -> Exclude {
+    let mut entries = Vec::new();
+    for (index, entry) in string_items(path, "exclude", value, problems) {
+        match ExcludeEntry::parse(&entry) {
+            Ok(parsed) => entries.push(parsed),
+            Err(error) => problems.push(ConfigProblem::ExcludeEntry {
+                path: path.to_path_buf(),
+                index,
+                entry,
+                error,
+            }),
+        }
+    }
+    Exclude::new(entries)
 }
 
 /// The top-level keys of the JSON object `content`, in the order it writes
@@ -512,7 +568,7 @@ mod tests {
         }
         let config = ProjectConfig {
             spec_root: Some("specs".into()),
-            exclude: vec!["drafts".into()],
+            exclude: Exclude::parse(["drafts"]).unwrap(),
             ..ProjectConfig::default()
         };
         let spec_root = config.spec_root_in(root);
@@ -797,11 +853,65 @@ mod tests {
         );
         assert!(read.problems.iter().all(|p| !p.blocks_edits()));
         assert_eq!(read.config.extensions, ["@specforge/product"]);
-        assert_eq!(read.config.exclude, ["a"]);
+        let written: Vec<&str> = read
+            .config
+            .exclude
+            .entries()
+            .iter()
+            .map(ExcludeEntry::written)
+            .collect();
+        assert_eq!(written, ["a"]);
         assert_eq!(
             load_project_config(dir.path()).extensions,
             ["@specforge/product"]
         );
+    }
+
+    #[specforge_test(
+        behavior = "resolve_use_imports",
+        verify = "an exclude entry that can match no source is E069 and ignored"
+    )]
+    fn an_exclude_entry_that_can_match_no_source_is_e069_and_ignored() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let root = dir.path();
+        for file in ["a.spec", "drafts/d.spec"] {
+            std::fs::create_dir_all(root.join(file).parent().unwrap()).unwrap();
+            std::fs::write(root.join(file), "").unwrap();
+        }
+        let path = root.join("specforge.json");
+
+        let read = parse_project_config(
+            &path,
+            r#"{"exclude": ["", "!drafts", "./drafts", "a/../b", "a[b", "drafts"]}"#,
+        );
+
+        let shown = |entry: &str, index: usize, why: &str| {
+            format!(
+                "\"exclude\"[{index}] in {}, \"{entry}\", {why}",
+                path.display()
+            )
+        };
+        let dots = "has a \".\" or \"..\" name, which no path under the spec root has";
+        let problems: Vec<String> = read.problems.iter().map(ToString::to_string).collect();
+        assert_eq!(
+            problems,
+            [
+                shown("", 0, "matches nothing: it has no name"),
+                shown(
+                    "!drafts",
+                    1,
+                    "starts with \"!\", and exclude has no negation"
+                ),
+                shown("./drafts", 2, dots),
+                shown("a/../b", 3, dots),
+                shown(
+                    "a[b",
+                    4,
+                    "is not a glob pattern (Pattern syntax error near position 1: invalid range pattern)"
+                ),
+            ]
+        );
+        assert_eq!(read.config.spec_files(root), [root.join("a.spec")]);
     }
 
     #[test]

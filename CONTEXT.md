@@ -75,7 +75,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   environment load, renewed each time the checks run (`specforge_project::SessionInputs`,
   `ProjectSession::inputs`). What a changed path is, which directories watch watches, which files
   the LSP asks its client to report and what the session stamps for freshness are all read from it;
-  a detached session's inputs are empty (ADR 0030).
+  a detached session's inputs are empty (ADR 0030). Nothing else: an import names one of the sources,
+  never a file on disk (ADR 0055).
 - **Held buffer**: an editor buffer a project session holds (`specforge_project::Buffer`: the file's path, the
   editor's text and version). While held it is the truth for its file, whatever happens to the file on disk:
   the session's freshness and classification leave it out, and an open or an environment reload builds it in
@@ -481,13 +482,21 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   `files_written`, the CLI's credential health on doctor), and never renames, drops or re-derives a
   key. It carries no `null`. Its spec type is the tool's `Mcp*` reply type (ADR 0052).
 - **Project sources**: the `.spec` files under the spec root (`spec_root`, else the project root) that
-  discovery keeps — no skipped directory, no `exclude` entry. What a compile reads, and what format
-  and migrate rewrite (`specforge_common::ProjectConfig::spec_files`).
+  discovery keeps — no skipped directory, no `exclude` entry. What a compile reads, what format and migrate
+  rewrite (`specforge_common::ProjectConfig::spec_files`), and the only files a `use` import names: a
+  compile holds each by its **key**, its path relative to the spec root, and resolves imports against the
+  keys alone (`specforge_resolver`, ADR 0055). An editor buffer the session holds for such a path is a
+  source, saved or not.
   The walk is `specforge_common::walk_spec_files`: the spec root is read whatever its own name, no
   skipped directory below it is entered, no symlink is followed, and only files are sources. Format's
   directory walk is the same walk, stopping at nested projects.
+  An **exclude entry** is a gitignore-style pattern over a source's path (`specforge_common::Exclude`): no
+  `/` but a trailing one matches a name at any depth, a `/` at the start or in the middle anchors it at the
+  spec root, a trailing `/` matches directories only, and a file is left out when an entry matches it or
+  one of its directories; an entry that can match no source is E069.
   A discovered source that can't be read (not UTF-8, no permission) is E025 naming it and stays out of the
-  graph, in a compile and after every update alike.
+  graph, in a compile and after every update alike; it is still a source, so an import of it reports
+  nothing more.
 - **Format configuration**: how one `.spec` document is laid out: inside a project, the nearest
   `.specforgefmt.toml` from the document's directory up to its own project root, else the defaults;
   outside any project, the editor's tab settings. `specforge format`, MCP `specforge.format` and the

@@ -297,10 +297,6 @@ impl ProjectSession {
 
     /// [`Self::update`], running the checks `mode` asks for.
     pub fn update_with(&mut self, change: SourceChange<'_>, mode: CheckMode) -> Update {
-        // A disk change always applies: what an import names is read from
-        // disk, so even a file left out may move an import's diagnostic. A
-        // hold of text the session already has changes nothing.
-        let skippable = matches!(change, SourceChange::Hold(_));
         let reads: Vec<(String, Read)> = match change {
             SourceChange::Disk(paths) => {
                 let mut keys: Vec<String> = paths
@@ -331,7 +327,7 @@ impl ProjectSession {
                 reads
             }
         };
-        self.applied(reads, mode, skippable)
+        self.applied(reads, mode)
     }
 
     /// The editor no longer holds the buffers of `paths` (absolute): each
@@ -368,7 +364,7 @@ impl ProjectSession {
         if reads.is_empty() && !self.checks_skipped {
             return None;
         }
-        Some(self.applied(reads, CheckMode::Full, true))
+        Some(self.applied(reads, CheckMode::Full))
     }
 
     /// The buffer the editor holds for source `key`, as the session last
@@ -399,10 +395,10 @@ impl ProjectSession {
 
     /// The one tail of every source update: apply `reads`, resolve the
     /// imports, then run or skip the checks. With nothing to apply it runs
-    /// the checks only if they were skipped, else it changes nothing (when
-    /// `skippable`: a disk change always applies, to see what imports name).
-    fn applied(&mut self, reads: Vec<(String, Read)>, mode: CheckMode, skippable: bool) -> Update {
-        if reads.is_empty() && skippable {
+    /// the checks only if they were skipped, else it changes nothing:
+    /// nothing an update reads besides its sources can have moved (ADR 0055).
+    fn applied(&mut self, reads: Vec<(String, Read)>, mode: CheckMode) -> Update {
+        if reads.is_empty() {
             return if self.checks_skipped {
                 self.recheck()
             } else {

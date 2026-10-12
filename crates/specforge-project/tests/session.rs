@@ -339,7 +339,7 @@ fn imports_of_every_kind_stay_resolved_across_updates() {
     session.set_verify_incremental(true);
     assert_eq!(
         e025(&session.project().diagnostics()),
-        ["import target not found: models"]
+        ["import target not found among the project's sources: models"]
     );
     assert!(
         session
@@ -370,7 +370,7 @@ fn imports_of_every_kind_stay_resolved_across_updates() {
     assert_eq!(update.rebuilt_files, ["types.spec"]);
     assert_eq!(
         e025(&update.diagnostics),
-        ["import target not found: ../types"]
+        ["import target not found among the project's sources: ../types"]
     );
     assert_matches_a_fresh_compile(&session, root);
 }
@@ -2530,4 +2530,212 @@ fn a_reload_keeps_the_root_it_was_opened_at() {
     let kept = session.project().project_root().expect("on disk");
     assert_eq!(kept.dir(), dir.path());
     assert_eq!(session.project().root(), Some(dir.path()));
+}
+
+// --- 04-T0: imports name the compile's sources ---
+
+const BARE: &str = r#"{"name":"s","version":"0.1.0","extensions":[]}"#;
+const EXCLUDING_DRAFTS: &str =
+    r#"{"name":"s","version":"0.1.0","extensions":[],"exclude":["drafts/"]}"#;
+
+#[specforge_test(
+    behavior = "resolve_use_imports",
+    verify = "an import of a file that is no project source produces E025"
+)]
+fn an_import_of_a_file_that_is_no_source_is_e025() {
+    let dir = project(
+        EXCLUDING_DRAFTS,
+        &[
+            ("drafts/x.spec", "term x \"X\" {\n}\n"),
+            ("build/f.spec", "term f \"F\" {\n}\n"),
+            (
+                "a.spec",
+                "use \"drafts/x\"\nuse \"build/f\"\nuse \"escape/secret\"\n\nterm a \"A\" {\n}\n",
+            ),
+        ],
+    );
+    let root = dir.path();
+    #[cfg(unix)]
+    {
+        let outside = TempDir::new().unwrap();
+        write(outside.path(), "secret.spec", "term secret \"S\" {\n}\n");
+        std::os::unix::fs::symlink(outside.path(), root.join("escape")).unwrap();
+        let compiled =
+            CompiledProject::compile(&specforge_common::ProjectRoot::of(root).unwrap(), None);
+        let found: Vec<(usize, String)> = compiled
+            .diagnostics()
+            .iter()
+            .filter(|d| d.code == "E025")
+            .map(|d| (d.span.as_ref().unwrap().start_line, d.message.clone()))
+            .collect();
+        assert_eq!(
+            found,
+            [
+                (
+                    1,
+                    "import target not found among the project's sources: drafts/x".to_string()
+                ),
+                (
+                    2,
+                    "import target not found among the project's sources: build/f".to_string()
+                ),
+                (
+                    3,
+                    "import target not found among the project's sources: escape/secret"
+                        .to_string()
+                ),
+            ]
+        );
+        for id in ["x", "f", "secret"] {
+            assert!(compiled.graph().node(id).is_none(), "{id}");
+        }
+    }
+}
+
+#[specforge_test(
+    behavior = "resolve_use_imports",
+    verify = "an import of an unreadable source reports only that source's E025"
+)]
+fn an_import_of_an_unreadable_source_reports_only_its_e025() {
+    let dir = project(
+        BARE,
+        &[(
+            "c.spec",
+            "use \"bad\"\npub use { q } from \"bad\"\nterm c \"C\" {\n}\n",
+        )],
+    );
+    fs::write(dir.path().join("bad.spec"), b"term bad \"B\xff\" {\n}\n").unwrap();
+    let compiled = CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        None,
+    );
+    let diagnostics = compiled.diagnostics();
+    assert_eq!(
+        e025(&diagnostics),
+        ["cannot read bad.spec: stream did not contain valid UTF-8"]
+    );
+    assert!(
+        !diagnostics.iter().any(|d| d.code == "W027"),
+        "{diagnostics:?}"
+    );
+}
+
+#[specforge_test(
+    behavior = "resolve_use_imports",
+    verify = "an import names an editor buffer's source, saved or not"
+)]
+fn an_import_names_an_unsaved_buffer() {
+    let dir = project(BARE, &[("a.spec", "use \"b\"\n\nterm a \"A\" {\n}\n")]);
+    let root = dir.path();
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
+    assert_eq!(e025(&session.project().diagnostics()).len(), 1);
+
+    let buffers = [Buffer::new(root.join("b.spec"), "term b \"B\" {\n}\n")];
+    let update = session.update(SourceChange::Hold(&buffers));
+
+    assert!(
+        e025(&update.diagnostics).is_empty(),
+        "{:?}",
+        update.diagnostics
+    );
+    assert!(session.project().graph().node("b").is_some());
+}
+
+#[specforge_test(
+    invariant = "incremental_correctness",
+    verify = "a file discovery does not find changes nothing a compile or a session reports"
+)]
+fn a_file_discovery_does_not_find_changes_nothing_a_session_reports() {
+    let dir = project(
+        EXCLUDING_DRAFTS,
+        &[("a.spec", "use \"drafts/x\"\n\nterm a \"A\" {\n}\n")],
+    );
+    let root = dir.path();
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
+    assert_eq!(e025(&session.project().diagnostics()).len(), 1);
+
+    write(root, "drafts/x.spec", "term x \"X\" {\n}\n");
+
+    assert!(session.stale().is_empty());
+    assert!(session.ensure_fresh().is_none());
+    assert_matches_a_fresh_compile(&session, root);
+    assert_eq!(e025(&session.project().diagnostics()).len(), 1);
+}
+
+#[specforge_test(
+    behavior = "classify_project_changes",
+    verify = "an excluded or undiscovered .spec file changes nothing"
+)]
+fn an_update_naming_only_files_discovery_does_not_find_changes_nothing() {
+    let dir = project(EXCLUDING_DRAFTS, &[("a.spec", "term a \"A\" {\n}\n")]);
+    let root = dir.path();
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
+    let before = session.project().diagnostics();
+
+    write(root, "drafts/d.spec", "term d \"D\" {\n}\n");
+    write(root, "build/f.spec", "term f \"F\" {\n}\n");
+    let update = session.update(SourceChange::Disk(&changed(&[
+        "drafts/d.spec",
+        "build/f.spec",
+    ])));
+
+    assert_eq!(update.kind, UpdateKind::Sources);
+    assert!(update.rebuilt_files.is_empty());
+    assert_eq!(update.delta, specforge_project::GraphDelta::default());
+    assert!(!update.inputs_changed);
+    assert_eq!(update.diagnostics, before);
+}
+
+#[specforge_test(
+    behavior = "resolve_use_imports",
+    verify = "files matching an exclude entry are not compiled"
+)]
+fn a_glob_exclude_entry_leaves_its_files_out_of_the_compile() {
+    let dir = project(
+        r#"{"name":"s","version":"0.1.0","extensions":[],"exclude":["drafts/**","**/*.draft.spec"]}"#,
+        &[
+            ("drafts/a.spec", "term a \"A\" {\n}\n"),
+            ("sub/b.draft.spec", "term b \"B\" {\n}\n"),
+            ("main.spec", "term m \"M\" {\n}\n"),
+        ],
+    );
+    let root = dir.path();
+    let compiled =
+        CompiledProject::compile(&specforge_common::ProjectRoot::of(root).unwrap(), None);
+    let mut files: Vec<String> = compiled.source_texts().into_keys().collect();
+    files.sort();
+    assert_eq!(files, ["main.spec"]);
+
+    let session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
+    assert_eq!(
+        session.inputs().classify(&root.join("sub/c.draft.spec")),
+        specforge_project::InputRole::Unrelated
+    );
+}
+
+#[specforge_test(
+    behavior = "resolve_use_imports",
+    verify = "symlink pointing outside spec_root is rejected"
+)]
+#[cfg(unix)]
+fn a_symlinked_directory_is_no_source() {
+    let outer = TempDir::new().unwrap();
+    let outside = outer.path().join("outside");
+    write(&outside, "secret.spec", "term secret \"S\" {\n}\n");
+    let dir = project(
+        BARE,
+        &[("a.spec", "use \"escape/secret\"\nterm a \"A\" {\n}\n")],
+    );
+    std::os::unix::fs::symlink(&outside, dir.path().join("escape")).unwrap();
+
+    let compiled = CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        None,
+    );
+
+    assert!(compiled.graph().node("secret").is_none());
+    assert_eq!(
+        e025(&compiled.diagnostics()),
+        ["import target not found among the project's sources: escape/secret"]
+    );
 }

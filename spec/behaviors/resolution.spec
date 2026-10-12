@@ -14,51 +14,79 @@ behavior resolve_use_imports "Resolve Use Imports" {
   invariants [import_dag, reference_resolution_completeness, compilation_pipeline_ordering]
   category   query
   types      [SpecFile, FileEntry]
-  ports      [FileSystem]
   consumes   [registries_populated]
   requires {
     registries_populated_fired "registries_populated event has fired, confirming KindRegistry and FieldRegistry are ready"
-    filesystem_available       "FileSystem port is available for locating .spec files on disk"
+    sources_held               "The compile holds its sources: the path relative to the spec root of every .spec file discovery kept, parsed or unreadable, and of every editor buffer of one"
   }
   ensures {
-    imports_resolved        "All use directives are resolved to target .spec files relative to the spec root"
-    missing_files_diagnosed "Missing import targets produce E025 diagnostics"
+    imports_resolved        "All use directives are resolved to the project sources they name, relative to the spec root"
+    missing_files_diagnosed "An import that names no project source produces E025"
     dependency_graph_built  "File dependency graph is constructed from resolved imports"
   }
   contract   """
-    The resolver MUST process use directives by locating the target .spec
-    file relative to the spec root directory. The .spec extension MUST be
-    appended implicitly; a path that already ends in .spec names the same
-    file. Missing files MUST produce an E025 diagnostic. A target above
-    the spec root does not resolve, whichever step of the cascade
-    (relative or bare path) names it: E025. An @scope/name import names
-    an extension (I004 when it is not installed). A .spec file discovery
+    The resolver MUST resolve a use directive against the project's
+    sources, the .spec files the compile holds, by their paths relative
+    to the spec root, and MUST NOT read, list or stat any file. A
+    relative path (./ or ../) is read from the importing file's
+    directory, any other path from the spec root. The .spec extension
+    MUST be appended implicitly, and a dotted name keeps its dots
+    ("api.v2" names api.v2.spec); a path that already ends in .spec
+    names that file; when no source has that path, the path's
+    index.spec names the directory. Paths compare exactly, whatever the
+    case rules of the file system. An import that names no source MUST
+    produce E025: no file by that path, a file an exclude entry leaves
+    out, one under a skipped directory, one inside a symlinked
+    directory, and one above the spec root (whichever step of the
+    cascade names it) are all no source. An @scope/name import names an
+    extension (I004 when it is not installed). A .spec file discovery
     finds that cannot be read (not UTF-8, no permission) MUST produce an
     E025 naming its path, in a compile and after every update, and is
-    left out of the graph.
+    left out of the graph; it is still a source, so an import of it
+    reports nothing more and a re-export from it no W027. An editor
+    buffer the session holds for a file discovery would find is a
+    source, saved or not.
     The resolver MUST build the file dependency graph from imports.
-    A .spec file whose path relative to the spec root contains one of the
-    exclude entries of specforge.json MUST NOT be compiled, on every
-    surface (check, watch, the LSP and MCP). Entries are plain substrings,
-    not globs: "drafts/" excludes drafts/a.spec, "drafts/**" matches no
-    path. A file under a skipped directory (target, node_modules, .git,
-    .hg, dist, build) inside the spec root is not compiled either, on
-    every surface; the spec root itself is read whatever its own name.
-    Only files are sources: a directory named like a .spec file is none.
+    A .spec file that an exclude entry of specforge.json leaves out MUST
+    NOT be compiled, on every surface (check, watch, the LSP and MCP),
+    and no import names it. Each entry is a pattern over a file's path
+    relative to the spec root, written with /: * and ? match within one
+    name, ** any number of directories, [...] one character of a set.
+    An entry with no / except a trailing one matches a name at any depth
+    ("drafts" leaves out drafts/a.spec and sub/drafts/b.spec, not
+    mydrafts/c.spec); an entry with a / at its start or in its middle is
+    anchored at the spec root ("/drafts", "sub/drafts"). A trailing /
+    matches directories only. A file is left out when an entry matches
+    its path or the path of one of its directories. An entry that can
+    match no source (empty, starting with !, with a . or .. name, or not
+    a glob pattern) is ignored, and specforge.json reports it (E069).
+    A file under a skipped directory (target, node_modules, .git, .hg,
+    dist, build) inside the spec root is not compiled either, on every
+    surface; the spec root itself is read whatever its own name. Only
+    files are sources: a directory named like a .spec file is none.
   """
-  verify unit "resolve use path to file on disk"
+  verify unit "a use path resolves to the project source it names"
   verify unit "missing import file produces E025"
   verify unit "an import path may spell out the .spec extension"
   verify unit "relative import traversing above spec_root is rejected"
   verify unit "an import reaching above spec_root by any cascade step produces E025"
   verify integration "imports across nested directories resolve correctly"
-  verify contract "Resolve Use Imports: use import resolution holds — registries_populated_fired, filesystem_available, imports_resolved, missing_files_diagnosed, dependency_graph_built"
+  verify contract "Resolve Use Imports: use import resolution holds — registries_populated_fired, sources_held, imports_resolved, missing_files_diagnosed, dependency_graph_built"
   verify unit "resolve extension import path"
   verify unit "symlink pointing outside spec_root is rejected"
   verify unit "files matching an exclude entry are not compiled"
   verify unit "a source that cannot be read produces E025 naming it"
   verify unit "a spec root named like a skipped directory is compiled"
   verify unit "a directory named like a .spec file is no source"
+  verify unit "an import of a file that is no project source produces E025"
+  verify unit "an import of an unreadable source reports only that source's E025"
+  verify unit "an import names an editor buffer's source, saved or not"
+  verify unit "a dotted import path names the file with .spec appended"
+  verify unit "import paths match source paths exactly, whatever the file system's case rules"
+  verify unit "an exclude entry without a slash matches a name at any depth"
+  verify unit "an exclude entry with a slash is anchored at the spec root"
+  verify unit "exclude entries are glob patterns matched against a file and its directories"
+  verify unit "an exclude entry that can match no source is E069 and ignored"
 }
 
 // No consumes — called inline during use import resolution

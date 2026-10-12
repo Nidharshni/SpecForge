@@ -96,16 +96,21 @@ invariant incremental_correctness "Incremental Correctness" {
     After an incremental recompilation triggered by a file change, the
     in-memory graph MUST be identical to the graph produced by a full
     cold rebuild of the same source files. No stale nodes or edges
-    MUST remain from the previous compilation. After every update that
-    runs the checks, a project session MUST report exactly what a fresh
-    compile of the same sources reports, in the same order; an editor
-    update that skips the checks while a file does not parse reports no
-    check diagnostic until the next update that runs them.
+    MUST remain from the previous compilation. What a compile reports is
+    a function of its environment and its sources (their paths and
+    texts): no file it does not hold changes it, so a file discovery
+    does not find (excluded, under a skipped directory, outside the spec
+    root) is no input. After every update that runs the checks, a
+    project session MUST report exactly what a fresh compile of the same
+    sources reports, in the same order; an editor update that skips the
+    checks while a file does not parse reports no check diagnostic until
+    the next update that runs them.
   """
   risk      high
   verify property "incremental recompilation produces the same graph as a full rebuild"
   verify property "a session reports what a fresh compile of the same sources reports, in the same order, after every update that runs the checks"
   verify unit "no stale nodes or edges remain after incremental recompilation"
+  verify unit "a file discovery does not find changes nothing a compile or a session reports"
 }
 
 invariant graph_delta_determinism "Graph Delta Determinism" {

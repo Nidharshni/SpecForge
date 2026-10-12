@@ -723,29 +723,39 @@ fn hover_information_contract() {
     verify = "Go-to-Definition on Imports: import go-to-definition holds — imports_resolved, target_file_navigated"
 )]
 fn goto_import_definition_contract() {
-    // Requires: use import path + spec root with target file
-    // Ensures: resolves to target file location; None for missing
-    let tmp = tempfile::tempdir().unwrap();
-    let behaviors_dir = tmp.path().join("behaviors");
-    std::fs::create_dir_all(&behaviors_dir).unwrap();
-    std::fs::write(
-        behaviors_dir.join("auth.spec"),
-        "behavior auth \"Auth\" {}\n",
-    )
-    .unwrap();
+    // Requires: use import paths + the sources the project was compiled from
+    // Ensures: resolves to the source's location; None for missing
+    let served = crate::served::Served::new(&[
+        ("behaviors/auth.spec", "behavior auth \"Auth\" {}\n"),
+        (
+            "main.spec",
+            "use \"behaviors/auth\"\nuse \"nonexistent/path\"\n",
+        ),
+    ])
+    .open(&["main.spec"]);
+    let at = |line: u32| {
+        specforge_lsp::answers::definition(
+            &served.state(),
+            &served.uri("main.spec"),
+            Position::new(line, 5),
+        )
+    };
 
-    let goto =
-        |import: &str| specforge_lsp::goto_import_definition(import, "main.spec", tmp.path());
-
-    let result = goto("behaviors/auth");
-    let loc = result.expect("valid import path must resolve");
-    assert!(
-        loc.file.as_str().ends_with("behaviors/auth.spec"),
+    let Some(GotoDefinitionResponse::Scalar(location)) = at(0) else {
+        panic!("valid import path must resolve");
+    };
+    assert_eq!(
+        location.uri,
+        served.uri("behaviors/auth.spec"),
         "must resolve to correct file"
     );
+    assert_eq!(
+        location.range,
+        tower_lsp::lsp_types::Range::default(),
+        "from its first line"
+    );
 
-    let missing = goto("nonexistent/path");
-    assert!(missing.is_none(), "missing import must return None");
+    assert!(at(1).is_none(), "missing import must return None");
 }
 
 // B:prepare_rename — verify contract "requires/ensures consistency for prepare rename"

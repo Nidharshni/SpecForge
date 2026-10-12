@@ -17,6 +17,7 @@ specforge-protocol-types = { path = "../specforge-protocol-types" }
 specforge-shape-macros = { path = "../specforge-shape-macros" }
 # The source-annotated rendering of diagnostics (`render_diagnostics`).
 ariadne = { workspace = true }
+glob = { workspace = true }
 lasso = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
