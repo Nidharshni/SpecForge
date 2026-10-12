@@ -29,7 +29,9 @@ fn serving(dir: &TempDir, text: &str) -> (LspState, Url) {
     .unwrap();
     std::fs::write(dir.path().join("main.spec"), text).unwrap();
     let mut state = LspState::new();
-    state.set_session(ProjectSession::open(dir.path()));
+    state.set_session(ProjectSession::open(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+    ));
     let uri = Url::from_file_path(dir.path().join("main.spec")).unwrap();
     state.open_document(uri.as_str(), text);
     (state, uri)

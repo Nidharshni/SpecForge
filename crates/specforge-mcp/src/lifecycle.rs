@@ -160,7 +160,7 @@ pub fn serve_project(state: &mut McpState, start: Option<PathBuf>) {
         .and_then(ProjectRoot::enclosing)
         .map(ProjectRoot::canonicalized)
     {
-        state.serve(root.dir());
+        state.serve(&root);
     }
     state.served = true;
 }

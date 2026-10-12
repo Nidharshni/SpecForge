@@ -138,7 +138,10 @@ fn registry_diagnostics_keep_their_order() {
     // Compiled again and again, with fresh hash maps each time: the order
     // must not depend on them.
     for _ in 0..20 {
-        let ctx = specforge_project::CompiledProject::compile(dir.path(), Some(runtime.clone()));
+        let ctx = specforge_project::CompiledProject::compile(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            Some(runtime.clone()),
+        );
         let diagnostics = ctx.diagnostics();
         assert_eq!(render(&diagnostics), expected);
     }
@@ -155,7 +158,10 @@ fn the_environment_reports_before_the_sources() {
     let runtime = Arc::new(colliding_extensions_with(true, true));
 
     for _ in 0..20 {
-        let ctx = specforge_project::CompiledProject::compile(dir.path(), Some(runtime.clone()));
+        let ctx = specforge_project::CompiledProject::compile(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            Some(runtime.clone()),
+        );
         let diagnostics = ctx.diagnostics();
         let codes: Vec<&str> = diagnostics.iter().map(|d| d.code.as_str()).collect();
         // The environment's own first (provider registration), then the

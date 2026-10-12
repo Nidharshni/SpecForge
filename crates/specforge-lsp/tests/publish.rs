@@ -23,7 +23,7 @@ fn project(extensions: &[&str], files: &[(&str, &str)]) -> (tempfile::TempDir, L
     let runtime = specforge_component::ComponentRuntime::with_user_cache();
     let mut state = LspState::new();
     state.set_session(ProjectSession::open_with_runtime(
-        dir.path(),
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
         Some(Arc::new(runtime)),
     ));
     (dir, state)

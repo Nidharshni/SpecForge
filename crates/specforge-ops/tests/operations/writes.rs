@@ -130,14 +130,20 @@ fn add(root: &Path, source: Source) -> Result<extension::Added, specforge_ops::O
 
 /// The project at `root`, compiled in process with [`candidates`].
 fn compiled(root: &Path) -> CompiledProject {
-    CompiledProject::compile(root, Some(Arc::new(candidates())))
+    CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(root).unwrap(),
+        Some(Arc::new(candidates())),
+    )
 }
 
 /// The project at `root`, compiled with the component runtime that loads
 /// the builtins.
 fn compiled_with_builtins(root: &Path) -> CompiledProject {
     let runtime = specforge_component::ComponentRuntime::with_user_cache();
-    CompiledProject::compile(root, Some(Arc::new(runtime)))
+    CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(root).unwrap(),
+        Some(Arc::new(runtime)),
+    )
 }
 
 fn remove(root: &Path, name: &str, dry_run: bool) -> extension::RemoveOutcome {

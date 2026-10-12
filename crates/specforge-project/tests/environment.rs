@@ -61,7 +61,10 @@ fn an_environment_reports_its_config_its_load_its_providers_then_its_build() {
     specforge_installed::testing::install(root, &[RULES]);
     let rt: SharedRuntime = Arc::new(InProcessRuntime::new().with(rules));
 
-    let env = Environment::load(root, Some(rt.clone()));
+    let env = Environment::load(
+        &specforge_common::ProjectRoot::of(root).unwrap(),
+        Some(rt.clone()),
+    );
 
     let all: Vec<_> = env.diagnostics().collect();
     assert_eq!(
@@ -100,7 +103,7 @@ fn without_a_runtime_nothing_loads_and_each_entry_is_enabled_as_written() {
     )
     .unwrap();
 
-    let env = Environment::load(root, None);
+    let env = Environment::load(&specforge_common::ProjectRoot::of(root).unwrap(), None);
 
     assert!(env.runtime().is_none());
     assert!(env.registries().declarations().is_empty());

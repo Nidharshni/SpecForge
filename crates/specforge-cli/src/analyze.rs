@@ -5,7 +5,6 @@
 //! codes out.
 
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
-use crate::pipeline;
 use crate::terminal::{Terminal, err, errln, outln};
 use specforge_common::{codes, diagnostic_summary, render_diagnostics, truncate_diagnostics};
 use specforge_ops::OpError;
@@ -71,7 +70,10 @@ impl Args {
     }
 
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
-        let project = pipeline::compile_project(&self.path);
+        let project = match crate::project::compile(&self.path) {
+            Ok(project) => project,
+            Err(error) => return Refusal::measuring(self.output.format).report(terminal, &error),
+        };
         // A refusal is the error document under `--format json`, the lines
         // on stderr otherwise; analyze measures, so it cannot judge the
         // project either way.

@@ -24,30 +24,8 @@ use crate::child_guard::{ChildGuard, guarded_command};
 
 /// The rows whose two runs differ today.
 const DIVERGES_TODAY: &[&str] = &[
-    // Compiled at the path as given.
-    "check",
-    "stats",
-    "export",
-    "schema",
-    "model",
-    "outline",
-    "query",
-    "trace",
-    "explore",
-    "infer-guide",
-    "analyze",
-    "doctor",
-    "providers",
-    "extensions",
-    "remove",
-    "watch",
-    "product features",
     // `specforge.json` read at the path as given.
-    "search",
-    "add",
-    "update",
-    "publish",
-    "login",
+    "search", "add", "update", "publish", "login",
 ];
 
 /// The project every row runs in: software and product enabled, a provider
@@ -413,35 +391,61 @@ fn watch_from_a_subdirectory_watches_its_project() {
     assert_rows(&[Kind::Watch]);
 }
 
-#[test]
-fn a_missing_path_is_read_as_an_empty_project_today() {
+#[specforge_test(
+    behavior = "locate_project_root",
+    verify = "a command given a path that does not exist refuses it as file_not_found"
+)]
+fn a_command_given_a_missing_path_refuses_it_as_file_not_found() {
     let dir = TempDir::new().unwrap();
-    let check = specforge()
-        .args(["check", "nope"])
-        .current_dir(dir.path())
-        .output()
-        .unwrap();
-    let stderr = String::from_utf8_lossy(&check.stderr);
-    assert_eq!(check.status.code(), Some(0), "{stderr}");
-    assert!(stderr.contains("info[I002]"), "{stderr}");
-
-    let stats = specforge()
-        .args(["stats", "nope", "--format", "json"])
-        .current_dir(dir.path())
-        .output()
-        .unwrap();
-    assert_eq!(stats.status.code(), Some(0), "{stats:?}");
+    for (args, code) in [
+        (&["check", "nope"][..], 1),
+        (&["stats", "nope", "--format", "json"][..], 2),
+        (&["export", "nope", "--format", "json"][..], 1),
+        (&["watch", "--path", "nope", "--format", "json"][..], 1),
+        (&["product", "features", "--path", "nope"][..], 1),
+    ] {
+        let out = specforge()
+            .args(args)
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+        let (stdout, stderr) = (
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr),
+        );
+        assert_eq!(out.status.code(), Some(code), "{args:?}: {stdout}{stderr}");
+        let shown = format!("{stdout}{stderr}");
+        assert!(shown.contains("file_not_found"), "{args:?}: {shown}");
+        assert!(shown.contains("path not found: nope"), "{args:?}: {shown}");
+    }
 }
 
-#[test]
-fn a_file_path_reads_specforge_json_under_the_file_today() {
+#[specforge_test(
+    behavior = "locate_project_root",
+    verify = "a file path is in the project of its directory"
+)]
+fn a_file_path_names_the_project_it_is_in() {
     let p = project();
-    let check = specforge()
-        .arg("check")
-        .arg(p.path().join("spec/a.spec"))
-        .output()
-        .unwrap();
-    let stderr = String::from_utf8_lossy(&check.stderr);
-    assert!(stderr.contains("E069"), "{stderr}");
-    assert!(stderr.contains("a.spec/specforge.json"), "{stderr}");
+    let check = |args: &[&str]| {
+        let out = specforge()
+            .args(args)
+            .arg(p.path().join("spec/a.spec"))
+            .output()
+            .unwrap();
+        (
+            out.status.code(),
+            String::from_utf8_lossy(&out.stderr).to_string(),
+        )
+    };
+    let (code, stderr) = check(&["check", "--format", "human"]);
+    let (project_code, project_stderr) = {
+        let out = specforge().arg("check").arg(p.path()).output().unwrap();
+        (
+            out.status.code(),
+            String::from_utf8_lossy(&out.stderr).to_string(),
+        )
+    };
+    assert!(!stderr.contains("E069"), "{stderr}");
+    assert_eq!(code, project_code, "{stderr}");
+    assert_eq!(stderr, project_stderr);
 }

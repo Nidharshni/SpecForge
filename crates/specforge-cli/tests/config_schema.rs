@@ -70,7 +70,7 @@ fn specforge_json_with_inference_and_registries_loads() {
         r#"{
             "name": "parity",
             "spec_root": "src",
-            "extensions": ["@specforge/product"],
+            "extensions": [],
             "inference": { "density_threshold": 0.5, "kinds": { "widget": "src/" } },
             "registries": [ { "alias": "local", "url": "http://127.0.0.1:1", "default_registry": true } ]
         }"#,

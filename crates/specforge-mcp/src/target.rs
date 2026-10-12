@@ -567,9 +567,10 @@ impl<'s> Call<'s> {
                 session.project().diagnostics()
             }
             CallTarget::New(dir) => {
-                if self.state.project_root().is_none() {
-                    let dir = dir.clone();
-                    self.state.serve(&dir);
+                if self.state.project_root().is_none()
+                    && let Ok(root) = ProjectRoot::of(dir)
+                {
+                    self.state.serve(&root.canonicalized());
                 }
                 Vec::new()
             }
@@ -643,7 +644,7 @@ pub fn resolve(
         // Nothing served: the call serves this project, as it is on disk
         // now. A directory that is no project is never served; it is
         // opened for this call below.
-        state.serve(root.dir());
+        state.serve(&root);
         return Ok(CallTarget::Served);
     }
     if served_root.as_deref() == Some(root.canonical()) {
@@ -652,7 +653,7 @@ pub fn resolve(
     if target.reach == Reach::Served {
         return Err(TargetError::OtherProjectRefused);
     }
-    Ok(CallTarget::Other(Box::new(state.open(root.dir()))))
+    Ok(CallTarget::Other(Box::new(state.open(&root))))
 }
 
 /// The target argument `name` of the call, read as `T`: none when absent

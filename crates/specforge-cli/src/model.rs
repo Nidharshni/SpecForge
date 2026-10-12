@@ -1,6 +1,5 @@
 use crate::options;
 use crate::outcome::{Exit, OutputFormat, Refusal};
-use crate::pipeline;
 use crate::terminal::{Terminal, errln, out};
 use specforge_ops::model::{FieldLevel, GroupBy, ModelFormat, ModelOptions, ModelRoot};
 use specforge_ops::view::ProjectView;
@@ -74,7 +73,10 @@ impl Args {
     /// `path`. The model on stdout, the notices (I020) on stderr, a refusal
     /// as `error[CODE]` with its hint (exit 1).
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
-        let project = pipeline::compile_project(&self.path);
+        let project = match crate::project::compile(&self.path) {
+            Ok(project) => project,
+            Err(error) => return Refusal::of(OutputFormat::Human).report(terminal, &error),
+        };
         match specforge_ops::model::model(&ProjectView::of(&project), &self.options()) {
             Ok(outcome) => {
                 for notice in &outcome.notices {

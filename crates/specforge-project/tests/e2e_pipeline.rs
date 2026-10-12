@@ -43,7 +43,10 @@ fn compile_specs_in(files: &[(&str, &str)]) -> (TempDir, specforge_project::Comp
         }
         fs::write(&path, content).unwrap();
     }
-    let compiled = specforge_project::CompiledProject::compile(dir.path(), None);
+    let compiled = specforge_project::CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        None,
+    );
     (dir, compiled)
 }
 
@@ -73,7 +76,10 @@ fn compile_with_builtins(
         fs::write(&path, content).unwrap();
     }
     let runtime = wasm_runtime_for(extensions);
-    specforge_project::CompiledProject::compile(dir.path(), Some(Arc::new(runtime)))
+    specforge_project::CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        Some(Arc::new(runtime)),
+    )
 }
 
 // B:extension_owned_body_syntax — verify unit "port method body syntax does not surface parse errors"
@@ -437,7 +443,10 @@ fn validation_diagnostics_surface() {
 )]
 fn empty_project_produces_empty_graph() {
     let dir = TempDir::new().unwrap();
-    let ctx = specforge_project::CompiledProject::compile(dir.path(), None);
+    let ctx = specforge_project::CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        None,
+    );
 
     assert!(
         ctx.graph().nodes().is_empty(),

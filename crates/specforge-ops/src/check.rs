@@ -265,7 +265,10 @@ mod tests {
 
     fn compile(dir: &TempDir) -> CompiledProject {
         let runtime = specforge_component::ComponentRuntime::with_user_cache();
-        CompiledProject::compile(dir.path(), Some(std::sync::Arc::new(runtime)))
+        CompiledProject::compile(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            Some(std::sync::Arc::new(runtime)),
+        )
     }
 
     fn run(compiled: &CompiledProject, options: &CheckOptions) -> CheckOutcome {

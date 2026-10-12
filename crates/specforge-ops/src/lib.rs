@@ -294,6 +294,15 @@ impl std::fmt::Display for OpError {
 
 impl std::error::Error for OpError {}
 
+/// A path that names no project to open: `file_not_found` ("path not found: <path>"),
+/// the code and message MCP answers for a call's `path`.
+impl From<specforge_common::NoSuchPath> for OpError {
+    fn from(error: specforge_common::NoSuchPath) -> Self {
+        let kind = OpErrorKind::of_io_kind(error.kind);
+        Self::new(kind, kind.as_str(), error.to_string())
+    }
+}
+
 /// A diagnostic's code stays data; its message and suggestion carry over.
 impl From<specforge_common::Diagnostic> for OpError {
     fn from(diagnostic: specforge_common::Diagnostic) -> Self {

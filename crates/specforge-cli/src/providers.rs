@@ -1,4 +1,4 @@
-use crate::outcome::{Exit, OutputArg, OutputFormat};
+use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use crate::terminal::{Terminal, errln, outln};
 use specforge_ops::extension;
 use specforge_ops::view::ProjectView;
@@ -21,7 +21,10 @@ impl Args {
     /// the loaded extensions gives it.
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         let format = self.output.format;
-        let project = crate::pipeline::compile_project(&self.path);
+        let project = match crate::project::compile(&self.path) {
+            Ok(project) => project,
+            Err(error) => return Refusal::of(format).report(terminal, &error),
+        };
         let listing = extension::providers(&ProjectView::of(&project));
         let (providers, diagnostics) = (&listing.providers, &listing.diagnostics);
 

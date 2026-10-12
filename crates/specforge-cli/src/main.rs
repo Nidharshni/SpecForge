@@ -23,7 +23,7 @@ mod new;
 mod options;
 mod outcome;
 mod outline;
-mod pipeline;
+mod project;
 mod providers;
 mod publish;
 mod query;
@@ -161,7 +161,11 @@ fn main() {
 /// of the project in the current directory contribute (`specforge product
 /// ...`).
 fn completions(shell: Shell, terminal: &Terminal) -> Exit {
-    let mut cmd = extension_command::with_extension_commands(Cli::command(), Path::new("."));
+    // A working directory that can't be resolved (deleted) lists the built-ins only.
+    let mut cmd = Cli::command();
+    if let Ok(root) = specforge_common::ProjectRoot::of(Path::new(".")) {
+        cmd = extension_command::with_extension_commands(cmd, &root);
+    }
     clap_complete::generate(
         shell,
         &mut cmd,

@@ -10,7 +10,7 @@
 //! readers meanwhile see the session's last complete graph (`LspState`'s stand-in). It must not
 //! be called from an async task.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use tokio::sync::RwLock;
@@ -76,7 +76,7 @@ impl<E: Editor> Reaction<E> {
         // A folder inside a project opens that project, as the CLI and MCP find it, spelled as
         // the editor spells its files; a folder in no project opens as given.
         let root = match specforge_common::ProjectRoot::of(&root) {
-            Ok(root) => root.dir().to_path_buf(),
+            Ok(root) => root,
             Err(e) => {
                 self.editor.log(
                     MessageType::WARNING,
@@ -166,7 +166,7 @@ impl<E: Editor> Reaction<E> {
         // Opening a project loads its environment first and shows it to readers before the
         // sources are read: the kinds and fields keyword completion offers need no `.spec`
         // file, so they are answered while indexing runs (CONTEXT: Environment).
-        let opening = match plan.root().map(Path::to_path_buf) {
+        let opening = match plan.root().cloned() {
             Some(root) => {
                 let runtime = self.runtime.clone();
                 match unwinding(move || ProjectSession::begin_open(&root, runtime)) {

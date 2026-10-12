@@ -7,6 +7,7 @@
 
 use std::path::{Path, PathBuf};
 
+use specforge_common::ProjectRoot;
 use specforge_project::{
     Buffer, Changes, CheckMode, ProjectSession, SourceChange, Update, UpdateKind,
 };
@@ -22,7 +23,7 @@ use crate::uri::uri_to_file_path;
 pub enum Change {
     /// The workspace opened at this root (`initialized`); the project holds
     /// the open buffers.
-    Open(PathBuf),
+    Open(ProjectRoot),
     /// These documents were opened or edited: everything the debounce
     /// coalesced. Each one still open has its buffer as the truth for its
     /// file.
@@ -41,7 +42,7 @@ pub enum Change {
 /// What a change will apply.
 pub struct Plan {
     /// The project to open (`Change::Open`).
-    root: Option<PathBuf>,
+    root: Option<ProjectRoot>,
     /// What the watched paths amount to, applied first.
     disk: Option<Changes>,
     /// The absolute path of the document that was closed: the session
@@ -139,8 +140,8 @@ impl Plan {
     /// (`ProjectSession::begin_open`, showing its environment to readers,
     /// then `OpeningProject::finish`) and passes the opened session to
     /// [`Plan::apply`].
-    pub fn root(&self) -> Option<&Path> {
-        self.root.as_deref()
+    pub fn root(&self) -> Option<&ProjectRoot> {
+        self.root.as_ref()
     }
 
     /// Apply the plan to `session`. Blocking: it reads files and runs the

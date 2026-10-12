@@ -1,6 +1,5 @@
 use crate::options;
 use crate::outcome::{Exit, OutputFormat, Refusal};
-use crate::pipeline;
 use crate::terminal::{Terminal, errln, outln};
 use specforge_ops::export::Format;
 use specforge_ops::query::{QueryRequest, query};
@@ -55,7 +54,10 @@ impl Args {
     /// stderr; a refusal as `error[CODE]` with the closest entity as its
     /// hint (exit 1).
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
-        let project = pipeline::compile_project(&self.path);
+        let project = match crate::project::compile(&self.path) {
+            Ok(project) => project,
+            Err(error) => return Refusal::of(OutputFormat::Human).report(terminal, &error),
+        };
         match query(&ProjectView::of(&project), &self.request()) {
             Ok(outcome) => {
                 for notice in &outcome.notices {

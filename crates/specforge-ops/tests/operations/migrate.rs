@@ -684,7 +684,10 @@ fn a_diagnostic_the_migration_introduces_is_reported() {
         )
         .map_err(|e| e.to_string())
     }));
-    let before = specforge_project::CompiledProject::compile(dir.path(), Some(runtime.clone()));
+    let before = specforge_project::CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        Some(runtime.clone()),
+    );
     assert!(
         !before.diagnostics().iter().any(|d| d.code == "E003"),
         "{:?}",

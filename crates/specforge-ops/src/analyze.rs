@@ -688,7 +688,10 @@ mod tests {
                 &specforge_project::builtins(),
             );
             let runtime = std::sync::Arc::new(runtime);
-            let env = specforge_project::Environment::load(dir.path(), Some(runtime.clone()));
+            let env = specforge_project::Environment::load(
+                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                Some(runtime.clone()),
+            );
             assert!(
                 env.diagnostics().all(|d| d.code != "E028"),
                 "{:?}",

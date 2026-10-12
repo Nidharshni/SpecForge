@@ -1,5 +1,4 @@
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
-use crate::pipeline;
 use crate::terminal::{Terminal, outln};
 use specforge_ops::infer::{InferenceGuide, KindGuide, guide, kind_guide};
 use specforge_ops::view::ProjectView;
@@ -28,7 +27,10 @@ impl Args {
     /// `unknown_kind` naming the closest declared kind (exit 1).
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         let format = self.output.format;
-        let project = pipeline::compile_project(&self.path);
+        let project = match crate::project::compile(&self.path) {
+            Ok(project) => project,
+            Err(error) => return Refusal::of(format).report(terminal, &error),
+        };
         let view = ProjectView::of(&project);
         match self.kind.as_deref() {
             None => {

@@ -27,7 +27,10 @@ fn served_project(config: serde_json::Value, files: &[(&str, &str)]) -> TempDir 
 
 fn compile(root: &Path) -> CompiledProject {
     let runtime = Arc::new(specforge_component::ComponentRuntime::with_user_cache());
-    CompiledProject::compile(root, Some(runtime.clone()))
+    CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(root).unwrap(),
+        Some(runtime.clone()),
+    )
 }
 
 fn codes(diagnostics: &[specforge_common::Diagnostic]) -> Vec<&str> {
@@ -422,11 +425,14 @@ fn compile_with_providers(
     root: &Path,
     extensions: &'static [&'static str],
 ) -> Vec<specforge_common::Diagnostic> {
-    CompiledProject::compile(root, Some(Arc::new(provider_extensions(extensions))))
-        .diagnostics()
-        .into_iter()
-        .filter(|d| d.code != "W012")
-        .collect()
+    CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(root).unwrap(),
+        Some(Arc::new(provider_extensions(extensions))),
+    )
+    .diagnostics()
+    .into_iter()
+    .filter(|d| d.code != "W012")
+    .collect()
 }
 
 /// A configured provider registers its scheme: a ref with that scheme is
@@ -510,7 +516,10 @@ fn source_texts_are_what_was_compiled() {
         serde_json::json!({"name": "p", "version": "0.1.0", "extensions": []}),
         &[("a.spec", compiled_text), ("sub/b.spec", "// b\n")],
     );
-    let compiled = CompiledProject::compile(dir.path(), None);
+    let compiled = CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        None,
+    );
     fs::write(dir.path().join("a.spec"), "// rewritten\n").unwrap();
 
     let texts = compiled.source_texts();
@@ -531,8 +540,14 @@ fn a_compile_of_a_loaded_environment_is_the_compile_of_its_root() {
         )],
     );
     let runtime = Arc::new(specforge_component::ComponentRuntime::new());
-    let whole = CompiledProject::compile(dir.path(), Some(runtime.clone()));
-    let env = specforge_project::Environment::load(dir.path(), Some(runtime));
+    let whole = CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        Some(runtime.clone()),
+    );
+    let env = specforge_project::Environment::load(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        Some(runtime),
+    );
     let of = CompiledProject::of(env);
 
     assert_eq!(of.diagnostics(), whole.diagnostics());
@@ -561,7 +576,10 @@ fn environment_diagnostics_come_in_load_order() {
         &[],
     );
     let runtime = Arc::new(specforge_component::ComponentRuntime::with_user_cache());
-    let env = specforge_project::Environment::load(dir.path(), Some(runtime.clone()));
+    let env = specforge_project::Environment::load(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        Some(runtime.clone()),
+    );
     let codes: Vec<&str> = env.diagnostics().map(|d| d.code.as_str()).collect();
     // The missing extension's load failure, formal's missing peer, then the
     // registry build's: formal's enhancements of software's kinds.
@@ -622,7 +640,10 @@ mod declared_in_process {
             serde_json::json!({ "name": "p", "version": "0.1.0", "extensions": extensions }),
             &[],
         );
-        Environment::load(dir.path(), Some(runtime))
+        Environment::load(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            Some(runtime),
+        )
     }
 
     #[specforge_test_macros::test(
@@ -760,7 +781,10 @@ mod passes_of_the_declaration {
             serde_json::json!({ "name": "p", "version": "0.1.0", "extensions": ["@acme/audit"] }),
             &[],
         );
-        let env = Environment::load(dir.path(), Some(runtime.clone()));
+        let env = Environment::load(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            Some(runtime.clone()),
+        );
         let e028: Vec<&str> = env
             .diagnostics()
             .filter(|d| d.code == "E028")
@@ -786,7 +810,10 @@ mod passes_of_the_declaration {
             serde_json::json!({ "name": "p", "version": "0.1.0", "extensions": ["@acme/audit"] }),
             &[("a.spec", "spec p \"P\" {\n}\n")],
         );
-        let compiled = CompiledProject::compile(dir.path(), Some(runtime.clone()));
+        let compiled = CompiledProject::compile(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            Some(runtime.clone()),
+        );
         let calls: Vec<String> = runtime
             .calls()
             .iter()
@@ -827,7 +854,10 @@ mod passes_of_the_declaration {
             }),
             &[],
         );
-        let env = Environment::load(dir.path(), Some(runtime.clone()));
+        let env = Environment::load(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            Some(runtime.clone()),
+        );
         let codes: Vec<&str> = env.diagnostics().map(|d| d.code.as_str()).collect();
         assert_eq!(codes, ["E028", "E030"], "{codes:?}");
     }
@@ -845,7 +875,10 @@ fn an_unusable_config_is_e069_then_i002_naming_it() {
     fs::write(dir.path().join("specforge.json"), r#"{ "extensions": ["#).unwrap();
     let runtime = Arc::new(specforge_component::ComponentRuntime::with_user_cache());
 
-    let env = specforge_project::Environment::load(dir.path(), Some(runtime.clone()));
+    let env = specforge_project::Environment::load(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        Some(runtime.clone()),
+    );
 
     let diagnostics: Vec<&specforge_common::Diagnostic> = env.diagnostics().collect();
     let codes: Vec<&str> = diagnostics.iter().map(|d| d.code.as_str()).collect();
@@ -883,7 +916,10 @@ fn an_unusable_config_is_e069_then_i002_naming_it() {
 
     // No file at all: no problem, the old wording.
     let empty = TempDir::new().unwrap();
-    let env = specforge_project::Environment::load(empty.path(), Some(runtime.clone()));
+    let env = specforge_project::Environment::load(
+        &specforge_common::ProjectRoot::of(empty.path()).unwrap(),
+        Some(runtime.clone()),
+    );
     assert!(!env.config_found());
     assert!(env.config_problems().is_empty());
     let messages: Vec<&str> = env.diagnostics().map(|d| d.message.as_str()).collect();
@@ -903,7 +939,12 @@ fn the_environment_reads_the_lock_once_at_its_root() {
     fs::write(dir.path().join("specforge.json"), "{}").unwrap();
     let runtime = Arc::new(specforge_component::ComponentRuntime::with_user_cache());
     let runtime: specforge_project::SharedRuntime = runtime;
-    let load = || specforge_project::Environment::load(dir.path(), Some(runtime.clone()));
+    let load = || {
+        specforge_project::Environment::load(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            Some(runtime.clone()),
+        )
+    };
 
     assert_eq!(load().installed().lock(), &LockState::Absent);
 
@@ -1051,7 +1092,10 @@ fn an_entry_that_names_no_package_is_e072_and_not_loaded() {
     );
     let runtime = Arc::new(specforge_component::ComponentRuntime::with_user_cache());
 
-    let env = specforge_project::Environment::load(dir.path(), Some(runtime.clone()));
+    let env = specforge_project::Environment::load(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        Some(runtime.clone()),
+    );
 
     let e072: Vec<&specforge_common::Diagnostic> =
         env.diagnostics().filter(|d| d.code == "E072").collect();
@@ -1079,7 +1123,10 @@ fn an_unreadable_lock_reports_e033_once_then_each_installed_extension() {
     .unwrap();
     let runtime = Arc::new(specforge_component::ComponentRuntime::with_user_cache());
 
-    let env = specforge_project::Environment::load(dir.path(), Some(runtime.clone()));
+    let env = specforge_project::Environment::load(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        Some(runtime.clone()),
+    );
 
     let diagnostics: Vec<&specforge_common::Diagnostic> = env.diagnostics().collect();
     let lock: Vec<&&specforge_common::Diagnostic> =
@@ -1110,7 +1157,10 @@ fn an_unpinned_lock_entry_loads_with_w149() {
     install_greet(dir.path(), Some(""));
     let runtime = Arc::new(specforge_component::ComponentRuntime::with_user_cache());
 
-    let env = specforge_project::Environment::load(dir.path(), Some(runtime.clone()));
+    let env = specforge_project::Environment::load(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        Some(runtime.clone()),
+    );
 
     let named: Vec<(&str, specforge_common::Severity)> = env
         .diagnostics()
@@ -1167,7 +1217,10 @@ fn a_project_listing_a_dependent_first_loads_its_peer_first() {
             .with(widget_extension("@acme/base", None)),
     );
 
-    let compiled = CompiledProject::compile(dir.path(), Some(runtime.clone()));
+    let compiled = CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        Some(runtime.clone()),
+    );
 
     let e026: Vec<String> = compiled
         .diagnostics()

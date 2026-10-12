@@ -166,7 +166,10 @@ fn the_providers_listing_reports_what_the_environment_registered() {
         ],
     });
     std::fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
-    let compiled = specforge_project::CompiledProject::compile(dir.path(), None);
+    let compiled = specforge_project::CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        None,
+    );
 
     let listing = extension::providers(&ProjectView::of(&compiled));
 
@@ -211,7 +214,10 @@ fn the_providers_listing_reads_the_registration() {
         "providers": [{"scheme": "gh", "alias": "work", "extension": "@acme/issues"}],
     });
     std::fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
-    let compiled = specforge_project::CompiledProject::compile(dir.path(), None);
+    let compiled = specforge_project::CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        None,
+    );
 
     // specforge.json now says something else entirely.
     std::fs::write(

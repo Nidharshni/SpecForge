@@ -56,7 +56,10 @@ impl Args {
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         let (format, show_gaps, show_stale, show_gaps_detail) =
             (self.output.format, self.gaps, self.stale, self.gaps_detail);
-        let project = crate::pipeline::compile_project(&self.path);
+        let project = match crate::project::compile(&self.path) {
+            Ok(project) => project,
+            Err(error) => return Refusal::of(format).report(terminal, &error),
+        };
         run_over(
             &project,
             format,

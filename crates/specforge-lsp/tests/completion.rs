@@ -33,7 +33,10 @@ pub fn compiled(files: &[(&str, &str)]) -> (tempfile::TempDir, CompiledProject) 
         std::fs::write(dir.path().join(name), text).unwrap();
     }
     let runtime = specforge_component::ComponentRuntime::with_user_cache();
-    let project = CompiledProject::compile(dir.path(), Some(Arc::new(runtime)));
+    let project = CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        Some(Arc::new(runtime)),
+    );
     assert!(
         project.diagnostics().iter().all(|d| d.code != "I002"),
         "the extension did not load"

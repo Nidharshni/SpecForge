@@ -27,7 +27,10 @@ fn open(config: serde_json::Value, files: &[(&str, &str)]) -> (TempDir, ProjectS
     for (path, text) in files {
         write(dir.path(), path, text);
     }
-    let session = ProjectSession::open_with_runtime(dir.path(), None);
+    let session = ProjectSession::open_with_runtime(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        None,
+    );
     (dir, session)
 }
 
@@ -171,8 +174,10 @@ fn the_build_cache_reruns_the_checks_only() {
     let dir = passes_project(SPEC);
     let root = dir.path();
     let ext = Arc::new(passes_extension());
-    let mut session =
-        ProjectSession::open_with_runtime(root, Some(Arc::clone(&ext) as SharedRuntime));
+    let mut session = ProjectSession::open_with_runtime(
+        &specforge_common::ProjectRoot::of(root).unwrap(),
+        Some(Arc::clone(&ext) as SharedRuntime),
+    );
     let cache = root.join(specforge_project::BUILD_CACHE_FILE);
     assert!(
         session
@@ -224,8 +229,10 @@ fn a_referenced_file_reruns_the_checks() {
     let dir = passes_project("gadget doc \"Doc\" {\n  docs [\"docs/guide.md\"]\n}\n");
     let root = dir.path();
     let ext = Arc::new(passes_extension());
-    let mut session =
-        ProjectSession::open_with_runtime(root, Some(Arc::clone(&ext) as SharedRuntime));
+    let mut session = ProjectSession::open_with_runtime(
+        &specforge_common::ProjectRoot::of(root).unwrap(),
+        Some(Arc::clone(&ext) as SharedRuntime),
+    );
     let e016 = |session: &ProjectSession| {
         session
             .project()
@@ -256,8 +263,10 @@ fn an_update_that_names_a_new_file_changes_the_inputs() {
     let dir = passes_project("gadget doc \"Doc\" {\n}\n");
     let root = dir.path();
     let ext = Arc::new(passes_extension());
-    let mut session =
-        ProjectSession::open_with_runtime(root, Some(Arc::clone(&ext) as SharedRuntime));
+    let mut session = ProjectSession::open_with_runtime(
+        &specforge_common::ProjectRoot::of(root).unwrap(),
+        Some(Arc::clone(&ext) as SharedRuntime),
+    );
     let before = session.inputs().clone();
 
     // An edit that names a file: the inputs gain it.
@@ -340,8 +349,10 @@ fn a_file_a_file_exists_rule_names_reruns_the_checks() {
     let root = dir.path();
     specforge_installed::testing::install(root, &["@test/files"]);
     let ext = Arc::new(file_rule_extension());
-    let mut session =
-        ProjectSession::open_with_runtime(root, Some(Arc::clone(&ext) as SharedRuntime));
+    let mut session = ProjectSession::open_with_runtime(
+        &specforge_common::ProjectRoot::of(root).unwrap(),
+        Some(Arc::clone(&ext) as SharedRuntime),
+    );
     let missing = |session: &ProjectSession| -> Vec<String> {
         session
             .project()
@@ -558,7 +569,10 @@ fn every_input_lies_under_a_watch_root() {
     let layout = inputs_layout();
     let root = layout.project.path();
     let ext = Arc::new(passes_extension());
-    let session = ProjectSession::open_with_runtime(root, Some(ext as SharedRuntime));
+    let session = ProjectSession::open_with_runtime(
+        &specforge_common::ProjectRoot::of(root).unwrap(),
+        Some(ext as SharedRuntime),
+    );
     let roots: Vec<_> = session
         .inputs()
         .watch_roots()

@@ -1,5 +1,4 @@
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
-use crate::pipeline;
 use crate::terminal::{Terminal, outln};
 use specforge_ops::stats::Stats;
 use specforge_ops::view::ProjectView;
@@ -23,7 +22,10 @@ impl Args {
     /// (exit 2), as in `analyze`.
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         let format = self.output.format;
-        let project = pipeline::compile_project(&self.path);
+        let project = match crate::project::compile(&self.path) {
+            Ok(project) => project,
+            Err(error) => return Refusal::measuring(self.output.format).report(terminal, &error),
+        };
         let stats = match specforge_ops::stats::stats(&ProjectView::of(&project)) {
             Ok(stats) => stats,
             Err(error) => return Refusal::measuring(format).report(terminal, &error),

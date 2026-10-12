@@ -247,8 +247,12 @@ pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Outcome {
         return outcome;
     }
 
-    // The graph and schema before any file is touched.
-    let pre = CompiledProject::compile(root, runtime.clone());
+    // The graph and schema before any file is touched. (Pending files mean
+    // the path exists, so it resolves.)
+    let Ok(project) = specforge_common::ProjectRoot::of(root) else {
+        return outcome;
+    };
+    let pre = CompiledProject::compile(&project, runtime.clone());
     let pre_schema = schema_of(&pre);
 
     outcome.summary = migrate_project(root, target, false, request.no_backup);
@@ -282,7 +286,7 @@ pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Outcome {
     }
 
     // The migrated project must have the graph it had before.
-    let post = CompiledProject::compile(root, runtime);
+    let post = CompiledProject::compile(&project, runtime);
     outcome.validated = true;
     outcome.schema_warnings = check_schema_compatibility(&pre_schema, &schema_of(&post));
     outcome.structural_differences = compare_graphs(pre.graph(), post.graph());

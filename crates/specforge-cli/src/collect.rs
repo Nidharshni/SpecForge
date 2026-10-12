@@ -53,11 +53,12 @@ impl Args {
 fn collect_at(options: &Args, terminal: &Terminal) -> Exit {
     let format = options.output.format;
     // The project the path is in (ADR 0029 D6); collect refuses one that is none.
-    let root = specforge_common::ProjectRoot::of(&options.path)
-        .map(|r| r.dir().to_path_buf())
-        .unwrap_or_else(|_| options.path.clone());
+    let root = match crate::project::root(&options.path) {
+        Ok(root) => root,
+        Err(error) => return Refusal::of(format).report(terminal, &error),
+    };
 
-    let project = crate::pipeline::compile_project(&root);
+    let project = crate::project::compile_at(&root);
 
     let mode = if !options.reports.is_empty() {
         Mode::Reports(&options.reports)
@@ -69,8 +70,9 @@ fn collect_at(options: &Args, terminal: &Terminal) -> Exit {
     } else {
         Mode::Run(RunnerOutput::Inherit)
     };
-    let mut prompt =
-        |collector: &Collector, argv: &[String]| terminal.ask(&question(collector, argv, &root));
+    let mut prompt = |collector: &Collector, argv: &[String]| {
+        terminal.ask(&question(collector, argv, root.dir()))
+    };
     let consent = match asks(options.yes, format, terminal.facts()) {
         Asks::Nobody => Consent::Yes,
         Asks::ApprovedOnly => Consent::Approved,
