@@ -902,10 +902,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "behavior.features": "feature"
     },
     "bidirectional_pairs": [],
-    "body_parser_kinds": [
-      "port",
-      "type"
-    ],
     "derived_references": [
       {
         "field": "types",

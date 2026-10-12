@@ -110,7 +110,6 @@ expression: digest(&build)
       "behavior.owner": "nowhere"
     },
     "bidirectional_pairs": [],
-    "body_parser_kinds": [],
     "derived_references": [],
     "field_coercions": {
       "behavior.watched": "List",

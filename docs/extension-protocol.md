@@ -404,8 +404,8 @@ is not `{content, mime_type}`) is a JSON-RPC internal error whose `data` is an M
 ### Body syntax
 
 Extensions cannot contribute grammars or body parsers (ADR 0004, D5-a, ADR 0050). A kind whose
-body syntax the core grammar does not parse sets `has_body_parser` on its entity descriptor
-instead; the compiler then leaves parse errors inside entities of that kind unreported.
+body carries syntax of its own may set `has_body_parser` on its entity descriptor; the flag changes
+nothing in the compiler: the core grammar reads every body and every parse error in it is reported.
 
 ### Category: collectors
 

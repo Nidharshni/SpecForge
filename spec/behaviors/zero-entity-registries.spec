@@ -508,14 +508,13 @@ behavior registry_build_graph_inputs "Registry Build Derives the Graph Inputs" {
     registries_populated "The build's kind and field registries hold every loaded declaration (registry_build_kinds, registry_build_fields)"
   }
   ensures {
-    every_input_derived "Every input the graph build reads of the extensions comes from the build: body-parser kinds, single and absent-target reference fields, inverse pairs, value coercions and derived references"
+    every_input_derived "Every input the graph build reads of the extensions comes from the build: single and absent-target reference fields, inverse pairs, value coercions and derived references"
     registries_agree    "Each input says what the build's declarations and field registry say, and nothing else"
     deterministic       "The same declarations give the same inputs, whatever order the registries hold them in"
   }
   contract   """
     The registry build MUST derive every input the graph build reads of the
-    loaded extensions, and no caller derives one: the kinds whose bodies an
-    extension parses (has_body_parser); every registered field of the
+    loaded extensions, and no caller derives one: every registered field of the
     reference type as a single reference field, none while no kind is
     registered; every reference field whose target kind no loaded extension
     declares, with that kind; every pair of a reference field and one of its

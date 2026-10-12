@@ -4,15 +4,15 @@ expression: result.errors
 ---
 [
   {
-    "message": "syntax error: unexpected '??? {'",
+    "message": "syntax error: unexpected 'behavior ??? {'",
     "span": {
       "file": "test.spec",
       "start_line": 6,
-      "start_col": 10,
-      "end_line": 10,
-      "end_col": 9
+      "start_col": 1,
+      "end_line": 8,
+      "end_col": 2
     },
     "expected": "a valid block: keyword name \"Title\" {{ fields... }}",
-    "found": "??? {"
+    "found": "behavior ??? {"
   }
 ]

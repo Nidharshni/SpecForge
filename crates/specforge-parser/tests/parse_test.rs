@@ -2492,8 +2492,45 @@ fn the_blocks_after_an_unclosed_body_are_parsed() {
     assert!(result.entities[0].fields.get("status").is_some());
     assert_eq!(result.errors.len(), 1, "errors: {:?}", result.errors);
     let error = &result.errors[0];
-    assert!(error.message.contains("missing '}'"), "{}", error.message);
-    assert_eq!((error.span.start_line, error.span.start_col), (2, 14));
+    assert_eq!(
+        error.message,
+        "syntax error: unclosed block — missing closing '}'; it was ended before the block on line 4"
+    );
+    assert_eq!((error.span.start_line, error.span.start_col), (1, 16));
+}
+
+#[specforge_test(
+    behavior = "recover_from_syntax_errors",
+    verify = "an unclosed body is reported at its opening brace, naming the line where it was ended"
+)]
+fn an_unclosed_body_at_the_end_names_no_line() {
+    let result = parse("behavior a \"A\" {\n  status done\n", "test.spec");
+    assert_eq!(result.errors.len(), 1, "errors: {:?}", result.errors);
+    let error = &result.errors[0];
+    assert_eq!(
+        error.message,
+        "syntax error: unclosed block — missing closing '}'"
+    );
+    assert_eq!((error.span.start_line, error.span.start_col), (1, 16));
+}
+
+#[specforge_test(
+    behavior = "recover_from_syntax_errors",
+    verify = "an unclosed body is reported at its opening brace, naming the line where it was ended"
+)]
+fn an_unclosed_string_takes_its_bodys_error() {
+    let source = "port pay \"Pay\" {\n  direction inbound\n  description \"\"\"Takes payments\n  method charge(amount: String) -> String\n\nbehavior settle \"Settle\" {\n  contract \"Settles.\"\n}\n";
+    let result = parse(source, "test.spec");
+    let ids: Vec<&str> = result.entities.iter().map(|e| e.id.raw.as_str()).collect();
+    assert!(ids.contains(&"settle"), "entities: {ids:?}");
+    assert_eq!(result.errors.len(), 1, "errors: {:?}", result.errors);
+    assert!(
+        result.errors[0]
+            .message
+            .contains("unclosed triple-quoted string"),
+        "{}",
+        result.errors[0].message
+    );
 }
 
 #[specforge_test(
@@ -2521,4 +2558,54 @@ fn a_backslash_before_a_line_break_leaves_the_string_unclosed() {
         "{}",
         error.message
     );
+}
+
+/// A body left unclosed while a field's name is being typed, then two blocks.
+const HALF_TYPED_FIELD: &str = "behavior a1 \"A\" {\n  contract \"x\"\n  st\n\nbehavior b1 \"B\" {\n  contract \"y\"\n}\n\nbehavior c1 \"C\" {\n  contract \"z\"\n}\n";
+
+/// A method header typed without its parameter list, then a block.
+const HALF_TYPED_METHOD: &str = "port pay \"Pay\" {\n  direction inbound\n  method charge\n\nbehavior settle \"Settle\" {\n  contract \"Settles.\"\n}\n";
+
+/// A parameter list left open, then a block.
+const OPEN_PARAMETER_LIST: &str = "port pay \"Pay\" {\n  direction inbound\n  method charge(amount: String\n\nbehavior settle \"Settle\" {\n  contract \"Settles.\"\n}\n";
+
+#[specforge_test(
+    behavior = "recover_from_syntax_errors",
+    verify = "a body member left half-typed ends where the next top-level form starts"
+)]
+fn a_half_typed_field_ends_its_body_at_the_next_form() {
+    let result = parse(HALF_TYPED_FIELD, "test.spec");
+    let ids: Vec<&str> = result.entities.iter().map(|e| e.id.raw.as_str()).collect();
+    assert_eq!(ids, ["a1", "b1", "c1"], "errors: {:?}", result.errors);
+    assert_eq!(result.errors.len(), 1, "errors: {:?}", result.errors);
+    let error = &result.errors[0];
+    assert_eq!(
+        error.message,
+        "syntax error: unclosed block — missing closing '}'; it was ended before the block on line 5"
+    );
+    assert_eq!((error.span.start_line, error.span.start_col), (1, 17));
+}
+
+#[specforge_test(
+    behavior = "recover_from_syntax_errors",
+    verify = "the parser resumes at every form start the grammar's tree missed"
+)]
+fn a_half_typed_method_header_ends_its_body_at_the_next_form() {
+    let result = parse(HALF_TYPED_METHOD, "test.spec");
+    let ids: Vec<&str> = result.entities.iter().map(|e| e.id.raw.as_str()).collect();
+    // `pay` itself is lost: the grammar reads no entity from a method header
+    // cut short (README section 5, R15).
+    assert!(ids.contains(&"settle"), "entities: {ids:?}");
+    assert!(
+        result.errors.iter().any(|e| e.span.start_line == 1),
+        "errors: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn an_open_parameter_list_ends_its_body_at_the_next_form() {
+    let result = parse(OPEN_PARAMETER_LIST, "test.spec");
+    let ids: Vec<&str> = result.entities.iter().map(|e| e.id.raw.as_str()).collect();
+    assert_eq!(ids, ["pay", "settle"], "errors: {:?}", result.errors);
 }
