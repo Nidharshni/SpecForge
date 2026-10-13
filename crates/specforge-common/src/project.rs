@@ -370,14 +370,6 @@ pub fn parse_project_config(path: &Path, content: &str) -> ConfigRead {
     }
 }
 
-/// Load project configuration from specforge.json in the given directory:
-/// [`read_project_config`]'s config, the problems dropped (a best-effort
-/// read: the default for whatever is unusable). Returns a default config if
-/// the file doesn't exist.
-pub fn load_project_config(project_root: &Path) -> ProjectConfig {
-    read_project_config(project_root).config
-}
-
 /// A key whose value must be a string: `None`, and a problem, otherwise.
 fn string_key(
     path: &Path,
@@ -904,10 +896,6 @@ mod tests {
             .map(ExcludeEntry::written)
             .collect();
         assert_eq!(written, ["a"]);
-        assert_eq!(
-            load_project_config(dir.path()).extensions,
-            ["@specforge/product"]
-        );
     }
 
     #[specforge_test(

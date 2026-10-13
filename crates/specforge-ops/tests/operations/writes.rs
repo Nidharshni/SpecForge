@@ -467,7 +467,10 @@ fn enabling_a_builtin_writes_the_config_only() {
     assert_eq!(changed_since(root, &before), ["specforge.json"]);
     assert_eq!(
         added.extensions_enabled,
-        specforge_common::load_project_config(root).extensions.len()
+        specforge_common::read_project_config(root)
+            .config
+            .extensions
+            .len()
     );
     assert!(added.extensions_enabled >= 1);
 }

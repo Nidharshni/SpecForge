@@ -28,8 +28,7 @@ pub use present::{
 };
 pub use project::{
     ConfigProblem, ConfigRead, ExtensionEntry, InferenceConfig, ProjectConfig,
-    extension_entry_name, load_project_config, parse_project_config, read_project_config,
-    validate_project_name,
+    extension_entry_name, parse_project_config, read_project_config, validate_project_name,
 };
 pub use project_root::{NoSuchPath, PROJECT_FILE, ProjectRoot};
 pub use slug::slug;
