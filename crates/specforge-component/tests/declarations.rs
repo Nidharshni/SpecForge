@@ -91,3 +91,62 @@ fn builtin_declarations_match_their_snapshots() {
     );
     assert_eq!(compared, 10 * (1 + DECLARED_CATEGORIES.len()));
 }
+
+/// The committed SDK fixtures, where git holds them today.
+const FIXTURES: [(&str, &str); 3] = [
+    ("@sdk/greet", "fixtures/greet-extension/greet.wasm"),
+    ("@sdk/docref", "fixtures/docref-extension/docref.wasm"),
+    ("@test/probe", "fixtures/sandbox-probe/probe.wasm"),
+];
+
+fn handshake_protocol(runtime: &ComponentRuntime, name: &str) -> String {
+    let request = serde_json::to_vec(&specforge_protocol_types::HandshakeRequest {
+        host_version: PROTOCOL_VERSION.to_string(),
+    })
+    .unwrap();
+    let handshake = answer(runtime, name, "__handshake", &request);
+    let value: serde_json::Value = serde_json::from_slice(&handshake).expect("a JSON handshake");
+    value["protocol_version"]
+        .as_str()
+        .unwrap_or_else(|| panic!("{name}: the handshake has no protocol_version"))
+        .to_string()
+}
+
+#[ignore = "fixed by the round's re-vendor; 09-T9 un-ignores it"]
+#[specforge_test_macros::test(
+    behavior = "load_extension_declaration",
+    verify = "every committed SDK blob answers the host's protocol version; a bridge component answers the version it declares"
+)]
+fn every_sdk_fixture_answers_the_host_protocol() {
+    let root = repo_root();
+    let runtime = ComponentRuntime::new();
+    let mut stale = Vec::new();
+    for (name, path) in FIXTURES {
+        let bytes = std::fs::read(root.join(path)).unwrap_or_else(|e| panic!("{path}: {e}"));
+        runtime
+            .load(name, &bytes)
+            .unwrap_or_else(|e| panic!("{name}: {e}"));
+        let found = handshake_protocol(&runtime, name);
+        if found != PROTOCOL_VERSION {
+            stale.push(format!("{name}: {found}"));
+        }
+    }
+    assert!(
+        stale.is_empty(),
+        "these fixtures answer a protocol other than the host's {PROTOCOL_VERSION}: {stale:?}"
+    );
+}
+
+#[specforge_test_macros::test(
+    behavior = "load_extension_declaration",
+    verify = "every committed SDK blob answers the host's protocol version; a bridge component answers the version it declares"
+)]
+fn the_bridge_component_answers_its_canned_protocol() {
+    let path = "crates/fixtures/test-component/test_component.wasm";
+    let bytes = std::fs::read(repo_root().join(path)).unwrap_or_else(|e| panic!("{path}: {e}"));
+    let runtime = ComponentRuntime::new();
+    runtime
+        .load("@test/component", &bytes)
+        .expect("the bridge component loads");
+    assert_eq!(handshake_protocol(&runtime, "@test/component"), "1.0.0");
+}

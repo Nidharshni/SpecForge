@@ -141,6 +141,7 @@ behavior load_extension_declaration "Load Extension Declaration" {
     extension's later calls.
   """
   verify integration "every builtin's handshake and describe answers match their pinned snapshot byte for byte"
+  verify integration "every committed SDK blob answers the host's protocol version; a bridge component answers the version it declares"
   verify unit "a declaration round-trips through its wire answers unchanged"
   verify unit "a describe category that does not parse fails the load naming the category"
   verify unit "a describe item key the protocol does not define produces W138"
