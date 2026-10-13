@@ -8,7 +8,7 @@ use axum::{
 use sha2::{Digest, Sha256};
 use specforge_package::PackageName;
 use specforge_package::Version;
-use specforge_registry_wire::path::route;
+use specforge_registry_wire::address::{Endpoint, HEALTH};
 use specforge_registry_wire::{
     ErrorBody, ErrorCode, PackageMetadata, PackageSignature, PublishReceipt, SearchHit,
     SearchQuery, SearchResults, SignedContent, TokenIssued, TokenList, TokenRequest, TokenRevoked,
@@ -24,23 +24,24 @@ use crate::state::AppState;
 use crate::storage::LocalStorage;
 
 pub fn router(state: Arc<AppState>) -> Router {
+    let version = Endpoint::Version.route();
     Router::new()
-        .route(route::PACKAGE, get(get_package_versions))
-        .route(route::VERSION, get(get_package_version))
+        .route(&Endpoint::Package.route(), get(get_package_versions))
+        .route(&version, get(get_package_version))
         .route(
-            route::VERSION,
+            &version,
             put(publish_package).layer(DefaultBodyLimit::max(64 * 1024 * 1024)),
         )
-        .route(route::VERSION, delete(yank_package))
-        .route(route::DOWNLOAD, get(download_package))
-        .route(route::SEARCH, get(search_packages))
-        .route(route::AUTH_VERIFY, post(verify_auth))
+        .route(&version, delete(yank_package))
+        .route(&Endpoint::Download.route(), get(download_package))
+        .route(&Endpoint::Search.route(), get(search_packages))
+        .route(&Endpoint::AuthVerify.route(), post(verify_auth))
         .route(
-            route::ADMIN_TOKENS,
+            &Endpoint::AdminTokens.route(),
             post(admin_create_token).get(admin_list_tokens),
         )
-        .route(route::ADMIN_TOKEN, delete(admin_revoke_token))
-        .route(route::HEALTH, get(health_check))
+        .route(&Endpoint::AdminToken.route(), delete(admin_revoke_token))
+        .route(HEALTH, get(health_check))
         .with_state(state)
 }
 

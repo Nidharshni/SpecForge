@@ -225,8 +225,6 @@ impl ErrorBody {
 mod tests {
     use super::*;
     use serde_json::json;
-    use specforge_package::PackageName;
-    use specforge_package::Version;
 
     /// `value` serializes to `expected` and `expected` reads back as `value`.
     fn is_this_json<T>(value: &T, expected: serde_json::Value)
@@ -440,45 +438,6 @@ mod tests {
         is_this_json(&Yanked { yanked: true }, json!({"yanked": true}));
         let empty: TokenRequest = serde_json::from_value(json!({})).unwrap();
         assert_eq!(empty, TokenRequest::default());
-    }
-
-    #[test]
-    fn the_routes_are_the_prefixed_paths() {
-        let name = PackageName::parse("@acme/tool").unwrap();
-        let v = Version::parse("1.0.0").unwrap();
-        let fill = |route: &str| {
-            route
-                .replace("{name}", &name.url_segment())
-                .replace("{version}", &v.to_string())
-                .replace("{prefix}", "abcd1234")
-        };
-        let prefixed = |path: String| format!("{}{path}", path::PREFIX);
-        assert_eq!(fill(path::route::PACKAGE), prefixed(path::package(&name)));
-        assert_eq!(
-            fill(path::route::VERSION),
-            prefixed(path::version(&name, &v))
-        );
-        assert_eq!(
-            fill(path::route::DOWNLOAD),
-            prefixed(path::download(&name, &v))
-        );
-        assert_eq!(path::route::SEARCH, prefixed(path::SEARCH.to_string()));
-        assert_eq!(
-            path::route::AUTH_VERIFY,
-            prefixed(path::AUTH_VERIFY.to_string())
-        );
-        assert_eq!(
-            path::route::ADMIN_TOKENS,
-            prefixed(path::ADMIN_TOKENS.to_string())
-        );
-        assert_eq!(
-            fill(path::route::ADMIN_TOKEN),
-            prefixed(path::admin_token("abcd1234"))
-        );
-        assert_eq!(
-            path::download(&name, &v),
-            "/packages/@acme%2Ftool/1.0.0/download"
-        );
     }
 
     #[test]

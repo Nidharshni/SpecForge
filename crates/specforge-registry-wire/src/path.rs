@@ -1,5 +1,5 @@
-//! Where each call goes. A client joins these to the registry's base URL; the server mounts [`route`]'s
-//! patterns, which are [`PREFIX`] followed by the same paths.
+//! Where each call goes. A client joins these to the registry's base URL; the server mounts
+//! [`crate::address::Endpoint::route`].
 
 use specforge_package::PackageName;
 use specforge_package::Version;
@@ -30,17 +30,4 @@ pub const ADMIN_TOKENS: &str = "/admin/tokens";
 /// `/admin/tokens/{prefix}`.
 pub fn admin_token(prefix: &str) -> String {
     format!("{ADMIN_TOKENS}/{prefix}")
-}
-
-/// The server's routes, as axum path patterns.
-pub mod route {
-    pub const PACKAGE: &str = "/v1/packages/{name}";
-    pub const VERSION: &str = "/v1/packages/{name}/{version}";
-    pub const DOWNLOAD: &str = "/v1/packages/{name}/{version}/download";
-    pub const SEARCH: &str = "/v1/search";
-    pub const AUTH_VERIFY: &str = "/v1/auth/verify";
-    pub const ADMIN_TOKENS: &str = "/v1/admin/tokens";
-    pub const ADMIN_TOKEN: &str = "/v1/admin/tokens/{prefix}";
-    /// Outside the prefix: a liveness probe.
-    pub const HEALTH: &str = "/health";
 }
