@@ -704,3 +704,69 @@ fn a_stateless_request_after_initialize_reads_what_the_session_serves() {
     assert_eq!(reply["result"]["isError"], false, "{reply}");
     assert!(alpha(&mut adopted));
 }
+
+#[specforge_test(
+    behavior = "serve_stateless_mcp_requests",
+    verify = "a stateless request is answered as a fresh server answers it, whatever stateless requests came before"
+)]
+fn a_stateless_answer_depends_on_no_earlier_request() {
+    for starts_with_project in [true, false] {
+        let root = tempfile::TempDir::new().unwrap();
+        if starts_with_project {
+            write_project(root.path());
+        }
+        let other = project();
+        let parent = tempfile::TempDir::new().unwrap();
+
+        // A history that names projects, creates one and reads what is served.
+        let mut worn = logged(McpServer::with_project_root(root.path().to_path_buf()));
+        stateless(&mut worn, "server/discover", json!({}));
+        tool(
+            &mut worn,
+            "specforge.validate",
+            json!({"path": other.path().to_str().unwrap()}),
+        );
+        tool(
+            &mut worn,
+            "specforge.init",
+            json!({"path": parent.path().join("new").to_str().unwrap(), "name": "new"}),
+        );
+        tool(&mut worn, "specforge.stats", json!({}));
+        stateless(
+            &mut worn,
+            "resources/read",
+            json!({"uri": "specforge://diagnostics"}),
+        );
+        tool(&mut worn, "specforge.extensions", json!({}));
+
+        // The disk changes since: a project at the root, and a file with a
+        // dangling reference.
+        if !starts_with_project {
+            write_project(root.path());
+        }
+        std::fs::write(
+            root.path().join("extra.spec"),
+            "behavior beta \"Beta\" {\n  invariants [missing_one]\n}\n",
+        )
+        .unwrap();
+
+        let mut fresh = logged(McpServer::with_project_root(root.path().to_path_buf()));
+        let call = |name: &str, arguments: Value| {
+            ("tools/call", json!({"name": name, "arguments": arguments}))
+        };
+        for (method, params) in [
+            call("specforge.stats", json!({})),
+            call("specforge.validate", json!({})),
+            ("resources/read", json!({"uri": "specforge://diagnostics"})),
+            ("resources/read", json!({"uri": "specforge://graph"})),
+            ("tools/list", json!({})),
+            call("specforge.extensions", json!({})),
+        ] {
+            assert_eq!(
+                stateless(&mut worn, method, params.clone()),
+                stateless(&mut fresh, method, params.clone()),
+                "{method} {params} (starts_with_project: {starts_with_project})"
+            );
+        }
+    }
+}

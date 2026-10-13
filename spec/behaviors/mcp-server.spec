@@ -804,6 +804,7 @@ behavior serve_stateless_mcp_requests "Serve Stateless MCP Requests" {
   verify unit "a stateless call's path is read for that call only, whatever tool takes it, and what the server serves is unchanged"
   verify unit "a stateless init serves nothing it creates"
   verify unit "a stateless no-project refusal names no call that would serve a project"
+  verify unit "a stateless request is answered as a fresh server answers it, whatever stateless requests came before"
 }
 
 behavior listen_for_mcp_resource_updates "Listen for MCP Resource Updates" {
