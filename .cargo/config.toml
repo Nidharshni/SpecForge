@@ -1,0 +1,2 @@
+[alias]
+gate = "run --quiet --package gate --"

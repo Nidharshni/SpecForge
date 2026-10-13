@@ -1,0 +1,13 @@
+//! The repository's check list: every check CI, `cargo gate` and the pre-commit hook run, each written once
+//! with the run it joins and the paths that trigger it. `cargo gate list` prints it.
+
+mod change_set;
+mod checks;
+pub mod judge;
+mod repo;
+mod run;
+
+pub use change_set::{ChangeSet, Pattern};
+pub use checks::{CHECKS, Check, Reach, Selection, Trigger, render_list};
+pub use repo::{Member, OUTSIDE_WORKSPACE, PROJECTS, Project, Repo};
+pub use run::{Ctx, Mode};
