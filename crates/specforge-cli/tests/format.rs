@@ -947,3 +947,132 @@ fn format_prints_how_many_files_it_formatted_and_changed() {
         "{second}"
     );
 }
+
+// --- plan 03: a specforge.json that hides the project's sources ---
+
+/// `specforge.json` texts that do not say which files are the project's
+/// sources (or which extensions it loads): every one refuses a rewrite.
+pub(crate) const HIDES_SOURCES: [&str; 5] = [
+    r#"{"spec_root": "spec", "extensions": ["#, // not JSON
+    "[1,2]",                                    // not an object
+    r#"{"exclude": "vendor"}"#,                 // exclude not an array
+    r#"{"spec_root": ["spec"]}"#,               // spec_root not a string
+    r#"{"spec_root": "spec", "extensions": "@specforge/product"}"#, // extensions not an array
+];
+
+const MESSY: &str = "behavior messy \"Messy\" {\ncontract \"The system MUST work\"\n}\n";
+
+/// A project with an unformatted `spec/a.spec`, an unformatted
+/// `vendor/v.spec` the config would leave out, and `config` as its
+/// `specforge.json`.
+pub(crate) fn project_with_config(root: &std::path::Path, config: &str) {
+    fs::create_dir_all(root.join("spec")).unwrap();
+    fs::create_dir_all(root.join("vendor")).unwrap();
+    fs::write(root.join("spec/a.spec"), MESSY).unwrap();
+    fs::write(root.join("vendor/v.spec"), MESSY.replace("messy", "vend")).unwrap();
+    fs::write(root.join("specforge.json"), config).unwrap();
+}
+
+/// The JSON `specforge <args> --path <root>` prints, and its exit code.
+pub(crate) fn json_of(root: &std::path::Path, args: &[&str]) -> (Option<i32>, serde_json::Value) {
+    let output = Command::cargo_bin("specforge")
+        .unwrap()
+        .args(args)
+        .args(["--format", "json", "--path", root.to_str().unwrap()])
+        .output()
+        .unwrap();
+    let json = serde_json::from_slice(&output.stdout).unwrap_or_else(|_| {
+        panic!(
+            "no JSON from {args:?}: {}",
+            String::from_utf8_lossy(&output.stdout)
+        )
+    });
+    (output.status.code(), json)
+}
+
+#[ignore = "fixed by T2"]
+#[specforge_test(
+    behavior = "discover_format_targets",
+    verify = "a specforge.json that does not say which files are the project's sources refuses the run, and nothing is written"
+)]
+fn format_refuses_a_config_that_does_not_say_which_files_are_its_sources() {
+    for config in HIDES_SOURCES {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        project_with_config(root, config);
+        let before = crate::written::files_under(root);
+        let (_, add) = json_of(root, &["add", "@specforge/product"]);
+        assert_eq!(add["code"], "config_invalid", "{config}: {add}");
+
+        for args in [&["format"][..], &["format", "--check"][..]] {
+            let (code, json) = json_of(root, args);
+            assert_eq!(code, Some(1), "{config} {args:?}: {json}");
+            assert_eq!(json["code"], "config_invalid", "{config} {args:?}: {json}");
+            assert_eq!(
+                json["error"], add["error"],
+                "{config} {args:?}: one refusal"
+            );
+            assert_eq!(
+                crate::written::files_under(root),
+                before,
+                "{config} {args:?}: nothing is written"
+            );
+        }
+    }
+}
+
+#[ignore = "fixed by T2"]
+#[specforge_test(
+    behavior = "check_formatting",
+    verify = "a problem in specforge.json the run goes around is an E069 that fails the check"
+)]
+fn format_check_fails_on_a_config_problem_it_goes_around() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    project_with_config(root, r#"{"spec_root":"spec","exclude":["["]}"#);
+    fs::write(root.join("spec/a.spec"), CANONICAL_FOO).unwrap();
+
+    let (code, json) = json_of(root, &["format", "--check"]);
+    assert_eq!(code, Some(1), "{json}");
+    assert_eq!(json["ok"], false, "{json}");
+    assert_eq!(json["all_clean"], true, "{json}");
+    assert_eq!(json["diagnostics"][0]["code"], "E069", "{json}");
+
+    let human = Command::cargo_bin("specforge")
+        .unwrap()
+        .args(["format", "--check", "--path", root.to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert_eq!(human.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&human.stderr);
+    assert!(
+        stderr.contains("error[E069]: specforge.json: \"exclude\"[0]"),
+        "{stderr}"
+    );
+}
+
+#[ignore = "fixed by T2"]
+#[specforge_test(
+    behavior = "format_spec_files",
+    verify = "a problem in specforge.json the run goes around is reported as E069 and makes the run exit 1, the files still formatted"
+)]
+fn format_writes_and_fails_on_a_mistyped_name() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    project_with_config(root, r#"{"name": 5, "spec_root": "spec"}"#);
+
+    let (code, json) = json_of(root, &["format"]);
+    assert_eq!(code, Some(1), "{json}");
+    assert_eq!(json["ok"], false, "{json}");
+    assert_eq!(
+        json["files_written"],
+        serde_json::json!(["spec/a.spec"]),
+        "{json}"
+    );
+    assert_eq!(json["diagnostics"][0]["code"], "E069", "{json}");
+    assert_eq!(
+        fs::read_to_string(root.join("vendor/v.spec")).unwrap(),
+        MESSY.replace("messy", "vend"),
+        "vendor/ is outside spec_root"
+    );
+}

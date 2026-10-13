@@ -147,6 +147,8 @@ behavior migrate_spec_files_in_place "Migrate Spec Files In Place" {
   verify unit "only the project's sources are migrated: under spec_root, without excluded files"
   verify unit "a kept migration records its files in .specforge/migration.json"
   verify unit "each file is read once: its backup, its diff and what a rollback restores are that text"
+  verify unit "a specforge.json that does not say which files are the project's sources refuses the migration, dry run included, and nothing is written"
+  verify unit "a problem in specforge.json the migration goes around is an E069 in its document and fails it"
 }
 
 behavior generate_migration_diff "Generate Migration Diff" {

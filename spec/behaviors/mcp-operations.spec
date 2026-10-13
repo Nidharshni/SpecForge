@@ -89,6 +89,8 @@ behavior provide_mcp_format_tool "Provide MCP Format Tool" {
   verify unit "ok is the verdict specforge format exits by, in every mode"
   verify unit "a directory that is no project is formatted with the defaults, as specforge format formats it"
   verify contract "Provide MCP Format Tool: MCP format tool holds — filesystem_available, files_formatted, check_mode_readonly, mutation_completed_emitted, tool_invoked_emitted"
+  verify unit "a specforge.json that does not say which files are the project's sources fails the call as config_invalid and writes nothing"
+  verify unit "a problem in specforge.json the call goes around is an E069 among the diagnostics and makes ok false"
 }
 
 behavior provide_mcp_rename_tool "Provide MCP Rename Tool" {
@@ -143,6 +145,7 @@ behavior provide_mcp_rename_tool "Provide MCP Rename Tool" {
   verify unit "rename plans on the project as it is on disk, references added since the last call included"
   verify unit "rename edits exactly the declaration and the references find_references returns"
   verify unit "rename's updated diagnostics follow a successful write only: a preview and a failure carry none"
+  verify unit "a specforge.json that does not say which files are the project's sources fails the rename as config_invalid and writes nothing"
 }
 
 // MCP init creates a project at a specified path, not the current project.
@@ -384,6 +387,7 @@ behavior provide_mcp_migrate_tool "Provide MCP Migrate Tool" {
   verify unit "a failed migration's error names its cause: a hook, a changed graph, a project that does not compile, or files that could not be migrated"
   verify unit "a directory that is no project is migrated as specforge migrate migrates it"
   verify contract "Provide MCP Migrate Tool: MCP migrate tool holds — filesystem_available, migrations_applied, post_migration_validated, dry_run_safe, mutation_completed_emitted, tool_invoked_emitted"
+  verify unit "a specforge.json that does not say which files are the project's sources fails the call as config_invalid and writes nothing"
 }
 
 // ---------------------------------------------------------------------------

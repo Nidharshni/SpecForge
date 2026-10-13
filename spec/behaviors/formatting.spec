@@ -55,6 +55,7 @@ behavior format_spec_files "Format Spec Files" {
   verify unit "the format document names each changed file, each failed file with its kind, and the run's verdict"
   verify unit "under --format json the run prints the format document on stdout and nothing on stderr"
   verify contract "Format Spec Files: spec file formatting holds — spec_files_available, format_config_loaded, formatted_output_written, unchanged_files_preserved, format_complete_emitted, summary_printed"
+  verify unit "a problem in specforge.json the run goes around is reported as E069 and makes the run exit 1, the files still formatted"
 }
 
 behavior preserve_comments "Preserve Comments During Formatting" {
@@ -132,6 +133,7 @@ behavior check_formatting "Check Formatting Without Modifying Files" {
   verify unit "a region left unformatted makes the check fail"
   verify unit "under --format json a check that finds a change prints the document and exits 1"
   verify contract "Check Formatting Without Modifying Files: formatting check holds — spec_files_available, format_config_loaded, no_files_written, exit_code_correct, unformatted_paths_printed"
+  verify unit "a problem in specforge.json the run goes around is an E069 that fails the check"
 }
 
 behavior show_formatting_diff "Show Formatting Diff" {
@@ -584,4 +586,5 @@ behavior discover_format_targets "Discover Format Targets" {
   verify unit "a directory named like a .spec file is no target, walked or discovered"
   verify unit "a file several arguments reach is formatted once"
   verify contract "Discover Format Targets: format target discovery holds — project_root_available, filesystem_accessible, all_spec_files_discovered, exclusions_applied, non_spec_skipped"
+  verify unit "a specforge.json that does not say which files are the project's sources refuses the run, and nothing is written"
 }

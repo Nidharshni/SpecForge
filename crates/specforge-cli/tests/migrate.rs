@@ -1767,3 +1767,53 @@ fn a_format_only_migration_passes_graph_protocol_compatibility_silently() {
         "the file was migrated"
     );
 }
+
+// --- plan 03: a specforge.json that hides the project's sources ---
+
+/// The `0.9`-header text of a spec file, to migrate.
+const OLD: &str = "// specforge-format: 0.9\nbehavior alpha \"Alpha\" {\n}\n";
+
+#[ignore = "fixed by T3"]
+#[specforge_test(
+    behavior = "migrate_spec_files_in_place",
+    verify = "a specforge.json that does not say which files are the project's sources refuses the migration, dry run included, and nothing is written"
+)]
+fn migrate_refuses_a_config_that_does_not_say_which_files_are_its_sources() {
+    for config in crate::format::HIDES_SOURCES {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        crate::format::project_with_config(root, config);
+        fs::write(root.join("spec/a.spec"), OLD).unwrap();
+        fs::write(root.join("vendor/v.spec"), OLD.replace("alpha", "vend")).unwrap();
+        let before = crate::written::files_under(root);
+
+        for args in [&["migrate"][..], &["migrate", "--dry-run"][..]] {
+            let (code, json) = crate::format::json_of(root, args);
+            assert_eq!(code, Some(1), "{config} {args:?}: {json}");
+            assert_eq!(json["code"], "config_invalid", "{config} {args:?}: {json}");
+            assert_eq!(
+                crate::written::files_under(root),
+                before,
+                "{config} {args:?}: no rewrite, no .bak, no migration record"
+            );
+        }
+    }
+}
+
+#[ignore = "fixed by T3"]
+#[specforge_test(
+    behavior = "migrate_spec_files_in_place",
+    verify = "a problem in specforge.json the migration goes around is an E069 in its document and fails it"
+)]
+fn migrate_reports_a_config_problem_it_goes_around() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    crate::format::project_with_config(root, r#"{"spec_root":"spec","exclude":["["]}"#);
+    fs::write(root.join("spec/a.spec"), "behavior alpha \"Alpha\" {\n}\n").unwrap();
+
+    let (code, json) = crate::format::json_of(root, &["migrate", "--dry-run"]);
+    assert_eq!(code, Some(1), "{json}");
+    assert_eq!(json["ok"], false, "{json}");
+    assert_eq!(json["pending"], false, "{json}");
+    assert_eq!(json["diagnostics"][0]["code"], "E069", "{json}");
+}
