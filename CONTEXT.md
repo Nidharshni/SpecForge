@@ -108,9 +108,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   formatter's (a W142 per region formatting kept verbatim, while the document is the text it formatted). A publish
   sends the file's whole list, the compile layer plus the formatter layer of the same version, under the one URI
   the client names the file by. Hover and code actions read the layers; one module writes them (ADR 0056).
-- **Call target**: the project one MCP call acts on, resolved from the call's optional `path` (the target's arguments are
-  `TargetArgument`: `path`, `use_cached`, each spelled once) and its
-  entry's target before the handler runs: the served session (brought up to date unless `use_cached`),
+- **Call target**: the project one MCP call acts on, resolved from the call's optional `path` (the target's argument is
+  `TargetArgument::Path`, spelled once) and its
+  entry's target before the handler runs: the served session (brought up to date with disk),
   another project opened as a session for that call only and brought up to date after the call writes, as the served one is, the directory `init` creates, or, with nothing served and
   no project named, the empty session for an entry that reads only the project view
   (`specforge_mcp::target::CallTarget`).

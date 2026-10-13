@@ -185,60 +185,6 @@ fn format_with_another_path_leaves_the_served_spans() {
     assert!(server.state().graph().node("other").is_none());
 }
 
-#[specforge_test(
-    behavior = "provide_mcp_validate_tool",
-    verify = "validate with use_cached=true returns existing diagnostics without recompilation"
-)]
-fn use_cached_serves_the_last_compile_when_diagnostics_exist() {
-    // No extension: the compile reports I002, so the served project has
-    // diagnostics to serve.
-    let dir = project(&[], "behavior login \"Login\" {\n}\n");
-    let mut server = McpServer::new();
-    initialize(&mut server, dir.path());
-    assert!(validate_codes(&mut server, json!({})).contains(&"I002".to_string()));
-
-    // A dangling reference written since: a compile reports E003.
-    fs::write(
-        dir.path().join("main.spec"),
-        "behavior login \"Login\" {\n  invariants [missing_one]\n}\n",
-    )
-    .unwrap();
-    let cached = validate_codes(&mut server, json!({"use_cached": true}));
-    assert!(!cached.contains(&"E003".to_string()), "{cached:?}");
-
-    let fresh = validate_codes(&mut server, json!({}));
-    assert!(fresh.contains(&"E003".to_string()), "{fresh:?}");
-}
-
-#[specforge_test(
-    behavior = "provide_mcp_doctor_tool",
-    verify = "specforge.doctor compiles the project afresh unless use_cached is set"
-)]
-fn doctor_use_cached_reports_the_last_compile() {
-    let dir = project(&[], "behavior login \"Login\" {\n}\n");
-    let mut server = McpServer::new();
-    initialize(&mut server, dir.path());
-
-    // An extension enabled since, which is not installed: E028.
-    write_config(dir.path(), &["@acme/missing"]);
-    let load_failures = |server: &mut McpServer, arguments: Value| -> Vec<Value> {
-        let resp = call_tool(server, "specforge.doctor", arguments);
-        let report: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
-        report["findings"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .filter(|f| f["about"] == "load")
-            .cloned()
-            .collect()
-    };
-    let cached = load_failures(&mut server, json!({"use_cached": true}));
-    assert!(cached.is_empty(), "{cached:?}");
-
-    let fresh = load_failures(&mut server, json!({}));
-    assert!(fresh.iter().any(|f| f["code"] == "E028"), "{fresh:?}");
-}
-
 #[test]
 fn extension_tool_without_a_project_is_refused() {
     // Serving nothing, no extension tool is listed: a call names an
@@ -608,31 +554,6 @@ fn a_path_inside_the_served_project_names_the_served_project() {
     assert!(!inside.contains(&"I002".to_string()), "{inside:?}");
     assert!(inside.contains(&"E003".to_string()), "{inside:?}");
     assert_eq!(server.state().session_generation(), generation);
-}
-
-#[specforge_test(
-    behavior = "provide_mcp_validate_tool",
-    verify = "validate with use_cached=true returns existing diagnostics without recompilation"
-)]
-fn use_cached_is_honoured_when_the_project_has_no_diagnostics() {
-    let dir = project(&["@specforge/software"], "");
-    let mut server = McpServer::new();
-    initialize(&mut server, dir.path());
-    assert!(validate_codes(&mut server, json!({"use_cached": true})).is_empty());
-
-    // R5: a project with no diagnostics was recompiled whatever use_cached
-    // said.
-    fs::write(
-        dir.path().join("added.spec"),
-        "behavior added \"Added\" {\n  category command\n  invariants [nope]\n}\n",
-    )
-    .unwrap();
-    let cached = validate_codes(&mut server, json!({"use_cached": true}));
-    assert!(cached.is_empty(), "{cached:?}");
-    assert!(server.state().graph().node("added").is_none());
-
-    let fresh = validate_codes(&mut server, json!({}));
-    assert!(fresh.contains(&"E003".to_string()), "{fresh:?}");
 }
 
 #[specforge_test(

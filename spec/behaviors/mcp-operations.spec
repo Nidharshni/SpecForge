@@ -489,14 +489,13 @@ behavior provide_mcp_doctor_tool "Provide MCP Doctor Tool" {
     verdict ok and each detected issue once, with what it is about and a
     deterministic resolution step. Like specforge.validate, the tool MUST bring the
     project up to date with disk before checking it, so it sees edits made
-    outside the server; with use_cached (optional boolean, default false) it
-    MUST report on the project as last brought up to date instead.
+    outside the server.
   """
   verify unit "specforge.doctor detects extension conflicts"
   verify unit "response checks wasm cache integrity"
   verify unit "response provides deterministic resolution steps"
   verify unit "specforge.doctor reports an extension that fails to load (E028, E070) as an error"
-  verify unit "specforge.doctor compiles the project afresh unless use_cached is set"
+  verify unit "specforge.doctor reports the project as it is on disk, edits made outside the server included"
   verify unit "specforge.doctor reports an unusable specforge.json (E069) as a finding"
   verify contract "Provide MCP Doctor Tool: MCP doctor tool holds — compiler_api_available, health_checked, resolution_steps_provided, tool_invoked_emitted"
 }

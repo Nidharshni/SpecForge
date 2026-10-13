@@ -1,12 +1,11 @@
 //! The project one MCP call acts on (CONTEXT.md "Call target", ADR 0014).
 //!
-//! A call's optional `path` and its entry's [`TargetSpec`] (reach and
-//! freshness) are resolved into one [`CallTarget`] before the handler runs:
-//! the served session, brought up to date with disk unless the call asks
-//! for the last compile; another project, opened as a session for this call
+//! A call's optional `path` and its entry's [`TargetSpec`] (reach) are
+//! resolved into one [`CallTarget`] before the handler runs: the served
+//! session, brought up to date with disk; another project, opened as a session for this call
 //! only; or the directory `init` creates. Handlers read their project as a
 //! [`ProjectRef`] and cannot tell which adapter answered it; they never
-//! resolve a root, pick a freshness rule or reload anything themselves.
+//! resolve a root or reload anything themselves.
 
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
@@ -78,45 +77,6 @@ pub struct NoProject {
     pub serving: Serving,
 }
 
-/// Whether the target is brought up to date with disk before the handler.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Freshness {
-    /// Always (`ProjectSession::ensure_fresh`).
-    Fresh,
-    /// Unless the call passes `use_cached: true` (validate, analyze, doctor).
-    FreshUnlessCached,
-}
-
-/// How a handler that reads a project reaches it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct ProjectTarget {
-    pub reach: Reach,
-    pub freshness: Freshness,
-}
-
-impl ProjectTarget {
-    /// The served project, brought up to date.
-    pub const SERVED: Self = Self {
-        reach: Reach::Served,
-        freshness: Freshness::Fresh,
-    };
-    /// The served project, unless `use_cached` (doctor).
-    pub const SERVED_UNLESS_CACHED: Self = Self {
-        reach: Reach::Served,
-        freshness: Freshness::FreshUnlessCached,
-    };
-    /// The served project or the one `path` names, brought up to date.
-    pub const ANY: Self = Self {
-        reach: Reach::AnyProject,
-        freshness: Freshness::Fresh,
-    };
-    /// The same, unless `use_cached` (validate, analyze).
-    pub const ANY_UNLESS_CACHED: Self = Self {
-        reach: Reach::AnyProject,
-        freshness: Freshness::FreshUnlessCached,
-    };
-}
-
 /// What a call with nothing served, and no project named, gets.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WithoutProject {
@@ -130,11 +90,11 @@ pub enum WithoutProject {
 /// handler is given, never declared beside it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TargetSpec {
-    /// Reads no project (explain): no `path`, no `use_cached`.
+    /// Reads no project (explain): no `path`.
     Unscoped,
     /// Reads or acts on a project.
     Project {
-        target: ProjectTarget,
+        reach: Reach,
         without: WithoutProject,
     },
     /// `path` names the directory to create a project in (init): required,
@@ -146,14 +106,14 @@ impl TargetSpec {
     /// The served project, brought up to date, read over the empty session
     /// when nothing is served: every core prompt and resource.
     pub const SERVED_VIEW: TargetSpec = TargetSpec::Project {
-        target: ProjectTarget::SERVED,
+        reach: Reach::Served,
         without: WithoutProject::EmptySession,
     };
 
     /// The served project, brought up to date, refused when nothing is
     /// served: every extension tool and resource.
     pub const SERVED_PROJECT: TargetSpec = TargetSpec::Project {
-        target: ProjectTarget::SERVED,
+        reach: Reach::Served,
         without: WithoutProject::Refused,
     };
 
@@ -173,24 +133,15 @@ impl TargetSpec {
     pub fn takes_path(self) -> bool {
         match self {
             TargetSpec::Unscoped => false,
-            TargetSpec::Project { target, .. } => target.reach.takes_path(),
+            TargetSpec::Project { reach, .. } => reach.takes_path(),
             TargetSpec::NewProject => true,
         }
-    }
-
-    /// Whether the call may ask for the last compile with `use_cached`.
-    fn takes_use_cached(self) -> bool {
-        matches!(
-            self,
-            TargetSpec::Project { target, .. } if target.freshness == Freshness::FreshUnlessCached
-        )
     }
 
     /// The input-schema properties the target reads from a call: `path` for
     /// a reach that names a project by it (`AnyProject`: "Project root path
     /// (the served project if omitted)"; `NewProject`: "Directory for the
-    /// new project, outside the current one"), and `use_cached` for
-    /// `FreshUnlessCached`. A tool's listed schema is its own properties
+    /// new project, outside the current one"). A tool's listed schema is its own properties
     /// plus these ([`ToolSpec::input_schema`]); its handler never reads
     /// them.
     pub fn properties(self) -> serde_json::Map<String, Value> {
@@ -203,16 +154,6 @@ impl TargetSpec {
             properties.insert(
                 TargetArgument::Path.name().into(),
                 serde_json::json!({ "type": "string", "description": description }),
-            );
-        }
-        if self.takes_use_cached() {
-            properties.insert(
-                TargetArgument::UseCached.name().into(),
-                serde_json::json!({
-                    "type": "boolean",
-                    "description": "Use the last compile instead of bringing the project up to date with disk; with no project served, the path is compiled anyway",
-                    "default": false,
-                }),
             );
         }
         properties
@@ -230,24 +171,22 @@ impl TargetSpec {
     /// Every name the target reads from a call, listed or not: `path` for
     /// every target but `Unscoped` (a `Served` entry accepts its own
     /// project's root and refuses another's,
-    /// [`TargetError::OtherProjectRefused`]), and `use_cached` for
-    /// `FreshUnlessCached`. [`Self::fields`] stays the listed ones.
+    /// [`TargetError::OtherProjectRefused`]). [`Self::fields`] stays the
+    /// listed ones.
     pub fn accepted(self) -> &'static [TargetArgument] {
-        match (self != TargetSpec::Unscoped, self.takes_use_cached()) {
-            (true, true) => &[TargetArgument::Path, TargetArgument::UseCached],
-            (true, false) => &[TargetArgument::Path],
-            (false, true) => &[TargetArgument::UseCached],
-            (false, false) => &[],
+        if self == TargetSpec::Unscoped {
+            &[]
+        } else {
+            &[TargetArgument::Path]
         }
     }
 
     /// The names [`Self::properties`] declares, for the schema drift test.
     pub fn fields(self) -> &'static [TargetArgument] {
-        match (self.takes_path(), self.takes_use_cached()) {
-            (true, true) => &[TargetArgument::Path, TargetArgument::UseCached],
-            (true, false) => &[TargetArgument::Path],
-            (false, true) => &[TargetArgument::UseCached],
-            (false, false) => &[],
+        if self.takes_path() {
+            &[TargetArgument::Path]
+        } else {
+            &[]
         }
     }
 }
@@ -331,7 +270,6 @@ impl<'a> ProjectRef<'a> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TargetArgument {
     Path,
-    UseCached,
 }
 
 impl TargetArgument {
@@ -339,7 +277,6 @@ impl TargetArgument {
     pub const fn name(self) -> &'static str {
         match self {
             Self::Path => "path",
-            Self::UseCached => "use_cached",
         }
     }
 }
@@ -359,9 +296,8 @@ pub enum TargetError {
     /// `init` was called without the `path` it creates: `invalid_input`
     /// "Missing required parameter: path" on argument `path`.
     PathRequired,
-    /// `path` or `use_cached` is not of its type (a string, a boolean):
-    /// `invalid_input` on that argument, as every argument of the wrong
-    /// type is refused.
+    /// `path` is not a string: `invalid_input` on that argument, as every
+    /// argument of the wrong type is refused.
     InvalidArgument {
         argument: TargetArgument,
         message: String,
@@ -682,8 +618,7 @@ impl<'s> Call<'s> {
 }
 
 /// Resolve the call's `path` (from `arguments`) under `spec` for a request
-/// made under `revision`, then apply the freshness policy to a served
-/// target.
+/// made under `revision`, then bring a served target up to date with disk.
 ///
 /// A `path` names the project it is in (`ProjectRoot::of`, canonical: the
 /// nearest directory at or above it holding `specforge.json`, else the
@@ -702,11 +637,10 @@ pub fn resolve(
     spec: TargetSpec,
     arguments: &Value,
 ) -> Result<CallTarget, TargetError> {
-    // The target's own arguments, read by their type as every argument
-    // is (ADR 0033 D4): a `path` that is not a string and a `use_cached`
-    // that is not a boolean are refused.
+    // The target's own argument, read by its type as every argument is
+    // (ADR 0033 D4): a `path` that is not a string is refused.
     let serving = Serving::of(revision);
-    let (target, without) = match spec {
+    let (reach, without) = match spec {
         TargetSpec::Unscoped => return Ok(CallTarget::Unscoped),
         TargetSpec::NewProject => {
             let Some(path) = argument::<String>(arguments, TargetArgument::Path)? else {
@@ -721,16 +655,11 @@ pub fn resolve(
             }
             return Ok(CallTarget::New { dir, serving });
         }
-        TargetSpec::Project { target, without } => (target, without),
+        TargetSpec::Project { reach, without } => (reach, without),
     };
     let path = argument::<String>(arguments, TargetArgument::Path)?;
     let path = path.as_deref();
-    let no_project = NoProject {
-        reach: target.reach,
-        serving,
-    };
-    let cached = spec.takes_use_cached()
-        && argument::<bool>(arguments, TargetArgument::UseCached)?.unwrap_or(false);
+    let no_project = NoProject { reach, serving };
     let served = |state: &mut McpState| {
         if state.project_root().is_none() {
             // Nothing is served and the call names no project: the target
@@ -740,9 +669,7 @@ pub fn resolve(
                 WithoutProject::Refused => Err(TargetError::NoProject(no_project)),
             };
         }
-        if !cached {
-            state.ensure_fresh();
-        }
+        state.ensure_fresh();
         Ok(CallTarget::Served)
     };
     let Some(path) = path else {
@@ -752,7 +679,7 @@ pub fn resolve(
     let served_root = state.project_root().map(absolute);
     if served_root.is_none()
         && serving == Serving::Adopts
-        && target.reach != Reach::Served
+        && reach != Reach::Served
         && root.is_configured()
     {
         // A handshake session serves the project its call names while none
@@ -764,7 +691,7 @@ pub fn resolve(
     if served_root.as_deref() == Some(root.canonical()) {
         return served(state);
     }
-    if target.reach == Reach::Served {
+    if reach == Reach::Served {
         return Err(TargetError::OtherProjectRefused);
     }
     Ok(CallTarget::Other(Box::new(state.open(&root))))
@@ -839,32 +766,21 @@ pub trait Input {
     fn given<'c>(call: &'c Call<'_>) -> Result<Self::Given<'c>, Box<McpError>>;
 }
 
-/// How a handler given a project reaches it: one of four marker types.
+/// How a handler given a project reaches it: one of two marker types.
 pub trait Reaches {
-    const TARGET: ProjectTarget;
+    const REACH: Reach;
 }
 
-/// The served project, brought up to date ([`ProjectTarget::SERVED`]).
+/// The served project, brought up to date.
 pub struct Served;
-/// The served project, unless `use_cached` ([`ProjectTarget::SERVED_UNLESS_CACHED`]).
-pub struct ServedUnlessCached;
-/// The served project or the one `path` names, brought up to date
-/// ([`ProjectTarget::ANY`]).
+/// The served project or the one `path` names, brought up to date.
 pub struct AnyProject;
-/// The same, unless `use_cached` ([`ProjectTarget::ANY_UNLESS_CACHED`]).
-pub struct AnyUnlessCached;
 
 impl Reaches for Served {
-    const TARGET: ProjectTarget = ProjectTarget::SERVED;
-}
-impl Reaches for ServedUnlessCached {
-    const TARGET: ProjectTarget = ProjectTarget::SERVED_UNLESS_CACHED;
+    const REACH: Reach = Reach::Served;
 }
 impl Reaches for AnyProject {
-    const TARGET: ProjectTarget = ProjectTarget::ANY;
-}
-impl Reaches for AnyUnlessCached {
-    const TARGET: ProjectTarget = ProjectTarget::ANY_UNLESS_CACHED;
+    const REACH: Reach = Reach::AnyProject;
 }
 
 /// Given nothing: reads no project (explain). `TargetSpec::Unscoped`.
@@ -872,12 +788,12 @@ pub struct Unscoped;
 
 /// Given the project view of the project `R` reaches; with nothing served,
 /// the empty session's (ADR 0025).
-/// `TargetSpec::Project { R::TARGET, EmptySession }`.
+/// `TargetSpec::Project { R::REACH, EmptySession }`.
 pub struct View<R = Served>(PhantomData<R>);
 
 /// Given the project `R` reaches, on disk (its root, its runtime, its view):
 /// with nothing served and no project named, refused before it runs.
-/// `TargetSpec::Project { R::TARGET, Refused }`.
+/// `TargetSpec::Project { R::REACH, Refused }`.
 pub struct Project<R = Served>(PhantomData<R>);
 
 /// Given the directory init creates and the runtime its extensions'
@@ -904,7 +820,7 @@ impl Input for Unscoped {
 impl<R: Reaches> Input for View<R> {
     type Given<'c> = ProjectView<'c>;
     const TARGET: TargetSpec = TargetSpec::Project {
-        target: R::TARGET,
+        reach: R::REACH,
         without: WithoutProject::EmptySession,
     };
 
@@ -916,7 +832,7 @@ impl<R: Reaches> Input for View<R> {
 impl<R: Reaches> Input for Project<R> {
     type Given<'c> = ProjectRef<'c>;
     const TARGET: TargetSpec = TargetSpec::Project {
-        target: R::TARGET,
+        reach: R::REACH,
         without: WithoutProject::Refused,
     };
 
@@ -947,67 +863,49 @@ mod tests {
 
     #[specforge_test_macros::test(
         behavior = "list_mcp_tools",
-        verify = "a tool's path and use_cached are declared once, by its target"
+        verify = "a tool's path is declared once, by its target"
     )]
     fn each_input_makes_its_target() {
-        let project = |target, without| TargetSpec::Project { target, without };
+        let project = |reach, without| TargetSpec::Project { reach, without };
         assert_eq!(Unscoped::TARGET, TargetSpec::Unscoped);
         assert_eq!(NewProject::TARGET, TargetSpec::NewProject);
         assert_eq!(
             View::<Served>::TARGET,
-            project(ProjectTarget::SERVED, WithoutProject::EmptySession)
+            project(Reach::Served, WithoutProject::EmptySession)
         );
         assert_eq!(
             View::<AnyProject>::TARGET,
-            project(ProjectTarget::ANY, WithoutProject::EmptySession)
+            project(Reach::AnyProject, WithoutProject::EmptySession)
         );
         assert_eq!(
             Project::<Served>::TARGET,
-            project(ProjectTarget::SERVED, WithoutProject::Refused)
-        );
-        assert_eq!(
-            Project::<ServedUnlessCached>::TARGET,
-            project(ProjectTarget::SERVED_UNLESS_CACHED, WithoutProject::Refused)
+            project(Reach::Served, WithoutProject::Refused)
         );
         assert_eq!(
             Project::<AnyProject>::TARGET,
-            project(ProjectTarget::ANY, WithoutProject::Refused)
-        );
-        assert_eq!(
-            Project::<AnyUnlessCached>::TARGET,
-            project(ProjectTarget::ANY_UNLESS_CACHED, WithoutProject::Refused)
+            project(Reach::AnyProject, WithoutProject::Refused)
         );
     }
 
     #[specforge_test_macros::test(
         behavior = "list_mcp_tools",
-        verify = "a tool's path and use_cached are declared once, by its target"
+        verify = "a tool's path is declared once, by its target"
     )]
-    fn target_arguments_follow_reach_and_freshness() {
+    fn target_arguments_follow_reach() {
         let names =
             |spec: TargetSpec| -> Vec<String> { spec.properties().keys().cloned().collect() };
         let mut specs = vec![TargetSpec::Unscoped, TargetSpec::NewProject];
         for reach in [Reach::Served, Reach::AnyProject] {
-            for freshness in [Freshness::Fresh, Freshness::FreshUnlessCached] {
-                for without in [WithoutProject::EmptySession, WithoutProject::Refused] {
-                    specs.push(TargetSpec::Project {
-                        target: ProjectTarget { reach, freshness },
-                        without,
-                    });
-                }
+            for without in [WithoutProject::EmptySession, WithoutProject::Refused] {
+                specs.push(TargetSpec::Project { reach, without });
             }
         }
         for spec in specs {
             let takes_path = match spec {
                 TargetSpec::Unscoped => false,
                 TargetSpec::NewProject => true,
-                TargetSpec::Project { target, .. } => target.reach == Reach::AnyProject,
+                TargetSpec::Project { reach, .. } => reach == Reach::AnyProject,
             };
-            let takes_cached = matches!(
-                spec,
-                TargetSpec::Project { target, .. }
-                    if target.freshness == Freshness::FreshUnlessCached
-            );
             let mut declared = names(spec);
             declared.sort();
             let mut fields: Vec<String> = spec
@@ -1022,12 +920,9 @@ mod tests {
                 takes_path,
                 "{spec:?}"
             );
-            assert_eq!(
-                declared
-                    .iter()
-                    .any(|n| n == TargetArgument::UseCached.name()),
-                takes_cached,
-                "{spec:?}"
+            assert!(
+                declared.iter().all(|n| n != "use_cached"),
+                "{spec:?} lists use_cached"
             );
             assert_eq!(
                 spec.required(),
@@ -1052,7 +947,7 @@ mod tests {
         );
         assert_eq!(
             described(TargetSpec::Project {
-                target: ProjectTarget::ANY,
+                reach: Reach::AnyProject,
                 without: WithoutProject::Refused,
             })
             .as_deref(),
@@ -1140,10 +1035,10 @@ mod tests {
             ),
             (
                 TargetError::InvalidArgument {
-                    argument: TargetArgument::UseCached,
-                    message: "not a boolean".into(),
+                    argument: TargetArgument::Path,
+                    message: "not a string".into(),
                 },
-                Some("use_cached"),
+                path,
             ),
             // `no_project` names `path` only where the entry takes one.
             (TargetError::NoProject(adopts(Reach::Served)), None),
@@ -1176,7 +1071,7 @@ mod tests {
             }))
         ));
         let any = TargetSpec::Project {
-            target: ProjectTarget::ANY,
+            reach: Reach::AnyProject,
             without: WithoutProject::Refused,
         };
         let error = match refused(any) {

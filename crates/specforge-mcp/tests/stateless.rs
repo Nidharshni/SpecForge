@@ -645,27 +645,6 @@ fn a_project_created_at_the_root_is_served_by_the_next_stateless_request() {
     assert_eq!(extensions["result"]["isError"], false, "{extensions}");
 }
 
-#[test]
-fn pin_a_stateless_use_cached_reads_an_earlier_compile() {
-    let dir = project();
-    let mut server = server(&dir);
-    assert!(!codes(&tool(&mut server, "specforge.validate", json!({}))).contains(&"E001".into()));
-    std::fs::write(dir.path().join("broken.spec"), "behavior {\n").unwrap();
-    let cached = codes(&tool(
-        &mut server,
-        "specforge.validate",
-        json!({"use_cached": true}),
-    ));
-    assert!(!cached.contains(&"E001".to_string()), "{cached:?}");
-    let mut fresh = self::server(&dir);
-    let control = codes(&tool(
-        &mut fresh,
-        "specforge.validate",
-        json!({"use_cached": true}),
-    ));
-    assert!(control.contains(&"E001".to_string()), "{control:?}");
-}
-
 #[specforge_test(
     behavior = "serve_stateless_mcp_requests",
     verify = "a stateless no-project refusal names no call that would serve a project"

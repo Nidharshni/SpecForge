@@ -73,7 +73,7 @@ invariant mcp_served_project_consistency "MCP Served Project Consistency" {
     The project an MCP server serves is replaced whole or not at all, and
     every request that reads it (tools/call, resources/read, prompts/get and
     the list methods) first brings it up to date with the files on disk
-    (bring_session_up_to_date), unless the tool's use_cached says otherwise:
+    (bring_session_up_to_date):
     an update for changed sources, an environment reload with its extension
     tools and resources for a changed specforge.json, specforge.lock or
     extension module. Subscribed clients learn what changed. A call whose

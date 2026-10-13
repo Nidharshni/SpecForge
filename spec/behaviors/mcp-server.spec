@@ -239,7 +239,7 @@ behavior list_mcp_tools "List MCP Tools" {
   verify unit "an extension tool is annotated read-only and is never listed as a mutation"
   verify unit "an extension tool is listed once across recompiles"
   verify unit "an extension tool's declared output_schema is listed as its outputSchema"
-  verify unit "a tool's path and use_cached are declared once, by its target"
+  verify unit "a tool's path is declared once, by its target"
   verify unit "a core tool's spec is derived from its one module: its name, description, effect, arguments, target and reply"
   verify unit "every listed extension tool is the one dispatched under its name, listed once"
 }
@@ -266,7 +266,7 @@ behavior read_mcp_arguments_as_declared "Read MCP Arguments as Declared" {
     Every core MCP tool and prompt MUST read its call's arguments into one
     typed definition from which its listing is derived: a tool's inputSchema
     (each property's type, description, default, enum, minimum and whether
-    it is required, then its target's path and use_cached, with no other
+    it is required, then its target's path, with no other
     property allowed) and a prompt's listed arguments (name, description,
     required). An absent or null argument MUST read as the default the
     listing states, an option as none, a list as empty; a required argument
