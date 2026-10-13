@@ -137,7 +137,13 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   positions ignored (`specforge_graph::GraphDelta`, re-exported as `specforge_project::GraphDelta`). A graph
   build computes it. `specforge watch --format json` prints it and MCP sends it whole as
   `specforge/graphChanged` (ADR 0058). `specforge migrate` keeps a migration only when the delta from the graph
-  before it to the graph after is empty, and reports each change as W054.
+  before it to the graph after is empty, and reports each change as W054. A node that only moved is no change; the
+  update lists it apart (**moved node**, `Update::moved`), so what writes positions (MCP's `specforge://graph`) is
+  notified.
+- **Moved node**: a node in both graphs declared at another file or start line, where it is now
+  (`specforge_graph::NodeChange` in `Applied::moved` / `Update::moved`). Not part of the graph delta; MCP notifies
+  the resources that write positions (`Watched::Graph`, what a resource declares with
+  `ResourceSpec::changes_with`).
 - **Diagnostics delta**: what an update or a reload changed in what a session reports: the diagnostics added and
   removed, each compared and presented whole, as every JSON surface presents one (code, severity, message, span,
   suggestion, data, origin). A diagnostic that moved or changed in any part is removed and added; identical ones
@@ -457,7 +463,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Read view**: an operation that only reads the project view: stats, trace, the coverage view, the
   model and outline diagrams, the versioned schema, inspect, query, list and search (the entities a
   selection over the view returns, `specforge_ops::query`), the exploration and the review
-  (`specforge_ops::{explore, review}`), the plan check (`specforge_ops::plan::check`), and the inference guide and plan
+  (`specforge_ops::{explore, review}`), the reach of a trace (`specforge_ops::trace::reach`, the trace prompt's
+  affected and unverified entities), the plan check (`specforge_ops::plan::check`), and the inference guide and plan
   (`specforge_ops::infer::{guide, kind_guide, inference_plan}`). Each returns a typed outcome; the CLI,
   MCP (its tools and its prompts) and the LSP only render it.
 - **Entity facts**: what inspect returns for one entity: its node and kind entry, headline
