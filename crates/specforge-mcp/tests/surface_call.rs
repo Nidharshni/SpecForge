@@ -296,11 +296,11 @@ fn export_takes_a_schema_version() {
         json!({"format": "graph", "schema_version": "99.0.0"}),
     );
     let error = tool_error(&reply);
-    assert_eq!(
-        error["diagnostic"]["code"],
-        expected.code.as_ref(),
-        "{error}"
-    );
+    // An operation's own code (a slug) does not ride in the tool error: the
+    // kind picks `code`, the message names the refusal.
+    assert_eq!(expected.code.as_ref(), "incompatible_schema_version");
+    assert_eq!(error["code"], "conflict", "{error}");
+    assert_eq!(error["message"], expected.message.as_str(), "{error}");
 
     // A version of this major is served at that version.
     let reply = call_tool(
@@ -320,6 +320,30 @@ fn export_takes_a_schema_version() {
     );
     let error = tool_error(&reply);
     assert_eq!(error["code"], "invalid_input", "{error}");
+}
+
+#[specforge_test(
+    behavior = "negotiate_schema_version",
+    verify = "--schema-version and the export tool's schema_version are checked whatever the format"
+)]
+fn the_export_tools_schema_version_is_checked_whatever_the_format() {
+    let mut server = served();
+    for format in ["graph", "brief", "context"] {
+        let reply = call_tool(
+            &mut server,
+            "specforge.export",
+            json!({"format": format, "schema_version": "2.0.0"}),
+        );
+        let error = tool_error(&reply);
+        assert_eq!(error["code"], "conflict", "{format}: {error}");
+        assert!(
+            error["message"]
+                .as_str()
+                .unwrap()
+                .starts_with("requested schema version 2.0.0 has another major version"),
+            "{format}: {error}"
+        );
+    }
 }
 
 #[test]

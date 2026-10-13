@@ -104,6 +104,8 @@ has one coverage-row presenter (`tools::coverage::row_json`) and one gap present
   rendered text.
 - **D10. Only `specforge export` records the schema cache**, at the view's root (D1). MCP only
   reads it.
+  *(ADR 0067: it records the versioned schema with its content hash, after a successful export of any
+  format; every reader versions against the record through `SchemaCache::version`.)*
 - **D11. Trace errors are typed**: `TraceError::EntityNotFound { entity_id, near }` replaces the
   emitter error that carried `E003: …` in its message for MCP to re-parse. It converts to an
   `OpError` E003 with a did-you-mean; the CLI prints `error[E003]: …` with a help line.

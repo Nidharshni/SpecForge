@@ -22,6 +22,7 @@ the spec to say what SpecForge does:
 
 Built instead of trimmed, because the machinery already existed: `specforge migrate`'s schema
 snapshot and W053 compatibility check, and `specforge watch --verify-incremental`.
+*(ADR 0067 D6: the schema snapshot and its check are gone; a migration cannot change the schema.)*
 
 A second pass (tier 3, strengthening weak tests) settled more:
 

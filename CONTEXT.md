@@ -47,6 +47,16 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   I007 (older) and E019 (newer, or a header that is not `MAJOR.MINOR`) on the header line, like any
   parser diagnostic; `specforge migrate` reads the version through the same function. It is
   distinct from the Graph Protocol's schema version.
+- **Schema version**: the Graph Protocol schema's `MAJOR.MINOR.PATCH`, computed, never declared: the version the
+  schema record holds, bumped by the largest change between the recorded schema and the one the loaded extensions
+  produce (major when something a reader relies on is removed or reshaped, minor for an addition, patch for
+  documentation and provenance; 1.0.0 with no record). One version names one document (one content hash). A
+  requested version is admitted when its readers read the current schema, never applied
+  (`specforge_ops::schema_version::VersionedSchema`, ADR 0067).
+- **Schema record**: `<root>/.specforge/schema-cache.json`, the versioned schema the last successful `specforge
+  export` recorded, with its content hash (`specforge_ops::schema_version::SchemaCache`). Every reader of the
+  project's schema versions against it; only export writes it, into the project it exports. One that cannot be
+  read is I016 and the version starts again at 1.0.0.
 - **Migration record**: `<root>/.specforge/migration.json`, what `specforge migrate --rollback` undoes: the
   last kept migration made with backups, each file with its backup and the SHA-256 of the file as the migration
   left it (`specforge_migrate::MigrationRecord`). A rollback restores only a recorded file that still holds that

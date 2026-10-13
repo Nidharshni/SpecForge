@@ -304,11 +304,16 @@ fn export_context_omits_the_schema_unless_asked() {
 fn export_invalid_schema_version_exits_one() {
     let dir = setup_project(&[("main.spec", SPEC_CONTENT)]);
 
-    specforge_cmd()
+    let refused = specforge_cmd()
         .args(["export", "--format=graph", "--schema-version=invalid"])
         .arg(dir.path())
         .assert()
         .code(1);
+    let stderr = String::from_utf8_lossy(&refused.get_output().stderr).into_owned();
+    assert!(
+        stderr.starts_with("error[invalid_schema_version]"),
+        "{stderr}"
+    );
 }
 
 // B:serve_schema_resource — specforge schema command outputs JSON

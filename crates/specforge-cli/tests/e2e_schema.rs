@@ -523,7 +523,7 @@ fn export_v2_schema_has_edge_types() {
 
 #[specforge_test(
     behavior = "negotiate_schema_version",
-    verify = "compatible version within range is resolved"
+    verify = "a requested version of the same major, not newer, is admitted and the export carries the current version"
 )]
 fn export_schema_version_negotiation() {
     let dir = setup_project(&[("main.spec", SOFTWARE_SPEC)]);
@@ -536,12 +536,17 @@ fn export_schema_version_negotiation() {
         .unwrap();
     assert!(output.status.success(), "1.0.0 should be accepted");
 
-    // Invalid major version
-    specforge_cmd()
+    // Another major version
+    let refused = specforge_cmd()
         .args(["export", "--format=graph", "--schema-version=99.0.0"])
         .arg(dir.path())
         .assert()
         .code(1);
+    let stderr = String::from_utf8_lossy(&refused.get_output().stderr).into_owned();
+    assert!(
+        stderr.starts_with("error[incompatible_schema_version]"),
+        "{stderr}"
+    );
 }
 
 #[specforge_test(

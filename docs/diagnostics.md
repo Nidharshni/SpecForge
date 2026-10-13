@@ -1092,11 +1092,13 @@ Level: info
 ## I016
 
 ```
-I016: Schema cache missing
+I016: Schema cache unreadable
 
-Prior exports exist but `.specforge/schema-cache.json` is missing, so
-breaking-change detection was skipped for this compilation. Run a full
-compilation to regenerate the schema cache.
+`.specforge/schema-cache.json` exists but cannot be read: it is not JSON, not a
+recorded schema, or names a field type this host does not read. The schema is
+versioned as if no export had been made, at 1.0.0, and the export records a new
+cache. Agents that read earlier exports must not take the version as continuing
+theirs.
 
 Owner: core
 Level: info
@@ -2497,15 +2499,16 @@ Level: warning
 ```
 W053: Breaking schema change
 
-A graph protocol schema change classified as breaking: a removed entity kind,
-edge type or field, a new required field, or a field whose type changed.
-`specforge export` compares the schema against the one the previous export
-cached in `.specforge/schema-cache.json`, so an extension upgrade or removal
-that breaks the schema warns on the next export; the export is still written and
-the cache updated. `specforge migrate` compares the schema before and after a
-migration. Update the agents and tools that read the export, keep the extension
-versions that produced the old schema, or review the migration to preserve
-backward compatibility.
+A graph protocol schema change classified as breaking since the last export:
+something a reader of the recorded schema relies on was removed or reshaped —
+a removed entity kind, edge type or field, a field added as required, a field
+whose type, required flag, edge type or target kind changed, an enum value lost,
+or an edge type that lost a source or target kind. `specforge export` compares
+every attribute of the schema against the one the previous export recorded in
+`.specforge/schema-cache.json`, bumps the major version, and names the versions
+in the warning; the export is still written and the cache updated. Update the
+agents and tools that read the export, or keep the extension versions that
+produced the old schema.
 
 Owner: core
 Level: warning
