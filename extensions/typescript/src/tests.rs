@@ -1,4 +1,5 @@
 use super::*;
+use specforge_extension_sdk::testing::MockHost;
 use specforge_protocol_types::{AnalyzerDescriptor, DescribeResponse};
 // --- Scan tests ---
 
@@ -366,7 +367,7 @@ fn map_camel_case_function() {
 #[test]
 fn handshake_declares_analyzer() {
     let handshake: specforge_protocol_types::HandshakeResponse =
-        serde_json::from_str(&specforge_extension_build().handshake_json()).unwrap();
+        serde_json::from_str(&specforge_extension_build().declaration().handshake_json()).unwrap();
     assert_eq!(handshake.name, "@specforge/typescript");
     assert!(!handshake.providers);
     let declaration = specforge_extension_build().declaration();
@@ -379,8 +380,8 @@ fn handshake_declares_analyzer() {
 
 #[test]
 fn describe_returns_analyzer_descriptor() {
-    let json = specforge_extension_build()
-        .describe_response_json("analyzers")
+    let json = MockHost::new(specforge_extension_build())
+        .describe_json("analyzers")
         .expect("analyzers category");
     let resp: DescribeResponse = serde_json::from_str(&json).unwrap();
     assert_eq!(resp.category, "analyzers");

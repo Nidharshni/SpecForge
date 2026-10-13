@@ -175,6 +175,7 @@ behavior call_extension_exports "Call Extension Exports" {
   verify unit "an unknown field in an answer is ignored and an absent optional field takes its default"
   verify unit "a pass answer may be bare diagnostics or diagnostics with a summary, and its diagnostics come back in canonical order with an entity's span attached"
   verify unit "an analyze pass that traps is reported as an E028 finding of that pass"
+  verify unit "an analyze pass runs in the view's runtime whether or not the view has a root"
   verify unit "a scanner that traps or answers malformed output is reported, not dropped"
   verify unit "a pass, collector, custom rule, scanner or migration hook is declared with its handler, and its export answers through it"
   verify unit "the SDK routes a compiler pass at the export the host calls it by"

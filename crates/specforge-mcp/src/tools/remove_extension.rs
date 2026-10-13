@@ -2,9 +2,11 @@
 
 use crate::args::Arguments;
 use crate::mutation::{Mutated, Mutation, MutationArgs, MutationReply, NoDiagnostics, Written};
+use crate::refusal::ArgumentOf;
 use crate::target::ProjectRef;
 use crate::target::{AnyProject, Project};
 use crate::tool::{CoreTool, Effect, ReplySpec, WriteHints};
+use specforge_ops::extension::RemoveField;
 
 /// `specforge.remove_extension`'s arguments.
 #[derive(Debug, Arguments)]
@@ -33,6 +35,14 @@ type Reply = specforge_ops::extension::RemoveDocument;
 
 pub(crate) struct Tool;
 
+impl ArgumentOf<RemoveField> for Tool {
+    fn argument(field: RemoveField) -> Option<&'static str> {
+        match field {
+            RemoveField::Name => Some("name"),
+        }
+    }
+}
+
 impl CoreTool for Tool {
     const NAME: &'static str = "specforge.remove_extension";
     const DESCRIPTION: &'static str = "Remove an installed extension";
@@ -58,7 +68,8 @@ impl CoreTool for Tool {
             force: args.force,
             dry_run: args.dry_run,
         };
-        let outcome = specforge_ops::extension::remove(&project.view(), &request)?;
+        let outcome =
+            specforge_ops::extension::remove(&project.view(), &request).map_err(Self::failed)?;
         Ok(Mutated::new(
             outcome.document(),
             Written::files(outcome.writes)

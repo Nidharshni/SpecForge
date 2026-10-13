@@ -89,15 +89,15 @@ Common patterns:
 
 | From | Edge Type | Meaning |
 |------|-----------|---------|
-| `behavior` | `uses_port` | "This behavior uses this port interface" |
-| `module` | `defines_port` | "This module defines this port interface" |
-| `invariant` | `enforces` | "This invariant is enforced by this port's implementation" |
+| `behavior` | `BehaviorUsesPort` | "Behaviors that use this port" (via `ports` field) |
+| `module` | `ModuleConsumesPort` | "Modules that consume this port" (via `ports` field) |
+| `module` | `ModuleDefinesPort` | "Modules that define this port" (via `ports_defined` field) |
 
 ### Outgoing edges
 
 | To | Edge Type | Meaning |
 |----|-----------|---------|
-| `ref` | `links_to` | "This port links to these external references" |
+| `type` | `PortReferencesType` | "This port references these types" (via `types` field) |
 
 ## Validation Rules
 
@@ -151,10 +151,10 @@ A behavior references the invariants that the port's implementation must uphold.
 
 | Direction | Entity | Edge | Meaning |
 |-----------|--------|------|---------|
-| outgoing | [ref](ref.md) | `links_to` | External references linked to this port |
-| incoming | [behavior](behavior.md) | `uses_port` | Behaviors that use this port interface |
-| incoming | [module](module.md) | `defines_port` | Modules that define this port |
-| incoming | [invariant](invariant.md) | `enforces` | Invariants enforced by this port's implementation |
+| outgoing | [type](type.md) | `PortReferencesType` | Types this port references |
+| incoming | [behavior](behavior.md) | `BehaviorUsesPort` | Behaviors that use this port |
+| incoming | [module](module.md) | `ModuleConsumesPort` | Modules that consume this port |
+| incoming | [module](module.md) | `ModuleDefinesPort` | Modules that define this port |
 
 ## Examples
 

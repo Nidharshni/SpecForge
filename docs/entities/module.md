@@ -43,7 +43,7 @@ All fields are optional at the type level.
 | `title` | string | Human-readable name (the string after the entity ID). |
 | `description` | string | Brief description of the module's purpose and scope. |
 | `family` | ModuleFamily | Logical grouping from the `ModuleFamily` enum: `core`, `platform`, `extension`, `integration`, `advisory`. Not validated by the compiler. |
-| `features` | EntityId[] | The features this module implements. Creates `ModuleFeature` edges. |
+| `features` | EntityId[] | The features this module implements. Creates `ModuleContainsFeature` edges. |
 | `depends_on` | EntityId[] | Other modules this module depends on. Creates `ModuleDependsOn` edges. Cycles detected by E007. |
 | `reason` | string | Rationale for module state (e.g., deprecation justification). Documentation-only — no validation rule in v1. |
 | `tags` | string[] | Free-form tags for categorization. |
@@ -55,17 +55,19 @@ All fields are optional at the type level.
 
 | To | Edge Type | Meaning |
 |----|-----------|---------|
-| `feature` | `ModuleFeature` | "This module implements these features" |
-| `module` | `ModuleDependsOn` | "This module depends on that module" |
-| `ref` | `links_to` | "This module links to these external references" |
+| `port` | `ModuleConsumesPort` | "This module consumes these ports" (via `ports` field) |
+| `feature` | `ModuleContainsFeature` | "This module implements these features" (via `features` field) |
+| `port` | `ModuleDefinesPort` | "This module defines these ports" (via `ports_defined` field) |
+| `module` | `ModuleDependsOn` | "This module depends on these modules" (via `depends_on` field) |
 
 ### Incoming edges
 
 | From | Edge Type | Meaning |
 |------|-----------|---------|
-| `module` | `ModuleDependsOn` | "Another module depends on this one" |
-| `deliverable` | `DeliverableModule` | "A deliverable uses this module" |
-| `milestone` | `MilestoneModule` | "A milestone includes this module" |
+| `deliverable` | `DeliverableContainsModule` | "Deliverables that contain this module" (via `modules` field) |
+| `milestone` | `MilestoneScopesModule` | "Milestones that include this module" (via `modules` field) |
+| `module` | `ModuleDependsOn` | "Modules that depend on this module" (via `depends_on` field) |
+| `term` | `TermBelongsToModule` | "Terms that belong to this module" (via `module` field) |
 
 ## Validation Rules
 
@@ -122,12 +124,14 @@ The module block models references and relationships — which features it imple
 
 | Direction | Entity | Edge | Meaning |
 |-----------|--------|------|---------|
-| outgoing | [feature](feature.md) | `ModuleFeature` | Features this module implements |
+| outgoing | [port](port.md) | `ModuleConsumesPort` | Ports this module consumes |
+| outgoing | [feature](feature.md) | `ModuleContainsFeature` | Features this module implements |
+| outgoing | [port](port.md) | `ModuleDefinesPort` | Ports this module defines |
 | outgoing | [module](module.md) | `ModuleDependsOn` | Modules this module depends on |
-| outgoing | [ref](ref.md) | `links_to` | External references linked to this module |
-| incoming | [module](module.md) | `ModuleDependsOn` | Modules that depend on this one |
-| incoming | [deliverable](deliverable.md) | `DeliverableModule` | Deliverables that use this module |
-| incoming | [milestone](milestone.md) | `MilestoneModule` | Milestones that include this module |
+| incoming | [deliverable](deliverable.md) | `DeliverableContainsModule` | Deliverables that contain this module |
+| incoming | [milestone](milestone.md) | `MilestoneScopesModule` | Milestones that include this module |
+| incoming | [module](module.md) | `ModuleDependsOn` | Modules that depend on this module |
+| incoming | [term](term.md) | `TermBelongsToModule` | Terms that belong to this module |
 
 ## Examples
 

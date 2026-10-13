@@ -32,6 +32,7 @@ pub mod plan;
 mod prove;
 pub mod publish;
 pub mod query;
+mod refusal;
 pub mod registry;
 pub mod rename;
 mod report;
@@ -47,6 +48,7 @@ pub mod trace;
 pub mod view;
 mod writes;
 
+pub use refusal::Refusal;
 pub use writes::Writes;
 
 use specforge_common::Code;
@@ -128,6 +130,28 @@ impl OpErrorKind {
             Self::PermissionDenied => "permission_denied",
             Self::Timeout => "timeout",
             Self::Internal => "internal_error",
+        }
+    }
+
+    /// Whether a refusal of this kind rejects a value the caller gave: the
+    /// request is wrong (`InvalidInput`), names an entity, file or extension
+    /// that is not there (`EntityNotFound`, `FileNotFound`,
+    /// `ExtensionNotFound`), or contradicts what is there (`Conflict`). Every
+    /// other kind is about the project or the environment, and a refusal of
+    /// it names no field ([`Refusal::about`]). One arm per kind, no wildcard.
+    pub const fn rejects_a_value(self) -> bool {
+        match self {
+            Self::InvalidInput
+            | Self::EntityNotFound
+            | Self::FileNotFound
+            | Self::ExtensionNotFound
+            | Self::Conflict => true,
+            Self::SchemaMismatch
+            | Self::CompilationFailed
+            | Self::PreconditionFailed
+            | Self::PermissionDenied
+            | Self::Timeout
+            | Self::Internal => false,
         }
     }
 
@@ -249,6 +273,17 @@ impl OpError {
         self.data = Some(Box::new(data));
         self
     }
+
+    /// This refusal about `field` ([`Refusal::about`]).
+    pub fn about<F>(self, field: F) -> Refusal<F> {
+        Refusal::about(field, self)
+    }
+}
+
+impl AsRef<OpError> for OpError {
+    fn as_ref(&self) -> &OpError {
+        self
+    }
 }
 
 impl std::fmt::Display for OpError {
@@ -296,7 +331,7 @@ mod tests {
 
     #[test]
     fn an_error_stays_small_enough_to_return_whole() {
-        // clippy.toml's `large-error-threshold` is 129 bytes.
+        // clippy.toml's `large-error-threshold` is 153 bytes.
         assert!(std::mem::size_of::<OpError>() <= 129);
     }
 

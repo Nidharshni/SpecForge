@@ -4,6 +4,7 @@ expression: "normalized(value, root)"
 ---
 {
   "isError": {
+    "argument": "entity_id",
     "code": "entity_not_found",
     "diagnostic": {
       "code": "E003",

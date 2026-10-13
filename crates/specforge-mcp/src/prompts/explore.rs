@@ -5,11 +5,21 @@ use specforge_ops::explore::{ExplorationDocument, ExplorationRequest, explore};
 
 use crate::args::Arguments;
 use crate::prompt::{CorePrompt, Prompted};
+use crate::refusal::ArgumentOf;
 use crate::tool::McpError;
+use specforge_ops::navigate::EntityField;
 use specforge_ops::view::ProjectView;
 
 /// The explore prompt (`McpExplorePromptResult`).
 pub struct Prompt;
+
+impl ArgumentOf<EntityField> for Prompt {
+    fn argument(field: EntityField) -> Option<&'static str> {
+        match field {
+            EntityField::EntityId => Some("entity_id"),
+        }
+    }
+}
 
 impl CorePrompt for Prompt {
     const NAME: &'static str = "specforge://prompts/explore";
@@ -51,7 +61,8 @@ fn render(
         kind: args.kind.as_deref(),
         depth: args.depth,
     };
-    let exploration = explore(&view, &request).map_err(McpError::from)?;
+    let exploration =
+        explore(&view, &request).map_err(|refusal| Box::new(Prompt::refused(refusal)))?;
     Ok(Prompted {
         instruction: INSTRUCTION.to_string(),
         payload: exploration.document(),

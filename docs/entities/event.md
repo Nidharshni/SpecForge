@@ -76,14 +76,16 @@ Supported annotations: `@readonly`, `@optional`.
 
 | From | Edge Type | Meaning |
 |------|-----------|---------|
-| `behavior` | `produces` | "This behavior emits this event" (via the `trigger` field) |
+| `behavior` | `BehaviorConsumesEvent` | "Behaviors that consume this event" (via `consumes` field) |
+| `behavior` | `BehaviorProducesEvent` | "Behaviors that emit this event" (via `produces` field) |
 
 ### Outgoing edges
 
 | To | Edge Type | Meaning |
 |----|-----------|---------|
-| `behavior` | `consumes` | "This event is consumed by these behaviors" |
-| `ref` | `links_to` | "This event links to these external references" |
+| `type` | `EventCarriesPayloadType` | "This event has as its payload these types" (via `payload` field) |
+| `protocol` | `EventFollowsProtocol` | "This event follows these protocols" (via `follows_protocol` field) |
+| `process` | `EventParticipatesInProcess` | "This event participates in these processes" (via `participates_in` field) |
 
 ## Validation Rules
 
@@ -130,9 +132,11 @@ Events are the primary mechanism for traceability across bounded contexts. When 
 
 | Direction | Entity | Edge | Meaning |
 |-----------|--------|------|---------|
-| outgoing | [behavior](behavior.md) | `consumes` | Behaviors triggered by this event |
-| outgoing | [ref](ref.md) | `links_to` | External references linked to this event |
-| incoming | [behavior](behavior.md) | `produces` | Behaviors that emit this event |
+| outgoing | [type](type.md) | `EventCarriesPayloadType` | Types this event has as its payload |
+| outgoing | `protocol` | `EventFollowsProtocol` | Protocols this event follows |
+| outgoing | `process` | `EventParticipatesInProcess` | Processes this event participates in |
+| incoming | [behavior](behavior.md) | `BehaviorConsumesEvent` | Behaviors that consume this event |
+| incoming | [behavior](behavior.md) | `BehaviorProducesEvent` | Behaviors that emit this event |
 
 ## Examples
 

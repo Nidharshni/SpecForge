@@ -9,5 +9,7 @@ crate-type = ["cdylib"]
 [dependencies]
 specforge-extension-sdk = { path = "../../crates/specforge-extension-sdk" }
 specforge-protocol-types = { path = "../../crates/specforge-protocol-types" }
-serde = { version = "1.0", features = ["derive"] }
+
+[dev-dependencies]
 serde_json = "1.0"
+specforge-extension-sdk = { path = "../../crates/specforge-extension-sdk", features = ["testing"] }

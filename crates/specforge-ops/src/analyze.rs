@@ -25,7 +25,7 @@ use specforge_project::passes::{self, AnalysisContext};
 use specforge_registry::DeclaredPass;
 
 use crate::solver::Solver;
-use crate::{OpError, OpErrorKind, RunVerdict};
+use crate::{OpError, OpErrorKind, Refusal, RunVerdict};
 
 pub use crate::view::ProjectView;
 
@@ -115,28 +115,29 @@ pub struct StrayRecord {
 pub struct AnalyzeOutcome {
     /// Built-in passes, extension passes in their declared order, `prove` last.
     pub passes: Vec<PassOutcome>,
-    /// The `min` proof-coverage gate: part of the run's verdict.
-    pub gate: Gate,
+    /// The `min` proof-coverage gate, `None` when `min` was not set: part of
+    /// the run's verdict.
+    pub gate: Option<Gate>,
     /// Stray test records, outside the pass reports.
     pub stray_records: Vec<StrayRecord>,
 }
 
-/// Where the proof-coverage gate landed.
-#[derive(Debug, Clone, PartialEq)]
+/// Where the proof-coverage gate landed, when `min` was set: part of the
+/// run's verdict, and the document's `gate` (`McpAnalyzeGate`).
+#[derive(Debug, Clone, PartialEq, Serialize, Shape)]
+#[serde(tag = "status", rename_all = "lowercase")]
 pub enum Gate {
-    /// `min` was not set.
-    NotRequested,
     /// Proof coverage is at or above `min` (nothing testable always is).
     Met {
-        pct: f64,
         min: f64,
+        pct: f64,
         proven: usize,
         total: usize,
     },
     /// Proof coverage is under `min`: the run fails (E048).
     Below {
-        pct: f64,
         min: f64,
+        pct: f64,
         proven: usize,
         total: usize,
     },
@@ -147,77 +148,42 @@ pub enum Gate {
 }
 
 impl Gate {
-    fn of(min: Option<f64>, passes: &[PassOutcome]) -> Gate {
-        let Some(min) = min else {
-            return Gate::NotRequested;
-        };
+    /// The gate at `min` over `passes`; `None` without a minimum.
+    fn of(min: Option<f64>, passes: &[PassOutcome]) -> Option<Gate> {
+        let min = min?;
         let Some(pass) = passes.iter().find(|r| r.name == COVERAGE_PASS) else {
-            return Gate::Unjudged {
+            return Some(Gate::Unjudged {
                 min,
                 reason: "the coverage pass did not run".to_string(),
-            };
+            });
         };
         // A missing or renamed key is an error, never a silent 0.
         let summary: coverage::Summary = match serde_json::from_value(pass.summary.clone()) {
             Ok(summary) => summary,
             Err(e) => {
-                return Gate::Unjudged {
+                return Some(Gate::Unjudged {
                     min,
                     reason: format!("the summary is not the shape this specforge reads ({e})"),
-                };
+                });
             }
         };
         let pct = summary.proof_pct();
         let (proven, total) = (summary.testable_proven, summary.testable_total);
-        if pct + f64::EPSILON < min {
+        Some(if pct + f64::EPSILON < min {
             Gate::Below {
-                pct,
                 min,
+                pct,
                 proven,
                 total,
             }
         } else {
             Gate::Met {
-                pct,
                 min,
+                pct,
                 proven,
                 total,
             }
-        }
-    }
-
-    /// `{status, min, pct?, proven?, total?, reason?}`; `None` when no
-    /// minimum was requested.
-    fn document(&self) -> Option<GateDocument> {
-        match self {
-            Gate::NotRequested => None,
-            Gate::Met {
-                pct,
-                min,
-                proven,
-                total,
-            } => Some(GateDocument::Met {
-                min: *min,
-                pct: *pct,
-                proven: *proven,
-                total: *total,
-            }),
-            Gate::Below {
-                pct,
-                min,
-                proven,
-                total,
-            } => Some(GateDocument::Below {
-                min: *min,
-                pct: *pct,
-                proven: *proven,
-                total: *total,
-            }),
-            Gate::Unjudged { min, reason } => Some(GateDocument::Unjudged {
-                min: *min,
-                reason: reason.clone(),
-            }),
-        }
+        })
     }
 }
 
@@ -235,9 +201,9 @@ impl AnalyzeOutcome {
     /// returns `ok` (`verdict() == Passed`) and the gate.
     pub fn verdict(&self) -> RunVerdict {
         match &self.gate {
-            Gate::Unjudged { .. } => RunVerdict::Unjudged,
-            Gate::Below { .. } => RunVerdict::Failed,
-            Gate::NotRequested | Gate::Met { .. } => RunVerdict::of(self.findings_ok()),
+            Some(Gate::Unjudged { .. }) => RunVerdict::Unjudged,
+            Some(Gate::Below { .. }) => RunVerdict::Failed,
+            None | Some(Gate::Met { .. }) => RunVerdict::of(self.findings_ok()),
         }
     }
 
@@ -251,22 +217,22 @@ impl AnalyzeOutcome {
     /// when below, E068 when unjudged; `None` otherwise.
     pub fn gate_failure(&self) -> Option<OpError> {
         match &self.gate {
-            Gate::NotRequested | Gate::Met { .. } => None,
+            None | Some(Gate::Met { .. }) => None,
             // The kind is never mapped: MCP returns the outcome, not an
             // error, and the CLI prints the lines only (ADR 0029 D3a).
-            Gate::Below {
+            Some(Gate::Below {
                 pct,
                 min,
                 proven,
                 total,
-            } => Some(OpError::coded(
+            }) => Some(OpError::coded(
                 OpErrorKind::InvalidInput,
                 codes::E048,
                 format!(
                     "proof coverage {pct:.1}% is below the required minimum {min:.1}% ({proven}/{total} testable entities proven)"
                 ),
             )),
-            Gate::Unjudged { reason, .. } => Some(
+            Some(Gate::Unjudged { reason, .. }) => Some(
                 OpError::coded(
                     OpErrorKind::SchemaMismatch,
                     codes::E068,
@@ -291,7 +257,7 @@ impl AnalyzeOutcome {
                     summary: r.summary.clone(),
                 })
                 .collect(),
-            gate: self.gate.document(),
+            gate: self.gate.clone(),
             stray_records: self.stray_records.clone(),
         }
     }
@@ -306,7 +272,7 @@ pub struct AnalyzeDocument {
     pub passes: Vec<PassDocument>,
     /// Where the `min` proof-coverage gate landed; absent without `min`.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub gate: Option<GateDocument>,
+    pub gate: Option<Gate>,
     /// Stray test records; absent when there are none.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub stray_records: Vec<StrayRecord>,
@@ -321,26 +287,15 @@ pub struct PassDocument {
     pub summary: Value,
 }
 
-/// Where the proof-coverage gate landed.
-#[derive(Debug, Clone, PartialEq, Serialize, Shape)]
-#[serde(tag = "status", rename_all = "lowercase")]
-pub enum GateDocument {
-    /// Proof coverage is at or above `min`.
-    Met {
-        min: f64,
-        pct: f64,
-        proven: usize,
-        total: usize,
-    },
-    /// Proof coverage is under `min`.
-    Below {
-        min: f64,
-        pct: f64,
-        proven: usize,
-        total: usize,
-    },
-    /// The coverage pass gave no figure the gate reads.
-    Unjudged { min: f64, reason: String },
+/// The field of an analysis request a refusal can be about (ADR 0072).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AnalyzeField {
+    /// `AnalyzeOptions::pass`.
+    Pass,
+    /// `AnalyzeOptions::min`.
+    Min,
+    /// `AnalyzeOptions::report`, when it names a file.
+    Report,
 }
 
 /// Why no analysis ran. Raised before any pass runs, in this order.
@@ -355,8 +310,10 @@ pub enum AnalyzeError {
     /// `min` was set and the coverage pass will not run (not selected, its
     /// extension not loaded, or no runtime): E068.
     MinWithoutCoveragePass,
-    /// The test report is there (or was named) but cannot be used.
+    /// The recorded test report is there but cannot be used.
     UnusableReport(OpError),
+    /// The test results file the request named cannot be used.
+    UnusableTestResults(OpError),
     /// `min` was set and there is no report to score.
     MinNeedsTestResults,
 }
@@ -379,7 +336,7 @@ impl std::fmt::Display for AnalyzeError {
             AnalyzeError::MinWithoutCoveragePass => f.write_str(
                 "a proof-coverage minimum needs the coverage pass of @specforge/testing (pass coverage or all)",
             ),
-            AnalyzeError::UnusableReport(e) => e.fmt(f),
+            AnalyzeError::UnusableReport(e) | AnalyzeError::UnusableTestResults(e) => e.fmt(f),
             AnalyzeError::MinNeedsTestResults => f.write_str(
                 "--min needs test results: run `specforge collect` or pass --test-results",
             ),
@@ -397,6 +354,15 @@ impl std::error::Error for AnalyzeError {}
 /// (`no_test_results`).
 impl From<AnalyzeError> for OpError {
     fn from(error: AnalyzeError) -> Self {
+        Refusal::<AnalyzeField>::from(error).into_error()
+    }
+}
+
+/// [`OpError::from`], with the field the variant is about: an unknown pass is about `pass`, a
+/// minimum out of range about `min`, and a named results file that is not there about the
+/// report (by the kind rule an unusable one is a refusal of the file, not of the argument).
+impl From<AnalyzeError> for Refusal<AnalyzeField> {
+    fn from(error: AnalyzeError) -> Self {
         let message = error.to_string();
         match error {
             AnalyzeError::UnknownPass {
@@ -412,24 +378,28 @@ impl From<AnalyzeError> for OpError {
                     Some(close) => error.with_suggestion(format!("did you mean '{close}'?")),
                     None => error,
                 }
+                .about(AnalyzeField::Pass)
             }
             AnalyzeError::MinOutOfRange(_) => {
                 OpError::new(OpErrorKind::InvalidInput, INVALID_MIN, message)
+                    .about(AnalyzeField::Min)
             }
             AnalyzeError::MinWithoutCoveragePass => {
                 OpError::coded(OpErrorKind::PreconditionFailed, codes::E068, message)
                     .with_suggestion("enable it with `specforge add @specforge/testing`")
+                    .into()
             }
-            AnalyzeError::UnusableReport(error) => error,
+            AnalyzeError::UnusableReport(error) => error.into(),
+            AnalyzeError::UnusableTestResults(error) => error.about(AnalyzeField::Report),
             AnalyzeError::MinNeedsTestResults => {
-                OpError::new(OpErrorKind::PreconditionFailed, "no_test_results", message)
+                OpError::new(OpErrorKind::PreconditionFailed, "no_test_results", message).into()
             }
         }
     }
 }
 
 /// Run the selected passes over `view`; the extension passes in the view's
-/// runtime, when it has one and a root. With `options.prove`, the prove step
+/// runtime, when it has one. With `options.prove`, the prove step
 /// first, over that solver.
 pub fn analyze(
     view: &ProjectView,
@@ -442,8 +412,7 @@ pub fn analyze(
         }
         let coverage_runs = selection.runs(COVERAGE_PASS)
             && declared_pass_names(view).iter().any(|n| n == COVERAGE_PASS)
-            && view.runtime().is_some()
-            && view.root().is_some();
+            && view.runtime().is_some();
         if !coverage_runs {
             return Err(AnalyzeError::MinWithoutCoveragePass);
         }
@@ -489,9 +458,7 @@ pub fn analyze(
             });
         }
     }
-    if view.root().is_some()
-        && let Some(runtime) = view.runtime()
-    {
+    if let Some(runtime) = view.runtime() {
         // Declared `after` constraints order a single extension's passes;
         // across extensions they are advisory.
         passes_run.extend(
@@ -619,9 +586,6 @@ fn select(view: &ProjectView, requested: &str) -> Result<Selection, AnalyzeError
 
 /// `<extension>:<pass>` of every analyze-phase pass the extensions declare.
 fn declared_pass_names(view: &ProjectView) -> Vec<String> {
-    if view.root().is_none() {
-        return Vec::new();
-    }
     view.registries()
         .analyze_passes()
         .map(DeclaredPass::full_name)
@@ -634,10 +598,11 @@ fn read_report(
 ) -> Result<Option<Arc<TestReport>>, AnalyzeError> {
     match source {
         ReportSource::None => Ok(None),
-        ReportSource::File(path) => crate::report::named(path).map(Some),
-        ReportSource::Recorded => view.test_report(),
+        ReportSource::File(path) => crate::report::named(path)
+            .map(Some)
+            .map_err(AnalyzeError::UnusableTestResults),
+        ReportSource::Recorded => view.test_report().map_err(AnalyzeError::UnusableReport),
     }
-    .map_err(AnalyzeError::UnusableReport)
 }
 
 #[cfg(test)]
@@ -903,12 +868,17 @@ mod tests {
         }
     }
 
-    #[test]
-    fn extension_passes_are_skipped_without_a_root() {
+    #[specforge_test(
+        behavior = "call_extension_exports",
+        verify = "an analyze pass runs in the view's runtime whether or not the view has a root"
+    )]
+    fn extension_passes_run_without_a_root() {
         let project = Project::new();
-        let view = project.view_at(None);
-        let outcome = analyze(&view, &AnalyzeOptions::default()).unwrap();
-        assert_eq!(names(&outcome), vec!["contracts"]);
+        let options = AnalyzeOptions::default();
+        let rooted = project.run(&options).unwrap();
+        let rootless = analyze(&project.view_at(None), &options).unwrap();
+        assert_eq!(names(&rootless), names(&rooted));
+        assert!(names(&rooted).contains(&"@t/x:scan"));
     }
 
     #[test]
@@ -931,7 +901,7 @@ mod tests {
         };
         assert!(matches!(
             project.run(&missing).unwrap_err(),
-            AnalyzeError::UnusableReport(_)
+            AnalyzeError::UnusableTestResults(_)
         ));
     }
 
@@ -1049,7 +1019,7 @@ mod tests {
 
     /// A project with a (blank) recorded report, gated at `min`, whose
     /// testing extension reports `proven` of `total`.
-    fn gate_of(pass_name: &str, min: Option<f64>, summary: Value) -> Gate {
+    fn gate_of(pass_name: &str, min: Option<f64>, summary: Value) -> Option<Gate> {
         let project = Project::serving(InProcessRuntime::new().with(coverage(summary)), &[TESTING]);
         std::fs::write(
             project.dir.path().join("specforge-report.json"),
@@ -1078,7 +1048,7 @@ mod tests {
         verify = "the analysis's ok is the run verdict, the gate included, and its JSON says where the gate landed"
     )]
     fn the_gate_is_not_requested_without_min() {
-        assert_eq!(gate_of("all", None, tally(0, 4)), Gate::NotRequested);
+        assert_eq!(gate_of("all", None, tally(0, 4)), None);
     }
 
     #[specforge_test(
@@ -1088,21 +1058,21 @@ mod tests {
     fn the_gate_is_met_at_or_above_the_minimum() {
         assert_eq!(
             gate_of("all", Some(50.0), tally(2, 4)),
-            Gate::Met {
+            Some(Gate::Met {
                 pct: 50.0,
                 min: 50.0,
                 proven: 2,
                 total: 4
-            }
+            })
         );
         assert_eq!(
             gate_of("coverage", Some(50.0), tally(3, 4)),
-            Gate::Met {
+            Some(Gate::Met {
                 pct: 75.0,
                 min: 50.0,
                 proven: 3,
                 total: 4
-            }
+            })
         );
     }
 
@@ -1113,7 +1083,7 @@ mod tests {
     fn nothing_testable_satisfies_any_minimum() {
         assert!(matches!(
             gate_of("all", Some(100.0), tally(0, 0)),
-            Gate::Met { .. }
+            Some(Gate::Met { .. })
         ));
     }
 
@@ -1124,12 +1094,12 @@ mod tests {
     fn the_gate_is_below_with_the_numbers_to_print() {
         assert_eq!(
             gate_of("all", Some(75.0), tally(1, 4)),
-            Gate::Below {
+            Some(Gate::Below {
                 pct: 25.0,
                 min: 75.0,
                 proven: 1,
                 total: 4
-            }
+            })
         );
     }
 
@@ -1138,42 +1108,86 @@ mod tests {
         verify = "the analysis's ok is the run verdict, the gate included, and its JSON says where the gate landed"
     )]
     fn the_verdict_folds_the_gate_in() {
-        let outcome = |gate: Gate| AnalyzeOutcome {
+        let outcome = |gate: Option<Gate>| AnalyzeOutcome {
             passes: Vec::new(),
             gate,
             stray_records: Vec::new(),
         };
         let landed = |pct: f64| (pct, 50.0, 1, 4);
         let (pct, min, proven, total) = landed(25.0);
-        let below = outcome(Gate::Below {
+        let below = outcome(Some(Gate::Below {
             pct,
             min,
             proven,
             total,
-        });
+        }));
         assert!(below.findings_ok(), "the findings are fine");
         assert_eq!(below.verdict(), RunVerdict::Failed);
         assert!(!below.ok());
         assert_eq!(json_of(&below)["ok"], false);
         assert_eq!(below.gate_failure().unwrap().code, "E048");
 
-        let unjudged = outcome(Gate::Unjudged {
+        let unjudged = outcome(Some(Gate::Unjudged {
             min: 50.0,
             reason: "no figure".into(),
-        });
+        }));
         assert_eq!(unjudged.verdict(), RunVerdict::Unjudged);
         assert_eq!(json_of(&unjudged)["gate"]["status"], "unjudged");
         assert_eq!(unjudged.gate_failure().unwrap().code, "E068");
 
-        let met = outcome(Gate::Met {
+        let met = outcome(Some(Gate::Met {
             pct: 80.0,
             min: 50.0,
             proven: 4,
             total: 5,
-        });
+        }));
         assert_eq!(met.verdict(), RunVerdict::Passed);
         assert!(met.gate_failure().is_none());
-        assert!(json_of(&outcome(Gate::NotRequested)).get("gate").is_none());
+        assert!(json_of(&outcome(None)).get("gate").is_none());
+    }
+
+    #[specforge_test(
+        behavior = "te_coverage_gate",
+        verify = "the analysis's ok is the run verdict, the gate included, and its JSON says where the gate landed"
+    )]
+    fn the_gate_document_is_byte_stable() {
+        let written = |gate: Option<Gate>| {
+            serde_json::to_string(
+                &AnalyzeOutcome {
+                    passes: Vec::new(),
+                    gate,
+                    stray_records: Vec::new(),
+                }
+                .document(),
+            )
+            .unwrap()
+        };
+        assert!(
+            written(Some(Gate::Below {
+                pct: 25.0,
+                min: 75.0,
+                proven: 1,
+                total: 4
+            }))
+            .contains(r#""gate":{"status":"below","min":75.0,"pct":25.0,"proven":1,"total":4}"#)
+        );
+        assert!(
+            written(Some(Gate::Unjudged {
+                min: 50.0,
+                reason: "r".into()
+            }))
+            .contains(r#""gate":{"status":"unjudged","min":50.0,"reason":"r"}"#)
+        );
+        assert!(
+            written(Some(Gate::Met {
+                pct: 100.0,
+                min: 50.0,
+                proven: 2,
+                total: 2
+            }))
+            .contains(r#""gate":{"status":"met","min":50.0,"pct":100.0,"proven":2,"total":2}"#)
+        );
+        assert!(!written(None).contains(r#""gate""#));
     }
 
     #[specforge_test(
@@ -1242,10 +1256,10 @@ mod tests {
     fn a_summary_of_another_shape_is_unreadable_not_zero() {
         assert_eq!(
             gate_of("all", Some(10.0), json!({"testable_total": "many"})),
-            Gate::Unjudged {
+            Some(Gate::Unjudged {
                 min: 10.0,
                 reason: "the summary is not the shape this specforge reads (invalid type: string \"many\", expected usize)".into()
-            }
+            })
         );
     }
 
@@ -1424,5 +1438,47 @@ mod tests {
 
         let none = Project::new().run(&pass("contracts")).unwrap();
         assert!(json_of(&none).get("stray_records").is_none());
+    }
+
+    #[specforge_test(
+        invariant = "mcp_structured_error_responses",
+        verify = "an operation states the request field each refusal is about, and a refusal of the project or the environment is about none"
+    )]
+    fn analyze_states_which_field_a_refusal_is_about() {
+        let project = Project::new();
+        let subject = |options: AnalyzeOptions| {
+            Refusal::<AnalyzeField>::from(project.run(&options).unwrap_err()).subject
+        };
+        assert_eq!(subject(pass("nope")), Some(AnalyzeField::Pass));
+        let min = AnalyzeOptions {
+            min: Some(150.0),
+            ..Default::default()
+        };
+        assert_eq!(subject(min), Some(AnalyzeField::Min));
+        // A named results file that is not there is about the report; one that is unusable is a
+        // refusal of the file, and so is an unusable recorded report.
+        let report = |path: std::path::PathBuf| AnalyzeOptions {
+            report: ReportSource::File(path),
+            ..Default::default()
+        };
+        let missing = project.dir.path().join("missing.json");
+        assert_eq!(subject(report(missing)), Some(AnalyzeField::Report));
+        let unusable = project.dir.path().join("unusable.json");
+        std::fs::write(&unusable, "{not json").unwrap();
+        assert_eq!(subject(report(unusable)), None);
+        std::fs::write(
+            project.dir.path().join("specforge-report.json"),
+            "{not json",
+        )
+        .unwrap();
+        assert_eq!(subject(AnalyzeOptions::default()), None);
+        // A refusal of the project is about no field.
+        let no_report = AnalyzeOptions {
+            min: Some(50.0),
+            report: ReportSource::None,
+            ..Default::default()
+        };
+        let refusal = Refusal::<AnalyzeField>::from(project.run(&no_report).unwrap_err());
+        assert_eq!(refusal.subject, None, "{refusal:?}");
     }
 }

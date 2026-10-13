@@ -2,6 +2,7 @@ use crate::queries::*;
 use specforge_extension_sdk::prelude::{
     CommandFormat, CommandGraph, CommandInput, GraphEdge, GraphNode,
 };
+use specforge_extension_sdk::testing::MockHost;
 
 mod coverage_matrices;
 mod dates_and_effort;
@@ -217,8 +218,8 @@ fn a_closed_enum_is_the_one_its_validation_rule_checks() {
         &RELEASES,
     ];
     let surfaces: serde_json::Value = serde_json::from_str(
-        &crate::specforge_extension_build()
-            .describe_response_json("surfaces")
+        &MockHost::new(crate::specforge_extension_build())
+            .describe_json("surfaces")
             .unwrap(),
     )
     .unwrap();
@@ -1905,8 +1906,8 @@ fn an_id_list_says_none_when_empty() {
 #[test]
 fn every_declared_command_answers_its_export() {
     let described: serde_json::Value = serde_json::from_str(
-        &crate::specforge_extension_build()
-            .describe_response_json("surfaces")
+        &MockHost::new(crate::specforge_extension_build())
+            .describe_json("surfaces")
             .unwrap(),
     )
     .unwrap();
@@ -2068,8 +2069,8 @@ fn fnv1a(bytes: &[u8]) -> u64 {
 ///   counts" where it said "orphan counts"; nothing else changed.
 #[test]
 fn the_surfaces_payload_is_pinned() {
-    let payload = crate::specforge_extension_build()
-        .describe_response_json("surfaces")
+    let payload = MockHost::new(crate::specforge_extension_build())
+        .describe_json("surfaces")
         .unwrap();
     assert_eq!(
         (payload.len(), fnv1a(payload.as_bytes())),

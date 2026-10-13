@@ -7,8 +7,9 @@ use std::collections::BTreeSet;
 use serde::Serialize;
 use specforge_common::shape::Shape;
 
-use crate::OpError;
+use crate::Refusal;
 use crate::coverage::{CoverageQuery, CoverageRow, CoverageRowDocument, coverage};
+use crate::navigate::EntityField;
 use crate::view::ProjectView;
 
 /// Hops around the reviewed entity when a request names none.
@@ -129,7 +130,7 @@ pub struct FindingDocument {
 /// The review `request` asks for. An `entity_id` the graph lacks is
 /// `navigate::not_found` (E003); a recorded report that cannot be read is
 /// its E045 failure (`ProjectView::coverage`).
-pub fn review(view: &ProjectView, request: &ReviewRequest) -> Result<Review, OpError> {
+pub fn review(view: &ProjectView, request: &ReviewRequest) -> Result<Review, Refusal<EntityField>> {
     let neighbourhood: Option<BTreeSet<&'static str>> = request
         .entity_id
         .map(|id| view.neighbourhood(id, Some(request.depth)))

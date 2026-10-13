@@ -10,6 +10,7 @@ pub mod mutation;
 pub mod prompt;
 pub mod prompts;
 pub mod protocol;
+mod refusal;
 pub mod registry;
 pub mod reply;
 pub mod resources;

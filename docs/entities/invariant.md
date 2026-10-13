@@ -50,21 +50,20 @@ invariant data_persistence "Data Persistence" {
 
 ## Relationships
 
-### Incoming edges (entities that reference this invariant)
+### Incoming edges
 
 | From | Edge Type | Meaning |
 |------|-----------|---------|
-| `behavior` | `references` | "This behavior depends on this invariant holding true" |
-| `decision` | `protects` | "This architectural decision was made to protect this invariant" |
-| `failure_mode` | `mitigates` | "This failure mode threatens this invariant" |
-| `constraint` | `constrains` | "This quality requirement helps protect this invariant" |
+| `axiom` | `AxiomAssumesInvariant` | "Axioms that assume this invariant" (via `assumes` field) |
+| `behavior` | `BehaviorEnforcesInvariant` | "Behaviors that enforce this invariant" (via `invariants` field) |
+| `constraint` | `ConstraintProtectsInvariant` | "Constraints that protect this invariant" (via `protects` field) |
+| `decision` | `DecisionProtectsInvariant` | "Decisions that protect this invariant" (via `invariants` field) |
+| `failure_mode` | `FailureModeTargetsInvariant` | "Failure modes that target this invariant" (via `invariant` field) |
+| `property` | `PropertyDependsOnInvariant` | "Properties that depend on this invariant" |
 
 ### Outgoing edges
 
-| To | Edge Type | Meaning |
-|----|-----------|---------|
-| `behavior` | `enforces` | "This invariant is enforced by these behaviors" |
-| `ref` | `links_to` | "This invariant links to these external references" |
+None. No extension declares an outgoing edge type for `invariant`.
 
 ## Validation Rules
 
@@ -100,12 +99,12 @@ Invariants should be:
 
 | Direction | Entity | Edge | Meaning |
 |-----------|--------|------|---------|
-| outgoing | [behavior](behavior.md) | `enforces` | Behaviors that enforce this invariant |
-| outgoing | [ref](ref.md) | `links_to` | External references linked to this invariant |
-| incoming | [behavior](behavior.md) | `references` | Behaviors that depend on this invariant |
-| incoming | [decision](decision.md) | `protects` | Decisions made to protect this invariant |
-| incoming | [constraint](constraint.md) | `constrains` | Quality requirements that protect this invariant |
-| incoming | [failure_mode](failure-mode.md) | `mitigates` | Failure modes that threaten this invariant |
+| incoming | `axiom` | `AxiomAssumesInvariant` | Axioms that assume this invariant |
+| incoming | [behavior](behavior.md) | `BehaviorEnforcesInvariant` | Behaviors that enforce this invariant |
+| incoming | [constraint](constraint.md) | `ConstraintProtectsInvariant` | Constraints that protect this invariant |
+| incoming | [decision](decision.md) | `DecisionProtectsInvariant` | Decisions that protect this invariant |
+| incoming | [failure_mode](failure-mode.md) | `FailureModeTargetsInvariant` | Failure modes that target this invariant |
+| incoming | `property` | `PropertyDependsOnInvariant` | Properties that depend on this invariant |
 
 ## Examples
 

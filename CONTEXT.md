@@ -109,7 +109,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   formatter's (a W142 per region formatting kept verbatim, while the document is the text it formatted). A publish
   sends the file's whole list, the compile layer plus the formatter layer of the same version, under the one URI
   the client names the file by. Hover and code actions read the layers; one module writes them (ADR 0056).
-- **Call target**: the project one MCP call acts on, resolved from the call's optional `path` and its
+- **Call target**: the project one MCP call acts on, resolved from the call's optional `path` (the target's arguments are
+  `TargetArgument`: `path`, `use_cached`, each spelled once) and its
   entry's target before the handler runs: the served session (brought up to date unless `use_cached`),
   another project opened as a session for that call only and brought up to date after the call writes, as the served one is, the directory `init` creates, or, with nothing served and
   no project named, the empty session for an entry that reads only the project view
@@ -575,11 +576,19 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`OpErrorKind`: invalid input, not found, conflict, schema mismatch, compilation failed, …) is
   stated where it is raised — at the operation's own raise site (`OpError::coded`), or where a lower
   crate's diagnostic crosses into ops (`OpError::of`), a recorded test report that cannot be used included
-  (`specforge_ops::report`) — never by a table of codes and never by a surface; its code is what the CLI prints. Its outcome prints as one outcome document on
+  (`specforge_ops::report`) — never by a table of codes and never by a surface; a refusal that rejects a value
+  the caller gave also says which field of the request it is about (its **subject**: a `specforge_ops::Refusal<F>`,
+  `F` the operation's field enum), stated where the operation reads the field and never by a table of codes; its
+  code is what the CLI prints. Its outcome prints as one outcome document on
   every surface (ADR 0052). The CLI and MCP
   are adapters over it (`specforge-ops`); the CLI ends every core command through one renderer
   (`specforge_cli::outcome`: the refusal, the exit code) and writes it through its **Terminal**
   (ADR 0029).
+- **Refusal subject**: the field of an operation's request a refusal is about, typed by the operation
+  (`Refusal<F>`, `F` one variant per field a refusal of it can be about: `AddField::Extensions`,
+  `InitField::Dir`). Only a refusal that rejects a value the caller gave has one (invalid input, an entity, file or
+  extension not there, a conflict); a refusal of the project or the environment has none. Each surface spells it:
+  MCP names the argument (`specifiers`, `path`), the CLI and the LSP print the error (ADR 0072).
 - **Mutation outcome**: what one MCP mutation call produced, typed: a run (`specforge_mcp::mutation::Mutated`:
   its reply and what it wrote — the files its operation changed, the entities it changed and the domain
   event it produces, `Written`) or a failure (`mutation::Failed`: its McpError and the files it left
@@ -719,8 +728,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   implementing `CoreTool` once: its name, description and effect, the spec type its reply is, the tool
   arguments it reads, what its handler is given (nothing, the project view, the project, or the
   directory init creates, with how it reaches its project), the tool reply it answers (typed, text,
-  or a mutation's) and which argument each of its operation's refusal codes is about
-  (`REFUSAL_ARGUMENTS`; the dispatcher names it on the refusal, ADR 0033). Its category, annotations, call target, descriptor (input and output schemas
+  or a mutation's) and, for each operation it calls that can refuse about a field of its request, the argument
+  that sends each field (`ArgumentOf<F>`, one exhaustive map, ADR 0072). Its category, annotations, call target, descriptor (input and output schemas
   included) and dispatch derive from it; the core tool table lists each once (`CORE_TOOLS`, each seen
   as a `ToolSpec`), and a declaration that contradicts its handler does not build. A prompt names a
   tool by its typed name (ADR 0024, ADR 0049).

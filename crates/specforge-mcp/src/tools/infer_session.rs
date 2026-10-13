@@ -1,15 +1,15 @@
 use crate::target::Project;
-use crate::tool::{CoreTool, Effect, RefusalArgument, ReplySpec, WriteHints};
+use crate::tool::{CoreTool, Effect, ReplySpec, WriteHints};
 use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_ops::infer::{
-    self, EndStatus, Recorded, SessionAction, SessionOutcome, SessionStatus, SessionStep,
+    self, EndStatus, Recorded, SessionAction, SessionField, SessionOutcome, SessionStatus,
+    SessionStep,
 };
 
 use crate::args::Arguments;
-use crate::mutation::{
-    Failed, Mutated, Mutation, MutationArgs, MutationReply, NoDiagnostics, Written,
-};
+use crate::mutation::{Mutated, Mutation, MutationArgs, MutationReply, NoDiagnostics, Written};
+use crate::refusal::ArgumentOf;
 use crate::target::ProjectRef;
 use crate::tool::{ErrorCode, McpError};
 
@@ -63,6 +63,16 @@ pub struct Reply {
 /// (`specforge_ops::infer::session`), which writes `specforge-infer.json`.
 pub(crate) struct Tool;
 
+impl ArgumentOf<SessionField> for Tool {
+    fn argument(field: SessionField) -> Option<&'static str> {
+        match field {
+            SessionField::SourceRoots => Some("source_roots"),
+            SessionField::SourceFile => Some("source_file"),
+            SessionField::SessionId => Some("session_id"),
+        }
+    }
+}
+
 impl CoreTool for Tool {
     const NAME: &'static str = "specforge.infer_session";
     const DESCRIPTION: &'static str =
@@ -78,29 +88,11 @@ impl CoreTool for Tool {
     type Args = Args;
     type Input = Project;
     type Returns = Mutation<Reply>;
-    const REFUSAL_ARGUMENTS: &'static [RefusalArgument] = &[
-        RefusalArgument {
-            code: infer::UNKNOWN_SESSION,
-            argument: "session_id",
-        },
-        RefusalArgument {
-            code: infer::SOURCE_UNREADABLE,
-            argument: "source_file",
-        },
-        RefusalArgument {
-            code: infer::SOURCE_OUTSIDE_ROOT,
-            argument: "source_file",
-        },
-        RefusalArgument {
-            code: infer::SOURCE_ROOT_OUTSIDE_ROOT,
-            argument: "source_roots",
-        },
-    ];
 
     fn call(project: ProjectRef<'_>, args: Args) -> Mutation<Reply> {
         let step = step(&args)?;
-        let SessionOutcome { recorded, writes } = infer::session(&project.view(), step)
-            .map_err(|error| Failed::from(McpError::from(error)))?;
+        let SessionOutcome { recorded, writes } =
+            infer::session(&project.view(), step).map_err(Self::failed)?;
         let written = match &recorded {
             Recorded::Marked { entities, .. } => {
                 Written::files(writes).with_entities(entities.clone())

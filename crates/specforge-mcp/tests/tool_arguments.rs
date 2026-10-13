@@ -575,7 +575,11 @@ fn every_core_tool_lists_its_typed_arguments() {
         for listed in properties.keys() {
             assert!(
                 declared.contains(&listed.as_str())
-                    || tool.target().fields().contains(&listed.as_str()),
+                    || tool
+                        .target()
+                        .fields()
+                        .iter()
+                        .any(|argument| argument.name() == listed),
                 "{}: lists {listed}",
                 tool.name()
             );

@@ -58,13 +58,15 @@ persona admin "System Administrator" {
 
 ### Outgoing edges
 
-None. Personas are leaf nodes in the product graph.
+| To | Edge Type | Meaning |
+|----|-----------|---------|
+| `feature` | `PersonaPrioritizesFeature` | "This persona prioritizes these features" (via `key_features` field) |
 
 ### Incoming edges
 
 | From | Edge Type | Meaning |
 |------|-----------|---------|
-| `journey` | `JourneyPersona` | "This journey is performed by this persona" |
+| `journey` | `JourneyTargetsPersona` | "Journeys that are performed by this persona" (via `persona` field) |
 
 ## Validation Rules
 
@@ -116,7 +118,8 @@ Use `technical_level` to communicate UI/UX expectations:
 
 | Direction | Entity | Edge | Meaning |
 |-----------|--------|------|---------|
-| incoming | [journey](journey.md) | `JourneyPersona` | Journeys performed by this persona |
+| outgoing | [feature](feature.md) | `PersonaPrioritizesFeature` | Features this persona prioritizes |
+| incoming | [journey](journey.md) | `JourneyTargetsPersona` | Journeys that are performed by this persona |
 
 ## Examples
 

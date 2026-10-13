@@ -10,5 +10,4 @@ crate-type = ["cdylib"]
 specforge-extension-sdk = { path = "../../crates/specforge-extension-sdk" }
 # The coverage rule, shared with the host (ADR 0004, D2-f).
 specforge-coverage = { path = "../../crates/specforge-coverage" }
-serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

@@ -52,8 +52,12 @@ fn call(c: &ContributionsBuilder, args: serde_json::Value) -> CommandOutput {
 #[test]
 fn a_declared_command_is_described_with_its_args_in_order() {
     let c = builder();
-    let described: serde_json::Value =
-        serde_json::from_str(&c.describe_response_json("surfaces").unwrap()).unwrap();
+    let described: serde_json::Value = serde_json::from_str(
+        &crate::testing::MockHost::new(c)
+            .describe_json("surfaces")
+            .unwrap(),
+    )
+    .unwrap();
     assert_eq!(
         described["items"],
         json!([{"commands": [{
@@ -75,8 +79,12 @@ fn a_declared_command_is_described_with_its_args_in_order() {
 #[test]
 fn no_surfaces_describe_as_none() {
     let c = ContributionsBuilder::new(ExtensionMeta::new("@acme/x", "1.0.0"));
-    let described: serde_json::Value =
-        serde_json::from_str(&c.describe_response_json("surfaces").unwrap()).unwrap();
+    let described: serde_json::Value = serde_json::from_str(
+        &crate::testing::MockHost::new(c)
+            .describe_json("surfaces")
+            .unwrap(),
+    )
+    .unwrap();
     assert_eq!(described, json!({"category": "surfaces", "items": []}));
 }
 
@@ -385,8 +393,10 @@ fn tools_and_resources_are_described_and_routed() {
             .mime_type("text/plain")
             .handler(|uri| Ok(format!("read {uri}")));
     });
+    let host = crate::testing::MockHost::new(c);
     let described: serde_json::Value =
-        serde_json::from_str(&c.describe_response_json("surfaces").unwrap()).unwrap();
+        serde_json::from_str(&host.describe_json("surfaces").unwrap()).unwrap();
+    let c = host.0;
     assert_eq!(
         described["items"],
         json!([{

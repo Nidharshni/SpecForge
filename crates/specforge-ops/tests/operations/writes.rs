@@ -114,7 +114,10 @@ fn candidates() -> InProcessRuntime {
 const GREET: &str = "@sdk/greet";
 const MODULE: &str = ".specforge/extensions/@sdk/greet/extension.wasm";
 
-fn add(root: &Path, source: Source) -> Result<extension::Added, specforge_ops::OpError> {
+fn add(
+    root: &Path,
+    source: Source,
+) -> Result<extension::Added, specforge_ops::Refusal<extension::AddField>> {
     extension::add(
         &AddRequest {
             root: &specforge_common::ProjectRoot::of(root).unwrap(),
@@ -378,8 +381,8 @@ fn init_refuses_a_directory_whose_starter_file_exists() {
 
     let error = init::init(&request, &candidates()).unwrap_err();
 
-    assert_eq!(error.code, init::STARTER_EXISTS, "{error:?}");
-    assert_eq!(error.kind, OpErrorKind::Conflict);
+    assert_eq!(error.error.code, init::STARTER_EXISTS, "{error:?}");
+    assert_eq!(error.error.kind, OpErrorKind::Conflict);
     assert_eq!(files_under(&dir), before, "the file is byte-identical");
 }
 
@@ -405,7 +408,7 @@ fn init_refuses_local_extensions_over_an_unreadable_lock_before_writing() {
 
     let error = init::init(&request, &candidates()).unwrap_err();
 
-    assert_eq!(error.code, "E033", "{error:?}");
+    assert_eq!(error.error.code, "E033", "{error:?}");
     assert_eq!(files_under(&dir), before);
 }
 
@@ -434,8 +437,8 @@ fn a_failed_init_puts_back_what_was_there() {
 
     let error = init::init(&request, &candidates()).unwrap_err();
 
-    assert_eq!(error.code, "E032", "{error:?}");
-    assert!(error.writes.is_empty(), "{:?}", error.writes);
+    assert_eq!(error.error.code, "E032", "{error:?}");
+    assert!(error.error.writes.is_empty(), "{:?}", error.error.writes);
     assert_eq!(
         std::fs::read_to_string(dir.join(".specforge/keep.txt")).unwrap(),
         "keep\n"
@@ -475,8 +478,8 @@ fn a_failed_init_leaves_an_empty_directory_empty() {
 
     let error = init::init(&request, &candidates()).unwrap_err();
 
-    assert_eq!(error.code, "E032", "{error:?}");
-    assert!(error.writes.is_empty(), "{:?}", error.writes);
+    assert_eq!(error.error.code, "E032", "{error:?}");
+    assert!(error.error.writes.is_empty(), "{:?}", error.error.writes);
     let left: Vec<_> = std::fs::read_dir(&dir)
         .unwrap()
         .map(|entry| entry.unwrap().file_name())
@@ -521,7 +524,7 @@ fn init_reads_its_specifiers_as_add_reads_them() {
             .map(|_| ())
         });
         let by_add = by_add.unwrap_err();
-        assert_eq!(by_add.code, code, "{specifier}: add: {by_add:?}");
+        assert_eq!(by_add.error.code, code, "{specifier}: add: {by_add:?}");
         assert_eq!(files_under(existing.path()), before);
 
         let dir = scratch.path().join("fresh");
@@ -533,13 +536,17 @@ fn init_reads_its_specifiers_as_add_reads_them() {
             extensions: &extensions,
         };
         let by_init = init::init(&request, &candidates()).unwrap_err();
-        assert_eq!(by_init.code, code, "{specifier}: init: {by_init:?}");
+        assert_eq!(by_init.error.code, code, "{specifier}: init: {by_init:?}");
         if code != "E063" {
-            assert_eq!(by_init.message, by_add.message, "{specifier}");
-            assert_eq!(by_init.suggestion, by_add.suggestion, "{specifier}");
+            assert_eq!(by_init.error.message, by_add.error.message, "{specifier}");
+            assert_eq!(
+                by_init.error.suggestion, by_add.error.suggestion,
+                "{specifier}"
+            );
         } else {
             assert!(
                 by_init
+                    .error
                     .suggestion
                     .as_deref()
                     .is_some_and(|s| s.contains("specforge add @acme/x")),
@@ -635,12 +642,12 @@ fn an_add_that_fails_after_placing_its_module_writes_nothing() {
 
     let error = add(root, Source::Local(blobs.greet())).unwrap_err();
 
-    assert_eq!(error.code, "E033", "{error:?}");
+    assert_eq!(error.error.code, "E033", "{error:?}");
     assert!(
-        error.message.contains("specforge.lock.tmp"),
+        error.error.message.contains("specforge.lock.tmp"),
         "the message names the file it could not write: {error:?}"
     );
-    assert!(error.writes.is_empty(), "{:?}", error.writes);
+    assert!(error.error.writes.is_empty(), "{:?}", error.error.writes);
     assert_eq!(changed_since(root, &before), Vec::<String>::new());
 }
 
@@ -666,7 +673,7 @@ fn a_failed_add_over_an_install_keeps_the_pinned_binary() {
     let error = add(root, Source::Local(variant)).unwrap_err();
     std::fs::remove_dir(root.join("specforge.lock.tmp")).unwrap();
 
-    assert_eq!(error.code, "E033", "{error:?}");
+    assert_eq!(error.error.code, "E033", "{error:?}");
     assert_eq!(changed_since(root, &before), Vec::<String>::new());
     let diagnostics = compiled(root).diagnostics();
     let refused: Vec<&str> = diagnostics
@@ -693,8 +700,8 @@ fn an_add_over_an_unreadable_lock_is_refused() {
 
     let error = add(root, Source::Local(variant)).unwrap_err();
 
-    assert_eq!(error.code, "E033", "{error:?}");
-    assert!(error.writes.is_empty());
+    assert_eq!(error.error.code, "E033", "{error:?}");
+    assert!(error.error.writes.is_empty());
     assert_eq!(changed_since(root, &before), Vec::<String>::new());
     let lock = std::fs::read_to_string(root.join("specforge.lock")).unwrap();
     assert_eq!(lock, "not a lock {{{", "the lock is byte-identical");
@@ -724,8 +731,8 @@ fn a_failed_remove_changes_nothing() {
     )
     .unwrap_err();
 
-    assert_eq!(error.code, "E033", "{error:?}");
-    assert!(error.writes.is_empty(), "{:?}", error.writes);
+    assert_eq!(error.error.code, "E033", "{error:?}");
+    assert!(error.error.writes.is_empty(), "{:?}", error.error.writes);
     assert_eq!(changed_since(root, &before), Vec::<String>::new());
     let config = std::fs::read_to_string(root.join("specforge.json")).unwrap();
     assert!(config.contains(PROBE), "{config}");
@@ -976,9 +983,9 @@ fn init_refuses_a_local_binary_that_claims_a_builtins_name_before_writing() {
     let error = init::init(&request, &impostor).unwrap_err();
 
     // As `add` refuses it: the extension conflicts with the builtin.
-    assert_eq!(error.code, "extension_conflict");
+    assert_eq!(error.error.code, "extension_conflict");
     assert_eq!(
-        error.message,
+        error.error.message,
         "the extension declares the name of the builtin '@specforge/product'"
     );
     assert!(!dir.exists());
@@ -1063,11 +1070,11 @@ fn init_refuses_a_local_file_the_embedded_builtin_does_not_satisfy() {
 
     let error = init::init(&request, &testing::probes()).unwrap_err();
 
-    assert_eq!(error.code, "E027", "{error:?}");
+    assert_eq!(error.error.code, "E027", "{error:?}");
     // Named by the specifier that asked for it, as `add` names it among several.
     assert!(
-        error.message.starts_with("adding '")
-            && error.message.ends_with(
+        error.error.message.starts_with("adding '")
+            && error.error.message.ends_with(
                 "extension '@probe/needs-software' requires peer dependency '@specforge/software' ^9.0 but version 1.0.0 is installed"
             ),
         "{error:?}"

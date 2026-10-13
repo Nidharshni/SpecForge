@@ -4,11 +4,11 @@ use serde::Serialize;
 use serde_json::Value;
 use specforge_common::shape::{Object, Shape};
 use specforge_ops::export::Format;
-use specforge_ops::query::{QueryRequest, query};
+use specforge_ops::query::{QueryField, QueryRequest, query};
 
 use crate::args::Arguments;
+use crate::refusal::ArgumentOf;
 use crate::reply::{Answer, Answered};
-use crate::tool::McpError;
 use specforge_ops::view::ProjectView;
 
 /// `specforge.query`'s arguments.
@@ -50,6 +50,15 @@ impl Object for Reply {}
 /// kind of the filter rides in `_meta.diagnostics` (I020).
 pub(crate) struct Tool;
 
+impl ArgumentOf<QueryField> for Tool {
+    fn argument(field: QueryField) -> Option<&'static str> {
+        match field {
+            QueryField::EntityId => Some("entity_id"),
+            QueryField::Format => Some("format"),
+        }
+    }
+}
+
 impl CoreTool for Tool {
     const NAME: &'static str = "specforge.query";
     const DESCRIPTION: &'static str = "Query the graph at multiple resolutions";
@@ -70,7 +79,7 @@ impl CoreTool for Tool {
             format: Some(args.format),
             include_coverage: args.include_coverage,
         };
-        let outcome = query(&view, &request).map_err(McpError::from)?;
+        let outcome = query(&view, &request).map_err(Self::refused)?;
         let document: Value = serde_json::from_str(&outcome.document).expect("an export is JSON");
         Ok(Answer::new(Reply(document)).with_diagnostics(outcome.notices))
     }

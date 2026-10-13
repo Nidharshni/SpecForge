@@ -204,12 +204,15 @@ fn query_of_a_missing_entity_is_e003() {
         },
     )
     .unwrap_err();
-    assert!(error.is(specforge_common::codes::E003));
+    assert!(error.error.is(specforge_common::codes::E003));
     assert_eq!(
-        error.message,
+        error.error.message,
         "unresolved entity 'logn' — not found in graph"
     );
-    assert_eq!(error.suggestion.as_deref(), Some("did you mean 'login'?"));
+    assert_eq!(
+        error.error.suggestion.as_deref(),
+        Some("did you mean 'login'?")
+    );
     // Nothing close: no suggestion.
     let error = query(
         &project.view(),
@@ -219,7 +222,7 @@ fn query_of_a_missing_entity_is_e003() {
         },
     )
     .unwrap_err();
-    assert_eq!(error.suggestion, None);
+    assert_eq!(error.error.suggestion, None);
 }
 
 #[specforge_test(
@@ -299,9 +302,9 @@ fn query_refuses_dot() {
         },
     )
     .unwrap_err();
-    assert_eq!(error.code, "invalid_input");
+    assert_eq!(error.error.code, "invalid_input");
     assert_eq!(
-        error.message,
+        error.error.message,
         "Unknown format: dot. Expected: graph, context, brief"
     );
 }
@@ -507,4 +510,32 @@ fn query_contract_valid_entity_returns_subgraph() {
             { "source": "b", "target": "c", "label": "depends_on" },
         ])
     );
+}
+
+#[specforge_test(
+    invariant = "mcp_structured_error_responses",
+    verify = "an operation states the request field each refusal is about, and a refusal of the project or the environment is about none"
+)]
+fn query_states_which_field_a_refusal_is_about() {
+    use specforge_ops::query::QueryField;
+    let project = linear();
+    let missing = query(
+        &project.view(),
+        &QueryRequest {
+            entity_id: "zzzzzzzz",
+            ..QueryRequest::default()
+        },
+    )
+    .unwrap_err();
+    assert_eq!(missing.subject, Some(QueryField::EntityId));
+    let dot = query(
+        &project.view(),
+        &QueryRequest {
+            entity_id: "b",
+            format: Some(Format::Dot),
+            ..QueryRequest::default()
+        },
+    )
+    .unwrap_err();
+    assert_eq!(dot.subject, Some(QueryField::Format));
 }

@@ -8,8 +8,10 @@
 //! needs a configured registry, which a project that doesn't exist yet can't have, so it is added
 //! afterwards with `specforge add`.
 
-use crate::extension::{self, Also, Ask, Candidate, Install, LocalFile, LockPlan, Source};
-use crate::{OpError, OpErrorKind, Writes};
+use crate::extension::{
+    self, AddField, Also, Ask, Candidate, Install, LocalFile, LockPlan, Source,
+};
+use crate::{OpError, OpErrorKind, Refusal, Writes};
 use serde::Serialize;
 use serde_json::{Value, json};
 use specforge_common::shape::Shape;
@@ -42,6 +44,17 @@ pub const GITIGNORE: [&str; 3] = [
     "specforge-report.json",
     ".specforge/",
 ];
+
+/// The field of an init's request a refusal can be about (ADR 0072).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InitField {
+    /// `Request::dir`: the directory to scaffold.
+    Dir,
+    /// `Request::name`: the project name.
+    Name,
+    /// `Request::extensions`: the extension specifiers.
+    Extensions,
+}
 
 /// What to scaffold.
 #[derive(Debug, Clone)]
@@ -107,7 +120,7 @@ pub struct InitDocument {
 /// starter. Init only adds: the starter is created, never overwritten, and a failed init puts
 /// back what was there before it ran and removes what it created. Its error reports nothing
 /// written.
-pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, OpError> {
+pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal<InitField>> {
     if ProjectRoot::is_root(req.dir) {
         return Err(OpError::new(
             OpErrorKind::Conflict,
@@ -116,11 +129,12 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, OpError
                 "project already exists at {} ({PROJECT_FILE})",
                 req.dir.display()
             ),
-        ));
+        )
+        .about(InitField::Dir));
     }
 
     if req.dir.join(STARTER_FILE).exists() {
-        return Err(starter_exists(req.dir));
+        return Err(starter_exists(req.dir).about(InitField::Dir));
     }
 
     let name = match req.name {
@@ -132,7 +146,7 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, OpError
             .unwrap_or("my-project")
             .to_string(),
     };
-    validate_project_name(&name).map_err(|why| invalid_name(&name, why))?;
+    validate_project_name(&name).map_err(|why| invalid_name(&name, why).about(InitField::Name))?;
     // The starter declares `spec "<id>"`: an ID outside the identifier
     // contract would fail its first check (E014).
     let spec_id = sanitize_entity_id(&name);
@@ -140,7 +154,8 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, OpError
         return Err(invalid_name(
             &name,
             "it must be 2-60 characters, as the starter's spec ID must",
-        ));
+        )
+        .about(InitField::Name));
     }
     let version = req.version.to_string();
 
@@ -153,12 +168,17 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, OpError
     let wanted = if specifiers.is_empty() {
         Vec::new()
     } else {
-        extension::specified(&specifiers)?
+        extension::specified(&specifiers).map_err(|refusal| {
+            refusal.map_subject(|AddField::Extensions| Some(InitField::Extensions))
+        })?
     };
     let several = wanted.len() > 1;
-    let named = |at: usize, error: OpError| match wanted.get(at) {
-        Some(wanted) => extension::named(several, &wanted.specifier, error),
-        None => error,
+    let named = |at: usize, error: OpError| {
+        let error = match wanted.get(at) {
+            Some(wanted) => extension::named(several, &wanted.specifier, error),
+            None => error,
+        };
+        error.about(InitField::Extensions)
     };
 
     // The lock plan the installs will be, `add`'s: an unreadable lock refuses here (E033), and the
@@ -479,10 +499,10 @@ mod tests {
 
         let error = init(&request(&dir, &extensions), &runtime()).unwrap_err();
 
-        assert_eq!(error.code, "E027", "{error:?}");
+        assert_eq!(error.error.code, "E027", "{error:?}");
         // Named by the specifier that asked for it, as `add` names it among several.
         assert!(
-            error.message.starts_with("adding '") && error.message.ends_with(
+            error.error.message.starts_with("adding '") && error.error.message.ends_with(
                 "extension '@x/a' requires peer dependency '@x/b' ^2 but version 1.0.0 is installed"
             ),
             "{error:?}"
@@ -510,5 +530,64 @@ mod tests {
         assert_eq!(outcome.extensions, ["@x/b"]);
         let lock = std::fs::read_to_string(dir.join("specforge.lock")).unwrap();
         assert!(lock.contains("release/b_ext.wasm"), "{lock}");
+    }
+
+    #[specforge_test_macros::test(
+        invariant = "mcp_structured_error_responses",
+        verify = "an operation states the request field each refusal is about, and a refusal of the project or the environment is about none"
+    )]
+    fn init_states_which_field_a_refusal_is_about() {
+        let scratch = tempfile::tempdir().unwrap();
+        let init_with = |dir: &str, name: Option<&str>, extensions: &[String]| {
+            let dir = scratch.path().join(dir);
+            let request = Request {
+                dir: &dir,
+                name,
+                version: DEFAULT_VERSION,
+                extensions,
+            };
+            let refusal = init(&request, &runtime()).unwrap_err();
+            (refusal.error.code.to_string(), refusal.subject)
+        };
+        let specifiers = |list: &[&str]| list.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+
+        // The directory is already a project.
+        let existing = scratch.path().join("existing");
+        std::fs::create_dir_all(&existing).unwrap();
+        std::fs::write(existing.join(PROJECT_FILE), "{}").unwrap();
+        assert_eq!(
+            init_with("existing", Some("demo"), &[]),
+            (PROJECT_EXISTS.to_string(), Some(InitField::Dir))
+        );
+        // The name.
+        assert_eq!(
+            init_with("n1", Some("x"), &[]),
+            (INVALID_NAME.to_string(), Some(InitField::Name))
+        );
+        // The specifiers.
+        let extensions = InitField::Extensions;
+        assert_eq!(
+            init_with(
+                "n2",
+                Some("demo"),
+                &specifiers(&["git+https://example.com/x"])
+            ),
+            ("E064".to_string(), Some(extensions))
+        );
+        assert_eq!(
+            init_with("n3", Some("demo"), &specifiers(&["@a/b@!!"])),
+            ("R-RES-003".to_string(), Some(extensions))
+        );
+        let not_wasm = scratch.path().join("notwasm.txt");
+        std::fs::write(&not_wasm, "not wasm").unwrap();
+        assert_eq!(
+            init_with("n4", Some("demo"), &[not_wasm.display().to_string()]),
+            ("E028".to_string(), Some(extensions))
+        );
+        // A registry package needs a registry no new project has: a refusal of the project.
+        assert_eq!(
+            init_with("n5", Some("demo"), &specifiers(&["@acme/x"])),
+            ("E063".to_string(), None)
+        );
     }
 }

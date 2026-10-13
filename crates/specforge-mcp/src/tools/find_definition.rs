@@ -6,8 +6,9 @@ use specforge_common::shape::Shape;
 use specforge_ops::navigate::Precision;
 
 use crate::args::Arguments;
+use crate::refusal::ArgumentOf;
 use crate::reply::Answered;
-use crate::tool::McpError;
+use specforge_ops::navigate::EntityField;
 use specforge_ops::view::ProjectView;
 
 /// `specforge.find_definition`'s arguments.
@@ -40,6 +41,14 @@ pub struct Reply {
 /// read: `precision` says which).
 pub(crate) struct Tool;
 
+impl ArgumentOf<EntityField> for Tool {
+    fn argument(field: EntityField) -> Option<&'static str> {
+        match field {
+            EntityField::EntityId => Some("entity_id"),
+        }
+    }
+}
+
 impl CoreTool for Tool {
     const NAME: &'static str = "specforge.find_definition";
     const DESCRIPTION: &'static str = "Find the source location of an entity definition";
@@ -54,7 +63,7 @@ impl CoreTool for Tool {
     fn call(view: ProjectView<'_>, args: Args) -> Answered<Reply> {
         let definition = super::navigator(view)
             .definition(&args.entity_id)
-            .map_err(McpError::from)?;
+            .map_err(Self::refused)?;
         Ok(Reply {
             entity_id: definition.id.to_string(),
             file_path: definition.name.file.to_string(),

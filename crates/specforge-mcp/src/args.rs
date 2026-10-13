@@ -499,7 +499,7 @@ pub fn undeclared(
     let known: Vec<&str> = declared
         .iter()
         .map(|argument| argument.name)
-        .chain(target.accepted().iter().copied())
+        .chain(target.accepted().iter().map(|argument| argument.name()))
         .collect();
     unknown_argument(arguments, &known)
 }
@@ -535,7 +535,12 @@ pub fn input_schema(declared: &[Argument], target: TargetSpec) -> Value {
         }
     }
     properties.extend(target.properties());
-    required.extend(target.required().iter().map(|name| Value::from(*name)));
+    required.extend(
+        target
+            .required()
+            .iter()
+            .map(|argument| Value::from(argument.name())),
+    );
     let mut schema = json!({
         "type": "object",
         "properties": properties,

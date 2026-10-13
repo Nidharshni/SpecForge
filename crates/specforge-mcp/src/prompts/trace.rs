@@ -10,12 +10,22 @@ use specforge_ops::trace::{Target, trace};
 
 use crate::args::{AgentPlan, Arguments};
 use crate::prompt::{CorePrompt, Prompted};
+use crate::refusal::ArgumentOf;
 use crate::tool::{ErrorCode, McpError};
 use crate::tools::trace::{Gap, analyze_plan};
+use specforge_ops::navigate::EntityField;
 use specforge_ops::view::ProjectView;
 
 /// The trace prompt (`McpTracePromptResult`).
 pub struct Prompt;
+
+impl ArgumentOf<EntityField> for Prompt {
+    fn argument(field: EntityField) -> Option<&'static str> {
+        match field {
+            EntityField::EntityId => Some("entity_id"),
+        }
+    }
+}
 
 impl CorePrompt for Prompt {
     const NAME: &'static str = "specforge://prompts/trace";
@@ -63,7 +73,7 @@ fn render(view: ProjectView<'_>, args: Args) -> Result<Prompted<Payload>, Box<Mc
         (None, Some(entity_id)) => {
             // As the trace tool traces it: its chain and missing links.
             let outcome = trace(&view, Target::Entity(entity_id))
-                .map_err(|error| McpError::from(specforge_ops::OpError::from(error)))?;
+                .map_err(|error| Prompt::refused(specforge_ops::Refusal::from(error)))?;
             let gaps = outcome.gaps().iter().map(Gap::of).collect();
             (
                 vec![entity_id.to_string()],

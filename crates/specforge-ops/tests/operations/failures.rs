@@ -163,7 +163,7 @@ fn analyze_calls_a_missing_named_report_file_not_found() {
 
     let error = analyze(&project.view(), &options).unwrap_err();
 
-    let AnalyzeError::UnusableReport(error) = error else {
+    let AnalyzeError::UnusableTestResults(error) = error else {
         panic!("expected an unusable report: {error:?}");
     };
     assert_eq!(error.kind, OpErrorKind::FileNotFound);

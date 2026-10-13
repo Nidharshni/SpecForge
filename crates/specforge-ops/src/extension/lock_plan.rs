@@ -230,11 +230,11 @@ impl Staged<'_> {
             // A local file was checked when it was read; a preview loads nothing.
             return Ok(());
         };
-        let binary = Installable::read(*runtime, bytes.clone())?;
+        let binary = Installable::read(*runtime, bytes.clone()).map_err(published_wrongly)?;
         let declared = binary.candidate();
         if declared.name() != self.name.as_str() || declared.version() != self.version {
             return Err(OpError::coded(
-                crate::OpErrorKind::InvalidInput,
+                OpErrorKind::SchemaMismatch,
                 codes::E028,
                 format!(
                     "registry package {}@{} declares itself {}@{}",
@@ -1364,12 +1364,22 @@ fn diamond(registry: &dyn Registry, set: &ProjectPeers, edge: &Edge, locked: &st
     }
 }
 
+/// A failure of reading a fetched binary: the caller gave no such value, the registry served a
+/// binary that is not what it published (`schema_mismatch`, as `METADATA_MISMATCH` beside it).
+fn published_wrongly(mut error: OpError) -> OpError {
+    if error.kind == OpErrorKind::InvalidInput {
+        error.kind = OpErrorKind::SchemaMismatch;
+    }
+    error
+}
+
 /// The versions `registry` publishes of `peer`, in the registry's order. E072 when `peer` is no
-/// package name.
+/// package name: an extension's declaration is malformed (`schema_mismatch`), not the caller's
+/// value.
 fn published_versions(registry: &dyn Registry, peer: &str) -> Result<Vec<Version>, OpError> {
     let name = PackageName::parse(peer).map_err(|why| {
         OpError::of(
-            OpErrorKind::InvalidInput,
+            OpErrorKind::SchemaMismatch,
             specforge_common::package::invalid(&why),
         )
     })?;

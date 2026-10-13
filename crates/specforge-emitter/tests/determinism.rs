@@ -60,7 +60,7 @@ fn build_graph() -> Graph {
 )]
 fn same_input_produces_identical_json_across_runs() {
     let outputs: Vec<String> = (0..5)
-        .map(|_| specforge_emitter::json::emit_json(&build_graph()))
+        .map(|_| crate::support::emit_json(&build_graph()))
         .collect();
     for output in &outputs[1..] {
         assert_eq!(
@@ -127,7 +127,7 @@ fn same_input_produces_identical_context_across_runs() {
 )]
 fn json_nodes_sorted_by_id() {
     let graph = build_graph();
-    let json = specforge_emitter::json::emit_json(&graph);
+    let json = crate::support::emit_json(&graph);
     let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
     let ids: Vec<&str> = parsed["nodes"]
         .as_array()
@@ -168,8 +168,8 @@ fn json_edges_sorted_deterministically() {
         }
         graph
     };
-    let forward = specforge_emitter::json::emit_json(&with_edges(edges.iter().collect()));
-    let backward = specforge_emitter::json::emit_json(&with_edges(edges.iter().rev().collect()));
+    let forward = crate::support::emit_json(&with_edges(edges.iter().collect()));
+    let backward = crate::support::emit_json(&with_edges(edges.iter().rev().collect()));
     assert_eq!(forward, backward, "edge insertion order must not matter");
 
     // Sorted by source, then target, then label.
@@ -222,7 +222,7 @@ fn json_output_contains_no_timestamps() {
     let graph = build_graph();
     let emit_all = |graph: &Graph| -> Vec<String> {
         vec![
-            specforge_emitter::json::emit_json(graph),
+            crate::support::emit_json(graph),
             crate::export(graph, specforge_emitter::EmitFormat::Context, None),
             crate::export(graph, specforge_emitter::EmitFormat::Brief, None),
             specforge_emitter::dot::emit_dot(graph, &specforge_emitter::DotOptions::default()),
@@ -352,8 +352,8 @@ fn file_emission_order_independent_of_filesystem() {
         });
     }
 
-    let json1 = specforge_emitter::json::emit_json(&graph1);
-    let json2 = specforge_emitter::json::emit_json(&graph2);
+    let json1 = crate::support::emit_json(&graph1);
+    let json2 = crate::support::emit_json(&graph2);
     assert_eq!(
         json1, json2,
         "output must be identical regardless of node insertion order (simulating different readdir orders)"

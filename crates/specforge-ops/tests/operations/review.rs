@@ -146,7 +146,7 @@ fn an_unreadable_report_is_e045() {
     )
     .unwrap();
     let error = review(&project.view(), &ReviewRequest::default()).unwrap_err();
-    assert_eq!(error.code, "E045");
+    assert_eq!(error.error.code, "E045");
 }
 
 #[specforge_test(

@@ -11,8 +11,10 @@ use specforge_common::{DiagnosticList, SourceSpan};
 use specforge_ops::inspect::{EntityCoverage, EntityFacts, obligation_text};
 
 use crate::args::Arguments;
+use crate::refusal::ArgumentOf;
 use crate::reply::Answered;
 use crate::tool::McpError;
+use specforge_ops::navigate::EntityField;
 use specforge_ops::view::ProjectView;
 
 /// `specforge.inspect`'s arguments.
@@ -62,6 +64,14 @@ pub struct Reply {
 
 pub(crate) struct Tool;
 
+impl ArgumentOf<EntityField> for Tool {
+    fn argument(field: EntityField) -> Option<&'static str> {
+        match field {
+            EntityField::EntityId => Some("entity_id"),
+        }
+    }
+}
+
 impl CoreTool for Tool {
     const NAME: &'static str = "specforge.inspect";
     const DESCRIPTION: &'static str = "Get full detail for a specific entity";
@@ -76,7 +86,7 @@ impl CoreTool for Tool {
 
     fn call(view: ProjectView<'_>, args: Args) -> Answered<Reply> {
         let facts =
-            specforge_ops::inspect::inspect(&view, &args.entity_id).map_err(McpError::from)?;
+            specforge_ops::inspect::inspect(&view, &args.entity_id).map_err(Self::refused)?;
         // A recorded report that cannot be read fails the call (ADR 0004 D2-e).
         let coverage = facts
             .coverage

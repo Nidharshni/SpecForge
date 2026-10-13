@@ -80,13 +80,16 @@ constraint api_latency "API Latency Under Load" {
 
 | To | Edge Type | Meaning |
 |----|-----------|---------|
-| `behavior` | `constrains` | "This quality requirement applies to these behaviors" |
-| `invariant` | `constrains` | "This quality requirement protects these invariants" |
-| `ref` | `links_to` | "This constraint links to these external references" |
+| `behavior` | `ConstraintConstrainsBehavior` | "This constraint constrains these behaviors" (via `constrains` field) |
+| `behavior` | `ConstraintEnforcedByBehavior` | "This constraint is enforced by these behaviors" (via `enforced_by` field) |
+| `feature` | `ConstraintGovernsFeature` | "This constraint governs these features" (via `governs_features` field) |
+| `invariant` | `ConstraintProtectsInvariant` | "This constraint protects these invariants" (via `protects` field) |
 
-### No incoming edges
+### Incoming edges
 
-Constraints are leaf nodes in the traceability chain — they constrain other entities but nothing traces *to* a constraint.
+| From | Edge Type | Meaning |
+|------|-----------|---------|
+| `decision` | `DecisionImposesConstraint` | "Decisions that impose this constraint" (via `constraints` field) |
 
 ## Validation Rules
 
@@ -127,11 +130,11 @@ Constraints should be:
 
 | Direction | Entity | Edge | Meaning |
 |-----------|--------|------|---------|
-| outgoing | [behavior](behavior.md) | `constrains` | Behaviors this quality requirement applies to |
-| outgoing | [invariant](invariant.md) | `constrains` | Invariants this quality requirement protects |
-| outgoing | [ref](ref.md) | `links_to` | External references linked to this constraint |
-
-No incoming edges. Constraints are leaf nodes in the traceability chain.
+| outgoing | [behavior](behavior.md) | `ConstraintConstrainsBehavior` | Behaviors this constraint constrains |
+| outgoing | [behavior](behavior.md) | `ConstraintEnforcedByBehavior` | Behaviors this constraint is enforced by |
+| outgoing | [feature](feature.md) | `ConstraintGovernsFeature` | Features this constraint governs |
+| outgoing | [invariant](invariant.md) | `ConstraintProtectsInvariant` | Invariants this constraint protects |
+| incoming | [decision](decision.md) | `DecisionImposesConstraint` | Decisions that impose this constraint |
 
 ## Examples
 

@@ -436,6 +436,7 @@ test and assert on them. No Wasm runtime, no SpecForge binary:
 #[cfg(test)]
 mod tests {
     use super::*;
+    use specforge_extension_sdk::testing::MockHost;
 
     #[test]
     fn describes_greeting_kind() {
@@ -445,11 +446,14 @@ mod tests {
         ));
         Greet::contribute(&mut c);
 
-        let describe = c.describe_response_json("entities").unwrap();
+        let describe = MockHost::new(c).describe_json("entities").unwrap();
         assert!(describe.contains("\"greeting\""));
     }
 }
 ```
+
+`MockHost` needs the SDK's `testing` feature in `[dev-dependencies]` (see the
+SDK reference).
 
 A command runs the same way, as the host would call it:
 

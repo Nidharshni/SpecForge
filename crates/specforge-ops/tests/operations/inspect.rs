@@ -294,10 +294,10 @@ type orphan \"Orphan\" {\n}\n";
 fn an_unknown_entity_is_not_found() {
     let project = standings();
     let error = inspect(&project.view(), "ghost").unwrap_err();
-    assert!(error.is(specforge_common::codes::E003));
-    assert_eq!(error.kind, specforge_ops::OpErrorKind::EntityNotFound);
+    assert!(error.error.is(specforge_common::codes::E003));
+    assert_eq!(error.error.kind, specforge_ops::OpErrorKind::EntityNotFound);
     assert_eq!(
-        error.message,
+        error.error.message,
         "unresolved entity 'ghost' — not found in graph"
     );
 }
