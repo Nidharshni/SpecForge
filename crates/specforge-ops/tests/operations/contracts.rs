@@ -176,7 +176,7 @@ fn trace_contract_entity_in_graph_produces_chain() {
         specforge_ops::trace::trace(&project.view(), specforge_ops::trace::Target::Entity("c"))
             .unwrap();
     let json = serde_json::to_value(&outcome).unwrap();
-    assert_eq!(json["schema_version"], specforge_emitter::SCHEMA_VERSION);
+    assert_eq!(json["schema_version"], "1.0.0");
     assert_eq!(json["missing"][0]["status"], "missing");
     assert_eq!(json["upstream"][0]["status"], "resolved");
 }
@@ -288,7 +288,7 @@ fn trace_data_contract_all_entities_traced() {
 
     // graph_protocol_conformance: the protocol's schema_version, and a
     // traces array.
-    assert_eq!(parsed["schema_version"], specforge_emitter::SCHEMA_VERSION);
+    assert_eq!(parsed["schema_version"], "1.0.0");
     let traces = parsed["traces"].as_array().unwrap();
 
     // full_trace_serialized: one chain per entity, in ID order, each with

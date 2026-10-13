@@ -138,17 +138,20 @@ impl fmt::Display for CheckError {
 
 impl std::error::Error for CheckError {}
 
-/// An unknown severity or lint profile is `invalid_input`, with the
-/// closest valid name as its suggestion; a missing root is `no_project`.
+/// An unknown severity ([`UNKNOWN_SEVERITY`]) or lint profile
+/// ([`UNKNOWN_LINT_PROFILE`]) is invalid input, with the closest valid name
+/// as its suggestion; a missing root is `no_project`.
 impl From<CheckError> for OpError {
     fn from(error: CheckError) -> Self {
+        let message = error.to_string();
         let op_error = match error {
-            CheckError::NoProjectRoot => OpError::no_project(error.to_string()),
-            _ => OpError::new(
-                OpErrorKind::InvalidInput,
-                "invalid_input",
-                error.to_string(),
-            ),
+            CheckError::NoProjectRoot => OpError::no_project(message),
+            CheckError::UnknownSeverity { .. } => {
+                OpError::new(OpErrorKind::InvalidInput, UNKNOWN_SEVERITY, message)
+            }
+            CheckError::UnknownLintProfile { .. } => {
+                OpError::new(OpErrorKind::InvalidInput, UNKNOWN_LINT_PROFILE, message)
+            }
         };
         match error.suggestion() {
             Some(suggestion) => op_error.with_suggestion(suggestion),
@@ -156,6 +159,11 @@ impl From<CheckError> for OpError {
         }
     }
 }
+
+/// A severity filter naming no severity (`InvalidInput`).
+pub const UNKNOWN_SEVERITY: &str = "unknown_severity";
+/// A lint profile naming no profile (`InvalidInput`).
+pub const UNKNOWN_LINT_PROFILE: &str = "unknown_lint_profile";
 
 /// The severities a filter names, lowercase. Matched ignoring ASCII case.
 pub const SEVERITY_NAMES: &[&str] = &["error", "warning", "info"];
@@ -506,9 +514,30 @@ mod tests {
             Some("did you mean 'error'?")
         );
         let op: OpError = refused.into();
-        assert_eq!(op.code, "invalid_input");
+        assert_eq!(op.code, UNKNOWN_SEVERITY);
         assert_eq!(op.suggestion.as_deref(), Some("did you mean 'error'?"));
         assert!(parse_severity("").is_err());
+    }
+
+    #[specforge_test(
+        behavior = "provide_mcp_validate_tool",
+        verify = "an unknown severity_filter or lint profile is invalid input"
+    )]
+    fn check_refusals_have_their_own_codes() {
+        let severity = OpError::from(parse_severity("errors").unwrap_err());
+        assert_eq!(severity.code, UNKNOWN_SEVERITY);
+        assert_eq!(severity.kind, OpErrorKind::InvalidInput);
+        assert_eq!(
+            severity.suggestion.as_deref(),
+            Some("did you mean 'error'?")
+        );
+        let profile = OpError::from(parse_lint_profiles(&["pedantik"]).unwrap_err());
+        assert_eq!(profile.code, UNKNOWN_LINT_PROFILE);
+        assert_eq!(profile.kind, OpErrorKind::InvalidInput);
+        assert_eq!(
+            profile.suggestion.as_deref(),
+            Some("did you mean 'pedantic'?")
+        );
     }
 
     #[test]

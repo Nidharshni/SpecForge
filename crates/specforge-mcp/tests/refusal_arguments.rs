@@ -122,6 +122,12 @@ fn unnamed_today() -> Vec<Refusal> {
         (
             "specforge.add_extension",
             json!({"specifiers": ["!!bad"]}),
+            "file_not_found",
+            Some("specifiers"),
+        ),
+        (
+            "specforge.add_extension",
+            json!({"specifiers": ["@scope/name@not.a.version"]}),
             "invalid_input",
             Some("specifiers"),
         ),
@@ -159,7 +165,6 @@ fn refusals_name_their_argument() {
     behavior = "read_mcp_arguments_as_declared",
     verify = "an operation's refusal of a core tool's call names the argument it is about"
 )]
-#[ignore = "fixed by T8"]
 fn every_invalid_input_refusal_names_its_argument() {
     for (tool, arguments, code, argument) in named_today().into_iter().chain(unnamed_today()) {
         let error = refused(tool, &arguments);

@@ -407,13 +407,13 @@ fn a_source_root_outside_the_root_is_refused() {
         },
     )
     .unwrap_err();
-    assert_eq!(error.code, infer::SOURCE_OUTSIDE_ROOT);
+    assert_eq!(error.code, infer::SOURCE_ROOT_OUTSIDE_ROOT);
     assert_eq!(error.kind, OpErrorKind::InvalidInput);
     assert_eq!(
         error.message,
         "source_roots entry '../x' is not a path inside the project root"
     );
-    assert_eq!(error.data.as_ref().unwrap()["argument"], "source_roots");
+    assert!(error.data.is_none(), "{error:?}");
     assert!(!project.dir.path().join("specforge-infer.json").exists());
 
     // The project root itself is a root; roots are recorded by the rule.

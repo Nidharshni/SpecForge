@@ -161,7 +161,6 @@ fn the_model_names_the_versioned_schema() {
     behavior = "embed_schema_in_export",
     verify = "every JSON export carries the project's schema version, whether the schema is attached or not"
 )]
-#[ignore = "fixed by T2"]
 fn every_document_names_the_versioned_schema() {
     use specforge_ops::export::{Format, Request, Schema, export};
     use specforge_ops::trace::{Target, trace};
@@ -211,4 +210,20 @@ fn every_document_names_the_versioned_schema() {
         traced.to_string().contains("\"schema_version\":\"2.0.0\""),
         "{traced}"
     );
+}
+
+#[specforge_test(
+    behavior = "serialize_traceability_data",
+    verify = "the trace document carries the project's schema version"
+)]
+fn a_trace_carries_the_projects_schema_version() {
+    use specforge_ops::trace::{Target, trace};
+    let project = project_at_two();
+    let view = project.view();
+    let entity = serde_json::to_value(trace(&view, Target::Entity("b")).unwrap()).unwrap();
+    assert_eq!(entity["schema_version"], "2.0.0", "{entity}");
+    let chain = trace(&view, Target::Entity("b")).unwrap().into_chain();
+    assert_eq!(chain.unwrap().schema_version, "2.0.0");
+    let every = serde_json::to_value(trace(&view, Target::Every).unwrap()).unwrap();
+    assert_eq!(every["schema_version"], "2.0.0", "{every}");
 }

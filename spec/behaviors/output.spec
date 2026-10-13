@@ -643,10 +643,13 @@ behavior serialize_traceability_data "Serialize Traceability Data" {
     edge types from root entities to leaf entities as structured JSON graph
     traversal data. Gaps in the chain MUST be included in the output with
     a "missing" status. The output MUST conform to the Graph Protocol schema.
+    The document's schema_version MUST be the project's versioned schema
+    version.
   """
   verify unit "full trace covers all root entities across registered edge types"
   verify unit "gaps in chain are highlighted"
   verify unit "output conforms to Graph Protocol schema"
+  verify unit "the trace document carries the project's schema version"
   verify contract "Serialize Traceability Data: traceability data serialization holds — validation_complete_fired, full_trace_serialized, gaps_included, graph_protocol_conformance, render_complete_emitted"
 }
 

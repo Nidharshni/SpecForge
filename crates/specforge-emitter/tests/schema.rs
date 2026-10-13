@@ -28,7 +28,8 @@ fn with_schema(
         &EmitOptions {
             format,
             scope,
-            schema: Some(schema),
+            schema,
+            attach_schema: true,
             ..EmitOptions::default()
         },
     )
@@ -1099,7 +1100,8 @@ fn scoped_v2_nonexistent_scope_error() {
         &graph,
         &specforge_emitter::EmitOptions {
             scope: Some("nonexistent"),
-            schema: Some(&schema),
+            schema: &schema,
+            attach_schema: true,
             ..Default::default()
         },
     )
@@ -1250,7 +1252,8 @@ fn published_context_schema_admits_declared_headline_and_normative_fields() {
         &graph,
         &specforge_emitter::EmitOptions {
             format: EmitFormat::Context,
-            schema: Some(&schema),
+            schema: &schema,
+            attach_schema: true,
             field_registry: Some(&fields),
             ..Default::default()
         },
@@ -1596,4 +1599,38 @@ fn each_format_publishes_its_own_id() {
         ]
     );
     assert!(publish(&schema, EmitFormat::Dot).is_none());
+}
+
+#[specforge_test(
+    behavior = "embed_schema_in_export",
+    verify = "every JSON export carries the project's schema version, whether the schema is attached or not"
+)]
+fn a_plain_export_carries_the_given_schemas_version() {
+    let mut schema = GraphProtocolSchema::empty();
+    schema.schema_version = SchemaVersion::new(4, 2, 0);
+    let graph = Graph::new();
+    for format in [EmitFormat::Json, EmitFormat::Context, EmitFormat::Brief] {
+        let plain = specforge_emitter::emit(
+            &graph,
+            &EmitOptions {
+                format,
+                schema: &schema,
+                ..EmitOptions::default()
+            },
+        )
+        .unwrap();
+        let document: serde_json::Value = serde_json::from_str(&plain).unwrap();
+        assert_eq!(document["schema_version"], "4.2.0", "{format:?}");
+        assert!(document.get("schema").is_none(), "{format:?}: {plain}");
+    }
+    let json = specforge_emitter::emit(
+        &graph,
+        &EmitOptions {
+            schema: &schema,
+            ..EmitOptions::default()
+        },
+    )
+    .unwrap();
+    let document: serde_json::Value = serde_json::from_str(&json).unwrap();
+    assert_eq!(document["format_version"], "1.0");
 }

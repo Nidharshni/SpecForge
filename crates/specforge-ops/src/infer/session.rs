@@ -20,9 +20,10 @@ pub const SESSION_ACTIVE: &str = "session_active";
 pub const SESSION_NOT_ACTIVE: &str = "session_not_active";
 /// An end of a session the manifest does not record (`InvalidInput`).
 pub const UNKNOWN_SESSION: &str = "unknown_session";
-/// A source path or source root outside the project root
-/// (`InvalidInput`); `data.argument` names `source_file` or `source_roots`.
+/// A source path outside the project root (`InvalidInput`).
 pub const SOURCE_OUTSIDE_ROOT: &str = "source_outside_root";
+/// A source root outside the project root (`InvalidInput`).
+pub const SOURCE_ROOT_OUTSIDE_ROOT: &str = "source_root_outside_root";
 /// A marked file that cannot be read (`OpErrorKind::of_io`: `FileNotFound`
 /// when missing).
 pub const SOURCE_UNREADABLE: &str = "source_unreadable";
@@ -194,7 +195,13 @@ impl<'a> Normalized<'a> {
                         roots
                             .iter()
                             .map(|root| {
-                                source_root(root).map_err(|_| outside_root("source_roots", root))
+                                source_root(root).map_err(|_| {
+                                    outside_root(
+                                        SOURCE_ROOT_OUTSIDE_ROOT,
+                                        "source_roots entry",
+                                        root,
+                                    )
+                                })
                             })
                             .collect::<Result<Vec<_>, _>>()
                     })
@@ -206,7 +213,7 @@ impl<'a> Normalized<'a> {
             } => Normalized::Mark {
                 given: source_file,
                 path: source_path(source_file)
-                    .map_err(|_| outside_root("source_file", source_file))?,
+                    .map_err(|_| outside_root(SOURCE_OUTSIDE_ROOT, "source_file", source_file))?,
                 entities,
             },
             SessionStep::End { session_id, status } => Normalized::End { session_id, status },
@@ -214,19 +221,14 @@ impl<'a> Normalized<'a> {
     }
 }
 
-/// `argument`'s path `given` is not a path inside the project root.
-fn outside_root(argument: &str, given: &str) -> OpError {
-    let what = if argument == "source_roots" {
-        "source_roots entry"
-    } else {
-        argument
-    };
+/// The path `given`, which `what` names in the message, is not a path
+/// inside the project root: refused as `code`.
+fn outside_root(code: &'static str, what: &str, given: &str) -> OpError {
     OpError::new(
         OpErrorKind::InvalidInput,
-        SOURCE_OUTSIDE_ROOT,
+        code,
         format!("{what} '{given}' is not a path inside the project root"),
     )
-    .with_data(serde_json::json!({ "argument": argument }))
 }
 
 /// `step` applied to `manifest`, at time `now`: the rules, without disk

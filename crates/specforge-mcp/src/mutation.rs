@@ -145,6 +145,11 @@ impl Failed {
         }
     }
 
+    /// The failure's McpError, to name its argument.
+    pub(crate) fn error_mut(&mut self) -> &mut McpError {
+        &mut self.error
+    }
+
     /// The same failure, its McpError mapped (naming the argument it is
     /// about).
     pub fn map_error(mut self, map: impl FnOnce(McpError) -> McpError) -> Self {

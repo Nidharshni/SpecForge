@@ -7,6 +7,7 @@
 //! `_meta`. What a mutation wrote crosses to the dispatcher typed (ADR 0022),
 //! never read back from the reply.
 
+use std::borrow::Cow;
 use std::marker::PhantomData;
 
 use serde::Serialize;
@@ -18,7 +19,7 @@ use specforge_graph::Graph;
 use crate::args::{Argument, Arguments};
 use crate::events::EventSink;
 use crate::lifecycle::Revision;
-use crate::mutation::{Mutation, MutationArgs, MutationReply};
+use crate::mutation::{Failed, Mutation, MutationArgs, MutationReply};
 use crate::protocol::{JsonRpcError, JsonRpcResponse, error_codes};
 use crate::registry::{ToolAnnotations, ToolDescriptor};
 use crate::reply::{Answered, Object, Source, Text};
@@ -221,6 +222,11 @@ pub trait CoreTool: Sync + 'static {
     type Returns: Handled;
     /// The handler: its input, then its typed arguments.
     fn call(input: <Self::Input as Input>::Given<'_>, args: Self::Args) -> Self::Returns;
+    /// Which argument each refusal code of its operations is about. The
+    /// dispatcher names it on every refusal the handler returns that names
+    /// none; an `invalid_input` refusal left without one fails a debug build
+    /// (ADR 0033 D2).
+    const REFUSAL_ARGUMENTS: &'static [RefusalArgument] = &[];
 }
 
 /// A tool's arguments as its reply kind reads them before the handler takes
@@ -271,6 +277,8 @@ pub trait Handled: Sized {
     /// recorded through the call), `preview` read from its arguments
     /// beforehand.
     fn finish(self, call: &mut Call<'_>, tool: &'static str, preview: bool) -> ToolOutcome;
+    /// The refusal the handler returned, if it refused.
+    fn refusal_mut(&mut self) -> Option<&mut McpError>;
 }
 
 impl Handled for Answered<Text> {
@@ -287,6 +295,10 @@ impl Handled for Answered<Text> {
 
     fn finish(self, _: &mut Call<'_>, _: &'static str, _: bool) -> ToolOutcome {
         crate::reply::text(self)
+    }
+
+    fn refusal_mut(&mut self) -> Option<&mut McpError> {
+        self.as_mut().err().map(|error| &mut **error)
     }
 }
 
@@ -305,6 +317,10 @@ impl<R: Object + Serialize + 'static> Handled for Answered<R> {
     fn finish(self, _: &mut Call<'_>, tool: &'static str, _: bool) -> ToolOutcome {
         let schema = Self::output_schema().expect("a typed reply has an outputSchema");
         crate::reply::conforming(tool, Source::Core, schema, crate::reply::structured(self))
+    }
+
+    fn refusal_mut(&mut self) -> Option<&mut McpError> {
+        self.as_mut().err().map(|error| &mut **error)
     }
 }
 
@@ -330,6 +346,10 @@ impl<R: MutationReply> Handled for Mutation<R> {
         // schema, record the events.
         let schema = Self::output_schema().expect("a mutation has an outputSchema");
         crate::mutation::complete::<R>(call, tool, schema, preview, self)
+    }
+
+    fn refusal_mut(&mut self) -> Option<&mut McpError> {
+        self.as_mut().err().map(Failed::error_mut)
     }
 }
 
@@ -494,7 +514,19 @@ impl<T: CoreTool> ToolSpec for T {
         // Read before the handler takes the arguments (ADR 0022).
         let preview = <T::Args as Previews<T::Returns>>::previews(&args);
         // The input borrows the call; what the handler returns does not.
-        let returned = <T::Input as Input>::given(call).map(|input| T::call(input, args));
+        let returned = <T::Input as Input>::given(call).map(|input| {
+            let mut returned = T::call(input, args);
+            if let Some(refusal) = returned.refusal_mut() {
+                refusal.name_argument(T::REFUSAL_ARGUMENTS);
+                debug_assert!(
+                    refusal.code != ErrorCode::InvalidInput || refusal.argument.is_some(),
+                    "{}: an invalid_input refusal names the argument it is about (ADR 0033 D2); \
+                     add its code to REFUSAL_ARGUMENTS: {refusal:?}",
+                    T::NAME
+                );
+            }
+            returned
+        });
         match returned {
             Ok(returned) => returned.finish(call, T::NAME, preview),
             // The call target refused a call with no project before this
@@ -623,6 +655,18 @@ pub struct McpError {
     /// ride in `_meta.diagnostics`, as a successful call's do.
     #[serde(skip)]
     pub reported: Vec<Diagnostic>,
+    /// The operation's own code for the refusal (`OpError::code`), read only
+    /// to name its argument ([`McpError::name_argument`]). Not on the wire.
+    #[serde(skip)]
+    pub(crate) refusal_code: Option<Cow<'static, str>>,
+}
+
+/// The argument a tool's caller sent that one of its operation's refusals is
+/// about: refusals with `code` name `argument` (ADR 0033 D2).
+#[derive(Debug, Clone, Copy)]
+pub struct RefusalArgument {
+    pub code: &'static str,
+    pub argument: &'static str,
 }
 
 impl McpError {
@@ -639,6 +683,7 @@ impl McpError {
             diagnostic: None,
             data: None,
             reported: Vec::new(),
+            refusal_code: None,
         }
     }
 
@@ -660,6 +705,20 @@ impl McpError {
     pub fn with_argument(mut self, argument: impl Into<String>) -> Self {
         self.argument = Some(argument.into());
         self
+    }
+
+    /// Name the argument `table` says this refusal is about, when it names
+    /// none and its operation code is in the table.
+    pub(crate) fn name_argument(&mut self, table: &[RefusalArgument]) {
+        if self.argument.is_some() {
+            return;
+        }
+        let Some(code) = self.refusal_code.as_deref() else {
+            return;
+        };
+        if let Some(row) = table.iter().find(|row| row.code == code) {
+            self.argument = Some(row.argument.to_string());
+        }
     }
 
     pub fn with_diagnostic(mut self, diagnostic: &Diagnostic) -> Self {
@@ -709,6 +768,7 @@ impl McpError {
 impl From<OpError> for McpError {
     fn from(error: OpError) -> Self {
         let mut mcp_error = McpError::new(error.kind.into(), error.message.clone());
+        mcp_error.refusal_code = Some(error.code.clone());
         let mut data = error.data.map_or_else(|| json!({}), |data| *data);
         if is_diagnostic_code(&error.code) {
             let mut diagnostic =
@@ -941,6 +1001,31 @@ pub fn envelope(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[specforge_test_macros::test(
+        behavior = "read_mcp_arguments_as_declared",
+        verify = "an operation's refusal of a core tool's call names the argument it is about"
+    )]
+    fn a_refusal_is_named_by_its_tools_table() {
+        const TABLE: &[RefusalArgument] = &[RefusalArgument {
+            code: "invalid_min",
+            argument: "min",
+        }];
+        let refusal = |code: &'static str| {
+            McpError::from(OpError::new(OpErrorKind::InvalidInput, code, "refused"))
+        };
+        let mut listed = refusal("invalid_min");
+        listed.name_argument(TABLE);
+        assert_eq!(listed.argument.as_deref(), Some("min"));
+
+        let mut named = refusal("invalid_min").with_argument("other");
+        named.name_argument(TABLE);
+        assert_eq!(named.argument.as_deref(), Some("other"));
+
+        let mut unlisted = refusal("unknown_pass");
+        unlisted.name_argument(TABLE);
+        assert_eq!(unlisted.argument, None);
+    }
 
     const ALL: [ErrorCode; 12] = [
         ErrorCode::InvalidInput,

@@ -1,6 +1,5 @@
 use crate::target::View;
-use crate::tool::{CoreTool, Effect, ToolGroup};
-use specforge_ops::OpError;
+use crate::tool::{CoreTool, Effect, RefusalArgument, ToolGroup};
 use specforge_ops::model::{self, FieldLevel, GroupBy, ModelFormat, ModelOptions, ModelRoot};
 
 use crate::args::Arguments;
@@ -46,22 +45,21 @@ impl CoreTool for Tool {
     type Args = Args;
     type Input = View;
     type Returns = Answered<Text>;
+    const REFUSAL_ARGUMENTS: &'static [RefusalArgument] = &[
+        RefusalArgument {
+            code: specforge_ops::view::UNKNOWN_KIND,
+            argument: "root",
+        },
+        RefusalArgument {
+            code: specforge_ops::extension::NOT_FOUND,
+            argument: "extension",
+        },
+    ];
 
     fn call(view: ProjectView<'_>, args: Args) -> Answered<Text> {
         let options = options(args)?;
-        match model::model(&view, &options) {
-            Ok(outcome) => {
-                Ok(Answer::new(Text(outcome.document)).with_diagnostics(outcome.notices))
-            }
-            Err(error) => {
-                let argument = argument_of(&error);
-                let error = McpError::from(error);
-                Err(Box::new(match argument {
-                    Some(argument) => error.with_argument(argument),
-                    None => error,
-                }))
-            }
-        }
+        let outcome = model::model(&view, &options).map_err(McpError::from)?;
+        Ok(Answer::new(Text(outcome.document)).with_diagnostics(outcome.notices))
     }
 }
 
@@ -87,13 +85,4 @@ fn options(args: Args) -> Result<ModelOptions, Box<McpError>> {
         kinds: args.kinds,
         root,
     })
-}
-
-/// The argument a model refusal is about.
-fn argument_of(error: &OpError) -> Option<&'static str> {
-    match error.code.as_ref() {
-        specforge_ops::view::UNKNOWN_KIND => Some("root"),
-        specforge_ops::extension::NOT_FOUND => Some("extension"),
-        _ => None,
-    }
 }

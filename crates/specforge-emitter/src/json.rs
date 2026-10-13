@@ -7,11 +7,7 @@ use std::collections::BTreeMap;
 
 use crate::budget::TokenBudget;
 use crate::error::EmitterError;
-use crate::schema::{GraphProtocolSchema, SchemaRefBlock};
-
-/// V1 export envelope version. V1 is a frozen legacy shape; new consumers
-/// should use the V2 schema-embedded export.
-pub const SCHEMA_VERSION: &str = "0.1.0";
+use crate::schema::{GraphProtocolSchema, SchemaRefBlock, SchemaVersion};
 
 /// The envelope version an export declares: 1.0 for the schemaless graph
 /// export, 2.0 once a schema is attached.
@@ -49,12 +45,13 @@ impl<'a, N: Serialize> Export<'a, N> {
     /// budget block.
     pub(crate) fn plain(
         format_version: Option<ExportVersion>,
+        schema_version: &SchemaVersion,
         graph: &Graph,
         nodes: Vec<N>,
     ) -> Self {
         Export {
             format_version,
-            schema_version: Cow::Borrowed(SCHEMA_VERSION),
+            schema_version: Cow::Owned(schema_version.to_string()),
             schema: None,
             schema_ref: None,
             nodes,
@@ -113,9 +110,9 @@ pub(crate) fn sorted_edges(graph: &Graph) -> Vec<JsonEdge> {
     edges
 }
 
+/// The graph as a plain (format 1.0) export against the empty schema: the
+/// test helper for [`emit`] with the default options.
 pub fn emit_json(graph: &Graph) -> String {
-    let nodes = graph.nodes().into_iter().map(graph_node).collect();
-    Export::plain(Some(ExportVersion::V1), graph, nodes)
-        .to_json()
+    crate::emit::emit(graph, &crate::emit::EmitOptions::default())
         .expect("graph serialization cannot fail")
 }

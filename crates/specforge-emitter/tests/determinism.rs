@@ -254,7 +254,7 @@ fn json_output_contains_no_timestamps() {
         "behaviors",
         "invariants",
         "test.spec",
-        "0.1.0",
+        "1.0.0",
         "1.0",
     ];
     fn check(value: &serde_json::Value, allowed: &[&str], at: &str) {

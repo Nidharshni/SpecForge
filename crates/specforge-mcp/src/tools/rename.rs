@@ -1,7 +1,7 @@
 //! `specforge.rename`: rename an entity across the project (`specforge_ops::rename`).
 
 use crate::target::{AnyProject, Project};
-use crate::tool::{CoreTool, Effect, ReplySpec, WriteHints};
+use crate::tool::{CoreTool, Effect, RefusalArgument, ReplySpec, WriteHints};
 use serde::Serialize;
 use specforge_common::shape::Shape;
 
@@ -10,7 +10,7 @@ use crate::mutation::{
     Failed, FreshDiagnostics, Mutated, Mutation, MutationArgs, MutationReply, Written,
 };
 use crate::target::ProjectRef;
-use specforge_ops::OpErrorKind;
+use crate::tool::McpError;
 
 /// `specforge.rename`'s arguments.
 #[derive(Debug, Arguments)]
@@ -71,6 +71,10 @@ impl CoreTool for Tool {
     type Args = Args;
     type Input = Project<AnyProject>;
     type Returns = Mutation<Reply>;
+    const REFUSAL_ARGUMENTS: &'static [RefusalArgument] = &[RefusalArgument {
+        code: specforge_ops::rename::INVALID_ID,
+        argument: "new_name",
+    }];
 
     fn call(project: ProjectRef<'_>, args: Args) -> Mutation<Reply> {
         use specforge_ops::rename;
@@ -87,13 +91,7 @@ impl CoreTool for Tool {
             &args.entity_id,
             &args.new_name,
         )
-        .map_err(|error| {
-            let argument = (error.kind == OpErrorKind::InvalidInput).then_some("new_name");
-            Failed::from(error).map_error(|e| match argument {
-                Some(argument) => e.with_argument(argument),
-                None => e,
-            })
-        })?;
+        .map_err(|error| Failed::from(McpError::from(error)))?;
 
         let mut reply = Reply {
             old_name: args.entity_id,

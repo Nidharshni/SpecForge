@@ -1,7 +1,7 @@
 //! `specforge.add_extension`: install extensions (`specforge_ops::extension::add`).
 
 use crate::target::{AnyProject, Project};
-use crate::tool::{CoreTool, Effect, ReplySpec, WriteHints};
+use crate::tool::{CoreTool, Effect, RefusalArgument, ReplySpec, WriteHints};
 use serde::Serialize;
 use specforge_common::shape::Shape;
 
@@ -71,6 +71,16 @@ impl CoreTool for Tool {
     type Args = Args;
     type Input = Project<AnyProject>;
     type Returns = Mutation<Reply>;
+    const REFUSAL_ARGUMENTS: &'static [RefusalArgument] = &[
+        RefusalArgument {
+            code: specforge_common::codes::E054.id(),
+            argument: "specifiers",
+        },
+        RefusalArgument {
+            code: specforge_common::codes::R_RES_003.id(),
+            argument: "specifiers",
+        },
+    ];
 
     fn call(project: ProjectRef<'_>, args: Args) -> Mutation<Reply> {
         use specforge_ops::extension::{self, AddRequest, Trust};
