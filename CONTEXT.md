@@ -672,8 +672,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Tool spec**: the single definition of a core MCP tool: its own module under `specforge_mcp::tools`,
   implementing `CoreTool` once: its name, description and effect, the spec type its reply is, the tool
   arguments it reads, what its handler is given (nothing, the project view, the project, or the
-  directory init creates, with how it reaches its project) and the tool reply it answers (typed, text,
-  or a mutation's). Its category, annotations, call target, descriptor (input and output schemas
+  directory init creates, with how it reaches its project), the tool reply it answers (typed, text,
+  or a mutation's) and which argument each of its operation's refusal codes is about
+  (`REFUSAL_ARGUMENTS`; the dispatcher names it on the refusal, ADR 0033). Its category, annotations, call target, descriptor (input and output schemas
   included) and dispatch derive from it; the core tool table lists each once (`CORE_TOOLS`, each seen
   as a `ToolSpec`), and a declaration that contradicts its handler does not build. A prompt names a
   tool by its typed name (ADR 0024, ADR 0049).

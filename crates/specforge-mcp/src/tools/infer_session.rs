@@ -1,8 +1,7 @@
 use crate::target::Project;
-use crate::tool::{CoreTool, Effect, ReplySpec, WriteHints};
+use crate::tool::{CoreTool, Effect, RefusalArgument, ReplySpec, WriteHints};
 use serde::Serialize;
 use specforge_common::shape::Shape;
-use specforge_ops::OpError;
 use specforge_ops::infer::{
     self, EndStatus, Recorded, SessionAction, SessionOutcome, SessionStatus, SessionStep,
 };
@@ -79,17 +78,29 @@ impl CoreTool for Tool {
     type Args = Args;
     type Input = Project;
     type Returns = Mutation<Reply>;
+    const REFUSAL_ARGUMENTS: &'static [RefusalArgument] = &[
+        RefusalArgument {
+            code: infer::UNKNOWN_SESSION,
+            argument: "session_id",
+        },
+        RefusalArgument {
+            code: infer::SOURCE_UNREADABLE,
+            argument: "source_file",
+        },
+        RefusalArgument {
+            code: infer::SOURCE_OUTSIDE_ROOT,
+            argument: "source_file",
+        },
+        RefusalArgument {
+            code: infer::SOURCE_ROOT_OUTSIDE_ROOT,
+            argument: "source_roots",
+        },
+    ];
 
     fn call(project: ProjectRef<'_>, args: Args) -> Mutation<Reply> {
         let step = step(&args)?;
-        let SessionOutcome { recorded, writes } =
-            infer::session(&project.view(), step).map_err(|error| {
-                let argument = argument_of(&error);
-                Failed::from(error).map_error(|refused| match argument {
-                    Some(argument) => refused.with_argument(argument),
-                    None => refused,
-                })
-            })?;
+        let SessionOutcome { recorded, writes } = infer::session(&project.view(), step)
+            .map_err(|error| Failed::from(McpError::from(error)))?;
         let written = match &recorded {
             Recorded::Marked { entities, .. } => {
                 Written::files(writes).with_entities(entities.clone())
@@ -127,17 +138,6 @@ fn required<'a>(value: &'a Option<String>, name: &str) -> Result<&'a str, Box<Mc
         let message = format!("Missing required parameter: {name}");
         Box::new(McpError::new(ErrorCode::InvalidInput, message).with_argument(name))
     })
-}
-
-/// The argument an operation refusal is about.
-fn argument_of(error: &OpError) -> Option<&'static str> {
-    match error.code.as_ref() {
-        infer::UNKNOWN_SESSION => Some("session_id"),
-        infer::SOURCE_UNREADABLE => Some("source_file"),
-        infer::SOURCE_OUTSIDE_ROOT => Some("source_file"),
-        infer::SOURCE_ROOT_OUTSIDE_ROOT => Some("source_roots"),
-        _ => None,
-    }
 }
 
 /// What a recorded step replies.
