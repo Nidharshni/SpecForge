@@ -6,6 +6,6 @@ exit: Some(2)
 stderr:
 error: the argument '--publish' cannot be used with '--kind <KIND>'
 
-Usage: specforge schema --publish <PATH>
+Usage: specforge schema --path <PATH> --publish
 
 For more information, try '--help'.

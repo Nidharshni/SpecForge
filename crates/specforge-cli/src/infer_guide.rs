@@ -2,7 +2,6 @@ use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use crate::terminal::{Terminal, outln};
 use specforge_ops::infer::{InferenceGuide, KindGuide, guide, kind_guide};
 use specforge_ops::view::ProjectView;
-use std::path::PathBuf;
 
 // `specforge infer-guide`'s command line.
 #[derive(clap::Args)]
@@ -10,8 +9,8 @@ pub(crate) struct Args {
     /// Entity kind (omit for every declared kind)
     kind: Option<String>,
 
-    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
-    path: PathBuf,
+    #[command(flatten)]
+    project: crate::project::ProjectArg,
 
     #[command(flatten)]
     output: OutputArg,
@@ -26,7 +25,7 @@ impl Args {
     /// `unknown_kind` naming the closest declared kind (exit 1).
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         let format = self.output.format;
-        let project = match crate::project::compile(&self.path) {
+        let project = match self.project.compile() {
             Ok(project) => project,
             Err(error) => return Refusal::of(format).report(terminal, &error),
         };

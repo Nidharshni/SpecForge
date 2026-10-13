@@ -2,7 +2,6 @@ use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal, Written};
 use crate::terminal::{Terminal, errln, outln};
 use specforge_ops::extension::{self, Origin, RemoveRequest};
 use specforge_ops::view::ProjectView;
-use std::path::PathBuf;
 
 // `specforge remove`'s command line.
 #[derive(clap::Args)]
@@ -10,8 +9,8 @@ pub(crate) struct Args {
     /// Extension name
     name: String,
 
-    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
-    path: PathBuf,
+    #[command(flatten)]
+    project: crate::project::ProjectArg,
 
     /// Force removal even if other extensions depend on it
     #[arg(long)]
@@ -31,7 +30,7 @@ impl Args {
     /// depend on the one removed.
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         let format = self.output.format;
-        let root = match crate::project::root(&self.path) {
+        let root = match self.project.root() {
             Ok(root) => root,
             Err(error) => return Refusal::of(format).report(terminal, &error),
         };

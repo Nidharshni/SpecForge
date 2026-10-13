@@ -10,8 +10,8 @@ Options:
       --name <NAME>
           Extension name
 
-      --path <PATH>
-          Path for the new extension
+      --dir <DIR>
+          Directory for the new extension
           
           [default: .]
 

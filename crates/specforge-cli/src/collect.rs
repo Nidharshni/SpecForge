@@ -20,8 +20,8 @@ use std::path::{Path, PathBuf};
 // `specforge collect`'s command line.
 #[derive(clap::Args)]
 pub(crate) struct Args {
-    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
-    path: PathBuf,
+    #[command(flatten)]
+    project: crate::project::ProjectArg,
 
     /// Collector to use (e.g. cargo-test). Detected from project files if omitted.
     #[arg(long, alias = "collector", value_name = "NAME")]
@@ -52,7 +52,7 @@ impl Args {
 fn collect_at(options: &Args, terminal: &Terminal) -> Exit {
     let format = options.output.format;
     // The project the path is in (ADR 0029 D6); collect refuses one that is none.
-    let root = match crate::project::root(&options.path) {
+    let root = match options.project.root() {
         Ok(root) => root,
         Err(error) => return Refusal::of(format).report(terminal, &error),
     };

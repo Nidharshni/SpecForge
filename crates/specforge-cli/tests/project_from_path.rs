@@ -277,26 +277,31 @@ fn args_of(row: &Row) -> Vec<String> {
         .collect()
 }
 
-fn observe(row: &Row, root: &Path, cwd: &Path) -> Observed {
+/// `row` run from `cwd` with `extra` arguments after its own.
+fn observe(row: &Row, root: &Path, cwd: &Path, extra: &[String]) -> Observed {
+    let mut args = args_of(row);
+    args.extend(extra.iter().cloned());
+    observe_args(row, root, cwd, &args)
+}
+
+/// `row`'s setup, then `args` (its arguments, however arranged) from `cwd`.
+fn observe_args(row: &Row, root: &Path, cwd: &Path, args: &[String]) -> Observed {
     (row.setup)(root);
     if row.kind == Kind::Watch {
         return Observed {
             exit: None,
-            stdout: normalized(&first_watch_event(&args_of(row), cwd), root),
+            stdout: normalized(&first_watch_event(args, cwd), root),
             stderr: String::new(),
             files: BTreeMap::new(),
         };
     }
-    let out = specforge()
-        .args(args_of(row))
-        .current_dir(cwd)
-        .output()
-        .unwrap();
+    let out = specforge().args(args).current_dir(cwd).output().unwrap();
     Observed {
         exit: out.status.code(),
         stdout: normalized(&String::from_utf8_lossy(&out.stdout), root),
         stderr: match row.kind {
-            Kind::Writes => String::new(),
+            // A usage error (exit 2) is always kept: it names the argument.
+            Kind::Writes if out.status.code() != Some(2) => String::new(),
             _ => normalized(&String::from_utf8_lossy(&out.stderr), root),
         },
         files: match row.kind {
@@ -332,8 +337,8 @@ fn first_watch_event(args: &[String], cwd: &Path) -> String {
 fn compare(row: &Row) -> (bool, Observed, Observed) {
     let at_root = project();
     let at_subdir = project();
-    let root = observe(row, at_root.path(), at_root.path());
-    let subdir = observe(row, at_subdir.path(), &at_subdir.path().join(SUBDIR));
+    let root = observe(row, at_root.path(), at_root.path(), &[]);
+    let subdir = observe(row, at_subdir.path(), &at_subdir.path().join(SUBDIR), &[]);
     (root != subdir, root, subdir)
 }
 
@@ -394,9 +399,9 @@ fn watch_from_a_subdirectory_watches_its_project() {
 fn a_command_given_a_missing_path_refuses_it_as_file_not_found() {
     let dir = TempDir::new().unwrap();
     for (args, code) in [
-        (&["check", "nope"][..], 1),
-        (&["stats", "nope", "--format", "json"][..], 2),
-        (&["export", "nope", "--format", "json"][..], 1),
+        (&["check", "--path", "nope"][..], 1),
+        (&["stats", "--path", "nope", "--format", "json"][..], 2),
+        (&["export", "--path", "nope", "--format", "json"][..], 1),
         (&["watch", "--path", "nope", "--format", "json"][..], 1),
         (&["product", "features", "--path", "nope"][..], 1),
     ] {
@@ -425,6 +430,7 @@ fn a_file_path_names_the_project_it_is_in() {
     let check = |args: &[&str]| {
         let out = specforge()
             .args(args)
+            .arg("--path")
             .arg(p.path().join("spec/a.spec"))
             .output()
             .unwrap();
@@ -435,7 +441,11 @@ fn a_file_path_names_the_project_it_is_in() {
     };
     let (code, stderr) = check(&["check", "--format", "human"]);
     let (project_code, project_stderr) = {
-        let out = specforge().arg("check").arg(p.path()).output().unwrap();
+        let out = specforge()
+            .args(["check", "--path"])
+            .arg(p.path())
+            .output()
+            .unwrap();
         (
             out.status.code(),
             String::from_utf8_lossy(&out.stderr).to_string(),
@@ -444,4 +454,83 @@ fn a_file_path_names_the_project_it_is_in() {
     assert!(!stderr.contains("E069"), "{stderr}");
     assert_eq!(code, project_code, "{stderr}");
     assert_eq!(stderr, project_stderr);
+}
+
+/// The commands that took their project as a positional argument; each one
+/// refuses it now.
+const WERE_POSITIONAL: [&str; 6] = ["check", "stats", "export", "schema", "model", "outline"];
+
+/// `row` run from `outside` (a directory in no project) with
+/// `--path <root>/spec/docs`.
+fn observe_with_path(row: &Row, root: &Path, outside: &Path) -> Observed {
+    let path = root.join(SUBDIR).to_string_lossy().to_string();
+    observe(row, root, outside, &["--path".to_string(), path])
+}
+
+#[specforge_test(
+    behavior = "locate_project_root",
+    verify = "every command given --path acts on the project the path is in, from any directory"
+)]
+fn every_command_names_its_project_with_path() {
+    let results: Vec<(&str, Observed, Observed)> = std::thread::scope(|scope| {
+        let handles: Vec<_> = ROWS
+            .iter()
+            .map(|row| {
+                scope.spawn(move || {
+                    let at_root = project();
+                    let given = project();
+                    let outside = TempDir::new().unwrap();
+                    let baseline = observe(row, at_root.path(), at_root.path(), &[]);
+                    let with_path = observe_with_path(row, given.path(), outside.path());
+                    (row.name, baseline, with_path)
+                })
+            })
+            .collect();
+        handles.into_iter().map(|h| h.join().unwrap()).collect()
+    });
+    let mut report = String::new();
+    for (name, baseline, with_path) in &results {
+        if baseline != with_path {
+            report.push_str(&format!(
+                "row `{name}` differs\n  from the root: {baseline:?}\n  with --path:   {with_path:?}\n"
+            ));
+        }
+    }
+    assert!(report.is_empty(), "{report}");
+}
+
+#[specforge_test(
+    behavior = "locate_project_root",
+    verify = "a project path given as a positional argument is refused as a usage error"
+)]
+fn no_command_takes_its_project_as_a_positional_argument() {
+    let results: Vec<(&str, Observed)> = std::thread::scope(|scope| {
+        let handles: Vec<_> = WERE_POSITIONAL
+            .iter()
+            .map(|name| {
+                scope.spawn(move || {
+                    let row = ROWS.iter().find(|row| row.name == *name).expect("a row");
+                    let given = project();
+                    let outside = TempDir::new().unwrap();
+                    // The path goes right after the command name.
+                    let mut args = args_of(row);
+                    args.insert(1, given.path().join(SUBDIR).to_string_lossy().to_string());
+                    (
+                        *name,
+                        observe_args(row, given.path(), outside.path(), &args),
+                    )
+                })
+            })
+            .collect();
+        handles.into_iter().map(|h| h.join().unwrap()).collect()
+    });
+    let mut report = String::new();
+    for (name, positional) in &results {
+        if positional.exit != Some(2) || !positional.stderr.contains("unexpected argument") {
+            report.push_str(&format!(
+                "row `{name}` should refuse the positional\n  {positional:?}\n"
+            ));
+        }
+    }
+    assert!(report.is_empty(), "{report}");
 }

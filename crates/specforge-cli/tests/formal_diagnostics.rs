@@ -60,6 +60,7 @@ fn finding(d: &serde_json::Value) -> Finding {
 fn check(dir: &TempDir) -> Vec<Finding> {
     let output = specforge_cmd()
         .args(["check", "--format=json"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();

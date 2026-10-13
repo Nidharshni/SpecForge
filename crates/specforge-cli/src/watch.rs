@@ -10,9 +10,10 @@
 
 use crate::terminal::{Terminal, errln, outln};
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
+use crate::project::ProjectArg;
 use serde::Serialize;
 use specforge_common::DiagnosticList;
 use specforge_common::shape::Shape;
@@ -24,8 +25,8 @@ use specforge_watch::{Applied, DEFAULT_DEBOUNCE_WINDOW, Notify, SessionWatch, Wa
 // `specforge watch`'s command line.
 #[derive(clap::Args)]
 pub(crate) struct Args {
-    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
-    path: PathBuf,
+    #[command(flatten)]
+    project: crate::project::ProjectArg,
 
     #[command(flatten)]
     output: OutputArg,
@@ -38,7 +39,7 @@ pub(crate) struct Args {
 impl Args {
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         watch_project(
-            &self.path,
+            &self.project,
             self.output.format,
             self.verify_incremental,
             terminal,
@@ -47,14 +48,14 @@ impl Args {
 }
 
 fn watch_project(
-    path: &Path,
+    project: &ProjectArg,
     format: OutputFormat,
     verify_incremental: bool,
     terminal: &Terminal,
 ) -> Exit {
     // A debug build checks every rebuild (ProjectSession); a release build
     // only when asked (the check costs a cold rebuild per change).
-    let root = match crate::project::root(path) {
+    let root = match project.root() {
         Ok(root) => root,
         Err(error) => return Refusal::of(format).report(terminal, &error),
     };

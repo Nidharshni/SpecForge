@@ -10,13 +10,12 @@ use specforge_ops::view::ProjectView;
 use specforge_registry_client::credential_health::{
     CredentialHealth, CredentialLevel, CredentialLine, user_credential_health,
 };
-use std::path::PathBuf;
 
 // `specforge doctor`'s command line.
 #[derive(clap::Args)]
 pub(crate) struct Args {
-    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
-    path: PathBuf,
+    #[command(flatten)]
+    project: crate::project::ProjectArg,
 
     #[command(flatten)]
     output: OutputArg,
@@ -38,7 +37,7 @@ impl Args {
     /// binaries) plus registry credential health. Exit 1 on any
     /// error-level finding or credential failure.
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
-        let project = match crate::project::compile(&self.path) {
+        let project = match self.project.compile() {
             Ok(project) => project,
             Err(error) => return Refusal::of(self.output.format).report(terminal, &error),
         };

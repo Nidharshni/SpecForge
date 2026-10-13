@@ -7,8 +7,8 @@ Load the built component and report its declaration's diagnostics
 Usage: specforge extension validate [OPTIONS]
 
 Options:
-      --path <PATH>
-          Path to the extension project
+      --dir <DIR>
+          The extension crate's directory
           
           [default: .]
 

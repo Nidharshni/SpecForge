@@ -37,7 +37,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   above the path, the path's own directory is a **loose root**: a project with the default configuration and
   no extension (I002 says so). A path that does not exist is `file_not_found`. The compile, the session open,
   the environment load and every operation that reads a project from disk take a project root, never a raw
-  path; only `init` takes its directory as given. Distinct from the **spec root**, where the project's
+  path; only `init` takes its directory as given. On the command line a project is named by `--path` (any
+  path inside it, `.` by default) on every command that reads one, extension commands included. Distinct from the **spec root**, where the project's
   `.spec` files are discovered (`spec_root` in its `specforge.json`, else the project root): a path inside
   the spec root names the project, never a project of its own.
 - **Format version**: the `.spec` file format a file was written against, `MAJOR.MINOR`, declared by

@@ -65,37 +65,37 @@ fn entity_alpha() -> Value {
 const PROBES: &[Probe] = &[
     Probe {
         label: "export format",
-        cli: Some(&["export", ROOT, "--format", NAME]),
+        cli: Some(&["export", "--path", ROOT, "--format", NAME]),
         mcp: Some(McpProbe("specforge.export", "format", no_arguments)),
         names: &["graph", "context", "brief", "dot", "json", "yaml"],
     },
     Probe {
         label: "schema publish format",
-        cli: Some(&["schema", ROOT, "--publish", "--format", NAME]),
+        cli: Some(&["schema", "--path", ROOT, "--publish", "--format", NAME]),
         mcp: None,
         names: &["graph", "context", "brief", "dot", "json"],
     },
     Probe {
         label: "model format",
-        cli: Some(&["model", ROOT, "--format", NAME]),
+        cli: Some(&["model", "--path", ROOT, "--format", NAME]),
         mcp: Some(McpProbe("specforge.model", "format", no_arguments)),
         names: &["markdown", "mermaid", "dot", "json", "dbml", "svg"],
     },
     Probe {
         label: "model group_by",
-        cli: Some(&["model", ROOT, "--group-by", NAME]),
+        cli: Some(&["model", "--path", ROOT, "--group-by", NAME]),
         mcp: Some(McpProbe("specforge.model", "group_by", no_arguments)),
         names: &["extension", "none", "flat"],
     },
     Probe {
         label: "model fields",
-        cli: Some(&["model", ROOT, "--fields", NAME]),
+        cli: Some(&["model", "--path", ROOT, "--fields", NAME]),
         mcp: Some(McpProbe("specforge.model", "fields", no_arguments)),
         names: &["none", "keys", "all", "some"],
     },
     Probe {
         label: "outline format",
-        cli: Some(&["outline", ROOT, "--format", NAME]),
+        cli: Some(&["outline", "--path", ROOT, "--format", NAME]),
         mcp: Some(McpProbe(
             "specforge.outline_extensions",
             "format",
@@ -105,7 +105,7 @@ const PROBES: &[Probe] = &[
     },
     Probe {
         label: "outline fields",
-        cli: Some(&["outline", ROOT, "--fields", NAME]),
+        cli: Some(&["outline", "--path", ROOT, "--fields", NAME]),
         mcp: Some(McpProbe(
             "specforge.outline_extensions",
             "fields",
@@ -115,7 +115,7 @@ const PROBES: &[Probe] = &[
     },
     Probe {
         label: "outline deps",
-        cli: Some(&["outline", ROOT, "--deps", NAME]),
+        cli: Some(&["outline", "--path", ROOT, "--deps", NAME]),
         mcp: Some(McpProbe(
             "specforge.outline_extensions",
             "deps",

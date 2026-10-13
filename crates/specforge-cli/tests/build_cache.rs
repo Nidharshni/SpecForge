@@ -20,6 +20,7 @@ fn project(files: &[(&str, &str)]) -> TempDir {
 fn check(dir: &Path, args: &[&str]) -> assert_cmd::assert::Assert {
     assert_cmd::cargo_bin_cmd!("specforge")
         .arg("check")
+        .arg("--path")
         .arg(dir)
         .args(args)
         .assert()

@@ -4,7 +4,6 @@ use specforge_ops::OpErrorKind;
 use specforge_ops::coverage::STATUS;
 use specforge_ops::review::{Review, ReviewRequest, review};
 use specforge_ops::view::ProjectView;
-use std::path::PathBuf;
 
 // `specforge review`'s command line.
 #[derive(clap::Args)]
@@ -12,8 +11,8 @@ pub(crate) struct Args {
     /// Entity ID to review (omit to review the whole project)
     entity: Option<String>,
 
-    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
-    path: PathBuf,
+    #[command(flatten)]
+    project: crate::project::ProjectArg,
 
     /// Hops around the entity
     #[arg(long, default_value_t = specforge_ops::review::DEFAULT_DEPTH)]
@@ -39,7 +38,7 @@ impl Args {
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         let format = self.output.format;
         let request = self.request();
-        let project = match crate::project::compile(&self.path) {
+        let project = match self.project.compile() {
             Ok(project) => project,
             Err(error) => return Refusal::measuring(format).report(terminal, &error),
         };

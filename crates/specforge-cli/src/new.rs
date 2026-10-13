@@ -27,7 +27,7 @@ pub(crate) struct Args {
 
     /// Directory to scaffold into
     #[arg(long, default_value = ".")]
-    path: PathBuf,
+    dir: PathBuf,
 
     #[command(flatten)]
     output: OutputArg,
@@ -38,7 +38,7 @@ impl Args {
         new(
             &self.name,
             self.extension,
-            &self.path,
+            &self.dir,
             self.output.format,
             terminal,
         )
