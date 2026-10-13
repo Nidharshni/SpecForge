@@ -84,6 +84,20 @@ fn copy_of_leaves_out_derived_directories() {
 }
 
 #[test]
+fn copy_in_places_a_tree_under_the_root() {
+    let source = TestProject::new()
+        .file("spec/a.spec", "a")
+        .file("target/out", "o");
+    let project = TestProject::new().copy_in(source.root(), "parts/one");
+    assert_eq!(project.read("parts/one/spec/a.spec"), "a");
+    assert_eq!(
+        project.read("parts/one/specforge.json"),
+        source.read("specforge.json")
+    );
+    assert!(!project.root().join("parts/one/target").exists());
+}
+
+#[test]
 fn compile_loads_the_builtins_it_enables() {
     let compiled = TestProject::new()
         .enabling(&["@specforge/software"])

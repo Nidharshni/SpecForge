@@ -75,6 +75,13 @@ impl TestProject {
         TestProject { config, ..project }
     }
 
+    /// Copy the directory tree at `from` to `to` under the root (leaving out `.specforge/` and `target/`): a project
+    /// assembled from parts of another, such as the repository's corpora beside its own `specforge.json`.
+    pub fn copy_in(self, from: impl AsRef<Path>, to: &str) -> Self {
+        copy_tree(from.as_ref(), &self.root().join(to));
+        self
+    }
+
     /// Enable `extensions`, in load order: builtins by name (`@specforge/software`), or what [`Self::serving`]
     /// serves.
     pub fn enabling(mut self, extensions: &[&str]) -> Self {

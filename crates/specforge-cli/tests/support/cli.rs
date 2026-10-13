@@ -144,6 +144,16 @@ impl<'p> Cli<'p> {
         self.guard(self.process(args, false, &[]))
     }
 
+    /// [`Self::bare`]'s command started, its stdout and stderr piped and not waited for: a test that closes one
+    /// end or reads the other on its own terms.
+    pub fn start(&self, args: &[&str]) -> std::process::Child {
+        self.process(args, false, &[])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("spawn specforge")
+    }
+
     /// The command line: `args`, then `--path <root>` when `path` is set, then `after`.
     fn process(&self, args: &[&str], path: bool, after: &[&str]) -> Command {
         let mut command = Command::new(env!("CARGO_BIN_EXE_specforge"));

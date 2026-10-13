@@ -2,10 +2,11 @@
 //! These pin what a user sees, so the catalog can move or grow without the
 //! command's output or exit codes changing by accident.
 
-use assert_cmd::Command;
+use crate::support::{Cli, TestProject};
 
-fn specforge() -> Command {
-    assert_cmd::cargo_bin_cmd!("specforge")
+/// A directory no project is in: `explain` reads none.
+fn nowhere() -> TestProject {
+    TestProject::new().without_config()
 }
 
 #[specforge_test_macros::test(
@@ -13,7 +14,11 @@ fn specforge() -> Command {
     verify = "specforge explain prints the catalogued entry with its docs link, and a retired code with the entry that replaced it"
 )]
 fn explain_prints_a_catalogued_code_case_insensitively() {
-    let out = specforge().args(["explain", "e001"]).output().unwrap();
+    let nowhere = nowhere();
+    let out = Cli::on(&nowhere)
+        .bare_command(&["explain", "e001"])
+        .output()
+        .unwrap();
     assert_eq!(out.status.code(), Some(0), "a catalogued code exits 0");
     let stdout = String::from_utf8(out.stdout).unwrap();
     // The code is printed bold; strip the escapes before matching.
@@ -33,7 +38,11 @@ fn explain_prints_a_catalogued_code_case_insensitively() {
     verify = "specforge explain prints the catalogued entry with its docs link, and a retired code with the entry that replaced it"
 )]
 fn explain_points_a_retired_code_at_its_replacement() {
-    let out = specforge().args(["explain", "E047"]).output().unwrap();
+    let nowhere = nowhere();
+    let out = Cli::on(&nowhere)
+        .bare_command(&["explain", "E047"])
+        .output()
+        .unwrap();
     assert_eq!(out.status.code(), Some(0), "a retired code exits 0");
     let stdout = String::from_utf8(out.stdout).unwrap();
     let plain = stdout.replace("\x1b[1m", "").replace("\x1b[0m", "");
@@ -55,7 +64,9 @@ fn explain_points_a_retired_code_at_its_replacement() {
     verify = "specforge explain bolds the code only where its output is coloured"
 )]
 fn explain_is_plain_into_a_pipe_and_bold_when_forced() {
-    let out = specforge()
+    let nowhere = nowhere();
+    let out = Cli::on(&nowhere)
+        .bare_command(&[])
         .env("NO_COLOR", "1")
         .env_remove("CLICOLOR_FORCE")
         .args(["explain", "E001"])
@@ -68,7 +79,8 @@ fn explain_is_plain_into_a_pipe_and_bold_when_forced() {
     );
     assert!(!stdout.contains('\x1b'), "stdout: {stdout:?}");
 
-    let out = specforge()
+    let out = Cli::on(&nowhere)
+        .bare_command(&[])
         .env_remove("NO_COLOR")
         .env("CLICOLOR_FORCE", "1")
         .args(["explain", "E001"])
@@ -83,7 +95,11 @@ fn explain_is_plain_into_a_pipe_and_bold_when_forced() {
     verify = "an uncatalogued code is refused with unknown_code on both surfaces"
 )]
 fn explain_rejects_an_unknown_code_with_format_hints() {
-    let out = specforge().args(["explain", "Z999"]).output().unwrap();
+    let nowhere = nowhere();
+    let out = Cli::on(&nowhere)
+        .bare_command(&["explain", "Z999"])
+        .output()
+        .unwrap();
     assert_eq!(out.status.code(), Some(1), "an unknown code exits 1");
     assert!(
         out.stdout.is_empty(),
@@ -106,8 +122,8 @@ fn explain_rejects_an_unknown_code_with_format_hints() {
     );
 
     // Under --format json the refusal is the error document on stdout, nothing on stderr.
-    let out = specforge()
-        .args(["explain", "Z999", "--format", "json"])
+    let out = Cli::on(&nowhere)
+        .bare_command(&["explain", "Z999", "--format", "json"])
         .output()
         .unwrap();
     assert_eq!(out.status.code(), Some(1));
@@ -126,7 +142,11 @@ fn explain_rejects_an_unknown_code_with_format_hints() {
 
 #[test]
 fn explain_reads_its_code_as_specforge_explain_does() {
-    let out = specforge().args(["explain", " e001"]).output().unwrap();
+    let nowhere = nowhere();
+    let out = Cli::on(&nowhere)
+        .bare_command(&["explain", " e001"])
+        .output()
+        .unwrap();
     assert_eq!(out.status.code(), Some(0));
     let stdout = String::from_utf8(out.stdout).unwrap();
     assert!(stdout.contains("Parse error"), "stdout: {stdout}");
@@ -137,8 +157,9 @@ fn explain_reads_its_code_as_specforge_explain_does() {
     verify = "specforge explain --format json prints the document specforge.explain answers"
 )]
 fn explain_prints_its_document_under_format_json() {
-    let out = specforge()
-        .args(["explain", "e001", "--format", "json"])
+    let nowhere = nowhere();
+    let out = Cli::on(&nowhere)
+        .bare_command(&["explain", "e001", "--format", "json"])
         .output()
         .unwrap();
     assert_eq!(out.status.code(), Some(0));
