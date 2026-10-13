@@ -31,7 +31,7 @@ const OLD: &str = "// specforge-format: 0.9\nbehavior gamma \"Gamma\" {\n}\n";
 
 /// The extension blob the build vendors: `@sdk/greet`.
 fn greet_blob() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/greet-extension/greet.wasm")
+    specforge_component::committed::GREET.path()
 }
 
 fn greet() -> String {

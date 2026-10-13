@@ -1,21 +1,16 @@
 //! Proof that an extension authored with `specforge-extension-sdk` passes the
 //! host's protocol (handshake + describe) end to end through the component
 //! runtime. The fixture's component blob is vendored at
-//! `fixtures/greet-extension/greet.wasm` (refresh:
+//! `specforge_component::committed::GREET` (refresh:
 //! `cargo run -p xtask --bin revendor`).
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use specforge_component::ComponentRuntime;
 use specforge_wasm::runtime::{WasmCallResult, WasmRuntime};
 
 fn greet_wasm_path() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("fixtures/greet-extension/greet.wasm")
+    specforge_component::committed::GREET.path()
 }
 
 #[test]

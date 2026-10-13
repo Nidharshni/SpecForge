@@ -3337,6 +3337,7 @@ dependencies = [
  "notify",
  "serde_json",
  "specforge-common",
+ "specforge-component",
  "specforge-project",
  "specforge-test",
  "specforge-test-macros",

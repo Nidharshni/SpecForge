@@ -80,12 +80,7 @@ fn find<'a>(items: &'a Value, key: &str, value: &str) -> &'a Value {
 
 /// The vendored product extension blob, installable offline.
 fn product_wasm() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("fixtures/greet-extension/greet.wasm")
+    specforge_component::committed::GREET.path()
 }
 
 /// A project on disk with `config` as its specforge.json and one spec file.
@@ -1365,8 +1360,7 @@ fn contract_dispatch_surface_command() {
     // The sandbox probe (fixtures/sandbox-probe), in the component runtime
     // every extension runs in. Its `probe` command reports its input and
     // what it got when it tried every capability; its `trap` command panics.
-    let probe =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/sandbox-probe/probe.wasm");
+    let probe = specforge_component::committed::PROBE.path();
     let runtime = specforge_component::ComponentRuntime::new();
     runtime
         .load("@test/probe", &std::fs::read(&probe).unwrap())

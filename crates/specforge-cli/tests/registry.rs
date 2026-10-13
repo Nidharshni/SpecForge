@@ -671,11 +671,8 @@ fn builtins_and_local_wasm_install_without_registry() {
 // ---------------------------------------------------------------
 
 pub(crate) fn greet_wasm() -> Vec<u8> {
-    std::fs::read(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../fixtures/greet-extension/greet.wasm"),
-    )
-    .expect("the greet fixture is vendored")
+    std::fs::read(specforge_component::committed::GREET.path())
+        .expect("the greet fixture is vendored")
 }
 
 /// A project whose only registry is `registry`.

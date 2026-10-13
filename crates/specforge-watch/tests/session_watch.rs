@@ -5,7 +5,7 @@
 
 use std::cell::RefCell;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::rc::Rc;
 
 use serde_json::json;
@@ -79,8 +79,7 @@ impl Fixture {
         });
         fs::write(root.join("specforge.json"), config.to_string()).unwrap();
         fs::copy(
-            Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../../fixtures/docref-extension/docref.wasm"),
+            specforge_component::committed::DOCREF.path(),
             root.join("ext/docref.wasm"),
         )
         .unwrap();

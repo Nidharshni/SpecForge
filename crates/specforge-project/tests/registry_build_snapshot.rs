@@ -5,7 +5,6 @@
 //! diagnostics in report order), never a field of the build's layout.
 
 use std::collections::BTreeMap;
-use std::path::Path;
 
 use serde_json::{Value, json};
 use specforge_common::Diagnostic;
@@ -21,8 +20,7 @@ fn runtime() -> ComponentRuntime {
 
 /// The SDK greet fixture's component blob.
 fn greet() -> Vec<u8> {
-    let greet =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/greet-extension/greet.wasm");
+    let greet = specforge_component::committed::GREET.path();
     std::fs::read(greet).expect("vendored greet component blob")
 }
 
