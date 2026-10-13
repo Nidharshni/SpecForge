@@ -856,6 +856,11 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`proof_role`): a **bound** the solver assumes (bounds must be consistent, E046) or a **claim**
   that must follow from the bounds (W139 when not; an entailed claim is a proved claim). A field
   with no role is not read by the prove pass (ADR 0009).
+- **Solver**: the SMT solver the prove pass asks (`specforge_ops::solver::Solver`, port `SmtSolver`):
+  whether it runs here (its version, or the W098 that says why not) and its answer to one SMT-LIB2 script.
+  Its adapters are z3 from PATH (`Z3`, which owns its timeouts and that W098) and a scripted solver
+  (tests). `specforge analyze --prove` and doctor take it as an argument; doctor's toolchain finding is
+  the W098 the prove pass reports. A test chooses the solver it sees (ADR 0079).
 - **Risk grading**: the coverage owner's policy for one kind: its entities' risk is tallied, and
   one with no obligations is A002, an error at the grading's error level
   (`specforge_coverage::RiskGrading`, supplied by `@specforge/testing`; ADR 0009).

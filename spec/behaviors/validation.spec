@@ -214,3 +214,47 @@ behavior validate_file_reference_paths "Validate File Reference Paths" {
 }
 
 // W017 (testable kind without verify support) is registry_build_kinds, in behaviors/zero-entity-registries.spec.
+
+// -- The Prove Pass ------------------------------------------------------------
+
+behavior prove_declared_bounds_and_claims "Prove Declared Bounds and Claims" {
+  features   [structural_validation]
+  invariants [diagnostic_determinism]
+  category   validation
+  types      [Diagnostic, ProofRole, FieldDescriptor, SolveFailure]
+  ports      [SmtSolver]
+  requires {
+    roles_declared "the fields the pass reads carry a proof role their extension declared (ADR 0009)"
+  }
+  ensures {
+    bounds_consistent "contradictory declared bounds are E046 citing every bound of the unsat core"
+    claims_checked    "an entailed claim is a proved claim; a claim not entailed is W139 with a counterexample"
+    one_warning       "a solver that does not run is one W098, worded where its adapter is"
+    bounded           "every call to the solver ends at its timeout"
+  }
+  contract   """
+    specforge analyze --prove runs the prove pass before the other passes
+    and reports it last. It asks the SMT solver once whether it runs here.
+    When it does not, the pass reports one W098 saying why (not on PATH, or
+    what `z3 --version` did), solves nothing, and its summary's solver is
+    null; specforge doctor states the same W098, word for word, as its
+    toolchain finding. When it runs, every bound's parseable lines are
+    asserted together: unsat is E046 citing every bound of the unsat core.
+    Each claim is checked as bounds and not claim: unsat proves it (a proved
+    claim, which the extension passes then receive), sat is W139 with a
+    counterexample rendered in the declared units, anything else is I098.
+    Every call to the solver ends at its timeout (the probe at 5 seconds, a
+    solve at --prove-timeout, 30 seconds by default), even when the solver
+    leaves a child process; a solve that timed out or failed is W098 and the
+    checks it did not answer are skipped. --prove-timeout without --prove is
+    a usage error. Without --prove, and always over MCP, no prove pass runs
+    and the extension passes receive no proved claims.
+  """
+  verify unit "contradictory declared bounds are E046 citing every bound of the unsat core"
+  verify unit "a claim the bounds do not entail is W139 with a counterexample in the declared units"
+  verify unit "a claim the bounds entail reaches the extension passes as a proved claim"
+  verify unit "a solver that does not run is one W098, the finding doctor states, and nothing is solved"
+  verify unit "a solver that times out or fails mid-run is W098 and the checks it did not answer are skipped"
+  verify unit "a solver call ends at its timeout, even when the solver leaves a child process"
+  verify integration "specforge analyze --prove-timeout sets the solver's timeout and needs --prove"
+}
