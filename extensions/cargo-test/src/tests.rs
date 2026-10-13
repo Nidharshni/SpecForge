@@ -18,8 +18,8 @@ fn groups_entries_by_entity_across_binaries() {
             file(
                 "target/specforge/a.json",
                 r#"{"schema_version":"1.0","binary_name":"a","entries":[
-                        {"entity_kind":"behavior","entity_id":"login","test_name":"ok","file":"a.rs","verify":"accepts","duration_ms":3,"status":"pass"},
-                        {"entity_kind":"behavior","entity_id":"login","test_name":"bad","file":"a.rs","duration_ms":1,"status":"fail"}]}"#,
+                        {"entity_kind":"behavior","entity_id":"login","test_name":"ok","file":"a.rs","verify":"accepts","duration_ms":3,"status":"passed"},
+                        {"entity_kind":"behavior","entity_id":"login","test_name":"bad","file":"a.rs","duration_ms":1,"status":"failed"}]}"#,
             ),
             file(
                 "target/specforge/b.json",
@@ -82,8 +82,8 @@ fn parses_libtest_output() {
 #[test]
 fn reports_tests_the_attribute_did_not_record_as_unlinked() {
     let report = r#"{"entries":[
-            {"entity_id":"cart","test_name":"rejects_a_duplicate_item","module_path":"shop_lib::tests::add_item","file":"src/lib.rs","status":"pass"},
-            {"entity_id":"cart","test_name":"panics","file":"src/lib.rs","status":"pass"}]}"#;
+            {"entity_id":"cart","test_name":"rejects_a_duplicate_item","module_path":"shop_lib::tests::add_item","file":"src/lib.rs","status":"passed"},
+            {"entity_id":"cart","test_name":"panics","file":"src/lib.rs","status":"passed"}]}"#;
     let out = collect(&CollectInput {
         reports: vec![file("target/specforge/shop_lib.json", report)],
         stdout: Some(LIBTEST.to_string()),
@@ -126,9 +126,10 @@ fn an_entry_whose_status_is_not_written_by_specforge_test_is_an_error() {
         ..CollectInput::default()
     })
     .unwrap_err();
-    assert_eq!(
-        err,
-        "target/specforge/a.json: entry for 'flaky' has status 'flaky', which specforge-test does not write"
+    assert!(err.starts_with("target/specforge/a.json: "), "{err}");
+    assert!(
+        err.contains("unknown variant `flaky`, expected one of `passed`, `failed`, `skipped`"),
+        "{err}"
     );
     // An entries array that does not decode is the collector's error too.
     let undecodable = r#"{"entries":[{"test_name":"nameless_entity"}]}"#;

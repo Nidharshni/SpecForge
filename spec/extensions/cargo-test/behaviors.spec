@@ -33,16 +33,16 @@ behavior ct_map_binary_reports "Map specforge-test Reports to Entities" {
   contract """
     `collect__cargo_test` MUST map every per-binary report entry
     (`entity_id`, `test_name`, `verify`, `duration_ms`, `status`) to a test
-    result of that entity, in entity order: `pass` is passed, `fail` is
-    failed and `skipped` is skipped. An entry whose status is none of
-    those is the collector's error, naming the file. A file that is not
+    result of that entity, in entity order, its status the protocol's
+    TestStatus as specforge-test writes it. An entry whose status is not
+    passed, failed or skipped is the collector's error, naming the file. A file that is not
     JSON is read as libtest output; a JSON file without `entries` yields
     nothing. It runs nothing and reads no files: the host passes the
     report text in.
   """
   ensures {
     grouped_by_entity   "results are grouped by entity across binaries"
-    statuses_typed      "an entry's status is pass, fail or skipped; any other is the collector's error"
+    statuses_typed      "an entry's status is passed, failed or skipped; any other is the collector's error"
     non_reports_ignored "files that aren't binary reports are skipped"
   }
   verify unit "cargo-test maps per-binary reports to entity results"

@@ -9,7 +9,8 @@
 mod support;
 
 use serde_json::Value;
-use specforge_test::registry::{TestOutcome, TestRecordEntry};
+use specforge_protocol_types::TestStatus;
+use specforge_test::registry::TestRecordEntry;
 use specforge_test::report;
 
 fn schema_path(name: &str) -> std::path::PathBuf {
@@ -104,7 +105,7 @@ fn validate(value: &Value, schema: &Value, root: &Value, path: &str, errors: &mu
     }
 }
 
-fn make_entry(id: &str, outcome: TestOutcome) -> TestRecordEntry {
+fn make_entry(id: &str, status: TestStatus) -> TestRecordEntry {
     TestRecordEntry {
         entity_kind: "behavior".to_string(),
         entity_id: id.to_string(),
@@ -113,7 +114,7 @@ fn make_entry(id: &str, outcome: TestOutcome) -> TestRecordEntry {
         file: "tests/x.rs".to_string(),
         verify: Some("rejects invalid input".to_string()),
         duration_ms: 3,
-        outcome,
+        status,
     }
 }
 
@@ -121,10 +122,10 @@ fn make_entry(id: &str, outcome: TestOutcome) -> TestRecordEntry {
 fn binary_report_conforms_to_published_schema() {
     let dir = tempfile::tempdir().unwrap();
     let entries = vec![
-        make_entry("auth_login", TestOutcome::Pass),
-        make_entry("auth_logout", TestOutcome::Fail),
+        make_entry("auth_login", TestStatus::Passed),
+        make_entry("auth_logout", TestStatus::Failed),
         {
-            let mut e = make_entry("auth_locked", TestOutcome::Skipped);
+            let mut e = make_entry("auth_locked", TestStatus::Skipped);
             e.verify = None;
             e
         },
@@ -154,7 +155,7 @@ fn binary_report_conforms_to_published_schema() {
             .clone()
     };
     let passing = by_id("auth_login");
-    assert_eq!(passing["status"], "pass");
+    assert_eq!(passing["status"], "passed");
     assert_eq!(passing["module_path"], "specforge_test::cases");
     assert_eq!(passing["duration_ms"], 3);
     let skipped = by_id("auth_locked");
@@ -212,7 +213,7 @@ fn schema_rejects_unknown_fields_and_bad_statuses() {
             "entity_id": "e",
             "test_name": "t",
             "file": "f.rs",
-            "status": "pass",
+            "status": "passed",
             "mystery_field": 1
         }]
     });

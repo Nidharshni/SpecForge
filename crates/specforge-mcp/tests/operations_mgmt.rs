@@ -157,8 +157,8 @@ fn collect_project() -> tempfile::TempDir {
         .file(
             "target/specforge/t.json",
             &json!({"entries": [
-                {"entity_id": "alpha", "test_name": "works", "status": "pass"},
-                {"entity_id": "ghost", "test_name": "stale", "status": "pass"}
+                {"entity_id": "alpha", "test_name": "works", "status": "passed"},
+                {"entity_id": "ghost", "test_name": "stale", "status": "passed"}
             ]})
             .to_string(),
         )

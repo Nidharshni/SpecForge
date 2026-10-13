@@ -59,8 +59,8 @@
         },
         "status": {
           "type": "string",
-          "enum": ["pass", "fail", "skipped"],
-          "description": "Test execution status. 'skipped' records #[ignore]d tests (C11-04)."
+          "enum": ["passed", "failed", "skipped"],
+          "description": "The protocol's TestStatus. specforge-test writes passed or failed; an #[ignore]d test records nothing."
         }
       },
       "additionalProperties": false

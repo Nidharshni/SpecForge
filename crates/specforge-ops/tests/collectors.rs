@@ -85,7 +85,7 @@ fn cargo_test_reports_plain_tests_as_unlinked() {
     let report = CollectReportFile {
         path: "target/specforge/shop_lib.json".into(),
         content: r#"{"entries":[{"entity_id":"cart","test_name":"panics",
-            "module_path":"shop_lib::tests","file":"src/lib.rs","status":"pass"}]}"#
+            "module_path":"shop_lib::tests","file":"src/lib.rs","status":"passed"}]}"#
             .into(),
     };
     let out = dispatch(Some(&runtime), collector, &[report], Some(stdout)).unwrap();
@@ -152,8 +152,8 @@ fn collect_maps_results_to_the_views_entities() {
     std::fs::write(
         &report,
         r#"{"entries":[
-            {"entity_id":"a","test_name":"proves_a","module_path":"shop::tests","file":"src/lib.rs","status":"pass"},
-            {"entity_id":"zz","test_name":"proves_zz","module_path":"shop::tests","file":"src/lib.rs","status":"pass"}
+            {"entity_id":"a","test_name":"proves_a","module_path":"shop::tests","file":"src/lib.rs","status":"passed"},
+            {"entity_id":"zz","test_name":"proves_zz","module_path":"shop::tests","file":"src/lib.rs","status":"passed"}
         ]}"#,
     )
     .unwrap();

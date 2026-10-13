@@ -62,7 +62,7 @@ struct Entry {
     verify: Option<String>,
     #[serde(default)]
     duration_ms: Option<f64>,
-    status: String,
+    status: TestStatus,
 }
 
 /// The tests the attribute recorded, by the name libtest prints for them.
@@ -97,27 +97,12 @@ impl Recorded {
     }
 }
 
-/// The status `specforge-test` writes for a test, as the protocol spells it.
-/// Any other value is the collector's error, never a skipped test
-/// (ADR 0069).
-fn status_of(entry: &Entry, file: &str) -> Result<TestStatus, String> {
-    match entry.status.as_str() {
-        "pass" => Ok(TestStatus::Passed),
-        "fail" => Ok(TestStatus::Failed),
-        "skipped" => Ok(TestStatus::Skipped),
-        other => Err(format!(
-            "{file}: entry for '{}' has status '{other}', which specforge-test does not write",
-            entry.test_name
-        )),
-    }
-}
-
 /// Map `specforge-test` reports to entity results, and return the tests in
 /// libtest's output (the captured stdout, or a report file that isn't JSON)
 /// that no report recorded as unlinked. A JSON object with an `entries` key
-/// is a binary report, and an entry that does not decode is the collector's
-/// error naming the file. Other JSON files in the report directory, like
-/// the graph snapshot the integration keeps there, yield nothing.
+/// is a binary report, and an entry that does not decode (a status outside the
+/// protocol's `TestStatus`, say) is the collector's error naming the file.
+/// Any other JSON document in the report directory yields nothing.
 fn collect(input: &CollectInput) -> Result<CollectOutput, String> {
     let mut by_entity: BTreeMap<String, Vec<TestResult>> = BTreeMap::new();
     let mut recorded = Recorded::default();
@@ -137,13 +122,12 @@ fn collect(input: &CollectInput) -> Result<CollectOutput, String> {
             serde_json::from_value(value).map_err(|e| format!("{}: {e}", file.path))?;
         for entry in report.entries {
             recorded.add(&entry);
-            let status = status_of(&entry, &file.path)?;
             by_entity
                 .entry(entry.entity_id)
                 .or_default()
                 .push(TestResult {
                     name: entry.test_name,
-                    status,
+                    status: entry.status,
                     verify: entry.verify,
                     duration_ms: entry.duration_ms,
                 });

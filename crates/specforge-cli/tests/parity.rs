@@ -1747,8 +1747,8 @@ fn collect_project(root: &Path) {
     std::fs::write(
         root.join("target/specforge/demo.json"),
         json!({"entries": [
-            {"entity_id": "alpha", "test_name": "works", "verify": "works", "status": "pass"},
-            {"entity_id": "omega", "test_name": "lost", "status": "pass"}
+            {"entity_id": "alpha", "test_name": "works", "verify": "works", "status": "passed"},
+            {"entity_id": "omega", "test_name": "lost", "status": "passed"}
         ]})
         .to_string(),
     )
