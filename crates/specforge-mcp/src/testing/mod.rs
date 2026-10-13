@@ -6,4 +6,4 @@ pub mod rpc;
 mod served;
 
 pub use events::{EventLog, Recorded};
-pub use served::Served;
+pub use served::{Served, rooted_server};

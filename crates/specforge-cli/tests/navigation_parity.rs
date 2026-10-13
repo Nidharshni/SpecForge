@@ -26,16 +26,16 @@ use std::path::{Path, PathBuf};
 
 use serde_json::{Value, json};
 use specforge_test::prelude::*;
-use tempfile::TempDir;
 use tower_lsp::lsp_types::Url;
 
+use crate::support::TestProject;
 use crate::support::lsp::Client;
 
 // ── Fixtures ────────────────────────────────────────────────────────────
 
 /// A fixture copied to a temporary directory.
 struct Project {
-    _dir: TempDir,
+    _dir: TestProject,
     /// Canonical project root, which is also the spec root.
     root: PathBuf,
 }
@@ -45,12 +45,8 @@ fn fixtures_dir() -> PathBuf {
 }
 
 fn project(fixture: &str) -> Project {
-    let dir = TempDir::new().unwrap();
-    for entry in fs::read_dir(fixtures_dir().join(fixture)).unwrap() {
-        let entry = entry.unwrap();
-        fs::copy(entry.path(), dir.path().join(entry.file_name())).unwrap();
-    }
-    let root = fs::canonicalize(dir.path()).unwrap();
+    let dir = TestProject::copy_of(fixtures_dir().join(fixture));
+    let root = fs::canonicalize(dir.root()).unwrap();
     Project { _dir: dir, root }
 }
 
@@ -1135,18 +1131,11 @@ fn write(project: &Project, file: &str, text: &str) {
 
 /// A project of `files` with `extensions`, in a temporary directory.
 fn project_of(extensions: &[&str], files: &[(&str, &str)]) -> Project {
-    let dir = TempDir::new().unwrap();
-    let root = fs::canonicalize(dir.path()).unwrap();
-    let p = Project { _dir: dir, root };
-    write(
-        &p,
-        "specforge.json",
-        &json!({"name": "pin", "extensions": extensions}).to_string(),
-    );
-    for (file, text) in files {
-        write(&p, file, text);
-    }
-    p
+    let dir = TestProject::new()
+        .raw_config(json!({"name": "pin", "extensions": extensions}).to_string())
+        .files(files);
+    let root = fs::canonicalize(dir.root()).unwrap();
+    Project { _dir: dir, root }
 }
 
 #[test]

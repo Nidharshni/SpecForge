@@ -901,7 +901,7 @@ fn the_cli_runs_a_pass_an_extension_declares() {
 
     // MCP lists the same passes for the same project.
     let mcp = crate::coverage_corpus::mcp_calls(
-        tmp.root(),
+        &mut crate::coverage_corpus::served(tmp),
         &[serde_json::json!({"name": "specforge.analyze", "arguments": {"pass": "nosuch"}})],
     );
     let message = mcp[0]["isError"]["message"].as_str().unwrap();

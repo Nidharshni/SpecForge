@@ -17,6 +17,12 @@ fn z3_ready() -> Arc<dyn specforge_ops::solver::Solver> {
     Arc::new(specforge_ops::testing::ScriptedSolver::ready())
 }
 
+/// The server `specforge mcp <root>` builds (`McpServer::with_project_root`), its doctor seeing z3. For the tests
+/// that compare surfaces over one project on disk that the CLI also runs on (`Served` owns its project).
+pub fn rooted_server(root: &Path) -> McpServer {
+    McpServer::with_project_root(root.to_path_buf()).with_solver(z3_ready())
+}
+
 /// An initialized server over a [`TestProject`]: what a client of `specforge mcp <root>` talks to. Dereferences
 /// to the server.
 pub struct Served {
@@ -41,8 +47,7 @@ impl Served {
     }
 
     fn rooted_with(project: TestProject, params: Value) -> Self {
-        let server =
-            McpServer::with_project_root(project.root().to_path_buf()).with_solver(z3_ready());
+        let server = rooted_server(project.root());
         Self::initialize(project, server, params, false)
     }
 

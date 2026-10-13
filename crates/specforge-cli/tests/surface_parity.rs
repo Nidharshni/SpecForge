@@ -31,13 +31,13 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 use specforge_test::prelude::*;
-use tempfile::TempDir;
+
+use crate::support::{Cli, TestProject};
 
 // ── Fixtures ────────────────────────────────────────────────────────────
 
@@ -212,7 +212,7 @@ fn subject_name(project: &Project, data: &Value) -> Option<(String, u64)> {
 // ── The project under test ──────────────────────────────────────────────
 
 struct Project {
-    _dir: TempDir,
+    dir: TestProject,
     /// Canonical project root.
     root: PathBuf,
     /// Canonical spec root (the root, or `root/spec_root`).
@@ -225,23 +225,9 @@ fn fixtures_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/parity")
 }
 
-fn copy_tree(from: &Path, to: &Path) {
-    fs::create_dir_all(to).unwrap();
-    for entry in fs::read_dir(from).unwrap() {
-        let entry = entry.unwrap();
-        let target = to.join(entry.file_name());
-        if entry.file_type().unwrap().is_dir() {
-            copy_tree(&entry.path(), &target);
-        } else {
-            fs::copy(entry.path(), target).unwrap();
-        }
-    }
-}
-
 fn project(fixture: &str, entry: &str) -> Project {
-    let dir = TempDir::new().unwrap();
-    copy_tree(&fixtures_dir().join(fixture), dir.path());
-    let root = fs::canonicalize(dir.path()).unwrap();
+    let dir = TestProject::copy_of(fixtures_dir().join(fixture));
+    let root = fs::canonicalize(dir.root()).unwrap();
     let config: Value =
         serde_json::from_str(&fs::read_to_string(root.join("specforge.json")).unwrap()).unwrap();
     let spec_root = match config["spec_root"].as_str() {
@@ -250,7 +236,7 @@ fn project(fixture: &str, entry: &str) -> Project {
     };
     Project {
         entry: root.join(entry),
-        _dir: dir,
+        dir,
         root,
         spec_root,
     }
@@ -268,10 +254,6 @@ impl Project {
 
 // ── check ───────────────────────────────────────────────────────────────
 
-fn binary() -> &'static str {
-    env!("CARGO_BIN_EXE_specforge")
-}
-
 /// `specforge check --format json`, as printed.
 fn check_output(project: &Project) -> String {
     check_output_with(project, &[])
@@ -279,14 +261,10 @@ fn check_output(project: &Project) -> String {
 
 /// `specforge check --format json` with `flags`, as printed.
 fn check_output_with(project: &Project, flags: &[&str]) -> String {
-    let out = Command::new(binary())
-        .args(["check", "--format", "json"])
-        .args(flags)
-        .arg("--path")
-        .arg(&project.root)
-        .output()
-        .unwrap();
-    String::from_utf8(out.stdout).unwrap()
+    let mut argv = vec!["check", "--format", "json"];
+    argv.extend(flags);
+    argv.extend(["--path", project.root.to_str().unwrap()]);
+    Cli::on(&project.dir).bare(&argv).stdout
 }
 
 /// `specforge check --format json`, as keys in output order.
@@ -464,16 +442,13 @@ fn event_keys(event: &Value) -> Keys {
 /// Watch's `ready` diagnostics, then its `rebuilt` diagnostics after the
 /// entry file is rewritten with the same entities.
 fn watch(project: &Project) -> (Keys, Keys) {
-    let mut watch = Command::new(binary());
-    watch
-        .args(["watch", "--format", "json", "--path"])
-        .arg(&project.root);
-    let mut child = crate::support::child::ChildGuard::spawn(
-        crate::support::child::guarded_command(&watch)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null()),
-    )
-    .unwrap();
+    let mut child = Cli::on(&project.dir).bare_spawn(&[
+        "watch",
+        "--format",
+        "json",
+        "--path",
+        project.root.to_str().unwrap(),
+    ]);
     let stdout = child.take_stdout().unwrap();
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {

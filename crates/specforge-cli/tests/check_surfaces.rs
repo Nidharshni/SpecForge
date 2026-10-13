@@ -9,11 +9,11 @@
 //! purpose updates its snapshot in the same diff.
 
 use serde_json::{Value, json};
+use specforge_mcp::testing::{Served, rpc};
 use std::path::{Path, PathBuf};
-use std::process::Command;
-use tempfile::TempDir;
 
 use crate::parity::normalized;
+use crate::support::{Cli, TestProject};
 
 /// The parity fixtures these tests run: clean, warnings only
 /// (`body_parser_type`), errors, warnings and infos (`product_cycle`), and a
@@ -31,42 +31,19 @@ fn fixtures_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/parity")
 }
 
-fn copy_tree(from: &Path, to: &Path) {
-    std::fs::create_dir_all(to).unwrap();
-    for entry in std::fs::read_dir(from).unwrap() {
-        let entry = entry.unwrap();
-        let target = to.join(entry.file_name());
-        if entry.file_type().unwrap().is_dir() {
-            copy_tree(&entry.path(), &target);
-        } else {
-            std::fs::copy(entry.path(), target).unwrap();
-        }
-    }
-}
-
 /// A copy of the parity fixture `name` in a temporary directory.
-fn fixture(name: &str) -> TempDir {
-    let dir = TempDir::new().unwrap();
-    copy_tree(&fixtures_dir().join(name), dir.path());
-    dir
+fn fixture(name: &str) -> TestProject {
+    TestProject::copy_of(fixtures_dir().join(name))
 }
 
 /// `specforge check <root> <args>`: exit code, stdout (parsed when it is
 /// JSON) and stderr.
-fn check(root: &Path, args: &[&str]) -> (i32, Value, String) {
-    let out = Command::new(assert_cmd::cargo_bin!("specforge"))
-        .env("HOME", std::env::temp_dir().join("specforge-parity-home"))
-        .arg("check")
-        .args(args)
-        .arg("--path")
-        .arg(root)
-        .current_dir(root)
-        .output()
-        .unwrap();
-    let stdout = String::from_utf8_lossy(&out.stdout).to_string();
-    let stdout = serde_json::from_str(&stdout).unwrap_or(Value::String(stdout));
-    let stderr = String::from_utf8_lossy(&out.stderr).to_string();
-    (out.status.code().unwrap_or(-1), stdout, stderr)
+fn check(project: &TestProject, args: &[&str]) -> (i32, Value, String) {
+    let mut argv = vec!["check"];
+    argv.extend(args);
+    let out = Cli::on(project).run(&argv);
+    let stdout = serde_json::from_str(&out.stdout).unwrap_or(Value::String(out.stdout));
+    (out.code, stdout, out.stderr)
 }
 
 fn suffix(flags: &[&str]) -> String {
@@ -84,14 +61,14 @@ fn cli_check_json_golden() {
             let dir = fixture(name);
             let mut args = vec!["--format", "json"];
             args.extend(flags);
-            let (exit, stdout, stderr) = check(dir.path(), &args);
+            let (exit, stdout, stderr) = check(&dir, &args);
             let doc = json!({"exit": exit, "stdout": stdout, "stderr": stderr});
             let snapshot = if flags.is_empty() {
                 format!("cli_check_json_{name}")
             } else {
                 format!("cli_check_json_{name}_{}", suffix(flags))
             };
-            insta::assert_snapshot!(snapshot, normalized(&doc, dir.path()));
+            insta::assert_snapshot!(snapshot, normalized(&doc, dir.root()));
         }
     }
 }
@@ -102,11 +79,11 @@ fn cli_check_json_golden() {
 fn cli_check_human_golden() {
     for name in FIXTURES {
         let dir = fixture(name);
-        let (exit, _, stderr) = check(dir.path(), &[]);
+        let (exit, _, stderr) = check(&dir, &[]);
         let doc = json!({"exit": exit, "stderr": stderr});
         insta::assert_snapshot!(
             format!("cli_check_human_{name}"),
-            normalized(&doc, dir.path())
+            normalized(&doc, dir.root())
         );
     }
 }
@@ -115,11 +92,11 @@ fn cli_check_human_golden() {
 fn cli_check_lint_values_golden() {
     for profile in ["inferred", "pedantic", "nonsense"] {
         let dir = fixture("body_parser_type");
-        let (exit, stdout, _) = check(dir.path(), &["--format", "json", "--lint", profile]);
+        let (exit, stdout, _) = check(&dir, &["--format", "json", "--lint", profile]);
         let doc = json!({"exit": exit, "stdout": stdout});
         insta::assert_snapshot!(
             format!("cli_check_lint_{profile}"),
-            normalized(&doc, dir.path())
+            normalized(&doc, dir.root())
         );
     }
 }
@@ -135,35 +112,22 @@ fn cli_check_cache_golden() {
         let dir = fixture(name);
         let mut args = vec!["--format", "json"];
         args.extend(flags);
-        let (exit, _, stderr) = check(dir.path(), &args);
-        let cache_file = std::fs::read_to_string(dir.path().join(CACHE))
+        let (exit, _, stderr) = check(&dir, &args);
+        let cache_file = std::fs::read_to_string(dir.root().join(CACHE))
             .map(Value::String)
             .unwrap_or(Value::Null);
         let doc = json!({"exit": exit, "stderr": stderr, "cache_file": cache_file});
         insta::assert_snapshot!(
             format!("cli_check_cache_{name}_{}", suffix(flags)),
-            normalized(&doc, dir.path())
+            normalized(&doc, dir.root())
         );
     }
 }
 
-/// An in-process MCP server serving `root`, initialized.
-fn server(root: &Path) -> specforge_mcp::McpServer {
-    let mut server = specforge_mcp::McpServer::with_project_root(root.to_path_buf());
-    let init = json!({"jsonrpc": "2.0", "id": 0, "method": "initialize", "params": {}});
-    server.handle_message(&init.to_string());
-    server
-}
-
 /// `specforge.validate` with `arguments`: the whole `result`, its text
 /// block parsed, or the JSON-RPC error.
-fn validate(server: &mut specforge_mcp::McpServer, arguments: &Value) -> Value {
-    let req = json!({
-        "jsonrpc": "2.0", "id": 1, "method": "tools/call",
-        "params": {"name": "specforge.validate", "arguments": arguments}
-    });
-    let resp: Value = serde_json::from_str(&server.handle_message(&req.to_string()).unwrap())
-        .expect("the server answers JSON");
+fn validate(server: &mut Served, arguments: &Value) -> Value {
+    let resp = rpc::call_tool(server, "specforge.validate", arguments.clone());
     if let Some(error) = resp.get("error") {
         return json!({"error": error});
     }
@@ -201,8 +165,8 @@ fn validate_arguments() -> Vec<Value> {
 #[test]
 fn mcp_validate_golden() {
     for name in FIXTURES {
-        let dir = fixture(name);
-        let mut server = server(dir.path());
+        let mut server = Served::rooted(fixture(name));
+        let root = server.root().to_path_buf();
         let calls: Vec<Value> = validate_arguments()
             .into_iter()
             .map(|arguments| {
@@ -212,7 +176,7 @@ fn mcp_validate_golden() {
             .collect();
         insta::assert_snapshot!(
             format!("mcp_validate_{name}"),
-            normalized(&Value::Array(calls), dir.path())
+            normalized(&Value::Array(calls), &root)
         );
     }
 }
