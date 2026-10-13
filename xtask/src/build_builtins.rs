@@ -14,7 +14,8 @@
 //! A blob is built in a staged workspace ([`Stage`]), so its bytes depend only on
 //! its sources and the toolchain, not on where the repository is checked out.
 
-use serde_json::{Value, json};
+use gate::blob_inputs::{self, BlobRecord, WORKSPACE_INHERITED};
+use serde_json::Value;
 use specforge_component::builtins::BUILTINS;
 use specforge_installed::hex_sha256;
 use std::collections::{BTreeMap, BTreeSet};
@@ -22,12 +23,6 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 const TARGET: &str = "wasm32-wasip2";
-const INPUTS_FILE: &str = "inputs.json";
-
-/// The shared crates inherit edition/version/license and dependency specs from
-/// the root manifest; only those tables can change what they compile to.
-const WORKSPACE_INHERITED: &str = "Cargo.toml#workspace-inherited";
-const INHERITED_TABLES: &[&str] = &["[workspace.package]", "[workspace.dependencies]"];
 
 #[derive(Clone, Copy, PartialEq)]
 enum Mode {
@@ -200,7 +195,7 @@ impl Stage {
             .map_err(|e| format!("read Cargo.toml: {e}"))?;
         let workspace = format!(
             "[workspace]\nresolver = \"2\"\nmembers = [\"extensions/{name}\"]\n\n{}",
-            inherited_tables(&root_manifest)
+            blob_inputs::inherited_tables(&root_manifest)
         );
         std::fs::write(root.join("Cargo.toml"), workspace).map_err(|e| e.to_string())?;
         std::fs::copy(
@@ -367,7 +362,7 @@ fn copy_dir(from: &Path, to: &Path, extension: bool, top: bool) -> Result<(), St
 
 /// A manifest without its `[dev-dependencies]`, `[dev-dependencies.<x>]` and
 /// `[target.<cfg>.dev-dependencies]` tables (each up to the next header). Line-based, like
-/// [`inherited_tables`].
+/// [`blob_inputs::inherited_tables`].
 fn strip_dev_dependencies(manifest: &str) -> String {
     let mut out = String::new();
     let mut skip = false;
@@ -435,15 +430,13 @@ fn lock_subset(staged: &str, extension: &str) -> Result<(), String> {
 /// another `rustc` is built, but not compared, and that is said.
 fn verify(root: &Path, name: &'static str, artifact: &str) -> bool {
     let vendor_dir = root.join(format!("extensions/{name}/wasm"));
-    let record: Option<Value> = std::fs::read(vendor_dir.join(INPUTS_FILE))
-        .ok()
-        .and_then(|bytes| serde_json::from_slice(&bytes).ok());
+    let record = BlobRecord::read(root, name).ok();
     let this = rustc_version();
     // Always built, so a cold clone proves every blob builds; another rustc's bytes differ.
     let Some(built) = build(root, name, artifact, true) else {
         return false;
     };
-    if let Some(built_with) = record.as_ref().and_then(|r| r["built_with"].as_str())
+    if let Some(built_with) = record.as_ref().map(|r| r.built_with.as_str())
         && built_with != this
     {
         println!("[skip]   {name}: built with {built_with}; this is {this}");
@@ -478,17 +471,15 @@ fn install(root: &Path, name: &str, artifact: &str, built: &Path) -> bool {
             .map_err(|e| e.to_string())?;
         let inputs = collect_inputs(root, &stage, name, &built.with_extension("d"))?;
         let count = inputs.len();
-        let record = json!({
-            "artifact": artifact,
-            "artifact_sha256": hex_sha256(&bytes),
-            "built_with": rustc_version(),
-            "inputs": inputs,
-        });
-        let mut text = serde_json::to_string_pretty(&record).map_err(|e| e.to_string())?;
-        text.push('\n');
         std::fs::create_dir_all(&vendor_dir).map_err(|e| e.to_string())?;
         std::fs::write(vendor_dir.join(artifact), &bytes).map_err(|e| e.to_string())?;
-        std::fs::write(vendor_dir.join(INPUTS_FILE), text).map_err(|e| e.to_string())?;
+        BlobRecord {
+            artifact: artifact.to_string(),
+            artifact_sha256: hex_sha256(&bytes),
+            built_with: rustc_version(),
+            inputs,
+        }
+        .write(root, name)?;
         Ok(count)
     })();
     match result {
@@ -505,21 +496,18 @@ fn install(root: &Path, name: &str, artifact: &str, built: &Path) -> bool {
 
 fn check(root: &Path, name: &str, artifact: &str) -> bool {
     let vendor_dir = root.join(format!("extensions/{name}/wasm"));
-    let record: Option<Value> = std::fs::read(vendor_dir.join(INPUTS_FILE))
-        .ok()
-        .and_then(|bytes| serde_json::from_slice(&bytes).ok());
-    let Some(record) = record else {
-        eprintln!("[stale]  {name}: extensions/{name}/wasm/{INPUTS_FILE} is missing or unreadable");
-        return false;
+    let record = match BlobRecord::read(root, name) {
+        Ok(record) => record,
+        Err(e) => {
+            eprintln!("[stale]  {name}: {e}");
+            return false;
+        }
     };
-    let Some(inputs) = record["inputs"].as_object() else {
-        eprintln!("[stale]  {name}: {INPUTS_FILE} has no \"inputs\" object");
-        return false;
-    };
+    let inputs = &record.inputs;
 
     let mut problems = Vec::new();
     match std::fs::read(vendor_dir.join(artifact)) {
-        Ok(bytes) if record["artifact_sha256"].as_str() == Some(hex_sha256(&bytes).as_str()) => {}
+        Ok(bytes) if record.artifact_sha256 == hex_sha256(&bytes) => {}
         Ok(_) => problems.push(format!(
             "{artifact} differs from the blob --install recorded"
         )),
@@ -527,7 +515,7 @@ fn check(root: &Path, name: &str, artifact: &str) -> bool {
     }
     for (key, recorded) in inputs {
         match input_hash(root, key) {
-            Ok(current) if recorded.as_str() == Some(current.as_str()) => {}
+            Ok(current) if *recorded == current => {}
             Ok(_) => problems.push(format!("changed: {key}")),
             Err(_) => problems.push(format!("missing: {key}")),
         }
@@ -591,27 +579,14 @@ fn collect_inputs(
 }
 
 fn input_hash(root: &Path, key: &str) -> std::io::Result<String> {
+    let path = root.join(blob_inputs::path_of(key));
     if key == WORKSPACE_INHERITED {
-        let manifest = std::fs::read_to_string(root.join("Cargo.toml"))?;
-        return Ok(hex_sha256(inherited_tables(&manifest).as_bytes()));
+        let manifest = std::fs::read_to_string(path)?;
+        return Ok(hex_sha256(
+            blob_inputs::inherited_tables(&manifest).as_bytes(),
+        ));
     }
-    Ok(hex_sha256(&std::fs::read(root.join(key))?))
-}
-
-fn inherited_tables(manifest: &str) -> String {
-    let mut out = String::new();
-    let mut keep = false;
-    for line in manifest.lines() {
-        let trimmed = line.trim();
-        if trimmed.starts_with('[') {
-            keep = INHERITED_TABLES.contains(&trimmed);
-        }
-        if keep {
-            out.push_str(line);
-            out.push('\n');
-        }
-    }
-    out
+    Ok(hex_sha256(&std::fs::read(path)?))
 }
 
 fn owning_manifest(root: &Path, file: &Path) -> Option<String> {
@@ -725,21 +700,6 @@ mod tests {
         assert_eq!(stage_key(stage, Path::new("/elsewhere/lib.rs")), None);
     }
 
-    #[test]
-    fn inherited_tables_ignore_members_and_profiles() {
-        let a = "[workspace]\nmembers = [\"x\"]\n[workspace.package]\nedition = \"2024\"\n\
-                 [workspace.dependencies]\nserde = \"1\"\n[profile.release]\nlto = true\n";
-        let b = "[workspace]\nmembers = [\"x\", \"y\"]\n[workspace.package]\nedition = \"2024\"\n\
-                 [workspace.dependencies]\nserde = \"1\"\n[profile.release]\nlto = false\n";
-        assert_eq!(inherited_tables(a), inherited_tables(b));
-
-        let c = a.replace(
-            "serde = \"1\"",
-            "serde = { version = \"1\", features = [\"rc\"] }",
-        );
-        assert_ne!(inherited_tables(a), inherited_tables(&c));
-    }
-
     /// The crates a builtin blob compiles besides its own sources: the guest wire, the SDK and its
     /// macros, and the coverage rule (ADR 0039, 0050). A host-only module in one of them, or a new
     /// path dependency of a guest, shows here as an input outside this list.
@@ -755,10 +715,9 @@ mod tests {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
         for builtin in BUILTINS {
             let name = builtin.dir;
-            let path = root.join(format!("extensions/{name}/wasm/{INPUTS_FILE}"));
-            let record: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+            let record = BlobRecord::read(&root, name).unwrap();
             let own = format!("extensions/{name}/");
-            let inputs = record["inputs"].as_object().unwrap();
+            let inputs = &record.inputs;
             for key in inputs.keys() {
                 assert!(
                     key == WORKSPACE_INHERITED
@@ -784,9 +743,8 @@ mod tests {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
         for builtin in BUILTINS {
             let name = builtin.dir;
-            let path = root.join(format!("extensions/{name}/wasm/{INPUTS_FILE}"));
-            let record: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
-            for key in record["inputs"].as_object().unwrap().keys() {
+            let record = BlobRecord::read(&root, name).unwrap();
+            for key in record.inputs.keys() {
                 assert_ne!(
                     key, "crates/specforge-extension-sdk/src/testing.rs",
                     "{name} compiles the SDK's test helpers"

@@ -4667,6 +4667,12 @@ expression: listing
           },
           "type": "array"
         },
+        "diagnostics": {
+          "items": {
+            "$ref": "#/$defs/Diagnostic"
+          },
+          "type": "array"
+        },
         "diffs": {
           "items": {
             "$ref": "#/$defs/MigrationDiff"
@@ -4760,6 +4766,7 @@ expression: listing
         "pending",
         "from_version",
         "to_version",
+        "diagnostics",
         "migrated",
         "dry_run",
         "files_migrated",

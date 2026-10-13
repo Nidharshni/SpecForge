@@ -2270,3 +2270,124 @@ fn add_then_tools_list_shows_the_extension_tools() {
             .is_some()
     );
 }
+
+// --- plan 03: a specforge.json that hides the project's sources ---
+
+/// A `specforge.json` that is cut off: no file is known to be a source.
+const TRUNCATED_CONFIG: &str = r#"{"spec_root": "spec", "extensions": ["#;
+
+/// Every file under `root` with its bytes.
+fn files_under(root: &Path) -> std::collections::BTreeMap<std::path::PathBuf, Vec<u8>> {
+    let mut files = std::collections::BTreeMap::new();
+    let mut dirs = vec![root.to_path_buf()];
+    while let Some(dir) = dirs.pop() {
+        for entry in std::fs::read_dir(&dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                dirs.push(path);
+            } else {
+                files.insert(path.clone(), std::fs::read(&path).unwrap());
+            }
+        }
+    }
+    files
+}
+
+#[specforge_test(
+    behavior = "provide_mcp_format_tool",
+    verify = "a specforge.json that does not say which files are the project's sources fails the call as config_invalid and writes nothing"
+)]
+fn format_refuses_a_config_that_does_not_say_which_files_are_its_sources() {
+    let (mut server, root) = server_with_unformatted();
+    std::fs::write(root.join("specforge.json"), TRUNCATED_CONFIG).unwrap();
+    let before = files_under(&root);
+
+    let resp = call_tool(&mut server, "specforge.format", json!({}));
+
+    let error = crate::tool_errors::mcp_error(&resp);
+    assert_eq!(error["code"], "schema_mismatch", "{error}");
+    assert!(
+        error["message"]
+            .as_str()
+            .unwrap()
+            .contains("specforge.json is not valid JSON: EOF while parsing"),
+        "{error}"
+    );
+    assert_eq!(error["data"]["files_written"], json!([]), "{error}");
+    assert_eq!(files_under(&root), before, "nothing is written");
+}
+
+#[specforge_test(
+    behavior = "provide_mcp_format_tool",
+    verify = "a problem in specforge.json the call goes around is an E069 among the diagnostics and makes ok false"
+)]
+fn format_check_reports_a_config_problem_it_goes_around() {
+    let (mut server, root) =
+        server_with_canonical_and(("b.spec", &CANONICAL.replace("messy", "other")));
+    std::fs::write(root.join("specforge.json"), r#"{"exclude": ["["]}"#).unwrap();
+
+    let parsed = format_result(&mut server, json!({"check": true}));
+
+    assert_eq!(parsed["ok"], false, "{parsed}");
+    assert_eq!(parsed["all_clean"], true, "{parsed}");
+    assert_eq!(parsed["diagnostics"][0]["code"], "E069", "{parsed}");
+}
+
+#[specforge_test(
+    behavior = "provide_mcp_migrate_tool",
+    verify = "a specforge.json that does not say which files are the project's sources fails the call as config_invalid and writes nothing"
+)]
+fn migrate_refuses_a_config_that_does_not_say_which_files_are_its_sources() {
+    let server = project()
+        .file(
+            "a.spec",
+            "// specforge-format: 0.9\nbehavior alpha \"Alpha\" {\n}\n",
+        )
+        .serve(&[TestExtension::software()]);
+    let mut server = server;
+    let root = server.root().to_path_buf();
+    std::fs::write(root.join("specforge.json"), TRUNCATED_CONFIG).unwrap();
+    let before = files_under(&root);
+
+    let resp = call_tool(&mut server, "specforge.migrate", json!({"dry_run": false}));
+
+    let error = crate::tool_errors::mcp_error(&resp);
+    assert_eq!(error["code"], "schema_mismatch", "{error}");
+    assert_eq!(files_under(&root), before, "no rewrite, no .bak");
+}
+
+#[specforge_test(
+    behavior = "provide_mcp_rename_tool",
+    verify = "a specforge.json that does not say which files are the project's sources fails the rename as config_invalid and writes nothing"
+)]
+fn rename_refuses_a_config_that_does_not_say_which_files_are_its_sources() {
+    let (mut server, root) = server_with_token_project();
+    std::fs::create_dir_all(root.join("vendor")).unwrap();
+    std::fs::write(
+        root.join("vendor/v.spec"),
+        "behavior vend \"Vend\" {\n  contract \"y\"\n}\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("specforge.json"),
+        r#"{"name":"t","version":"0.1.0","extensions":["@specforge/software"],"spec_root":["spec"]}"#,
+    )
+    .unwrap();
+    // The next call brings the served project up to date with the config just written.
+    call_tool(&mut server, "specforge.validate", json!({}));
+    let before = files_under(&root);
+
+    let resp = call_tool(
+        &mut server,
+        "specforge.rename",
+        json!({"entity_id": "vend", "new_name": "vended"}),
+    );
+
+    let error = crate::tool_errors::mcp_error(&resp);
+    assert_eq!(error["code"], "schema_mismatch", "{error}");
+    assert!(
+        error["message"].as_str().unwrap().contains("\"spec_root\""),
+        "{error}"
+    );
+    assert_eq!(files_under(&root), before, "vendor/v.spec is unchanged");
+}

@@ -31,7 +31,7 @@ behavior format_spec_files "Format Spec Files" {
     unchanged_files_preserved "files already in canonical format are not rewritten"
     format_complete_emitted   "format_complete event is produced after successful formatting"
     summary_printed           "names of changed files and a summary count are printed"
-    exit_code_reported        "exit code is 1 when a file cannot be read or written, or has a region left unformatted; 0 otherwise"
+    exit_code_reported        "exit code is 1 when a file cannot be read or written, has a region left unformatted, or specforge.json is not used as written; 0 otherwise"
   }
   contract   """
     When specforge format is invoked with file paths or a project directory,
@@ -46,6 +46,13 @@ behavior format_spec_files "Format Spec Files" {
     specforge.format answers (McpFormatResult) with the files it wrote, its
     diagnostics and failures in the document, and nothing on stderr; the
     exit code is the same.
+    The project's specforge.json is read through the read the compile uses.
+    One that does not say which files are the project's sources (it can't
+    be used, or spec_root, exclude or extensions has the wrong type) MUST
+    refuse the run with config_invalid, the refusal specforge add gives,
+    before any file is read or written. Each other problem in it MUST be
+    reported as its E069 among the diagnostics and MUST make the command
+    exit 1; the files are still formatted.
   """
   verify unit "files matching the canonical format are not rewritten"
   verify unit "changed files are printed to stdout"
@@ -55,6 +62,7 @@ behavior format_spec_files "Format Spec Files" {
   verify unit "the format document names each changed file, each failed file with its kind, and the run's verdict"
   verify unit "under --format json the run prints the format document on stdout and nothing on stderr"
   verify contract "Format Spec Files: spec file formatting holds — spec_files_available, format_config_loaded, formatted_output_written, unchanged_files_preserved, format_complete_emitted, summary_printed"
+  verify unit "a problem in specforge.json the run goes around is reported as E069 and makes the run exit 1, the files still formatted"
 }
 
 behavior preserve_comments "Preserve Comments During Formatting" {
@@ -114,7 +122,7 @@ behavior check_formatting "Check Formatting Without Modifying Files" {
   }
   ensures {
     no_files_written          "no files are written to disk in check mode"
-    exit_code_correct         "exit code is 0 when every file is read and in canonical form; 1 when any would change, cannot be read, or has a region left unformatted"
+    exit_code_correct         "exit code is 0 when every file is read and in canonical form and specforge.json is used as written; 1 when any would change, cannot be read, has a region left unformatted, or specforge.json has a problem (E069)"
     unformatted_paths_printed "file paths of unformatted files are printed to stdout"
   }
   contract   """
@@ -124,6 +132,9 @@ behavior check_formatting "Check Formatting Without Modifying Files" {
     paths. The system MUST NOT write any files in check mode. A file that
     cannot be read, or that has a region left unformatted
     (format_with_parse_errors), MUST also make the check exit with code 1.
+    A problem in specforge.json the check goes around (E069) MUST also make
+    it exit 1; one that does not say which files are the project's sources
+    refuses the check (config_invalid).
   """
   verify unit "already formatted files exit with code 0"
   verify unit "unformatted files exit with code 1"
@@ -132,6 +143,7 @@ behavior check_formatting "Check Formatting Without Modifying Files" {
   verify unit "a region left unformatted makes the check fail"
   verify unit "under --format json a check that finds a change prints the document and exits 1"
   verify contract "Check Formatting Without Modifying Files: formatting check holds — spec_files_available, format_config_loaded, no_files_written, exit_code_correct, unformatted_paths_printed"
+  verify unit "a problem in specforge.json the run goes around is an E069 that fails the check"
 }
 
 behavior show_formatting_diff "Show Formatting Diff" {
@@ -574,6 +586,12 @@ behavior discover_format_targets "Discover Format Targets" {
     below it, no symlink, files only). A file reached by more than one
     argument MUST be formatted once. Non-.spec
     files MUST be skipped without error.
+    The specforge.json of every project whose sources the run selects (the
+    project, a named project, a nested project a walk reaches, the project
+    of a walked file) MUST be read before any file: one that does not say
+    which files are its sources refuses the whole run (config_invalid). A
+    file named explicitly selects no configuration and is formatted
+    whatever specforge.json says.
   """
   verify unit "no arguments formats all .spec files under spec_root"
   verify unit "files the project's exclude entries leave out are not formatted"
@@ -584,4 +602,6 @@ behavior discover_format_targets "Discover Format Targets" {
   verify unit "a directory named like a .spec file is no target, walked or discovered"
   verify unit "a file several arguments reach is formatted once"
   verify contract "Discover Format Targets: format target discovery holds — project_root_available, filesystem_accessible, all_spec_files_discovered, exclusions_applied, non_spec_skipped"
+  verify unit "a specforge.json that does not say which files are the project's sources refuses the run, and nothing is written"
+  verify unit "a named file is formatted whatever specforge.json says"
 }

@@ -81,10 +81,17 @@ pub fn install_enabled(root: &Path, entries: &[String], builtins: &crate::Builti
 }
 
 /// [`install_enabled`] the entries of the `specforge.json` at `root`, as
-/// it is on disk now: call it after the config is written.
+/// it is on disk now: call it after the config is written. A config the
+/// compile could not use as written is a broken test: it panics, naming
+/// the problems.
 pub fn install_configured(root: &Path, builtins: &crate::Builtins) {
-    let config = specforge_common::load_project_config(root);
-    install_enabled(root, &config.extensions, builtins);
+    let read = specforge_common::read_project_config(root);
+    assert!(
+        read.problems.is_empty(),
+        "the test's specforge.json: {:?}",
+        read.problems
+    );
+    install_enabled(root, &read.config.extensions, builtins);
 }
 
 #[cfg(test)]
