@@ -107,7 +107,7 @@ impl CoreTool for Tool {
             dry_run: args.dry_run,
         };
         let added = extension::add(&request, &registry, project.runtime.as_ref());
-        // What reading the registry configuration reported (E067, W140, I003), once the add asked a
+        // What reading the registry configuration reported (W140, I003), once the add asked a
         // registry, as `specforge add` shows it.
         let reported = registry.reported();
         // An install that failed after placing its module reports it.

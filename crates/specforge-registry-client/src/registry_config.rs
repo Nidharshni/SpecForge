@@ -52,6 +52,8 @@ impl std::fmt::Debug for RegistryCredential {
 /// Returns a tuple of (parsed registries, diagnostics).
 /// Produces an I003 info diagnostic when no default registry is configured.
 /// Produces a W-level diagnostic for duplicate aliases.
+/// An entry that can't be read (its `url` isn't a registry root included) is E067 and is left out;
+/// the caller refuses the configuration (`specforge_ops_registry::configured`).
 pub fn parse_registries_from_config(config_json: &str) -> (Vec<RegistryConfig>, Vec<Diagnostic>) {
     let mut diagnostics = Vec::new();
 

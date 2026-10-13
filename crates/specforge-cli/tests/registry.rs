@@ -605,18 +605,34 @@ fn search_shows_that_no_registry_is_the_default() {
     assert!(stderr.contains("info[I003]"), "{stderr}");
 }
 
-#[test]
-fn login_shows_an_unreadable_registry_entry_and_skips_it() {
+#[specforge_test(
+    behavior = "configure_registries",
+    verify = "a registries entry that can't be read refuses every registry operation with E067 before any request"
+)]
+fn login_refuses_a_configuration_with_an_unreadable_entry_before_any_request() {
+    let spy = NetSpy::start();
     let dir = project_with_registries(serde_json::json!([
         {"alias": "main", "url": UNREACHABLE, "default_registry": true},
         {"alias": "broken"},
     ]));
-    let output = run_spied(&["login", "--token", "t"], &dir);
-    let stderr = stderr_of(&output);
+    let output = spy
+        .command(&["login", "--token", "t", "--format", "json", "--path"])
+        .arg(dir.path())
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let json: serde_json::Value =
+        serde_json::from_str(&stdout).unwrap_or_else(|e| panic!("not JSON ({e}): {stdout}"));
+    assert_eq!(json["code"], "E067", "{json}");
     assert!(
-        stderr.contains("error[E067]: Failed to parse registry entry at index 1"),
-        "{stderr}"
+        json["error"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("index 1"),
+        "{json}"
     );
+    assert_eq!(spy.hits(), 0, "login reached the network");
 }
 
 #[test]
@@ -1793,5 +1809,5 @@ fn a_registry_url_with_the_version_prefix_is_refused_before_any_request() {
             .contains("name the registry's root: 'http://registry.invalid'"),
         "{json}"
     );
-    // The `hits == 0` assertion lands with the whole array read before any request (T5).
+    assert_eq!(spy.hits(), 0, "search reached the network");
 }

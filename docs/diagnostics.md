@@ -777,8 +777,12 @@ E067: Invalid registry configuration
 
 The registry configuration in `specforge.json` can't be read: the file isn't
 valid JSON, `registries` isn't an array, or an entry at the reported index is
-missing a required field or has the wrong type. That part of the configuration
-is ignored. Fix the reported entry.
+missing a required field, has the wrong type, or has a `url` that isn't a
+registry's root (an `http` or `https` URL with no query, fragment or user name;
+write `https://registry.example`, not `https://registry.example/v1`: SpecForge
+adds the protocol's `/v1`). No registry is asked while an entry can't be read,
+so a package whose scope that entry serves never goes to another registry. Fix
+the reported entry.
 
 Owner: core
 Level: error

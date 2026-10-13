@@ -1063,6 +1063,7 @@ behavior configure_registries "Configure Registries" {
     no_hardcoded_urls             "No registry URLs are compiled-in constants in compiler source"
     registries_configured_emitted "registries_configured event fires after all entries are parsed"
     root_urls                     "Each entry's url is the registry's root: an http or https URL with no query, fragment or user info, not ending in the protocol's version prefix /v1; another is refused with E067 naming the root"
+    unreadable_entry_refused      "An entry that can't be read refuses every registry operation with E067 before any request: no other registry serves its names"
   }
   contract   """
     At startup, the compiler MUST parse the registries array from
@@ -1085,8 +1086,11 @@ behavior configure_registries "Configure Registries" {
     extensions and local .wasm files MUST install with no registry
     configured. First-use MUST NOT require network access — registries are
     opt-in configuration, and first use is always local/offline per P8.
-    The diagnostics of reading the registries array (E067, W140, I003) are
-    shown by an operation only once it has asked a registry: an add of an
+    An entry that can't be read (E067) refuses every registry operation
+    before any request, so no other registry serves the names its
+    scope_filter claims. The other diagnostics of reading the registries
+    array (W140, I003) are shown by an operation only once it has asked a
+    registry: an add of an
     exact version already installed asks none and shows none; a dry run of
     a registry package asks its registry for the package's manifest and
     shows them.
@@ -1103,7 +1107,8 @@ behavior configure_registries "Configure Registries" {
   verify unit "no registry URL on the specforge.dev domain is compiled into non-test source"
   verify unit "an operation shows the registry configuration's diagnostics once it has asked a registry"
   verify unit "a registry url is the registry's root, and one ending in the protocol's version prefix is refused with E067 naming the root"
-  verify contract "Configure Registries: registry configuration holds — specforge_json_parsed, filesystem_available, registry_entries_created, scope_filters_set, no_registries_diagnosed, no_hardcoded_urls, registries_configured_emitted, root_urls"
+  verify unit "a registries entry that can't be read refuses every registry operation with E067 before any request"
+  verify contract "Configure Registries: registry configuration holds — specforge_json_parsed, filesystem_available, registry_entries_created, scope_filters_set, no_registries_diagnosed, no_hardcoded_urls, registries_configured_emitted, root_urls, unreadable_entry_refused"
 }
 
 // ── Registry Authentication ──────────────────────────────────

@@ -248,7 +248,6 @@ fn the_configuration_is_reported_once_the_registry_is_asked() {
     behavior = "configure_registries",
     verify = "registries parsed from specforge.json"
 )]
-#[ignore = "fixed by T5"]
 fn an_entry_that_cannot_be_read_serves_no_name() {
     let dir = project(
         r#"{"name":"p","version":"0.1.0","extensions":[],"registries":[
