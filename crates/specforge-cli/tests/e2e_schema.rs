@@ -159,238 +159,12 @@ fn schema_publish_produces_json_schema_draft() {
             "published schema should have $schema field"
         );
         assert_eq!(parsed["title"], "SpecForge Graph Protocol");
-        // Every keyword is a draft 2020-12 keyword with a well-typed value.
-        let defs = parsed["$defs"]
-            .as_object()
-            .map(|d| d.keys().cloned().collect())
-            .unwrap_or_default();
-        assert_json_schema(&parsed, "#", &defs);
+        // Every keyword is one the in-repo checker reads, or an annotation.
+        assert_eq!(
+            specforge_common::shape::unchecked_keywords(&parsed),
+            Vec::<String>::new()
+        );
     }
-}
-
-/// Assert `node` is a well-formed JSON Schema (draft 2020-12) for the
-/// keywords the published schema uses; `defs` are the `$defs` names.
-fn assert_json_schema(node: &serde_json::Value, path: &str, defs: &BTreeSet<String>) {
-    use serde_json::Value;
-    const TYPES: [&str; 7] = [
-        "object", "array", "string", "integer", "number", "boolean", "null",
-    ];
-    let obj = match node {
-        Value::Bool(_) => return,
-        Value::Object(obj) => obj,
-        other => panic!("{path}: a schema must be an object or boolean, got {other}"),
-    };
-    for (key, value) in obj {
-        let at = format!("{path}/{key}");
-        match key.as_str() {
-            "$schema" | "$id" | "title" | "description" | "$comment" | "pattern" | "format" => {
-                assert!(value.is_string(), "{at} must be a string")
-            }
-            "type" => {
-                let listed: Vec<&Value> = match value {
-                    Value::Array(items) => items.iter().collect(),
-                    single => vec![single],
-                };
-                for t in listed {
-                    assert!(
-                        t.as_str().is_some_and(|t| TYPES.contains(&t)),
-                        "{at}: unknown type {t}"
-                    );
-                }
-            }
-            "properties" | "$defs" => {
-                for (name, sub) in value.as_object().unwrap_or_else(|| panic!("{at}: object")) {
-                    assert_json_schema(sub, &format!("{at}/{name}"), defs);
-                }
-            }
-            "items"
-            | "additionalProperties"
-            | "if"
-            | "then"
-            | "else"
-            | "not"
-            | "contains"
-            | "propertyNames" => assert_json_schema(value, &at, defs),
-            "allOf" | "anyOf" | "oneOf" => {
-                let items = value.as_array().unwrap_or_else(|| panic!("{at}: array"));
-                assert!(!items.is_empty(), "{at}: empty");
-                for (i, sub) in items.iter().enumerate() {
-                    assert_json_schema(sub, &format!("{at}/{i}"), defs);
-                }
-            }
-            "minItems" | "maxItems" | "minLength" | "maxLength" | "minProperties" => {
-                assert!(value.is_u64(), "{at} must be a non-negative integer")
-            }
-            "minimum" | "maximum" | "exclusiveMinimum" | "exclusiveMaximum" => {
-                assert!(value.is_number(), "{at} must be a number")
-            }
-            "uniqueItems" => assert!(value.is_boolean(), "{at} must be a boolean"),
-            "examples" => assert!(value.is_array(), "{at} must be an array"),
-            "required" => {
-                // Inside a sub-schema (then/allOf) `required` may name
-                // properties declared by the enclosing schema.
-                let props = obj.get("properties").and_then(Value::as_object);
-                for name in value.as_array().unwrap_or_else(|| panic!("{at}: array")) {
-                    let name = name.as_str().unwrap_or_else(|| panic!("{at}: strings"));
-                    if let Some(props) = props {
-                        assert!(
-                            props.contains_key(name),
-                            "{at}: required '{name}' is not a declared property"
-                        );
-                    }
-                }
-            }
-            "enum" => {
-                let items = value.as_array().unwrap_or_else(|| panic!("{at}: array"));
-                assert!(!items.is_empty(), "{at}: empty enum");
-                let unique: BTreeSet<String> = items.iter().map(|v| v.to_string()).collect();
-                assert_eq!(unique.len(), items.len(), "{at}: duplicate enum values");
-            }
-            "const" => {}
-            "$ref" => {
-                let target = value.as_str().unwrap_or_default();
-                let name = target
-                    .strip_prefix("#/$defs/")
-                    .unwrap_or_else(|| panic!("{at}: unsupported $ref {target}"));
-                assert!(defs.contains(name), "{at}: $ref to missing {target}");
-            }
-            other => panic!("{at}: unexpected keyword '{other}'"),
-        }
-    }
-}
-
-/// Validate `instance` against `schema` (draft 2020-12), for the keywords
-/// `assert_json_schema` admits. Returns one message per violation. A keyword
-/// the validator does not implement panics, so a schema can never pass
-/// by using something unchecked.
-fn validate(
-    instance: &serde_json::Value,
-    schema: &serde_json::Value,
-    root: &serde_json::Value,
-    at: &str,
-) -> Vec<String> {
-    use serde_json::Value;
-    let obj = match schema {
-        Value::Bool(true) => return vec![],
-        Value::Bool(false) => return vec![format!("{at}: rejected by `false` schema")],
-        Value::Object(obj) => obj,
-        other => panic!("{at}: a schema must be an object or boolean, got {other}"),
-    };
-    let type_of = |v: &Value| match v {
-        Value::Null => "null",
-        Value::Bool(_) => "boolean",
-        Value::Number(n) if n.is_i64() || n.is_u64() => "integer",
-        Value::Number(_) => "number",
-        Value::String(_) => "string",
-        Value::Array(_) => "array",
-        Value::Object(_) => "object",
-    };
-    let mut errors = Vec::new();
-    for (key, value) in obj {
-        match key.as_str() {
-            // Annotations: they never fail validation.
-            "$schema" | "$id" | "title" | "description" | "$comment" | "format" | "examples"
-            | "$defs" | "then" | "else" => {}
-            "type" => {
-                let actual = type_of(instance);
-                let allowed: Vec<&str> = match value {
-                    Value::Array(items) => items.iter().filter_map(Value::as_str).collect(),
-                    single => vec![single.as_str().unwrap()],
-                };
-                let ok = allowed
-                    .iter()
-                    .any(|t| *t == actual || (*t == "number" && actual == "integer"));
-                if !ok {
-                    errors.push(format!("{at}: {actual} is not {allowed:?}"));
-                }
-            }
-            "minimum" => {
-                if instance
-                    .as_f64()
-                    .is_some_and(|n| n < value.as_f64().unwrap())
-                {
-                    errors.push(format!("{at}: {instance} is below {value}"));
-                }
-            }
-            "enum" => {
-                if !value.as_array().unwrap().contains(instance) {
-                    errors.push(format!("{at}: {instance} is not one of {value}"));
-                }
-            }
-            "const" => {
-                if instance != value {
-                    errors.push(format!("{at}: {instance} is not {value}"));
-                }
-            }
-            "required" => {
-                if let Some(o) = instance.as_object() {
-                    for name in value.as_array().unwrap() {
-                        let name = name.as_str().unwrap();
-                        if !o.contains_key(name) {
-                            errors.push(format!("{at}: missing required '{name}'"));
-                        }
-                    }
-                }
-            }
-            "properties" => {
-                if let Some(o) = instance.as_object() {
-                    for (name, sub) in value.as_object().unwrap() {
-                        if let Some(v) = o.get(name) {
-                            errors.extend(validate(v, sub, root, &format!("{at}/{name}")));
-                        }
-                    }
-                }
-            }
-            "additionalProperties" => {
-                if let Some(o) = instance.as_object() {
-                    let declared = obj.get("properties").and_then(Value::as_object);
-                    for (name, v) in o {
-                        if !declared.is_some_and(|d| d.contains_key(name)) {
-                            errors.extend(validate(v, value, root, &format!("{at}/{name}")));
-                        }
-                    }
-                }
-            }
-            "items" => {
-                if let Some(items) = instance.as_array() {
-                    for (i, v) in items.iter().enumerate() {
-                        errors.extend(validate(v, value, root, &format!("{at}/{i}")));
-                    }
-                }
-            }
-            "allOf" => {
-                for sub in value.as_array().unwrap() {
-                    errors.extend(validate(instance, sub, root, at));
-                }
-            }
-            "anyOf" => {
-                let any = value
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .any(|sub| validate(instance, sub, root, at).is_empty());
-                if !any {
-                    errors.push(format!("{at}: matches no anyOf branch"));
-                }
-            }
-            "if" => {
-                let branch = if validate(instance, value, root, at).is_empty() {
-                    obj.get("then")
-                } else {
-                    obj.get("else")
-                };
-                if let Some(branch) = branch {
-                    errors.extend(validate(instance, branch, root, at));
-                }
-            }
-            "$ref" => {
-                let name = value.as_str().unwrap().strip_prefix("#/$defs/").unwrap();
-                errors.extend(validate(instance, &root["$defs"][name], root, at));
-            }
-            other => panic!("{at}: the validator does not implement '{other}'"),
-        }
-    }
-    errors
 }
 
 /// A project with an edge from nearly every reference field the software,
@@ -557,28 +331,28 @@ fn schema_publish_validates_a_real_export() {
         ]))
     );
 
-    let errors = validate(&export, &published, &published, "#");
+    let errors = conforms(&published, &export);
     assert!(
         errors.is_empty(),
         "the export does not validate against the published schema:\n{}",
         errors.join("\n")
     );
 
-    // The validator does reject what the schema forbids.
+    // The checker does reject what the schema forbids.
     let mut broken = export.clone();
     broken["edges"][0]["label"] = serde_json::json!(7);
     broken["nodes"][0]["kind"] = serde_json::json!("no_such_kind");
-    let mut rejected = validate(&broken, &published, &published, "#");
-    rejected.sort();
-    assert_eq!(
-        rejected,
-        vec![
-            "#/edges/0/label: integer is not [\"string\"]".to_string(),
-            format!(
-                "#/nodes/0/kind: \"no_such_kind\" is not one of {}",
-                published["properties"]["nodes"]["items"]["properties"]["kind"]["enum"]
-            ),
-        ]
+    let rejected = conforms(&published, &broken);
+    assert_eq!(rejected.len(), 2, "{rejected:?}");
+    assert!(
+        rejected.contains(&"$.edges[0].label: expected string, got integer".to_string()),
+        "{rejected:?}"
+    );
+    assert!(
+        rejected.iter().any(
+            |m| m.starts_with("$.nodes[0]: matches 0 of the ") && m.ends_with(" oneOf schemas")
+        ),
+        "{rejected:?}"
     );
 }
 
@@ -609,7 +383,7 @@ failure_mode fm1 "F" {
     let published = run_json(&["schema", "--publish"], dir.path());
     let export = run_json(&["export", "--format=graph"], dir.path());
 
-    let errors = validate(&export, &published, &published, "#");
+    let errors = conforms(&published, &export);
     assert!(
         errors.is_empty(),
         "the export does not validate against the published schema:\n{}",
@@ -625,19 +399,22 @@ fn schema_publish_includes_node_kind_enum() {
     let dir = software_project();
     let parsed = run_json(&["schema", "--publish"], dir.path());
 
-    let kind = &parsed["properties"]["nodes"]["items"]["properties"]["kind"];
-    assert_eq!(kind["type"], "string");
+    // One node branch per kind an export can hold: the registered ones and
+    // the structural `ref` and `spec`.
+    let kinds = published_node_kinds(&parsed);
+    let structural: BTreeSet<String> = specforge_common::structural::NODE_KINDS
+        .iter()
+        .map(|k| k.to_string())
+        .collect();
+    let declared: BTreeSet<String> = kinds.difference(&structural).cloned().collect();
     assert_eq!(
-        strings(&kind["enum"]),
+        declared,
         SOFTWARE_KINDS.iter().map(|s| s.to_string()).collect(),
-        "the node kind enum lists every registered kind"
+        "the node branches list every registered kind"
     );
     // The same set `specforge schema` reports as registered.
     let registered = run_json(&["schema"], dir.path());
-    assert_eq!(
-        strings(&kind["enum"]),
-        names(&registered["entity_kinds"], "name")
-    );
+    assert_eq!(declared, names(&registered["entity_kinds"], "name"));
 }
 
 #[specforge_test(
@@ -649,7 +426,7 @@ fn schema_publish_includes_edge_label_enum() {
     let parsed = run_json(&["schema", "--publish"], dir.path());
 
     // The embedded schema block names every registered edge type, no more.
-    let edge_type = &parsed["properties"]["schema"]["properties"]["edge_types"]["items"];
+    let edge_type = &parsed["$defs"]["GraphProtocolSchema"]["properties"]["edge_types"]["items"];
     let label = &edge_type["properties"]["label"];
     assert_eq!(label["type"], "string");
     let listed = strings(&label["enum"]);
@@ -667,7 +444,7 @@ fn schema_publish_includes_edge_label_enum() {
 
     // A graph edge is labelled by the field that declared it. The label is
     // open, and the fields that declare an edge type are its examples.
-    let edge_label = &parsed["properties"]["edges"]["items"]["properties"]["label"];
+    let edge_label = &parsed["$defs"]["Edge"]["properties"]["label"];
     assert_eq!(edge_label["type"], "string");
     assert!(edge_label.get("enum").is_none(), "{edge_label}");
     let declaring: BTreeSet<String> = registered["entity_kinds"]
@@ -834,10 +611,31 @@ fn schema_publish_describes_the_requested_format() {
         );
         let v: serde_json::Value =
             serde_json::from_slice(&out.stdout).expect("published schema is JSON");
-        v["properties"]["nodes"]["items"].clone()
+        let items = v["properties"]["nodes"]["items"].clone();
+        match items["oneOf"].as_array().and_then(|b| b.first()) {
+            // The first branch of a graph document, resolved.
+            Some(first) => {
+                let name = first["$ref"]
+                    .as_str()
+                    .unwrap()
+                    .trim_start_matches("#/$defs/");
+                let mut resolved = v["$defs"][name].clone();
+                resolved["oneOf"] = items["oneOf"].clone();
+                resolved
+            }
+            None => items,
+        }
     };
 
+    // A graph node is one branch per kind (`full` is the first, with the
+    // branch list), each requiring the full node.
     let full = run("graph");
+    assert!(
+        full["oneOf"]
+            .as_array()
+            .is_some_and(|branches| branches.len() > 2),
+        "graph schema has a branch per kind"
+    );
     assert_eq!(
         full["required"],
         serde_json::json!(["id", "kind", "file", "line", "fields"]),
@@ -864,4 +662,256 @@ fn schema_publish_describes_the_requested_format() {
         Some(vec!["id".into(), "kind".into(), "title".into()]),
         "brief schema exposes exactly id/kind/title"
     );
+}
+
+// --- Exports validate against what is published (ADR-NEW-01, plan 01) ---
+
+/// The messages for which `export` does not conform to `published`: the
+/// published schema's own keywords are held to the checker's, the export is
+/// checked against it, and a node that fails is checked against its kind's
+/// branch so a message names the field.
+fn conforms(published: &serde_json::Value, export: &serde_json::Value) -> Vec<String> {
+    use specforge_common::shape::{unchecked_keywords, violations};
+    let unchecked = unchecked_keywords(published);
+    assert!(
+        unchecked.is_empty(),
+        "keywords the checker ignores: {unchecked:?}"
+    );
+    let mut messages = violations(published, export);
+    if messages.is_empty() {
+        return messages;
+    }
+    for (i, node) in export["nodes"].as_array().into_iter().flatten().enumerate() {
+        let Some(kind) = node["kind"].as_str() else {
+            continue;
+        };
+        if published["$defs"].get(format!("node_{kind}")).is_none() {
+            continue;
+        }
+        let branch = serde_json::json!({
+            "$ref": format!("#/$defs/node_{kind}"),
+            "$defs": published["$defs"],
+        });
+        messages.extend(
+            violations(&branch, node)
+                .into_iter()
+                .map(|m| format!("$.nodes[{i}]{}", &m[1..])),
+        );
+    }
+    messages
+}
+
+/// The kinds a graph document's node branches name.
+fn published_node_kinds(published: &serde_json::Value) -> BTreeSet<String> {
+    published["properties"]["nodes"]["items"]["oneOf"]
+        .as_array()
+        .expect("a graph document has a branch per kind")
+        .iter()
+        .map(|branch| {
+            branch["$ref"]
+                .as_str()
+                .and_then(|r| r.strip_prefix("#/$defs/node_"))
+                .expect("a node branch")
+                .to_string()
+        })
+        .collect()
+}
+
+/// Copy `<repo>/<rel>` into a tempdir, leaving out `.specforge` and
+/// `target`; for the repository itself, only `specforge.json` and `spec/`.
+/// `export` records the schema cache in the project it exports, so a test
+/// never exports a committed directory.
+fn copy_project(rel: &str) -> tempfile::TempDir {
+    fn copy(from: &std::path::Path, to: &std::path::Path) {
+        std::fs::create_dir_all(to).unwrap();
+        for entry in std::fs::read_dir(from).unwrap() {
+            let entry = entry.unwrap();
+            let name = entry.file_name();
+            if name == ".specforge" || name == "target" {
+                continue;
+            }
+            let (from, to) = (entry.path(), to.join(&name));
+            if entry.file_type().unwrap().is_dir() {
+                copy(&from, &to);
+            } else {
+                std::fs::copy(&from, &to).unwrap();
+            }
+        }
+    }
+    let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let tmp = tempfile::TempDir::new().unwrap();
+    if rel == "." {
+        std::fs::copy(
+            repo.join("specforge.json"),
+            tmp.path().join("specforge.json"),
+        )
+        .unwrap();
+        copy(&repo.join("spec"), &tmp.path().join("spec"));
+    } else {
+        copy(&repo.join(rel), tmp.path());
+    }
+    tmp
+}
+
+/// The projects whose exports must validate against what they publish.
+const PUBLISHED_PROJECTS: [&str; 9] = [
+    ".",
+    "integrations/rust/spec",
+    "examples/todo-app",
+    "examples/shop",
+    "crates/specforge-cli/tests/fixtures/parity/clean",
+    "crates/specforge-cli/tests/fixtures/parity/body_parser_type",
+    "crates/specforge-cli/tests/fixtures/read_views/rv1",
+    "crates/specforge-cli/tests/fixtures/coverage/fx1",
+    "xtask/tests/fixtures/links",
+];
+
+/// Every named format's export of `dir` against the format's published
+/// schema; one message per violation, prefixed by the format.
+fn export_violations(dir: &std::path::Path, formats: &[&str]) -> Vec<String> {
+    let mut messages = Vec::new();
+    for format in formats {
+        let published = run_json(&["schema", "--publish", "--format", format], dir);
+        let export = run_json(&["export", "--format", format], dir);
+        messages.extend(
+            conforms(&published, &export)
+                .into_iter()
+                .map(|m| format!("{format}: {m}")),
+        );
+    }
+    messages
+}
+
+#[specforge_test(
+    behavior = "publish_schema_specification",
+    verify = "a context or brief export validates against the published schema of its format"
+)]
+fn agent_exports_validate_against_their_published_schema() {
+    let dir = setup_project_with_config(
+        r#"{"name":"t","version":"0.1.0","spec_root":"spec","extensions":["@specforge/software"]}"#,
+        &[(
+            "main.spec",
+            "spec \"fixture\" {\n  version \"1.0\"\n}\n\nbehavior register \"Register\" {\n  contract \"registers an id\"\n}\n",
+        )],
+    );
+    for with_schema in [false, true] {
+        for format in ["context", "brief"] {
+            let published = run_json(&["schema", "--publish", "--format", format], dir.path());
+            let mut args = vec!["export", "--format", format];
+            if with_schema {
+                args.push("--with-schema");
+            }
+            let export = run_json(&args, dir.path());
+            let messages = conforms(&published, &export);
+            assert!(
+                messages.is_empty(),
+                "{format} (with_schema {with_schema}):\n{}",
+                messages.join("\n")
+            );
+        }
+    }
+}
+
+const ADMITTED_SPEC: &str = r#"spec "fixture" {
+  version "1.0"
+}
+
+invariant unique_ids "Unique ids" {
+  guarantee "ids are unique"
+  expression expr {
+    duplicates < 1
+    collisions <= 0
+  }
+}
+
+behavior register "Register" {
+  contract   "registers an id"
+  invariants [unique_ids]
+  produces   [registered]
+  requires {
+    id_free "the id is not taken"
+  }
+  ensures {
+    id_taken "the id is taken"
+  }
+  maintains {
+    unique_ids "ids stay unique"
+  }
+}
+
+type Registration {
+  id     string
+  fields RegistrationFields
+  kind   string
+}
+
+type RegistrationFields {
+  entries string[]
+}
+
+event registered "Registered" {
+  payload Registration
+  sync {
+    timeout "5s"
+  }
+}
+
+failure_mode clash "Clash" {
+  cause    "two writers"
+  effect   "duplicate ids"
+  severity "high"
+  rpn      12
+  post_mitigation {
+    severity low
+    rpn      2
+  }
+}
+
+decision d1 "D" {
+  status       accepted
+  context      "c"
+  decision     "x"
+  consequences 5
+}
+"#;
+
+#[specforge_test(
+    behavior = "publish_schema_specification",
+    verify = "an export of a project with no errors validates against the published schema"
+)]
+#[ignore = "fixed by 01-T8"]
+fn an_export_of_a_project_check_admits_validates_against_its_published_schema() {
+    let dir = setup_project_with_config(
+        r#"{"name":"t","version":"0.1.0","spec_root":"spec","extensions":["@specforge/software","@specforge/product","@specforge/governance","@specforge/formal"]}"#,
+        &[("main.spec", ADMITTED_SPEC)],
+    );
+    specforge_cmd()
+        .args(["check"])
+        .arg(dir.path())
+        .assert()
+        .success();
+    let messages = export_violations(dir.path(), &["graph", "context", "brief"]);
+    assert!(messages.is_empty(), "{}", messages.join("\n"));
+}
+
+#[specforge_test(
+    behavior = "export_agent_graph_format",
+    verify = "output conforms to Graph Protocol schema"
+)]
+#[specforge_test(
+    behavior = "publish_schema_specification",
+    verify = "this repository's and its example projects' exports validate against their published schemas"
+)]
+#[ignore = "fixed by 01-T8"]
+fn this_repository_and_its_example_projects_export_what_they_publish() {
+    for rel in PUBLISHED_PROJECTS {
+        let dir = copy_project(rel);
+        specforge_cmd()
+            .args(["check"])
+            .arg(dir.path())
+            .assert()
+            .success();
+        let messages = export_violations(dir.path(), &["graph", "context", "brief"]);
+        assert!(messages.is_empty(), "{rel}:\n{}", messages.join("\n"));
+    }
 }

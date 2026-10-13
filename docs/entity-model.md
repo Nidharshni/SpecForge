@@ -559,8 +559,8 @@ For teams using structured conditions, specification layering, or event graph li
 specforge add @specforge/formal
 # → +5 entity kinds: property, axiom, protocol, refinement, process
 # → +4 compiler passes: condition_check, layering_verify, event_graph_analyze, coverage_tracking
-# → +13 edge types (BehaviorRequires/Ensures/MaintainsInvariant, BehaviorSatisfiesProperty, BehaviorRefinesBehavior, EventFollowsProtocol, EventParticipatesInProcess, PropertyDependsOnInvariant, AxiomAssumesInvariant, RefinementRefinesAbstract/Concrete, RefinementChainsToRefinement, ProcessComposesProcess)
-# → Inline condition fields (requires/ensures/maintains) enhanced on behavior entities
+# → +10 edge types (BehaviorSatisfiesProperty, BehaviorRefinesBehavior, EventFollowsProtocol, EventParticipatesInProcess, PropertyDependsOnInvariant, AxiomAssumesInvariant, RefinementRefinesAbstract/Concrete, RefinementChainsToRefinement, ProcessComposesProcess)
+# → Block condition fields (requires/ensures/maintains) enhanced on behavior entities
 # → Requires warning_level=strict in specforge.json for formal warnings
 ```
 

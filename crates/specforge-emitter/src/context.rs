@@ -1,6 +1,6 @@
 use serde::Serialize;
-use serde_json::Value;
 use specforge_common::shape::Shape;
+use specforge_graph::field_form::{FieldJson, Obligation, write};
 use specforge_graph::{FieldValue, Node};
 use specforge_registry::FieldRegistry;
 use std::collections::BTreeMap;
@@ -14,11 +14,11 @@ pub(crate) struct ContextNode {
     /// The fields an extension declares `headline` (a contract, a status),
     /// by name.
     #[serde(flatten)]
-    headline: BTreeMap<String, Value>,
+    headline: BTreeMap<String, String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    verify: Option<Value>,
+    verify: Option<Vec<Obligation>>,
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
-    fields: BTreeMap<String, Value>,
+    fields: BTreeMap<String, FieldJson>,
 }
 
 /// Keys a context node has of its own, which no headline field may take.
@@ -29,7 +29,7 @@ const NODE_KEYS: [&str; 5] = ["id", "kind", "title", "verify", "fields"];
 pub(crate) fn headline_fields(
     node: &Node,
     registry: Option<&FieldRegistry>,
-) -> BTreeMap<String, Value> {
+) -> BTreeMap<String, String> {
     let Some(registry) = registry else {
         return BTreeMap::new();
     };
@@ -40,7 +40,7 @@ pub(crate) fn headline_fields(
         .filter(|entry| !NODE_KEYS.contains(&entry.key.as_str()))
         .filter_map(|entry| match &entry.value {
             FieldValue::String(s) | FieldValue::Identifier(s) => {
-                Some((entry.key.to_string(), Value::String(s.clone())))
+                Some((entry.key.to_string(), s.clone()))
             }
             _ => None,
         })
@@ -76,7 +76,7 @@ fn is_headline(node: &Node, field: &str, registry: &FieldRegistry) -> bool {
 pub(crate) fn normative_fields(
     node: &Node,
     registry: Option<&FieldRegistry>,
-) -> BTreeMap<String, Value> {
+) -> BTreeMap<String, FieldJson> {
     let Some(registry) = registry else {
         return BTreeMap::new();
     };
@@ -90,12 +90,7 @@ pub(crate) fn normative_fields(
                 .get(node.kind.raw.as_str(), entry.key.as_str())
                 .is_some_and(|field| field.declared().normative)
         })
-        .map(|entry| {
-            (
-                entry.key.to_string(),
-                crate::json::field_value_to_json(&entry.value),
-            )
-        })
+        .map(|entry| (entry.key.to_string(), write(&entry.value)))
         .collect()
 }
 
@@ -107,7 +102,10 @@ pub(crate) fn context_node(n: &Node, registry: Option<&FieldRegistry>) -> Contex
         kind: n.kind.raw.to_string(),
         title: n.title.clone(),
         headline: headline_fields(n, registry),
-        verify: crate::json::obligations_json(n),
+        verify: {
+            let statements = specforge_graph::obligations(n);
+            (!statements.is_empty()).then(|| statements.iter().map(Obligation::of).collect())
+        },
         fields: normative_fields(n, registry),
     }
 }

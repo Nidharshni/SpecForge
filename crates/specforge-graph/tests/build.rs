@@ -28,7 +28,8 @@ fn graph_contents(graph: &Graph) -> (Vec<String>, Vec<String>) {
                 n.source_span.file,
                 n.source_span.start_line,
                 n.title,
-                serde_json::to_string(&n.fields).unwrap()
+                serde_json::to_string(&specforge_graph::field_form::write_fields(&n.fields))
+                    .unwrap()
             )
         })
         .collect();

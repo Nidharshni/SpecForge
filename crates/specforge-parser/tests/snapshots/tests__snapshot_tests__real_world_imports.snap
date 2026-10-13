@@ -1,35 +1,34 @@
 ---
 source: crates/specforge-parser/tests/snapshot_tests.rs
-assertion_line: 103
 expression: result.imports
 ---
 [
-  {
-    "path": "invariants/core",
-    "kind": "Full",
-    "bindings": null,
-    "namespace": null,
-    "is_pub": false,
-    "span": {
-      "file": "behaviors/parsing.spec",
-      "start_line": 2,
-      "start_col": 1,
-      "end_line": 2,
-      "end_col": 22
-    }
-  },
-  {
-    "path": "types/core",
-    "kind": "Full",
-    "bindings": null,
-    "namespace": null,
-    "is_pub": false,
-    "span": {
-      "file": "behaviors/parsing.spec",
-      "start_line": 3,
-      "start_col": 1,
-      "end_line": 3,
-      "end_col": 17
-    }
-  }
+    ImportDeclaration {
+        path: Sym("invariants/core"),
+        kind: Full,
+        bindings: None,
+        namespace: None,
+        is_pub: false,
+        span: SourceSpan {
+            file: Sym("behaviors/parsing.spec"),
+            start_line: 2,
+            start_col: 1,
+            end_line: 2,
+            end_col: 22,
+        },
+    },
+    ImportDeclaration {
+        path: Sym("types/core"),
+        kind: Full,
+        bindings: None,
+        namespace: None,
+        is_pub: false,
+        span: SourceSpan {
+            file: Sym("behaviors/parsing.spec"),
+            start_line: 3,
+            start_col: 1,
+            end_line: 3,
+            end_col: 17,
+        },
+    },
 ]

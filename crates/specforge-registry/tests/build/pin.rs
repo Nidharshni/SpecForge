@@ -160,10 +160,16 @@ fn graph_inputs(inputs: &GraphInputs) -> Value {
         .iter()
         .map(|((kind, field), target)| (format!("{kind}.{field}"), target))
         .collect();
-    let field_coercions: BTreeMap<String, String> = inputs
-        .field_coercions
+    let field_forms: BTreeMap<String, String> = inputs
+        .field_forms
         .iter()
-        .map(|((kind, field), coercion)| (format!("{kind}.{field}"), format!("{coercion:?}")))
+        .map(|((kind, field), form)| {
+            let label = match form.enum_values() {
+                [] => form.field_type().as_str().to_string(),
+                values => format!("{} ({})", form.field_type().as_str(), values.join(", ")),
+            };
+            (format!("{kind}.{field}"), label)
+        })
         .collect();
     let derived_references: Vec<Value> = inputs
         .derived_references
@@ -187,7 +193,7 @@ fn graph_inputs(inputs: &GraphInputs) -> Value {
         "single_reference_fields": single_reference_fields,
         "bidirectional_pairs": bidirectional_pairs,
         "absent_reference_targets": absent_reference_targets,
-        "field_coercions": field_coercions,
+        "field_forms": field_forms,
         "derived_references": derived_references,
     })
 }

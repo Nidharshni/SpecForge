@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use specforge_common::SourceSpan;
+use specforge_graph::ValueShape;
 
 /// One entity as the registry checks, the rules and the custom validators
 /// read it. Built by the project's entity snapshot; tests build it with the
@@ -55,44 +56,6 @@ pub struct FieldRecord {
     /// for it (a check then points at the entity). Host-internal: never on
     /// the wire.
     pub value_span: Option<SourceSpan>,
-}
-
-/// What a field's value was written as: the structure its field text loses
-/// (ADR 0019, "What would reopen this"). One variant per parsed value form,
-/// so a check tells `"1"` from `1`, a one-item list from a scalar and a
-/// quoted string from a bare word.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ValueShape {
-    /// `"text"`.
-    String,
-    /// A bare word: an identifier, or a single reference.
-    Identifier,
-    Date,
-    Integer,
-    Boolean,
-    /// `["a", "b"]`.
-    Strings,
-    /// `[a, b]`.
-    References,
-    /// A list whose items have different shapes.
-    Mixed,
-    /// A variant list (`a | b` in a body).
-    Variants,
-    TypeUnion,
-    Block,
-    /// `verify` statements.
-    Verify,
-    Expression,
-}
-
-impl ValueShape {
-    /// A list: of strings, references, mixed items or variants.
-    pub fn is_list(self) -> bool {
-        matches!(
-            self,
-            Self::Strings | Self::References | Self::Mixed | Self::Variants
-        )
-    }
 }
 
 /// One `verify` statement: its kind (`""` for a bare `verify "…"`) and text.

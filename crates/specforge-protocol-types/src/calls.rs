@@ -402,7 +402,7 @@ pub struct PassEntity {
 }
 
 /// One resolved reference in the snapshot (label = edge label, e.g.
-/// "produces", "consumes", "BehaviorRequiresInvariant").
+/// "produces", "consumes", "invariants").
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PassEdge {
     pub source: String,

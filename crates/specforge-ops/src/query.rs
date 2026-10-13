@@ -137,7 +137,7 @@ pub struct ListRequest<'a> {
     /// nothing and is a notice.
     pub kind: Option<&'a str>,
     /// Field name to the value it holds, compared as the field's JSON
-    /// (`specforge_emitter::field_value_to_json`), any kind's fields.
+    /// (`specforge_graph::field_form::write`), any kind's fields.
     pub fields: Option<&'a Map<String, Value>>,
     /// Skip this many, after sorting by id.
     pub offset: usize,
@@ -177,7 +177,9 @@ fn holds(node: &Node, wanted: &Map<String, Value>) -> bool {
             .entries()
             .iter()
             .find(|entry| entry.key.as_str() == field)
-            .is_some_and(|entry| &specforge_emitter::field_value_to_json(&entry.value) == value)
+            .is_some_and(|entry| {
+                &Value::from(specforge_graph::field_form::write(&entry.value)) == value
+            })
     })
 }
 

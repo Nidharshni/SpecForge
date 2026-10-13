@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use specforge_graph::FieldForm;
 use specforge_protocol_types::{FieldDescriptor, FieldType, ProofRole};
 
 /// A declared field type this host does not read. The registry build
@@ -18,7 +19,7 @@ pub struct UnknownFieldType(pub String);
 pub struct FieldRegistryEntry {
     kind_name: String,
     source_extension: String,
-    field_type: FieldType,
+    form: FieldForm,
     proof_role: Option<ProofRole>,
     declared: FieldDescriptor,
 }
@@ -41,10 +42,11 @@ impl FieldRegistryEntry {
             .ok_or_else(|| UnknownFieldType(declared.field_type.clone()))?;
         declared.field_type = field_type.as_str().to_string();
         let proof_role = declared.proof_role.as_deref().and_then(ProofRole::parse);
+        let form = FieldForm::new(field_type, declared.enum_values.clone());
         Ok(Self {
             kind_name: kind_name.to_string(),
             source_extension: source_extension.to_string(),
-            field_type,
+            form,
             proof_role,
             declared,
         })
@@ -67,24 +69,28 @@ impl FieldRegistryEntry {
 
     /// How the host reads the field's value.
     pub fn field_type(&self) -> FieldType {
-        self.field_type
+        self.form.field_type()
     }
 
     /// The values an enum field accepts, as declared; empty for any other
     /// type (and for an enum that declares none).
     pub fn enum_values(&self) -> &[String] {
-        match self.field_type {
-            FieldType::Enum => &self.declared.enum_values,
-            _ => &[],
-        }
+        self.form.enum_values()
+    }
+
+    /// The field's declared type read once (ADR-NEW-01): which stored
+    /// values it takes, how a written value is stored as it and the JSON
+    /// written for it.
+    pub fn form(&self) -> &FieldForm {
+        &self.form
     }
 
     /// The type as messages and hover name it: the type's name, followed by
     /// an enum's declared values: `enum (low, medium, high)`.
     pub fn type_label(&self) -> String {
         match self.enum_values() {
-            [] => self.field_type.as_str().to_string(),
-            values => format!("{} ({})", self.field_type.as_str(), values.join(", ")),
+            [] => self.field_type().as_str().to_string(),
+            values => format!("{} ({})", self.field_type().as_str(), values.join(", ")),
         }
     }
 

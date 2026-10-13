@@ -174,7 +174,9 @@ impl SchemaArgs {
         };
         let view = ProjectView::of(&project);
         let output = if self.publish {
-            specforge_ops::schema::json_schema(&view, self.format)
+            specforge_ops::schema::json_schema(&view, self.format).map(|schema| {
+                serde_json::to_string_pretty(&schema).expect("a published schema serializes")
+            })
         } else {
             specforge_ops::schema::schema(&view, &self.request())
                 .map(|outcome| serde_json::to_string_pretty(&outcome).expect("a schema serializes"))
