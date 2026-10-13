@@ -60,11 +60,6 @@ impl EntityCoverage {
     pub fn status(&self) -> Status {
         self.verdict.status()
     }
-
-    /// It declares at least one obligation (`inspect.declared`).
-    pub fn declared(&self) -> bool {
-        self.verdict.obligations > 0
-    }
 }
 
 /// The facts of the entity `entity_id`, with the diagnostics the view

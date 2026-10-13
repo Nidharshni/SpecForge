@@ -100,7 +100,7 @@ impl Reply {
     fn of(facts: &EntityFacts, coverage: &EntityCoverage) -> Self {
         let node = facts.node;
         let refs = &facts.references;
-        let declared = coverage.declared();
+        let declared = facts.standing.declares_obligations();
         Reply {
             entity_id: node.id.raw.to_string(),
             kind: node.kind.raw.to_string(),

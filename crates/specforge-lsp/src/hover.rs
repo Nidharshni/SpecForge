@@ -245,10 +245,7 @@ fn quoted(text: &str) -> String {
 /// testable and that declares no obligations.
 fn coverage_line(facts: &EntityFacts, rebuilding: bool) -> Option<String> {
     let standing = facts.standing;
-    let declares = match &facts.coverage {
-        Ok(coverage) => coverage.declared(),
-        Err(_) => !facts.obligations.is_empty(),
-    };
+    let declares = standing.declares_obligations();
     if !standing.testable && !declares {
         return None;
     }

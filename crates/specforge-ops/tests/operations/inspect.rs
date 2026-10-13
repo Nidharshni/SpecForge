@@ -86,7 +86,8 @@ fn coverage_is_the_coverage_rows_verdict() {
     let project = standings();
     project.record_passing(&[("done", "first")]);
     let view = project.view();
-    let coverage = inspect(&view, "done").unwrap().coverage.unwrap();
+    let facts = inspect(&view, "done").unwrap();
+    let coverage = facts.coverage.clone().unwrap();
     let row = specforge_ops::coverage::row(&view, "done")
         .unwrap()
         .unwrap();
@@ -94,7 +95,8 @@ fn coverage_is_the_coverage_rows_verdict() {
     assert_eq!(coverage.verdict.obligations, 2);
     assert_eq!(coverage.verdict.proven, 1);
     assert_eq!(coverage.status(), Status::Partial);
-    assert!(coverage.declared());
+    assert!(facts.standing.declares_obligations());
+    assert_eq!(facts.standing.declares_obligations(), row.declared());
     assert!(coverage.recorded);
 }
 
@@ -102,13 +104,18 @@ fn coverage_is_the_coverage_rows_verdict() {
 fn without_a_report_the_coverage_is_unrecorded() {
     let project = standings();
     let view = project.view();
-    let coverage = inspect(&view, "done").unwrap().coverage.unwrap();
+    let facts = inspect(&view, "done").unwrap();
+    let coverage = facts.coverage.clone().unwrap();
     assert!(!coverage.recorded);
     assert_eq!(coverage.status(), Status::Uncovered);
     assert_eq!(coverage.verdict.tests, 0);
-    assert!(coverage.declared());
-    let ob = inspect(&view, "ob").unwrap().coverage.unwrap();
-    assert!(!ob.declared());
+    assert!(facts.standing.declares_obligations());
+    assert!(
+        !inspect(&view, "ob")
+            .unwrap()
+            .standing
+            .declares_obligations()
+    );
 }
 
 #[specforge_test(
