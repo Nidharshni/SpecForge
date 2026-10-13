@@ -446,6 +446,47 @@ fn found(p: &Compiled, query: &EntityQuery) -> Vec<String> {
         .collect()
 }
 
+const FIELD_TEXTS: &str = "invariant fast \"Fast\" {\n  guarantee \"responds quickly\"\n  expression expr {\n    latency < 250ms\n  }\n}\n\n\
+                           behavior login \"Log in\" {\n  contract \"Given credentials, returns a token\"\n  \
+                           produces [logged_in]\n  requires {\n    ready \"the account exists\"\n  }\n}\n\n\
+                           event logged_in \"Logged in\" {\n}\n";
+
+#[specforge_test(
+    behavior = "provide_mcp_search_tool",
+    verify = "the field filter reads a field's text: a list by its items, an expression by its written form, a block by its keys; never the export's JSON"
+)]
+#[ignore = "fixed by T4"]
+fn the_field_filter_reads_the_field_text() {
+    let p = compile(
+        &["@specforge/software", "@specforge/formal"],
+        &[("a.spec", FIELD_TEXTS)],
+    );
+    let holding = |field, value| {
+        found(
+            &p,
+            &EntityQuery {
+                field_contains: Some((field, value)),
+                ..EntityQuery::new("", MatchScope::NamesAndText)
+            },
+        )
+    };
+
+    // An expression is its written form, not the parser's AST.
+    for value in ["latency", "<", "LATENCY < 250", "250ms"] {
+        assert_eq!(holding("expression", value), ["fast"], "{value}");
+    }
+    for value in ["span", "Lt", "start_col", "\""] {
+        assert!(holding("expression", value).is_empty(), "{value}");
+    }
+    // A list is its items, not its JSON.
+    for value in ["\"", "["] {
+        assert!(holding("produces", value).is_empty(), "{value}");
+    }
+    assert_eq!(holding("produces", "LOGGED"), ["login"]);
+    // A block is its keys.
+    assert_eq!(holding("requires", "ready"), ["login"]);
+}
+
 #[specforge_test(
     behavior = "workspace_symbol_search",
     verify = "search by ID prefix returns matches"

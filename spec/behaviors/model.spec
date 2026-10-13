@@ -205,6 +205,7 @@ behavior render_model_json "Render Model as ERD JSON" {
   """
   verify unit "output is valid JSON"
   verify unit "output includes model_version"
+  verify unit "output carries the schema_version specforge schema prints for the project"
   verify unit "entities have fields with type, required, primary_key, references"
   verify unit "relationships have cardinality"
   verify unit "output does not include testable, singleton, or incremental"

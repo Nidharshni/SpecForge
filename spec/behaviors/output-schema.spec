@@ -120,11 +120,15 @@ behavior embed_schema_in_export "Embed Schema in Export" {
     published schema's url and content_hash, so agents retain access to the
     broader context (the full-project schema is retrievable by that
     reference) without taping the whole schema into every scoped letter.
+    Every JSON export, the schema attached or not, MUST carry the
+    schema_version of the project's versioned schema; no export carries a
+    version the project's schema is not at.
   """
   verify unit "schema embedded as top-level key in full JSON export"
   verify unit "format_version set to 2.0 with schema"
   verify unit "--no-schema suppresses schema and keeps format_version 1.0"
   verify unit "scoped exports carry schema_ref (url and content_hash) instead of embedded schema"
+  verify unit "every JSON export carries the project's schema version, whether the schema is attached or not"
   verify contract "Embed Schema in Export: schema embedding in export holds — schema_version_computed_fired, validation_complete_fired, schema_embedded, format_version_set, schema_ref_names_full_schema"
 }
 
@@ -312,13 +316,16 @@ behavior negotiate_schema_version "Negotiate Schema Version" {
     range and reject the request. The default behavior when no version is
     requested MUST use the latest supported version. Consumers MAY request
     a specific schema version via the --schema-version CLI flag or the
-    schema_version query parameter in MCP resource URIs.
+    schema_version query parameter in MCP resource URIs. A requested
+    version is negotiated whatever the export's format and whether the
+    schema is attached.
   """
   verify unit "compatible version within range is resolved"
   verify unit "incompatible version produces E027 with supported range"
   verify unit "no version requested defaults to latest"
   verify unit "--schema-version CLI flag selects requested version"
   verify unit "schema_version MCP query parameter selects requested version"
+  verify unit "a requested version is negotiated whatever the format, the schema attached or not"
   verify contract "Negotiate Schema Version: schema version negotiation holds — validation_complete_fired, schema_breaking_change_detected_fired, compatible_version_resolved, incompatible_version_rejected, default_to_latest, schema_version_negotiated_emitted"
 }
 
