@@ -272,13 +272,16 @@ behavior read_views_over_the_project_view "Read Views over the Project View" {
     test report is <root>/specforge-report.json and its schema cache
     <root>/.specforge/schema-cache.json, and no view looks in an ancestor
     directory. A report that exists but cannot be used is the same error on
-    every view (E045), of the kind the operation decides: schema_mismatch
+    every view that reads it (E045), of the kind the operation decides: schema_mismatch
     when it is not a specforge-report.json, permission_denied when the system
     refuses to read it, else internal_error. The view says what its surface reports for the
     project: what specforge check reports for the compile behind it, then
     what the surface adds (MCP: I017). Coverage is computed once per
     compiled project or session state and per content of the recorded
-    report; a rewritten report is read again.
+    report; a rewritten report is read again. A view reads the recorded
+    report only for what the report decides (what an entity's tests prove);
+    who is testable and what an entity declares are its standing in the
+    entity snapshot, so the plan check and inspect's facts read no report.
     An entity is unconnected when no edge links it to another entity, in
     either direction: a reference that does not resolve is no edge (E003
     or I004 reports it), and an edge from an entity to itself links it to

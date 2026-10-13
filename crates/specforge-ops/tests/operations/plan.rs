@@ -253,7 +253,6 @@ fn plan_validation_contract_consistency() {
     behavior = "validate_agent_plan",
     verify = "the plan check reads no recorded test report"
 )]
-#[ignore = "fixed by T1"]
 fn the_plan_check_reads_no_recorded_report() {
     let project = Project::new(
         "behavior a \"A\" {\n  verify unit \"a works\"\n}\n\nbehavior b \"B\" {\n  verify unit \"b works\"\n}\n",

@@ -62,11 +62,8 @@ fn render(view: ProjectView<'_>, args: Args) -> Result<Prompted<Payload>, Box<Mc
     // plan's, or the entity's chain's missing links.
     let (seeds, coverage_gaps, subject) = match (&args.plan, args.entity_id.as_deref()) {
         (Some(plan), _) => {
-            let analysis = analyze_plan(&view, &plan.0).map_err(|error| match error {
-                PlanError::NotAPlan(why) => {
-                    McpError::new(ErrorCode::InvalidInput, why).with_argument("plan")
-                }
-                PlanError::Report(e) => McpError::from(e),
+            let analysis = analyze_plan(&view, &plan.0).map_err(|PlanError::NotAPlan(why)| {
+                McpError::new(ErrorCode::InvalidInput, why).with_argument("plan")
             })?;
             (analysis.entries, analysis.gaps, "the plan".to_string())
         }

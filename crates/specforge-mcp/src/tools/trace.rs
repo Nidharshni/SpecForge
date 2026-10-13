@@ -118,7 +118,6 @@ fn plan_gaps(view: &ProjectView, plan: &Value) -> Answered<Reply> {
         })
         .into()),
         Err(PlanError::NotAPlan(why)) => Err(Box::new(McpError::invalid_input("plan", why))),
-        Err(PlanError::Report(error)) => Err(Box::new(McpError::from(error))),
     }
 }
 

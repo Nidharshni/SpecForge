@@ -1699,7 +1699,6 @@ fn trace_plan_reports_its_gaps_as_structured_json() {
     behavior = "validate_agent_plan",
     verify = "the plan check reads no recorded test report"
 )]
-#[ignore = "fixed by T1"]
 fn a_report_the_plan_check_does_not_read_fails_no_plan() {
     let (project, mut server) = plan_project();
     std::fs::write(
@@ -1713,7 +1712,7 @@ fn a_report_the_plan_check_does_not_read_fails_no_plan() {
         {"entity_id": "ghost", "action": "implement"}
     ]});
     let resp = call_tool(&mut server, "specforge.trace", json!({"plan": plan}));
-    assert!(resp["result"]["isError"].is_null(), "{resp}");
+    assert_eq!(resp["result"]["isError"], false, "{resp}");
     let parsed: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
     assert_eq!(parsed["affected_entities"], json!(["act_one", "inv_a"]));
     assert_eq!(parsed["gaps"].as_array().unwrap().len(), 3, "{parsed}");

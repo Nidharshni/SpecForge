@@ -1,10 +1,10 @@
 //! An agent plan checked against the graph: the trace tool's plan mode,
-//! one operation over the project view (ADR 0015).
+//! one operation over the project view (ADR 0015). It reads the graph and
+//! the entity snapshot, never the recorded test report.
 
 use serde::Serialize;
 use serde_json::Value;
 use specforge_common::codes;
-use specforge_project::coverage::ProjectCoverage;
 use std::collections::{HashMap, HashSet};
 
 use crate::view::ProjectView;
@@ -26,32 +26,25 @@ pub struct PlanOutcome {
 pub enum PlanError {
     /// The value is not an `AgentPlan`: why.
     NotAPlan(String),
-    /// The recorded test report, which says which entities owe
-    /// obligations, is there but unusable: E045, classified by the
-    /// operation that read it.
-    Report(OpError),
 }
 
 impl std::fmt::Display for PlanError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             PlanError::NotAPlan(why) => f.write_str(why),
-            PlanError::Report(error) => error.fmt(f),
         }
     }
 }
 
 impl std::error::Error for PlanError {}
 
-/// `invalid_input` for a value that is no plan; the report's own failure
-/// for an unusable report.
+/// `invalid_input` for a value that is no plan.
 impl From<PlanError> for OpError {
     fn from(error: PlanError) -> Self {
         match error {
             PlanError::NotAPlan(why) => {
                 OpError::new(OpErrorKind::InvalidInput, "invalid_input", why)
             }
-            PlanError::Report(error) => error,
         }
     }
 }
@@ -117,11 +110,13 @@ pub fn check(view: &ProjectView, plan: &Value) -> Result<PlanOutcome, PlanError>
             )));
         }
     }
-    let coverage = view.coverage().map_err(PlanError::Report)?;
-    Ok(validate(view, entries, &coverage))
+    Ok(validate(view, entries))
 }
 
-fn validate(view: &ProjectView, entries: &[Value], coverage: &ProjectCoverage) -> PlanOutcome {
+/// The plan's gaps. It reads the graph and the view's entity snapshot, never
+/// the recorded test report: who is testable and what an entity declares
+/// are its standing.
+fn validate(view: &ProjectView, entries: &[Value]) -> PlanOutcome {
     let graph = view.graph();
     let mut validated_entries = Vec::new();
     let mut gaps = Vec::new();
@@ -152,12 +147,12 @@ fn validate(view: &ProjectView, entries: &[Value], coverage: &ProjectCoverage) -
     let plan_id_set: HashSet<String> = plan_ids.iter().cloned().collect();
 
     // Testable entities that declare obligations, missing from the plan.
-    for (record, standing) in coverage.entities().iter() {
+    for (record, standing) in view.entities().iter() {
         let id = &record.id;
-        let obliged = coverage
-            .verdict(id)
-            .is_some_and(|verdict| verdict.obligations > 0);
-        if standing.testable && obliged && !plan_id_set.contains(id.as_str()) {
+        if standing.testable
+            && standing.declares_obligations()
+            && !plan_id_set.contains(id.as_str())
+        {
             let message = format!(
                 "testable entity '{id}' ({}) is not covered by the plan",
                 record.kind
