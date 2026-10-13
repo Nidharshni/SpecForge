@@ -654,11 +654,8 @@ impl Checked<'_> {
         };
         let writes = match change {
             Some(change) => change
-                .commit_with(
-                    (!names.is_empty()).then_some(config_path.as_path()),
-                    last,
-                    |why| OpError::of(OpErrorKind::Internal, why),
-                )
+                .files((!names.is_empty()).then(|| config_path.clone()))
+                .commit_with(last, |why| OpError::of(OpErrorKind::Internal, why))
                 .map(|committed| Writes::of(committed.changed))
                 .map_err(|failed| failed.error.with_writes(Writes::of(failed.left)))?,
             None => {

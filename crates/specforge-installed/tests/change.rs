@@ -137,8 +137,8 @@ fn a_failed_install_puts_back_the_binary_the_lock_and_the_config() {
     let config_file = dir.path().join("specforge.json");
     let before = snapshot(dir.path());
     let failed = attempt(&Installed::at(dir.path()))
+        .files([config_file.clone()])
         .commit_with(
-            Some(&config_file),
             || -> Result<(), Diagnostic> {
                 std::fs::write(&config_file, "half written").unwrap();
                 Err(Diagnostic::new(codes::E069, "the config cannot be edited"))
@@ -202,8 +202,8 @@ fn a_failed_uninstall_puts_back_the_directory_the_lock_and_the_config() {
     let mut change = installed.change().unwrap();
     change.uninstall(&name("@acme/a"));
     let failed = change
+        .files([config_file.clone()])
         .commit_with(
-            Some(&config_file),
             || -> Result<(), Diagnostic> {
                 std::fs::write(&config_file, "{\"extensions\":[]}").unwrap();
                 Err(Diagnostic::new(codes::E069, "the config cannot be edited"))
@@ -257,8 +257,8 @@ fn a_rollback_that_cannot_restore_a_file_names_it() {
     change.install(Module::new(b"newer".to_vec()), pin("@acme/a"));
 
     let failed = change
+        .files([config_file.clone()])
         .commit_with(
-            Some(&config_file),
             || -> Result<(), Diagnostic> {
                 // The scope directory can no longer be changed: the rollback
                 // cannot take the new module away nor bring the old one back.
@@ -286,7 +286,6 @@ fn a_failing_last_step_puts_back_the_binaries_and_the_lock() {
 
     let failed = change
         .commit_with(
-            None,
             || -> Result<(), Diagnostic> { Err(Diagnostic::new(codes::R_TRUST_006, "x")) },
             std::convert::identity,
         )
@@ -308,8 +307,8 @@ fn a_config_the_last_step_leaves_as_it_was_is_not_changed() {
     change.install(Module::new(b"newer".to_vec()), pin("@acme/a"));
 
     let committed = change
+        .files([config_file.clone()])
         .commit_with(
-            Some(&config_file),
             || -> Result<(), Diagnostic> {
                 let same = std::fs::read(&config_file).unwrap();
                 std::fs::write(&config_file, same).unwrap();
@@ -325,8 +324,8 @@ fn a_config_the_last_step_leaves_as_it_was_is_not_changed() {
     let committed = installed
         .change()
         .unwrap()
+        .files([config_file.clone()])
         .commit_with(
-            Some(&config_file),
             || -> Result<(), Diagnostic> {
                 std::fs::write(&config_file, "{\"extensions\":[\"@acme/a\"]}").unwrap();
                 Ok(())
@@ -380,4 +379,140 @@ fn committed_lists_the_files_it_changed() {
     let mut change = installed.change().unwrap();
     change.uninstall(&name("@acme/a"));
     assert_eq!(change.commit().unwrap().changed, Vec::<PathBuf>::new());
+}
+
+#[specforge_test_macros::test(
+    invariant = "extension_operation_atomicity",
+    verify = "a failed change puts back every file its last step wrote and removes the directories it created"
+)]
+fn a_failed_change_removes_the_files_its_last_step_created_and_the_directories_it_made() {
+    let scratch = TempDir::new().unwrap();
+
+    // A change that only writes files, into a root that was not there.
+    let root = scratch.path().join("fresh");
+    let installed = Installed::at(&root);
+    let (config, starter) = (root.join("a.json"), root.join("spec/x.spec"));
+    let failed = installed
+        .change_entries()
+        .files([config.clone(), starter.clone()])
+        .commit_with(
+            || -> Result<(), Diagnostic> {
+                std::fs::create_dir_all(starter.parent().unwrap()).unwrap();
+                std::fs::write(&config, "{}").unwrap();
+                std::fs::write(&starter, "x").unwrap();
+                Err(Diagnostic::new(codes::E069, "the last step failed"))
+            },
+            std::convert::identity,
+        )
+        .unwrap_err();
+    assert_eq!(failed.error.code, "E069");
+    assert!(failed.left.is_empty());
+    assert!(!root.exists(), "the root the change created is gone");
+
+    // A change that also installs: the extensions directory goes with the module.
+    let installed = Installed::at(&root);
+    let mut change = installed.change().unwrap();
+    change.install(Module::new(b"one".to_vec()), pin("@acme/a"));
+    let failed = change
+        .files([config.clone()])
+        .commit_with(
+            || -> Result<(), Diagnostic> {
+                std::fs::create_dir_all(&root).unwrap();
+                std::fs::write(&config, "{}").unwrap();
+                Err(Diagnostic::new(codes::E069, "the last step failed"))
+            },
+            std::convert::identity,
+        )
+        .unwrap_err();
+    assert!(failed.left.is_empty());
+    assert!(!root.exists(), "{:?}", snapshot(&root));
+
+    // A directory that was there stays, with what was in it.
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::write(root.join("keep.txt"), "kept").unwrap();
+    let installed = Installed::at(&root);
+    let mut change = installed.change().unwrap();
+    change.install(Module::new(b"one".to_vec()), pin("@acme/a"));
+    let before = snapshot(&root);
+    let failed = change
+        .files([config.clone()])
+        .commit_with(
+            || -> Result<(), Diagnostic> { Err(Diagnostic::new(codes::E069, "no")) },
+            std::convert::identity,
+        )
+        .unwrap_err();
+    assert!(failed.left.is_empty());
+    assert_eq!(snapshot(&root), before);
+    assert!(!root.join(".specforge").exists());
+}
+
+#[test]
+fn a_change_that_stages_nothing_writes_no_lock() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path();
+    let config = root.join("specforge.json");
+
+    let installed = Installed::at(root);
+    let committed = installed
+        .change()
+        .unwrap()
+        .files([config.clone()])
+        .commit_with(
+            || -> Result<(), Diagnostic> {
+                std::fs::write(&config, "{}").unwrap();
+                Ok(())
+            },
+            std::convert::identity,
+        )
+        .unwrap();
+
+    assert_eq!(committed.changed, [config]);
+    assert!(!root.join("specforge.lock").exists());
+}
+
+#[specforge_test_macros::test(
+    behavior = "uninstall_wasm_extension",
+    verify = "rolls back on failure"
+)]
+fn an_entries_only_change_accepts_an_unreadable_lock() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path();
+    let config = root.join("specforge.json");
+    std::fs::write(root.join("specforge.lock"), "not a lock {{{").unwrap();
+    std::fs::write(&config, "{\"extensions\":[]}").unwrap();
+    let before = snapshot(root);
+    let installed = Installed::at(root);
+
+    let committed = installed
+        .change_entries()
+        .files([config.clone()])
+        .commit_with(
+            || -> Result<(), Diagnostic> {
+                std::fs::write(&config, "{\"extensions\":[\"@specforge/product\"]}").unwrap();
+                Ok(())
+            },
+            std::convert::identity,
+        )
+        .unwrap();
+    assert_eq!(committed.changed, std::slice::from_ref(&config));
+    assert_eq!(
+        std::fs::read_to_string(root.join("specforge.lock")).unwrap(),
+        "not a lock {{{"
+    );
+
+    // And it rolls back like any other.
+    std::fs::write(&config, "{\"extensions\":[]}").unwrap();
+    let failed = installed
+        .change_entries()
+        .files([config.clone()])
+        .commit_with(
+            || -> Result<(), Diagnostic> {
+                std::fs::write(&config, "half").unwrap();
+                Err(Diagnostic::new(codes::E069, "no"))
+            },
+            std::convert::identity,
+        )
+        .unwrap_err();
+    assert!(failed.left.is_empty());
+    assert_eq!(snapshot(root), before);
 }

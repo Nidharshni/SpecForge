@@ -258,8 +258,8 @@ fn remove_named(req: &Removing, extension: &ProjectExtension) -> Result<RemoveOu
                 .map_err(|why| OpError::of(OpErrorKind::SchemaMismatch, why))?;
             change.uninstall(&locked.name);
             let committed = change
+                .files([config_file.clone()])
                 .commit_with(
-                    Some(&config_file),
                     || drop_entry().map(|_| ()),
                     |why| OpError::of(OpErrorKind::Internal, why),
                 )
