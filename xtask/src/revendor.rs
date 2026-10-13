@@ -6,9 +6,9 @@
 //!
 //! In order: refuse a place it cannot work from; refresh the lockfile of every
 //! committed blob's crate (`specforge_component::committed::COMMITTED`); rebuild
-//! and vendor every blob with its `inputs.json` (`build-builtins --install`);
+//! and vendor every blob with its `inputs.json` (`build-blobs --install`);
 //! rewrite the declaration snapshots of every SDK blob, in process; check what it
-//! did not write (`build-builtins --check` and the declarations test) and print
+//! did not write (`build-blobs --check` and the declarations test) and print
 //! the paths to stage.
 
 use specforge_component::ComponentRuntime;
@@ -40,7 +40,7 @@ fn preflight(root: &Path, target_dir_set: bool) -> Result<(), String> {
     if target_dir_set {
         return Err(
             "CARGO_TARGET_DIR is set: unset it (`env -u CARGO_TARGET_DIR cargo run -p xtask --bin revendor`); \
-             the builtin blobs build in target/builtin-stage/"
+             the builtin blobs build in target/blob-stage/"
                 .to_string(),
         );
     }
@@ -66,12 +66,12 @@ fn run(root: &Path) -> Result<(), String> {
         }
     }
     println!("== blobs");
-    xtask(root, "build-builtins", &["--install"])?;
+    xtask(root, "build-blobs", &["--install"])?;
     println!("== declaration snapshots");
     let written = write_snapshots()?;
     println!("[ok]     {written} snapshot files written");
     println!("== checks");
-    xtask(root, "build-builtins", &["--check"])?;
+    xtask(root, "build-blobs", &["--check"])?;
     declarations_test(root)?;
 
     println!("\nre-vendored. Review `git diff --stat`, then stage:");

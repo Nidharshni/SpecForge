@@ -4,7 +4,7 @@ use specforge_common::ExtensionEntry;
 use specforge_wasm::WasmRuntime;
 
 /// One builtin extension: its package name, its crate under `extensions/`, the component
-/// `build-builtins` vendors into `extensions/<dir>/wasm/`, and the vendored bytes this host
+/// `build-blobs` vendors into `extensions/<dir>/wasm/`, and the vendored bytes this host
 /// embeds.
 pub struct Builtin {
     pub name: &'static str,

@@ -5,8 +5,8 @@ version = "0.1.0"
 publish = false
 
 [[bin]]
-name = "build-builtins"
-path = "src/build_builtins.rs"
+name = "build-blobs"
+path = "src/build_blobs.rs"
 
 [[bin]]
 name = "revendor"

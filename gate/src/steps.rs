@@ -120,7 +120,7 @@ pub fn builtins(ctx: &Ctx, selection: &Selection) -> Result<(), String> {
         "-p",
         "xtask",
         "--bin",
-        "build-builtins",
+        "build-blobs",
         "--",
         "--check",
     ]))
@@ -289,7 +289,7 @@ pub fn builtins_verify(ctx: &Ctx, _: &Selection) -> Result<(), String> {
         "-p",
         "xtask",
         "--bin",
-        "build-builtins",
+        "build-blobs",
         "--",
         "--verify",
     ]))

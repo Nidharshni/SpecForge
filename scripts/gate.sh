@@ -179,7 +179,7 @@ report() {
 run_full() {
     # Light, independent of the workspace build: in the background.
     step fmt fmt_check &
-    step builtins cargo run -q -p xtask --bin build-builtins -- --check &
+    step builtins cargo run -q -p xtask --bin build-blobs -- --check &
     local exts=()
     for m in extensions/*/Cargo.toml; do exts+=("$(basename "$(dirname "$m")")"); done
     step extensions extensions_check "${exts[@]}" &
@@ -245,7 +245,7 @@ run_quick() {
 
     step fmt fmt_check &
     [ "$links" = 1 ] && step links cargo run -q -p xtask --bin check-links &
-    [ "$builtins" = 1 ] && step builtins cargo run -q -p xtask --bin build-builtins -- --check &
+    [ "$builtins" = 1 ] && step builtins cargo run -q -p xtask --bin build-blobs -- --check &
     [ ${#exts[@]} -gt 0 ] && step extensions extensions_check "${exts[@]}" &
     if [ ${#pkgs[@]} -gt 0 ]; then
         # Build and lint the whole workspace (cached, and the same feature

@@ -1,5 +1,5 @@
 //! `<crate_dir>/wasm/inputs.json`: what one committed blob (a builtin under `extensions/` or a fixture under
-//! `fixtures/`) was built from. `build-builtins` writes and checks it through this module; a quick run asks it which
+//! `fixtures/`) was built from. `build-blobs` writes and checks it through this module; a quick run asks it which
 //! blobs a change set feeds. A blob is named by its crate directory from the repository root. The JSON is unchanged
 //! byte for byte.
 
@@ -35,7 +35,7 @@ impl BlobRecord {
             .map_err(|e| format!("{} is malformed: {e}", shown(crate_dir)))
     }
 
-    /// Pretty JSON and a final newline, as `build-builtins --install` wrote it at the base.
+    /// Pretty JSON and a final newline, as `build-blobs --install` wrote it at the base.
     pub fn write(&self, repo_root: &Path, crate_dir: &str) -> Result<(), String> {
         let mut text = serde_json::to_string_pretty(self).map_err(|e| e.to_string())?;
         text.push('\n');
