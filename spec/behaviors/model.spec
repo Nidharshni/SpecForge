@@ -193,25 +193,25 @@ behavior render_model_json "Render Model as ERD JSON" {
     valid_json_produced            "Output is valid JSON"
     erd_schema_conformed           "Output follows the ERD-oriented schema (entities, relationships, cardinality)"
     distinct_from_specforge_schema "Output does NOT include compiler metadata (testable, singleton, incremental)"
-    model_version_present          "Output includes a model_version field"
+    schema_version_present         "Output carries the schema_version of the schema it draws, as specforge schema states it for the project"
   }
   contract   """
     When specforge model --format=json is invoked, the system MUST
     serialize the ModelIntermediate as ERD-oriented JSON. The output MUST
-    include model_version, extensions, entities (with fields filtered by
+    include schema_version (the version of the project's Graph Protocol
+    schema, as specforge export stamps it), extensions, entities (with fields filtered by
     --fields level), and relationships (with cardinality). The JSON schema
     is distinct from specforge schema output — it MUST NOT include compiler
     metadata such as testable, singleton, or incremental flags.
   """
   verify unit "output is valid JSON"
-  verify unit "output includes model_version"
   verify unit "output carries the schema_version specforge schema prints for the project"
   verify unit "entities have fields with type, required, primary_key, references"
   verify unit "relationships have cardinality"
   verify unit "output does not include testable, singleton, or incremental"
   verify unit "fields level filters the field array"
   verify unit "empty model produces valid JSON with empty arrays"
-  verify contract "Render Model as ERD JSON: ERD JSON rendering holds — model_ir_built, valid_json_produced, erd_schema_conformed, distinct_from_specforge_schema, model_version_present"
+  verify contract "Render Model as ERD JSON: ERD JSON rendering holds — model_ir_built, valid_json_produced, erd_schema_conformed, distinct_from_specforge_schema, schema_version_present"
 }
 
 behavior render_model_dbml "Render Model as DBML" {

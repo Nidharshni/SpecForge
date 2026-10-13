@@ -111,7 +111,9 @@ pub struct ModelRoot {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct ModelIntermediate {
-    pub model_version: String,
+    /// The version of the Graph Protocol schema the model draws, as
+    /// `specforge export` and `specforge schema` state it for the same project.
+    pub schema_version: String,
     pub extensions: Vec<ModelExtension>,
     pub entities: Vec<ModelEntity>,
     pub relationships: Vec<ModelRelationship>,

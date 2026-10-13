@@ -48,7 +48,7 @@ pub fn model(view: &ProjectView, options: &ModelOptions) -> Result<ModelOutcome,
     let filter: Vec<&str> = options.kinds.iter().map(String::as_str).collect();
     Ok(ModelOutcome {
         notices: kinds.unknown_in(&filter),
-        document: specforge_emitter::model::export(&view.schema(), declarations, options),
+        document: specforge_emitter::model::export(&view.versioned_schema(), declarations, options),
     })
 }
 

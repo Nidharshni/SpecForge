@@ -64,9 +64,9 @@ type ModelExtension {
 }
 
 type ModelIntermediate "ERD-oriented intermediate representation" {
-  model_version string              @readonly
-  extensions    ModelExtension[]    @readonly
-  entities      ModelEntity[]       @readonly
-  relationships ModelRelationship[] @readonly
+  schema_version string              @readonly // the drawn schema's version
+  extensions     ModelExtension[]    @readonly
+  entities       ModelEntity[]       @readonly
+  relationships  ModelRelationship[] @readonly
   verify unit "ModelIntermediate schema is valid"
 }

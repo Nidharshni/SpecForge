@@ -111,7 +111,7 @@ fn project_at_two() -> crate::view_support::Project {
     behavior = "render_model_json",
     verify = "output carries the schema_version specforge schema prints for the project"
 )]
-#[ignore = "fixed by T1"]
+
 fn the_model_names_the_versioned_schema() {
     use specforge_ops::model::{ModelFormat, ModelOptions, model};
     let project = project_at_two();
@@ -129,7 +129,7 @@ fn the_model_names_the_versioned_schema() {
 
     let document: serde_json::Value = serde_json::from_str(&json(ModelFormat::Json)).unwrap();
     assert_eq!(document["schema_version"], "2.0.0", "{document}");
-    assert!(document.get("model_version").is_none(), "{document}");
+    assert!(!document.to_string().contains("model_"), "{document}");
     let dbml = json(ModelFormat::Dbml);
     assert_eq!(dbml.lines().nth(1), Some("// Schema version: 2.0.0"));
 }
