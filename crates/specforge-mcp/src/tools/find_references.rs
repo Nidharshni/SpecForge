@@ -6,8 +6,9 @@ use specforge_common::shape::Shape;
 use specforge_ops::navigate::{DIRECTION, Direction, Occurrence, Precision, ReferenceQuery, Role};
 
 use crate::args::Arguments;
+use crate::refusal::ArgumentOf;
 use crate::reply::Answered;
-use crate::tool::McpError;
+use specforge_ops::navigate::EntityField;
 use specforge_ops::view::ProjectView;
 
 /// `specforge.find_references`'s arguments.
@@ -63,6 +64,14 @@ impl Location {
 /// declaration only when asked for.
 pub(crate) struct Tool;
 
+impl ArgumentOf<EntityField> for Tool {
+    fn argument(field: EntityField) -> Option<&'static str> {
+        match field {
+            EntityField::EntityId => Some("entity_id"),
+        }
+    }
+}
+
 impl CoreTool for Tool {
     const NAME: &'static str = "specforge.find_references";
     const DESCRIPTION: &'static str = "Find the references to an entity: each place another entity's field names it, as the identifier token (what an IDE's find-references shows)";
@@ -81,7 +90,7 @@ impl CoreTool for Tool {
         };
         let occurrences = super::navigator(view)
             .references(&args.entity_id, query)
-            .map_err(McpError::from)?;
+            .map_err(Self::refused)?;
         Ok(Reply {
             direction: DIRECTION.name_of(args.direction).to_string(),
             entity_id: args.entity_id,

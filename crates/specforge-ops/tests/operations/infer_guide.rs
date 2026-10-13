@@ -268,9 +268,9 @@ fn the_guide_lists_extensions_kinds_and_entities() {
 fn kind_guide_refuses_an_undeclared_kind() {
     let project = project_of("", vec![extension("@t/soft", &[("behavior", None)])]);
     let error = kind_guide(&project.view(), "behaviour").unwrap_err();
-    assert_eq!(error.code, "unknown_kind");
+    assert_eq!(error.error.code, "unknown_kind");
     assert_eq!(
-        error.suggestion.as_deref(),
+        error.error.suggestion.as_deref(),
         Some("did you mean 'behavior'?")
     );
 }
@@ -436,4 +436,15 @@ fn the_plan_pages_its_file_lists() {
     assert_eq!(second.unanalyzed.files.len(), 10);
     assert_eq!(second.unanalyzed.files[0], "src/mod_50.rs");
     assert_eq!(second.next_cursor, None);
+}
+
+#[specforge_test(
+    invariant = "mcp_structured_error_responses",
+    verify = "an operation states the request field each refusal is about, and a refusal of the project or the environment is about none"
+)]
+fn an_unknown_kind_guide_is_about_its_kind() {
+    use specforge_ops::infer::KindGuideField;
+    let project = project_of("", vec![extension("@t/soft", &[("behavior", None)])]);
+    let refusal = kind_guide(&project.view(), "behaviour").unwrap_err();
+    assert_eq!(refusal.subject, Some(KindGuideField::Kind));
 }

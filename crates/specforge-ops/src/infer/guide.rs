@@ -11,7 +11,7 @@ use specforge_common::shape::Shape;
 use specforge_protocol_types::{EntityKindDescriptor, ExtensionDeclaration};
 use specforge_registry::{FieldRegistryEntry, FieldType};
 
-use crate::OpError;
+use crate::Refusal;
 use crate::view::ProjectView;
 
 /// One kind's guide.
@@ -243,10 +243,23 @@ pub fn guide<'a>(view: &ProjectView<'a>) -> InferenceGuide<'a> {
     }
 }
 
+/// The field of a kind guide's request a refusal can be about (ADR 0072). (Not `GuideField`:
+/// that is a field of the guide's document.)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KindGuideField {
+    /// The kind the guide is asked for.
+    Kind,
+}
+
 /// The guide of the declared kind `kind`; an undeclared one is
 /// `unknown_kind` naming the closest declared kind (`KnownKinds::declared`).
-pub fn kind_guide<'a>(view: &ProjectView<'a>, kind: &str) -> Result<KindGuide<'a>, OpError> {
-    view.kinds().declared(kind)?;
+pub fn kind_guide<'a>(
+    view: &ProjectView<'a>,
+    kind: &str,
+) -> Result<KindGuide<'a>, Refusal<KindGuideField>> {
+    view.kinds()
+        .declared(kind)
+        .map_err(|error| error.about(KindGuideField::Kind))?;
     let (declaration, descriptor) = view
         .registries()
         .declarations()

@@ -355,7 +355,6 @@ fn read_view_refusals_name_their_argument() {
     behavior = "read_mcp_arguments_as_declared",
     verify = "a prompt's or a resource read's refusal names the argument or query key it is about"
 )]
-#[ignore = "fixed by T5"]
 fn entity_refusals_name_their_argument() {
     for tool in [
         "specforge.inspect",

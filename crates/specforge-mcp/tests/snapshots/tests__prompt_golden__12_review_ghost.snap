@@ -6,6 +6,7 @@ expression: "shape(&reply, dir.path())"
   "error": {
     "code": -32602,
     "data": {
+      "argument": "entity_id",
       "code": "entity_not_found",
       "diagnostic": {
         "code": "E003",

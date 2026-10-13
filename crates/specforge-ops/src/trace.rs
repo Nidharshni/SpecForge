@@ -9,9 +9,10 @@ use specforge_graph::Graph;
 use specforge_registry::RegistryBuild;
 use std::collections::{BTreeMap, BTreeSet, HashSet, VecDeque};
 
-use crate::OpError;
+use crate::navigate::EntityField;
 use crate::plan::PlanGap;
 use crate::view::ProjectView;
+use crate::{OpError, Refusal};
 
 #[derive(Debug, Serialize, Shape)]
 pub struct TraceChain {
@@ -288,9 +289,17 @@ impl std::error::Error for TraceError {}
 /// entity is close.
 impl From<TraceError> for OpError {
     fn from(error: TraceError) -> Self {
+        Refusal::<EntityField>::from(error).into_error()
+    }
+}
+
+/// [`OpError::from`], about the entity traced.
+impl From<TraceError> for Refusal<EntityField> {
+    fn from(error: TraceError) -> Self {
         match error {
             TraceError::EntityNotFound { entity_id, near } => {
                 crate::navigate::unresolved(&entity_id, near.as_deref())
+                    .about(EntityField::EntityId)
             }
         }
     }

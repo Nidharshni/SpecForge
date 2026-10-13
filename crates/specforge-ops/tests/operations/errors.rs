@@ -112,7 +112,9 @@ fn a_missing_entity_is_one_refusal() {
         ),
         (
             "inspect",
-            specforge_ops::inspect::inspect(&view, "logn").unwrap_err(),
+            specforge_ops::inspect::inspect(&view, "logn")
+                .unwrap_err()
+                .error,
         ),
         (
             "explore",
@@ -123,7 +125,8 @@ fn a_missing_entity_is_one_refusal() {
                     ..Default::default()
                 },
             )
-            .unwrap_err(),
+            .unwrap_err()
+            .error,
         ),
         (
             "review",
@@ -134,9 +137,10 @@ fn a_missing_entity_is_one_refusal() {
                     ..Default::default()
                 },
             )
-            .unwrap_err(),
+            .unwrap_err()
+            .error,
         ),
-        ("navigator", navigator.definition("logn").unwrap_err()),
+        ("navigator", navigator.definition("logn").unwrap_err().error),
         (
             "rename",
             specforge_ops::rename::plan(&navigator, "logn", "fine_name").unwrap_err(),

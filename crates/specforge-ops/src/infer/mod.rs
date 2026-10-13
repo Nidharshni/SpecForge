@@ -30,8 +30,8 @@ pub use gaps::{
     DirectoryGaps, GapItem, Gaps, GapsDocument, ScanFailureRow, SourceItem, directory_of, gaps,
 };
 pub use guide::{
-    GuideDocument, GuideField, GuideKind, InferenceGuide, KindGuide, KindGuideDocument, guide,
-    kind_guide,
+    GuideDocument, GuideField, GuideKind, InferenceGuide, KindGuide, KindGuideDocument,
+    KindGuideField, guide, kind_guide,
 };
 pub use lint::lint;
 pub(crate) use manifest::read_manifest;

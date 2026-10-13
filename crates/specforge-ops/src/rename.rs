@@ -139,7 +139,9 @@ pub fn plan<F: Fn(&str) -> Option<String>>(
         direction: Direction::Incoming,
         include_declaration: true,
     };
-    let occurrences = nav.references(old_id, query)?;
+    let occurrences = nav
+        .references(old_id, query)
+        .map_err(crate::Refusal::into_error)?;
     let unreadable: BTreeSet<&str> = occurrences
         .iter()
         .filter(|o| o.precision == Precision::Entity)
