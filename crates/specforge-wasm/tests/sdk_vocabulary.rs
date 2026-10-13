@@ -17,9 +17,10 @@ fn extension() -> ContributionsBuilder {
     c.kind("thing", |k| {
         for t in FieldType::ALL {
             k.field(&format!("f_{t}"), |f| {
-                f.field_type(*t);
                 if *t == FieldType::Enum {
-                    f.enum_values(&["warm", "formal"]);
+                    f.vocabulary(&Vocabulary::new(&["warm", "formal"]));
+                } else {
+                    f.field_type(*t);
                 }
             });
         }
@@ -239,4 +240,27 @@ fn sdk_constraint_kinds_load_for_the_checks_that_read_them() {
             "rule {code}"
         );
     }
+}
+
+#[specforge_test_macros::test(
+    behavior = "registry_build_fields",
+    verify = "a field declared with a vocabulary registers as an enum of its values, its absent value as its default"
+)]
+fn a_vocabulary_reaches_the_field_registry() {
+    let declaration = loaded(|| {
+        let mut c = ContributionsBuilder::new(ExtensionMeta::new("@you/tone", "0.1.0"));
+        c.kind("thing", |k| {
+            k.field("tone", |f| {
+                f.vocabulary(&Vocabulary::new(&["warm", "formal"]).absent_as("warm"));
+            });
+        });
+        c
+    });
+    let build = build_registries(vec![declaration]);
+
+    assert_eq!(build.diagnostics().filter(|d| d.code == "W021").count(), 0);
+    let tone = build.fields().get("thing", "tone").unwrap();
+    assert_eq!(tone.field_type(), FieldType::Enum);
+    assert_eq!(tone.enum_values(), ["warm", "formal"]);
+    assert_eq!(tone.declared().default_value.as_deref(), Some("warm"));
 }

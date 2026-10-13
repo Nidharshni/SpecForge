@@ -13,3 +13,7 @@ specforge-coverage = { path = "../../crates/specforge-coverage" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 regex = "1"
+
+[dev-dependencies]
+# Spec links: #[specforge_test(behavior = "…", verify = "…")] (ADR 0002).
+specforge-test = { path = "../../integrations/rust/specforge-test" }

@@ -131,18 +131,20 @@ behavior emit_diagnostic_from_pattern "Emit Diagnostic From Pattern" {
   }
   ensures {
     diagnostic_emitted    "Diagnostic emitted with interpolated message, configured code, and correct severity"
-    template_interpolated "All interpolation variables ({id}, {kind}, {field}, {value}) resolved in messageTemplate"
+    template_interpolated "All interpolation variables ({id}, {kind}, {field}, {value}, and {allowed} for a one_of constraint) resolved in messageTemplate"
   }
   contract   """
     When a declarative validation pattern detects a violation, the engine
     MUST emit a diagnostic using the pattern's messageTemplate with
     interpolation variables: {id} for the entity ID, {kind} for the
-    entity kind, {field} for the field name, {value} for the field value.
+    entity kind, {field} for the field name, {value} for the field value,
+    {allowed} for a one_of constraint's values joined by commas.
     The diagnostic code MUST be the pattern's code field. The severity
     MUST match the pattern's severity field (error, warning, info).
   """
   verify unit "message template interpolates {id} and {kind}"
   verify unit "message template interpolates {field} and {value}"
+  verify unit "message template interpolates {allowed} with a one_of rule's values"
   verify unit "diagnostic code matches pattern code"
   verify unit "diagnostic severity matches pattern severity"
   verify contract "Emit Diagnostic From Pattern: pattern diagnostic emission holds — violation_detected, pattern_configured, diagnostic_emitted, template_interpolated"
@@ -428,5 +430,6 @@ behavior check_field_value_types "Check Field Value Types" {
   verify unit "a single integer, boolean or date, or a mixed list, on a list field becomes a list of strings"
   verify unit "a value of a shape its declared type never takes is an error"
   verify unit "a value the check admits is written as the published schema admits it"
+  verify unit "a value outside a builtin vocabulary is E061"
   verify contract "Check Field Value Types: declared field types hold — registries_populated_fired, single_values_listed, mismatches_diagnosed, undeclared_untouched"
 }

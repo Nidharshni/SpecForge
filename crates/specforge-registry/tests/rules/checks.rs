@@ -726,6 +726,30 @@ fn message_template_interpolates_field_and_value() {
 
 #[spec(
     behavior = "emit_diagnostic_from_pattern",
+    verify = "message template interpolates {allowed} with a one_of rule's values"
+)]
+fn a_one_of_rule_fills_allowed_with_its_values() {
+    let mut declared = rule("W900", "field_value_constraint");
+    declared.target_kind = Some("behavior".to_string());
+    declared.field = Some("state".to_string());
+    declared.message_template = "{id} {value} not in {allowed}".to_string();
+    declared.constraint = Some(constraint("one_of", None, &["open", "closed"]));
+    let diagnostics = check(
+        &one(declared),
+        &[entity("b1", "behavior", 0, 0).with_field("state", "shipped")],
+    );
+    assert_eq!(messages(&diagnostics), ["b1 shipped not in open, closed"]);
+
+    // The allowlist rule fills it already.
+    let built = allowlist("invariant", &["property", "unit"]);
+    assert_eq!(
+        messages(&check(&built, &[verifying("inv", &["load"])])),
+        ["entity 'inv' has verify kind 'load' not in allowed set property, unit"]
+    );
+}
+
+#[spec(
+    behavior = "emit_diagnostic_from_pattern",
     verify = "diagnostic code matches pattern code"
 )]
 fn diagnostic_code_matches_pattern_code() {

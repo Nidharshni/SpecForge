@@ -1134,10 +1134,12 @@ type McpInferKindGuide "Infer prompt, scope kind:<name>: one kind's guide" {
 }
 
 type McpInferGuideField {
-  name        string @readonly
+  name        string   @readonly
   type        string
   required    boolean
-  description string @optional
+  description string   @optional
+  values      string[] @optional
+  default     string   @optional
   verify unit "McpInferGuideField schema is valid"
 }
 

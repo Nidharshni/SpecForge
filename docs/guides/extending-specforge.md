@@ -114,14 +114,15 @@ use specforge_extension_sdk::prelude::*;
 )]
 struct Greet;
 
+/// The greeting styles.
+const STYLES: Vocabulary = Vocabulary::new(&["warm", "formal"]);
+
 impl Contributions for Greet {
     fn contribute(c: &mut ContributionsBuilder) {
         c.kind("greeting", |k| {
             k.description("A friendly greeting").testable(false);
             k.field("style", |f| {
-                f.field_type(FieldType::Enum);
-                f.enum_values(&["warm", "formal"]);
-                f.required();
+                f.vocabulary(&STYLES).required();
             });
         });
     }

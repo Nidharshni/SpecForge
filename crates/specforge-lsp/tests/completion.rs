@@ -4,7 +4,7 @@
 
 use crate::registries::registries;
 use specforge_common::{SourceSpan, Sym};
-use specforge_extension_sdk::prelude::FieldType;
+use specforge_extension_sdk::prelude::{FieldType, Vocabulary};
 use specforge_graph::{Graph, Node};
 use specforge_lsp::completion::items;
 use specforge_lsp::{CompletionSite, Document};
@@ -277,18 +277,22 @@ impl Fixture {
                 k.testable(true)
                     .supports_verify(true)
                     .verify_kinds(&["unit", "contract"]);
-                let mut field =
-                    |name: &str, field_type: FieldType, target: Option<&str>, values: &[&str]| {
-                        k.field(name, |f| {
-                            f.field_type(field_type).description(&format!("the {name}"));
-                            if let Some(target) = target {
-                                f.target_kind(target);
-                            }
-                            if !values.is_empty() {
-                                f.enum_values(values);
-                            }
-                        });
-                    };
+                let mut field = |name: &str,
+                                 field_type: FieldType,
+                                 target: Option<&str>,
+                                 values: &'static [&'static str]| {
+                    k.field(name, |f| {
+                        if values.is_empty() {
+                            f.field_type(field_type);
+                        } else {
+                            f.vocabulary(&Vocabulary::new(values));
+                        }
+                        f.description(&format!("the {name}"));
+                        if let Some(target) = target {
+                            f.target_kind(target);
+                        }
+                    });
+                };
                 field("state", FieldType::Enum, None, &["draft", "active", "done"]);
                 field("done", FieldType::Bool, None, &[]);
                 field("tags", FieldType::StringList, None, &[]);

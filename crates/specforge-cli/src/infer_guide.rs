@@ -115,9 +115,13 @@ fn print_kind(guide: &KindGuide, terminal: &Terminal) {
     outln!(terminal, "Fields:");
     for field in &guide.fields {
         let declared = field.declared();
+        let absent = match declared.default_value.as_deref() {
+            Some(default) => format!(" (absent: {default})"),
+            None => String::new(),
+        };
         outln!(
             terminal,
-            "  {}  {}  {}  {}",
+            "  {}  {}  {}  {}{absent}",
             field.name(),
             field.type_label(),
             if declared.required { "*" } else { "-" },
