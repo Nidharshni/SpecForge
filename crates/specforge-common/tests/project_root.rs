@@ -5,7 +5,7 @@ use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
-use specforge_common::{NoSuchPath, ProjectRoot, load_project_config};
+use specforge_common::{NoSuchPath, ProjectRoot, read_project_config};
 use specforge_test_macros::test as specforge_test;
 use tempfile::TempDir;
 
@@ -273,7 +273,7 @@ fn contract() {
     let root = ProjectRoot::of(&deep).unwrap();
     assert_eq!(root.canonical(), inner);
     assert_eq!(
-        load_project_config(root.dir()).name.as_deref(),
+        read_project_config(root.dir()).config.name.as_deref(),
         Some("inner-json")
     );
     let sibling = top.join("sibling");

@@ -184,7 +184,8 @@ fn format_writes_are_the_files_it_rewrote() {
         root: &specforge_common::ProjectRoot::of(root).unwrap(),
         paths: &[],
         mode: Mode::Write,
-    });
+    })
+    .unwrap();
     std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o644)).unwrap();
 
     // c.spec is already formatted; b.spec could not be written.
@@ -197,7 +198,8 @@ fn format_writes_are_the_files_it_rewrote() {
         root: &specforge_common::ProjectRoot::of(root).unwrap(),
         paths: &[],
         mode: Mode::Check,
-    });
+    })
+    .unwrap();
     assert!(outcome.writes().is_empty());
 }
 
@@ -465,7 +467,10 @@ fn enabling_a_builtin_writes_the_config_only() {
     assert_eq!(changed_since(root, &before), ["specforge.json"]);
     assert_eq!(
         added.extensions_enabled,
-        specforge_common::load_project_config(root).extensions.len()
+        specforge_common::read_project_config(root)
+            .config
+            .extensions
+            .len()
     );
     assert!(added.extensions_enabled >= 1);
 }
@@ -732,14 +737,16 @@ fn a_migration_writes_each_file_and_its_backup() {
     let preview = specforge_ops::migrate::run(
         &migration(&specforge_common::ProjectRoot::of(root).unwrap(), true),
         None,
-    );
+    )
+    .unwrap();
     assert!(preview.writes.is_empty());
     assert_eq!(changed_since(root, &before), Vec::<String>::new());
 
     let outcome = specforge_ops::migrate::run(
         &migration(&specforge_common::ProjectRoot::of(root).unwrap(), false),
         None,
-    );
+    )
+    .unwrap();
 
     let written = [
         ".specforge/migration.json",
@@ -769,7 +776,8 @@ fn a_rolled_back_migration_keeps_only_its_backups() {
     let outcome = specforge_ops::migrate::run(
         &migration(&specforge_common::ProjectRoot::of(root).unwrap(), false),
         Some(std::sync::Arc::new(runtime)),
-    );
+    )
+    .unwrap();
 
     assert!(outcome.rollback.is_some());
     assert_eq!(listed(&outcome.writes, root), ["old.spec.bak"]);

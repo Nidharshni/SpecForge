@@ -87,7 +87,7 @@ impl CoreTool for Tool {
             root: project_root,
             paths: &explicit,
             mode,
-        });
+        })?;
 
         let reply = outcome.document(args.diff);
         if outcome.succeeded() {

@@ -10,8 +10,7 @@
 use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_common::{
-    Diagnostic, DiagnosticList, ProjectConfig, ProjectRoot, Sym, codes, load_project_config,
-    walk_spec_files,
+    Diagnostic, DiagnosticList, ProjectConfig, ProjectRoot, Sym, codes, walk_spec_files,
 };
 use specforge_formatter::config::{find_config_path, read_config_file};
 use specforge_formatter::{FormatConfig, format_range, format_source};
@@ -480,13 +479,20 @@ impl Outcome {
         !self.diagnostics.iter().any(|d| d.is(codes::W142))
     }
 
+    /// Every `specforge.json` the run read is used as written: no E069.
+    pub fn configured(&self) -> bool {
+        !self.diagnostics.iter().any(|d| d.is(codes::E069))
+    }
+
     /// The run's verdict (ADR 0021 D4, ADR 0029): every target was read
-    /// and written, no region was left unformatted (W142), and under
-    /// [`Mode::Check`] no file would change. `specforge format` exits by
-    /// it; MCP `specforge.format` returns it as `ok`.
+    /// and written, no region was left unformatted (W142), every config the
+    /// run read is used as written (no E069), and under [`Mode::Check`] no
+    /// file would change. `specforge format` exits by it; MCP
+    /// `specforge.format` returns it as `ok`.
     pub fn ok(&self) -> bool {
         self.succeeded()
             && self.complete()
+            && self.configured()
             && !(self.mode == Mode::Check && !self.changes.is_empty())
     }
 
@@ -545,7 +551,8 @@ pub struct FormatDocument {
     pub all_clean: bool,
     /// The run did not write (check or diff).
     pub check_only: bool,
-    /// W141 per configuration file used, W142 per region kept verbatim.
+    /// E069 per problem in a specforge.json the run went around, then W141
+    /// per configuration file used, W142 per region kept verbatim.
     pub diagnostics: DiagnosticList,
     /// Each file that would change, before and after (asked for: `--diff`).
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -620,15 +627,15 @@ impl FileFailure {
 ///   (`specforge_common::walk_spec_files`), taking a nested project's
 ///   sources where the walk reaches its root, without the files their
 ///   project's `exclude` entries leave out.
-fn targets(root: &Path, paths: &[PathBuf]) -> Vec<PathBuf> {
+fn targets(root: &Path, paths: &[PathBuf]) -> Result<Targets, OpError> {
     let mut projects = Projects::default();
     let found: Vec<PathBuf> = if paths.is_empty() {
-        projects.config(root).spec_files(root)
+        projects.config(root)?.spec_files(root)
     } else {
         let mut found = Vec::new();
         for path in paths {
             if path.is_dir() {
-                found.extend(projects.walk(path));
+                found.extend(projects.walk(path)?);
             } else if path.extension().is_some_and(|ext| ext == "spec") {
                 found.push(path.clone());
             }
@@ -639,50 +646,68 @@ fn targets(root: &Path, paths: &[PathBuf]) -> Vec<PathBuf> {
     // canonical path (a file that does not exist keys by its spelling),
     // shown as first spelled.
     let mut seen = std::collections::HashSet::new();
-    found
+    let files = found
         .into_iter()
         .filter(|path| seen.insert(path.canonicalize().unwrap_or_else(|_| path.clone())))
-        .collect()
+        .collect();
+    Ok(Targets {
+        files,
+        diagnostics: projects.diagnostics,
+    })
 }
 
-/// The `specforge.json` of each project a run reaches, read once.
+/// The run's targets and the E069s of the configs that selected them.
+struct Targets {
+    files: Vec<PathBuf>,
+    diagnostics: Vec<Diagnostic>,
+}
+
+/// The `specforge.json` of each project a run selects sources from, read
+/// once through [`crate::config::rewritable`], and the E069s of the problems
+/// those reads went around, in the order the configs were read.
 #[derive(Default)]
 struct Projects {
     configs: HashMap<PathBuf, ProjectConfig>,
     roots: HashMap<PathBuf, Option<PathBuf>>,
+    diagnostics: Vec<Diagnostic>,
 }
 
 impl Projects {
-    /// The configuration of the project at `root`.
-    fn config(&mut self, root: &Path) -> &ProjectConfig {
-        self.configs
-            .entry(root.to_path_buf())
-            .or_insert_with(|| load_project_config(root))
+    /// The configuration of the project at `root`; refused when it does not
+    /// say which files are its sources.
+    fn config(&mut self, root: &Path) -> Result<&ProjectConfig, OpError> {
+        if !self.configs.contains_key(root) {
+            let read = crate::config::rewritable(root)?;
+            self.diagnostics.extend(read.diagnostics());
+            self.configs.insert(root.to_path_buf(), read.config);
+        }
+        Ok(&self.configs[root])
     }
 
     /// The `.spec` files of a named directory (see [`targets`]), sorted.
-    fn walk(&mut self, dir: &Path) -> Vec<PathBuf> {
+    fn walk(&mut self, dir: &Path) -> Result<Vec<PathBuf>, OpError> {
         if ProjectRoot::is_root(dir) {
-            return self.config(dir).spec_files(dir);
+            return Ok(self.config(dir)?.spec_files(dir));
         }
         let walked = walk_spec_files(dir, ProjectRoot::is_root);
-        let mut files: Vec<PathBuf> = walked
-            .files
-            .into_iter()
-            .filter(|file| !self.excluded(file))
-            .collect();
+        let mut files = Vec::new();
+        for file in walked.files {
+            if !self.excluded(&file)? {
+                files.push(file);
+            }
+        }
         for project in walked.stopped {
-            files.extend(self.config(&project).spec_files(&project));
+            files.extend(self.config(&project)?.spec_files(&project));
         }
         files.sort();
-        files
+        Ok(files)
     }
 
     /// Whether the project `file` belongs to leaves it out (`exclude`, or
     /// a skipped directory under its spec root).
-    fn excluded(&mut self, file: &Path) -> bool {
+    fn excluded(&mut self, file: &Path) -> Result<bool, OpError> {
         let Ok(file) = file.canonicalize() else {
-            return false;
+            return Ok(false);
         };
         let dir = directory_of(&file);
         let root = self
@@ -690,24 +715,35 @@ impl Projects {
             .entry(dir.clone())
             .or_insert_with(|| ProjectRoot::enclosing(&dir).map(|r| r.dir().to_path_buf()))
             .clone();
-        root.is_some_and(|root| {
-            let config = self.config(&root);
-            config.excludes(&config.spec_root_in(&root), &file)
-        })
+        match root {
+            Some(root) => {
+                let config = self.config(&root)?;
+                Ok(config.excludes(&config.spec_root_in(&root), &file))
+            }
+            None => Ok(false),
+        }
     }
 }
 
-/// Format every target of `request`.
-pub fn run(request: &Request) -> Outcome {
+/// Format every target of `request`. Refused (`config_invalid`, nothing
+/// read or written) when the `specforge.json` of a project whose sources
+/// the run selects does not say which files they are
+/// ([`ConfigProblem::blocks_rewrites`](specforge_common::ConfigProblem::blocks_rewrites));
+/// each other problem of those configs is one E069, first among the
+/// outcome's diagnostics, and fails [`Outcome::ok`]. A named `.spec` file
+/// selects no config: it is formatted all the same (ADR 0021 D3).
+pub fn run(request: &Request) -> Result<Outcome, OpError> {
+    let Targets { files, diagnostics } = targets(request.root.dir(), request.paths)?;
     // One set of configurations for the run: each file gets the one
     // `document(Place::File(file), ..)` gives it (no editor: the CLI and
     // MCP have none), and each configuration file is read once.
     let mut configs = Configs::default();
     let mut outcome = Outcome {
         mode: request.mode,
+        diagnostics,
         ..Outcome::default()
     };
-    for target in targets(request.root.dir(), request.paths) {
+    for target in files {
         let source = match std::fs::read_to_string(&target) {
             Ok(source) => source,
             Err(e) => {
@@ -743,12 +779,18 @@ pub fn run(request: &Request) -> Outcome {
             written,
         });
     }
-    outcome
+    Ok(outcome)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A run that is not refused: the tests that expect a refusal call
+    /// [`super::run`].
+    fn run(request: &Request) -> Outcome {
+        super::run(request).unwrap()
+    }
 
     const MESSY: &str = "behavior messy \"Messy\" {\ncontract \"The system MUST work\"\n}\n";
 
@@ -1192,7 +1234,7 @@ mod tests {
 
         // all_spec_files_discovered, exclusions_applied.
         assert_eq!(
-            targets(root, &[]),
+            targets(root, &[]).unwrap().files,
             [root.join("spec/a.spec"), root.join("spec/sub/b.spec")]
         );
         // non_spec_skipped: named, a non-.spec file is no target and no failure.
@@ -1218,7 +1260,7 @@ mod tests {
         let workspace = workspace.canonicalize().unwrap();
         let paths: Vec<PathBuf> = CI_GATE.iter().map(|(p, _)| workspace.join(p)).collect();
 
-        let found = targets(&workspace, &paths);
+        let found = targets(&workspace, &paths).unwrap().files;
 
         let sources: Vec<PathBuf> = CI_GATE
             .iter()
@@ -1882,5 +1924,134 @@ mod tests {
         assert_eq!(failed["failures"][0]["operation"], "read");
         assert_eq!(failed["failures"][0]["code"], "permission_denied");
         assert_eq!(failed["message"], failed["failures"][0]["message"]);
+    }
+
+    /// [`MESSY`] in canonical form.
+    const CANONICAL: &str = "behavior messy \"Messy\" {\n  contract \"The system MUST work\"\n}\n";
+
+    #[specforge_test(
+        behavior = "discover_format_targets",
+        verify = "a specforge.json that does not say which files are the project's sources refuses the run, and nothing is written"
+    )]
+    fn a_config_that_hides_the_sources_refuses_the_run() {
+        for config in crate::config::testing::HIDES_SOURCES {
+            for mode in [Mode::Write, Mode::Check, Mode::Preview] {
+                let dir = project_with(config, &[("spec/a.spec", MESSY), ("vendor/v.spec", MESSY)]);
+                let before = crate::config::testing::files_under(dir.path());
+
+                let refused = super::run(&Request {
+                    root: &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                    paths: &[],
+                    mode,
+                })
+                .unwrap_err();
+
+                let read = specforge_common::read_project_config(dir.path());
+                let first = read.problems.iter().find(|p| p.blocks_rewrites()).unwrap();
+                assert_eq!(refused.code, "config_invalid", "{config}");
+                assert_eq!(refused.message, first.to_string(), "{config}");
+                assert_eq!(
+                    crate::config::testing::files_under(dir.path()),
+                    before,
+                    "{config} {mode:?}"
+                );
+            }
+        }
+    }
+
+    #[specforge_test(
+        behavior = "discover_format_targets",
+        verify = "a specforge.json that does not say which files are the project's sources refuses the run, and nothing is written"
+    )]
+    fn a_nested_projects_config_refuses_the_walk_that_reaches_it() {
+        let dir = project_with(
+            "{}",
+            &[
+                ("spec/a.spec", MESSY),
+                ("ws/b.spec", MESSY),
+                ("ws/p/specforge.json", r#"{"spec_root": "#),
+                ("ws/p/spec/p.spec", MESSY),
+            ],
+        );
+        let before = crate::config::testing::files_under(dir.path());
+
+        let refused = super::run(&Request {
+            root: &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            paths: &[dir.path().join("ws")],
+            mode: Mode::Write,
+        })
+        .unwrap_err();
+
+        assert_eq!(refused.code, "config_invalid");
+        assert!(
+            refused.message.contains("ws/p/specforge.json"),
+            "{}",
+            refused.message
+        );
+        assert_eq!(crate::config::testing::files_under(dir.path()), before);
+    }
+
+    #[specforge_test(
+        behavior = "check_formatting",
+        verify = "a problem in specforge.json the run goes around is an E069 that fails the check"
+    )]
+    fn a_problem_the_run_goes_around_is_e069_and_fails_ok() {
+        let config = r#"{"spec_root":"spec","exclude":["[", 5],"name":7}"#;
+        let dir = project_with(
+            config,
+            &[("spec/a.spec", CANONICAL), ("vendor/v.spec", MESSY)],
+        );
+        let root = specforge_common::ProjectRoot::of(dir.path()).unwrap();
+
+        let check = run(&Request {
+            root: &root,
+            paths: &[],
+            mode: Mode::Check,
+        });
+
+        let e069: Vec<_> = check
+            .diagnostics
+            .iter()
+            .take_while(|d| d.is(codes::E069))
+            .collect();
+        assert_eq!(e069.len(), 3, "{:?}", check.diagnostics);
+        assert!(
+            e069.iter().any(|d| d.message.contains("\"name\"")),
+            "{e069:?}"
+        );
+        assert!(!check.ok());
+        assert!(check.clean(), "formatting itself is clean");
+
+        let write = run(&Request {
+            root: &root,
+            paths: &[],
+            mode: Mode::Write,
+        });
+        assert!(!write.ok());
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("vendor/v.spec")).unwrap(),
+            MESSY,
+            "outside spec_root"
+        );
+    }
+
+    #[specforge_test(
+        behavior = "discover_format_targets",
+        verify = "a named file is formatted whatever specforge.json says"
+    )]
+    fn a_named_file_reads_no_config() {
+        let dir = project_with(r#"{"spec_root": "#, &[("spec/a.spec", MESSY)]);
+        let file = dir.path().join("spec/a.spec");
+
+        let outcome = super::run(&Request {
+            root: &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            paths: std::slice::from_ref(&file),
+            mode: Mode::Write,
+        })
+        .unwrap();
+
+        assert!(outcome.configured(), "{:?}", outcome.diagnostics);
+        assert_eq!(outcome.changes.len(), 1);
+        assert_ne!(std::fs::read_to_string(file).unwrap(), MESSY);
     }
 }
