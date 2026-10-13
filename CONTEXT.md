@@ -236,7 +236,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   its fields are private (ADR 0031).
 - **Graph inputs**: what the graph build reads of the loaded extensions (`specforge_graph::GraphInputs`):
   the kinds whose bodies an extension parses, the single and the absent-target reference fields, the
-  inverse field pairs (a reference field and its inverse fields, fields of its target kind), each field's value coercion and the derived reference fields. Only the registry
+  inverse field pairs (a reference field and its inverse fields, fields of its target kind), each field's form and the derived reference fields. Only the registry
   build derives them (`RegistryBuild::graph_inputs`); with the provider schemes the environment
   registers they are every graph's `GraphConfig` (`Environment::graph_config`, ADR 0032).
 - **Edge type**: a relationship an extension declares (`edges`), or that fields name without one declaring it
@@ -272,7 +272,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   Each entity's record holds:
   - what it writes, as field text, with each value's shape (quoted, bare, a number, a list of
     strings or references, …) and span beside it for the host's own checks
-    (`specforge_registry::entity::ValueShape`);
+    (`specforge_graph::ValueShape`);
   - its references, obligations and methods;
   - its edge counts, in total and by edge type (each edge typed once, by the edge type its field writes from the
     kind it starts at);
@@ -292,7 +292,18 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   reads a declared type once, into the field's registry entry (`FieldRegistryEntry::new`, the only way
   to make one); every output names it by that one name — the schema and exports, the published JSON
   Schema, the model, the hover and E061 (ADR 0034). The older spellings (`_type` suffixes, `boolean`)
-  are read, never written; any other name is W019.
+  are read, never written; any other name is W019. What a field's type takes, how a written value is
+  stored as it, the JSON every output writes for it and that JSON's schema are its field form
+  (ADR 0064).
+- **Field form**: a field's declared type with an enum's values, read once
+  (`specforge_graph::FieldForm`, from `FieldRegistryEntry::form`): which
+  stored values the field takes (E061 reads it), how the graph build stores a
+  written value (coercion), and the JSON Schema of the written value (the
+  published schema reads it). Every output writes a field value through one
+  writer (`field_form::write`, the `FieldJson` shape): text as a string, an
+  expression group as its conjuncts one per line, lists as arrays, a block as
+  an object; never a parse tree or a position. A value E061 admits is a value
+  the published schema admits (ADR 0064).
 - **Standing**: how the obligation rule sees an entity (`specforge_project::snapshot::Standing`):
   - whether its kind is testable;
   - which `no_verify_statements` rule requires its kind to declare obligations (a rule without a

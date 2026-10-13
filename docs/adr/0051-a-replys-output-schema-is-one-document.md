@@ -28,7 +28,8 @@ are 61.0 KB; nine inline diagnostic schemas are 20.7 KB of it.
   (`Shape::NAME`). A document defines a named shape once under its root's `$defs` and refers to it
   as `{"$ref": "#/$defs/<name>"}` wherever it appears, even when it appears once. Every other
   subschema stays inline. A name belongs to one type, and a type with type parameters cannot be
-  named. A named shape may be recursive.
+  named. A named shape may be recursive. Outside MCP, the published Graph Protocol schema (ADR 0064) is held to
+  the same subset: `shape::unchecked_keywords` lists any keyword `violations` would ignore.
 - **D2. Which types are named.** A domain type another spec file declares that a reply embeds
   (`Diagnostic`, `MigrationResult`, `MigrationDiff`, `RollbackSummary`), and any type whose object
   schema a core tool's document would otherwise hold more than once (`SourceSpan`, `FormatVersion`,
@@ -80,7 +81,8 @@ are 61.0 KB; nine inline diagnostic schemas are 20.7 KB of it.
 - **`allOf` with `unevaluatedProperties: false` for a flattened union.** The TypeScript SDK 1.x
   validator (Ajv, draft-07 class) ignores the keyword and accepts any extra key.
 - **A JSON Schema validator crate as a test oracle.** The crate releases weekly; the clients that
-  matter run in JavaScript and Python and are scripted for a manual check.
+  matter run in JavaScript and Python and are scripted for a manual check. The published Graph Protocol schema is validated by the in-repo checker for the
+  same reason (ADR 0064).
 - **schemars** stays rejected (ADR 0048). Its output would need a transform for every schema (root
   `title`, `$schema`, `format`). Its references are now SpecForge's own, so they are no longer a
   reason.

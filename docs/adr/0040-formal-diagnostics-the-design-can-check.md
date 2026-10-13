@@ -128,3 +128,9 @@ renumbered W131-W136.
 - No feature changed status: each formal feature's solution still promises something unbuilt
   (`warning_level`, condition deltas, protocol timeouts, payload checks on the old model, and so
   on).
+
+## Amendment (round 8, plan 01)
+
+A behavior's `requires`, `ensures` and `maintains`, and a behavior's or event's `sync`, are block fields; the
+passes read their entries' names, as before. `BehaviorRequiresInvariant`, `BehaviorEnsuresInvariant` and
+`BehaviorMaintainsInvariant` are no longer declared: no field wrote them (ADR 0064).

@@ -479,18 +479,28 @@ behavior publish_schema_specification "Publish Schema Specification" {
   ensures {
     valid_json_schema_produced "Output is a valid JSON Schema document (draft 2020-12 or later)"
     all_kinds_described        "Published schema describes all registered entity kinds and edge types"
-    third_party_usable         "Published schema is usable by any JSON Schema validator to validate Graph Protocol exports"
+    third_party_usable         "Published schema is usable by any JSON Schema validator to validate Graph Protocol exports: an export of a project with no errors validates against the published schema of its format"
     render_complete_emitted    "render_complete event is emitted after schema publication"
   }
   contract   """
-    When specforge schema --publish is invoked, the system MUST export the
-    current GraphProtocolSchema as a standalone JSON Schema document suitable
-    for third-party consumers. The output MUST be a valid JSON Schema
-    (draft 2020-12 or later) that describes the Graph Protocol format
-    including all registered entity kinds, edge types, and field definitions.
-    The published schema MUST be usable by any JSON Schema validator to
-    validate Graph Protocol exports. The schema MUST include a $schema
-    meta-reference identifying the JSON Schema draft version used.
+    When specforge schema --publish is invoked, the system MUST export a
+    standalone JSON Schema document (draft 2020-12 or later) suitable for
+    third-party consumers, with a $schema meta-reference identifying the
+    draft.
+
+    The published schema MUST be the JSON Schema of the export document
+    itself, derived from the types that write it, narrowed by the
+    project: each kind an export can hold (every declared kind, and the
+    structural ref and spec) is one node branch whose fields are its
+    declared fields' wire forms, any other field a field value, and the
+    embedded schema's edge type labels are the registered ones. It MUST
+    use only keywords the in-repo checker reads (type, enum, properties,
+    required, additionalProperties, items, oneOf, anyOf, minimum, $ref,
+    $defs) and the annotations $schema, $id, title, description and
+    examples, so it is usable by any JSON Schema validator and checked
+    exactly by SpecForge's own. An export of a project whose check reports
+    no error MUST validate against the published schema of its format.
+    Each format's document has its own $id.
     The published schema describes the export format --format names
     (graph, context or brief; json is graph). --format applies only with
     --publish, and --kind cannot be combined with --publish: either is

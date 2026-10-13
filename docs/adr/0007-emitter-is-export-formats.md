@@ -155,3 +155,8 @@ every writer's target kind) that is loaded, and an edge counts when its peer is 
 inert, as before; an open far end counts every edge. The schema names every writing kind through the open-side
 inference above (both sides of an undeclared edge type are open); each of those kinds names its own extension.~~
 *(Superseded by [ADR 0060](0060-edge-types-resolved-once.md): the registry build resolves each edge type once; the schema prints its ends and infers nothing.)*
+
+## Amendment (architecture round 8, plan 01): a field value is written by the graph's field form
+
+How a field value is written is the graph's field form (ADR 0064); the emitter writes the envelopes and nodes
+around it, and derives the published schema from the export document.
