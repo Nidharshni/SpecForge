@@ -1,0 +1,63 @@
+---
+source: crates/specforge-cli/tests/parity.rs
+expression: snapshot
+---
+{
+  "both": {
+    "check": {
+      "diagnostics": [
+        "Error E003"
+      ],
+      "ok": false
+    },
+    "config": {
+      "extensions": [
+        "@specforge/software"
+      ],
+      "name": "demo",
+      "registries": [
+        {
+          "alias": "offline",
+          "default_registry": true,
+          "url": "http://127.0.0.1:9/v1"
+        }
+      ],
+      "spec_root": "spec",
+      "version": "0.1.0"
+    },
+    "document": [
+      {
+        "code": "E003",
+        "column": 15,
+        "data": {
+          "entity": "alpha",
+          "field": "invariants",
+          "kind": "unresolved_reference",
+          "target": "missing"
+        },
+        "file": "main.spec",
+        "line": 4,
+        "message": "unresolved reference 'missing' in entity 'alpha'",
+        "severity": "Error",
+        "span": {
+          "end_col": 22,
+          "end_line": 4,
+          "file": "main.spec",
+          "start_col": 15,
+          "start_line": 4
+        },
+        "suggestion": null,
+        "title": "Unresolved reference"
+      }
+    ],
+    "files": {
+      "spec/main.spec": "behavior alpha \"Alpha\" {\n  category \"core\"\n  contract \"The system MUST work\"\n  invariants [missing]\n}\n"
+    }
+  },
+  "cli": {
+    "ok": false
+  },
+  "mcp": {
+    "ok": true
+  }
+}

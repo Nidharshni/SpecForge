@@ -129,6 +129,7 @@ behavior auto_promote_commands_to_mcp_tools "Auto-Promote Commands to MCP Tools"
   verify unit "the derived input_schema states each arg's default and minimum and accepts no undeclared argument"
   verify unit "a required flag is not required over MCP, as on the command line"
   verify unit "an explicit extension tool named as a core tool is not listed, with I017"
+  verify integration "each auto-promoted tool is a command line of the same name whose help shows the tool's description and each of its arguments"
   verify contract "Auto-Promote Commands to MCP Tools: command-to-MCP-tool auto-promotion holds — surfaces_registered, all_commands_promoted, naming_convention_enforced, explicit_tool_wins, commands_auto_promoted_emitted, schema_is_the_declaration"
 }
 
@@ -237,6 +238,7 @@ behavior dispatch_surface_command "Dispatch Surface Command" {
   verify integration "a trapped command is E028 on both surfaces: one error object on the CLI's stderr under json, a structured MCP error over MCP"
   verify integration "the CLI and MCP send a command the same evidence for the same recorded report"
   verify unit "over MCP a failure's JSON error object is an isError result carrying it, and output that is not one object is text"
+  verify unit "the command line shows each declared arg by its shape, with its values, default and description, beside the host's --path and --format"
   verify contract "Dispatch Surface Command: surface command dispatch holds — command_declared, args_serialized, sandbox_restricted, traps_caught, output_returned, surface_command_dispatched_emitted, args_normalized_by_the_host, evidence_carried, one_operation"
 }
 

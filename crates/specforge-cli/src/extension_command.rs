@@ -498,6 +498,7 @@ mod tests {
     use specforge_protocol_types::{CommandArgDescriptor, CommandArgType, CommandDescriptor};
     use specforge_test_macros::test as specforge_test;
     use specforge_wasm::{CallError, CallFailure, Operation};
+    use std::collections::BTreeSet;
 
     fn arg(
         name: &str,
@@ -562,6 +563,166 @@ mod tests {
 
     fn parse(argv: &[&str]) -> Result<Map<String, Value>, clap::Error> {
         parse_with_format(argv).map(|(args, _)| args)
+    }
+
+    /// `c`, a command of `@acme/x` (short name `x`).
+    fn declared(c: CommandDescriptor) -> ExtensionCommand {
+        ExtensionCommand::new("@acme/x", "x", &c)
+    }
+
+    /// `a` with `description`.
+    fn described(mut a: CommandArgDescriptor, description: &str) -> CommandArgDescriptor {
+        a.description = Some(description.into());
+        a
+    }
+
+    /// `a` with `minimum`.
+    fn at_least(mut a: CommandArgDescriptor, minimum: i64) -> CommandArgDescriptor {
+        a.minimum = Some(minimum);
+        a
+    }
+
+    /// Commands whose declarations take every path through the host's
+    /// rendering. `show` declares an arg of every shape and value
+    /// ([`exercised`]), with and without a description, a minimum and a
+    /// default, and has a long description. `plain` has neither args nor a
+    /// description. `refused` declares an arg named `format`, which the host
+    /// refuses, so it is listed nowhere.
+    fn every_shape() -> Vec<CommandDescriptor> {
+        let enum_of = |values: &[&str]| CommandArgType::Enum {
+            values: values.iter().map(|v| v.to_string()).collect(),
+        };
+        let command = |id: &str, title: &str, description: &str, args| CommandDescriptor {
+            id: id.into(),
+            title: title.into(),
+            description: description.into(),
+            category: None,
+            export: format!("cmd__x_{id}"),
+            args,
+        };
+        vec![
+            command(
+                "show",
+                "Show one thing",
+                "Show one thing in full: its fields, then its links.",
+                vec![
+                    // Required, not a flag: positional, in declaration order.
+                    described(
+                        arg("target", CommandArgType::String, true, None),
+                        "The target id",
+                    ),
+                    arg("file", CommandArgType::Path, true, None),
+                    described(
+                        arg("side", enum_of(&["left", "right"]), true, None),
+                        "Which side",
+                    ),
+                    described(
+                        at_least(arg("count", CommandArgType::Integer, true, None), 1),
+                        "How many",
+                    ),
+                    // Optional, not a flag: `--option <VALUE>`.
+                    described(
+                        arg("label", CommandArgType::String, false, None),
+                        "A label to show",
+                    ),
+                    arg("out", CommandArgType::Path, false, None),
+                    described(
+                        arg("status", enum_of(&["open", "closed"]), false, Some("open")),
+                        "Only things with this status",
+                    ),
+                    described(
+                        at_least(arg("limit", CommandArgType::Integer, false, Some("10")), 0),
+                        "Return at most this many",
+                    ),
+                    arg("shift", CommandArgType::Integer, false, None),
+                    // Every flag, required or not: `--flag`.
+                    described(
+                        arg("details", CommandArgType::Bool, false, None),
+                        "Show every field",
+                    ),
+                    arg("strict", CommandArgType::Bool, true, None),
+                ],
+            ),
+            command("plain", "List plain things", "", vec![]),
+            command(
+                "refused",
+                "Refused",
+                "Declares the host's own option.",
+                vec![arg("format", CommandArgType::String, false, None)],
+            ),
+        ]
+    }
+
+    /// Every (shape, value) pair the args of `commands` take. The matches are
+    /// exhaustive on purpose: a new `ArgShape` or `ArgValue` variant fails to
+    /// compile here until `every_shape` declares an arg of it.
+    fn exercised(commands: &[ExtensionCommand]) -> BTreeSet<(&'static str, &'static str)> {
+        commands
+            .iter()
+            .flat_map(ExtensionCommand::args)
+            .map(|arg| {
+                let shape = match arg.shape {
+                    ArgShape::Positional { .. } => "positional",
+                    ArgShape::Option { .. } => "option",
+                    ArgShape::Flag { .. } => "flag",
+                };
+                let value = match arg.value {
+                    ArgValue::Text => "text",
+                    ArgValue::Path => "path",
+                    ArgValue::Integer { minimum: Some(_) } => "integer_at_least",
+                    ArgValue::Integer { minimum: None } => "integer",
+                    ArgValue::Flag => "flag",
+                    ArgValue::OneOf(_) => "one_of",
+                };
+                (shape, value)
+            })
+            .collect()
+    }
+
+    /// What `specforge x <argv>` prints for a `--help` among `argv`: clap's
+    /// help, rendered as `run` writes it.
+    fn help(commands: &[&ExtensionCommand], argv: &[&str]) -> String {
+        let error = command_line("x", commands)
+            .try_get_matches_from(std::iter::once("specforge x").chain(argv.iter().copied()))
+            .expect_err("--help ends the parse");
+        assert!(is_display(&error), "{argv:?}: {error}");
+        error.render().to_string()
+    }
+
+    #[specforge_test(
+        behavior = "dispatch_surface_command",
+        verify = "the command line shows each declared arg by its shape, with its values, default and description, beside the host's --path and --format"
+    )]
+    fn the_command_line_help_is_derived_from_the_declaration() {
+        let commands: Vec<ExtensionCommand> = every_shape().into_iter().map(declared).collect();
+        assert_eq!(
+            exercised(&commands),
+            BTreeSet::from([
+                ("positional", "text"),
+                ("positional", "path"),
+                ("positional", "one_of"),
+                ("positional", "integer_at_least"),
+                ("option", "text"),
+                ("option", "path"),
+                ("option", "one_of"),
+                ("option", "integer_at_least"),
+                ("option", "integer"),
+                ("flag", "flag"),
+            ])
+        );
+        assert!(commands[2].refusal().is_some(), "`refused` must be refused");
+        let commands: Vec<&ExtensionCommand> = commands.iter().collect();
+        let pinned: Vec<String> = [&["--help"][..], &["show", "--help"], &["plain", "--help"]]
+            .iter()
+            .map(|argv| {
+                format!(
+                    "$ specforge x {}\n{}",
+                    argv.join(" "),
+                    help(&commands, argv)
+                )
+            })
+            .collect();
+        insta::assert_snapshot!("command_line_help", pinned.join("\n"));
     }
 
     #[specforge_test(
