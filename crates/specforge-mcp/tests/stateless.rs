@@ -5,8 +5,10 @@
 use serde_json::{Value, json};
 use specforge_mcp::McpServer;
 use specforge_test::prelude::*;
+use std::path::{Path, PathBuf};
 
-use crate::support::{Logged, events, logged};
+use crate::support::{Logged, events, logged, tool_json};
+use crate::tool_errors::mcp_error;
 
 const REVISION: &str = "2026-07-28";
 
@@ -29,6 +31,49 @@ fn project() -> tempfile::TempDir {
 /// A server for `dir` as `specforge mcp <dir>` starts it: nothing sent yet.
 fn server(dir: &tempfile::TempDir) -> Logged {
     logged(McpServer::with_project_root(dir.path().to_path_buf()))
+}
+
+/// A server with no root (`McpServer::new()`): nothing served, nothing sent yet.
+fn rootless() -> Logged {
+    logged(McpServer::new())
+}
+
+/// The root the server serves, canonical.
+fn served(server: &McpServer) -> Option<PathBuf> {
+    server.state().project_root().map(canonical)
+}
+
+fn canonical(path: &Path) -> PathBuf {
+    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+}
+
+/// A stateless `tools/call` of `name`; its reply.
+fn tool(server: &mut McpServer, name: &str, arguments: Value) -> Value {
+    stateless(
+        server,
+        "tools/call",
+        json!({"name": name, "arguments": arguments}),
+    )
+}
+
+/// Write a project at `root`: `specforge.json` with no extension, `main.spec` with `alpha`.
+fn write_project(root: &Path) {
+    std::fs::write(
+        root.join("specforge.json"),
+        r#"{"name":"late","version":"0.1.0"}"#,
+    )
+    .unwrap();
+    std::fs::write(root.join("main.spec"), "behavior alpha \"Alpha\" {\n}\n").unwrap();
+}
+
+/// The diagnostic codes a stateless `specforge.validate` reply reports.
+fn codes(reply: &Value) -> Vec<String> {
+    tool_json(reply)
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|d| d["code"].as_str().unwrap().to_string())
+        .collect()
 }
 
 /// The `_meta` a stateless request carries.
@@ -480,4 +525,110 @@ fn stateless_prompt_get_renders() {
         serde_json::from_str(messages[1]["content"]["text"].as_str().unwrap()).unwrap();
     assert_eq!(payload["entity_id"], "alpha");
     assert_eq!(payload["contract_text"], "MUST work");
+}
+
+#[test]
+fn pin_a_stateless_path_is_adopted() {
+    let dir = project();
+    let mut server = rootless();
+    let reply = tool(
+        &mut server,
+        "specforge.validate",
+        json!({"path": dir.path().to_str().unwrap()}),
+    );
+    assert_eq!(reply["result"]["isError"], false, "{reply}");
+    assert_eq!(served(&server), Some(canonical(dir.path())));
+    let stats = tool(&mut server, "specforge.stats", json!({}));
+    assert_eq!(tool_json(&stats)["entity_count"], 1, "{stats}");
+}
+
+#[test]
+fn pin_a_stateless_init_serves_what_it_created() {
+    let parent = tempfile::TempDir::new().unwrap();
+    let created = parent.path().join("created");
+    let mut server = rootless();
+    let reply = tool(
+        &mut server,
+        "specforge.init",
+        json!({"path": created.to_str().unwrap(), "name": "created"}),
+    );
+    assert_eq!(reply["result"]["isError"], false, "{reply}");
+    assert_eq!(served(&server), Some(canonical(&created)));
+}
+
+#[test]
+fn pin_the_first_stateless_request_fixes_what_is_served() {
+    let root = tempfile::TempDir::new().unwrap();
+    let mut server = logged(McpServer::with_project_root(root.path().to_path_buf()));
+    stateless(&mut server, "server/discover", json!({}));
+    write_project(root.path());
+    let stats = tool(&mut server, "specforge.stats", json!({}));
+    assert_eq!(tool_json(&stats)["entity_count"], 0, "{stats}");
+    assert_eq!(served(&server), None);
+}
+
+#[test]
+fn pin_a_stateless_use_cached_reads_an_earlier_compile() {
+    let dir = project();
+    let mut server = server(&dir);
+    assert!(!codes(&tool(&mut server, "specforge.validate", json!({}))).contains(&"E001".into()));
+    std::fs::write(dir.path().join("broken.spec"), "behavior {\n").unwrap();
+    let cached = codes(&tool(
+        &mut server,
+        "specforge.validate",
+        json!({"use_cached": true}),
+    ));
+    assert!(!cached.contains(&"E001".to_string()), "{cached:?}");
+    let mut fresh = self::server(&dir);
+    let control = codes(&tool(
+        &mut fresh,
+        "specforge.validate",
+        json!({"use_cached": true}),
+    ));
+    assert!(control.contains(&"E001".to_string()), "{control:?}");
+}
+
+#[test]
+fn pin_a_stateless_no_project_refusal_says_to_call_a_tool_with_a_path() {
+    let mut server = rootless();
+    let reply = tool(&mut server, "specforge.extensions", json!({}));
+    let message = mcp_error(&reply)["message"].as_str().unwrap().to_string();
+    assert!(
+        message.contains("call a tool that takes a `path` first"),
+        "{message}"
+    );
+}
+
+#[specforge_test(
+    behavior = "serve_stateless_mcp_requests",
+    verify = "a stateless request after initialize reads the project the handshake session serves"
+)]
+fn a_stateless_request_after_initialize_reads_what_the_session_serves() {
+    let alpha = |server: &mut McpServer| {
+        let reply = tool(server, "specforge.query", json!({"entity_id": "alpha"}));
+        tool_json(&reply)["nodes"]
+            .as_array()
+            .is_some_and(|nodes| nodes.iter().any(|n| n["id"] == "alpha"))
+    };
+    let dir = project();
+    let mut named = rootless();
+    send(
+        &mut named,
+        1,
+        "initialize",
+        json!({"protocolVersion": "2025-11-25", "projectRoot": dir.path().to_str().unwrap()}),
+    );
+    assert!(alpha(&mut named));
+
+    let mut adopted = rootless();
+    send(&mut adopted, 1, "initialize", json!({}));
+    let reply = send(
+        &mut adopted,
+        2,
+        "tools/call",
+        json!({"name": "specforge.validate", "arguments": {"path": dir.path().to_str().unwrap()}}),
+    )
+    .unwrap();
+    assert_eq!(reply["result"]["isError"], false, "{reply}");
+    assert!(alpha(&mut adopted));
 }

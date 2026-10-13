@@ -1271,6 +1271,26 @@ fn a_root_in_no_project_serves_nothing_and_init_serves_what_it_creates() {
     assert_eq!(served_root(&server), Some(canonical(&nested)));
 }
 
+#[test]
+fn pin_a_project_created_at_the_root_after_initialize_is_not_served() {
+    let root = TempDir::new().unwrap();
+    let mut server = McpServer::with_project_root(root.path().to_path_buf());
+    let resp = call(&mut server, "initialize", json!({}));
+    assert!(resp["error"].is_null(), "{resp}");
+    fs::write(
+        root.path().join("specforge.json"),
+        r#"{"name":"late","version":"0.1.0"}"#,
+    )
+    .unwrap();
+    fs::write(
+        root.path().join("main.spec"),
+        "behavior alpha \"Alpha\" {\n}\n",
+    )
+    .unwrap();
+    assert!(!finds(&mut server, "alpha"));
+    assert_eq!(served_root(&server), None);
+}
+
 #[specforge_test(
     invariant = "mcp_served_project_consistency",
     verify = "a server started inside a project serves that project"

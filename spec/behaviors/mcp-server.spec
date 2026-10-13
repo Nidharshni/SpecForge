@@ -795,6 +795,7 @@ behavior serve_stateless_mcp_requests "Serve Stateless MCP Requests" {
   verify unit "ping and resources/subscribe are not stateless methods"
   verify unit "a stateless request after initialize is served under its own revision"
   verify unit "a stateless request's revision ends with the request"
+  verify unit "a stateless request after initialize reads the project the handshake session serves"
 }
 
 behavior listen_for_mcp_resource_updates "Listen for MCP Resource Updates" {
