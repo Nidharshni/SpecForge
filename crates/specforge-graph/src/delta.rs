@@ -159,6 +159,32 @@ pub fn compute_graph_delta(old: &Graph, new: &Graph) -> GraphDelta {
     diff(&ids, &old_nodes, &edge_keys(old), new)
 }
 
+/// The nodes among `ids` that are in both graphs and whose declared place
+/// (file, start line) differs, where each is now, sorted by ID. Only these
+/// IDs can have moved: a node outside the changed files keeps its span.
+pub(crate) fn moved(
+    ids: &BTreeSet<Sym>,
+    old_nodes: &BTreeMap<Sym, &Node>,
+    new: &Graph,
+) -> Vec<NodeChange> {
+    ids.iter()
+        .filter_map(|id| {
+            let (old, node) = (old_nodes.get(id)?, new.node(id.as_str())?);
+            let (was, is) = (&old.source_span, &node.source_span);
+            (was.file != is.file || was.start_line != is.start_line)
+                .then(|| node_change(node, &mut BTreeSet::new()))
+        })
+        .collect()
+}
+
+/// Every node in both graphs whose declared place differs ([`moved`] over
+/// every ID): what replacing one graph with another moved.
+pub fn moved_nodes(old: &Graph, new: &Graph) -> Vec<NodeChange> {
+    let ids: BTreeSet<Sym> = old.nodes().into_iter().map(|n| n.id.raw).collect();
+    let old_nodes = old.nodes().into_iter().map(|n| (n.id.raw, n)).collect();
+    moved(&ids, &old_nodes, new)
+}
+
 /// The delta from a graph to `new`, where only the nodes with an ID in
 /// `ids` may have been replaced: `old_nodes` holds what the old graph had
 /// under those IDs and `old_edges` all its edges. Every other node is

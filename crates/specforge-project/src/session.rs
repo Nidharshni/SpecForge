@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use specforge_common::{Diagnostic, ProjectConfig, ProjectRoot, read_project_config};
-use specforge_graph::{Applied, GraphDelta};
+use specforge_graph::{Applied, GraphDelta, NodeChange};
 
 use crate::buffers::{Buffer, Held};
 use crate::compiled::CompiledProject;
@@ -87,6 +87,10 @@ pub struct Update {
     /// adapter watches must follow [`ProjectSession::inputs`] (ADR 0030).
     pub inputs_changed: bool,
     pub delta: GraphDelta,
+    /// The nodes the update moved: [`Applied::moved`]. A move changes no
+    /// graph fact, so the delta does not list it; it changes what the graph
+    /// documents write.
+    pub moved: Vec<NodeChange>,
     /// The files re-parsed or dropped: exactly the changed ones (sorted).
     pub rebuilt_files: Vec<String>,
     /// Everything the session reports now ([`CompiledProject::diagnostics`],
@@ -114,12 +118,14 @@ impl Update {
         let Applied {
             files,
             delta,
+            moved,
             verification,
         } = applied;
         Update {
             kind,
             inputs_changed,
             delta,
+            moved,
             rebuilt_files: files,
             diagnostics,
             previous_diagnostics,

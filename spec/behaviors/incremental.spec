@@ -464,7 +464,10 @@ behavior compute_graph_delta "Compute Graph Delta" {
     outgoing edges differ, so a field named kind or methods is never read
     as the aspect), added edges, removed edges, and the list of affected
     files. Source positions are ignored: an entity that only moved is not
-    modified. added_nodes, removed_nodes, and modified_nodes MUST be
+    modified. The update lists it apart, as a moved node: its id and kind
+    and where it is declared now (file and start line, what every graph
+    document writes); a change of column or content alone moves nothing.
+    added_nodes, removed_nodes, and modified_nodes MUST be
     sorted by EntityId.raw to guarantee deterministic output. The delta
     MUST be computed before any subscribers are notified. One delta
     serves every reader: watch prints it, MCP notifies it, and the
@@ -479,6 +482,8 @@ behavior compute_graph_delta "Compute Graph Delta" {
   verify unit "affected files listed in delta"
   verify unit "shifted expression positions are not a modification"
   verify unit "a field named like an aspect is a changed field, never the aspect"
+  verify unit "an entity that only moved is a moved node, not a modification"
+  verify unit "a change of column or content alone moves no node"
   verify contract "Compute Graph Delta: graph delta computation holds — previous_graph_available"
 }
 

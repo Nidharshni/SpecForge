@@ -1,4 +1,4 @@
-use crate::delta::{self, GraphDelta};
+use crate::delta::{self, GraphDelta, NodeChange};
 use crate::{Graph, Node};
 use specforge_common::{Diagnostic, SourceSpan, Sym, codes, structural};
 use specforge_parser::{Entity, FieldValue, REF_SCHEME_FIELD, SpecFile};
@@ -65,6 +65,10 @@ pub struct Applied {
     /// declare now can be added, removed or replaced; any other node can
     /// only change through its outgoing edges.
     pub delta: GraphDelta,
+    /// The nodes that only changed place: in both graphs, same content or
+    /// not, declared at another file or line (each where it is now, sorted
+    /// by ID). The delta ignores positions; this does not.
+    pub moved: Vec<NodeChange>,
     /// The comparison with a cold build of the same files, when the build
     /// verifies ([`GraphBuild::set_verify`]): `Err` names the first node,
     /// edge or diagnostic that differs, or the delta check that failed.
@@ -163,10 +167,12 @@ impl GraphBuild {
 
         let old_nodes: BTreeMap<Sym, &Node> = old_nodes.iter().map(|(id, n)| (*id, n)).collect();
         let delta = delta::diff(&ids, &old_nodes, &old_edges, &self.graph);
+        let moved = delta::moved(&ids, &old_nodes, &self.graph);
         Applied {
             files: files.into_iter().collect(),
             verification: previous.map(|previous| self.verify(&previous, &delta)),
             delta,
+            moved,
         }
     }
 

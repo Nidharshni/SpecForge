@@ -353,12 +353,19 @@ pub(crate) fn refused(
 /// A preview's reply, checked against `schema`.
 fn previewed<R: MutationReply>(tool: &str, schema: &Value, mutation: Mutation<R>) -> ToolOutcome {
     match mutation {
-        Ok(Mutated { answer, .. }) => crate::reply::conforming(
-            tool,
-            crate::reply::Source::Core,
-            schema,
-            sent(answer, None, <R::After as AfterWrite>::of(None)),
-        ),
+        Ok(Mutated { answer, written }) => {
+            debug_assert!(
+                written.files.is_empty(),
+                "{tool}: a preview wrote {:?}",
+                written.files
+            );
+            crate::reply::conforming(
+                tool,
+                crate::reply::Source::Core,
+                schema,
+                sent(answer, None, <R::After as AfterWrite>::of(None)),
+            )
+        }
         Err(Failed { error, .. }) => ToolOutcome::Refused(error),
     }
 }

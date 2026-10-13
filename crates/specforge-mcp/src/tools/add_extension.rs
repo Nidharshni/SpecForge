@@ -126,9 +126,6 @@ impl CoreTool for Tool {
             }),
         };
         let answer = Answer::new(reply).with_diagnostics(reported);
-        if args.dry_run {
-            return Ok(Mutated::new(answer, Written::nothing()));
-        }
         let written = added.added.iter().fold(
             Written::files(added.writes.clone()),
             |written, extension| {
