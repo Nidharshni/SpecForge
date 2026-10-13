@@ -253,41 +253,98 @@ mod tests {
         pin_help(&root, &[]);
     }
 
-    /// Every `path` argument of `command` and of each subcommand under it,
-    /// by the command's path from the root.
-    fn path_arguments(command: &clap::Command, at: &str, found: &mut Vec<(String, clap::Arg)>) {
-        for argument in command.get_arguments() {
-            if argument.get_id() == "path" {
-                found.push((at.to_string(), argument.clone()));
-            }
-        }
+    /// The commands that read no project: they take no `--path`.
+    const NO_PROJECT: [&str; 8] = [
+        "init",
+        "new",
+        "explain",
+        "mcp",
+        "extension",
+        "extension init",
+        "extension build",
+        "extension validate",
+    ];
+
+    /// Every command of the tree under `command` (not the generated `help`
+    /// nor the external-subcommand placeholder), by its path from the root.
+    fn commands<'a>(
+        command: &'a clap::Command,
+        at: &str,
+        found: &mut Vec<(String, &'a clap::Command)>,
+    ) {
         for sub in command.get_subcommands() {
+            if sub.get_name() == "help" || sub.is_allow_external_subcommands_set() {
+                continue;
+            }
             let name = if at.is_empty() {
                 sub.get_name().to_string()
             } else {
                 format!("{at} {}", sub.get_name())
             };
-            path_arguments(sub, &name, found);
+            found.push((name.clone(), sub));
+            commands(sub, &name, found);
         }
     }
 
     #[specforge_test_macros::test(
         behavior = "locate_project_root",
-        verify = "every command's project path argument says it is a path inside the project"
+        verify = "every command that reads a project takes the one --path option, and none takes a project path as a positional argument"
     )]
-    fn every_project_path_argument_has_the_one_help() {
+    fn every_command_that_reads_a_project_takes_the_project_arg() {
         let mut root = Cli::command();
         root.build();
         let mut found = Vec::new();
-        path_arguments(&root, "", &mut found);
-        for (command, argument) in &found {
+        commands(&root, "", &mut found);
+        for name in NO_PROJECT {
+            assert!(
+                found.iter().any(|(command, _)| command == name),
+                "NO_PROJECT names `{name}`, which is no command"
+            );
+        }
+        let project = crate::project::ProjectArg::arg();
+        let shown = |value: Option<&clap::builder::StyledStr>| value.map(ToString::to_string);
+        for (name, command) in &found {
+            let paths: Vec<&clap::Arg> = command
+                .get_arguments()
+                .filter(|argument| {
+                    argument.get_id() == crate::project::ProjectArg::NAME
+                        || argument.get_long() == Some(crate::project::ProjectArg::NAME)
+                })
+                .collect();
+            if NO_PROJECT.contains(&name.as_str()) {
+                assert!(
+                    paths.is_empty(),
+                    "`specforge {name}` reads no project but takes --path"
+                );
+                continue;
+            }
+            // A command with subcommands only dispatches; its leaves read.
+            if command.has_subcommands() {
+                assert!(
+                    paths.is_empty(),
+                    "`specforge {name}` dispatches but takes --path"
+                );
+                continue;
+            }
+            let [path] = paths.as_slice() else {
+                panic!(
+                    "`specforge {name}` reads a project and takes no --path (flatten ProjectArg, or list it in NO_PROJECT)"
+                );
+            };
+            assert!(
+                !path.is_positional(),
+                "`specforge {name}` takes its project positionally"
+            );
+            assert_eq!(path.get_long(), project.get_long(), "`specforge {name}`");
             assert_eq!(
-                argument.get_help().map(ToString::to_string).as_deref(),
-                crate::project::ProjectArg::arg()
-                    .get_help()
-                    .map(ToString::to_string)
-                    .as_deref(),
-                "`specforge {command}`'s path says something else"
+                shown(path.get_help()),
+                shown(project.get_help()),
+                "`specforge {name}`"
+            );
+            assert_eq!(
+                path.get_default_values(),
+                project.get_default_values(),
+                "`specforge {name}`"
             );
         }
     }

@@ -705,9 +705,9 @@ mod tests {
 
     #[specforge_test(
         behavior = "locate_project_root",
-        verify = "every command's project path argument says it is a path inside the project"
+        verify = "every command that reads a project takes the one --path option, and none takes a project path as a positional argument"
     )]
-    fn the_host_path_option_has_the_one_help() {
+    fn the_host_path_option_is_the_project_arg() {
         let command = ExtensionCommand::new("@acme/x", "x", &contribution());
         let line = command_line("x", &[&command]);
         let sub = line.find_subcommand(command.cli_name()).unwrap();
@@ -715,13 +715,15 @@ mod tests {
             .get_arguments()
             .find(|a| a.get_id() == ProjectArg::NAME)
             .unwrap();
+        let project = ProjectArg::arg();
+        assert!(!path.is_positional());
+        assert_eq!(path.get_long(), project.get_long());
         assert_eq!(
-            path.get_help().map(ToString::to_string).as_deref(),
-            ProjectArg::arg()
-                .get_help()
-                .map(ToString::to_string)
-                .as_deref()
+            path.get_help().map(ToString::to_string),
+            project.get_help().map(ToString::to_string)
         );
+        assert_eq!(path.get_default_values(), project.get_default_values());
+        assert!(specforge_protocol_types::command_args::HOST_OPTIONS.contains(&ProjectArg::NAME));
     }
 
     #[test]
