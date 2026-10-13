@@ -487,6 +487,8 @@ behavior locate_project_root "Locate the Project a Path Is In" {
   verify integration "a command given a path that does not exist refuses it as file_not_found"
   verify integration "an extension command run from a subdirectory is routed over the project it is in"
   verify integration "watch run from a subdirectory watches the project it is in"
+  verify integration "every command given --path acts on the project the path is in, from any directory"
+  verify integration "a project path given as a positional argument is refused as a usage error"
   verify unit "every command's project path argument says it is a path inside the project"
   verify unit "a server started in a spec root holding specforge.spec serves the project around it"
   verify unit "a workspace root in a spec root holding specforge.spec opens the project around it"
