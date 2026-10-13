@@ -204,8 +204,9 @@ fn trace_today() {
         root,
         &[
             json!({"name": "specforge.trace", "arguments": {"entity_id": "login"}}),
-            json!({"name": "specforge.trace", "arguments": {"plan": {"entries": [
-                {"entity_id": "login"}, {"entity_id": "ghost"}]}}}),
+            json!({"name": "specforge.trace", "arguments": {"plan": {"plan_id": "p", "entries": [
+                {"entity_id": "login", "action": "implement"},
+                {"entity_id": "ghost", "action": "implement"}]}}}),
             json!({"name": "specforge.trace", "arguments": {"entity_id": "ghost"}}),
         ],
     );
@@ -287,7 +288,9 @@ fn coverage_views_today() {
             "prompt_trace_plan",
             prompt(
                 "trace",
-                json!({"plan": {"entries": [{"entity_id": "login"}, {"entity_id": "ghost"}]}}),
+                json!({"plan": {"plan_id": "p", "entries": [
+                    {"entity_id": "login", "action": "implement"},
+                    {"entity_id": "ghost", "action": "implement"}]}}),
             ),
         ),
     ];

@@ -25,6 +25,17 @@ pub use spec::spec_files;
 
 use std::sync::Arc;
 
+/// An `AgentPlan` of entries naming `ids`, each to implement.
+pub fn agent_plan(ids: &[&str]) -> serde_json::Value {
+    serde_json::json!({
+        "plan_id": "p",
+        "entries": ids
+            .iter()
+            .map(|id| serde_json::json!({"entity_id": id, "action": "implement"}))
+            .collect::<Vec<_>>(),
+    })
+}
+
 /// The solver every served test project's doctor sees: z3 runs (ADR 0079 D5).
 pub fn z3_ready() -> Arc<dyn specforge_ops::solver::Solver> {
     Arc::new(specforge_ops::testing::ScriptedSolver::ready())

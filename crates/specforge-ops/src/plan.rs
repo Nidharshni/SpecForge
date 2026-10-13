@@ -2,13 +2,13 @@
 //! one operation over the project view (ADR 0015). It reads the graph and
 //! the entity snapshot, never the recorded test report.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use specforge_common::codes;
+use specforge_common::shape::{self, Shape};
 use std::collections::{HashMap, HashSet};
 
 use crate::view::ProjectView;
-use crate::{OpError, OpErrorKind};
 
 /// How a plan falls short of the graph.
 #[derive(Debug, Clone, PartialEq)]
@@ -21,31 +21,87 @@ pub struct PlanOutcome {
     pub gaps: Vec<PlanGap>,
 }
 
-/// Why a plan could not be checked.
-#[derive(Debug, Clone, PartialEq)]
-pub enum PlanError {
-    /// The value is not an `AgentPlan`: why.
-    NotAPlan(String),
+/// What an agent intends to do, entity by entity, in the order it will do it
+/// (`AgentPlan`, spec/types/graph.spec). Its entry order is its dependency
+/// order; the graph's edges are the dependencies.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Shape)]
+#[serde(deny_unknown_fields)]
+pub struct AgentPlan {
+    pub plan_id: String,
+    pub entries: Vec<AgentPlanEntry>,
 }
 
-impl std::fmt::Display for PlanError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+/// One entry of an [`AgentPlan`] (`AgentPlanEntry`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Shape)]
+#[serde(deny_unknown_fields)]
+pub struct AgentPlanEntry {
+    /// The entity the entry is about.
+    pub entity_id: String,
+    /// What the agent will do to it: free text (implement, modify, remove, ...).
+    pub action: String,
+}
+
+/// Why a value is not an [`AgentPlan`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NotAPlan {
+    /// Text that is not JSON: serde_json's message.
+    NotJson(String),
+    /// Every place the value departs from the type's schema, as
+    /// `shape::violations` words it, rooted at `$`
+    /// (`$.entries[0]: missing required action`), in its order.
+    Departs(Vec<String>),
+}
+
+impl NotAPlan {
+    /// The refusal's message, the plan named `name` (MCP's argument, the
+    /// CLI's `plan`): `plan is not valid JSON: <why>`, or `plan must be an
+    /// AgentPlan: plan: missing required plan_id; plan.entries[0]: missing
+    /// required action` (each violation's `$` replaced by `name`, joined by
+    /// `; `).
+    pub fn message(&self, name: &str) -> String {
         match self {
-            PlanError::NotAPlan(why) => f.write_str(why),
+            NotAPlan::NotJson(why) => format!("{name} is not valid JSON: {why}"),
+            NotAPlan::Departs(found) => format!(
+                "{name} must be an AgentPlan: {}",
+                found
+                    .iter()
+                    .map(|violation| {
+                        format!("{name}{}", violation.strip_prefix('$').unwrap_or(violation))
+                    })
+                    .collect::<Vec<_>>()
+                    .join("; ")
+            ),
         }
     }
 }
 
-impl std::error::Error for PlanError {}
+impl std::fmt::Display for NotAPlan {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message("plan"))
+    }
+}
 
-/// `invalid_input` for a value that is no plan.
-impl From<PlanError> for OpError {
-    fn from(error: PlanError) -> Self {
-        match error {
-            PlanError::NotAPlan(why) => {
-                OpError::new(OpErrorKind::InvalidInput, "invalid_input", why)
-            }
+impl std::error::Error for NotAPlan {}
+
+impl AgentPlan {
+    /// The plan `value` is. The value is checked against the type's schema
+    /// (`shape::document::<AgentPlan>()`, the one `specforge.trace` lists)
+    /// before it is decoded. So a value the schema does not admit, positional
+    /// arrays included, is refused, listing every place it departs, and one
+    /// it admits always decodes.
+    pub fn read(value: &Value) -> Result<AgentPlan, NotAPlan> {
+        let found = shape::violations(shape::document::<AgentPlan>(), value);
+        if !found.is_empty() {
+            return Err(NotAPlan::Departs(found));
         }
+        AgentPlan::deserialize(value).map_err(|e| NotAPlan::Departs(vec![format!("$: {e}")]))
+    }
+
+    /// The plan the JSON `text` holds ([`Self::read`] of its value).
+    pub fn parse(text: &str) -> Result<AgentPlan, NotAPlan> {
+        let value =
+            serde_json::from_str::<Value>(text).map_err(|e| NotAPlan::NotJson(e.to_string()))?;
+        AgentPlan::read(&value)
     }
 }
 
@@ -84,39 +140,12 @@ impl PlanGapKind {
 /// The side of a gap that is the plan itself.
 const PLAN: &str = "plan";
 
-/// Check `plan`, an `AgentPlan` object or JSON text of one, against the
-/// view's graph: entries naming no entity, testable entities with
-/// obligations it has no entry for, and entries ordered before an entity
-/// they depend on.
-pub fn check(view: &ProjectView, plan: &Value) -> Result<PlanOutcome, PlanError> {
-    let parsed;
-    let plan = match plan {
-        Value::String(text) => {
-            parsed = serde_json::from_str::<Value>(text)
-                .map_err(|e| PlanError::NotAPlan(format!("plan is not valid JSON: {e}")))?;
-            &parsed
-        }
-        other => other,
-    };
-    let Some(entries) = plan.get("entries").and_then(Value::as_array) else {
-        return Err(PlanError::NotAPlan(
-            "plan must be an AgentPlan object with an entries array".into(),
-        ));
-    };
-    for (i, entry) in entries.iter().enumerate() {
-        if !entry.get("entity_id").is_some_and(Value::is_string) {
-            return Err(PlanError::NotAPlan(format!(
-                "plan.entries[{i}].entity_id must be a string"
-            )));
-        }
-    }
-    Ok(validate(view, entries))
-}
-
-/// The plan's gaps. It reads the graph and the view's entity snapshot, never
-/// the recorded test report: who is testable and what an entity declares
-/// are its standing.
-fn validate(view: &ProjectView, entries: &[Value]) -> PlanOutcome {
+/// Check `plan` against the view's graph: entries naming no entity,
+/// testable entities with obligations it has no entry for, and entries
+/// ordered before an entity they depend on. It reads the graph and the
+/// view's entity snapshot (`ProjectView::entities`), never the recorded
+/// test report, so it cannot fail.
+pub fn check(view: &ProjectView, plan: &AgentPlan) -> PlanOutcome {
     let graph = view.graph();
     let mut validated_entries = Vec::new();
     let mut gaps = Vec::new();
@@ -124,24 +153,23 @@ fn validate(view: &ProjectView, entries: &[Value]) -> PlanOutcome {
     let mut plan_ids: Vec<String> = Vec::new();
 
     // Validate each entry
-    for entry in entries {
-        if let Some(id) = entry["entity_id"].as_str() {
-            plan_ids.push(id.to_string());
-            if graph.node(id).is_some() {
-                validated_entries.push(id.to_string());
-            } else {
-                let message = format!(
-                    "{}: unresolved entity '{}' in plan — not found in graph",
-                    codes::E003,
-                    id
-                );
-                gaps.push(PlanGap {
-                    source: PLAN.to_string(),
-                    target: id.to_string(),
-                    kind: PlanGapKind::UnresolvedEntity,
-                    context: message,
-                });
-            }
+    for entry in &plan.entries {
+        let id = entry.entity_id.as_str();
+        plan_ids.push(id.to_string());
+        if graph.node(id).is_some() {
+            validated_entries.push(id.to_string());
+        } else {
+            let message = format!(
+                "{}: unresolved entity '{}' in plan — not found in graph",
+                codes::E003,
+                id
+            );
+            gaps.push(PlanGap {
+                source: PLAN.to_string(),
+                target: id.to_string(),
+                kind: PlanGapKind::UnresolvedEntity,
+                context: message,
+            });
         }
     }
     let plan_id_set: HashSet<String> = plan_ids.iter().cloned().collect();

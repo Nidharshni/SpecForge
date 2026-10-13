@@ -228,6 +228,9 @@ type DiagnosticsDelta {
 
 // ── Agent Plan Types ──────────────────────────────────────
 
+/// What an agent intends to do, entity by entity, in the order it will do
+/// it: the plan the plan check reads (validate_agent_plan). Its entry order
+/// is its dependency order; the graph's edges are the dependencies.
 type AgentPlan {
   plan_id string @readonly @unique
   entries AgentPlanEntry[]
@@ -235,8 +238,9 @@ type AgentPlan {
 }
 
 type AgentPlanEntry {
-  entity_id    string   @readonly
-  action       string
-  dependencies string[] @optional
+  /// The entity the entry is about.
+  entity_id string @readonly
+  /// What the agent will do to it: free text (implement, modify, remove, ...).
+  action    string
   verify unit "AgentPlanEntry schema is valid"
 }

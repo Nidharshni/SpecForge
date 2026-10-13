@@ -209,7 +209,10 @@ pub fn stats_of(graph: &Graph, testable: &[&str], diagnostics: &[Diagnostic]) ->
 /// must declare obligations.
 pub fn plan_check(graph: &Graph, testable: &[&str], plan: &serde_json::Value) -> PlanOutcome {
     let project = Project::of_graph(graph.clone(), registries(testable, &[]));
-    specforge_ops::plan::check(&project.view(), plan).unwrap()
+    specforge_ops::plan::check(
+        &project.view(),
+        &specforge_ops::plan::AgentPlan::read(plan).expect("an AgentPlan"),
+    )
 }
 
 /// The contexts of `outcome`'s gaps of `kind`, in order.

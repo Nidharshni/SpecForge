@@ -207,7 +207,7 @@ fn trace_prompt_identifies_unverified() {
 )]
 fn trace_unverified_is_counted_and_not_proven() {
     let mut server = test_server();
-    let t = trace_plan(&mut server, json!({"entries": [{"entity_id": "beta"}]}));
+    let t = trace_plan(&mut server, agent_plan(&["beta"]));
     assert_eq!(t["affected_entities"], json!(["alpha", "beta"]));
     assert_eq!(t["unverified_entities"], json!(["alpha"]));
 
@@ -217,7 +217,7 @@ fn trace_unverified_is_counted_and_not_proven() {
         "specforge-report.json",
         r#"{"results":{"alpha":{"tests":[{"name":"t","verify":"test alpha","status":"passed"}]}}}"#,
     );
-    let t = trace_plan(&mut server, json!({"entries": [{"entity_id": "beta"}]}));
+    let t = trace_plan(&mut server, agent_plan(&["beta"]));
     assert_eq!(t["unverified_entities"], json!([]), "{t}");
 }
 
@@ -340,10 +340,7 @@ fn trace_prompt_explains_each_gap() {
     let mut server = test_server();
 
     // beta depends on alpha, yet the plan does beta first.
-    let result = trace_plan(
-        &mut server,
-        json!({"entries": [{"entity_id": "beta"}, {"entity_id": "alpha"}]}),
-    );
+    let result = trace_plan(&mut server, agent_plan(&["beta", "alpha"]));
 
     let gaps = result["coverage_gaps"].as_array().unwrap();
     assert_eq!(gaps.len(), 1, "{result}");
@@ -352,10 +349,7 @@ fn trace_prompt_explains_each_gap() {
         gaps[0]["gap_context"],
         "'beta' depends on 'alpha' (via behaviors), but 'alpha' appears later in the plan"
     );
-    let again = trace_plan(
-        &mut server,
-        json!({"entries": [{"entity_id": "beta"}, {"entity_id": "alpha"}]}),
-    );
+    let again = trace_plan(&mut server, agent_plan(&["beta", "alpha"]));
     assert_eq!(result, again, "gap context is deterministic");
 }
 
@@ -366,7 +360,7 @@ fn trace_prompt_explains_each_gap() {
 fn trace_prompt_lists_the_entities_a_plan_affects() {
     let mut server = test_server();
 
-    let result = trace_plan(&mut server, json!({"entries": [{"entity_id": "beta"}]}));
+    let result = trace_plan(&mut server, agent_plan(&["beta"]));
 
     // beta and what its chain reaches; gamma_orphan is untouched.
     assert_eq!(
@@ -393,12 +387,17 @@ fn trace_prompt_rejects_a_malformed_plan() {
     };
 
     assert!(error(&mut server, "{not json").contains("not valid JSON"));
-    assert!(error(&mut server, "[1, 2]").contains("entries"));
-    let message = error(
-        &mut server,
-        r#"{"entries": [{"entity_id": "beta"}, {"id": "x"}]}"#,
+    assert_eq!(
+        error(&mut server, "[1, 2]"),
+        "plan must be an AgentPlan: plan: expected object, got array"
     );
-    assert!(message.contains("entries[1].entity_id"), "{message}");
+    assert_eq!(
+        error(
+            &mut server,
+            r#"{"plan_id": "p", "entries": [{"entity_id": "beta", "action": "a"}, {"id": "x"}]}"#,
+        ),
+        "plan must be an AgentPlan: plan.entries[1]: missing required entity_id; plan.entries[1]: missing required action; plan.entries[1].id: undeclared key"
+    );
 }
 
 // --- specforge://prompts/explore ---
@@ -585,7 +584,7 @@ fn full_arguments(prompt: &str) -> Value {
         }
         "specforge://prompts/review" => json!({"entity_id": "alpha", "depth": "1"}),
         "specforge://prompts/trace" => json!({
-            "plan": {"entries": [{"entity_id": "alpha", "action": "modify"}]},
+            "plan": {"plan_id": "p", "entries": [{"entity_id": "alpha", "action": "modify"}]},
             "entity_id": "alpha",
         }),
         "specforge://prompts/explore" => {

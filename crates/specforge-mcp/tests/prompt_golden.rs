@@ -6,7 +6,7 @@
 use serde_json::{Value, json};
 use specforge_mcp::McpServer;
 
-use crate::support::{Logged, events, logged};
+use crate::support::{Logged, agent_plan, events, logged};
 
 /// The project the prompts read: product, software and testing loaded,
 /// a four-hop chain `alpha - feat_login - beta - inv_session - delta`,
@@ -293,7 +293,7 @@ fn prompt_golden_trace() {
         (
             "15_trace_plan",
             "trace",
-            json!({"plan": {"entries": [{"entity_id": "beta"}, {"entity_id": "ghost"}]}}),
+            json!({"plan": agent_plan(&["beta", "ghost"])}),
         ),
         (
             "16_trace_plan_not_json",

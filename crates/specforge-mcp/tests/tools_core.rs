@@ -1612,9 +1612,7 @@ fn trace_plan_gap_analysis() {
 
     // act_one depends on inv_a but comes first; ghost doesn't exist;
     // act_two is testable and missing.
-    let plan = json!({"entries": [
-        {"entity_id": "act_one"}, {"entity_id": "inv_a"}, {"entity_id": "ghost"}
-    ]});
+    let plan = agent_plan(&["act_one", "inv_a", "ghost"]);
     let resp = call_tool(&mut server, "specforge.trace", json!({"plan": plan}));
     let parsed: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
     assert_eq!(parsed["affected_entities"], json!(["act_one", "inv_a"]));
@@ -1646,7 +1644,7 @@ fn trace_plan_gap_analysis() {
 fn trace_plan_reports_its_gaps_as_structured_json() {
     let (_project, mut server) = plan_project();
 
-    let plan = json!({"entries": [{"entity_id": "act_one"}, {"entity_id": "ghost"}]});
+    let plan = agent_plan(&["act_one", "ghost"]);
     let resp = call_tool(&mut server, "specforge.trace", json!({"plan": plan}));
     let parsed: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
 
@@ -1706,11 +1704,7 @@ fn a_report_the_plan_check_does_not_read_fails_no_plan() {
         r#"{"results":{"act_one":{"tests":[{"name":"t","status":"pass","verify":"x"}]}}}"#,
     )
     .unwrap();
-    let plan = json!({"plan_id": "p", "entries": [
-        {"entity_id": "act_one", "action": "implement"},
-        {"entity_id": "inv_a", "action": "implement"},
-        {"entity_id": "ghost", "action": "implement"}
-    ]});
+    let plan = agent_plan(&["act_one", "inv_a", "ghost"]);
     let resp = call_tool(&mut server, "specforge.trace", json!({"plan": plan}));
     assert_eq!(resp["result"]["isError"], false, "{resp}");
     let parsed: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
@@ -1725,7 +1719,6 @@ fn a_report_the_plan_check_does_not_read_fails_no_plan() {
     behavior = "validate_agent_plan",
     verify = "a plan that is not an AgentPlan is refused, naming every place it departs from the type"
 )]
-#[ignore = "fixed by T5"]
 fn trace_refuses_a_plan_that_is_not_an_agent_plan() {
     let (_project, mut server) = plan_project();
     let mut refused = |plan: Value| {

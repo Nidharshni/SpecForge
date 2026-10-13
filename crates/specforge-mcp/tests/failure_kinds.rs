@@ -85,10 +85,7 @@ fn an_unparsable_report_refuses_every_view() {
     }
     for (prompt, arguments) in [
         ("review", json!({})),
-        (
-            "trace",
-            json!({"plan": {"entries": [{"entity_id": "alpha"}]}}),
-        ),
+        ("trace", json!({"plan": agent_plan(&["alpha"])})),
     ] {
         let reply = get_prompt(
             &mut served,

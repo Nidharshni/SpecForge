@@ -5,10 +5,10 @@ use std::collections::BTreeSet;
 
 use serde::Serialize;
 use specforge_common::shape::Shape;
-use specforge_ops::plan::PlanError;
+use specforge_ops::plan::AgentPlan;
 use specforge_ops::trace::{Target, trace};
 
-use crate::args::{AgentPlan, Arguments};
+use crate::args::Arguments;
 use crate::prompt::{CorePrompt, Prompted};
 use crate::refusal::ArgumentOf;
 use crate::tool::{ErrorCode, McpError};
@@ -51,7 +51,7 @@ pub struct Payload {
 /// `specforge://prompts/trace`'s arguments.
 #[derive(Debug, Arguments)]
 pub struct Args {
-    /// AgentPlan JSON ({"entries": [{"entity_id", "action"}]}) to check against the graph
+    /// AgentPlan JSON ({"plan_id", "entries": [{"entity_id", "action"}]}) to check against the graph
     plan: Option<AgentPlan>,
     /// Entity ID to trace when no plan is given
     entity_id: Option<String>,
@@ -62,9 +62,7 @@ fn render(view: ProjectView<'_>, args: Args) -> Result<Prompted<Payload>, Box<Mc
     // plan's, or the entity's chain's missing links.
     let (seeds, coverage_gaps, subject) = match (&args.plan, args.entity_id.as_deref()) {
         (Some(plan), _) => {
-            let analysis = analyze_plan(&view, &plan.0).map_err(|PlanError::NotAPlan(why)| {
-                McpError::new(ErrorCode::InvalidInput, why).with_argument("plan")
-            })?;
+            let analysis = analyze_plan(&view, plan);
             (analysis.entries, analysis.gaps, "the plan".to_string())
         }
         (None, Some(entity_id)) => {

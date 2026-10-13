@@ -1,13 +1,12 @@
 use crate::target::View;
 use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
 use serde::Serialize;
-use serde_json::Value;
 use specforge_common::shape::Shape;
-use specforge_ops::plan::PlanError;
+use specforge_ops::plan::AgentPlan;
 use specforge_ops::trace::{ChainDocument, Target, TraceChain};
 use specforge_ops::view::ProjectView;
 
-use crate::args::{AgentPlan, Arguments};
+use crate::args::Arguments;
 use crate::refusal::ArgumentOf;
 use crate::reply::Answered;
 use crate::tool::{ErrorCode, McpError};
@@ -18,7 +17,7 @@ use specforge_ops::navigate::EntityField;
 pub struct Args {
     /// Entity ID to trace
     entity_id: Option<String>,
-    /// An agent plan, {"entries": [{"entity_id": ...}]}, to check for gaps against the graph instead of tracing one entity
+    /// An AgentPlan ({"plan_id", "entries": [{"entity_id", "action"}]}), or its JSON text, to check for gaps against the graph instead of tracing one entity
     plan: Option<AgentPlan>,
 }
 
@@ -86,7 +85,7 @@ impl CoreTool for Tool {
 
     fn call(view: ProjectView<'_>, args: Args) -> Answered<Reply> {
         if let Some(plan) = &args.plan {
-            return plan_gaps(&view, &plan.0);
+            return plan_gaps(&view, plan);
         }
         let Some(entity_id) = args.entity_id.as_deref() else {
             return Err(Box::new(McpError::invalid_input(
@@ -110,15 +109,13 @@ impl CoreTool for Tool {
 
 /// Gap analysis of an agent plan against the graph, as an
 /// `McpTracePlanResult`.
-fn plan_gaps(view: &ProjectView, plan: &Value) -> Answered<Reply> {
-    match analyze_plan(view, plan) {
-        Ok(analysis) => Ok(Reply::Plan(PlanReply {
-            affected_entities: analysis.entries,
-            gaps: analysis.gaps,
-        })
-        .into()),
-        Err(PlanError::NotAPlan(why)) => Err(Box::new(McpError::invalid_input("plan", why))),
-    }
+fn plan_gaps(view: &ProjectView, plan: &AgentPlan) -> Answered<Reply> {
+    let analysis = analyze_plan(view, plan);
+    Ok(Reply::Plan(PlanReply {
+        affected_entities: analysis.entries,
+        gaps: analysis.gaps,
+    })
+    .into())
 }
 
 /// An agent plan checked against the graph (`specforge_ops::plan::check`).
@@ -129,16 +126,15 @@ pub(crate) struct PlanAnalysis {
     pub gaps: Vec<Gap>,
 }
 
-/// Check `plan` — an `AgentPlan` object, or JSON text of one — against the
-/// view's graph.
-pub(crate) fn analyze_plan(view: &ProjectView, plan: &Value) -> Result<PlanAnalysis, PlanError> {
-    let outcome = specforge_ops::plan::check(view, plan)?;
-    Ok(PlanAnalysis {
+/// Check `plan` against the view's graph.
+pub(crate) fn analyze_plan(view: &ProjectView, plan: &AgentPlan) -> PlanAnalysis {
+    let outcome = specforge_ops::plan::check(view, plan);
+    PlanAnalysis {
         entries: outcome.entries,
         gaps: outcome
             .gaps
             .into_iter()
             .map(|gap| Gap::of(&specforge_ops::trace::Gap::Plan(gap)))
             .collect(),
-    })
+    }
 }
