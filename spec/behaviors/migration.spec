@@ -154,6 +154,7 @@ behavior migrate_spec_files_in_place "Migrate Spec Files In Place" {
   verify unit "a specforge.json that does not say which files are the project's sources refuses the migration, dry run included, and nothing is written"
   verify unit "a problem in specforge.json the migration goes around is an E069 in its document and fails it"
   verify unit "the preview and the migration rewrite the same sources, read once"
+  verify integration "migrate leaves a nested project's files alone"
 }
 
 behavior generate_migration_diff "Generate Migration Diff" {

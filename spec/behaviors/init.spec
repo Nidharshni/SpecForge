@@ -500,5 +500,6 @@ behavior locate_project_root "Locate the Project a Path Is In" {
   verify unit "a server started in a spec root holding specforge.spec serves the project around it"
   verify unit "a workspace root in a spec root holding specforge.spec opens the project around it"
   verify unit "a loose root's I002 says no project was found and suggests init"
+  verify integration "a file in a nested project is checked by its own project and by no project above it"
   verify contract "Locate the Project a Path Is In: project root location holds — filesystem_available, closest_wins_enforced, one_marker, loose_root, missing_path_refused, symlinks_resolved, every_surface_agrees, one_option"
 }

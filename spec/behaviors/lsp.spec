@@ -139,6 +139,7 @@ behavior document_open_close "Document Open/Close" {
   verify unit "an open document's entities stay when its file is deleted, until it is closed"
   verify unit "a document is one file whatever spelling of its URI the client sends"
   verify unit "an open document stays itself when an environment load moves its key"
+  verify integration "a document in a nested project is no source of the workspace project and gets none of its diagnostics"
   verify contract "Document Open/Close: document open/close holds — lsp_initialized_fired, document_tracked, file_changed_emitted, closed_file_published, closed_file_from_disk"
 }
 

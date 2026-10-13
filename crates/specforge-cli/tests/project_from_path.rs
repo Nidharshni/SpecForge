@@ -456,6 +456,78 @@ fn a_file_path_names_the_project_it_is_in() {
     assert_eq!(stderr, project_stderr);
 }
 
+#[ignore = "fixed by T2"]
+#[specforge_test(
+    behavior = "locate_project_root",
+    verify = "a file in a nested project is checked by its own project and by no project above it"
+)]
+fn a_file_in_a_nested_project_is_checked_by_its_own_project_alone() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    std::fs::create_dir_all(root.join("sub")).unwrap();
+    std::fs::write(
+        root.join("specforge.json"),
+        r#"{"extensions":["@specforge/product"]}"#,
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("a.spec"),
+        "feature f \"F\" {\n  problem \"p\"\n}\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("sub/specforge.json"),
+        r#"{"extensions":["@specforge/software"]}"#,
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("sub/b.spec"),
+        "behavior bb_x \"B\" {\n  contract \"MUST b\"\n}\n",
+    )
+    .unwrap();
+    let check = |cwd: &Path, args: &[&str]| {
+        let out = specforge()
+            .current_dir(cwd)
+            .args(["check", "--format", "json"])
+            .args(args)
+            .output()
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap_or_default();
+        (out.status.code(), json)
+    };
+    let entries = |json: &serde_json::Value| -> Vec<(String, String)> {
+        json.as_array()
+            .cloned()
+            .unwrap_or_default()
+            .iter()
+            .map(|d| {
+                (
+                    d["code"].as_str().unwrap_or_default().to_string(),
+                    d["file"].as_str().unwrap_or_default().to_string(),
+                )
+            })
+            .collect()
+    };
+
+    let (code, outer) = check(root, &[]);
+    assert_eq!(code, Some(1), "{outer}");
+    assert!(
+        entries(&outer)
+            .iter()
+            .all(|(_, file)| !file.starts_with("sub/")),
+        "{outer}"
+    );
+    for target in ["sub/b.spec", "sub"] {
+        let (code, inner) = check(root, &["--path", target]);
+        assert_eq!(code, Some(0), "{target}: {inner}");
+        assert_eq!(
+            entries(&inner),
+            vec![("W006".to_string(), "b.spec".to_string())],
+            "{target}"
+        );
+    }
+}
+
 /// The commands that took their project as a positional argument; each one
 /// refuses it now.
 const WERE_POSITIONAL: [&str; 6] = ["check", "stats", "export", "schema", "model", "outline"];

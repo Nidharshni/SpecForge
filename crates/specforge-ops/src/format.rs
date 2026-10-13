@@ -1883,6 +1883,29 @@ mod tests {
         );
     }
 
+    #[ignore = "fixed by T2"]
+    #[specforge_test(
+        behavior = "discover_format_targets",
+        verify = "a project's sources end at a nested project, which a run from the project does not format"
+    )]
+    fn a_run_from_a_project_leaves_a_nested_project_alone() {
+        let dir = project_with(
+            "{}",
+            &[
+                ("a.spec", MESSY),
+                ("sub/specforge.json", r#"{"exclude": ["b.spec"]}"#),
+                ("sub/b.spec", MESSY),
+                ("sub/c.spec", MESSY),
+            ],
+        );
+
+        assert_eq!(changed(dir.path()), ["a.spec"]);
+        let named = check_paths(dir.path(), &[""]);
+        assert_eq!(changed_in(dir.path(), &named), ["a.spec"]);
+        let nested = check_paths(dir.path(), &["sub"]);
+        assert_eq!(changed_in(dir.path(), &nested), ["sub/c.spec"]);
+    }
+
     #[specforge_test(
         behavior = "format_spec_files",
         verify = "the format document names each changed file, each failed file with its kind, and the run's verdict"

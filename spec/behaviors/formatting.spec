@@ -604,4 +604,5 @@ behavior discover_format_targets "Discover Format Targets" {
   verify contract "Discover Format Targets: format target discovery holds — project_root_available, filesystem_accessible, all_spec_files_discovered, exclusions_applied, non_spec_skipped"
   verify unit "a specforge.json that does not say which files are the project's sources refuses the run, and nothing is written"
   verify unit "a named file is formatted whatever specforge.json says"
+  verify unit "a project's sources end at a nested project, which a run from the project does not format"
 }

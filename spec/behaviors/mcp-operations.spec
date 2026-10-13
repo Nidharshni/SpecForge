@@ -155,6 +155,7 @@ behavior provide_mcp_rename_tool "Provide MCP Rename Tool" {
   verify unit "rename edits exactly the declaration and the references find_references returns"
   verify unit "rename's updated diagnostics follow a successful write only: a preview and a failure carry none"
   verify unit "a specforge.json that does not say which files are the project's sources fails the rename as config_invalid and writes nothing"
+  verify unit "rename never edits a nested project's files"
 }
 
 // MCP init creates a project at a specified path, not the current project.

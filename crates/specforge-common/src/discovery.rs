@@ -397,4 +397,50 @@ mod tests {
             );
         }
     }
+
+    /// `a.spec`, `q/c.spec`, and a nested project `p` (`specforge.json`,
+    /// `b.spec`, `deep/d.spec`) under a fresh root.
+    fn tree_with_a_nested_project() -> tempfile::TempDir {
+        let tmp = tempfile::tempdir().unwrap();
+        for (path, text) in [
+            ("a.spec", ""),
+            ("q/c.spec", ""),
+            ("p/specforge.json", "{}"),
+            ("p/b.spec", ""),
+            ("p/deep/d.spec", ""),
+        ] {
+            fs::create_dir_all(tmp.path().join(path).parent().unwrap()).unwrap();
+            fs::write(tmp.path().join(path), text).unwrap();
+        }
+        tmp
+    }
+
+    #[ignore = "fixed by T2"]
+    #[specforge_test(
+        behavior = "resolve_use_imports",
+        verify = "a .spec file inside a nested project below the spec root is no source"
+    )]
+    fn a_projects_sources_end_at_a_nested_project() {
+        let tmp = tree_with_a_nested_project();
+        let root = tmp.path();
+        assert_eq!(
+            discover_spec_files(root, &Exclude::default()),
+            vec![root.join("a.spec"), root.join("q/c.spec")]
+        );
+    }
+
+    #[ignore = "fixed by T2"]
+    #[specforge_test(
+        behavior = "resolve_use_imports",
+        verify = "a .spec file inside a nested project below the spec root is no source"
+    )]
+    fn a_path_in_a_nested_project_is_no_source() {
+        let _tmp = tree_with_a_nested_project();
+        let exclude = Exclude::default();
+        assert!(!is_discovered("p/b.spec", &exclude));
+        assert!(!is_discovered("p/deep/d.spec", &exclude));
+        assert!(is_discovered("q/c.spec", &exclude));
+        assert!(is_discovered("p.spec", &exclude));
+        assert!(is_discovered("gone/x.spec", &exclude));
+    }
 }

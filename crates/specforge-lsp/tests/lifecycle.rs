@@ -535,6 +535,60 @@ fn the_watchers_cover_what_the_session_classifies() {
     assert!(!globs.iter().any(|g| g.contains("/../")), "{globs:?}");
 }
 
+#[ignore = "fixed by T4"]
+#[spec(
+    behavior = "classify_project_changes",
+    verify = "the LSP's watchers report every specforge.json under the spec root"
+)]
+fn the_watchers_report_a_nested_projects_specforge_json() {
+    use specforge_project::ProjectSession;
+    use tower_lsp::lsp_types::{GlobPattern, OneOf, Url, WorkspaceFolder};
+
+    let dir = tempfile::TempDir::new().unwrap();
+    let root = dir.path();
+    std::fs::create_dir_all(root.join("spec")).unwrap();
+    std::fs::write(root.join("specforge.json"), r#"{"spec_root":"spec"}"#).unwrap();
+    std::fs::write(root.join("spec/a.spec"), "").unwrap();
+    let session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
+    let spec_root = session.inputs().spec_root().unwrap().to_path_buf();
+
+    let absolute: Vec<String> = specforge_lsp::watchers::file_watchers(session.inputs(), false)
+        .into_iter()
+        .filter_map(|w| match w.glob_pattern {
+            GlobPattern::String(glob) => Some(glob),
+            GlobPattern::Relative(_) => None,
+        })
+        .collect();
+    for glob in ["**/*.spec", "**/specforge.json"] {
+        let expected = format!("{}/{glob}", spec_root.display());
+        assert!(
+            absolute.contains(&expected),
+            "{expected} not in {absolute:?}"
+        );
+    }
+
+    let relative: Vec<(String, OneOf<WorkspaceFolder, Url>)> =
+        specforge_lsp::watchers::file_watchers(session.inputs(), true)
+            .into_iter()
+            .filter_map(|w| match w.glob_pattern {
+                GlobPattern::Relative(r) => Some((r.pattern, r.base_uri)),
+                GlobPattern::String(_) => None,
+            })
+            .collect();
+    let spec_base = |base: &OneOf<WorkspaceFolder, Url>| match base {
+        OneOf::Right(url) => url.to_file_path().ok().is_some_and(|p| p == spec_root),
+        OneOf::Left(_) => false,
+    };
+    for glob in ["**/*.spec", "**/specforge.json"] {
+        assert!(
+            relative
+                .iter()
+                .any(|(pattern, base)| pattern == glob && spec_base(base)),
+            "{glob} not in {relative:?}"
+        );
+    }
+}
+
 // -- validate_delta_correctness -----------------------------------------------
 
 /// The session the LSP holds verifies each rebuild against a cold build in a

@@ -121,6 +121,9 @@ behavior classify_project_changes "Classify Project Changes" {
   verify unit "a session's watch roots and the LSP's watchers cover every symlinked source's target"
   verify integration "the LSP asks its client to report every directory created or deleted under the project root"
   verify property "the changes of a batch naming every changed path are what the session finds stale"
+  verify unit "a nested project's specforge.json appearing or going changes every source under its directory"
+  verify unit "the LSP's watchers report every specforge.json under the spec root"
+  verify integration "the LSP drops a nested project's files when its specforge.json is created, and takes them back when it goes"
 }
 
 behavior bring_session_up_to_date "Bring a Session Up to Date with Disk" {
@@ -155,6 +158,7 @@ behavior bring_session_up_to_date "Bring a Session Up to Date with Disk" {
   verify unit "a specforge.json or module written while the extension runtime loads is seen next time"
   verify integration "after the LSP's watchers move, the session catches up on what changed while they did"
   verify integration "the LSP's catch-up keeps an open buffer"
+  verify unit "a nested project appearing below the spec root takes its files out of the session, and its removal puts them back"
 }
 
 behavior hold_editor_buffers "Hold Editor Buffers" {
