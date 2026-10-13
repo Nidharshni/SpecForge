@@ -538,8 +538,10 @@ impl Environment {
 
 /// `path`'s key under `spec_root` (see [`Environment::source_key`]). The
 /// editor and the workspace may spell one directory differently (a
-/// symlinked temp dir), so canonical forms are compared when the plain
-/// ones differ; a deleted file is compared through its directory.
+/// symlinked temp dir), so when the plain forms differ the path is compared
+/// by its directory's canonical form and its own name: a symlinked file is
+/// keyed by its own name, never its target's, and a deleted file is keyed
+/// the same way.
 pub fn source_key(spec_root: &Path, path: &Path) -> String {
     if spec_root.as_os_str().is_empty() {
         return path.to_string_lossy().into_owned();
@@ -548,11 +550,22 @@ pub fn source_key(spec_root: &Path, path: &Path) -> String {
         return relative.to_string_lossy().into_owned();
     }
     if let Ok(canonical_root) = std::fs::canonicalize(spec_root)
-        && let Ok(relative) = canonical(path).strip_prefix(&canonical_root)
+        && let Ok(relative) = in_canonical_dir(path).strip_prefix(&canonical_root)
     {
         return relative.to_string_lossy().into_owned();
     }
     path.to_string_lossy().into_owned()
+}
+
+/// `path` with its directory canonical and its own name kept: a symlink stays
+/// itself. `path` as given when it has no directory or no name.
+fn in_canonical_dir(path: &Path) -> PathBuf {
+    match (path.parent(), path.file_name()) {
+        (Some(parent), Some(name)) if !parent.as_os_str().is_empty() => {
+            canonical(parent).join(name)
+        }
+        _ => path.to_path_buf(),
+    }
 }
 
 /// `path`, canonical when it can be: the path itself when it exists, else
@@ -765,7 +778,6 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    #[ignore = "fixed by T2"]
     fn a_source_key_keeps_a_symlinks_own_name() {
         let dir = tempfile::TempDir::new().unwrap();
         let dir = std::fs::canonicalize(dir.path()).unwrap();
