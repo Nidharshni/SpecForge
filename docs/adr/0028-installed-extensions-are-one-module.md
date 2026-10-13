@@ -159,3 +159,12 @@ the user's publisher-key pins. A failure there puts every file back; `config` is
 - **D7**, first bullet: enabling the builtins an extension requires is the lock plan's (ADR 0041 B3),
   for a builtin, a local file and a registry package alike, in `add` and `init`; `candidate::
   required_builtins` is gone. A builtin that does not load still refuses the operation (E028).
+
+## Amendment (round 8)
+
+- **D4:** `Change` also puts back every file its last step names and removes the directories it created; a change that
+  stages nothing writes no lock; `remove` no longer opens the change itself (all four operations go through the lock
+  plan).
+- **D8/D10:** the inventory no longer answers which extensions require a name (remove asks the lock plan).
+- **D9:** a row's origin is that of the entry the load loaded it by (`Origin::of` over `Installed::resolve`), else of
+  its first entry in load order (ADR 0065 D5).
