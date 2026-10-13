@@ -304,6 +304,11 @@ fn changed_paths_are_named_by_key_or_by_path_under_the_root() {
     let (mut watch, _) = fixture.watch();
     let guide = fixture.parent.join("outside/guide.md");
     fs::write(&guide, "# guide\n").unwrap();
+    // A path changes something only when its file is not as the session
+    // read it: write the other two again, differently.
+    fixture.write("spec/a.spec", &format!("{NAMES_OUTSIDE}\n"));
+    let config = fs::read_to_string(fixture.root.join("specforge.json")).unwrap();
+    fixture.write("specforge.json", &format!("{config}\n"));
 
     let events = watch.changed(&[
         fixture.root.join("spec/a.spec"),
@@ -385,7 +390,6 @@ fn applied_says_what_the_update_left() {
     behavior = "watch_file_system_for_changes",
     verify = "a directory event reaches every source under it"
 )]
-#[ignore = "fixed by T3"]
 fn a_directory_event_reaches_every_source_under_it() {
     let fixture = Fixture::new(PLAIN);
     fixture.write(

@@ -1,5 +1,5 @@
-//! What a project session depends on, and what a changed path is to it
-//! (behavior `classify_project_changes`, ADR 0030).
+//! What a project session depends on, and what a changed path reaches of it
+//! (behavior `classify_project_changes`, ADR 0030, ADR 0073).
 //!
 //! A session is built from its sources (the `.spec` files discovery finds
 //! under the spec root), its environment inputs (`specforge.json`,
@@ -7,65 +7,42 @@
 //! its check inputs (files the checks read but no parse does: the build
 //! cache check-phase passes read, the files `file_reference` fields and
 //! `file_exists` rules name). [`SessionInputs`] is that set as one value;
-//! watch, the LSP and MCP all ask the session's inputs what a changed path
-//! means, which directories to watch and what to report, so "a change"
-//! has one meaning.
+//! the session asks its inputs what a changed path reaches
+//! (`ProjectSession::changes`), and watch and the LSP ask them which
+//! directories to watch and what to report.
 
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use specforge_common::{Exclude, ProjectConfig, discover_spec_files, is_discovered};
+use specforge_common::{
+    Exclude, ProjectConfig, discover_spec_files, discover_spec_files_at, is_discovered,
+};
 
 use crate::build_cache::BUILD_CACHE_FILE;
 use crate::{Environment, builtins};
 use specforge_installed::Installed;
 
-/// What a changed path is to a project session.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum InputRole {
-    /// A `.spec` file discovery finds under the spec root (key relative to it).
-    Source(String),
-    /// specforge.json, specforge.lock, or an extension module the environment loaded.
-    Environment,
-    /// A file the checks read: specforge-cache.json (ADR 0009), or a file a
-    /// `file_reference` field names.
-    CheckInput,
-    /// Anything else (an unloaded `.wasm`, an excluded `.spec`, target/…).
-    Unrelated,
-}
-
-/// What a batch of changed paths means: the input to
-/// [`crate::ProjectSession::apply`].
+/// What a batch of changed paths, or the disk since the last read, means to
+/// a session: the input to [`crate::ProjectSession::apply`]. Produced only
+/// by [`crate::ProjectSession::changes`] and [`crate::ProjectSession::stale`].
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Changes {
     /// Changed sources, by key relative to the spec root: sorted, deduplicated.
     pub sources: Vec<String>,
-    /// An environment input changed: the environment must load again.
-    pub environment: bool,
-    /// A check input changed: the checks must run again.
-    pub check_inputs: bool,
+    /// The environment must load again. Each path of the batch that reached
+    /// an environment input which changed, as the batch spelled it (for
+    /// `stale`, each changed input as the session recorded it): sorted,
+    /// deduplicated.
+    pub environment: Vec<PathBuf>,
+    /// The checks must run again: the paths that reached a changed check
+    /// input, named the same way.
+    pub check_inputs: Vec<PathBuf>,
 }
 
 impl Changes {
     /// Nothing the session is built from changed.
     pub fn is_empty(&self) -> bool {
-        self.sources.is_empty() && !self.environment && !self.check_inputs
-    }
-
-    /// The changes `roles` amount to.
-    pub fn from_roles(roles: impl IntoIterator<Item = InputRole>) -> Self {
-        let mut changes = Changes::default();
-        for role in roles {
-            match role {
-                InputRole::Source(key) => changes.sources.push(key),
-                InputRole::Environment => changes.environment = true,
-                InputRole::CheckInput => changes.check_inputs = true,
-                InputRole::Unrelated => {}
-            }
-        }
-        changes.sources.sort();
-        changes.sources.dedup();
-        changes
+        self.sources.is_empty() && self.environment.is_empty() && self.check_inputs.is_empty()
     }
 }
 
@@ -91,13 +68,14 @@ pub enum UpdateKind {
 ///
 /// One value per environment load, renewed each time the checks run;
 /// `Update::inputs_changed` says when it changed. Every answer to "what
-/// does this session depend on" is read from it: what a changed path is
-/// ([`Self::classify`]), which directories a file watcher watches
+/// does this session depend on" is read from it: what a changed path
+/// reaches (inside the crate, for [`crate::ProjectSession::changes`]),
+/// which directories a file watcher watches
 /// ([`Self::watch_roots`]), which files an editor asks its client to report
 /// ([`Self::watched`]), and, inside the crate, what the session stamps for
 /// freshness and where it discovers its sources. A detached session's
-/// inputs are [`Self::detached`]: no root, every `.spec` path a buffer
-/// source keyed by itself, nothing to watch, nothing to stamp.
+/// inputs are [`Self::detached`]: no root, nothing to reach, nothing to
+/// watch, nothing to stamp.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SessionInputs {
     place: Place,
@@ -141,7 +119,29 @@ struct Pending {
     ancestor: PathBuf,
     /// The missing directory (canonical, as far as it can be).
     toward: PathBuf,
-    role: InputRole,
+    kind: Kind,
+}
+
+/// Environment or check input.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Kind {
+    Environment,
+    Check,
+}
+
+/// What a batch of changed paths reaches of what a session read
+/// ([`SessionInputs::reach`]).
+#[derive(Debug, Default)]
+pub(crate) struct Reach {
+    /// Keys relative to the spec root whose sources (read, or found now) are
+    /// compared; "" is every source. Sorted; none lies under another.
+    pub(crate) regions: Vec<String>,
+    /// Each batch path that reached a recorded input, with the inputs it
+    /// reached, as recorded.
+    pub(crate) inputs: Vec<(PathBuf, Vec<(Kind, PathBuf)>)>,
+    /// Each batch path that is a directory created on the way to a missing
+    /// input's directory.
+    pub(crate) pending: Vec<(PathBuf, Kind)>,
 }
 
 impl OnDisk {
@@ -163,9 +163,10 @@ impl OnDisk {
 struct Canonical {
     root: PathBuf,
     spec_root: PathBuf,
-    environment: BTreeSet<PathBuf>,
-    checks: BTreeSet<PathBuf>,
-    listings: BTreeSet<PathBuf>,
+    /// Canonical form to the path as recorded.
+    environment: BTreeMap<PathBuf, PathBuf>,
+    checks: BTreeMap<PathBuf, PathBuf>,
+    listings: BTreeMap<PathBuf, PathBuf>,
 }
 
 /// A directory a file watcher watches.
@@ -207,56 +208,6 @@ impl SessionInputs {
     /// Where `.spec` files are discovered; `None` when detached.
     pub fn spec_root(&self) -> Option<&Path> {
         self.disk().map(|disk| disk.spec_root.as_path())
-    }
-
-    /// What `path` (absolute, or relative to the working directory) is to
-    /// the session: a `.spec` file discovery finds under the spec root is a
-    /// source keyed relative to it; the config, the lock and each loaded
-    /// module are environment inputs; the build cache, each named file and
-    /// any file directly in a missing named file's directory are check
-    /// inputs; anything else is unrelated. Paths are compared canonically.
-    /// Detached: a `.spec` path is a source keyed by itself, anything else
-    /// unrelated.
-    pub fn classify(&self, path: &Path) -> InputRole {
-        let Some(disk) = self.disk() else {
-            return if path.extension().is_some_and(|ext| ext == "spec") {
-                InputRole::Source(path.to_string_lossy().into_owned())
-            } else {
-                InputRole::Unrelated
-            };
-        };
-        let path = canonical(path);
-        let known = &disk.canonical;
-        if known.environment.contains(&path) {
-            return InputRole::Environment;
-        }
-        if let Ok(relative) = path.strip_prefix(&known.spec_root) {
-            let key = relative.to_string_lossy().into_owned();
-            if !self.excludes(&key) {
-                return InputRole::Source(key);
-            }
-        }
-        if known.checks.contains(&path)
-            || path
-                .parent()
-                .is_some_and(|dir| known.listings.contains(dir))
-        {
-            return InputRole::CheckInput;
-        }
-        // A directory created on the way to an input's missing directory.
-        for pending in &disk.pending {
-            if path.parent() == Some(pending.ancestor.as_path())
-                && pending.toward.starts_with(&path)
-            {
-                return pending.role.clone();
-            }
-        }
-        InputRole::Unrelated
-    }
-
-    /// What a batch of changed paths amounts to.
-    pub fn changes<'p>(&self, paths: impl IntoIterator<Item = &'p Path>) -> Changes {
-        Changes::from_roles(paths.into_iter().map(|path| self.classify(path)))
     }
 
     /// The directories a file watcher must watch to see a change to any
@@ -434,6 +385,94 @@ impl SessionInputs {
             .unwrap_or_default()
     }
 
+    /// What `paths` (absolute, spelled as a watcher or an editor reports
+    /// them) reach of what the session read: the sources at or under each
+    /// (a region), and the environment and check inputs each is or lies
+    /// above. Detached: nothing.
+    pub(crate) fn reach<'p>(&self, paths: impl IntoIterator<Item = &'p Path>) -> Reach {
+        let Some(disk) = self.disk() else {
+            return Reach::default();
+        };
+        let known = &disk.canonical;
+        let mut parents: BTreeMap<PathBuf, PathBuf> = BTreeMap::new();
+        let mut regions: Vec<String> = Vec::new();
+        let mut reach = Reach::default();
+        for path in paths {
+            let canonical_path = canonical(path);
+            let in_dir = match (path.parent(), path.file_name()) {
+                (Some(parent), Some(name)) if !parent.as_os_str().is_empty() => parents
+                    .entry(parent.to_path_buf())
+                    .or_insert_with(|| canonical(parent))
+                    .join(name),
+                _ => path.to_path_buf(),
+            };
+            if known.spec_root.starts_with(&canonical_path) {
+                regions.push(String::new());
+            } else if let Ok(relative) = in_dir.strip_prefix(&known.spec_root) {
+                regions.push(relative.to_string_lossy().into_owned());
+            }
+            let mut reached: Vec<(Kind, PathBuf)> = Vec::new();
+            for (known, recorded) in &known.environment {
+                if known.starts_with(&canonical_path) {
+                    reached.push((Kind::Environment, recorded.clone()));
+                }
+            }
+            for (known, recorded) in &known.checks {
+                if known.starts_with(&canonical_path) {
+                    reached.push((Kind::Check, recorded.clone()));
+                }
+            }
+            for (known, recorded) in &known.listings {
+                if known.starts_with(&canonical_path)
+                    || canonical_path.parent() == Some(known.as_path())
+                {
+                    reached.push((Kind::Check, recorded.clone()));
+                }
+            }
+            if !reached.is_empty() {
+                reach.inputs.push((path.to_path_buf(), reached));
+            }
+            // A directory created on the way to an input's missing directory.
+            for pending in &disk.pending {
+                if canonical_path.parent() == Some(pending.ancestor.as_path())
+                    && pending.toward.starts_with(&canonical_path)
+                {
+                    reach.pending.push((path.to_path_buf(), pending.kind));
+                }
+            }
+        }
+        regions.sort();
+        regions.dedup();
+        let mut kept: Vec<String> = Vec::new();
+        for region in regions {
+            if !kept
+                .iter()
+                .any(|outer| outer.is_empty() || Path::new(&region).starts_with(outer))
+            {
+                kept.push(region);
+            }
+        }
+        reach.regions = kept;
+        reach
+    }
+
+    /// The sources discovery finds at `key` now (a directory: all under it; a
+    /// source file: itself; else none), by key. "" is every source.
+    pub(crate) fn discover_at(&self, key: &str) -> Vec<String> {
+        let Some(disk) = self.disk() else {
+            return Vec::new();
+        };
+        discover_spec_files_at(&disk.spec_root, &disk.spec_root.join(key), &disk.exclude)
+            .into_iter()
+            .map(|path| {
+                path.strip_prefix(&disk.spec_root)
+                    .unwrap_or(&path)
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .collect()
+    }
+
     /// A changed key the session ignores (never, detached).
     pub(crate) fn excludes(&self, key: &str) -> bool {
         self.disk()
@@ -448,17 +487,21 @@ impl SessionInputs {
             environment: [&disk.config, &disk.lock]
                 .into_iter()
                 .chain(&disk.modules)
-                .map(|path| canonical(path))
+                .map(|path| (canonical(path), path.clone()))
                 .collect(),
             checks: disk
                 .build_cache
                 .iter()
                 .chain(&disk.named)
-                .map(|path| canonical(path))
+                .map(|path| (canonical(path), path.clone()))
                 .collect(),
             // A missing referenced file's suggestion names a similar file
             // in its directory: a file created or deleted there changes it.
-            listings: disk.listings.iter().map(|dir| canonical(dir)).collect(),
+            listings: disk
+                .listings
+                .iter()
+                .map(|dir| (canonical(dir), dir.clone()))
+                .collect(),
         };
         disk.pending = disk.pending_directories();
         SessionInputs {
@@ -474,7 +517,7 @@ impl OnDisk {
         if !self.canonical.root.is_dir() {
             return Vec::new();
         }
-        let toward = |dir: &Path, role: &InputRole| -> Option<Pending> {
+        let toward = |dir: &Path, kind: Kind| -> Option<Pending> {
             let toward = canonical(dir);
             if toward.is_dir() || toward.starts_with(&self.canonical.root) {
                 return None;
@@ -486,26 +529,24 @@ impl OnDisk {
             Some(Pending {
                 ancestor: ancestor.to_path_buf(),
                 toward,
-                role: role.clone(),
+                kind,
             })
         };
-        let environment = InputRole::Environment;
-        let check = InputRole::CheckInput;
         let mut pending: Vec<Pending> = Vec::new();
-        let candidates = std::iter::once((self.spec_root.as_path(), &environment))
+        let candidates = std::iter::once((self.spec_root.as_path(), Kind::Environment))
             .chain(
                 self.modules
                     .iter()
-                    .filter_map(|module| Some((module.parent()?, &environment))),
+                    .filter_map(|module| Some((module.parent()?, Kind::Environment))),
             )
             .chain(
                 self.build_cache
                     .iter()
                     .chain(&self.named)
-                    .filter_map(|file| Some((file.parent()?, &check))),
+                    .filter_map(|file| Some((file.parent()?, Kind::Check))),
             );
-        for (dir, role) in candidates {
-            if let Some(next) = toward(dir, role)
+        for (dir, kind) in candidates {
+            if let Some(next) = toward(dir, kind)
                 && !pending.contains(&next)
             {
                 pending.push(next);
@@ -520,9 +561,9 @@ impl Canonical {
         Canonical {
             root: PathBuf::new(),
             spec_root: PathBuf::new(),
-            environment: BTreeSet::new(),
-            checks: BTreeSet::new(),
-            listings: BTreeSet::new(),
+            environment: BTreeMap::new(),
+            checks: BTreeMap::new(),
+            listings: BTreeMap::new(),
         }
     }
 }
@@ -640,22 +681,19 @@ mod tests {
         std::fs::write(real.join("specforge.json"), "{}").unwrap();
 
         // The same file, however the directory is spelled.
+        for config in [real.join("specforge.json"), link.join("specforge.json")] {
+            let reach = inputs.reach([config.as_path()]);
+            assert_eq!(reach.inputs.len(), 1, "{reach:?}");
+            assert_eq!(reach.inputs[0].1[0].0, Kind::Environment);
+        }
         assert_eq!(
-            inputs.classify(&real.join("specforge.json")),
-            InputRole::Environment
-        );
-        assert_eq!(
-            inputs.classify(&link.join("specforge.json")),
-            InputRole::Environment
-        );
-        assert_eq!(
-            inputs.classify(&real.join("a.spec")),
-            InputRole::Source("a.spec".to_string())
+            inputs.reach([real.join("a.spec").as_path()]).regions,
+            vec!["a.spec".to_string()]
         );
     }
 
     #[test]
-    fn detached_inputs_answer_nothing_but_spec_buffers() {
+    fn detached_inputs_reach_nothing() {
         let inputs = SessionInputs::detached();
         assert_eq!(inputs.root(), None);
         assert_eq!(inputs.spec_root(), None);
@@ -665,14 +703,8 @@ mod tests {
         assert!(!inputs.excludes("target/x.spec"));
         assert_eq!(inputs.environment_files().count(), 0);
         assert_eq!(inputs.check_files().count(), 0);
-        assert_eq!(
-            inputs.classify(Path::new("/x/a.spec")),
-            InputRole::Source("/x/a.spec".to_string())
-        );
-        assert_eq!(
-            inputs.classify(Path::new("/x/specforge.json")),
-            InputRole::Unrelated
-        );
+        let reach = inputs.reach([Path::new("/x/a.spec"), Path::new("/x/specforge.json")]);
+        assert!(reach.regions.is_empty() && reach.inputs.is_empty() && reach.pending.is_empty());
         assert_eq!(inputs.with_named(vec!["/x/y".into()]), inputs);
     }
 
@@ -753,12 +785,22 @@ mod tests {
         );
         // A directory created on the way is the module's change; one
         // beside it is nothing.
-        assert_eq!(inputs.classify(&far.join("deep")), InputRole::Environment);
-        assert_eq!(inputs.classify(&far.join("other")), InputRole::Unrelated);
-        // Below the first directory on the way is not this ancestor's.
         assert_eq!(
-            inputs.classify(&far.join("deep/mods")),
-            InputRole::Unrelated
+            inputs.reach([far.join("deep").as_path()]).pending,
+            vec![(far.join("deep"), Kind::Environment)]
+        );
+        assert!(
+            inputs
+                .reach([far.join("other").as_path()])
+                .pending
+                .is_empty()
+        );
+        // Below the first directory on the way is not this ancestor's.
+        assert!(
+            inputs
+                .reach([far.join("deep/mods").as_path()])
+                .pending
+                .is_empty()
         );
         // Once the directory exists, it is watched whole.
         std::fs::create_dir_all(far.join("deep/mods")).unwrap();
@@ -799,6 +841,6 @@ mod tests {
         let dir = tempfile::TempDir::new().unwrap();
         let inputs = SessionInputs::opened(&dir.path().join("nope"), &config(&[]));
         assert!(inputs.watch_roots().is_empty());
-        assert_eq!(inputs.classify(dir.path()), InputRole::Unrelated);
+        assert!(inputs.discover_at("").is_empty());
     }
 }

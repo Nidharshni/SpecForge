@@ -888,7 +888,6 @@ fn watch_reports_what_check_reports_when_an_excluded_import_target_appears() {
     behavior = "watch_file_system_for_changes",
     verify = "a directory moved inside the spec root leaves watch reporting what check reports"
 )]
-#[ignore = "fixed by T3"]
 fn watch_reports_what_check_reports_after_a_directory_move() {
     let project = TempDir::new().unwrap();
     fs::write(

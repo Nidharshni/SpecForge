@@ -517,7 +517,6 @@ fn last_e003_version(served: &Served, sent: &[Sent], file: &str) -> Option<i32> 
     behavior = "classify_project_changes",
     verify = "a directory created, moved or deleted under the spec root changes every source under it"
 )]
-#[ignore = "fixed by T3"]
 fn a_moved_directory_is_every_source_under_it() {
     let mut served = Served::new(&[("a.spec", A_ALPHA), ("old/b.spec", B_PLAIN)]).open(&[]);
     std::fs::rename(served.root().join("old"), served.root().join("new")).unwrap();

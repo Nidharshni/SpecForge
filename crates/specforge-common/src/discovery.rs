@@ -59,7 +59,7 @@ pub fn walk_spec_files(root: &Path, mut stop: impl FnMut(&Path) -> bool) -> Walk
         .filter_map(Result::ok)
         .filter(|entry| {
             let ft = entry.file_type();
-            (ft.is_file() || (ft.is_symlink() && entry.path().is_file()))
+            is_source_entry(ft, entry.path())
                 && entry.path().extension().is_some_and(|ext| ext == "spec")
         })
         .map(walkdir::DirEntry::into_path)
@@ -67,6 +67,17 @@ pub fn walk_spec_files(root: &Path, mut stop: impl FnMut(&Path) -> bool) -> Walk
     files.sort();
     stopped.sort();
     Walked { files, stopped }
+}
+
+/// Whether an entry of a walk of type `ft` at `path` can be a source: not a
+/// directory, and a symlink only when it resolves to a file (not to a
+/// directory, not to nothing).
+fn is_source_entry(ft: std::fs::FileType, path: &Path) -> bool {
+    if ft.is_symlink() {
+        path.is_file()
+    } else {
+        !ft.is_dir()
+    }
 }
 
 /// A project's sources under `root` (its spec root): the `.spec` files
@@ -122,7 +133,10 @@ pub fn discover_spec_files_at(root: &Path, path: &Path, exclude: &Exclude) -> Ve
             .into_iter()
             .filter(|file| !exclude.excludes(file.strip_prefix(root).unwrap_or(file)))
             .collect(),
-        Ok(_) if path.is_file() && is_discovered(&relative.to_string_lossy(), exclude) => {
+        Ok(meta)
+            if is_source_entry(meta.file_type(), path)
+                && is_discovered(&relative.to_string_lossy(), exclude) =>
+        {
             vec![path.to_path_buf()]
         }
         _ => Vec::new(),

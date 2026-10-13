@@ -449,7 +449,7 @@ fn glob_matches(glob: &str, path: &str) -> bool {
     verify = "the LSP's watchers cover every input the session classifies"
 )]
 fn the_watchers_cover_what_the_session_classifies() {
-    use specforge_project::{InputRole, ProjectSession};
+    use specforge_project::ProjectSession;
     use tower_lsp::lsp_types::GlobPattern;
 
     let outside = tempfile::TempDir::new().unwrap();
@@ -514,9 +514,10 @@ fn the_watchers_cover_what_the_session_classifies() {
         ),
     ];
     for (input, watched) in &spelled {
-        assert_ne!(
-            session.inputs().classify(input),
-            InputRole::Unrelated,
+        std::fs::create_dir_all(input.parent().unwrap()).unwrap();
+        std::fs::write(input, "new content").unwrap();
+        assert!(
+            !session.changes([input.as_path()]).is_empty(),
             "{}",
             input.display()
         );

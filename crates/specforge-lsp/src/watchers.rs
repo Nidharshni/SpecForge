@@ -2,7 +2,7 @@
 //! didChangeWatchedFiles`), derived from the project session's inputs: every
 //! file the project is built from (`lsp_extension_reload_consistency`). What
 //! a reported change means is the session's to say
-//! (`SessionInputs::changes`); this only makes sure the client reports it.
+//! (`ProjectSession::changes`); this only makes sure the client reports it.
 
 use std::path::Path;
 

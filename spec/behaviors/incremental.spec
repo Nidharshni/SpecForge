@@ -90,7 +90,6 @@ behavior classify_project_changes "Classify Project Changes" {
   verify unit "a file a file_reference field names re-runs the checks"
   verify unit "a file a file_exists rule names re-runs the checks"
   verify unit "an excluded or undiscovered .spec file changes nothing"
-  verify unit "a detached session classifies a .spec buffer as a source and nothing else as an input"
   verify unit "a session's watch roots cover every input it classifies"
   verify unit "the LSP's watchers cover every input the session classifies"
   verify integration "the LSP watches a missing referenced file and its directory, spelled under the project root"

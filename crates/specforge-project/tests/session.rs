@@ -582,12 +582,14 @@ fn a_wasm_file_entry_loads_in_a_session_and_reloads_with_its_file() {
     for code in ["E024", "E028", "W019", "W112"] {
         assert!(!codes.iter().any(|c| c == code), "{code}: {codes:?}");
     }
-    assert_eq!(
-        session.inputs().classify(&root.join("ext/greet.wasm")),
-        specforge_project::InputRole::Environment
-    );
 
     fs::write(root.join("ext/greet.wasm"), b"\0asm not a component").unwrap();
+    assert!(
+        !session
+            .changes([root.join("ext/greet.wasm").as_path()])
+            .environment
+            .is_empty()
+    );
     let update = session.reload_environment();
     let e028: Vec<&Diagnostic> = update
         .diagnostics
@@ -1788,7 +1790,7 @@ fn edits_creations_and_deletions_apply_as_one_update() {
 
     let stale = session.stale();
     assert_eq!(stale.sources, vec!["a.spec", "b.spec", "c.spec"]);
-    assert!(!stale.environment && !stale.check_inputs);
+    assert!(stale.environment.is_empty() && stale.check_inputs.is_empty());
     let update = session.ensure_fresh().expect("three files changed");
     assert_eq!(update.kind, specforge_project::UpdateKind::Sources);
     assert_eq!(update.rebuilt_files, vec!["a.spec", "b.spec", "c.spec"]);
@@ -1860,7 +1862,10 @@ fn a_lock_change_reloads_the_environment() {
     fs::write(root.join("specforge.lock"), lock.to_string()).unwrap();
 
     let stale = session.stale();
-    assert!(stale.environment && stale.sources.is_empty(), "{stale:?}");
+    assert!(
+        !stale.environment.is_empty() && stale.sources.is_empty(),
+        "{stale:?}"
+    );
     let update = session.ensure_fresh().expect("the lock changed");
     assert_eq!(update.kind, specforge_project::UpdateKind::Environment);
     let locked = e028(&session);
@@ -2178,7 +2183,7 @@ fn a_config_written_while_the_runtime_loads_is_seen_next_time() {
     };
     assert!(!e028(&session), "{:?}", session.project().diagnostics());
     // The write was after the config's stamp: the session is stale.
-    assert!(session.stale().environment);
+    assert!(!session.stale().environment.is_empty());
 
     let update = session.ensure_fresh().expect("the config changed");
     assert_eq!(update.kind, UpdateKind::Environment);
@@ -2186,7 +2191,7 @@ fn a_config_written_while_the_runtime_loads_is_seen_next_time() {
     assert!(!e028(&session), "{:?}", session.project().diagnostics());
     let kinds = session.project().environment().registries().kinds();
     assert!(kinds.contains("alpha") && kinds.contains("beta"));
-    assert!(!session.stale().environment);
+    assert!(session.stale().environment.is_empty());
 }
 
 #[specforge_test(
@@ -2205,10 +2210,10 @@ fn a_module_rewritten_while_the_runtime_loads_is_seen_next_time() {
     let mut session =
         ProjectSession::open_from(&specforge_common::ProjectRoot::of(root).unwrap(), source);
 
-    assert!(session.stale().environment);
+    assert!(!session.stale().environment.is_empty());
     let update = session.ensure_fresh().expect("the module changed");
     assert_eq!(update.kind, UpdateKind::Environment);
-    assert!(!session.stale().environment);
+    assert!(session.stale().environment.is_empty());
 }
 
 #[test]
@@ -2705,9 +2710,11 @@ fn a_glob_exclude_entry_leaves_its_files_out_of_the_compile() {
     assert_eq!(files, ["main.spec"]);
 
     let session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
-    assert_eq!(
-        session.inputs().classify(&root.join("sub/c.draft.spec")),
-        specforge_project::InputRole::Unrelated
+    write(root, "sub/c.draft.spec", "term c \"C\" {\n}\n");
+    assert!(
+        session
+            .changes([root.join("sub/c.draft.spec").as_path()])
+            .is_empty()
     );
 }
 
@@ -2853,9 +2860,16 @@ fn a_batch_naming_every_changed_path_changes_what_is_stale() {
             let changes = session.changes(paths.iter().map(PathBuf::as_path));
             let stale = session.stale();
             assert_eq!(changes.sources, stale.sources, "{context}");
-            // Bools until the changes name their paths (T3).
-            assert_eq!(changes.environment, stale.environment, "{context}");
-            assert_eq!(changes.check_inputs, stale.check_inputs, "{context}");
+            assert_eq!(
+                changes.environment.is_empty(),
+                stale.environment.is_empty(),
+                "{context}"
+            );
+            assert_eq!(
+                changes.check_inputs.is_empty(),
+                stale.check_inputs.is_empty(),
+                "{context}"
+            );
 
             session.apply(&changes);
             assert!(session.stale().is_empty(), "{context}");
