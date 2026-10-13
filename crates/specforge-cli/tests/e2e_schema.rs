@@ -884,7 +884,6 @@ decision d1 "D" {
     behavior = "publish_schema_specification",
     verify = "an export of a project with no errors validates against the published schema"
 )]
-#[ignore = "fixed by 01-T8"]
 fn an_export_of_a_project_check_admits_validates_against_its_published_schema() {
     let dir = setup_project_with_config(
         r#"{"name":"t","version":"0.1.0","spec_root":"spec","extensions":["@specforge/software","@specforge/product","@specforge/governance","@specforge/formal"]}"#,
@@ -907,7 +906,6 @@ fn an_export_of_a_project_check_admits_validates_against_its_published_schema() 
     behavior = "publish_schema_specification",
     verify = "this repository's and its example projects' exports validate against their published schemas"
 )]
-#[ignore = "fixed by 01-T8"]
 fn this_repository_and_its_example_projects_export_what_they_publish() {
     for rel in PUBLISHED_PROJECTS {
         let dir = copy_project(rel);

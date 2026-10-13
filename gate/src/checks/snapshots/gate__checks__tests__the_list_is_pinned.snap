@@ -29,6 +29,8 @@ clippy            quick      crates/**, integrations/rust/**, xtask/**, gate/**,
                              the workspace is clippy-clean with warnings denied
 doctests          quick      computed: a workspace member that holds a runnable doctest (after build)
                              the doctests of the crates that have one pass
+published-schemas quick      **/*.spec, **/specforge.json, extensions/**, crates/specforge-emitter/**, crates/specforge-graph/**, crates/specforge-registry/**, crates/specforge-cli/tests/e2e_schema.rs (after build)
+                             every project's exports validate against the schema `specforge schema --publish` prints for their format
 specs             quick      **/*.spec, **/specforge.json, gate/baseline.json, extensions/**, crates/*/src/**, crates/*/Cargo.toml
                              every project checks with no error and no warning above the baseline
 dogfood           full       always (after tests, guests)
