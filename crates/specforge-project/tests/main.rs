@@ -15,6 +15,7 @@ mod extension_calls;
 mod field_types;
 mod fixture;
 mod policy;
+mod product_rules;
 mod providers;
 mod registered_fields;
 mod registry_build_snapshot;

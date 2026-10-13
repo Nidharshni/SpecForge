@@ -187,40 +187,6 @@ behavior keeper "Keeper" {
 }
 
 #[specforge_test(
-    behavior = "se_validate_unused_invariants",
-    verify = "invariant nothing references produces W003"
-)]
-#[specforge_test(
-    behavior = "se_validate_unused_invariants",
-    verify = "invariant with incoming reference edge passes"
-)]
-fn check_reports_an_unreferenced_invariant_as_w003() {
-    let dir = TestProject::new().raw_config(r#"{"extensions": ["@specforge/software"]}"#);
-    dir.write(
-        "main.spec",
-        concat!(
-            "invariant held \"Held\" {\n  guarantee \"g\"\n}\n",
-            "invariant orphan \"Orphan\" {\n  guarantee \"g\"\n}\n",
-            "behavior keeper \"Keeper\" {\n  contract \"c\"\n  invariants [held]\n}\n",
-        ),
-    );
-    let output = Cli::on(&dir)
-        .command(&["check", "--format=json"])
-        .output()
-        .unwrap();
-    let diagnostics: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    let w003: Vec<&str> = diagnostics
-        .as_array()
-        .unwrap()
-        .iter()
-        .filter(|d| d["code"] == "W003")
-        .map(|d| d["message"].as_str().unwrap())
-        .collect();
-    assert_eq!(w003.len(), 1, "{diagnostics}");
-    assert!(w003[0].contains("'orphan'"), "{w003:?}");
-}
-
-#[specforge_test(
     behavior = "te_coverage_pass",
     verify = "recorded test results prove entities and failing tests are A014"
 )]

@@ -773,24 +773,6 @@ fn the_timeline_compares_against_today_unless_as_of_says_otherwise() {
 }
 
 #[specforge_test(
-    behavior = "pe_query_milestone_timeline",
-    verify = "specforge check emits no I058 diagnostics (query-time only)"
-)]
-fn check_reports_no_overdue_milestone() {
-    let dir = setup_overdue_project();
-    let mut cmd = Cli::on(&dir).bare_command(&["check"]);
-    let output = cmd.output().unwrap();
-    let all = format!(
-        "{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    // Infos are always reported, so an I058 would be among them.
-    assert!(output.status.code().is_some_and(|c| c <= 1), "{all}");
-    assert!(!all.contains("I058"), "{all}");
-}
-
-#[specforge_test(
     behavior = "dispatch_surface_command",
     verify = "the CommandInput carries what the recorded tests prove, per entity that counts toward coverage"
 )]
