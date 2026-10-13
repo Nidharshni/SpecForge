@@ -14,6 +14,7 @@ mod lists;
 mod milestone_completion;
 mod persona_channel_features;
 mod project_wide;
+mod registration_spec;
 mod rollups;
 mod shared_contract;
 mod term_analytics;

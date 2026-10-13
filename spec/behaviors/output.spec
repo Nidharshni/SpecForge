@@ -313,6 +313,7 @@ behavior read_views_over_the_project_view "Read Views over the Project View" {
   verify unit "a coverage row is one JSON document on every surface"
   verify unit "a kind filter reports each kind the project does not know with I020, naming the closest"
   verify unit "an argument naming an undeclared kind is refused with unknown_kind naming the closest declared kind"
+  verify unit "the reach of some entities is every entity their trace chains reach, the seeds included, and its unverified entities are those that count toward coverage and are not proven"
   verify contract "Read Views over the Project View: read views hold — project_compiled, one_report_rule, one_coverage_per_state, surfaces_agree"
 }
 

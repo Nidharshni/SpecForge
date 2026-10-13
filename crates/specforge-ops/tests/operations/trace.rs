@@ -381,3 +381,35 @@ fn trace_human_output_marks_missing_links() {
         )
     );
 }
+
+// B:read_views_over_the_project_view — verify unit "the reach of some entities is every entity their trace chains reach, the seeds included, and its unverified entities are those that count toward coverage and are not proven"
+#[specforge_test(
+    behavior = "read_views_over_the_project_view",
+    verify = "the reach of some entities is every entity their trace chains reach, the seeds included, and its unverified entities are those that count toward coverage and are not proven"
+)]
+fn reach_lists_what_the_chains_reach_and_what_is_unverified() {
+    let mut project = Project::new(
+        "behavior alpha \"A\" {\n  verify unit \"test alpha\"\n}\n\nfeature beta \"B\" {\n}\n",
+        crate::view_support::registries(&["behavior"], &["feature"]),
+    );
+    project.graph.add_edge(Edge {
+        source: "beta".into(),
+        target: "alpha".into(),
+        label: "behaviors".into(),
+    });
+
+    let reach = specforge_ops::trace::reach(&project.view(), ["beta"]).unwrap();
+    assert_eq!(reach.affected, ["alpha", "beta"]);
+    // alpha is testable and unproven; beta, a feature, is not obligated.
+    assert_eq!(reach.unverified, ["alpha"]);
+
+    let project = {
+        project.record_passing(&[("alpha", "test alpha")]);
+        project
+    };
+    let reach = specforge_ops::trace::reach(&project.view(), ["beta"]).unwrap();
+    assert_eq!(reach.unverified, Vec::<String>::new());
+
+    let refused = specforge_ops::trace::reach(&project.view(), ["nope"]).unwrap_err();
+    assert_eq!(refused.code, "E003", "{refused:?}");
+}
