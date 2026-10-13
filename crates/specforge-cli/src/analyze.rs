@@ -22,8 +22,8 @@ pub(crate) struct Args {
     /// an extension declares (`<extension>:<pass>`)
     pass: Option<String>,
 
-    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
-    path: PathBuf,
+    #[command(flatten)]
+    project: crate::project::ProjectArg,
 
     #[command(flatten)]
     output: OutputArg,
@@ -69,7 +69,7 @@ impl Args {
     }
 
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
-        let project = match crate::project::compile(&self.path) {
+        let project = match self.project.compile() {
             Ok(project) => project,
             Err(error) => return Refusal::measuring(self.output.format).report(terminal, &error),
         };

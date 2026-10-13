@@ -16,8 +16,8 @@ pub(crate) struct Args {
     /// Defaults to the --path directory
     extension: Option<PathBuf>,
 
-    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
-    path: PathBuf,
+    #[command(flatten)]
+    project: crate::project::ProjectArg,
 
     #[command(flatten)]
     output: OutputArg,
@@ -33,8 +33,8 @@ impl Args {
     /// configuration reported, go to stderr whatever the result.
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         let format = self.output.format;
-        let extension = self.extension.as_deref().unwrap_or(&self.path);
-        let root = match crate::project::root(&self.path) {
+        let extension = self.extension.as_deref().unwrap_or(self.project.path());
+        let root = match self.project.root() {
             Ok(root) => root,
             Err(error) => return Refusal::of(format).report(terminal, &error),
         };

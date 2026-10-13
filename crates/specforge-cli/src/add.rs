@@ -2,7 +2,6 @@ use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal, Written};
 use crate::terminal::{Terminal, outln};
 use specforge_ops::extension::{self, AddOutcome, AddRequest, Added, AddedExtension, Origin};
 use specforge_ops_registry::ConfiguredRegistry;
-use std::path::PathBuf;
 
 // `specforge add`'s command line.
 #[derive(clap::Args)]
@@ -11,8 +10,8 @@ pub(crate) struct Args {
     #[arg(required = true, num_args = 1..)]
     specifiers: Vec<String>,
 
-    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
-    path: PathBuf,
+    #[command(flatten)]
+    project: crate::project::ProjectArg,
 
     #[command(flatten)]
     output: OutputArg,
@@ -34,7 +33,7 @@ impl Args {
     /// `specforge add`: the shared add operation, presented.
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         let format = self.output.format;
-        let root = match crate::project::root(&self.path) {
+        let root = match self.project.root() {
             Ok(root) => root,
             Err(error) => return Refusal::of(format).report(terminal, &error),
         };
