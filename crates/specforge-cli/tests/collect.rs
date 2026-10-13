@@ -312,10 +312,10 @@ fn collect_links_plain_tests_by_naming_convention() {
     let tests = &fx.report()["results"]["login"]["tests"];
     assert_eq!(tests[0]["name"], "tests::login__accepts_valid_credentials");
     assert_eq!(tests[0]["verify"], "accepts valid credentials");
-    assert_eq!(tests[0]["status"], "pass");
+    assert_eq!(tests[0]["status"], "passed");
     assert_eq!(tests[1]["name"], "login::rejects_a_locked_account");
     assert!(tests[1]["verify"].is_null(), "not an obligation of login");
-    assert_eq!(tests[1]["status"], "fail");
+    assert_eq!(tests[1]["status"], "failed");
     assert!(
         fx.root()
             .join("target/specforge/cargo-test.stdout.txt")

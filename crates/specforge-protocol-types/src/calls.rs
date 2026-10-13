@@ -346,10 +346,10 @@ pub struct PassInput {
     /// written against the entities-only input compatible.
     #[serde(default)]
     pub edges: Vec<PassEdge>,
-    /// Recorded test results (the normalized `specforge-report.json`), when
-    /// the host has them.
+    /// The recorded test report, without each test's runner, when the host
+    /// has one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub test_results: Option<PassTestResults>,
+    pub test_results: Option<TestResults>,
     /// Entity ids whose formal claims the prove pass entailed, sorted;
     /// absent when the prove pass did not run.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -435,34 +435,6 @@ pub struct PassBuildCache {
 pub struct PassCachedStatus {
     pub kind: String,
     pub status: String,
-}
-
-/// Normalized test results handed to a pass: per entity id, the recorded
-/// tests.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-pub struct PassTestResults {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub runner: Option<String>,
-    #[serde(default)]
-    pub results: BTreeMap<String, PassEntityResults>,
-}
-
-/// The tests recorded for one entity.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-pub struct PassEntityResults {
-    #[serde(default)]
-    pub tests: Vec<PassTestResult>,
-}
-
-/// One recorded test. `status` is `"pass"` for a passing test.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PassTestResult {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
-    pub status: String,
-    /// The obligation the test proves, when it names one.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub verify: Option<String>,
 }
 
 /// A pass diagnostic's severity, on the wire as the host's (`"Error"`,

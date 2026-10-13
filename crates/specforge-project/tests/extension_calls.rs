@@ -148,8 +148,8 @@ fn c4_the_pass_input_of_an_analysis() {
     );
     let report: TestReport = serde_json::from_value(json!({
         "runner": "cargo-test",
-        "results": {"a": {"file": "a.rs", "tests": [
-            {"name": "a_works", "status": "pass", "verify": "a works", "duration_ms": 1.5,
+        "results": {"a": {"tests": [
+            {"name": "a_works", "status": "passed", "verify": "a works", "duration_ms": 1.5,
              "runner": "cargo-test"}
         ]}}
     }))
@@ -164,8 +164,8 @@ fn c4_the_pass_input_of_an_analysis() {
         test_results: Some(&report),
         proved_claims: Some(&proved),
     });
-    // flipped in T6: the report's own keys (a result's `file`, a test's
-    // `duration_ms` and `runner`) are not the protocol's, and not sent
+    // flipped in T6, then by plan 08: a test's `runner` is the report's own
+    // key and not sent; its name, status, `verify` and `duration_ms` are
     golden("pass.input.json", &serde_json::to_value(&input).unwrap());
 }
 

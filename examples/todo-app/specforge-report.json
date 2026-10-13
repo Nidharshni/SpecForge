@@ -3,49 +3,65 @@
     "complete_task": {
       "tests": [
         {
-          "status": "pass"
+          "name": "completing_a_task_sets_status_to_done",
+          "runner": "cargo-test",
+          "status": "passed",
+          "verify": "completing a task sets status to done"
         },
         {
-          "status": "pass"
+          "name": "task_completed_event_fires_once_per_completion",
+          "runner": "cargo-test",
+          "status": "passed",
+          "verify": "task_completed event fires once per completion"
         }
-      ],
-      "total": 2
+      ]
     },
     "completed_implies_timestamp": {
       "tests": [
         {
-          "status": "pass"
+          "name": "completing_a_task_sets_completed_at",
+          "runner": "cargo-test",
+          "status": "passed",
+          "verify": "completing a task sets completedAt"
         }
-      ],
-      "total": 1
+      ]
     },
     "create_task": {
       "tests": [
         {
-          "status": "pass"
+          "name": "empty_title_is_rejected",
+          "runner": "cargo-test",
+          "status": "passed",
+          "verify": "empty title is rejected"
         },
         {
-          "status": "pass"
+          "name": "valid_title_creates_an_open_task",
+          "runner": "cargo-test",
+          "status": "passed",
+          "verify": "valid title creates an open task"
         }
-      ],
-      "total": 2
+      ]
     },
     "list_tasks": {
       "tests": [
         {
-          "status": "pass"
+          "name": "listing_open_tasks_excludes_done_tasks",
+          "runner": "cargo-test",
+          "status": "passed",
+          "verify": "listing open tasks excludes done tasks"
         }
-      ],
-      "total": 1
+      ]
     },
     "task_id_uniqueness": {
       "tests": [
         {
-          "status": "pass"
+          "name": "concurrent_task_creation_never_produces_duplicate_ids",
+          "runner": "cargo-test",
+          "status": "passed",
+          "verify": "concurrent task creation never produces duplicate ids"
         }
-      ],
-      "total": 1
+      ]
     }
   },
-  "runner": "specforge-test"
+  "runner": "cargo-test"
 }

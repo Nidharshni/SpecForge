@@ -282,7 +282,7 @@ mod evidence {
     fn the_input_carries_each_counted_entitys_proof() {
         let runtime = probe_runtime();
         let project = Project::in_runtime(SOURCE, registries(&["behavior"], &[]), runtime.clone());
-        let pass = |verify: &str| serde_json::json!({"status": "pass", "verify": verify});
+        let pass = |verify: &str| serde_json::json!({"name": verify, "status": "passed", "verify": verify});
         std::fs::write(
             project.dir.path().join("specforge-report.json"),
             serde_json::json!({"runner": "fixture", "results": {

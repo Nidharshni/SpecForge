@@ -424,7 +424,7 @@ none, runs the pass only under `specforge analyze`, which skips check passes.
 
 A pass receives `PassInput`: `entities` (each with its field texts by name
 ([Field text](#field-text)), edge counts, span, `testable`, and `owes_none`: it
-owes no obligations of its own, decided by the host's one obligation rule), `edges`, `test_results` and `proved_claims` (always absent for a
+owes no obligations of its own, decided by the host's one obligation rule), `edges`, `test_results` (the recorded test report as [`TestResults`]; `TestResults::of(id)` lists an entity's tests) and `proved_claims` (always absent for a
 check pass), and `previous`: when
 `specforge-cache.json` exists, the statuses of the build that wrote it
 (`previous.statuses["<id>"].kind` / `.status`), else `None`. Give a

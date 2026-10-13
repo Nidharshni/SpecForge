@@ -47,14 +47,14 @@ The handshake is the first call the host makes after loading a Wasm binary. It e
 **Input:**
 
 ```json
-{ "host_version": "1.3.0" }
+{ "host_version": "1.4.0" }
 ```
 
 **Output** (`specforge_protocol_types::HandshakeResponse`):
 
 ```json
 {
-  "protocol_version": "1.3.0",
+  "protocol_version": "1.4.0",
   "name": "@specforge/software",
   "version": "1.0.0",
   "peer_dependencies": [
@@ -457,6 +457,8 @@ graph checks, and its diagnostics join the compile's (`specforge check`,
 watch, the LSP, MCP). Passes with any other phase, or none, run only under
 `specforge analyze`. The `__pass_<name>` export receives a `PassInput`
 (`{"entities", "edges", "test_results"?, "proved_claims"?, "previous"?}`;
+`test_results` is the recorded test report as `TestResults`, `{"runner"?,
+"results": {"<id>": {"tests": [TestResult]}}}`;
 each entity is `{"id", "kind", "fields", "incoming_edge_count",
 "outgoing_edge_count", "span"?, "testable", "owes_none", "verify_kinds",
 "verify_texts"}`, `owes_none` meaning it owes no obligations of its own, decided
@@ -537,7 +539,8 @@ The wire rules, on both sides:
   field reads as its default.
 - **Strict on shape, lenient on unknown fields.** A required field is required:
   a command answer without `exit_code`, a resource answer without `mime_type`,
-  a collected test without `name` is not that type. A field the reader does
+  a collected test without `name` or with a status outside `passed`,
+  `failed` and `skipped` is not that type. A field the reader does
   not know is ignored, so a newer peer may add one.
 
 Every failure of a call is E028, in one shape: `<operation> <export>() of
@@ -603,6 +606,7 @@ The host-function surface is versioned alongside the wire protocol (`protocol_ve
 | `1.1.0` | the same as `1.0.0` |
 | `1.2.0` | the same as `1.0.0` |
 | `1.3.0` | the same as `1.0.0` |
+| `1.4.0` | the same as `1.0.0` |
 
 ### Protocol Versions
 
@@ -621,6 +625,7 @@ or answered.
 | `1.1.0` | A validation rule's optional `target_extension` (ADR 0020). Field text (ADR 0019): every field an entity writes has one text, the same in a pass's `PassEntity.fields`, a validator's `ValidatorField.value` and what declarative rules match (see "Field text" in `extension-sdk.md`). A written field is present even when empty (`""`). A validator's field `value` is always a string (a variant list, mixed list, expression or type union was `null`). `PassEntity.exempt` follows the host's one obligation rule: a `no_verify_statements` rule without a target kind obliges every kind that accepts `verify` statements (an entity of a kind that accepts none is exempt). |
 | `1.2.0` | The declared categories are the only describe categories (`fields`, `grammars`, `body_parsers` are gone); the handshake request carries only `host_version`; the handshake response carries `providers` and no `contribution_flags`; a pass's `PassEntity` says `owes_none` where it said `exempt` (ADR 0050). A 1.2 host loads every 1.x guest and ignores an older guest's flags; a 1.1 host cannot read a 1.2 guest's handshake. |
 | `1.3.0` | An enhancement declares no `edge_types`: an edge type is declared once, in `edges` (an enhancement's fields name it as their `edge`). A 1.3 host reports a 1.2 guest's enhancement `edge_types` key as W138 and ignores it (ADR 0060). |
+| `1.4.0` | A recorded test is one `TestResult` with a `TestStatus`: `passed`, `failed` or `skipped`, decoded strictly on the collect wire (a collector's other status is E028), and a pass's `test_results` carry the same, `duration_ms` included (they said `pass`/`fail`). A 1.3 pass that reads `test_results` misreads 1.4 values (ADR 0069). |
 
 A host of `1.0.x` still loads a `1.1.0` guest and hands it the `1.0.0` values; a guest that needs the
 `1.1.0` values can read `host_version` in its handshake request.

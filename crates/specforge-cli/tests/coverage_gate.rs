@@ -25,15 +25,17 @@ fn seed(path: &Path) {
 }
 
 fn report(path: &Path, proven: bool, extra: Option<&str>) -> String {
-    let status = if proven { "pass" } else { "fail" };
+    let status = if proven { "passed" } else { "failed" };
     let mut json = format!(
         r#"{{"runner":"specforge-test","results":{{"widget":{{"tests":[{{"name":"w test","status":"{status}","verify":"widget valid"}}]}}}}}}"#
     );
     if let Some(orphan) = extra {
         json = json.trim_end_matches('}').to_string();
         json.push_str(
-            format!(r#", "{orphan}": {{"tests":[{{"name":"orphan test","status":"pass"}}]}}}}}}"#)
-                .as_str(),
+            format!(
+                r#", "{orphan}": {{"tests":[{{"name":"orphan test","status":"passed"}}]}}}}}}"#
+            )
+            .as_str(),
         );
     }
     std::fs::write(path.join("specforge-report.json"), &json).unwrap();
@@ -76,7 +78,8 @@ fn min_gate_fails_when_coverage_below_threshold() {
     let tmp = TempDir::new().unwrap();
     seed(tmp.path());
     // 1 of 1 entities proven = 100%; make it fail by NOT proving: failing test
-    let report = r#"{"runner":"r","results":{"widget":{"tests":[{"name":"w","status":"fail"}]}}}"#;
+    let report =
+        r#"{"runner":"r","results":{"widget":{"tests":[{"name":"w","status":"failed"}]}}}"#;
     std::fs::write(tmp.path().join("specforge-report.json"), report).unwrap();
     let out = specforge()
         .args([
@@ -119,8 +122,8 @@ fn a_feature_with_a_passing_test_does_not_raise_the_gate() {
     std::fs::write(
         tmp.path().join("specforge-report.json"),
         r#"{"runner":"r","results":{
-            "widget":{"tests":[{"name":"w","status":"fail","verify":"widget valid"}]},
-            "signin":{"tests":[{"name":"s","status":"pass"}]}}}"#,
+            "widget":{"tests":[{"name":"w","status":"failed","verify":"widget valid"}]},
+            "signin":{"tests":[{"name":"s","status":"passed"}]}}}"#,
     )
     .unwrap();
     let out = specforge()
@@ -209,7 +212,7 @@ fn stray_test_records_warn_with_suggestion() {
     let tmp = TempDir::new().unwrap();
     seed(tmp.path());
     // Report proves "widget" and orphans "wodget" (typo of widget).
-    let report = r#"{"runner":"r","results":{"widget":{"tests":[{"name":"w","status":"pass"}]},"wodget":{"tests":[{"name":"x","status":"pass"}]}}}"#;
+    let report = r#"{"runner":"r","results":{"widget":{"tests":[{"name":"w","status":"passed"}]},"wodget":{"tests":[{"name":"x","status":"passed"}]}}}"#;
     std::fs::write(tmp.path().join("specforge-report.json"), report).unwrap();
     let out = specforge()
         .args([
@@ -239,7 +242,7 @@ fn write_report(path: &Path, ids: &[&str]) {
         .map(|id| {
             (
                 id.to_string(),
-                serde_json::json!({"tests": [{"name": "t", "status": "pass", "verify": "widget valid"}]}),
+                serde_json::json!({"tests": [{"name": "t", "status": "passed", "verify": "widget valid"}]}),
             )
         })
         .collect();

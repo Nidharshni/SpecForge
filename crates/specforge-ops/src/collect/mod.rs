@@ -21,7 +21,9 @@ use specforge_common::shape::Shape;
 use specforge_common::{Code, Diagnostic, DiagnosticList, codes};
 use specforge_project::coverage::{ReportedEntity, ReportedTest, TestReport};
 use specforge_protocol_types::ExtensionDeclaration;
-use specforge_protocol_types::{CollectInput, CollectOutput, CollectReportFile};
+use specforge_protocol_types::{
+    CollectInput, CollectOutput, CollectReportFile, TestResult, TestStatus,
+};
 use specforge_wasm::{CallError, CallFailure, ExtensionCalls, Operation};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Component, Path, PathBuf};
@@ -518,23 +520,25 @@ pub fn merge(
         let mut recorded = Vec::new();
         for test in &entity.test_results {
             let status = match test.status.as_str() {
-                "passed" | "pass" => "pass",
-                "failed" | "fail" => "fail",
+                "passed" | "pass" => TestStatus::Passed,
+                "failed" | "fail" => TestStatus::Failed,
                 _ => {
                     stats.skipped += 1;
                     continue;
                 }
             };
-            if status == "pass" {
+            if status == TestStatus::Passed {
                 stats.passed += 1;
             } else {
                 stats.failed += 1;
             }
             recorded.push(ReportedTest {
-                name: Some(test.name.clone()),
-                status: status.to_string(),
-                duration_ms: test.duration_ms,
-                verify: test.verify.clone(),
+                result: TestResult {
+                    name: test.name.clone(),
+                    status,
+                    verify: test.verify.clone(),
+                    duration_ms: test.duration_ms,
+                },
                 runner: Some(runner.to_string()),
             });
         }
@@ -545,10 +549,7 @@ pub fn merge(
         report
             .results
             .entry(entity.entity_id.clone())
-            .or_insert_with(|| ReportedEntity {
-                file: None,
-                tests: Vec::new(),
-            })
+            .or_insert_with(|| ReportedEntity { tests: Vec::new() })
             .tests
             .extend(recorded);
     }
@@ -1260,7 +1261,10 @@ mod tests {
         // Re-collecting cargo-test drops its old results, keeps vitest's.
         merge(&mut report, "cargo-test", &collected(&[]), &known);
         assert_eq!(report.results["a"].tests.len(), 1);
-        assert_eq!(report.results["a"].tests[0].status, "pass");
+        assert_eq!(
+            report.results["a"].tests[0].result.status,
+            TestStatus::Passed
+        );
         assert_eq!(report.runner.as_deref(), Some("vitest"));
     }
 
@@ -1283,9 +1287,11 @@ mod tests {
         assert!(!report.results.contains_key("a"));
     }
 
-    // Plan 08, T0 pin: the report collect writes. T2 flips it.
-    #[test]
-    fn the_report_collect_writes_today() {
+    #[specforge_test(
+        behavior = "ingest_collector_report",
+        verify = "the recorded test report speaks the collect vocabulary, and a status outside it is a report that cannot be used"
+    )]
+    fn the_report_collect_writes() {
         let known = KnownEntities::from_iter([("a".to_string(), Vec::new())]);
         let mut report = empty_report();
         merge(
@@ -1296,8 +1302,8 @@ mod tests {
         );
         assert_eq!(
             serde_json::to_value(&report).unwrap()["results"]["a"],
-            serde_json::json!({"file": null, "tests": [
-                {"name": "t1", "status": "pass", "runner": "vitest"}
+            serde_json::json!({"tests": [
+                {"name": "t1", "status": "passed", "runner": "vitest"}
             ]})
         );
     }

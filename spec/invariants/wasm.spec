@@ -123,8 +123,10 @@ invariant collector_output_conformance "Collector Output Conformance" {
     What a collector reports is only recorded for entities the graph
     declares: results for any other entity ID are dropped with a W115
     warning, not a hard error, so one stale annotation doesn't block the
-    rest of a run. Recorded statuses are only `pass` and `fail`; skipped
-    tests are never recorded as proof.
+    rest of a run. A test's status is passed, failed or skipped, the one
+    vocabulary of the collect wire, the recorded test report and a pass's
+    test results. Recorded statuses are only passed and failed; skipped
+    tests are counted, never recorded as proof.
   """
   risk      medium
   verify unit "unknown entity ID in collector entry produces W115"

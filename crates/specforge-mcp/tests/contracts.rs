@@ -863,7 +863,7 @@ fn contract_coverage() {
     server.write(
         "specforge-report.json",
         &json!({"results": {"alpha": {"tests": [
-            {"name": "alpha_works", "status": "pass", "verify": "works"}
+            {"name": "alpha_works", "status": "passed", "verify": "works"}
         ]}}})
         .to_string(),
     );

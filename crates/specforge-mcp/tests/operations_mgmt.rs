@@ -188,7 +188,7 @@ fn collect_returns_result() {
     let report: Value =
         serde_json::from_str(&std::fs::read_to_string(root.join("specforge-report.json")).unwrap())
             .unwrap();
-    assert_eq!(report["results"]["alpha"]["tests"][0]["status"], "pass");
+    assert_eq!(report["results"]["alpha"]["tests"][0]["status"], "passed");
 }
 
 #[test]
