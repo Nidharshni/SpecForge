@@ -2758,7 +2758,6 @@ fn located(diagnostics: &[Value]) -> Vec<(String, i64)> {
     behavior = "notify_diagnostics_delta_via_mcp",
     verify = "a diagnostic that moved is removed where it was and added where it is"
 )]
-#[ignore = "fixed by T3"]
 fn a_moved_diagnostic_is_notified() {
     let text = "behavior alpha \"Alpha\" {\n}\nbogus thing\n";
     let (removed, added) = diagnostics_heard_after(text, &format!("\n\n\n{text}"));
@@ -2770,7 +2769,6 @@ fn a_moved_diagnostic_is_notified() {
     behavior = "notify_diagnostics_delta_via_mcp",
     verify = "a diagnostic whose span changed is removed and added"
 )]
-#[ignore = "fixed by T3"]
 fn a_diagnostic_whose_span_changed_is_notified() {
     let alpha = "behavior alpha \"Alpha\" {\n}\n";
     let (removed, added) = diagnostics_heard_after(
@@ -2787,7 +2785,6 @@ fn a_diagnostic_whose_span_changed_is_notified() {
     behavior = "notify_diagnostics_delta_via_mcp",
     verify = "removing one of two identical diagnostics is notified"
 )]
-#[ignore = "fixed by T3"]
 fn removing_one_of_two_identical_diagnostics_is_notified() {
     let two = "behavior alpha \"Alpha\" {\n}\nbehavior alpha \"Again\" {\n}\n";
     let (removed, added) =
