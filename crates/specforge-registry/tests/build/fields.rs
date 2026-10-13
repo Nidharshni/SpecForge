@@ -328,7 +328,6 @@ fn a_proof_role_other_than_bound_or_claim_is_refused() {
     behavior = "registry_build_fields",
     verify = "an enum field without values, or whose default_value is not one of its values, is W021 and still registered"
 )]
-#[ignore = "fixed by 01-T3"]
 fn an_enum_without_values_or_with_a_default_outside_them_is_w021() {
     let mut declaration = declare("@test/ext", |c| {
         c.kind("Thing", |k| {
@@ -377,7 +376,7 @@ fn an_enum_without_values_or_with_a_default_outside_them_is_w021() {
 
 #[spec(
     behavior = "registry_build_fields",
-    verify = "Registry Build Registers Fields: field registration holds — declarations_in_load_order, fields_registered, types_parsed, roles_checked"
+    verify = "Registry Build Registers Fields: field registration holds — declarations_in_load_order, fields_registered, types_parsed, roles_checked, enums_checked"
 )]
 fn field_registration_holds() {
     // declarations_in_load_order: software, then an extension with a field
@@ -417,6 +416,7 @@ fn field_registration_holds() {
     assert!(w019[0].message.contains("'prose'"));
     assert!(!build.fields().contains("task", "title_text"));
 
+    // enums_checked: an_enum_without_values_or_with_a_default_outside_them_is_w021.
     // roles_checked: the bad role is W021 and the field has none.
     assert_eq!(
         build.fields().get("task", "bound").unwrap().proof_role(),
