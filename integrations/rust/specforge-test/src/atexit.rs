@@ -1,5 +1,3 @@
-use crate::ports::RealFs;
-use crate::ports::ReportWriter;
 use crate::{registry, report};
 use std::path::PathBuf;
 use std::sync::Once;
@@ -16,22 +14,6 @@ pub fn ensure_registered() {
             libc::atexit(on_exit);
         }
     });
-}
-
-/// Append one JSONL record the moment a test finishes (C11-06): results
-/// survive panic=abort, SIGKILL from a CI timeout, nextest kills, and
-/// segfaults — none of which run atexit. The atexit handler only finalizes.
-pub fn append_jsonl(entry: &registry::TestRecordEntry) {
-    let binary_name = binary_name();
-    let dir = report_dir();
-    let fs = RealFs;
-    if fs.create_dir_all(&dir).is_err() {
-        return;
-    }
-    if let Ok(line) = serde_json::to_string(entry) {
-        let path = dir.join(format!("{binary_name}.jsonl"));
-        let _ = fs.append_line(&path, &line);
-    }
 }
 
 fn binary_name() -> String {

@@ -26,7 +26,6 @@ fn the_exit_handler_prints_no_coverage() {
     behavior = "record_test_via_drop_guard",
     verify = "the exit handler writes the report and nothing else"
 )]
-#[ignore = "fixed by T4"]
 fn the_exit_handler_writes_the_report_and_nothing_else() {
     let reports = tempfile::tempdir().unwrap();
     support::run_fixture(&["--include-ignored"], reports.path());

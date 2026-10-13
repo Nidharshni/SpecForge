@@ -125,9 +125,6 @@ impl Drop for TestGuard {
             duration_ms: u64::try_from(self.started.elapsed().as_millis()).unwrap_or(u64::MAX),
             outcome,
         };
-        // Durability first (C11-06): the JSONL line persists even if the
-        // process dies before atexit runs.
-        atexit::append_jsonl(&entry);
         registry::record(entry);
     }
 }

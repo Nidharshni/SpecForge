@@ -47,9 +47,10 @@ behavior record_test_via_drop_guard "Record Test via Drop Guard" {
     Each entry carries the test's module path, so a collector can match
     it to the test's line in libtest's output, and every report conforms
     to the published binary report schema
-    (schema/specforge-binary-report.schema.json). The exit handler prints
-    nothing: which obligations the tests prove is the coverage rule's,
-    after `specforge collect` (ADR 0068).
+    (schema/specforge-binary-report.schema.json). The exit handler writes
+    that report and nothing else, and prints nothing: which obligations
+    the tests prove is the coverage rule's, after `specforge collect`
+    (ADR 0068).
   """
   verify unit "successful test records pass via Drop"
   verify unit "panicking test records fail via Drop"
