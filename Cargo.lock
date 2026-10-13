@@ -3272,6 +3272,7 @@ dependencies = [
  "specforge-protocol-types",
  "specforge-test",
  "specforge-test-macros",
+ "url",
 ]
 
 [[package]]

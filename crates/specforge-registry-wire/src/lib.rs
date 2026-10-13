@@ -1,32 +1,34 @@
-//! The package registry's HTTP contract (ADR 0044): the paths a registry serves, the JSON it answers with,
-//! the multipart form a publish uploads, the package signature it carries and the codes its errors carry.
+//! The package registry's HTTP contract (ADR 0044): the address of every call under a registry's root
+//! ([`address`]), the reading of an answer ([`reply`]), the JSON a registry answers with, the multipart form a
+//! publish uploads, the package signature it carries and the codes its errors carry.
 //! `specforge-registry-server` serializes these and mounts these routes; `specforge-registry-client` requests
-//! these paths and deserializes these bodies. Both ends parse, sign and verify the package signature with
+//! these addresses and deserializes these bodies. Both ends parse, sign and verify the package signature with
 //! [`signature`] (ADR 0061). Nothing else writes a registry's JSON: a test reaches a registry through the
 //! real server in process (`specforge_registry_server::testing`) or an in-memory client
 //! (`specforge_registry_client::testing`).
-//!
-//! A registry's base URL carries the API prefix by convention (`https://registry.example/v1`, see
-//! [`path::PREFIX`]); the paths in [`path`] are relative to it.
 
+pub mod address;
 pub mod code;
 pub mod form;
 pub mod path;
+pub mod reply;
 pub mod signature;
+
+pub use address::RegistryRoot;
 
 pub use code::ErrorCode;
 pub use signature::{PackageSignature, SignatureError, SignedContent, sha256_hex};
 
 use serde::{Deserialize, Serialize};
 
-/// `GET {base}/packages/{name}`: every version a package publishes and has not yanked, oldest first.
+/// `GET {root}/v1/packages/{name}`: every version a package publishes and has not yanked, oldest first.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VersionList {
     pub name: String,
     pub versions: Vec<String>,
 }
 
-/// `GET {base}/packages/{name}/{version}`: what a registry stores for one version.
+/// `GET {root}/v1/packages/{name}/{version}`: what a registry stores for one version.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PackageMetadata {
     pub name: String,
@@ -46,8 +48,9 @@ pub struct PackageMetadata {
     /// RFC 3339.
     #[serde(default)]
     pub published_at: String,
-    /// Where the binary downloads from. The server answers [`path::download`] (relative to the base); a
-    /// client hands it on absolute.
+    /// Where the binary downloads from: an `http`/`https` URL, or a path at the registry's root. The server
+    /// answers [`address::Call::Download`]'s path (`/v1/packages/…/download`); a client resolves it with
+    /// [`RegistryRoot::download_address`] and hands it on absolute.
     pub wasm_url: String,
     /// The publisher signature; absent when unsigned (a registry that refuses unsigned uploads serves none such).
     /// Only a well-formed one reads: a reply carrying another is not this body.
@@ -66,7 +69,7 @@ fn default_limit() -> u32 {
     DEFAULT_SEARCH_LIMIT
 }
 
-/// `GET {base}/search?q=…&limit=…`.
+/// `GET {root}/v1/search?q=…&limit=…`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SearchQuery {
     pub q: String,
@@ -121,7 +124,7 @@ pub struct SearchHit {
     pub description: String,
 }
 
-/// `PUT {base}/packages/{name}/{version}` answered `201 Created`.
+/// `PUT {root}/v1/packages/{name}/{version}` answered `201 Created`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PublishReceipt {
     pub name: String,
@@ -132,13 +135,13 @@ pub struct PublishReceipt {
     pub key_id: String,
 }
 
-/// `DELETE {base}/packages/{name}/{version}`.
+/// `DELETE {root}/v1/packages/{name}/{version}`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Yanked {
     pub yanked: bool,
 }
 
-/// `POST {base}/auth/verify` with a bearer token the registry accepts.
+/// `POST {root}/v1/auth/verify` with a bearer token the registry accepts.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TokenVerified {
     pub valid: bool,
@@ -149,7 +152,7 @@ pub struct TokenVerified {
     pub expires_at: Option<String>,
 }
 
-/// `POST {base}/admin/tokens` body (an admin token authenticates it). Every field is optional.
+/// `POST {root}/v1/admin/tokens` body (an admin token authenticates it). Every field is optional.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TokenRequest {
     #[serde(default)]
@@ -165,12 +168,12 @@ pub struct TokenRequest {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TokenIssued {
     pub token: String,
-    /// What revokes it (`DELETE {base}/admin/tokens/{prefix}`).
+    /// What revokes it (`DELETE {root}/v1/admin/tokens/{prefix}`).
     pub prefix: String,
     pub expires_in_days: u64,
 }
 
-/// `GET {base}/admin/tokens`.
+/// `GET {root}/v1/admin/tokens`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TokenList {
     pub tokens: Vec<TokenSummary>,
@@ -186,7 +189,7 @@ pub struct TokenSummary {
     pub admin: bool,
 }
 
-/// `DELETE {base}/admin/tokens/{prefix}`.
+/// `DELETE {root}/v1/admin/tokens/{prefix}`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TokenRevoked {
     pub revoked: bool,
