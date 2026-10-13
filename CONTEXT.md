@@ -381,18 +381,25 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   registry refuses an upload whose signature isn't one or doesn't verify over it (INVALID_SIGNATURE), before storing
   anything, so the version stays publishable; `add` verifies what it downloads again, because the registry is not the
   trust anchor: which keys to trust is the user's pins (ADR 0061).
-- **Package registry contract**: what a package registry and its client exchange over HTTP: the paths, the JSON
-  bodies (the package signature among them), the publish form and the error codes, each defined once in
+- **Package registry contract**: what a package registry and its client exchange over HTTP: each call's address under a registry
+  root, the JSON bodies (the package signature among them), the publish form and the error codes, each defined once in
   `specforge-registry-wire`, which `specforge-registry-server` and `specforge-registry-client` both compile against
   (ADR 0044, ADR 0061). A registry's refusal (HTTP 400) carries a typed code and reaches the user as R008; an
-  answer that isn't the call's wire type is R009. A test reaches a registry through the real server in process or
+  answer that isn't the call's wire type is R009. So is a 404 without the protocol's NOT_FOUND error: an address
+  no registry serves, not a missing package. A test reaches a registry through the real server in process or
   an in-memory client, never through JSON written by hand. A search matches by one rule, an ASCII
   case-insensitive substring of a package's name, description or one keyword
   (`specforge_package::search::matches`), on the server and in both in-memory registries.
+- **Registry root**: the URL a `registries` entry names: where a package registry is, an `http` or `https` URL
+  without the protocol's version prefix (`https://registry.example`, or `https://example.com/registry` for one served
+  under a path) (`specforge_registry_wire::RegistryRoot`). Every call goes to the root, then `/v1`, then the call's
+  path (`RegistryRoot::address`); the server mounts the same routes (`Endpoint::route`). A url ending in `/v1`, or
+  one that isn't an http(s) URL, is E067 (ADR 0075).
 - **Registry for a package**: the one configured registry that serves a package name: the first
   `registries` entry whose `scope_filter` is the name's scope, else the first marked
   `default_registry`; with neither, none does, and the operation refuses with R-OPS-001 before any
-  request (`specforge_ops_registry::Configured::registry_for`, ADR 0045). `add`, `update` and
+  request (`specforge_ops_registry::Configured::registry_for`, ADR 0045); a `registries` entry that can't be
+  read refuses every registry operation with E067 first, so a scope it claims never falls to the default. `add`, `update` and
   `publish` ask that one registry; `search` asks every entry. A registry credential is kept under
   the registry's alias (`login --registry`, else the default registry's).
 - **Package name**: what an extension package is called, `@scope/name` (a registry holds only

@@ -6,7 +6,7 @@ use specforge_ops_registry::{ConfiguredRegistry, User};
 use specforge_registry_client::testing::{MemoryClient, package};
 use specforge_registry_client::{RegistryConfig, SigningKey};
 use specforge_registry_server::testing::LocalRegistry;
-use specforge_registry_wire::PackageMetadata;
+use specforge_registry_wire::{PackageMetadata, RegistryRoot};
 use tempfile::TempDir;
 
 /// What a registry stores for `published`, signed by `key` when it names a signer.
@@ -51,7 +51,7 @@ fn the_configured_registry_over_http_keeps_the_registry_contract() {
 fn the_configured_registry_over_memory_keeps_the_registry_contract() {
     let config = RegistryConfig {
         alias: "local".to_string(),
-        url: "memory://local".to_string(),
+        url: RegistryRoot::parse("https://local.invalid").unwrap(),
         scope_filter: None,
         default_registry: true,
     };
@@ -62,7 +62,7 @@ fn the_configured_registry_over_memory_keeps_the_registry_contract() {
         client.store(&config, stored(p, &key), p.wasm.clone());
     }
     let dir = project(serde_json::json!([
-        { "alias": "local", "url": "memory://local", "default_registry": true }
+        { "alias": "local", "url": "https://local.invalid", "default_registry": true }
     ]));
     let registry = ConfiguredRegistry::for_project(
         &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
@@ -82,7 +82,7 @@ fn a_published_manifest_is_read_without_downloading_the_binary() {
 
     let config = RegistryConfig {
         alias: "local".to_string(),
-        url: "memory://local".to_string(),
+        url: RegistryRoot::parse("https://local.invalid").unwrap(),
         scope_filter: None,
         default_registry: true,
     };
@@ -93,7 +93,7 @@ fn a_published_manifest_is_read_without_downloading_the_binary() {
         client.store(&config, stored(p, &key), p.wasm.clone());
     }
     let dir = project(serde_json::json!([
-        { "alias": "local", "url": "memory://local", "default_registry": true }
+        { "alias": "local", "url": "https://local.invalid", "default_registry": true }
     ]));
     let registry = ConfiguredRegistry::for_project(
         &specforge_common::ProjectRoot::of(dir.path()).unwrap(),

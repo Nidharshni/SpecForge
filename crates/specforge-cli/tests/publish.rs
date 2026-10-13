@@ -12,7 +12,7 @@ use tempfile::TempDir;
 fn config(registry: &LocalRegistry) -> RegistryConfig {
     RegistryConfig {
         alias: "local".to_string(),
-        url: registry.url().to_string(),
+        url: registry.root().clone(),
         scope_filter: None,
         default_registry: true,
     }
@@ -29,7 +29,7 @@ fn publish_stores_the_declaration_the_binary_declares() {
         project.path().join("specforge.json"),
         serde_json::json!({
             "name": "p", "version": "0.1.0",
-            "registries": [{ "alias": "local", "url": registry.url(), "default_registry": true }]
+            "registries": [{ "alias": "local", "url": registry.root().as_str(), "default_registry": true }]
         })
         .to_string(),
     )
@@ -92,7 +92,7 @@ fn publish_refuses_an_unscoped_or_unversioned_declaration_offline() {
         project.path().join("specforge.json"),
         serde_json::json!({
             "name": "p", "version": "0.1.0",
-            "registries": [{ "alias": "local", "url": "http://127.0.0.1:1/v1", "default_registry": true }]
+            "registries": [{ "alias": "local", "url": "http://127.0.0.1:1", "default_registry": true }]
         })
         .to_string(),
     )
@@ -135,7 +135,7 @@ fn project_publishing_to(registry: &LocalRegistry) -> TempDir {
         project.path().join("specforge.json"),
         serde_json::json!({
             "name": "p", "version": "0.1.0",
-            "registries": [{ "alias": "local", "url": registry.url(), "default_registry": true }]
+            "registries": [{ "alias": "local", "url": registry.root().as_str(), "default_registry": true }]
         })
         .to_string(),
     )

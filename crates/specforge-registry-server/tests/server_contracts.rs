@@ -6,8 +6,8 @@ use axum::http::{Request, StatusCode};
 use specforge_registry_server::state::{AppState, PublishLimits};
 use specforge_registry_server::{auth, handlers};
 use specforge_registry_wire::{
-    ErrorBody, PackageMetadata, PublishReceipt, SearchResults, SignedContent, TokenVerified,
-    VersionList, Yanked, form,
+    ErrorBody, ErrorCode, PackageMetadata, PublishReceipt, SearchResults, SignedContent,
+    TokenVerified, VersionList, Yanked, form, reply,
 };
 use std::sync::Arc;
 use tower::ServiceExt as _;
@@ -800,7 +800,7 @@ async fn the_server_answers_in_these_json_shapes() {
     );
     assert_eq!(
         metadata["wasm_url"],
-        "/packages/@test%2Fsigned-ext/1.0.0/download"
+        "/v1/packages/@test%2Fsigned-ext/1.0.0/download"
     );
     round_trips::<PackageMetadata>(&metadata);
 
@@ -1283,4 +1283,63 @@ async fn revoking_takes_a_token_id() {
     assert_eq!(delete(id).await, StatusCode::OK);
     assert_eq!(verify(one).await, StatusCode::UNAUTHORIZED);
     assert_eq!(verify(two).await, StatusCode::OK);
+}
+
+#[specforge_test_macros::test(
+    behavior = "resolve_registry_source",
+    verify = "the registry server answers every call in the JSON its client reads"
+)]
+#[tokio::test]
+async fn an_address_the_registry_does_not_serve_answers_a_bare_404() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = app_state(dir.path(), 100);
+    let answer = |uri: &'static str| {
+        let router = app_clone(&state);
+        async move {
+            let response = router
+                .oneshot(Request::builder().uri(uri).body(Body::empty()).unwrap())
+                .await
+                .unwrap();
+            let status = response.status();
+            let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap();
+            (status, bytes)
+        }
+    };
+
+    // An address no route serves: the framework's own 404, with no body.
+    for uri in [
+        "/elsewhere",
+        "/packages/@acme%2Ftool",
+        "/v1/v1/packages/@acme%2Ftool",
+    ] {
+        let (status, bytes) = answer(uri).await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{uri}");
+        assert!(bytes.is_empty(), "{uri}: {bytes:?}");
+        assert!(
+            matches!(
+                reply::failure(404, &bytes),
+                reply::Failure::NotRegistry { status: 404, .. }
+            ),
+            "{uri}: a client reads the framework's 404 as no registry's answer"
+        );
+    }
+
+    // A route the registry serves answers its own 404 in the protocol's error.
+    for uri in [
+        "/v1/packages/@acme%2Fnone",
+        "/v1/packages/@acme%2Fnone/1.0.0",
+        "/v1/packages/@acme%2Fnone/1.0.0/download",
+        "/v1/packages/@acme%2F..",
+    ] {
+        let (status, bytes) = answer(uri).await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{uri}");
+        match reply::failure(404, &bytes) {
+            reply::Failure::Error { status: 404, error } => {
+                assert_eq!(error.code, ErrorCode::NotFound, "{uri}");
+            }
+            other => panic!("{uri}: not the protocol's NOT_FOUND ({other:?}): {bytes:?}"),
+        }
+    }
 }

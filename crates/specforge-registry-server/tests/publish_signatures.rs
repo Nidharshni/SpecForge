@@ -11,7 +11,16 @@ use specforge_registry_client::registry_config::{RegistryConfig, RegistryCredent
 use specforge_registry_client::{HttpRegistryClient, SigningKey, publish_to_registry};
 use specforge_registry_server::state::PublishLimits;
 use specforge_registry_server::testing::LocalRegistry;
+use specforge_registry_wire::address::Call;
 use specforge_registry_wire::{PackageSignature, SignatureError, SignedContent};
+
+/// Where `@test/signed-ext@1.0.0` is published and read.
+fn signed_ext_address(server: &LocalRegistry) -> String {
+    server.root().address(&Call::Version(
+        &specforge_package::PackageName::parse("@test/signed-ext").unwrap(),
+        &specforge_package::Version::new(1, 0, 0),
+    ))
+}
 
 fn minimal_manifest() -> ExtensionDeclaration {
     manifest_of("1.0.0")
@@ -35,7 +44,7 @@ fn client_of(server: &LocalRegistry) -> (RegistryConfig, RegistryCredential) {
     (
         RegistryConfig {
             alias: "test".to_string(),
-            url: server.url().to_string(),
+            url: server.root().clone(),
             scope_filter: None,
             default_registry: true,
         },
@@ -65,7 +74,7 @@ fn signed_publish_round_trips_through_http_boundary() {
     assert!(url.contains("signed-ext"), "{}", url);
 
     // Metadata serves the signature object, the key id, and the manifest.
-    let metadata_url = format!("{}/packages/%40test%2Fsigned-ext/1.0.0", server.url());
+    let metadata_url = signed_ext_address(&server);
     let body: serde_json::Value = reqwest::blocking::get(&metadata_url)
         .expect("metadata request")
         .json()
@@ -150,10 +159,7 @@ fn a_signature_the_client_would_refuse_is_refused_and_the_version_stays_publisha
 
     // 1. What no client sends is refused, and nothing is stored.
     let response = reqwest::blocking::Client::new()
-        .put(format!(
-            "{}/packages/%40test%2Fsigned-ext/1.0.0",
-            server.url()
-        ))
+        .put(signed_ext_address(&server))
         .header(AUTHORIZATION, format!("Bearer {}", server.token()))
         .header(CONTENT_TYPE, form::content_type("p12"))
         .body(form::body("p12", &manifest, wasm, Some(MALFORMED)))
