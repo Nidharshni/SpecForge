@@ -1752,7 +1752,6 @@ fn a_registry_named_by_its_root_is_searched() {
     behavior = "authenticate_registry_request",
     verify = "every registry call reads an answer's status as one error"
 )]
-#[ignore = "fixed by T4"]
 fn login_at_an_address_no_registry_serves_is_r009() {
     use crate::published::{Package, serve};
     let registry = serve(vec![Package::new("@sdk/greet", "0.1.0", greet_wasm())]);

@@ -86,7 +86,6 @@ fn the_private_contract_holds_in_memory() {
     behavior = "check_registry_reply",
     verify = "a reply that is not the protocol's JSON is refused with R009, even with --allow-unsigned"
 )]
-#[ignore = "fixed by T4"]
 fn an_address_no_registry_serves_is_not_a_registry() {
     let server = LocalRegistry::start();
     let root = format!("{}/elsewhere", server.root());

@@ -911,6 +911,11 @@ behavior check_registry_reply "Check Registry Reply" {
     A reply that isn't the registry protocol's JSON for the request (a
     publisher signature that isn't one among them) MUST be refused (R009)
     before anything else is checked: no flag accepts it.
+    A 404 is the registry's "not found" only when it carries the protocol's
+    NOT_FOUND error; a 404 without it (an address no registry serves, such as
+    a url that isn't the registry's root) MUST be refused with R009, not
+    reported as a missing package. A wasm_url MUST be an http or https URL or
+    a path at the registry's root.
     Before a registry package's signature is checked or its key pinned,
     the system MUST refuse the reply when it describes another package or
     version than the one requested, or when its manifest does: the

@@ -1897,8 +1897,8 @@ Level: error
 ```
 R006: Package version not found
 
-The registry answered 404 for the package or version. Check the package name and
-version.
+The registry answered that it has no such package or version (HTTP 404 with the
+registry protocol's NOT_FOUND error). Check the package name and version.
 
 Owner: core
 Level: error
@@ -1939,12 +1939,15 @@ Level: error
 ```
 R009: Registry reply unreadable
 
-The registry answered with a body that isn't the JSON the registry protocol
-defines for that request, such as a publisher signature that isn't an Ed25519
-signature object, or a publish receipt that describes another upload than the
-one sent. The registry is broken, or the URL isn't a SpecForge registry. Nothing
-is installed and no key is pinned, and `--allow-unsigned` doesn't accept such a
-package. Check the registry.
+The registry's answer isn't one the registry protocol defines for that request:
+a body that isn't the request's JSON (such as a publisher signature that isn't
+an Ed25519 signature object, or a publish receipt that describes another upload
+than the one sent), a 404 without the protocol's NOT_FOUND error (no registry
+serves that address: the configured `url` isn't a SpecForge registry's root), or
+a download URL that is neither an `http`/`https` URL nor a path at the
+registry's root. The registry is broken, or the URL isn't a SpecForge registry's
+root. Nothing is installed and no key is pinned, and `--allow-unsigned` doesn't
+accept such a package. Check the registry and its `url` in `specforge.json`.
 
 Owner: core
 Level: error

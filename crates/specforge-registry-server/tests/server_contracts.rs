@@ -7,7 +7,7 @@ use specforge_registry_server::state::{AppState, PublishLimits};
 use specforge_registry_server::{auth, handlers};
 use specforge_registry_wire::{
     ErrorBody, ErrorCode, PackageMetadata, PublishReceipt, SearchResults, SignedContent,
-    TokenVerified, VersionList, Yanked, form,
+    TokenVerified, VersionList, Yanked, form, reply,
 };
 use std::sync::Arc;
 use tower::ServiceExt as _;
@@ -1317,6 +1317,13 @@ async fn an_address_the_registry_does_not_serve_answers_a_bare_404() {
         let (status, bytes) = answer(uri).await;
         assert_eq!(status, StatusCode::NOT_FOUND, "{uri}");
         assert!(bytes.is_empty(), "{uri}: {bytes:?}");
+        assert!(
+            matches!(
+                reply::failure(404, &bytes),
+                reply::Failure::NotRegistry { status: 404, .. }
+            ),
+            "{uri}: a client reads the framework's 404 as no registry's answer"
+        );
     }
 
     // A route the registry serves answers its own 404 in the protocol's error.
@@ -1328,8 +1335,11 @@ async fn an_address_the_registry_does_not_serve_answers_a_bare_404() {
     ] {
         let (status, bytes) = answer(uri).await;
         assert_eq!(status, StatusCode::NOT_FOUND, "{uri}");
-        let body: ErrorBody = serde_json::from_slice(&bytes)
-            .unwrap_or_else(|e| panic!("{uri}: not the protocol's error ({e}): {bytes:?}"));
-        assert_eq!(body.error.code, ErrorCode::NotFound, "{uri}");
+        match reply::failure(404, &bytes) {
+            reply::Failure::Error { status: 404, error } => {
+                assert_eq!(error.code, ErrorCode::NotFound, "{uri}");
+            }
+            other => panic!("{uri}: not the protocol's NOT_FOUND ({other:?}): {bytes:?}"),
+        }
     }
 }
