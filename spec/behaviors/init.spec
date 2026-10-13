@@ -299,7 +299,8 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
     manifest, read without its binary), which is what the add's peer
     check judges; what only the binary can fail (integrity, the publisher
     signature, its load) is not checked. An extension already present
-    answers as the add would, whatever its source.
+    answers as the add would, whatever its source. specforge add --dry-run
+    is that dry run on the command line.
     The system MUST NOT modify any other field in specforge.json.
     When adding an extension, the system MUST judge, by the one peer rule
     (ADR 0041) and before anything is installed, the project's peer set as
