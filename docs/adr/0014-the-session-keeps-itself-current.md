@@ -84,6 +84,8 @@ before each read) with disk, and `ensure_fresh` applies exactly that.
   again after any update that changed them (amended by ADR 0030). *(ADR 0035: each then catches up on
   what changed while its watchers moved, and the LSP's follow is one reaction every change goes
   through.)*
+  *(ADR 0073: there is no classifier; a batch of paths narrows the session's stale comparison, and a
+  directory reaches every source and input under it.)*
 - **D10. No public root.** `McpState::project_root()` is the session's root. MCP serves only a
   project opened from disk (amended by ADR 0025). An `initialize` root that does not exist serves
   nothing.

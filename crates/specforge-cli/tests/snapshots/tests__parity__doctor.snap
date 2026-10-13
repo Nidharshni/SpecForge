@@ -65,7 +65,7 @@ expression: snapshot
       "findings": [],
       "installed_count": 0,
       "ok": true,
-      "z3_available": "[Z3]"
+      "z3_available": true
     },
     "files": {
       "spec/main.spec": "behavior alpha \"Alpha\" {\n  category \"core\"\n  contract \"The system MUST work\"\n}\n"

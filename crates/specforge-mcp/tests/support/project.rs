@@ -91,7 +91,11 @@ impl TestProject {
             self.enabled.as_deref().unwrap_or_default(),
             &specforge_installed::Builtins(specforge_component::builtins::BUILTIN_EXTENSIONS),
         );
-        self.initialized(McpServer::new().with_extension_runtime(runtime))
+        self.initialized(
+            McpServer::new()
+                .with_solver(super::z3_ready())
+                .with_extension_runtime(runtime),
+        )
     }
 
     /// An initialized server over this project with no host runtime: the
@@ -100,7 +104,7 @@ impl TestProject {
     /// remove, doctor and the builtins.
     pub fn serve_components(mut self) -> Served {
         self.enabled.get_or_insert_with(Vec::new);
-        self.initialized(McpServer::new())
+        self.initialized(McpServer::new().with_solver(super::z3_ready()))
     }
 
     /// The project as files only, its `specforge.json` written (enabling

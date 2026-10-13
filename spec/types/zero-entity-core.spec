@@ -214,6 +214,10 @@ type FieldDescriptor {
 // consistent, E046); a claim must follow from the bounds (W139 when not).
 type ProofRole = bound | claim
 
+// Why a solver gave no answer to a script: it ran past its timeout, or it
+// could not be run or ended without an answer (port SmtSolver).
+type SolveFailure = timed_out | failed
+
 // Where a derived reference field takes its targets from: the type names in
 // the entity's type-syntax field values, or in its method signatures.
 type DerivedReferenceSource = type_expressions | method_signatures

@@ -1,5 +1,6 @@
 use specforge_common::{Diagnostic, ProjectConfig, ProjectRoot};
 use specforge_graph::Graph;
+use specforge_ops::solver::{Solver, Z3};
 use specforge_project::{ProjectSession, RuntimeSource, SharedRuntime, Update, UpdateKind};
 use specforge_registry::RegistryBuild;
 use std::path::{Path, PathBuf};
@@ -54,6 +55,9 @@ pub struct McpState {
     /// default the served project's session builds the project's runtime
     /// (`specforge_component::ComponentRuntime::with_user_cache`) each time it loads.
     pub(crate) extension_runtime: Option<SharedRuntime>,
+    /// The SMT solver doctor checks: z3 from PATH unless the host gave
+    /// another ([`crate::McpServer::with_solver`]).
+    pub(crate) solver: Arc<dyn Solver>,
 }
 
 impl McpState {
@@ -70,6 +74,7 @@ impl McpState {
             events: Box::new(Discard),
             subscriptions: Subscriptions::new(),
             extension_runtime: None,
+            solver: Arc::new(Z3::default()),
         }
     }
 

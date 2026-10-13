@@ -582,12 +582,14 @@ fn a_wasm_file_entry_loads_in_a_session_and_reloads_with_its_file() {
     for code in ["E024", "E028", "W019", "W112"] {
         assert!(!codes.iter().any(|c| c == code), "{code}: {codes:?}");
     }
-    assert_eq!(
-        session.inputs().classify(&root.join("ext/greet.wasm")),
-        specforge_project::InputRole::Environment
-    );
 
     fs::write(root.join("ext/greet.wasm"), b"\0asm not a component").unwrap();
+    assert!(
+        !session
+            .changes([root.join("ext/greet.wasm").as_path()])
+            .environment
+            .is_empty()
+    );
     let update = session.reload_environment();
     let e028: Vec<&Diagnostic> = update
         .diagnostics
@@ -1788,7 +1790,7 @@ fn edits_creations_and_deletions_apply_as_one_update() {
 
     let stale = session.stale();
     assert_eq!(stale.sources, vec!["a.spec", "b.spec", "c.spec"]);
-    assert!(!stale.environment && !stale.check_inputs);
+    assert!(stale.environment.is_empty() && stale.check_inputs.is_empty());
     let update = session.ensure_fresh().expect("three files changed");
     assert_eq!(update.kind, specforge_project::UpdateKind::Sources);
     assert_eq!(update.rebuilt_files, vec!["a.spec", "b.spec", "c.spec"]);
@@ -1860,7 +1862,10 @@ fn a_lock_change_reloads_the_environment() {
     fs::write(root.join("specforge.lock"), lock.to_string()).unwrap();
 
     let stale = session.stale();
-    assert!(stale.environment && stale.sources.is_empty(), "{stale:?}");
+    assert!(
+        !stale.environment.is_empty() && stale.sources.is_empty(),
+        "{stale:?}"
+    );
     let update = session.ensure_fresh().expect("the lock changed");
     assert_eq!(update.kind, specforge_project::UpdateKind::Environment);
     let locked = e028(&session);
@@ -2178,7 +2183,7 @@ fn a_config_written_while_the_runtime_loads_is_seen_next_time() {
     };
     assert!(!e028(&session), "{:?}", session.project().diagnostics());
     // The write was after the config's stamp: the session is stale.
-    assert!(session.stale().environment);
+    assert!(!session.stale().environment.is_empty());
 
     let update = session.ensure_fresh().expect("the config changed");
     assert_eq!(update.kind, UpdateKind::Environment);
@@ -2186,7 +2191,7 @@ fn a_config_written_while_the_runtime_loads_is_seen_next_time() {
     assert!(!e028(&session), "{:?}", session.project().diagnostics());
     let kinds = session.project().environment().registries().kinds();
     assert!(kinds.contains("alpha") && kinds.contains("beta"));
-    assert!(!session.stale().environment);
+    assert!(session.stale().environment.is_empty());
 }
 
 #[specforge_test(
@@ -2205,10 +2210,10 @@ fn a_module_rewritten_while_the_runtime_loads_is_seen_next_time() {
     let mut session =
         ProjectSession::open_from(&specforge_common::ProjectRoot::of(root).unwrap(), source);
 
-    assert!(session.stale().environment);
+    assert!(!session.stale().environment.is_empty());
     let update = session.ensure_fresh().expect("the module changed");
     assert_eq!(update.kind, UpdateKind::Environment);
-    assert!(!session.stale().environment);
+    assert!(session.stale().environment.is_empty());
 }
 
 #[test]
@@ -2705,9 +2710,11 @@ fn a_glob_exclude_entry_leaves_its_files_out_of_the_compile() {
     assert_eq!(files, ["main.spec"]);
 
     let session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
-    assert_eq!(
-        session.inputs().classify(&root.join("sub/c.draft.spec")),
-        specforge_project::InputRole::Unrelated
+    write(root, "sub/c.draft.spec", "term c \"C\" {\n}\n");
+    assert!(
+        session
+            .changes([root.join("sub/c.draft.spec").as_path()])
+            .is_empty()
     );
 }
 
@@ -2736,4 +2743,136 @@ fn a_symlinked_directory_is_no_source() {
         e025(&compiled.diagnostics()),
         ["import target not found among the project's sources: escape/secret"]
     );
+}
+
+/// Whatever a watcher reports for a step (a file, both directories of a
+/// rename, a directory created or removed, a symlink target), the changes
+/// of that batch are what the session finds stale: the batch comparison is
+/// the full comparison narrowed to what the paths reach, so naming every
+/// changed path loses nothing.
+#[specforge_test(
+    behavior = "classify_project_changes",
+    verify = "the changes of a batch naming every changed path are what the session finds stale"
+)]
+fn a_batch_naming_every_changed_path_changes_what_is_stale() {
+    use std::path::PathBuf;
+
+    const PATHS: &[&str] = &[
+        "a.spec",
+        "b.spec",
+        "sub/c.spec",
+        "sub/deep/e.spec",
+        "drafts/d.spec",
+    ];
+    let config = |exclude: bool| {
+        let exclude = if exclude {
+            r#","exclude":["drafts/"]"#
+        } else {
+            ""
+        };
+        format!(
+            r#"{{"name":"s","version":"0.1.0","extensions":["@specforge/software","@specforge/testing"],"spec_root":"spec"{exclude}}}"#
+        )
+    };
+    for seed in [
+        0x9E37_79B9_7F4A_7C15_u64,
+        0xD1B5_4A32_D192_ED03,
+        0x2545_F491_4F6C_DD1D,
+        0x1F83_D9AB_FB41_BD6B,
+    ] {
+        let mut rng = Rng(seed);
+        let dir = project(&config(false), &[]);
+        let root = fs::canonicalize(dir.path()).unwrap();
+        let spec = root.join("spec");
+        let outside = TempDir::new().unwrap();
+        let outside_dir = fs::canonicalize(outside.path()).unwrap();
+        for path in &PATHS[..3] {
+            write(&spec, path, &random_spec(&mut rng));
+        }
+        let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(&root).unwrap());
+        let mut excluding = false;
+        #[cfg_attr(not(unix), allow(unused_mut, unused_variables))]
+        let mut links = 0;
+
+        for step in 0..30 {
+            let mut paths: Vec<PathBuf> = Vec::new();
+            match rng.below(8) {
+                0 => {
+                    let path = rng.pick(PATHS);
+                    write(&spec, path, &random_spec(&mut rng));
+                    paths.push(spec.join(path));
+                }
+                1 => {
+                    let path = rng.pick(PATHS);
+                    if spec.join(path).is_file() {
+                        fs::remove_file(spec.join(path)).unwrap();
+                        paths.push(spec.join(path));
+                    }
+                }
+                2 => {
+                    let (from, to) = if spec.join("sub").is_dir() {
+                        ("sub", "sub2")
+                    } else {
+                        ("sub2", "sub")
+                    };
+                    if spec.join(from).is_dir() && !spec.join(to).exists() {
+                        fs::rename(spec.join(from), spec.join(to)).unwrap();
+                        paths.extend([spec.join(from), spec.join(to)]);
+                    }
+                }
+                3 => {
+                    for file in ["made/x.spec", "made/y.spec"] {
+                        write(&spec, file, &random_spec(&mut rng));
+                    }
+                    paths.push(spec.join("made"));
+                }
+                4 => {
+                    if spec.join("made").is_dir() {
+                        fs::remove_dir_all(spec.join("made")).unwrap();
+                        paths.push(spec.join("made"));
+                    }
+                }
+                #[cfg(unix)]
+                5 => {
+                    links += 1;
+                    let target = outside_dir.join(format!("t{links}.spec"));
+                    fs::write(&target, random_spec(&mut rng)).unwrap();
+                    let link = spec.join(format!("l{links}.spec"));
+                    std::os::unix::fs::symlink(&target, &link).unwrap();
+                    paths.push(link);
+                }
+                #[cfg(unix)]
+                6 => {
+                    if links > 0 {
+                        let target = outside_dir.join(format!("t{}.spec", 1 + rng.below(links)));
+                        fs::write(&target, random_spec(&mut rng)).unwrap();
+                        paths.push(target);
+                    }
+                }
+                _ => {
+                    excluding = !excluding;
+                    fs::write(root.join("specforge.json"), config(excluding)).unwrap();
+                    paths.push(root.join("specforge.json"));
+                }
+            }
+            let context = format!("seed {seed:#x} step {step}");
+            let changes = session.changes(paths.iter().map(PathBuf::as_path));
+            let stale = session.stale();
+            assert_eq!(changes.sources, stale.sources, "{context}");
+            assert_eq!(
+                changes.environment.is_empty(),
+                stale.environment.is_empty(),
+                "{context}"
+            );
+            assert_eq!(
+                changes.check_inputs.is_empty(),
+                stale.check_inputs.is_empty(),
+                "{context}"
+            );
+
+            session.apply(&changes);
+            assert!(session.stale().is_empty(), "{context}");
+            assert_matches_a_fresh_compile(&session, &root);
+        }
+    }
 }

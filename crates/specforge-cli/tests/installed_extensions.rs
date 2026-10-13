@@ -555,6 +555,7 @@ fn doctor(root: &Path) -> (bool, Value) {
         .args(["doctor", "--format", "json", "--path"])
         .arg(root)
         .env("HOME", home.path())
+        .env("PATH", crate::toolchain::z3_ready())
         .output()
         .unwrap();
     let report = serde_json::from_slice(&out.stdout)

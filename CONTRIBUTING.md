@@ -25,6 +25,8 @@ Run `scripts/setup-hooks.sh` once per clone: the tracked pre-commit hook runs th
 
 Run `cargo gate` (what the working tree changed) before a PR and `cargo gate full` before a merge; CI runs `cargo gate ci`, the same list. `cargo gate list` prints every check, the run it joins and the paths that trigger it.
 
+The prove tests ask the real SMT solver: install z3 (`brew install z3`, `apt-get install z3`); CI installs it. Every other test chooses the solver it sees.
+
 ## Where things are
 
 - [`crates/`](crates/) — the Rust workspace: compiler, graph, extension runtime, CLI, LSP, MCP.

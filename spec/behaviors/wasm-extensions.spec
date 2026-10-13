@@ -699,7 +699,11 @@ behavior run_doctor_check "Run Doctor Check" {
     extensions (ADR 0041), so a peer a builtin or a .wasm file entry
     satisfies is not reported. Doctor MUST list the extensions the
     extensions listing lists, in its order, each with the version, source
-    and status the listing gives it. Run in a
+    and status the listing gives it. When the SMT solver specforge
+    analyze --prove asks does not run here, doctor MUST report it as one
+    warning finding about the toolchain: the W098 analyze --prove reports,
+    its message the check and its suggestion the remediation; the report's
+    z3_available is then false. Run in a
     directory without specforge.json, doctor MUST report a warning finding
     config_missing naming the directory; the run stays healthy. A
     specforge.lock that exists but cannot be read (E033) MUST be reported
@@ -726,6 +730,8 @@ behavior run_doctor_check "Run Doctor Check" {
   verify unit "doctor lists the extensions the extensions listing lists, each with its version, source and status"
   verify unit "doctor in a directory without specforge.json reports config_missing as a warning"
   verify unit "a lock file that cannot be read is an error finding naming E033"
+  verify unit "doctor reports a solver that does not run as the W098 analyze --prove reports, as a toolchain warning"
+  verify integration "doctor's toolchain finding is the W098 specforge analyze --prove prints"
   verify unit "doctor states each finding once, saying what it is about, and its verdict; the CLI and MCP return one report"
   verify contract "Run Doctor Check: doctor check holds — enhancement_registered_fired, filesystem_available, doctor_check_completed_emitted, report_produced, json_output_supported"
 }

@@ -95,8 +95,10 @@ fn watch_project(
     let debug = std::env::var("SPECFORGE_WATCH_DEBUG").is_ok();
     for batch in &batches {
         if debug {
-            let roles: Vec<_> = batch.iter().map(|path| watch.classify(path)).collect();
-            errln!(terminal, "[watch] batch: {batch:?} -> {roles:?}");
+            let changes = watch
+                .session()
+                .changes(batch.iter().map(std::path::PathBuf::as_path));
+            errln!(terminal, "[watch] batch: {batch:?} -> {changes:?}");
         }
         for event in watch.changed(&batch) {
             match event {

@@ -1,10 +1,11 @@
 //! Peer requirements as `doctor` reports them over a compiled project.
 
+use specforge_ops::testing::ScriptedSolver;
 use std::path::Path;
 
 use specforge_common::Severity;
 use specforge_extension_sdk::{ContributionsBuilder, ExtensionMeta};
-use specforge_ops::doctor::{Part, diagnose_with};
+use specforge_ops::doctor::{Part, diagnose};
 use specforge_ops::view::ProjectView;
 use specforge_project::CompiledProject;
 use specforge_protocol_types::PeerDependency;
@@ -82,7 +83,7 @@ fn a_peer_a_builtin_satisfies_is_not_reported_by_doctor() {
         "{:?}",
         compiled.diagnostics()
     );
-    let report = diagnose_with(&ProjectView::of(&compiled), true);
+    let report = diagnose(&ProjectView::of(&compiled), &ScriptedSolver::ready());
 
     assert_eq!(report.about(Part::Peer).count(), 0, "{:?}", report.findings);
     assert_eq!(
@@ -120,7 +121,7 @@ fn doctor_reports_the_peer_requirements_check_reports() {
     assert_eq!(reported[0].code, "E073");
     assert_eq!(reported[0].severity, Severity::Error);
 
-    let report = diagnose_with(&ProjectView::of(&compiled), true);
+    let report = diagnose(&ProjectView::of(&compiled), &ScriptedSolver::ready());
     let peers: Vec<_> = report.about(Part::Peer).collect();
     assert_eq!(peers.len(), 1, "{:?}", report.findings);
     assert_eq!(peers[0].code, "E073");
@@ -147,7 +148,7 @@ fn doctor_reports_the_peer_requirements_check_reports() {
     let all = compiled.diagnostics();
     let e027: Vec<_> = all.iter().filter(|d| d.code == "E027").collect();
     assert_eq!(e027.len(), 1, "{e027:?}");
-    let report = diagnose_with(&ProjectView::of(&compiled), true);
+    let report = diagnose(&ProjectView::of(&compiled), &ScriptedSolver::ready());
     let peers: Vec<_> = report.about(Part::Peer).collect();
     assert_eq!(peers.len(), 1, "{:?}", report.findings);
     assert_eq!(peers[0].code, "E027");
@@ -185,7 +186,7 @@ fn check_reports_a_cycle_among_required_peers() {
     assert!(!outcome.ok());
 
     // Doctor lists the same cycle under its peers.
-    let report = diagnose_with(&ProjectView::of(&compiled), true);
+    let report = diagnose(&ProjectView::of(&compiled), &ScriptedSolver::ready());
     let peers: Vec<_> = report.about(Part::Peer).collect();
     assert_eq!(peers.len(), 1, "{:?}", report.findings);
     assert_eq!(peers[0].check, cycles[0].message);
