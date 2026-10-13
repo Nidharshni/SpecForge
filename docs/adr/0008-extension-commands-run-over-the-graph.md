@@ -15,7 +15,7 @@ listed the product module. Both close here: the queries are `@specforge/product`
   [ADR 0013](0013-typed-extension-calls.md) the protocol type `specforge_protocol_types::CommandInput`,
   same fields and defaults):
   `args` (what the caller set, typed as declared), `cwd` (the project root) and `graph`, the
-  compiled graph in the graph export's shape (`specforge_emitter::json::emit_json`: entities by
+  compiled graph in the graph export's shape (`specforge_emitter::emit` with the export's options: entities by
   id, edges by source, target, label). It answers with `CommandOutput` (`exit_code`, `stdout`,
   `stderr`). It reads no files, so one call serves both surfaces. Commands are queries over a
   compiled project; one that needs more than the graph is a new decision.

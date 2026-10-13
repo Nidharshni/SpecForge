@@ -43,7 +43,7 @@ fn emit_graph_includes_all_fields_and_metadata() {
         methods: Vec::new(),
     });
 
-    let json = specforge_emitter::json::emit_json(&graph);
+    let json = crate::support::emit_json(&graph);
     let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
 
     let node = &parsed["nodes"].as_array().unwrap()[0];
@@ -94,7 +94,7 @@ fn emit_graph_equals_emit_json() {
     }
 
     // The graph format is what `specforge export --format graph` emits.
-    let graph_output = specforge_emitter::json::emit_json(&graph);
+    let graph_output = crate::support::emit_json(&graph);
     assert_eq!(
         graph_output,
         specforge_emitter::emit(&graph, &specforge_emitter::EmitOptions::default()).unwrap()
@@ -155,7 +155,7 @@ fn graph_format_conforms_to_graph_protocol_schema() {
         label: Sym::new("behaviors"),
     });
 
-    let json = specforge_emitter::json::emit_json(&graph);
+    let json = crate::support::emit_json(&graph);
     let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
 
     // Graph Protocol requires: schema_version, nodes array, edges array
@@ -193,7 +193,7 @@ fn graph_format_includes_schema_version() {
         methods: Vec::new(),
     });
 
-    let json = specforge_emitter::json::emit_json(&graph);
+    let json = crate::support::emit_json(&graph);
     let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
 
     let version = parsed["schema_version"]
@@ -279,7 +279,7 @@ fn structural_only_graph_exports_raw_keywords() {
         methods: Vec::new(),
     });
 
-    let json = specforge_emitter::json::emit_json(&graph);
+    let json = crate::support::emit_json(&graph);
     let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
 
     let nodes = parsed["nodes"].as_array().unwrap();

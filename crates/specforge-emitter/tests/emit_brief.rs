@@ -102,7 +102,7 @@ fn brief_is_smaller_than_full_json() {
     ));
 
     let brief = crate::export(&graph, specforge_emitter::EmitFormat::Brief, None);
-    let full = specforge_emitter::json::emit_json(&graph);
+    let full = crate::support::emit_json(&graph);
     assert!(
         brief.len() < full.len(),
         "brief ({}) should be smaller than full ({})",
@@ -208,8 +208,7 @@ fn brief_schema_version_matches_graph_format() {
         None,
     ))
     .unwrap();
-    let full: serde_json::Value =
-        serde_json::from_str(&specforge_emitter::json::emit_json(&graph)).unwrap();
+    let full: serde_json::Value = serde_json::from_str(&crate::support::emit_json(&graph)).unwrap();
     assert_eq!(brief["schema_version"], "1.0.0", "{brief}");
     assert_eq!(
         brief["schema_version"], full["schema_version"],

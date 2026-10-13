@@ -288,7 +288,8 @@ fn single_entity_roundtrip() {
     assert_eq!(node.title.as_deref(), Some("User Login"));
 
     // Emit as JSON — should produce valid JSON
-    let json = specforge_emitter::json::emit_json(ctx.graph());
+    let json =
+        specforge_emitter::emit(ctx.graph(), &specforge_emitter::EmitOptions::default()).unwrap();
     let parsed: serde_json::Value =
         serde_json::from_str(&json).expect("emitted JSON must be valid");
     let nodes = parsed["nodes"].as_array().expect("must have nodes array");
@@ -462,7 +463,8 @@ invariant security "Security Invariant" {
     )]);
 
     // JSON format
-    let json = specforge_emitter::json::emit_json(ctx.graph());
+    let json =
+        specforge_emitter::emit(ctx.graph(), &specforge_emitter::EmitOptions::default()).unwrap();
     assert!(
         serde_json::from_str::<serde_json::Value>(&json).is_ok(),
         "JSON must be valid"
