@@ -97,6 +97,11 @@ pub fn inventory<'a>(view: &ProjectView<'a>) -> Inventory<'a> {
     let entries: &'a [EnabledExtension] = view.env().enabled();
     let declarations: &'a [ExtensionDeclaration] = view.registries().declarations();
     let locked: &'a [LockFileEntry] = view.lock().entries();
+    // What each entry names, decided as the extension load decides it (`Installed::resolve`):
+    // aligned with `entries` by index.
+    let texts: Vec<String> = entries.iter().map(|e| e.entry.clone()).collect();
+    let builtins = specforge_project::builtins();
+    let resolution = view.installed().resolve(&texts, &builtins);
     let names: BTreeSet<&'a str> = entries
         .iter()
         .map(|e| e.name.as_str())
@@ -108,10 +113,25 @@ pub fn inventory<'a>(view: &ProjectView<'a>) -> Inventory<'a> {
         .map(|name| {
             let enabling: Vec<&'a EnabledExtension> =
                 entries.iter().filter(|e| e.name == name).collect();
+            // The entry that loaded it, else the first that tried, in the order the load tries
+            // them.
+            let in_load_order: Vec<usize> = resolution
+                .in_load_order()
+                .map(|(at, _)| at)
+                .filter(|at| entries[*at].name == name)
+                .collect();
+            let loaded_by = in_load_order
+                .iter()
+                .copied()
+                .find(|at| entries[*at].failure.is_none())
+                .or_else(|| in_load_order.first().copied());
             let declaration = declarations.iter().find(|d| d.name() == name);
             let lock = locked.iter().find(|e| e.name.as_str() == name);
             ProjectExtension {
-                origin: origin(name, &enabling, lock),
+                origin: match loaded_by {
+                    Some(at) => Origin::of(&resolution, at),
+                    None => unlisted_origin(name, lock),
+                },
                 status: match (enabling.is_empty(), declaration) {
                     (false, Some(_)) => Status::Loaded,
                     (false, None) => Status::NotLoaded,
@@ -127,22 +147,14 @@ pub fn inventory<'a>(view: &ProjectView<'a>) -> Inventory<'a> {
     Inventory { entries, rows }
 }
 
-/// Where `name` comes from, in the order the extension load tries
-/// (`Installed::load`): named entries load before `.wasm` file entries,
-/// and a named entry is a builtin before it is a lock entry. So a `.wasm`
-/// file is the origin only when no named entry enables the name.
-fn origin(name: &str, entries: &[&EnabledExtension], lock: Option<&LockFileEntry>) -> Origin {
-    let named = entries.iter().any(|e| e.file.is_none());
-    if !named && let Some(path) = entries.iter().find_map(|e| e.file.clone()) {
-        return Origin::File { path };
-    }
-    if builtin_name(name).is_some() {
-        return Origin::Builtin;
-    }
+/// Where `name` comes from when no entry enables it: its lock entry's source, else a builtin,
+/// else unknown.
+fn unlisted_origin(name: &str, lock: Option<&LockFileEntry>) -> Origin {
     match lock {
         Some(entry) => Origin::Installed {
             source: entry.source.clone(),
         },
+        None if builtin_name(name).is_some() => Origin::Builtin,
         None => Origin::Unknown,
     }
 }

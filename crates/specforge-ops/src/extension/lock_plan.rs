@@ -28,9 +28,9 @@ use specforge_package::{PackageName, Version, highest_matching};
 use specforge_protocol_types::{DeclaredCategory, ExtensionDeclaration, PeerDependency};
 use specforge_wasm::WasmRuntime;
 
-use super::Trust;
 use super::candidate::{Installable, LocalFile};
-use super::peer_set::{Declarations, MemberOrigin, ProjectPeers};
+use super::peer_set::{Declarations, ProjectPeers};
+use super::{Origin, Trust};
 use crate::registry::{KeyPin, METADATA_MISMATCH, Publisher, Registry, TrustPolicy};
 use crate::{OpError, OpErrorKind, Writes};
 
@@ -1251,10 +1251,10 @@ fn refusal(
         Verdict::Missing => checks(),
         Verdict::OutOfRange { installed } | Verdict::NotSemver { installed } => {
             match set.member(peer).map(|member| &member.origin) {
-                Some(MemberOrigin::Builtin) => {
+                Some(Origin::Builtin) => {
                     let dependent_is_builtin = set
                         .member(edge.dependent)
-                        .is_some_and(|member| member.origin == MemberOrigin::Builtin);
+                        .is_some_and(|member| member.origin == Origin::Builtin);
                     checks().with_suggestion(if dependent_is_builtin {
                         "this specforge build's builtin extensions disagree: reinstall specforge"
                             .to_string()
@@ -1265,7 +1265,7 @@ fn refusal(
                         )
                     })
                 }
-                Some(MemberOrigin::Installed(_)) => {
+                Some(Origin::Installed { .. }) => {
                     match staged.get(owner).and_then(Staged::registry) {
                         None => checks(),
                         Some(registry) => {
@@ -1280,7 +1280,7 @@ fn refusal(
                         }
                     }
                 }
-                Some(MemberOrigin::File(_)) | None => checks(),
+                Some(Origin::File { .. } | Origin::Unknown) | None => checks(),
             }
         }
         Verdict::Satisfied => unreachable!("filtered by `unsatisfied`"),

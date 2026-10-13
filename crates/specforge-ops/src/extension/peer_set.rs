@@ -6,11 +6,12 @@
 
 use std::path::{Path, PathBuf};
 
-use specforge_installed::{Installed, LockSource, Module, Resolved};
+use specforge_installed::{Installed, Module, Resolved};
 use specforge_package::peers::{Member, Peers};
 use specforge_protocol_types::{ExtensionDeclaration, PeerDependency};
 use specforge_wasm::WasmRuntime;
 
+use super::Origin;
 use super::candidate::Candidate;
 use crate::OpError;
 use crate::view::ProjectView;
@@ -22,18 +23,9 @@ pub(crate) struct PeerMember {
     /// The version it loads at: the builtin's or the file's declared one, or the lock entry's.
     pub(crate) version: String,
     pub(crate) peers: Vec<PeerDependency>,
-    pub(crate) origin: MemberOrigin,
-}
-
-/// Where a member's version comes from: it decides how a peer it leaves unsatisfied is refused.
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) enum MemberOrigin {
-    /// The builtin this specforge embeds: no install changes its version.
-    Builtin,
-    /// An installed extension, by its lock entry as the change leaves the lock.
-    Installed(LockSource),
-    /// A `.wasm` file entry, by the path it writes.
-    File(String),
+    /// Where its version comes from: it decides how a peer it leaves unsatisfied is refused. Never
+    /// `Unknown`: an entry that loads nothing is no member.
+    pub(crate) origin: Origin,
 }
 
 /// The extensions a project loads, in entry order (the registry build's input order).
@@ -72,14 +64,14 @@ impl ProjectPeers {
                         name: (*name).to_string(),
                         version: declared.version().to_string(),
                         peers: declared.peers().to_vec(),
-                        origin: MemberOrigin::Builtin,
+                        origin: Origin::of(&resolution, i),
                     }
                 }
                 Resolved::Locked { entry, .. } => PeerMember {
                     name: entry.name.to_string(),
                     version: entry.version.clone(),
                     peers: entry.peer_dependencies.clone(),
-                    origin: MemberOrigin::Installed(entry.source.clone()),
+                    origin: Origin::of(&resolution, i),
                 },
                 Resolved::File(file) => {
                     let Some(declared) = read.file(&file.file) else {
@@ -96,7 +88,7 @@ impl ProjectPeers {
                         name,
                         version: declared.version().to_string(),
                         peers: declared.peers().to_vec(),
-                        origin: MemberOrigin::File(file.path.to_string()),
+                        origin: Origin::of(&resolution, i),
                     }
                 }
                 Resolved::Unloadable { .. } | Resolved::Again { .. } => continue,
@@ -236,7 +228,7 @@ impl<'r> Declarations<'r> {
 mod tests {
     use super::*;
     use crate::testing::{self, declaring, serving_builtin};
-    use specforge_installed::{LockFile, LockFileEntry, LockState};
+    use specforge_installed::{LockFile, LockFileEntry, LockSource, LockState};
     use specforge_package::PackageName;
     use specforge_test_macros::test as specforge_test;
 
@@ -288,7 +280,7 @@ mod tests {
         let set =
             ProjectPeers::of(&installed, &entries, &mut Declarations::through(&runtime)).unwrap();
 
-        let members: Vec<(&str, &str, &MemberOrigin)> = set
+        let members: Vec<(&str, &str, &Origin)> = set
             .members()
             .iter()
             .map(|m| (m.name.as_str(), m.version.as_str(), &m.origin))
@@ -296,16 +288,20 @@ mod tests {
         assert_eq!(
             members,
             [
-                ("@specforge/software", "1.0.0", &MemberOrigin::Builtin),
+                ("@specforge/software", "1.0.0", &Origin::Builtin),
                 (
                     "@acme/tool",
                     "1.4.0",
-                    &MemberOrigin::Installed(LockSource::Registry)
+                    &Origin::Installed {
+                        source: LockSource::Registry
+                    }
                 ),
                 (
                     "@probe/base",
                     "2.0.0",
-                    &MemberOrigin::File("base.wasm".to_string())
+                    &Origin::File {
+                        path: "base.wasm".to_string()
+                    }
                 ),
             ],
             "the twin file declares a loaded name, the unlocked name loads nothing, \

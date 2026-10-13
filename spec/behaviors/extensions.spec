@@ -471,11 +471,13 @@ behavior list_installed_extensions "List Installed Extensions" {
     When specforge extensions is invoked, the system MUST list all installed
     extensions with their name, version, entity count, and registered entity types.
     The listing MUST query the KindRegistry to enumerate entity kinds per
-    extension. Each entry MUST carry its source, where the extension load
-    takes it from whatever order the entries are in: file:<path> when only
-    .wasm file entries of specforge.json enable it (listed under the name
-    its component declares), builtin for a builtin's name, else the lock
-    entry's source (registry, local:<path>), else unknown; its version: the
+    extension. Each entry MUST carry its source: where the extension load
+    loaded it from (the entry that loaded it, read by the load's one rule,
+    load_extension_manifests: builtin for a builtin's name, the lock
+    entry's source for an installed one, file:<path> for a .wasm file
+    entry, listed under the name it declares), else where its first entry
+    in load order would load it from, else its lock entry's source, else
+    unknown; its version: the
     loaded one, else an installed extension's locked one, else the version
     a legacy name@version entry writes; and its status (loaded, not_loaded,
     not_configured). The CLI and the MCP extensions tool MUST answer the same
