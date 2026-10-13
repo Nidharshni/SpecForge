@@ -108,18 +108,21 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   formatter's (a W142 per region formatting kept verbatim, while the document is the text it formatted). A publish
   sends the file's whole list, the compile layer plus the formatter layer of the same version, under the one URI
   the client names the file by. Hover and code actions read the layers; one module writes them (ADR 0056).
-- **Call target**: the project one MCP call acts on, resolved from the call's optional `path` (the target's argument is
-  `TargetArgument::Path`, spelled once) and its
-  entry's target before the handler runs: the served session (brought up to date with disk),
-  another project opened as a session for that call only and brought up to date after the call writes, as the served one is, the directory `init` creates, or, with nothing served and
-  no project named, the empty session for an entry that reads only the project view
-  (`specforge_mcp::target::CallTarget`).
-  Only a project (a directory holding `specforge.json`) is ever served: the server
-  serves the nearest one at or above its root, else nothing, and a `path` to a directory that is no
-  project is read for its call only (ADR 0014 D6 as amended).
-  An entry's target is derived from what its handler is given
-  (nothing, the project view, the project, the new directory), never declared beside it: an entry
-  whose handler acts on the project is refused as no project before it runs (ADR 0014, ADR 0024).
+- **Call target**: the project one MCP call acts on, resolved from the call's optional `path` and its
+  entry's target before the handler runs: the served session (brought up to date), another project opened as a
+  session for that call only and brought up to date after the call writes, as the served one is, the directory
+  `init` creates, or, with nothing served and no project named, the empty session for an entry that reads only the
+  project view (`specforge_mcp::target::CallTarget`). The revision of the request decides whether the call may
+  change what is served (`target::Serving`): in a handshake session a `path` naming a project while none is served
+  is adopted and the project `init` creates is served (ADR 0014 D5); a stateless request serves nothing it names
+  (ADR 0077). An entry's target is derived from what its handler is given (nothing, the project view, the
+  project, the new directory), never declared beside it: an entry whose handler acts on the project is refused as
+  no project before it runs (ADR 0014, ADR 0024).
+- **Served project**: the project an MCP server serves to every call that names none: the nearest project (a
+  directory holding `specforge.json`) at or above the server's root (the path `specforge mcp` was started with, or
+  a handshake client's `projectRoot`), else nothing; while none is served, every request looks there again first
+  (`McpState::follow_root`). In a handshake session a call may also serve one (Call target). It is replaced whole or
+  not at all, and brought up to date with disk before a request reads it (ADR 0014, ADR 0077).
 - **Update**: one change applied to a project session. It re-reads and re-parses exactly the changed files (an
   importer parses the same, since references resolve without `use`), applies them to the session's graph
   build, resolves every file's imports again and re-runs the checks (`specforge_project::Update`, ADR 0006,
@@ -789,7 +792,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   answered on its own without `initialize`; every other request follows the revision `initialize`
   negotiated (`specforge_mcp::modern`). Every request is served under its revision, which travels
   with it from the router to the reply (`specforge_mcp::lifecycle::Revision`); the server state
-  keeps only the negotiated one.
+  keeps only the negotiated one. A stateless request never changes what the server serves (its `path` is read
+  for that call only, `init` serves nothing); on a connection that sent `initialize` it reads what that session
+  serves (ADR 0077).
 - **Stdio transport**: how one MCP client and the server talk over a pair of byte streams (`specforge mcp`:
   its standard input and output). Each line of input is one JSON-RPC message; a line of only JSON whitespace is
   skipped, and one that is not UTF-8 is answered as a parse error. A message's response, then each notification it
