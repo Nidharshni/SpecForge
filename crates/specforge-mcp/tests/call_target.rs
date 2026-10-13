@@ -1271,8 +1271,11 @@ fn a_root_in_no_project_serves_nothing_and_init_serves_what_it_creates() {
     assert_eq!(served_root(&server), Some(canonical(&nested)));
 }
 
-#[test]
-fn pin_a_project_created_at_the_root_after_initialize_is_not_served() {
+#[specforge_test(
+    invariant = "mcp_served_project_consistency",
+    verify = "while nothing is served, a project created at or above the server's root is served by the next request, in either revision"
+)]
+fn a_project_created_at_the_root_after_initialize_is_served_by_the_next_request() {
     let root = TempDir::new().unwrap();
     let mut server = McpServer::with_project_root(root.path().to_path_buf());
     let resp = call(&mut server, "initialize", json!({}));
@@ -1287,8 +1290,8 @@ fn pin_a_project_created_at_the_root_after_initialize_is_not_served() {
         "behavior alpha \"Alpha\" {\n}\n",
     )
     .unwrap();
-    assert!(!finds(&mut server, "alpha"));
-    assert_eq!(served_root(&server), None);
+    assert!(finds(&mut server, "alpha"));
+    assert_eq!(served_root(&server), Some(canonical(root.path())));
 }
 
 #[specforge_test(

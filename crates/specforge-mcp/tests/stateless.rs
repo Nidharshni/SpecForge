@@ -556,15 +556,20 @@ fn pin_a_stateless_init_serves_what_it_created() {
     assert_eq!(served(&server), Some(canonical(&created)));
 }
 
-#[test]
-fn pin_the_first_stateless_request_fixes_what_is_served() {
+#[specforge_test(
+    invariant = "mcp_served_project_consistency",
+    verify = "while nothing is served, a project created at or above the server's root is served by the next request, in either revision"
+)]
+fn a_project_created_at_the_root_is_served_by_the_next_stateless_request() {
     let root = tempfile::TempDir::new().unwrap();
     let mut server = logged(McpServer::with_project_root(root.path().to_path_buf()));
     stateless(&mut server, "server/discover", json!({}));
     write_project(root.path());
     let stats = tool(&mut server, "specforge.stats", json!({}));
-    assert_eq!(tool_json(&stats)["entity_count"], 0, "{stats}");
-    assert_eq!(served(&server), None);
+    assert_eq!(tool_json(&stats)["entity_count"], 1, "{stats}");
+    assert_eq!(served(&server), Some(canonical(root.path())));
+    let extensions = tool(&mut server, "specforge.extensions", json!({}));
+    assert_eq!(extensions["result"]["isError"], false, "{extensions}");
 }
 
 #[test]

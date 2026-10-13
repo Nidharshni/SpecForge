@@ -87,7 +87,9 @@ invariant mcp_served_project_consistency "MCP Served Project Consistency" {
     project (a directory holding specforge.json) is ever
     served: the server serves the nearest one at or above its root (the
     client's projectRoot, else the path it was started with), and nothing
-    when there is none. A call whose path names a project while none is
+    when there is none; while none is served, every request looks there
+    again first, so a project created there since is served by the next
+    request. A call whose path names a project while none is
     served serves that project; a path to a directory that is no project is
     read for that call only and never served.
     With no project served and none named, what a call gets is declared by
@@ -114,6 +116,7 @@ invariant mcp_served_project_consistency "MCP Served Project Consistency" {
   verify unit "a path inside the served project names the served project"
   verify unit "a server whose root lies in no project serves nothing, and init then serves the project it creates"
   verify unit "a server started inside a project serves that project"
+  verify unit "while nothing is served, a project created at or above the server's root is served by the next request, in either revision"
   verify unit "a path to a directory that is no project is read for that call and never served"
   verify unit "rename with a path to another project edits that project only and keeps serving this one"
   verify unit "remove_extension with a path to another project checks that project's dependents and entities"
