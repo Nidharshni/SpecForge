@@ -47,6 +47,10 @@ pub use crate::prove::ProveOptions;
 /// The pass name that runs every pass: what an absent pass means on every
 /// surface (`specforge analyze`, `specforge.analyze`).
 pub const EVERY_PASS: &str = "all";
+/// A pass name no pass answers to (`InvalidInput`).
+pub const UNKNOWN_PASS: &str = "unknown_pass";
+/// A coverage minimum outside 0 to 100 (`InvalidInput`).
+pub const INVALID_MIN: &str = "invalid_min";
 
 /// What to run. `Default` is a plain `analyze all`.
 #[derive(Debug, Clone)]
@@ -389,14 +393,14 @@ impl From<AnalyzeError> for OpError {
                     &requested,
                     available.iter().map(String::as_str),
                 );
-                let error = OpError::new(OpErrorKind::InvalidInput, "unknown_pass", message);
+                let error = OpError::new(OpErrorKind::InvalidInput, UNKNOWN_PASS, message);
                 match close {
                     Some(close) => error.with_suggestion(format!("did you mean '{close}'?")),
                     None => error,
                 }
             }
             AnalyzeError::MinOutOfRange(_) => {
-                OpError::new(OpErrorKind::InvalidInput, "invalid_min", message)
+                OpError::new(OpErrorKind::InvalidInput, INVALID_MIN, message)
             }
             AnalyzeError::MinWithoutCoveragePass => {
                 OpError::coded(OpErrorKind::PreconditionFailed, codes::E068, message)
@@ -1225,7 +1229,7 @@ mod tests {
             assert!(matches!(error, AnalyzeError::MinOutOfRange(_)), "{min}");
             let error = OpError::from(error);
             assert_eq!(error.kind, OpErrorKind::InvalidInput);
-            assert_eq!(error.code, "invalid_min");
+            assert_eq!(error.code, INVALID_MIN);
         }
     }
 

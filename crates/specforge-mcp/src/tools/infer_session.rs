@@ -134,12 +134,8 @@ fn argument_of(error: &OpError) -> Option<&'static str> {
     match error.code.as_ref() {
         infer::UNKNOWN_SESSION => Some("session_id"),
         infer::SOURCE_UNREADABLE => Some("source_file"),
-        infer::SOURCE_OUTSIDE_ROOT => {
-            match error.data.as_ref().and_then(|d| d["argument"].as_str()) {
-                Some("source_roots") => Some("source_roots"),
-                _ => Some("source_file"),
-            }
-        }
+        infer::SOURCE_OUTSIDE_ROOT => Some("source_file"),
+        infer::SOURCE_ROOT_OUTSIDE_ROOT => Some("source_roots"),
         _ => None,
     }
 }

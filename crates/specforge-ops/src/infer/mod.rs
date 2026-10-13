@@ -48,6 +48,6 @@ pub use progress::{
 };
 pub use session::{
     END_STATUS, EndStatus, Recorded, SESSION_ACTION, SESSION_ACTIVE, SESSION_NOT_ACTIVE,
-    SOURCE_OUTSIDE_ROOT, SOURCE_UNREADABLE, SessionAction, SessionOutcome, SessionStep,
-    UNKNOWN_SESSION, session,
+    SOURCE_OUTSIDE_ROOT, SOURCE_ROOT_OUTSIDE_ROOT, SOURCE_UNREADABLE, SessionAction,
+    SessionOutcome, SessionStep, UNKNOWN_SESSION, session,
 };

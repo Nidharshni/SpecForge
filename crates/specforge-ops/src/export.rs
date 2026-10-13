@@ -95,6 +95,8 @@ pub enum Schema {
     Without,
 }
 
+/// A requested schema version that does not parse (`InvalidInput`).
+pub const INVALID_SCHEMA_VERSION: &str = "invalid_schema_version";
 /// The code of the refusal of `depth` without a `scope`: depth limits a
 /// scoped export.
 pub const DEPTH_WITHOUT_SCOPE: &str = "depth_without_scope";
@@ -165,7 +167,7 @@ fn export_versioned(
         let requested = requested.parse::<SchemaVersion>().map_err(|e| {
             OpError::new(
                 OpErrorKind::InvalidInput,
-                "invalid_schema_version",
+                INVALID_SCHEMA_VERSION,
                 format!("invalid schema version: {e}"),
             )
         })?;
