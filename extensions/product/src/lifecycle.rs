@@ -15,12 +15,14 @@
 //!   test report): I071, a done feature the recorded tests do not prove
 //!   (ADR 0039; [`crate::evidence`]).
 //!
-//! A feature without a `status` is `proposed`, a milestone without one is
-//! `planned` and a deliverable without one is `draft`, as the queries read
-//! them. A deprecated feature in a completed milestone is no contradiction:
+//! A kind's absent status is its vocabulary's (`vocabulary::lifecycle`), as
+//! the queries read it. A deprecated feature in a completed milestone is no contradiction:
 //! it was delivered, then retired.
 
 use crate::evidence::{FeatureEvidence, IMPLEMENTER_KIND, IMPLEMENTS_FIELD};
+use crate::vocabulary::{
+    self, DELIVERABLE_SHIPPED, FEATURE_DEPRECATED, FEATURE_DONE, MILESTONE_COMPLETED,
+};
 use specforge_coverage as coverage;
 use specforge_extension_sdk::prelude::*;
 use std::collections::{BTreeMap, BTreeSet};
@@ -60,19 +62,13 @@ impl<'a> Snapshot<'a> {
             .filter(move |e| e.kind == kind)
     }
 
-    /// `entity`'s status, else the default its kind's queries read.
+    /// `entity`'s status: as written, else its kind's absent status.
     fn status(&self, entity: &'a PassEntity) -> &'a str {
-        entity
-            .fields
-            .get("status")
-            .map(String::as_str)
-            .filter(|s| !s.is_empty())
-            .unwrap_or(match entity.kind.as_str() {
-                "feature" => "proposed",
-                "milestone" => "planned",
-                "deliverable" => "draft",
-                _ => "",
-            })
+        let written = entity.fields.get("status").map(String::as_str);
+        match vocabulary::lifecycle(&entity.kind) {
+            Some(statuses) => statuses.read(written).unwrap_or(""),
+            None => written.unwrap_or(""),
+        }
     }
 
     /// The targets of `source`'s `field` references that are of `kind`, in
@@ -132,12 +128,12 @@ pub fn pass_lifecycle(input: &PassInput) -> Vec<PassDiagnostic> {
 /// neither `done` nor `deprecated`, once per such feature.
 fn completed_milestones_deliver_done_features(snap: &Snapshot<'_>, out: &mut Vec<PassDiagnostic>) {
     for milestone in snap.of_kind("milestone") {
-        if snap.status(milestone) != "completed" {
+        if snap.status(milestone) != MILESTONE_COMPLETED {
             continue;
         }
         for feature in snap.targets(&milestone.id, "features", "feature") {
             let status = snap.status(feature);
-            if status == "done" || status == "deprecated" {
+            if status == FEATURE_DONE || status == FEATURE_DEPRECATED {
                 continue;
             }
             out.push(finding(
@@ -161,12 +157,12 @@ fn completed_milestones_deliver_done_features(snap: &Snapshot<'_>, out: &mut Vec
 /// `done`, once per such dependency.
 fn done_features_depend_on_done_features(snap: &Snapshot<'_>, out: &mut Vec<PassDiagnostic>) {
     for feature in snap.of_kind("feature") {
-        if snap.status(feature) != "done" {
+        if snap.status(feature) != FEATURE_DONE {
             continue;
         }
         for dependency in snap.targets(&feature.id, "depends_on", "feature") {
             let status = snap.status(dependency);
-            if status == "done" {
+            if status == FEATURE_DONE {
                 continue;
             }
             out.push(finding(
@@ -238,12 +234,12 @@ fn shipped_deliverables_track_completed_milestones(
     out: &mut Vec<PassDiagnostic>,
 ) {
     for deliverable in snap.of_kind("deliverable") {
-        if snap.status(deliverable) != "shipped" {
+        if snap.status(deliverable) != DELIVERABLE_SHIPPED {
             continue;
         }
         for milestone in snap.targets(&deliverable.id, "milestones", "milestone") {
             let status = snap.status(milestone);
-            if status == "completed" {
+            if status == MILESTONE_COMPLETED {
                 continue;
             }
             out.push(finding(
@@ -301,7 +297,7 @@ pub fn pass_delivery_evidence(input: &PassInput) -> PassOutput {
     for feature in snap.of_kind("feature") {
         features += 1;
         let evidence = FeatureEvidence::of(&feature.id, &snap.implementers(&feature.id), score);
-        let is_done = snap.status(feature) == "done";
+        let is_done = snap.status(feature) == FEATURE_DONE;
         done += usize::from(is_done);
         proven += usize::from(evidence.proven);
         if evidence.proven && !is_done {

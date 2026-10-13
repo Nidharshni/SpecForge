@@ -204,6 +204,14 @@ pub const RETIRED: &[(&str, Option<&str>)] = &[
     ("W028", None),
     ("W062", Some("E073")),
     ("W063", None),
+    ("W077", Some("E061")),
+    ("W078", Some("E061")),
+    ("W079", Some("E061")),
+    ("W080", Some("E061")),
+    ("W083", Some("E061")),
+    ("W084", Some("E061")),
+    ("W085", Some("E061")),
+    ("W095", Some("E061")),
     ("W099", None),
     ("W111", None),
     ("W114", None),
@@ -651,7 +659,7 @@ mod tests {
 
     /// Whether the code literal on `line` at `range` is only compared
     /// against rather than reported: an operand of `==`/`!=`, a match or
-    /// `matches!` pattern (`"E003" | "E025" =>`). A guest's `c.rule("W077", ..)`
+    /// `matches!` pattern (`"E003" | "E025" =>`). A guest's `c.rule("W041", ..)`
     /// or `PassDiagnostic::new("A001", ..)` reports it.
     fn is_literal_consumer(line: &str, range: &std::ops::Range<usize>) -> bool {
         let before = line[..range.start].trim_end();
@@ -923,7 +931,7 @@ mod tests {
             }
         }
         let guest_emitters = [
-            r#"        c.rule("W077", |r| {"#,
+            r#"        c.rule("W041", |r| {"#,
             r#"                code: "E028".to_string(),"#,
             r#"      "code": "W041","#,
             r#"            Kind::Missing => "E025","#,

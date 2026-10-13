@@ -479,7 +479,7 @@ feature task_management "Task Management" {
 ```
 
 ✅ `problem` framed from the user's perspective; `solution` from the system's.
-❌ Inventing a status like `wip` — only the enum values above are valid (else `W077`).
+❌ Inventing a status like `wip` — only the enum values above are valid (else `E061`).
 
 **Links to:** behaviors implement it; journeys/modules/milestones/personas reference it.
 

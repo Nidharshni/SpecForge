@@ -684,8 +684,10 @@ E061: Field value is not the declared type
 The extension that registers a field declares its type, and the value given
 can't be that type. A string field takes text, a bare word, a date, a type union
 or an `expr { }` group; an enum one of its declared values (the suggestion names
-the closest one); an integer field an integer; a bool field true or false; a
-reference field one id; a string_list or reference_list field a list; a block
+the closest one; the closed vocabularies the builtins declare, a feature's
+`status`, a failure mode's `severity`, a property's `property_type`, and the
+like, are enum fields); an integer field an integer; a bool field true or false;
+a reference field one id; a string_list or reference_list field a list; a block
 field a block. Values that can be read as the declared type are converted
 without a diagnostic: a single string, id, integer, boolean or date on a list
 field becomes a one-item list, a mixed list the list of its items' text, a
@@ -2580,96 +2582,6 @@ Owner: core
 Level: warning
 ```
 
-## W077
-
-```
-W077: Invalid feature status
-
-A `feature` entity's `status` field is not one of the recognized values
-(`proposed`, `accepted`, `in_progress`, `done`, `deferred`, `deprecated`). Set
-`status` to one of these values.
-
-Owner: @specforge/product
-Level: warning
-```
-
-## W078
-
-```
-W078: Invalid priority value
-
-A `feature`, `journey`, `milestone`, or `constraint` entity's `priority` field
-is not one of the recognized values (`critical`, `high`, `medium`, `low`). Set
-`priority` to one of these values.
-
-Owner: @specforge/product
-Level: warning
-```
-
-## W079
-
-```
-W079: Invalid milestone status
-
-A `milestone` entity's `status` field is not one of the recognized values
-(`planned`, `in_progress`, `completed`, `blocked`). Set `status` to one of these
-values.
-
-Owner: @specforge/product
-Level: warning
-```
-
-## W080
-
-```
-W080: Invalid deliverable artifact type
-
-A `deliverable` entity's `artifact_type` field is not one of the recognized
-values (e.g. `cli`, `service`, `library`, `web_app`, `mobile_app`, `api`,
-`extension`, `documentation`, `package`). Set `artifact_type` to one of these
-values.
-
-Owner: @specforge/product
-Level: warning
-```
-
-## W083
-
-```
-W083: Invalid persona status
-
-A `persona` entity's `status` field is not one of the recognized values
-(`active`, `deprecated`). Set `status` to one of these values.
-
-Owner: @specforge/product
-Level: warning
-```
-
-## W084
-
-```
-W084: Invalid channel status
-
-A `channel` entity's `status` field is not one of the recognized values
-(`active`, `deprecated`). Set `status` to one of these values.
-
-Owner: @specforge/product
-Level: warning
-```
-
-## W085
-
-```
-W085: Invalid deliverable status
-
-A `deliverable` entity's `status` field is not one of the recognized values
-(`draft`, `in_progress`, `shipped`, `deprecated`). Set `status` to one of these
-values.
-
-Owner: @specforge/product
-Level: warning
-```
-
 ## W092
 
 ```
@@ -2689,18 +2601,6 @@ W093: Invalid release version format
 
 A `release` entity's `version` field does not match semver format (e.g.
 `1.0.0`). Set `version` to a valid semver string.
-
-Owner: @specforge/product
-Level: warning
-```
-
-## W095
-
-```
-W095: Invalid feature effort
-
-A `feature` entity's `effort` field is not one of the recognized values (`xs`,
-`s`, `m`, `l`, `xl`). Set `effort` to one of these values.
 
 Owner: @specforge/product
 Level: warning
@@ -3312,6 +3212,14 @@ These codes are no longer emitted, and are never reused for another meaning.
 | W028 | (nothing) |
 | W062 | [E073](#e073) |
 | W063 | (nothing) |
+| W077 | [E061](#e061) |
+| W078 | [E061](#e061) |
+| W079 | [E061](#e061) |
+| W080 | [E061](#e061) |
+| W083 | [E061](#e061) |
+| W084 | [E061](#e061) |
+| W085 | [E061](#e061) |
+| W095 | [E061](#e061) |
 | W099 | (nothing) |
 | W111 | (nothing) |
 | W114 | (nothing) |

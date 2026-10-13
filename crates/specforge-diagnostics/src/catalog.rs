@@ -219,7 +219,7 @@ catalog! {
         "A runner extension declares the command that runs its tests, and `specforge collect` only runs it after you approve it for the project. The approval is asked at an interactive prompt and remembered per project, extension and command, in your user-level `~/.specforge/collector-consent.json`, never in the project. Without a terminal (CI, `--format json`) nothing is asked: pass `--yes` to run the command, or `--no-run` to parse a report the runner already wrote.";
     E061: Error core,
         "Field value is not the declared type",
-        "The extension that registers a field declares its type, and the value given can't be that type. A string field takes text, a bare word, a date, a type union or an `expr { }` group; an enum one of its declared values (the suggestion names the closest one); an integer field an integer; a bool field true or false; a reference field one id; a string_list or reference_list field a list; a block field a block. Values that can be read as the declared type are converted without a diagnostic: a single string, id, integer, boolean or date on a list field becomes a one-item list, a mixed list the list of its items' text, a quoted integer or boolean the number or boolean. Fix the value, or check the field's type with `specforge schema --kind <kind>`.";
+        "The extension that registers a field declares its type, and the value given can't be that type. A string field takes text, a bare word, a date, a type union or an `expr { }` group; an enum one of its declared values (the suggestion names the closest one; the closed vocabularies the builtins declare, a feature's `status`, a failure mode's `severity`, a property's `property_type`, and the like, are enum fields); an integer field an integer; a bool field true or false; a reference field one id; a string_list or reference_list field a list; a block field a block. Values that can be read as the declared type are converted without a diagnostic: a single string, id, integer, boolean or date on a list field becomes a one-item list, a mixed list the list of its items' text, a quoted integer or boolean the number or boolean. Fix the value, or check the field's type with `specforge schema --kind <kind>`.";
     E062: Error core,
         "Token budget too small for the export",
         "`specforge export --max-tokens` (or the MCP `export` tool's `max_tokens`) keeps the most central entities that fit the budget, but some of the export never shrinks: the envelope (`format_version`, `schema_version`), the `token_budget` block listing the dropped entity IDs, and, with `--with-schema`, the embedded schema, which is never cut short. The budget is below that fixed part, so no export fits. Raise the budget, or drop `--with-schema` when the schema alone is over it.";
@@ -622,36 +622,12 @@ catalog! {
     W061: Warning core,
         "Reference cycle detected",
         "The resolved reference graph contains a cycle among entity references. Break the cycle by removing or inverting one of the references in the reported path.";
-    W077: Warning product,
-        "Invalid feature status",
-        "A `feature` entity's `status` field is not one of the recognized values (`proposed`, `accepted`, `in_progress`, `done`, `deferred`, `deprecated`). Set `status` to one of these values.";
-    W078: Warning product,
-        "Invalid priority value",
-        "A `feature`, `journey`, `milestone`, or `constraint` entity's `priority` field is not one of the recognized values (`critical`, `high`, `medium`, `low`). Set `priority` to one of these values.";
-    W079: Warning product,
-        "Invalid milestone status",
-        "A `milestone` entity's `status` field is not one of the recognized values (`planned`, `in_progress`, `completed`, `blocked`). Set `status` to one of these values.";
-    W080: Warning product,
-        "Invalid deliverable artifact type",
-        "A `deliverable` entity's `artifact_type` field is not one of the recognized values (e.g. `cli`, `service`, `library`, `web_app`, `mobile_app`, `api`, `extension`, `documentation`, `package`). Set `artifact_type` to one of these values.";
-    W083: Warning product,
-        "Invalid persona status",
-        "A `persona` entity's `status` field is not one of the recognized values (`active`, `deprecated`). Set `status` to one of these values.";
-    W084: Warning product,
-        "Invalid channel status",
-        "A `channel` entity's `status` field is not one of the recognized values (`active`, `deprecated`). Set `status` to one of these values.";
-    W085: Warning product,
-        "Invalid deliverable status",
-        "A `deliverable` entity's `status` field is not one of the recognized values (`draft`, `in_progress`, `shipped`, `deprecated`). Set `status` to one of these values.";
     W092: Warning product,
         "Release dependency cycle",
         "Two or more `release` entities form a cycle through their `depends_on` edges. Break the cycle by removing or restructuring one of the dependency references.";
     W093: Warning product,
         "Invalid release version format",
         "A `release` entity's `version` field does not match semver format (e.g. `1.0.0`). Set `version` to a valid semver string.";
-    W095: Warning product,
-        "Invalid feature effort",
-        "A `feature` entity's `effort` field is not one of the recognized values (`xs`, `s`, `m`, `l`, `xl`). Set `effort` to one of these values.";
     W096: Warning formal,
         "Behavior requires without ensures",
         "A `behavior` entity declares a `requires` clause (an obligation on callers) but no `ensures` clause (a guarantee in return). Add an `ensures` clause describing what the behavior guarantees when its `requires` is satisfied.";

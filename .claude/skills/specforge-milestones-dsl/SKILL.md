@@ -44,7 +44,7 @@ milestone mvp "Phase 1: Core" {
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `status` | MilestoneStatus | Phase status: `planned`, `in_progress`, `completed`, `blocked`. Validated by W080. |
+| `status` | MilestoneStatus | Phase status: `planned`, `in_progress`, `completed`, `blocked`. Absent: `planned`. Another value is E061. |
 | `features` | reference list | Features scheduled for this phase. |
 | `modules` | reference list | Module dependencies for this phase. |
 | `depends_on` | reference list | Other milestones that must complete before this phase. Forms a DAG validated by E015 (cycle detection). |
@@ -97,7 +97,7 @@ milestone mvp "Phase 1: Core" {
 | E015 | error | Circular milestone dependency -- `depends_on` edges between milestones form a cycle. |
 | W049 | warning | Empty milestone -- no features AND no modules. |
 | W057 | warning | Completed milestone without exit criteria. |
-| W080 | warning | Invalid `status` value (not in MilestoneStatus enum). |
+| E061 | error | A value outside the field's vocabulary (`status`, `priority`). |
 | I051 | info | Milestone features not reachable from milestone modules (gap). |
 | I053 | info | Invalid `target_date` format (not ISO 8601 `YYYY-MM-DD`). |
 | I057 | info | Blocked milestone without a `depends_on` reference. |

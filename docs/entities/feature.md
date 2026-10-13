@@ -49,8 +49,8 @@ All fields are optional at the type level. Features are intentionally lightweigh
 | `title` | string | Human-readable name (the string after the identifier). Auto-derived from identifier if omitted. |
 | `problem` | string | What user need or pain point this feature addresses. Written from the user's perspective. |
 | `solution` | string | How the system addresses the problem. Written from the system's perspective. |
-| `priority` | Priority | Importance level: `critical`, `high`, `medium`, `low`. Validated by W078. |
-| `status` | FeatureStatus | Lifecycle state: `proposed`, `accepted`, `in_progress`, `done`, `deferred`. Validated by W077. Used in completion calculations. |
+| `priority` | Priority | Importance level: `critical`, `high`, `medium`, `low`. Another value is E061. |
+| `status` | FeatureStatus | Lifecycle state: `proposed`, `accepted`, `in_progress`, `done`, `deferred`, `deprecated`. Absent: `proposed`. Another value is E061. Used in completion calculations. |
 | `acceptance` | string[] | Free-form acceptance criteria. Deliberately prose (ADR pe_acceptance_free_form, C12-16): acceptance strings are wishes with formatting, not compiled references — checkable criteria belong in a behavior's `verify` blocks, which the coverage diff tracks. |
 | `depends_on` | EntityId[] | Other features this one depends on. Creates `FeatureDependsOn` edges. Cycles detected by W045. |
 | `reason` | string | Rationale for current status (expected when `deferred`, checked by I059). |
@@ -87,8 +87,7 @@ All fields are optional at the type level. Features are intentionally lightweigh
 |------|-------|------|
 | W041 | warning | Feature not referenced by any journey, module, or milestone (unreferenced feature). |
 | W045 | warning | Circular feature dependency — `depends_on` edges form a cycle. |
-| W077 | warning | Invalid `status` value (not in FeatureStatus enum). |
-| W078 | warning | Invalid `priority` value (not in Priority enum). |
+| E061 | error | A value outside the field's vocabulary. |
 | I048 | info | No acceptance criteria (no `acceptance`, or an empty list). |
 | I059 | info | Deferred feature without a `reason`. |
 | I080 | info | No `owner`. |

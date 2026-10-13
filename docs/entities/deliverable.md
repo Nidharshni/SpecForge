@@ -46,8 +46,8 @@ All fields are optional at the type level.
 | Field | Type | Description |
 |-------|------|-------------|
 | `title` | string | Human-readable name (the string after the entity ID). |
-| `artifact_type` | ArtifactType | The artifact kind: `cli`, `service`, `library`, `web_app`, `mobile_app`, `api`, `extension`, `documentation`, `package`. Validated by W080. |
-| `status` | DeliverableStatus | Lifecycle state: `draft`, `in_progress`, `shipped`, `deprecated`. Validated by W085. |
+| `artifact_type` | ArtifactType | The artifact kind: `cli`, `service`, `library`, `web_app`, `mobile_app`, `api`, `extension`, `documentation`, `package`. Another value is E061. |
+| `status` | DeliverableStatus | Lifecycle state: `draft`, `in_progress`, `shipped`, `deprecated`. Absent: `draft`. Another value is E061. |
 | `journeys` | EntityId[] | The UX journeys this deliverable ships. Creates `DeliverableSupportsJourney` edges. |
 | `modules` | EntityId[] | The modules this deliverable is built from. Creates `DeliverableContainsModule` edges. |
 | `milestones` | EntityId[] | Milestones this deliverable is tracked against. Creates `DeliverableTrackedByMilestone` edges. |
@@ -80,8 +80,7 @@ All fields are optional at the type level.
 | Code | Level | Rule |
 |------|-------|------|
 | E052 | error | Circular deliverable dependency — `depends_on` edges form a cycle. |
-| W080 | warning | Invalid `artifact_type` value (not in ArtifactType enum). |
-| W085 | warning | Invalid `status` value (not in DeliverableStatus enum). |
+| E061 | error | A value outside the field's vocabulary. |
 | W043 | warning | Deliverable with no journeys (no `journeys`, or an empty list). |
 | W046 | warning | Deliverable with no modules (no `modules`, or an empty list). |
 | I061 | info | `version` present but not semver. |

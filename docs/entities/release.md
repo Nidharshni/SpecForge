@@ -22,7 +22,7 @@ Deliverables have individual versions and statuses, but multiple deliverables of
 |-------|------|----------|-------------|
 | `description` | string | no | What this release delivers |
 | `version` | string | no | SemVer 2.0.0 version (W093 if non-conforming) |
-| `status` | ReleaseStatus | no | planned, in_progress, released, recalled |
+| `status` | ReleaseStatus | no | planned, in_progress, released, recalled; absent: planned; another value is E061 |
 | `deliverables` | EntityId[] | no | Deliverables shipping in this release |
 | `milestones` | EntityId[] | no | Milestones targeted by this release |
 | `release_date` | string | no | ISO 8601 date YYYY-MM-DD (not validated) |
