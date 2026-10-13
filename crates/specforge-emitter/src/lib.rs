@@ -17,15 +17,17 @@ mod error;
 pub mod json;
 pub mod model;
 pub mod outline;
+mod publish;
 pub mod schema;
 
 pub use dot::DotOptions;
 pub use emit::{EmitFormat, EmitOptions, document_schema, emit};
 pub use error::EmitterError;
 pub use json::SCHEMA_VERSION;
+pub use publish::publish;
 pub use schema::{
     GraphProtocolSchema, SchemaCacheEntry, SchemaCompatibility, SchemaEdgeType, SchemaEntityKind,
     SchemaExtensionInfo, SchemaField, SchemaMigration, SchemaMigrationChange, SchemaVersion,
     SchemaVersionError, compute_schema_version, content_hash, diff_schemas, diff_schemas_optional,
-    generate_schema, negotiate_version, publish_json_schema_format,
+    generate_schema, negotiate_version,
 };

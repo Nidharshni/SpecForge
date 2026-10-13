@@ -3,7 +3,7 @@ source: crates/specforge-cli/tests/read_views.rs
 expression: "normalized(&schema_digest(value), root)"
 ---
 {
-  "$id": "https://specforge.dev/schema/graph-protocol-v1.0.0.json",
+  "$id": "https://specforge.dev/schema/graph-protocol-v1.0.0-context.json",
   "properties": [
     "edges",
     "format_version",
@@ -14,7 +14,6 @@ expression: "normalized(&schema_digest(value), root)"
     "token_budget"
   ],
   "required": [
-    "format_version",
     "schema_version",
     "nodes",
     "edges"

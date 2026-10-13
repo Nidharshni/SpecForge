@@ -565,6 +565,62 @@ fn check(
     }
 }
 
+/// The keywords [`violations`] checks, and the annotations it ignores by
+/// design (they describe, never constrain).
+const CHECKED_KEYWORDS: [&str; 11] = [
+    "type",
+    "enum",
+    "properties",
+    "required",
+    "additionalProperties",
+    "items",
+    "oneOf",
+    "anyOf",
+    "minimum",
+    "$ref",
+    "$defs",
+];
+const ANNOTATIONS: [&str; 5] = ["$schema", "$id", "title", "description", "examples"];
+
+/// Every keyword of `document`, with its JSON Pointer, that [`violations`]
+/// neither checks nor treats as an annotation: what a document held to this
+/// checker must not use. Walks `properties` and `$defs` as maps of schemas,
+/// `items` and `additionalProperties` as schemas, `oneOf`/`anyOf` as arrays
+/// of schemas; `enum`, `required` and `examples` hold values. Checked:
+/// `type`, `enum`, `properties`, `required`, `additionalProperties`,
+/// `items`, `oneOf`, `anyOf`, `minimum`, `$ref`, `$defs`; annotations:
+/// `$schema`, `$id`, `title`, `description`, `examples`.
+pub fn unchecked_keywords(document: &Value) -> Vec<String> {
+    let mut found = Vec::new();
+    walk_keywords(document, "", &mut found);
+    found
+}
+
+fn walk_keywords(schema: &Value, pointer: &str, found: &mut Vec<String>) {
+    let Value::Object(object) = schema else {
+        return;
+    };
+    let escape = |name: &str| name.replace('~', "~0").replace('/', "~1");
+    for (keyword, value) in object {
+        let at = format!("{pointer}/{}", escape(keyword));
+        match keyword.as_str() {
+            "properties" | "$defs" => {
+                for (name, sub) in value.as_object().into_iter().flatten() {
+                    walk_keywords(sub, &format!("{at}/{}", escape(name)), found);
+                }
+            }
+            "items" | "additionalProperties" => walk_keywords(value, &at, found),
+            "oneOf" | "anyOf" => {
+                for (i, sub) in value.as_array().into_iter().flatten().enumerate() {
+                    walk_keywords(sub, &format!("{at}/{i}"), found);
+                }
+            }
+            keyword if CHECKED_KEYWORDS.contains(&keyword) || ANNOTATIONS.contains(&keyword) => {}
+            _ => found.push(at),
+        }
+    }
+}
+
 /// Whether `value` is of the JSON Schema type `name`; a name the subset
 /// does not know accepts anything.
 fn is_a(name: &str, value: &Value) -> bool {
