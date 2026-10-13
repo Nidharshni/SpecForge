@@ -2824,6 +2824,7 @@ dependencies = [
  "lasso",
  "serde",
  "serde_json",
+ "specforge-coverage",
  "specforge-diagnostics",
  "specforge-package",
  "specforge-protocol-types",
