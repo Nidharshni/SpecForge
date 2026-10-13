@@ -122,8 +122,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Update**: one change applied to a project session. It re-reads and re-parses exactly the changed files (an
   importer parses the same, since references resolve without `use`), applies them to the session's graph
   build, resolves every file's imports again and re-runs the checks (`specforge_project::Update`, ADR 0006,
-  ADR 0032). An update says whether the session's inputs changed (`inputs_changed`) and, when it was
-  verified, how it differs from a cold rebuild (`divergence`). An update that changes no file (a held buffer
+  ADR 0032). An update says whether the session's inputs changed (`inputs_changed`), what the session
+  reported before it and reports after (its diagnostics delta), and, when it was verified, how it differs
+  from a cold rebuild (`divergence`). An update that changes no file (a held buffer
   whose text is already its file's) runs no check.
 - **Graph delta**: what an update or a reload changed in the graph: added and removed nodes (each with its
   kind, file and line), modified nodes (the fields whose values differ, and apart from them which of its
@@ -132,6 +133,14 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   build computes it. `specforge watch --format json` prints it and MCP sends it whole as
   `specforge/graphChanged` (ADR 0058). `specforge migrate` keeps a migration only when the delta from the graph
   before it to the graph after is empty, and reports each change as W054.
+- **Diagnostics delta**: what an update or a reload changed in what a session reports: the diagnostics added and
+  removed, each compared and presented whole, as every JSON surface presents one (code, severity, message, span,
+  suggestion, data, origin). A diagnostic that moved or changed in any part is removed and added; identical ones
+  count one by one; order is not part of it (`specforge_project::DiagnosticsDelta`). An update holds what the
+  session reported before and reports after, shared with its compiled project, and compares them only when asked
+  (`Update::diagnostics_delta`). `specforge watch --format json` prints it; MCP sends it, with the I017 its
+  extension surfaces add and remove, as `specforge/diagnosticsChanged` (ADR 0074). The LSP does not read it: it
+  publishes every file's diagnostics as the editor shows them.
 - **Debounce rule**: changes that arrive less than 50 ms apart are one batch, due 50 ms after the last
   of them, each change once. Watch batches the file changes under every directory it watches as one
   stream, and the LSP batches edited documents, by the same rule (`specforge_watch::Coalescer`,
@@ -778,7 +787,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`specforge://diagnostics`). After an update that changed it, each subscription hears
   `notifications/resources/updated` once, and a handshake subscriber of a graph view or of the
   diagnostics then hears the delta, whole (`specforge/graphChanged`: the graph delta;
-  `specforge/diagnosticsChanged`: the diagnostics added and removed, each as every surface presents one).
+  `specforge/diagnosticsChanged`: the update's diagnostics delta, then the I017 the server's extension
+  surfaces added and removed).
   Subscriptions belong to the connection and end with it or at shutdown
   (`specforge_mcp::subscriptions::Subscriptions`, ADR 0024 D6).
 - **MCP event**: what an MCP server records it did — a tool, prompt or listing invoked, a resource

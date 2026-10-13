@@ -331,6 +331,12 @@ behavior emit_incremental_diagnostics "Emit Incremental Diagnostics" {
     does not affect file B, B's diagnostics MUST remain unchanged. This
     behavior orchestrates the diagnostic collection, not the extension
     invocation directly.
+    Each update MUST also state the diagnostics it added and removed
+    (DiagnosticsDelta), each compared whole, as every surface presents it:
+    code, severity, message, span, suggestion, data and origin. A
+    diagnostic that moved or changed in any part is removed and added;
+    identical diagnostics count one by one; the same diagnostics in
+    another order are no change.
   """
   verify unit "diagnostics from changed files are refreshed"
   verify unit "diagnostics from unchanged files are preserved"
@@ -510,7 +516,7 @@ behavior notify_delta_subscribers "Notify Delta Subscribers" {
   features   [incremental_graph_deltas]
   invariants [incremental_correctness, diagnostic_determinism, graph_traversal_integrity]
   category   command
-  types      [GraphDelta]
+  types      [GraphDelta, DiagnosticsDelta]
   // MCP notification is handled by notify_graph_delta_via_mcp in behaviors/mcp-server.spec.
   // The LSP is not a delta subscriber: provide_semantic_tokens in behaviors/lsp.spec
   // owns its semantic token refresh.
@@ -524,17 +530,23 @@ behavior notify_delta_subscribers "Notify Delta Subscribers" {
     delta_subscribers_notified_emitted "delta_subscribers_notified event fires once the update is reported"
   }
   contract   """
-    After every update, the project session MUST report the GraphDelta
-    and the files it affects with the update, for whoever holds the
-    session to deliver: specforge watch prints it (whole, as each rebuilt
-    or rechecked line's delta under --format json; its counts in text),
-    and MCP notifies its subscribed clients (notify_graph_delta_via_mcp) and diffs
-    the diagnostics into a DiagnosticsDelta itself
-    (notify_diagnostics_delta_via_mcp). The session never waits on a
-    subscriber, so a slow one cannot delay the compilation pipeline. The
-    LSP does not use these deltas: it recompiles on its own document
-    changes and asks its client to refresh semantic tokens
-    (provide_semantic_tokens, behaviors/lsp.spec).
+    After every update, the project session MUST report with the update
+    the GraphDelta and the files it affects, and what it reported before
+    and reports after, from which it computes, when asked, the
+    DiagnosticsDelta: the diagnostics the update added and removed
+    (emit_incremental_diagnostics). Whoever holds the session delivers
+    them: specforge watch prints both (whole under --format json: each
+    rebuilt or rechecked line's delta and each rebuilt, rechecked or
+    extensions_reloaded line's diagnostics_delta; counts in text), and
+    MCP notifies its subscribed clients (notify_graph_delta_via_mcp,
+    notify_diagnostics_delta_via_mcp). A DiagnosticsDelta nobody asks for
+    is never computed. The session never waits on a subscriber, so a slow
+    one cannot delay the compilation pipeline. The LSP does not use these
+    deltas: it publishes every file's diagnostics as the editor shows
+    them, a spanless one placed at its entity's name
+    (emit_live_diagnostics), which a delta of the diagnostics as JSON
+    presents them does not describe, and asks its client to refresh
+    semantic tokens (provide_semantic_tokens, behaviors/lsp.spec).
   """
   verify unit "an update reports its delta and the files it affects"
   verify unit "watch --format json prints each rebuild's GraphDelta, the one MCP notifies"
