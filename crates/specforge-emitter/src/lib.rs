@@ -6,7 +6,7 @@
 //! D1-d). Compiling a project is `specforge-project`'s; traces, plans,
 //! stats and the schema record are `specforge-ops`'.
 
-pub mod brief;
+mod brief;
 mod budget;
 pub use budget::estimate_tokens;
 pub mod context;

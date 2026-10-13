@@ -39,7 +39,7 @@ impl ModelIntermediate {
             .collect();
 
         ModelIntermediate {
-            model_version: "1.0.0".to_string(),
+            schema_version: schema.schema_version.to_string(),
             extensions,
             entities,
             relationships,

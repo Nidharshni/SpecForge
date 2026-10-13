@@ -13,6 +13,7 @@
 use specforge_common::Sym;
 use specforge_graph::{Graph, Node};
 use specforge_parser::FieldValue;
+use specforge_project::snapshot::{field_items, field_text};
 
 /// The least Jaro-Winkler similarity, over the lowercase id or title, at
 /// which a text that matches no other way still finds an entity.
@@ -42,7 +43,8 @@ pub struct EntityQuery<'q> {
     /// Only entities of these kinds; empty: every kind.
     pub kinds: &'q [&'q str],
     /// Only entities whose field (the first) holds the value (the
-    /// second): its text, a list or block as its JSON, lowercase.
+    /// second): its text by the field-text rule (ADR 0019), item by item,
+    /// lowercase.
     pub field_contains: Option<(&'q str, &'q str)>,
     /// Only entities that reference this entity (a reference to it in
     /// one of their fields).
@@ -208,15 +210,18 @@ fn rank<'g>(node: &'g Node, text: &str, scope: MatchScope) -> Option<EntityMatch
     None
 }
 
-/// Whether `node`'s `field` holds `value`: its text (a list or block as
-/// its JSON) contains it, ignoring case.
+/// Whether `node`'s `field` holds `value`, ignoring case: one of the
+/// field's texts contains it, by the one field-text rule (ADR 0019): a
+/// list's items (a reference list's ids, a verify list's statements, a
+/// block's keys, each expression in its written form), else the scalar's
+/// text.
 fn field_holds(node: &Node, field: &str, value: &str) -> bool {
+    let value = value.to_lowercase();
     node.fields.get(field).is_some_and(|v| {
-        let text = match serde_json::Value::from(specforge_graph::field_form::write(v)) {
-            serde_json::Value::String(text) => text,
-            other => other.to_string(),
-        };
-        text.to_lowercase().contains(&value.to_lowercase())
+        field_items(v)
+            .unwrap_or_else(|| vec![field_text(v)])
+            .iter()
+            .any(|text| text.to_lowercase().contains(&value))
     })
 }
 

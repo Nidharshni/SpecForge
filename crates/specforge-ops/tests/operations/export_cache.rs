@@ -103,3 +103,112 @@ fn a_failed_export_leaves_the_cache() {
         "a failed export records nothing"
     );
 }
+
+// ===========================================================================
+// Every document names the project's versioned schema (plan 11, ADR 0015)
+// ===========================================================================
+
+/// A project whose versioned schema is 2.0.0: its cache recorded a kind the
+/// project no longer has, a breaking change not yet recorded over.
+fn project_at_two() -> crate::view_support::Project {
+    use specforge_ops::export::{Request, export_recorded};
+    let project = recorded_project();
+    assert!(
+        export_recorded(&project.view(), &Request::default())
+            .export
+            .is_ok()
+    );
+    let mut cache: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(cache_file(&project)).unwrap()).unwrap();
+    cache["schema"]["entity_kinds"]
+        .as_array_mut()
+        .unwrap()
+        .push(serde_json::json!({
+            "name": "legacy", "source_extension": "x", "testable": false, "fields": []
+        }));
+    std::fs::write(cache_file(&project), cache.to_string()).unwrap();
+    project
+}
+
+#[specforge_test(
+    behavior = "render_model_json",
+    verify = "output carries the schema_version specforge schema prints for the project"
+)]
+
+fn the_model_names_the_versioned_schema() {
+    use specforge_ops::model::{ModelFormat, ModelOptions, model};
+    let project = project_at_two();
+    let json = |format| {
+        model(
+            &project.view(),
+            &ModelOptions {
+                format,
+                ..ModelOptions::default()
+            },
+        )
+        .unwrap()
+        .document
+    };
+
+    let document: serde_json::Value = serde_json::from_str(&json(ModelFormat::Json)).unwrap();
+    assert_eq!(document["schema_version"], "2.0.0", "{document}");
+    assert!(!document.to_string().contains("model_"), "{document}");
+    let dbml = json(ModelFormat::Dbml);
+    assert_eq!(dbml.lines().nth(1), Some("// Schema version: 2.0.0"));
+}
+
+#[specforge_test(
+    behavior = "embed_schema_in_export",
+    verify = "every JSON export carries the project's schema version, whether the schema is attached or not"
+)]
+#[ignore = "fixed by T2"]
+fn every_document_names_the_versioned_schema() {
+    use specforge_ops::export::{Format, Request, Schema, export};
+    use specforge_ops::trace::{Target, trace};
+    let project = project_at_two();
+    let view = project.view();
+    let version = |request: Request| {
+        let document: serde_json::Value =
+            serde_json::from_str(&export(&view, &request).unwrap()).unwrap();
+        document["schema_version"].clone()
+    };
+
+    for (what, request) in [
+        ("graph", Request::default()),
+        (
+            "graph without the schema",
+            Request {
+                schema: Schema::Without,
+                ..Request::default()
+            },
+        ),
+        (
+            "context",
+            Request {
+                format: Some(Format::Context),
+                ..Request::default()
+            },
+        ),
+        (
+            "brief",
+            Request {
+                format: Some(Format::Brief),
+                ..Request::default()
+            },
+        ),
+        (
+            "graph under a budget",
+            Request {
+                max_tokens: Some(100_000),
+                ..Request::default()
+            },
+        ),
+    ] {
+        assert_eq!(version(request), "2.0.0", "{what}");
+    }
+    let traced = serde_json::to_value(trace(&view, Target::Every).unwrap()).unwrap();
+    assert!(
+        traced.to_string().contains("\"schema_version\":\"2.0.0\""),
+        "{traced}"
+    );
+}

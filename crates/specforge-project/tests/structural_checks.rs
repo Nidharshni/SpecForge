@@ -7,6 +7,7 @@ use std::fs;
 
 use serde_json::json;
 use specforge_common::Diagnostic;
+use specforge_extension_sdk::PeerDependency;
 use specforge_extension_sdk::prelude::*;
 use specforge_project::CompiledProject;
 use specforge_test::prelude::*;

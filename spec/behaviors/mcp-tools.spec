@@ -258,8 +258,9 @@ behavior provide_mcp_search_tool "Provide MCP Search Tool" {
   contract   """
     In MCP server mode, the system MUST register a specforge.search tool that
     accepts query (required; empty matches every entity), kinds?[], field?
-    and value? (together: only entities whose field's text contains the
-    value, ignoring case; one without the other MUST be an invalid-input
+    and value? (together: only entities whose field's text, by the
+    one field-text rule, contains the value, ignoring case: a list item by
+    item, an expression in its written form, a block by its keys; one without the other MUST be an invalid-input
     error naming the missing one), references? (an entity id: only
     entities that reference it), and limit? (default 20). The tool MUST combine these filters with
     AND semantics. Unknown kind values in the kinds[] array MUST be
@@ -275,6 +276,7 @@ behavior provide_mcp_search_tool "Provide MCP Search Tool" {
   verify unit "kind filter restricts results to matching entity kinds"
   verify unit "field and value filter matches entity fields"
   verify unit "field without value, or value without field, is an invalid-input error"
+  verify unit "the field filter reads a field's text: a list by its items, an expression by its written form, a block by its keys; never the export's JSON"
   verify unit "limit caps the number of returned results"
   verify unit "empty query returns all entities up to limit"
   verify unit "references filter returns entities referencing target"

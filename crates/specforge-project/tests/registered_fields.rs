@@ -7,6 +7,7 @@
 use std::fs;
 
 use specforge_common::{Diagnostic, Severity};
+use specforge_extension_sdk::PeerDependency;
 use specforge_extension_sdk::prelude::*;
 use specforge_project::Environment;
 use specforge_test::prelude::*;

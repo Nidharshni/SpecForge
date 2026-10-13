@@ -42,7 +42,7 @@ impl ModelIntermediate {
 
         let keep: HashSet<String> = keep.into_iter().map(str::to_string).collect();
         let ModelIntermediate {
-            model_version,
+            schema_version,
             extensions,
             mut entities,
             mut relationships,
@@ -56,7 +56,7 @@ impl ModelIntermediate {
         relationships.retain(|r| keep.contains(&r.source) && keep.contains(&r.target));
 
         ModelIntermediate {
-            model_version,
+            schema_version,
             extensions,
             entities,
             relationships,

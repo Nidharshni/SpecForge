@@ -22,11 +22,7 @@ impl Contributions for Formal {
     fn contribute(c: &mut ContributionsBuilder) {
         // Diagrams (`model`, `outline`) draw the extension in this colour.
         c.theme_color("#9b59b6");
-        c.meta.peer_dependencies.push(PeerDependency {
-            name: "@specforge/software".to_string(),
-            version: "^1.0".to_string(),
-            optional: false,
-        });
+        c.peer("@specforge/software", "^1.0");
 
         // Declaration order is deliberately shuffled; the host must order
         // passes by the declared after-constraints, not by declaration.

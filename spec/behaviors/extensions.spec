@@ -154,6 +154,7 @@ behavior load_extension_declaration "Load Extension Declaration" {
   verify unit "the SDK's short name reaches the handshake as ext_short"
   verify unit "a short name that is not lowercase kebab case is refused when the extension is built"
   verify unit "a raw category that does not parse panics when the extension is built"
+  verify unit "the SDK's peer and optional_peer calls reach the handshake as peer_dependencies, in call order"
   verify integration "the loader reads the handshake and every describe category once"
   verify integration "an extension that only declares commands registers its commands"
   verify integration "an extension that only declares passes has them in its declaration"

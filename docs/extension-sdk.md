@@ -231,18 +231,14 @@ specforge_extension_sdk::component_guest!(build = contributions::build);
 | `short` | no | The name the extension's commands are routed by: `specforge <short> <command>` on the CLI, `specforge.<short>.<id>` over MCP. Lowercase kebab case (`[a-z][a-z0-9-]*`), checked at compile time; absent, the name's last segment (`@specforge/software` is `software`). On the wire, the handshake's `ext_short`. |
 | `description` | no | One line a package registry shows for the extension (the handshake's `description`) |
 
-Everything else the handshake carries is set on the builder: `c.starter_template(..)`, `c.theme_color(..)`, `c.migration_hook_handler(export, |input| ..)`, `c.command_prefix(..)` and `c.providers()` (it implements configured providers), and `ExtensionMeta`'s `c.meta.keywords`, `c.meta.peer_dependencies` and `c.meta.sandbox_policy`. The declaration the builder builds (`ContributionsBuilder::declaration`) is exactly what the host loads and what `specforge publish` uploads (ADR 0012).
+Everything else the handshake carries is set on the builder: `c.starter_template(..)`, `c.theme_color(..)`, `c.migration_hook_handler(export, |input| ..)`, `c.command_prefix(..)` and `c.providers()` (it implements configured providers), `c.peer(..)` and `c.optional_peer(..)` (a peer requirement), and `ExtensionMeta`'s `c.meta.keywords` and `c.meta.sandbox_policy`. The declaration the builder builds (`ContributionsBuilder::declaration`) is exactly what the host loads and what `specforge publish` uploads (ADR 0012).
 
 `ExtensionMeta::sandbox_policy` declares the extension's limits, `SandboxPolicy { max_execution_ms, max_memory_mb }`: at most 30000 ms and 512 MB, the ceiling when unset. A component is granted no capability whatever it declares (see Sandbox in the [protocol doc](extension-protocol.md)).
 
-Peer dependencies go on the extension's meta:
+A peer requirement is a builder call, `c.peer(name, range)`, or `c.optional_peer(name, range)` for a peer the extension works without:
 
 ```rust
-c.meta.peer_dependencies.push(PeerDependency {
-    name: "@specforge/product".to_string(),
-    version: "^1.0".to_string(), // a SemVer requirement; anything else is E073
-    optional: false,
-});
+c.peer("@specforge/product", "^1.0"); // a SemVer requirement; anything else is E073
 ```
 
 `specforge add` and `init` enable a required peer that is a builtin along with your extension; a required peer that is not installed, or an installed one at a version your range does not accept (a builtin's included), refuses the install with E027, as `specforge check` would report it.
@@ -264,7 +260,7 @@ Every contribution is a builder call. The SDK adds the matching Wasm exports and
 | `c.pass(name, \|p\| ..)` | a compiler pass and its handler | `passes` |
 | `c.analyzer(language, \|a\| ..)` | a source analyzer and its scanner | `analyzers` |
 | `c.feature_flag(name, default, description)` | a flag users set in `specforge.json` | `feature_flags` |
-| `c.meta.peer_dependencies` | a peer requirement | handshake |
+| `c.peer(name, range)`, `c.optional_peer(name, range)` | a peer requirement | handshake |
 | `c.providers()` | it implements configured providers | handshake |
 
 ## Builder reference
@@ -612,11 +608,7 @@ struct Gherkin;
 
 impl Contributions for Gherkin {
     fn contribute(c: &mut ContributionsBuilder) {
-        c.meta.peer_dependencies.push(PeerDependency {
-            name: "@specforge/software".to_string(),
-            version: "^1.0".to_string(),
-            optional: false,
-        });
+        c.peer("@specforge/software", "^1.0");
         c.enhance("behavior", "@specforge/software", |e| {
             e.field("gherkin", |f| {
                 f.field_type(FieldType::StringList)

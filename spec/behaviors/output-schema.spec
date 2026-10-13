@@ -120,11 +120,15 @@ behavior embed_schema_in_export "Embed Schema in Export" {
     published schema's url and content_hash, so agents retain access to the
     broader context (the full-project schema is retrievable by that
     reference) without taping the whole schema into every scoped letter.
+    Every JSON export, the schema attached or not, MUST carry the
+    schema_version of the project's versioned schema; no export carries a
+    version the project's schema is not at.
   """
   verify unit "schema embedded as top-level key in full JSON export"
   verify unit "format_version set to 2.0 with schema"
   verify unit "--no-schema suppresses schema and keeps format_version 1.0"
   verify unit "scoped exports carry schema_ref (url and content_hash) instead of embedded schema"
+  verify unit "every JSON export carries the project's schema version, whether the schema is attached or not"
   verify contract "Embed Schema in Export: schema embedding in export holds — schema_version_computed_fired, validation_complete_fired, schema_embedded, format_version_set, schema_ref_names_full_schema"
 }
 

@@ -377,7 +377,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   means up to date, never a lower version; a lock version that is not SemVer moves to what `latest` picks
   (`specforge_package::upgrade_target`, ADR 0036 as amended).
 - **Peer requirement**: what an extension declares it needs from another extension: the peer's name,
-  a SemVer range read as Cargo reads one, and whether the peer may be absent
+  a SemVer range read as Cargo reads one, and whether the peer may be absent (an extension declares
+  one with the SDK's `peer` or `optional_peer`)
   (`specforge_package::peers::PeerRequirement`, ADR 0050). One rule judges it (`peers::verdict`): an
   unreadable range satisfies nothing (E073); a required peer must be installed; an installed one must
   be at a version the range accepts (E027 otherwise). The registry build, `doctor` and the lock plan
