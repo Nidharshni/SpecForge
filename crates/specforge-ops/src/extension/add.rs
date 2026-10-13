@@ -4,7 +4,7 @@ use super::candidate::LocalFile;
 use super::lock_plan::{Ask, Asked, Fetching, Install, LockPlan, Purpose};
 use super::{Origin, builtin_name};
 use crate::registry::{Acceptance, Publisher, Registry};
-use crate::{OpError, OpErrorKind, Writes};
+use crate::{OpError, OpErrorKind, Refusal, Writes};
 use serde::Serialize;
 use specforge_common::codes;
 use specforge_common::shape::Shape;
@@ -142,11 +142,19 @@ impl Source {
     }
 }
 
+/// The field of an add's request a refusal can be about (ADR 0072).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AddField {
+    /// `AddRequest::extensions`: the specifiers to add, read by [`specified`].
+    Extensions,
+}
+
 /// Read each of `specifiers`, in order, as [`parse`] reads it. E054 when there is none; the
-/// first that can't be read refuses, named when there are several.
-pub fn specified<S: AsRef<str>>(specifiers: &[S]) -> Result<Vec<Specified>, OpError> {
+/// first that can't be read refuses, named when there are several. Every refusal is about the
+/// specifiers.
+pub fn specified<S: AsRef<str>>(specifiers: &[S]) -> Result<Vec<Specified>, Refusal<AddField>> {
     if specifiers.is_empty() {
-        return Err(no_specifier());
+        return Err(no_specifier().about(AddField::Extensions));
     }
     let several = specifiers.len() > 1;
     specifiers
@@ -158,7 +166,7 @@ pub fn specified<S: AsRef<str>>(specifiers: &[S]) -> Result<Vec<Specified>, OpEr
                     specifier: specifier.to_string(),
                     source,
                 })
-                .map_err(|error| named(several, specifier, error))
+                .map_err(|error| named(several, specifier, error).about(AddField::Extensions))
         })
         .collect()
 }
@@ -494,13 +502,13 @@ pub fn add(
     req: &AddRequest,
     registry: &dyn Registry,
     runtime: &dyn WasmRuntime,
-) -> Result<Added, OpError> {
+) -> Result<Added, Refusal<AddField>> {
     // The project must exist, with a config the writer can edit, before
     // anything is installed into it: the refusal `update` and `remove`
     // give an unusable specforge.json too (`config_invalid`).
     let config = crate::config::required(req.root.dir())?.config;
     if req.extensions.is_empty() {
-        return Err(no_specifier());
+        return Err(no_specifier().about(AddField::Extensions));
     }
     let several = req.extensions.len() > 1;
     let installed = Installed::at(req.root.dir());
@@ -534,8 +542,10 @@ pub fn add(
         let step = resolver
             .step(&req.extensions[..at], wanted)
             .map_err(|error| match error {
-                Resolved::Refused(error) => named(several, &wanted.specifier, error),
-                Resolved::Conflict(error) => error,
+                Resolved::Refused(error) => {
+                    named(several, &wanted.specifier, error).about(AddField::Extensions)
+                }
+                Resolved::Conflict(error) => error.about(AddField::Extensions),
             })?;
         steps.push(step);
     }
@@ -798,7 +808,7 @@ fn apply<'a>(
     config: &specforge_common::ProjectConfig,
     mut plan: LockPlan<'a>,
     steps: Vec<Step<'a>>,
-) -> Result<Added, OpError> {
+) -> Result<Added, Refusal<AddField>> {
     let several = req.extensions.len() > 1;
     let specifier = |at: usize| req.extensions[at].specifier.as_str();
     let mut outcomes: Vec<Option<AddOutcome>> = Vec::with_capacity(steps.len());
@@ -818,9 +828,9 @@ fn apply<'a>(
                 plan.install(ask, install);
             }
             Step::Fetch(name, version) => {
-                let install = plan
-                    .fetch(&name, &version)
-                    .map_err(|error| named(several, specifier(at), error))?;
+                let install = plan.fetch(&name, &version).map_err(|error| {
+                    named(several, specifier(at), error).about(AddField::Extensions)
+                })?;
                 asked.push((at, Wanted::of(&install)));
                 plan.install(ask, install);
             }
@@ -838,7 +848,7 @@ fn apply<'a>(
         .check()
         .map_err(|refused| {
             let (Ask(at), error) = refused.decisive();
-            named(several, specifier(at), error)
+            named(several, specifier(at), error).about(AddField::Extensions)
         })?
         .finish(req.root.dir(), Vec::new())?;
     for (at, wanted) in asked {
@@ -1007,7 +1017,7 @@ mod tests {
                     let error = add(&request, &crate::registry::Unconfigured("add"), &runtime())
                         .unwrap_err();
 
-                    assert_eq!(error, refused, "{config}: {source:?}");
+                    assert_eq!(error.error, refused, "{config}: {source:?}");
                     assert_eq!(files_under(dir.path()), before, "{config}: {source:?}");
                 }
             }
@@ -1118,14 +1128,14 @@ mod tests {
         )
         .unwrap_err();
 
-        assert_eq!(error.code, "extension_conflict");
-        assert_eq!(error.kind, OpErrorKind::Conflict);
+        assert_eq!(error.error.code, "extension_conflict");
+        assert_eq!(error.error.kind, OpErrorKind::Conflict);
         assert_eq!(
-            error.message,
+            error.error.message,
             "the extension declares the name of the builtin '@specforge/product'"
         );
         assert_eq!(
-            error.suggestion.as_deref(),
+            error.error.suggestion.as_deref(),
             Some("enable the builtin instead: specforge add @specforge/product")
         );
         assert_eq!(files_under(dir.path()), before);
@@ -1151,9 +1161,9 @@ mod tests {
             &runtime(),
         )
         .unwrap_err();
-        assert_eq!(error.code, "E054");
+        assert_eq!(error.error.code, "E054");
         assert_eq!(
-            error.message,
+            error.error.message,
             format!("file not found: {}", missing.display())
         );
         assert_eq!(files_under(dir.path()), before);
@@ -1179,11 +1189,11 @@ mod tests {
         )
         .unwrap_err();
 
-        assert_eq!(error.code, "E040");
+        assert_eq!(error.error.code, "E040");
         assert!(
-            error.message.starts_with("no built component in"),
+            error.error.message.starts_with("no built component in"),
             "{}",
-            error.message
+            error.error.message
         );
         assert_eq!(files_under(dir.path()), before);
     }
@@ -1248,16 +1258,18 @@ mod tests {
         )
         .unwrap_err();
 
-        assert_eq!(error.code, "E028");
+        assert_eq!(error.error.code, "E028");
         assert!(
             error
+                .error
                 .message
                 .starts_with("not a loadable SpecForge extension:"),
             "{}",
-            error.message
+            error.error.message
         );
         assert!(
             error
+                .error
                 .suggestion
                 .as_deref()
                 .unwrap()
@@ -1285,7 +1297,7 @@ mod tests {
         )
         .unwrap_err();
 
-        assert_eq!(error.code, "E033");
+        assert_eq!(error.error.code, "E033");
         assert_eq!(
             std::fs::read_to_string(dir.path().join("specforge.lock")).unwrap(),
             "not a lock {{{"
@@ -1426,13 +1438,14 @@ mod tests {
         )
         .unwrap_err();
 
-        assert_eq!(error.code, "E028");
+        assert_eq!(error.error.code, "E028");
         assert!(
             error
+                .error
                 .message
                 .starts_with("the builtin '@specforge/cargo-test' does not load: "),
             "{}",
-            error.message
+            error.error.message
         );
         assert_eq!(files_under(dir.path()), before);
     }
@@ -1569,13 +1582,13 @@ mod tests {
         )
         .unwrap_err();
 
-        assert_eq!(error.code, "E027");
+        assert_eq!(error.error.code, "E027");
         assert_eq!(
-            error.message,
+            error.error.message,
             "extension '@specforge/formal' requires peer dependency '@specforge/software' ^2.0 but version 1.0.0 is installed"
         );
         assert_eq!(
-            error.suggestion.as_deref(),
+            error.error.suggestion.as_deref(),
             Some("this specforge build's builtin extensions disagree: reinstall specforge")
         );
         assert_eq!(files_under(dir.path()), before);
@@ -1593,7 +1606,7 @@ mod tests {
             &runtime,
         )
         .unwrap_err();
-        assert_eq!(error.code, "E027");
+        assert_eq!(error.error.code, "E027");
     }
 
     /// The project's peer set (ADR 0041, amendment round 7) is what an add is judged against.
@@ -1617,7 +1630,7 @@ mod tests {
         dir: &Path,
         source: Source,
         registry: &dyn Registry,
-    ) -> Result<Added, crate::OpError> {
+    ) -> Result<Added, Refusal<AddField>> {
         let root = specforge_common::ProjectRoot::of(dir).unwrap();
         add(
             &AddRequest {
@@ -1662,13 +1675,13 @@ mod tests {
 
             let error = add_one(dir.path(), source, registry).unwrap_err();
 
-            assert_eq!(error.code, "E027", "{error:?}");
+            assert_eq!(error.error.code, "E027", "{error:?}");
             assert_eq!(
-                error.message,
+                error.error.message,
                 "extension '@probe/needs-software' requires peer dependency '@specforge/software' ^9.0 but version 1.0.0 is installed"
             );
             assert_eq!(
-                error.suggestion.as_deref(),
+                error.error.suggestion.as_deref(),
                 Some(
                     "'@specforge/software' is the builtin this specforge embeds, at 1.0.0: install a version of '@probe/needs-software' that accepts it"
                 )
@@ -1706,13 +1719,13 @@ mod tests {
 
             let error = add_one(dir.path(), source, registry).unwrap_err();
 
-            assert_eq!(error.code, "E027", "{error:?}");
+            assert_eq!(error.error.code, "E027", "{error:?}");
             assert_eq!(
-                error.message,
+                error.error.message,
                 "extension '@probe/dep' requires peer dependency '@probe/base' ^1.0 which is not installed"
             );
             assert_eq!(
-                error.suggestion.as_deref(),
+                error.error.suggestion.as_deref(),
                 Some("install it with: specforge add @probe/base")
             );
             assert_eq!(files_under(dir.path()), before);
@@ -1753,13 +1766,13 @@ mod tests {
         )
         .unwrap_err();
 
-        assert_eq!(error.code, "E027", "{error:?}");
+        assert_eq!(error.error.code, "E027", "{error:?}");
         assert!(
-            error.message.starts_with(
+            error.error.message.starts_with(
                 "enabling '@specforge/software' 1.0.0 breaks '@probe/needs-software': "
             ),
             "{}",
-            error.message
+            error.error.message
         );
         assert_eq!(files_under(dir.path()), before);
     }
@@ -1779,13 +1792,14 @@ mod tests {
         let base = Source::Local(wasm_file(files.path(), "base.wasm", testing::BASE_2));
         let before = files_under(dir.path());
         let error = add_one(dir.path(), base, &unconfigured).unwrap_err();
-        assert_eq!(error.code, "E027", "{error:?}");
+        assert_eq!(error.error.code, "E027", "{error:?}");
         assert!(
             error
+                .error
                 .message
                 .starts_with("installing '@probe/base' 2.0.0 breaks '@probe/dep': "),
             "{}",
-            error.message
+            error.error.message
         );
         assert_eq!(files_under(dir.path()), before);
 
@@ -1795,9 +1809,9 @@ mod tests {
         let dep = Source::Local(wasm_file(files.path(), "dep.wasm", testing::DEP_1));
         let before = files_under(dir.path());
         let error = add_one(dir.path(), dep, &unconfigured).unwrap_err();
-        assert_eq!(error.code, "E027", "{error:?}");
+        assert_eq!(error.error.code, "E027", "{error:?}");
         assert_eq!(
-            error.message,
+            error.error.message,
             "extension '@probe/dep' requires peer dependency '@probe/base' ^1.0 but version 2.0.0 is installed"
         );
         assert_eq!(files_under(dir.path()), before);
@@ -1906,8 +1920,8 @@ mod tests {
         .unwrap_err();
         std::fs::set_permissions(&config, std::fs::Permissions::from_mode(0o644)).unwrap();
 
-        assert_eq!(error.code, "config_write_failed", "{error:?}");
-        assert!(error.writes.is_empty());
+        assert_eq!(error.error.code, "config_write_failed", "{error:?}");
+        assert!(error.error.writes.is_empty());
         assert_eq!(std::fs::read(&config).unwrap(), before);
     }
 
@@ -1924,8 +1938,8 @@ mod tests {
 
         let error = add(&request, &crate::registry::Unconfigured("add"), &runtime()).unwrap_err();
 
-        assert_eq!(error.code, "config_not_found");
-        assert!(error.suggestion.unwrap().contains("specforge init"));
+        assert_eq!(error.error.code, "config_not_found");
+        assert!(error.error.suggestion.unwrap().contains("specforge init"));
         assert!(!dir.path().join("specforge.json").exists());
     }
 
@@ -1947,7 +1961,7 @@ mod tests {
         enabled_project(lock)
     }
 
-    fn add_greet(root: &Path, registry: &MemoryRegistry) -> Result<AddOutcome, OpError> {
+    fn add_greet(root: &Path, registry: &MemoryRegistry) -> Result<AddOutcome, Refusal<AddField>> {
         add(
             &AddRequest {
                 root: &specforge_common::ProjectRoot::of(root).unwrap(),
@@ -1999,8 +2013,8 @@ mod tests {
             let dir = add_project(Vec::new());
             let registry = MemoryRegistry::new().serving(Published::new(greet(), published));
             let err = add_greet(dir.path(), &registry).unwrap_err();
-            assert!(err.is(crate::registry::METADATA_MISMATCH), "{err:?}");
-            assert!(err.message.contains("@sdk/greet@0.1.0"), "{err:?}");
+            assert!(err.error.is(crate::registry::METADATA_MISMATCH), "{err:?}");
+            assert!(err.error.message.contains("@sdk/greet@0.1.0"), "{err:?}");
             assert!(
                 !installed(dir.path(), "@sdk/greet").exists(),
                 "nothing is installed"
@@ -2012,7 +2026,7 @@ mod tests {
         let dir = add_project(Vec::new());
         let registry = MemoryRegistry::new().serving(Published::new(greet(), kinds));
         let err = add_greet(dir.path(), &registry).unwrap_err();
-        assert!(err.message.contains("another entities"), "{err:?}");
+        assert!(err.error.message.contains("another entities"), "{err:?}");
         // The published declaration equal to the binary's installs.
         let dir = add_project(Vec::new());
         let registry =
@@ -2039,9 +2053,9 @@ mod tests {
                 declaration("@acme/x", "1.0.0", &[]),
             ));
         let err = add_greet(dir.path(), &registry).unwrap_err();
-        assert!(!err.is(crate::registry::METADATA_MISMATCH), "{err:?}");
-        assert!(err.code.starts_with("R-RES"), "{err:?}");
-        assert!(err.message.contains("@acme/x"), "{err:?}");
+        assert!(!err.error.is(crate::registry::METADATA_MISMATCH), "{err:?}");
+        assert!(err.error.code.starts_with("R-RES"), "{err:?}");
+        assert!(err.error.message.contains("@acme/x"), "{err:?}");
     }
 
     #[test]
@@ -2104,9 +2118,9 @@ mod tests {
         )
         .unwrap_err();
 
-        assert_eq!(error.code, "R-RES-006", "{error:?}");
+        assert_eq!(error.error.code, "R-RES-006", "{error:?}");
         assert_eq!(
-            error.message,
+            error.error.message,
             "version diamond: '@x/a' requires peer '@x/b' ^2 but 1.0.0 is locked; @x/b 2.0.0 would satisfy every requirer"
         );
         assert_eq!(
@@ -2141,15 +2155,17 @@ mod tests {
 
         let error = add_greet(dir.path(), &registry).unwrap_err();
 
-        assert_eq!(error.code, "R-RES-005", "{error:?}");
+        assert_eq!(error.error.code, "R-RES-005", "{error:?}");
         assert!(
             error
+                .error
                 .message
                 .starts_with("installing '@sdk/greet' 0.1.0 breaks '@acme/app': "),
             "{error:?}"
         );
         assert_eq!(
             error
+                .error
                 .message
                 .matches("@acme/app wants @sdk/greet ^2.0")
                 .count(),
@@ -2490,9 +2506,9 @@ mod tests {
             )
             .unwrap_err();
 
-            assert_eq!(error.code, "E054", "{error:?}");
+            assert_eq!(error.error.code, "E054", "{error:?}");
             assert_eq!(
-                error.message,
+                error.error.message,
                 format!(
                     "adding '{}': file not found: {}",
                     missing.display(),
@@ -2514,7 +2530,7 @@ mod tests {
         )
         .unwrap_err();
         assert_eq!(
-            error.message,
+            error.error.message,
             format!("file not found: {}", missing.display())
         );
     }
@@ -2540,22 +2556,26 @@ mod tests {
         );
 
         let error = specified(&["@specforge/product", "@acme/tool@", "@acme/"]).unwrap_err();
-        assert_eq!(error.code, "E054");
+        assert_eq!(error.error.code, "E054");
         assert!(
             error
+                .error
                 .message
                 .starts_with("adding '@acme/tool@': invalid extension specifier: "),
             "{error:?}"
         );
         let alone = specified(&["@acme/"]).unwrap_err();
         assert!(
-            alone.message.starts_with("invalid extension specifier: "),
+            alone
+                .error
+                .message
+                .starts_with("invalid extension specifier: "),
             "{alone:?}"
         );
 
         let none = specified::<&str>(&[]).unwrap_err();
-        assert_eq!(none.code, "E054");
-        assert_eq!(none.message, "no extension specifier");
+        assert_eq!(none.error.code, "E054");
+        assert_eq!(none.error.message, "no extension specifier");
         let dir = project_with(EMPTY_PROJECT);
         let error = add(
             &several(
@@ -2624,7 +2644,7 @@ mod tests {
             &runtime,
         )
         .unwrap_err();
-        assert_eq!(error.code, "R-RES-006", "{error:?}");
+        assert_eq!(error.error.code, "R-RES-006", "{error:?}");
 
         // With `@x/b` 2.0.0 in the same add, the set is accepted, in either order, leaving the
         // same lock.
@@ -2676,9 +2696,9 @@ mod tests {
                 &runtime,
             )
             .unwrap_err();
-            assert_eq!(error.code, "R-RES-006", "{order:?}: {error:?}");
+            assert_eq!(error.error.code, "R-RES-006", "{order:?}: {error:?}");
             assert_eq!(
-                error.message,
+                error.error.message,
                 "adding '@x/a@2.0.0': version diamond: '@x/a' requires peer '@x/b' ^2 but this install locks 1.0.0; @x/b 2.0.0 would satisfy every requirer",
                 "{order:?}"
             );
@@ -2776,13 +2796,13 @@ mod tests {
             &runtime,
         )
         .unwrap_err();
-        assert_eq!(error.code, "extension_conflict");
-        assert_eq!(error.kind, OpErrorKind::Conflict);
+        assert_eq!(error.error.code, "extension_conflict");
+        assert_eq!(error.error.kind, OpErrorKind::Conflict);
         assert_eq!(
-            error.message,
+            error.error.message,
             "'@x/b@1.0.0' and '@x/b@2.0.0' both add '@x/b', as 1.0.0 from registry and as 2.0.0 from registry"
         );
-        assert_eq!(error.suggestion.as_deref(), Some("add '@x/b' once"));
+        assert_eq!(error.error.suggestion.as_deref(), Some("add '@x/b' once"));
         assert_eq!(files_under(dir.path()), before);
     }
 
@@ -2847,8 +2867,8 @@ mod tests {
             &runtime_with_product(),
         )
         .unwrap_err();
-        assert_eq!(error.code, "E054");
-        assert!(error.message.starts_with("adding '"), "{error:?}");
+        assert_eq!(error.error.code, "E054");
+        assert!(error.error.message.starts_with("adding '"), "{error:?}");
         assert_eq!(files_under(dir.path()), before);
     }
 
@@ -2925,12 +2945,15 @@ mod tests {
         };
 
         let real = add(&request(false), &published(), &runtime()).unwrap_err();
-        assert_eq!(real.code, "R-RES-006", "{real:?}");
-        assert!(real.message.contains("2.0.0"), "{real:?}");
+        assert_eq!(real.error.code, "R-RES-006", "{real:?}");
+        assert!(real.error.message.contains("2.0.0"), "{real:?}");
 
         let registry = published();
         let dry = add(&request(true), &registry, &runtime()).unwrap_err();
-        assert_eq!((dry.code, dry.message), (real.code, real.message));
+        assert_eq!(
+            (dry.error.code, dry.error.message),
+            (real.error.code, real.error.message)
+        );
         let asked = registry.asked();
         assert!(
             asked.contains(&crate::registry::testing::Asked::Published(
@@ -2991,5 +3014,178 @@ mod tests {
             origin.source(),
             "local:ext/target/wasm32-wasip2/release/greet.wasm"
         );
+    }
+
+    /// A registry whose every answer for a name's versions is R008, the registry's own refusal
+    /// of a request (a 400); everything else is as `Unconfigured`.
+    struct Refusing;
+
+    impl Registry for Refusing {
+        fn versions(&self, _: &PackageName) -> Result<Vec<specforge_package::Version>, OpError> {
+            Err(OpError::coded(
+                OpErrorKind::InvalidInput,
+                codes::R008,
+                "the registry refused the request (UNKNOWN): the name is refused",
+            ))
+        }
+
+        fn fetch(
+            &self,
+            name: &PackageName,
+            version: &specforge_package::Version,
+            policy: crate::registry::TrustPolicy<'_>,
+        ) -> Result<crate::registry::Package, OpError> {
+            crate::registry::Unconfigured("add").fetch(name, version, policy)
+        }
+
+        fn published(
+            &self,
+            name: &PackageName,
+            version: &specforge_package::Version,
+        ) -> Result<crate::registry::Manifest, OpError> {
+            crate::registry::Unconfigured("add").published(name, version)
+        }
+
+        fn pin(&self, pins: &[crate::registry::KeyPin]) -> Result<(), OpError> {
+            crate::registry::Unconfigured("add").pin(pins)
+        }
+
+        fn publish(
+            &self,
+            upload: &crate::registry::Upload<'_>,
+        ) -> Result<crate::registry::Published, OpError> {
+            crate::registry::Unconfigured("add").publish(upload)
+        }
+
+        fn search(
+            &self,
+            query: &str,
+            contributes: Option<specforge_protocol_types::DeclaredCategory>,
+        ) -> Result<crate::registry::Searched, OpError> {
+            crate::registry::Unconfigured("add").search(query, contributes)
+        }
+    }
+
+    #[specforge_test(
+        invariant = "mcp_structured_error_responses",
+        verify = "an operation states the request field each refusal is about, and a refusal of the project or the environment is about none"
+    )]
+    fn every_refusal_of_a_specifier_is_about_the_extensions() {
+        let about = Some(AddField::Extensions);
+        // Reading the specifiers.
+        let refusal = specified(&["@a/b@!!"]).unwrap_err();
+        assert_eq!(
+            (refusal.error.code.as_ref(), refusal.subject),
+            ("R-RES-003", about)
+        );
+        let refusal = specified(&[""]).unwrap_err();
+        assert_eq!(
+            (refusal.error.code.as_ref(), refusal.subject),
+            ("E054", about)
+        );
+        let refusal = specified::<&str>(&[]).unwrap_err();
+        assert_eq!(
+            (refusal.error.code.as_ref(), refusal.subject),
+            ("E054", about)
+        );
+
+        // Resolving them.
+        let dir = project_with(EMPTY_PROJECT);
+        let root = specforge_common::ProjectRoot::of(dir.path()).unwrap();
+        let files = tempfile::tempdir().unwrap();
+        let refused = |specifier: &str, registry: &dyn Registry, runtime: &InProcessRuntime| {
+            let extensions = vec![Specified {
+                specifier: specifier.to_string(),
+                source: parse(specifier).unwrap(),
+            }];
+            let error = add(&several(&root, extensions, false), registry, runtime).unwrap_err();
+            (
+                error.error.code.to_string(),
+                error.error.kind,
+                error.subject,
+            )
+        };
+        let unconfigured = crate::registry::Unconfigured("add");
+
+        let (code, kind, subject) = refused("git+https://example.com/x", &unconfigured, &runtime());
+        assert_eq!(
+            (code.as_str(), kind, subject),
+            ("E064", OpErrorKind::InvalidInput, about)
+        );
+
+        let not_wasm = files.path().join("notwasm.txt");
+        std::fs::write(&not_wasm, "not wasm").unwrap();
+        let (code, _, subject) = refused(not_wasm.to_str().unwrap(), &unconfigured, &runtime());
+        assert_eq!((code.as_str(), subject), ("E028", about));
+
+        let bad_name = files.path().join("bad.wasm");
+        std::fs::write(&bad_name, b"\0asm bad name").unwrap();
+        let impostor = runtime().binary(b"\0asm bad name", declaring("Bad Name", "1.0.0", &[]));
+        let (code, _, subject) = refused(bad_name.to_str().unwrap(), &unconfigured, &impostor);
+        assert_eq!((code.as_str(), subject), ("E072", about));
+
+        // The registry.
+        let registry =
+            MemoryRegistry::new().serving(Published::new(greet(), declaration_of(&greet())));
+        let (code, _, subject) = refused("@sdk/greet@^9", &registry, &runtime());
+        assert_eq!((code.as_str(), subject), ("R-RES-004", about));
+        let (code, _, subject) = refused("@sdk/greet", &Refusing, &runtime());
+        assert_eq!((code.as_str(), subject), ("R008", about));
+        let (code, kind, subject) = refused("@sdk/greet", &MemoryRegistry::new(), &runtime());
+        assert_eq!(
+            (code.as_str(), kind, subject),
+            ("R-RES-001", OpErrorKind::ExtensionNotFound, about)
+        );
+
+        // No registry is configured: a refusal of the project, about no field.
+        let (code, kind, subject) = refused("@sdk/greet", &unconfigured, &runtime());
+        assert_eq!(
+            (code.as_str(), kind, subject),
+            ("E063", OpErrorKind::PreconditionFailed, None)
+        );
+    }
+
+    #[specforge_test(
+        invariant = "mcp_structured_error_responses",
+        verify = "an operation states the request field each refusal is about, and a refusal of the project or the environment is about none"
+    )]
+    fn a_fetched_binary_that_is_not_what_was_published_is_a_schema_mismatch() {
+        // A binary that loads as no extension (E028), and one that declares another name than
+        // the registry published it under (E028): the registry's fault, not a value the caller
+        // gave, so neither is invalid input and neither is about the specifiers.
+        let impostor = b"\0asm declares another name".to_vec();
+        let runtime_of_impostor =
+            runtime().binary(&impostor, declaring("@sdk/other", "0.1.0", &[]));
+        for (bytes, runtime) in [
+            (b"\0asm not an extension".to_vec(), runtime()),
+            (impostor, runtime_of_impostor),
+        ] {
+            let dir = add_project(Vec::new());
+            let registry = MemoryRegistry::new().serving(Published::new(
+                bytes,
+                declaration("@sdk/greet", "0.1.0", &[]),
+            ));
+            let refusal = add(
+                &AddRequest {
+                    root: &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                    extensions: vec![
+                        Source::Registry(PackageRef::parse("@sdk/greet@0.1.0").unwrap()).into(),
+                    ],
+                    allow_unsigned: true,
+                    trust: Trust::Refuse,
+                    dry_run: false,
+                },
+                &registry,
+                &runtime,
+            )
+            .unwrap_err();
+            assert_eq!(refusal.error.code, "E028", "{refusal:?}");
+            assert_eq!(
+                refusal.error.kind,
+                OpErrorKind::SchemaMismatch,
+                "{refusal:?}"
+            );
+            assert_eq!(refusal.subject, None, "{refusal:?}");
+        }
     }
 }

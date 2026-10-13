@@ -9,9 +9,9 @@ use specforge_project::coverage::{Status, Verdict};
 use specforge_project::snapshot::{ObligationRecord, Standing};
 use specforge_registry::KindRegistryEntry;
 
-use crate::OpError;
-use crate::navigate::{References, is_about, not_found};
+use crate::navigate::{EntityField, References, is_about, not_found};
 use crate::view::ProjectView;
+use crate::{OpError, Refusal};
 
 /// Everything a surface shows about one entity, borrowed from the view.
 #[derive(Debug, Clone)]
@@ -70,17 +70,20 @@ impl EntityCoverage {
 /// The facts of the entity `entity_id`, with the diagnostics the view
 /// reports about it (MCP: its call target's; the LSP: what it published).
 /// An entity the graph lacks is `navigate::not_found`.
-pub fn inspect<'v>(view: &ProjectView<'v>, entity_id: &str) -> Result<EntityFacts<'v>, OpError> {
+pub fn inspect<'v>(
+    view: &ProjectView<'v>,
+    entity_id: &str,
+) -> Result<EntityFacts<'v>, Refusal<EntityField>> {
     let graph = view.graph();
     let node = graph
         .node(entity_id)
-        .ok_or_else(|| not_found(graph, entity_id))?;
+        .ok_or_else(|| not_found(graph, entity_id).about(EntityField::EntityId))?;
     // The snapshot is built over the same graph: a node it lacks is not one
     // this view can state facts about.
     let (record, standing) = view
         .entities()
         .get(entity_id)
-        .ok_or_else(|| not_found(graph, entity_id))?;
+        .ok_or_else(|| not_found(graph, entity_id).about(EntityField::EntityId))?;
     let coverage = view.recorded().map(|recorded| EntityCoverage {
         verdict: recorded
             .coverage

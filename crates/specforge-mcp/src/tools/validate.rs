@@ -1,10 +1,11 @@
 use crate::args::Arguments;
+use crate::refusal::ArgumentOf;
 use crate::reply::{Answer, Answered, Text};
 use crate::target::ProjectRef;
 use crate::target::{AnyUnlessCached, Project};
-use crate::tool::McpError;
-use crate::tool::{CoreTool, Effect, RefusalArgument, ToolGroup};
-use specforge_ops::check::{CheckError, CheckOptions, check, parse_lint_profiles, parse_severity};
+use crate::tool::{CoreTool, Effect, ToolGroup};
+use specforge_ops::Refusal;
+use specforge_ops::check::{CheckField, CheckOptions, check, parse_lint_profiles, parse_severity};
 
 /// `specforge.validate`'s arguments.
 #[derive(Debug, Arguments)]
@@ -31,6 +32,15 @@ pub const VERDICT_META: &str = "specforge/check";
 /// never records the build cache.
 pub(crate) struct Tool;
 
+impl ArgumentOf<CheckField> for Tool {
+    fn argument(field: CheckField) -> Option<&'static str> {
+        match field {
+            CheckField::Severity => Some("severity_filter"),
+            CheckField::LintProfiles => Some("lint"),
+        }
+    }
+}
+
 impl CoreTool for Tool {
     const NAME: &'static str = "specforge.validate";
     const DESCRIPTION: &'static str = "Recompile and validate the spec project";
@@ -40,37 +50,24 @@ impl CoreTool for Tool {
     type Args = Args;
     type Input = Project<AnyUnlessCached>;
     type Returns = Answered<Text>;
-    const REFUSAL_ARGUMENTS: &'static [RefusalArgument] = &[
-        RefusalArgument {
-            code: specforge_ops::check::UNKNOWN_SEVERITY,
-            argument: "severity_filter",
-        },
-        RefusalArgument {
-            code: specforge_ops::check::UNKNOWN_LINT_PROFILE,
-            argument: "lint",
-        },
-    ];
 
     fn call(project: ProjectRef<'_>, args: Args) -> Answered<Text> {
-        let severity = match args.severity_filter.as_deref().map(parse_severity) {
-            None => None,
-            Some(Ok(severity)) => Some(severity),
-            Some(Err(error)) => return Err(refused(error)),
-        };
-        let lint_profiles = match parse_lint_profiles(&args.lint) {
-            Ok(profiles) => profiles,
-            Err(error) => return Err(refused(error)),
-        };
+        let severity = args
+            .severity_filter
+            .as_deref()
+            .map(parse_severity)
+            .transpose()
+            .map_err(|e| Self::refused(Refusal::from(e)))?;
+        let lint_profiles =
+            parse_lint_profiles(&args.lint).map_err(|e| Self::refused(Refusal::from(e)))?;
         let options = CheckOptions {
             strict: args.strict,
             lint_profiles,
             severity,
             record_cache: false,
         };
-        let outcome = match check(&project.view(), &options) {
-            Ok(outcome) => outcome,
-            Err(error) => return Err(refused(error)),
-        };
+        let outcome =
+            check(&project.view(), &options).map_err(|e| Self::refused(Refusal::from(e)))?;
         let shown: Vec<specforge_common::Diagnostic> =
             outcome.shown().into_iter().cloned().collect();
         Ok(
@@ -78,11 +75,4 @@ impl CoreTool for Tool {
                 .with_meta(VERDICT_META, outcome.verdict_json()),
         )
     }
-}
-
-/// Why validate could not run: an argument it cannot use (`invalid_input`,
-/// named by [`Tool::REFUSAL_ARGUMENTS`], with the closest valid name), or no
-/// project root.
-fn refused(error: CheckError) -> Box<McpError> {
-    Box::new(McpError::from(specforge_ops::OpError::from(error)))
 }

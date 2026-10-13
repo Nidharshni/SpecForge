@@ -132,8 +132,8 @@ impl<R> Mutated<R> {
 /// entity and produces no domain event.
 #[derive(Debug)]
 pub struct Failed {
-    error: Box<McpError>,
-    files: Writes,
+    pub(crate) error: Box<McpError>,
+    pub(crate) files: Writes,
 }
 
 impl Failed {
@@ -143,18 +143,6 @@ impl Failed {
             error: error.into(),
             files,
         }
-    }
-
-    /// The failure's McpError, to name its argument.
-    pub(crate) fn error_mut(&mut self) -> &mut McpError {
-        &mut self.error
-    }
-
-    /// The same failure, its McpError mapped (naming the argument it is
-    /// about).
-    pub fn map_error(mut self, map: impl FnOnce(McpError) -> McpError) -> Self {
-        self.error = Box::new(map(*self.error));
-        self
     }
 
     /// The same failure, `extra` added to the diagnostics its reply carries

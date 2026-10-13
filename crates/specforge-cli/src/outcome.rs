@@ -127,7 +127,8 @@ impl<'a> Refusal<'a> {
     /// Report `error` at `terminal`: under JSON output the error document
     /// on stdout and nothing on stderr (ADR 0011), under human output
     /// [`error_lines`] on stderr. Returns the exit.
-    pub(crate) fn report(self, terminal: &Terminal, error: &OpError) -> Exit {
+    pub(crate) fn report(self, terminal: &Terminal, error: &impl AsRef<OpError>) -> Exit {
+        let error = error.as_ref();
         match self.format {
             OutputFormat::Json => terminal.json(&error_document(error, self.root)),
             OutputFormat::Human => err!(terminal, "{}", error_lines(error, self.root)),

@@ -115,14 +115,17 @@ fn the_density_threshold_is_the_compiled_config() {
 
 // --- inference sessions: `infer::session` ---
 
+use specforge_ops::OpErrorKind;
 use specforge_ops::infer::{
     self, EndStatus, Recorded, SESSION_ACTIVE, SESSION_NOT_ACTIVE, SOURCE_UNREADABLE,
     SessionStatus, SessionStep, UNKNOWN_SESSION,
 };
-use specforge_ops::{OpError, OpErrorKind};
 
 /// One `step` over `project`'s view.
-fn step(project: &Project, step: SessionStep<'_>) -> Result<infer::SessionOutcome, OpError> {
+fn step(
+    project: &Project,
+    step: SessionStep<'_>,
+) -> Result<infer::SessionOutcome, specforge_ops::Refusal<infer::SessionField>> {
     infer::session(&project.view(), step)
 }
 
@@ -181,10 +184,10 @@ fn a_second_start_is_session_active_and_writes_nothing() {
         },
     )
     .unwrap_err();
-    assert_eq!(error.code, SESSION_ACTIVE);
-    assert_eq!(error.kind, OpErrorKind::Conflict);
+    assert_eq!(error.error.code, SESSION_ACTIVE);
+    assert_eq!(error.error.kind, OpErrorKind::Conflict);
     assert_eq!(
-        error.message,
+        error.error.message,
         "Another inference session is already active. End it first."
     );
     let after = std::fs::read(project.dir.path().join("specforge-infer.json")).unwrap();
@@ -230,8 +233,8 @@ fn end_completes_or_pauses_and_stamps_ended_at() {
             },
         )
         .unwrap_err();
-        assert_eq!(again.code, SESSION_NOT_ACTIVE);
-        assert_eq!(again.kind, OpErrorKind::Conflict);
+        assert_eq!(again.error.code, SESSION_NOT_ACTIVE);
+        assert_eq!(again.error.kind, OpErrorKind::Conflict);
     }
 }
 
@@ -249,9 +252,9 @@ fn end_of_an_unknown_session_is_unknown_session() {
         },
     )
     .unwrap_err();
-    assert_eq!(error.code, UNKNOWN_SESSION);
-    assert_eq!(error.kind, OpErrorKind::InvalidInput);
-    assert_eq!(error.message, "Unknown session_id: 'nope'");
+    assert_eq!(error.error.code, UNKNOWN_SESSION);
+    assert_eq!(error.error.kind, OpErrorKind::InvalidInput);
+    assert_eq!(error.error.message, "Unknown session_id: 'nope'");
     assert!(!project.dir.path().join("specforge-infer.json").exists());
 }
 
@@ -327,9 +330,9 @@ fn mark_hashes_the_file_with_sha256() {
         },
     )
     .unwrap_err();
-    assert_eq!(error.code, SOURCE_UNREADABLE);
-    assert_eq!(error.kind, OpErrorKind::FileNotFound);
-    assert_eq!(error.message, "failed to read src/missing.rs");
+    assert_eq!(error.error.code, SOURCE_UNREADABLE);
+    assert_eq!(error.error.kind, OpErrorKind::FileNotFound);
+    assert_eq!(error.error.message, "failed to read src/missing.rs");
 }
 
 #[test]
@@ -347,7 +350,7 @@ fn a_rootless_view_is_no_project() {
         },
     )
     .unwrap_err();
-    assert_eq!(error.code, "no_project");
+    assert_eq!(error.error.code, "no_project");
 }
 
 #[specforge_test(
@@ -390,7 +393,7 @@ fn every_step_reports_the_manifest_as_its_write() {
         },
     )
     .unwrap_err();
-    assert!(refused.writes.is_empty());
+    assert!(refused.error.writes.is_empty());
 }
 
 #[specforge_test(
@@ -407,13 +410,13 @@ fn a_source_root_outside_the_root_is_refused() {
         },
     )
     .unwrap_err();
-    assert_eq!(error.code, infer::SOURCE_ROOT_OUTSIDE_ROOT);
-    assert_eq!(error.kind, OpErrorKind::InvalidInput);
+    assert_eq!(error.error.code, infer::SOURCE_ROOT_OUTSIDE_ROOT);
+    assert_eq!(error.error.kind, OpErrorKind::InvalidInput);
     assert_eq!(
-        error.message,
+        error.error.message,
         "source_roots entry '../x' is not a path inside the project root"
     );
-    assert!(error.data.is_none(), "{error:?}");
+    assert!(error.error.data.is_none(), "{error:?}");
     assert!(!project.dir.path().join("specforge-infer.json").exists());
 
     // The project root itself is a root; roots are recorded by the rule.
@@ -428,4 +431,49 @@ fn a_source_root_outside_the_root_is_refused() {
     let text = std::fs::read_to_string(project.dir.path().join("specforge-infer.json")).unwrap();
     let manifest: serde_json::Value = serde_json::from_str(&text).unwrap();
     assert_eq!(manifest["source_roots"], serde_json::json!([".", "src"]));
+}
+
+#[specforge_test(
+    invariant = "mcp_structured_error_responses",
+    verify = "an operation states the request field each refusal is about, and a refusal of the project or the environment is about none"
+)]
+fn a_session_refusal_is_about_its_field() {
+    use specforge_ops::infer::SessionField;
+    let project = project(None, serde_json::json!({}));
+    let subject = |session_step: SessionStep<'_>| step(&project, session_step).unwrap_err().subject;
+
+    let outside = ["../x".to_string()];
+    assert_eq!(
+        subject(SessionStep::Start {
+            agent: None,
+            source_roots: Some(&outside),
+        }),
+        Some(SessionField::SourceRoots)
+    );
+    for source_file in ["../x.rs", "src/missing.rs"] {
+        assert_eq!(
+            subject(SessionStep::MarkAnalyzed {
+                source_file,
+                entities: &[],
+            }),
+            Some(SessionField::SourceFile),
+            "{source_file}"
+        );
+    }
+    let end = |session_id| SessionStep::End {
+        session_id,
+        status: EndStatus::Completed,
+    };
+    assert_eq!(subject(end("nope")), Some(SessionField::SessionId));
+    let id = started(&project, None);
+    // Another session is active: the state of the manifest, not a value the caller gave.
+    assert_eq!(
+        subject(SessionStep::Start {
+            agent: None,
+            source_roots: None,
+        }),
+        None
+    );
+    step(&project, end(&id)).unwrap();
+    assert_eq!(subject(end(&id)), Some(SessionField::SessionId));
 }

@@ -89,6 +89,14 @@ impl<'a, F: Fn(&str) -> Option<String>> Navigator<'a, F> {
     }
 }
 
+/// The field of a read view's request a refusal can be about (ADR 0072): the one entity the
+/// view is asked about (inspect, definition, references, neighbourhood, explore, review, trace).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EntityField {
+    /// The entity the view is about.
+    EntityId,
+}
+
 /// A request names an entity the graph lacks: E003, of kind
 /// `EntityNotFound`, about `id`, worded `unresolved entity '<id>' - not
 /// found in graph`, with `did you mean '<closest>'?` when an id of `graph`

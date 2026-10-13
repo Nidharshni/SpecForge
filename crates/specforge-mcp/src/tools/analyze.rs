@@ -1,11 +1,11 @@
 use crate::args::Arguments;
+use crate::refusal::ArgumentOf;
 use crate::reply::Answered;
 use crate::target::ProjectRef;
 use crate::target::{AnyUnlessCached, Project};
-use crate::tool::McpError;
-use crate::tool::{CoreTool, Effect, RefusalArgument, ReplySpec, ToolGroup};
-use specforge_ops::OpError;
-use specforge_ops::analyze::{AnalyzeOptions, ReportSource, analyze};
+use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
+use specforge_ops::Refusal;
+use specforge_ops::analyze::{AnalyzeField, AnalyzeOptions, ReportSource, analyze};
 
 /// `specforge.analyze`'s reply: the document `specforge analyze --format json`
 /// prints (`McpAnalyzeResult`).
@@ -34,6 +34,16 @@ pub struct Args {
 /// analyze: a no-project refusal (plan 01 D7).
 pub(crate) struct Tool;
 
+impl ArgumentOf<AnalyzeField> for Tool {
+    fn argument(field: AnalyzeField) -> Option<&'static str> {
+        match field {
+            AnalyzeField::Pass => Some("pass"),
+            AnalyzeField::Min => Some("min"),
+            AnalyzeField::Report => Some("test_results"),
+        }
+    }
+}
+
 impl CoreTool for Tool {
     const NAME: &'static str = "specforge.analyze";
     const DESCRIPTION: &'static str = "Run analysis passes (coverage: proof obligations and discharge funnel; contracts: clause symmetry) over the compiled project";
@@ -45,16 +55,6 @@ impl CoreTool for Tool {
     type Args = Args;
     type Input = Project<AnyUnlessCached>;
     type Returns = Answered<Reply>;
-    const REFUSAL_ARGUMENTS: &'static [RefusalArgument] = &[
-        RefusalArgument {
-            code: specforge_ops::analyze::UNKNOWN_PASS,
-            argument: "pass",
-        },
-        RefusalArgument {
-            code: specforge_ops::analyze::INVALID_MIN,
-            argument: "min",
-        },
-    ];
 
     fn call(project: ProjectRef<'_>, args: Args) -> Answered<Reply> {
         let view = project.view();
@@ -72,7 +72,7 @@ impl CoreTool for Tool {
             min: args.min,
             prove: None,
         };
-        let outcome = analyze(&view, &options).map_err(|e| McpError::from(OpError::from(e)))?;
+        let outcome = analyze(&view, &options).map_err(|e| Self::refused(Refusal::from(e)))?;
         Ok(outcome.document().into())
     }
 }

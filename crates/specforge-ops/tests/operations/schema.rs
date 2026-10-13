@@ -170,10 +170,10 @@ fn an_unknown_kind_is_refused_naming_the_closest() {
         ..SchemaRequest::default()
     };
     let error = schema(&project.view(), &request).unwrap_err();
-    assert_eq!(error.code, "unknown_kind");
-    assert_eq!(error.message, "unknown entity kind 'behaviour'");
+    assert_eq!(error.error.code, "unknown_kind");
+    assert_eq!(error.error.message, "unknown entity kind 'behaviour'");
     assert_eq!(
-        error.suggestion.as_deref(),
+        error.error.suggestion.as_deref(),
         Some("did you mean 'behavior'?")
     );
 }
@@ -234,4 +234,18 @@ fn json_schema_refuses_dot() {
         published["$schema"],
         "https://json-schema.org/draft/2020-12/schema"
     );
+}
+
+#[specforge_test(
+    invariant = "mcp_structured_error_responses",
+    verify = "an operation states the request field each refusal is about, and a refusal of the project or the environment is about none"
+)]
+fn schema_states_which_field_a_refusal_is_about() {
+    use specforge_ops::schema::SchemaField;
+    let request = SchemaRequest {
+        kind: Some("behaviour"),
+        ..SchemaRequest::default()
+    };
+    let refusal = schema(&project().view(), &request).unwrap_err();
+    assert_eq!(refusal.subject, Some(SchemaField::Kind));
 }

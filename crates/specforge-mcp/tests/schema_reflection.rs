@@ -40,7 +40,12 @@ fn each_core_tool_schema_advertises_exactly_what_its_handler_reads() {
             .filter(|argument| argument.required)
             .map(|argument| argument.name)
             .collect();
-        required.extend(tool.target().required());
+        required.extend(
+            tool.target()
+                .required()
+                .iter()
+                .map(|argument| argument.name()),
+        );
         let listed: Vec<&str> = schema["required"]
             .as_array()
             .into_iter()

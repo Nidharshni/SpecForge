@@ -6,11 +6,21 @@ use specforge_ops::review::{DEFAULT_DEPTH, ReviewDocument, ReviewRequest, review
 
 use crate::args::Arguments;
 use crate::prompt::{CorePrompt, Prompted};
+use crate::refusal::ArgumentOf;
 use crate::tool::McpError;
+use specforge_ops::navigate::EntityField;
 use specforge_ops::view::ProjectView;
 
 /// The review prompt (`McpReviewPromptResult`).
 pub struct Prompt;
+
+impl ArgumentOf<EntityField> for Prompt {
+    fn argument(field: EntityField) -> Option<&'static str> {
+        match field {
+            EntityField::EntityId => Some("entity_id"),
+        }
+    }
+}
 
 impl CorePrompt for Prompt {
     const NAME: &'static str = "specforge://prompts/review";
@@ -44,7 +54,7 @@ fn render(view: ProjectView<'_>, args: Args) -> Result<Prompted<ReviewDocument>,
         entity_id: args.entity_id.as_deref(),
         depth: args.depth,
     };
-    let review = review(&view, &request).map_err(McpError::from)?;
+    let review = review(&view, &request).map_err(|refusal| Box::new(Prompt::refused(refusal)))?;
 
     let scope = args.entity_id.as_deref().unwrap_or("the entire graph");
     let instruction = format!(

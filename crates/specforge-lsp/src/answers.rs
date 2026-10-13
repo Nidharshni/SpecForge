@@ -296,8 +296,8 @@ pub fn rename(
     // with why.
     let edits = match specforge_ops::rename::plan(&compiled.navigator(), id.as_str(), new_name) {
         Ok(plan) => plan.edits,
-        Err(e) if e.kind == specforge_ops::OpErrorKind::EntityNotFound => return Ok(None),
-        Err(e) => return Err(Error::invalid_params(e.message)),
+        Err(e) if e.error.kind == specforge_ops::OpErrorKind::EntityNotFound => return Ok(None),
+        Err(e) => return Err(Error::invalid_params(e.error.message)),
     };
 
     let mut changes: HashMap<Url, Vec<TextEdit>> = HashMap::new();

@@ -29,6 +29,9 @@ nearest project, else the directory itself" on their own.
   spelling of an argument is a surface's: `severity_filter` against `--severity`); their kind and code
   are their `From<…> for OpError`, which every surface goes through. `AnalyzeError` gains it
   (`unknown_pass` with a did-you-mean, the classified E045, `no_test_results`).
+  *Amended by ADR 0072 (round 9):* a typed error's variant also decides the field of the request its refusal is
+  about (`From<CheckError> for Refusal<CheckField>`, likewise `AnalyzeError` and `TraceError`); its
+  `From<…> for OpError` is that refusal's error. The surface still spells the argument.
 - **D3. Format and migrate carry their verdict.** `format::Outcome::ok()` (with `Mode::Preview` for a
   diff that does not fail), `migrate::Outcome::ok()` and `failure()`; `OpErrorKind::CompilationFailed`
   makes the map to MCP's error codes total, so MCP decides no kind. MCP returns `ok` in the result (and

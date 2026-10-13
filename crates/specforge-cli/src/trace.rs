@@ -31,7 +31,8 @@ impl Args {
         let outcome = match specforge_ops::trace::trace(&ProjectView::of(&project), target) {
             Ok(outcome) => outcome,
             Err(error) => {
-                return Refusal::of(self.format).report(terminal, &error.into());
+                return Refusal::of(self.format)
+                    .report(terminal, &specforge_ops::OpError::from(error));
             }
         };
 

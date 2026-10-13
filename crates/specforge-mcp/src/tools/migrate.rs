@@ -4,11 +4,13 @@ use crate::args::Arguments;
 use crate::mutation::{
     Failed, Mutated, Mutation, MutationArgs, MutationReply, NoDiagnostics, Written,
 };
+use crate::refusal::ArgumentOf;
 use crate::target::ProjectRef;
 use crate::target::{AnyProject, Project};
 use crate::tool::McpError;
-use crate::tool::{CoreTool, Effect, RefusalArgument, ReplySpec, WriteHints};
+use crate::tool::{CoreTool, Effect, ReplySpec, WriteHints};
 use specforge_ops::OpError;
+use specforge_ops::migrate::MigrateField;
 
 /// `specforge.migrate`'s arguments.
 #[derive(Debug, Arguments)]
@@ -38,6 +40,14 @@ type Reply = specforge_ops::migrate::MigrateDocument;
 
 pub(crate) struct Tool;
 
+impl ArgumentOf<MigrateField> for Tool {
+    fn argument(field: MigrateField) -> Option<&'static str> {
+        match field {
+            MigrateField::Target => Some("target_version"),
+        }
+    }
+}
+
 impl CoreTool for Tool {
     const NAME: &'static str = "specforge.migrate";
     const DESCRIPTION: &'static str = "Run migration pipeline";
@@ -52,10 +62,6 @@ impl CoreTool for Tool {
     type Args = Args;
     type Input = Project<AnyProject>;
     type Returns = Mutation<Reply>;
-    const REFUSAL_ARGUMENTS: &'static [RefusalArgument] = &[RefusalArgument {
-        code: specforge_common::codes::E019.id(),
-        argument: "target_version",
-    }];
 
     fn call(project: ProjectRef<'_>, args: Args) -> Mutation<Reply> {
         // The project the call migrates, and the runtime its hooks run in.
@@ -64,7 +70,8 @@ impl CoreTool for Tool {
         let no_backup = args.no_backup;
         // The format version to migrate to, checked as `specforge migrate
         // --target-version` checks it.
-        let target = specforge_ops::migrate::parse_target(args.target_version.as_deref())?;
+        let target = specforge_ops::migrate::parse_target(args.target_version.as_deref())
+            .map_err(Self::failed)?;
 
         let runtime = project.runtime;
         // The migration `specforge migrate` runs, hooks and rollback included.
