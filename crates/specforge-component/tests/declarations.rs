@@ -183,7 +183,6 @@ fn handshake_protocol(runtime: &ComponentRuntime, name: &str) -> String {
         .to_string()
 }
 
-#[ignore = "fixed by the round's re-vendor; 09-T9 un-ignores it"]
 #[specforge_test_macros::test(
     behavior = "load_extension_declaration",
     verify = "every committed SDK blob answers the host's protocol version; a bridge component answers the version it declares"
