@@ -324,7 +324,6 @@ fn exported_fields(fields: FieldMap) -> serde_json::Value {
     behavior = "serialize_json_graph",
     verify = "an expression group is written as its conjuncts, one per line, never as a parse tree"
 )]
-#[ignore = "fixed by 01-T4"]
 fn an_expression_group_is_written_as_its_conjuncts_one_per_line() {
     let mut fields = FieldMap::new();
     fields.push(

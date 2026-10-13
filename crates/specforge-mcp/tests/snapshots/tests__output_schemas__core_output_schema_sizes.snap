@@ -1,9 +1,8 @@
 ---
 source: crates/specforge-mcp/tests/output_schemas.rs
-assertion_line: 213
 expression: "lines.join(\"\\n\")"
 ---
-specforge.query 4559
+specforge.query 5273
 specforge.analyze 3703
 specforge.trace 1688
 specforge.search 481
@@ -33,4 +32,4 @@ specforge.infer_gaps 1101
 specforge.infer_session 295
 specforge.find_implementation 502
 specforge.find_spec_for_source 642
-total 53418
+total 54132
