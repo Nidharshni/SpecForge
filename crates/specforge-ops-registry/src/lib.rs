@@ -605,10 +605,11 @@ pub fn failure(error: RegistryError) -> OpError {
         RegistryError::NetworkError { .. } => OpErrorKind::Internal,
         RegistryError::NotFound { .. } => OpErrorKind::ExtensionNotFound,
         RegistryError::DuplicateVersion { .. } => OpErrorKind::Conflict,
-        RegistryError::InvalidPackage { .. } | RegistryError::Refused { .. } => {
-            OpErrorKind::InvalidInput
+        RegistryError::Refused { .. } => OpErrorKind::InvalidInput,
+        // The registry's reply names a package that is no package: not a value the caller gave.
+        RegistryError::InvalidPackage { .. } | RegistryError::InvalidReply { .. } => {
+            OpErrorKind::SchemaMismatch
         }
-        RegistryError::InvalidReply { .. } => OpErrorKind::SchemaMismatch,
     };
     OpError::of(kind, error.to_diagnostic())
 }
@@ -742,7 +743,7 @@ mod tests {
             ),
             (
                 RegistryError::InvalidPackage { message: s() },
-                OpErrorKind::InvalidInput,
+                OpErrorKind::SchemaMismatch,
             ),
             (
                 RegistryError::InvalidReply {
@@ -777,5 +778,20 @@ mod tests {
             .unwrap_err();
         assert!(error.is(specforge_ops::registry::NO_REGISTRY), "{error:?}");
         assert!(registry.reported().is_empty());
+    }
+
+    #[specforge_test_macros::test(
+        invariant = "mcp_structured_error_responses",
+        verify = "an operation states the request field each refusal is about, and a refusal of the project or the environment is about none"
+    )]
+    fn a_registry_reply_naming_no_package_is_a_schema_mismatch() {
+        // The reply is the registry's fault, not a value the caller gave: no argument is about
+        // it. The registry's own refusal of a request (a 400) is the caller's.
+        let invalid = failure(RegistryError::InvalidPackage {
+            message: "x".to_string(),
+        });
+        assert_eq!(invalid.kind, OpErrorKind::SchemaMismatch);
+        assert!(!invalid.kind.rejects_a_value());
+        assert!(OpErrorKind::InvalidInput.rejects_a_value());
     }
 }

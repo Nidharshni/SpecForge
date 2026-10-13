@@ -130,7 +130,8 @@ fn management_operations_read_the_project_from_their_view() {
                 dry_run: true,
             },
         )
-        .map(drop),
+        .map(drop)
+        .map_err(specforge_ops::Refusal::into_error),
     );
     refused(specforge_ops::infer::progress(&rootless).map(drop));
     refused(specforge_ops::infer::gaps(&rootless).map(drop));

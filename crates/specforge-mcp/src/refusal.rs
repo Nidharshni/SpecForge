@@ -40,12 +40,11 @@ impl Failed {
 /// sends it, or to `None` for a field the surface fills itself. Implemented on
 /// the entry's unit struct, once per field enum, with one `match` and no
 /// wildcard arm, so a new field fails to compile until it is named.
-// Implemented by each entry as its operations take on `Refusal<F>`.
-#[allow(dead_code)]
 pub(crate) trait ArgumentOf<F> {
     fn argument(field: F) -> Option<&'static str>;
 
     /// `refusal` as the McpError a read answers.
+    #[allow(dead_code)] // first used by the read operations' tools
     fn refused(refusal: Refusal<F>) -> McpError {
         McpError::refused(refusal, Self::argument)
     }

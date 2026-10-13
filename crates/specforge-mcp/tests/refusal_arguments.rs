@@ -221,7 +221,6 @@ fn every_invalid_input_refusal_names_its_argument() {
     behavior = "read_mcp_arguments_as_declared",
     verify = "a refusal a value the caller gave earns names that argument, whatever its kind"
 )]
-#[ignore = "fixed by T3"]
 fn extension_refusals_name_their_argument() {
     let git = "git+https://example.com/x";
     let add = |specifiers: Value| {

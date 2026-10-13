@@ -14,7 +14,7 @@ mod resolve;
 mod update;
 
 pub use add::{
-    AddDocument, AddOutcome, AddRequest, AddResult, Added, AddedExtension, BuiltinSource,
+    AddDocument, AddField, AddOutcome, AddRequest, AddResult, Added, AddedExtension, BuiltinSource,
     DuplicateSpecifier, EnabledBuiltin, InstalledPackage, PlannedAdd, PresentExtension, Source,
     Specified, Trust, add, parse, specified,
 };
@@ -26,7 +26,7 @@ pub use list::{
     ProviderListing, ProviderRow, ProviderStatus, ProvidersDocument, list, providers,
 };
 pub use remove::{
-    RemoveAction, RemoveDocument, RemoveOutcome, RemoveRequest, StrandedEntity, remove,
+    RemoveAction, RemoveDocument, RemoveField, RemoveOutcome, RemoveRequest, StrandedEntity, remove,
 };
 pub use resolve::{resolve, upgrade};
 pub use update::{

@@ -359,7 +359,7 @@ fn add_and_check_agree_on_the_project_peer_set() {
         match refused {
             Some(code) => {
                 let error = result.unwrap_err();
-                assert_eq!(error.code, code, "{case}: {error:?}");
+                assert_eq!(error.error.code, code, "{case}: {error:?}");
                 assert_eq!(snapshot(dir.path()), before, "{case}: nothing written");
             }
             None => {
@@ -448,7 +448,11 @@ fn a_dry_run_answers_what_the_add_answers() {
 
         match (dry, real) {
             (Err(dry), Err(real)) => {
-                assert_eq!((dry.code, dry.message), (real.code, real.message), "{case}");
+                assert_eq!(
+                    (dry.error.code, dry.error.message),
+                    (real.error.code, real.error.message),
+                    "{case}"
+                );
             }
             (Ok(dry), Ok(real)) => {
                 let peers = |added: &extension::Added| {
@@ -580,10 +584,15 @@ fn remove_and_check_agree_on_the_project_peer_set() {
 
         if refused {
             let error = result.unwrap_err();
-            assert_eq!(error.code, "E027", "{case}: {error:?}");
+            assert_eq!(error.error.code, "E027", "{case}: {error:?}");
+            assert_eq!(
+                error.subject,
+                Some(specforge_ops::extension::RemoveField::Name),
+                "{case}"
+            );
             if name == "@specforge/software" {
                 assert!(
-                    error.message.contains("'@probe/needs-software'"),
+                    error.error.message.contains("'@probe/needs-software'"),
                     "{case}: {error:?}"
                 );
             }
