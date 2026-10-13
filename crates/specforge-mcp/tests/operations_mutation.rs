@@ -2356,7 +2356,6 @@ fn migrate_refuses_a_config_that_does_not_say_which_files_are_its_sources() {
     assert_eq!(files_under(&root), before, "no rewrite, no .bak");
 }
 
-#[ignore = "fixed by T5"]
 #[specforge_test(
     behavior = "provide_mcp_rename_tool",
     verify = "a specforge.json that does not say which files are the project's sources fails the rename as config_invalid and writes nothing"
