@@ -204,8 +204,7 @@ pub fn read_all() -> Vec<Observed> {
 pub fn write_all() -> Vec<Observed> {
     let elsewhere = TempDir::new().expect("a temp dir");
     let collected = collected();
-    let greet = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../fixtures/greet-extension/greet.wasm");
+    let greet = specforge_component::committed::GREET.path();
     let fill = |arguments: &str| {
         arguments
             .replace("<elsewhere>", elsewhere.path().to_str().expect("UTF-8"))

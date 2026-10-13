@@ -104,7 +104,7 @@ pub static CHECKS: &[Check] = &[
     },
     Check {
         name: "rustfmt",
-        proves: "the workspace, the nine guests and the fixtures are rustfmt-clean",
+        proves: "the workspace, the nine guests and the four fixtures (the bridge component included) are rustfmt-clean",
         reach: Reach::Hook,
         trigger: Trigger::Paths(&["**/*.rs"]),
         compiles: false,
@@ -163,7 +163,7 @@ pub static CHECKS: &[Check] = &[
     },
     Check {
         name: "builtins",
-        proves: "every builtin blob was built from the sources it recorded",
+        proves: "every committed blob was built from the sources it recorded",
         reach: Reach::Quick,
         trigger: Trigger::Computed("a file some blob's inputs.json records", blobs_fed),
         compiles: false,
@@ -282,7 +282,7 @@ pub static CHECKS: &[Check] = &[
     },
     Check {
         name: "builtins-verify",
-        proves: "a cold clone rebuilds every builtin blob to the vendored bytes",
+        proves: "a cold clone rebuilds every committed blob to the vendored bytes",
         reach: Reach::Bootstrap,
         trigger: Trigger::Always,
         compiles: false,
@@ -376,7 +376,8 @@ fn holds_verify(file: &Path) -> bool {
     })
 }
 
-/// The builtins whose recorded inputs hold a changed path (each blob recorded what it was built from).
+/// The committed blobs (crate directories) whose recorded inputs hold a changed path (each blob recorded what it was
+/// built from).
 fn blobs_fed(repo: &Repo, changes: &ChangeSet) -> Result<Selection, String> {
     Ok(only(
         blob_inputs::fed_by(&repo.root, changes)?

@@ -941,15 +941,15 @@ fn non_interactive_unknown_extension_rejected() {
 
     // A well-formed name nothing can install: it used to pass the syntax
     // check, exit 0 and report the extension installed, and `check` then
-    // failed E028.
+    // failed E028. A new project has no registry: E063, as `add` answers it
+    // with none configured, saying how to add it once there is one.
     specforge_cmd()
         .args(["init", "--name", "bad-ext", "--extensions", "@acme/unknown"])
         .current_dir(dir.path())
         .assert()
         .code(1)
-        .stderr(predicates::str::contains(
-            "unresolvable extension '@acme/unknown'",
-        ));
+        .stderr(predicates::str::contains("error[E063]"))
+        .stderr(predicates::str::contains("specforge add @acme/unknown"));
 
     // Nothing is written on failure.
     assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
@@ -966,7 +966,7 @@ fn non_interactive_unknown_extension_rejected() {
         .current_dir(dir.path())
         .assert()
         .failure()
-        .stderr(predicates::str::contains("unresolvable extension"));
+        .stderr(predicates::str::contains("error[E054]"));
     assert!(!dir.path().join("specforge.json").exists());
 
     // Empty extension
@@ -976,7 +976,8 @@ fn non_interactive_unknown_extension_rejected() {
         .current_dir(dir2.path())
         .assert()
         .failure()
-        .stderr(predicates::str::contains("unresolvable extension"));
+        .stderr(predicates::str::contains("error[E054]"))
+        .stderr(predicates::str::contains("empty extension specifier"));
 }
 
 // ═══════════════════════════════════════════════════════════

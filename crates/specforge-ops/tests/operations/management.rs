@@ -273,3 +273,35 @@ fn collect_at_a_root_that_is_no_project_is_no_project() {
         "nothing was written"
     );
 }
+
+#[specforge_test(
+    behavior = "list_installed_extensions",
+    verify = "an extension's source is where the extension load takes it from, whatever order its entries are in"
+)]
+fn an_extensions_source_is_the_entry_that_loaded_it() {
+    use specforge_ops::extension::{Origin, inventory};
+
+    let dir = tempfile::tempdir().unwrap();
+    let config = serde_json::json!({
+        "name": "p", "version": "0.1.0", "extensions": ["@sdk/greet", "greet.wasm"],
+    });
+    std::fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
+    std::fs::write(dir.path().join("greet.wasm"), specforge_ops::testing::GREET).unwrap();
+
+    // The named entry is not installed (no lock) and fails; the file entry loads it.
+    let compiled = specforge_project::CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        Some(std::sync::Arc::new(specforge_ops::testing::candidates())),
+    );
+    let view = ProjectView::of(&compiled);
+    let rows = inventory(&view);
+    let greet = rows.get("@sdk/greet").expect("the row of @sdk/greet");
+
+    assert_eq!(greet.status, Status::Loaded);
+    assert_eq!(
+        greet.origin,
+        Origin::File {
+            path: "greet.wasm".into()
+        }
+    );
+}

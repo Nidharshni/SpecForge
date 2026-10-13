@@ -819,14 +819,16 @@ type McpAddExtensionPresent "An extension already installed and enabled: nothing
 }
 
 type McpAddExtensionPlanned "What a dry run would install or enable" {
-  action    "planned" @literal
+  action        "planned" @literal
   /// The specifier as the call gave it.
-  specifier string
-  extension string    @readonly
+  specifier     string
+  extension     string    @readonly
   /// Absent for a builtin, which tracks the binary.
-  version   string    @optional
+  version       string    @optional
   /// "builtin", "registry", or "local:<path>".
-  source    string
+  source        string
+  /// The required builtins the add would enable with it, dependencies first.
+  peers_enabled string[]
   verify unit "McpAddExtensionPlanned schema is valid"
 }
 

@@ -7,26 +7,30 @@ fn root() -> PathBuf {
         .to_path_buf()
 }
 
+/// The builtins a change feeds; the fixtures that record their inputs are left out.
 fn fed(paths: &[&str]) -> Vec<String> {
-    fed_by(&root(), &ChangeSet::of(paths.iter().copied())).unwrap()
+    let mut fed = fed_by(&root(), &ChangeSet::of(paths.iter().copied())).unwrap();
+    fed.retain(|crate_dir| crate_dir.starts_with("extensions/"));
+    fed
 }
 
+/// The blobs that record their inputs today: the nine builtins. The fixtures join at the round's re-vendor.
 const NINE: [&str; 9] = [
-    "cargo-test",
-    "formal",
-    "governance",
-    "product",
-    "rust",
-    "software",
-    "testing",
-    "typescript",
-    "vitest",
+    "extensions/cargo-test",
+    "extensions/formal",
+    "extensions/governance",
+    "extensions/product",
+    "extensions/rust",
+    "extensions/software",
+    "extensions/testing",
+    "extensions/typescript",
+    "extensions/vitest",
 ];
 
 #[test]
 fn a_record_round_trips_byte_for_byte() {
     let scratch = tempfile::tempdir().unwrap();
-    for builtin in builtins(&root()).unwrap() {
+    for builtin in blobs(&root()).unwrap() {
         let record = BlobRecord::read(&root(), &builtin).unwrap();
         record.write(scratch.path(), &builtin).unwrap();
         let original = std::fs::read(root().join(shown(&builtin))).unwrap();
@@ -39,7 +43,11 @@ fn a_record_round_trips_byte_for_byte() {
 fn a_change_to_coverage_feeds_the_blobs_that_record_it() {
     assert_eq!(
         fed(&["crates/specforge-coverage/src/lib.rs"]),
-        ["formal", "product", "testing"]
+        [
+            "extensions/formal",
+            "extensions/product",
+            "extensions/testing"
+        ]
     );
 }
 
@@ -57,8 +65,14 @@ fn a_test_only_sdk_file_feeds_no_blob() {
 }
 
 #[test]
-fn builtins_lists_the_nine() {
-    assert_eq!(builtins(&root()).unwrap(), NINE);
+fn blobs_lists_the_recorded_blobs() {
+    let listed = blobs(&root()).unwrap();
+    assert!(NINE.iter().all(|nine| listed.iter().any(|l| l == nine)));
+    assert!(
+        listed
+            .iter()
+            .all(|l| l.starts_with("extensions/") || l.starts_with("fixtures/"))
+    );
 }
 
 #[test]

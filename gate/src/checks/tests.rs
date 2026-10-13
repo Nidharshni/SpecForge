@@ -130,7 +130,7 @@ fn an_unformatted_guest_is_judged_by_the_hook() {
         .iter()
         .flat_map(|pattern| manifests_matching(pattern))
         .count();
-    assert_eq!(manifests, 12, "nine guests and three fixtures");
+    assert_eq!(manifests, 13, "nine guests and four fixtures");
 }
 
 fn manifests_matching(pattern: &str) -> Vec<String> {
@@ -366,7 +366,11 @@ fn quick_runs_the_builtins_check_when_a_recorded_input_changes() {
             Mode::Quick,
             &["crates/specforge-coverage/src/lib.rs"]
         ),
-        only(&["formal", "product", "testing"])
+        only(&[
+            "extensions/formal",
+            "extensions/product",
+            "extensions/testing"
+        ])
     );
 }
 

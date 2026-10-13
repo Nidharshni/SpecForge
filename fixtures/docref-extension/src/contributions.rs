@@ -2,9 +2,8 @@
 //! files (`file_reference`) and a `file_exists` rule over its `guide` field.
 //! The host's session tests load it to exercise the files the checks read.
 //!
-//! The vendored release blob `docref.wasm` is built from this source;
-//! rebuild with `cargo build --release --target wasm32-wasip2` and copy
-//! `target/wasm32-wasip2/release/docref.wasm` next to this crate.
+//! The vendored release blob `wasm/docref.wasm` is built from this source;
+//! refresh it with `cargo run -p xtask --bin revendor`.
 
 use specforge_extension_sdk::prelude::*;
 

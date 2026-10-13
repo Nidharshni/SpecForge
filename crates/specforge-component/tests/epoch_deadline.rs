@@ -7,7 +7,6 @@
 //! (canonical-ABI signature matching `specforge:bridge`), so an unbounded
 //! call would hang the host thread unless the deadline traps it.
 
-use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -55,12 +54,7 @@ fn spin_component_bytes() -> Vec<u8> {
 }
 
 fn greet_wasm_bytes() -> Vec<u8> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("fixtures/greet-extension/greet.wasm");
+    let path = specforge_component::committed::GREET.path();
     std::fs::read(path).expect("vendored greet component blob")
 }
 

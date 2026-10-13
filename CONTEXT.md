@@ -147,6 +147,11 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   extension declaration, the operation payloads, the extension vocabulary and the command-arg rule. Every
   builtin blob is built from it, so it holds nothing only the host reads: the host's reading of package names,
   version requirements and peer ranges is `specforge-package` (ADR 0050).
+- **Committed blob**: a wasm component the repository commits, at `<crate>/wasm/<artifact>` with the `inputs.json` its
+  build recorded: a builtin (`extensions/<name>`, embedded in the host) or a test fixture (`fixtures/<name>`). Listed
+  once, `specforge_component::committed::COMMITTED`; git tracks exactly that list. An SDK blob answers the host's
+  protocol and its wire answers are pinned; a bridge blob (the runtime's own test component) is written without the
+  SDK and declares the canned protocol it answers. `revendor` rebuilds every one (ADR 0070).
 - **Installed extension**: an extension placed in the project under
   `.specforge/extensions/<name>/extension.wasm` and pinned by its `specforge.lock` entry (version,
   source `registry` or `local:<path>`, the SHA-256 of the binary and, for a signed registry package, its
@@ -154,8 +159,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   the one its entry pins (E070 otherwise; W149 when the entry pins no hash). A project's installed
   extensions are one value, its lock read once (`specforge_installed::Installed`); installing,
   updating and removing them is one **change** (`Installed::change`), written all at once or not at
-  all, `specforge.json` included (ADR 0028); `add`, `update` and `init` install through the
-  **lock plan**.
+  all, with the files its last step writes (`specforge.json`; for `init` also `.gitignore` and the
+  starter) and the directories it created (ADR 0028); `add`, `update`, `init` and `remove` change
+  them through the **lock plan**.
 - **Extension load**: turning a project's `extensions` entries into loaded extensions and their
   declarations, once per environment load (`Installed::load`, over the `WasmRuntime` port): a
   builtin from its embedded binary, an installed extension from its pinned module, a `.wasm` file
@@ -169,8 +175,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`specforge_project::ExtensionLoad`: `NoRuntime`, or what was loaded `In` a runtime).
 - **Extension inventory**: every extension a project has, one row per name: enabled by a
   `specforge.json` entry, pinned in the `specforge.lock` the compile read, or loaded. Each row has its
-  origin (`file:<path>` when only `.wasm` file entries enable it, `builtin`, the lock entry's source,
-  else `unknown`: the order the extension load tries them), its status (loaded, not loaded, not
+  origin (where the load loaded it from, by `Installed::resolve`: `builtin`, the lock entry's source,
+  `file:<path>`; else where its first entry in load order would; else its lock entry's source; else
+  `unknown`: `Origin::of`), its status (loaded, not loaded, not
   configured), the entries that enable it, its declaration, its lock entry and why it did not load
   (`specforge_ops::extension::inventory`, over the project view). The extensions listing, doctor and
   remove read it, so they cannot disagree about which extensions a project has, where one comes from
@@ -184,10 +191,12 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   enables the builtins an extension requires (CONTEXT "Lock plan"), and a builtin that does not load
   refuses the operation.
 - **Lock plan**: the change one operation makes to what the project installs and enables (`add` its
-  installs and builtins, `update` every upgrade, `init` its local files and builtins), staged as the
-  operation leaves them: each package's lock entry replaces its previous one, never sits beside it,
-  and each new `specforge.json` entry is appended (`specforge_ops::extension::lock_plan::LockPlan`, ADR
-  0041). `add` and `init` first enable the builtins what they add requires, dependencies first;
+  installs and builtins, `update` every upgrade, `init` its local files and builtins, `remove` its
+  disabled entries and uninstall), staged as the operation leaves them: each package's lock entry
+  replaces its previous one, never sits beside it, each new `specforge.json` entry is appended, each
+  dropped one removed (`specforge_ops::extension::lock_plan::LockPlan`, ADR 0041, ADR 0065). An
+  operation names what it asks for, each an **ask**; refusals and outcomes are answered per ask.
+  `add` and `init` first enable the builtins what they add requires, dependencies first;
   `update` enables nothing. The peer rule then judges the **project peer set** as the change leaves it,
   once: every declared peer whose dependent or peer the change touches. A required peer no member
   provides is E027; a peer installed from a registry is unified against the registry the install came
@@ -195,14 +204,17 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   file entry) is E027. Lock order and entry order decide nothing. A registry install's binary loads
   only after that and must declare what was published; then the plan is written as one change,
   `specforge.json` included, whose last step pins the publisher keys its fetches accepted
-  (`Registry::pin`): a refused or failed plan pins nothing (ADR 0059).
+  (`Registry::pin`): a refused or failed plan pins nothing (ADR 0059). A **dry run** is the plan
+  checked and not committed: it answers what the operation would, its refusal included, and writes,
+  pins and downloads nothing; a registry package is judged by its published manifest
+  (`Registry::published`).
 - **Project peer set**: the extensions a project's `specforge.json` entries load, as the peer rule reads
   them: a builtin by the declaration this specforge embeds, an installed extension by its lock entry, a
   `.wasm` file entry by its file's declaration, each entry resolved by the extension load's one rule
   (`Installed::resolve`). An entry that loads nothing and a locked extension no entry enables are not in
   it (`specforge_ops::extension::peer_set::ProjectPeers`). The registry build judges it as loaded; the
   lock plan judges it as a change will leave it, before anything is written, so `add`, `init`,
-  `update` and `check` judge one set (ADR 0041).
+  `update`, `remove`, their dry runs and `check` judge one set (ADR 0041).
 - **Setup part**: what part of a project's setup a diagnostic the environment reports is about: the
   config, the lock, one `extensions` entry, structural-only, the configured providers, one declaration,
   the peers, the registries, a rule, a surface, or a collision (two contributions claiming one name: a
@@ -376,10 +388,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`Peers::load_order`); a cycle among required peers is E027 and its extensions load together in
   entry order (ADR 0041).
 - **Extension specifier**: an `add` argument (also each of `specforge.add_extension`'s
-  `specifiers` and `init --extensions`'): a builtin's name, a local path (a `.wasm` file, or an
-  extension's crate directory, read as the component its crate builds:
-  `specforge_ops::extension::binary_at`), a `git+` URL, or a package
-  reference `@scope/name[@requirement]` (`PackageRef`), read once by
+  `specifiers` and `init --extensions`'): a builtin's name, a local path (anything that is no
+  builtin's name, `git+` URL or package reference: a `.wasm` file, or an extension's crate directory,
+  read as the component its crate builds: `specforge_ops::extension::binary_at`), a `git+` URL, or a
+  package reference `@scope/name[@requirement]` (`PackageRef`; it starts with `@`), read once by
   `specforge_ops::extension::parse`. An add takes one or more and adds them as one change, judged on
   the whole set (one lock plan, ADR 0041); a specifier naming an extension an earlier one of the same
   add names is a *duplicate* of it.

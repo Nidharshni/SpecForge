@@ -739,13 +739,15 @@ behavior parse_extension_specifier "Parse Extension Specifier" {
   }
   contract   """
     The system MUST read an add argument once into one source: a builtin's
-    name, a local path (ending in .wasm, or starting with ./, ../ or /), a
-    git+ URL, or a package reference @scope/name[@requirement], where the
-    name is a PackageName and the requirement a VersionRequirement (latest
-    when absent). An argument that is none of these MUST be refused with
-    E054 before any registry is asked; a requirement that is not one MUST be
-    refused with R-RES-003 before any registry is asked. No other code may
-    split name@requirement.
+    name, a git+ URL, a package reference @scope/name[@requirement] (it
+    starts with @ and does not end in .wasm), where the name is a
+    PackageName and the requirement a VersionRequirement (latest when
+    absent), or else a local path (a .wasm file or an extension's crate
+    directory, with or without ./). A package reference that is not one,
+    and a path that names nothing, MUST be refused with E054 before any
+    registry is asked; a requirement that is not one MUST be refused with
+    R-RES-003 before any registry is asked. No other code may split
+    name@requirement.
   """
   produces   [extension_specifier_parsed]
   verify unit "@scope/name@version parsed as registry source"
@@ -753,6 +755,7 @@ behavior parse_extension_specifier "Parse Extension Specifier" {
   verify unit "git:url#ref parsed as git source"
   verify unit "invalid specifier produces ExtensionError"
   verify unit "each add argument reads as one extension source"
+  verify unit "a specifier that is no builtin's name, git+ URL or @scope/name reference is a local path, a bare crate directory included"
   verify unit "a package name is @scope/name or a local name, and always a relative path inside its directory"
   verify unit "a package name crosses a registry URL as one segment"
   verify unit "a version requirement is latest, one version or a SemVer requirement"
@@ -906,7 +909,11 @@ behavior update_all_extensions "Update All Extensions" {
     could not write (E032) or the lock (E033); every file is put back, and no
     extension is reported updated. Only registry installs are updated: an
     extension installed from a local file (source local:<path>) MUST NOT be
-    replaced from a registry. When a registry-installed extension is
+    replaced from a registry. An update of one extension by name MUST
+    refuse a name the lock does not hold, before any registry is asked:
+    extension_not_found naming it (E072 when it is no package name; a
+    builtin's name is told that builtins update with specforge).
+    When a registry-installed extension is
     to be updated and no registry is configured in specforge.json, update
     MUST make no network call and MUST fail with E063, whose suggestion
     names the registries key.
@@ -931,6 +938,7 @@ behavior update_all_extensions "Update All Extensions" {
   verify unit "peer dependency conflicts detected before applying"
   verify unit "every upgrade is judged against the lock as the whole update leaves it, whatever order the lock lists them in"
   verify unit "an upgrade whose required peer no entry enables is refused, and update enables nothing"
+  verify unit "an update of a name the lock does not hold is refused before any registry is asked"
   verify unit "failed upgrade rolls back all changes"
   verify unit "a write that fails while applying fails the update, naming what it could not write, and nothing is applied"
   verify integration "update never replaces a locally installed extension from a registry"

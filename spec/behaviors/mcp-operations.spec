@@ -252,8 +252,10 @@ behavior provide_mcp_add_extension_tool "Provide MCP Add Extension Tool" {
     reported as a duplicate), dry_run? (optional boolean, default false) and allow_unsigned?
     (optional boolean, default false: accept a registry package with no
     publisher signature). When dry_run is true, the tool MUST
-    return a preview of the changes without modifying specforge.json or
-    downloading any Wasm modules. The tool MUST add
+    answer what specforge add --dry-run answers: the add judged and not
+    committed, its refusal included, without modifying any file, pinning
+    any key or downloading any Wasm module (a registry package is judged
+    by its published manifest). The tool MUST add
     the extension to specforge.json, download the Wasm module if remote, and
     validate the extension manifest. If the manifest is invalid or the
     extension conflicts with an existing one, the tool MUST return an error.
@@ -314,7 +316,9 @@ behavior provide_mcp_remove_extension_tool "Provide MCP Remove Extension Tool" {
     In MCP server mode, the system MUST register a specforge.remove_extension
     tool that accepts name (required), force? and dry_run? (optional
     booleans, default false) and path? (as rename); dependents and stranded
-    entities are those of the project the path names. When dry_run is true, the tool MUST return a
+    entities are those of the project the path names. It judges dependents
+    as specforge remove does (the project's peer set), and a dry run
+    answers the refusal the removal would give. When dry_run is true, the tool MUST return a
     preview of the removal (including the stranded entities) without modifying
     specforge.json. The tool MUST remove the
     extension from specforge.json. If removing the extension strands

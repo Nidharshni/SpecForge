@@ -93,3 +93,8 @@ with a dry-run default.
 - `logout --registry X` needs no `specforge.json` entry for X (D5 and 06 D6); the spec no longer says otherwise.
 - The `Registry` port also searches (`Registry::search`), so `specforge search` reaches registries the way add,
   update and publish do (ADR 0010).
+
+## Amendment (round 8)
+
+D2's port also reads a version's published manifest without its binary (`Registry::published`), what a dry run judges
+(ADR 0065 D3).

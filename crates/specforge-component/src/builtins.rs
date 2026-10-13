@@ -9,6 +9,8 @@ use specforge_wasm::WasmRuntime;
 pub struct Builtin {
     pub name: &'static str,
     pub dir: &'static str,
+    /// Its crate, from the repository root: `extensions/<dir>`.
+    pub crate_dir: &'static str,
     pub artifact: &'static str,
     pub bytes: &'static [u8],
 }
@@ -19,6 +21,7 @@ macro_rules! builtins {
         pub const BUILTINS: &[Builtin] = &[$(Builtin {
             name: $name,
             dir: $dir,
+            crate_dir: concat!("extensions/", $dir),
             artifact: $artifact,
             bytes: include_bytes!(concat!("../../../extensions/", $dir, "/wasm/", $artifact)),
         }),*];

@@ -10,8 +10,8 @@ use specforge_package::{PackageName, Version, VersionRequirement};
 use specforge_protocol_types::{DeclaredCategory, ExtensionDeclaration};
 
 use super::{
-    Found, KeyPin, Package, Published as Receipt, Publisher, Registry, Searched, TrustPolicy,
-    Upload,
+    Found, KeyPin, Manifest, Package, Published as Receipt, Publisher, Registry, Searched,
+    TrustPolicy, Upload,
 };
 use crate::OpError;
 use crate::extension::Trust;
@@ -95,6 +95,8 @@ pub fn declaration(name: &str, version: &str, peers: &[(&str, &str)]) -> Extensi
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Asked {
     Versions(PackageName),
+    /// A version's published manifest, read without its binary.
+    Published(PackageName, Version),
     Fetch(PackageName, Version),
 }
 
@@ -137,7 +139,7 @@ impl MemoryRegistry {
     }
 
     /// The publishes it accepted through [`Registry::publish`], in order.
-    pub fn published(&self) -> Vec<(PackageName, Version)> {
+    pub fn accepted_publishes(&self) -> Vec<(PackageName, Version)> {
         self.accepted.lock().unwrap().clone()
     }
 
@@ -147,7 +149,7 @@ impl MemoryRegistry {
             .into_iter()
             .filter_map(|asked| match asked {
                 Asked::Versions(name) => Some(name),
-                Asked::Fetch(..) => None,
+                Asked::Published(..) | Asked::Fetch(..) => None,
             })
             .collect()
     }
@@ -257,6 +259,29 @@ impl Registry for MemoryRegistry {
         Ok(versions)
     }
 
+    /// What it publishes as `name@version`, without its binary: R006 as `fetch` for a version it does
+    /// not hold; else the declaration it was published with and `hex_sha256` of its bytes. Asks no
+    /// question and decides no publisher: an unsigned package is answered too.
+    fn published(&self, name: &PackageName, version: &Version) -> Result<Manifest, OpError> {
+        self.asked
+            .lock()
+            .unwrap()
+            .push(Asked::Published(name.clone(), version.clone()));
+        let held = self.held.lock().unwrap();
+        let Some(published) = held
+            .iter()
+            .find(|p| p.name() == *name && p.version() == *version)
+        else {
+            return Err(not_found(name, version));
+        };
+        Ok(Manifest {
+            name: name.clone(),
+            version: version.clone(),
+            sha256: hex_sha256(&published.wasm),
+            declaration: published.declaration.clone(),
+        })
+    }
+
     /// The package published as `name@version`: R006 "Package not found: {name}@{version}" when there is none,
     /// R-TRUST-001 "package '{name}' is not signed" (suggestion "re-run with --allow-unsigned to accept the
     /// risk") when unsigned and `!allow_unsigned`; else its bytes, `hex_sha256(bytes)`, its declaration and
@@ -279,12 +304,7 @@ impl Registry for MemoryRegistry {
             .iter()
             .find(|p| p.name() == *name && p.version() == *version)
         else {
-            return Err(OpError::coded(
-                crate::OpErrorKind::ExtensionNotFound,
-                codes::R006,
-                format!("Package not found: {name}@{version}"),
-            )
-            .with_suggestion("Verify the package name and version."));
+            return Err(not_found(name, version));
         };
         if published.key_id.is_none() && !policy.allow_unsigned {
             return Err(OpError::coded(
@@ -411,6 +431,16 @@ impl Registry for MemoryRegistry {
             asked: 1,
         })
     }
+}
+
+/// R006 for a version a registry does not hold.
+fn not_found(name: &PackageName, version: &Version) -> OpError {
+    OpError::coded(
+        crate::OpErrorKind::ExtensionNotFound,
+        codes::R006,
+        format!("Package not found: {name}@{version}"),
+    )
+    .with_suggestion("Verify the package name and version.")
 }
 
 /// The packages the contract runs over, the signed ones signed by `key_id`:
@@ -671,6 +701,28 @@ pub fn assert_registry_contract(registry: &dyn Registry, published: &[Published]
         "C10: the lock's key is accepted, and still pinned when the install is written"
     );
 
+    // C11: the published manifest is what a fetch answers, without the binary
+    let manifest = registry
+        .published(&fresh, &fresh_version)
+        .unwrap_or_else(|e| panic!("C11: published of a held version fails: {e:?}"));
+    assert_eq!(
+        (manifest.name.clone(), manifest.version.clone()),
+        (fresh.clone(), fresh_version.clone()),
+        "C11: the package asked for"
+    );
+    assert_eq!(manifest.sha256, served.sha256, "C11: sha256 as fetch");
+    assert_eq!(
+        manifest.declaration, served.declaration,
+        "C11: declaration as fetch"
+    );
+    let error = registry
+        .published(&base, &Version::parse("9.9.9").unwrap())
+        .unwrap_err();
+    assert!(
+        error.is(codes::R006),
+        "C11: an unknown version as fetch refuses it: {error:?}"
+    );
+
     // R-S
     let searched = registry
         .search("contract/fresh", None)
@@ -718,6 +770,32 @@ mod tests {
             .cloned()
             .fold(MemoryRegistry::new(), MemoryRegistry::serving);
         assert_registry_contract(&registry, &published);
+    }
+
+    #[specforge_test_macros::test(
+        type = "RegistryManifest",
+        verify = "RegistryManifest schema is valid"
+    )]
+    fn the_registry_manifest_is_what_a_dry_run_judges() {
+        let published = Published::new(
+            b"\0asm tool".to_vec(),
+            declaration("@acme/tool", "1.0.0", &[("@acme/base", "^1.0")]),
+        );
+        let registry = MemoryRegistry::new().serving(published.clone());
+
+        let manifest = registry
+            .published(&published.name(), &published.version())
+            .unwrap();
+
+        assert_eq!(manifest.name, published.name());
+        assert_eq!(manifest.version, published.version());
+        assert_eq!(manifest.sha256, hex_sha256(b"\0asm tool"));
+        assert_eq!(manifest.declaration, published.declaration);
+        assert_eq!(
+            registry.asked(),
+            [Asked::Published(published.name(), published.version())],
+            "the manifest is asked for, the binary is not"
+        );
     }
 
     #[specforge_test_macros::test(
@@ -783,7 +861,7 @@ mod tests {
         assert_eq!(registry.versions(&name).unwrap(), vec![version.clone()]);
         let served = registry.fetch(&name, &version, refuse(false)).unwrap();
         assert_eq!(served.publisher.key_id(), Some(IN_MEMORY_KEY));
-        assert_eq!(registry.published(), [(name, version)]);
+        assert_eq!(registry.accepted_publishes(), [(name, version)]);
     }
 
     #[specforge_test_macros::test(
@@ -926,7 +1004,7 @@ mod tests {
         let error = registry.publish(&upload).unwrap_err();
         assert!(error.is(super::super::ALREADY_PUBLISHED), "{error:?}");
         assert_eq!(error.kind, crate::OpErrorKind::Conflict);
-        assert_eq!(registry.published().len(), 1);
+        assert_eq!(registry.accepted_publishes().len(), 1);
     }
 
     #[test]

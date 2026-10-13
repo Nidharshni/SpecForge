@@ -67,8 +67,7 @@ impl CoreTool for Tool {
             version: &args.version,
             extensions,
         };
-        let outcome = init::plan(&request, runtime.as_ref())
-            .and_then(|plan| init::apply(path, plan, runtime.as_ref()))?;
+        let outcome = init::init(&request, runtime.as_ref())?;
         let reply = outcome.document();
         // With no project served, the server serves the one it created (ADR
         // 0014 D5): `mutation::complete` does, once it wrote.

@@ -1,5 +1,6 @@
-//! Golden round-trip: the SDK's wire output must match, byte for byte, what
-//! the builtin extensions answer. This is the pin behind "typed descriptors
+//! Golden: the SDK's builders must declare what the `software` builtin
+//! declares. (The typed round trip of every committed blob's declaration
+//! is `crates/specforge-component/tests/declarations.rs`.) This is the pin behind "typed descriptors
 //! shared wire-exact with the host" (wayfinder map #1, ticket #2).
 
 use specforge_extension_sdk::{
@@ -74,22 +75,9 @@ fn software_builder() -> ContributionsBuilder {
     b
 }
 
-/// The pinned wire declarations of every builtin and the greet fixture
-/// (`crates/specforge-component/tests/declarations/`, generated from the
-/// vendored blobs by `xtask snapshot-builtins`).
-const PINNED: &[&str] = &[
-    "product",
-    "software",
-    "governance",
-    "formal",
-    "testing",
-    "cargo-test",
-    "vitest",
-    "rust",
-    "typescript",
-    "greet",
-];
-
+/// The pinned wire declaration of the `software` builtin
+/// (`crates/specforge-component/tests/declarations/software/`, generated from the
+/// vendored blob by `xtask revendor`).
 fn pinned(dir: &str, file: &str) -> String {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../specforge-component/tests/declarations")
@@ -113,28 +101,6 @@ fn load_pinned(dir: &str) -> ExtensionDeclaration {
         |key| panic!("{dir}: unknown key {key:?}"),
     )
     .unwrap_or_else(|e| panic!("{dir}: {e}"))
-}
-
-/// Every builtin's whole declaration goes through the typed descriptors
-/// and back to the same bytes: the SDK's wire format is the builtins'.
-#[test]
-fn every_pinned_declaration_round_trips_byte_for_byte() {
-    for dir in PINNED {
-        let declaration = load_pinned(dir);
-        assert_eq!(
-            declaration.handshake_json(),
-            pinned(dir, "handshake.json"),
-            "{dir}: handshake"
-        );
-        for category in DeclaredCategory::ALL {
-            let name = category.name();
-            assert_eq!(
-                declaration.describe_json(category),
-                pinned(dir, &format!("describe_{name}.json")),
-                "{dir}: describe {name}"
-            );
-        }
-    }
 }
 
 /// What the SDK builders declare is exactly what the builtin declares for

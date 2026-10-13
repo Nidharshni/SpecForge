@@ -1,0 +1,16 @@
+{
+  "category": "validation_rules",
+  "items": [
+    {
+      "check": "file_exists",
+      "code": "W901",
+      "constraint": null,
+      "edge_type": null,
+      "field": "guide",
+      "message_template": "gadget '{id}': missing '{value}'",
+      "severity": "warning",
+      "target_kind": "gadget",
+      "wasm_function": null
+    }
+  ]
+}

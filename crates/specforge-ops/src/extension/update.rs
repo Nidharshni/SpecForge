@@ -11,7 +11,7 @@
 //! update that is not applied pins nothing (ADR 0059).
 
 use super::Trust;
-use super::lock_plan::{Fetch, Install, LockPlan, Verb};
+use super::lock_plan::{Ask, Fetching, Install, LockPlan};
 use crate::registry::{Acceptance, NO_REGISTRY, Publisher, Registry};
 use crate::{OpError, OpErrorKind};
 use serde::Serialize;
@@ -287,7 +287,8 @@ pub struct BatchUpdateCompleted {
 ///
 /// Fails outright (nothing asked, nothing written) with `config_invalid`
 /// when `specforge.json` cannot be used, with E033 when the
-/// project has no lock file, and with E063 when a registry install needs a
+/// project has no lock file, with `extension_not_found` (E072 for a name
+/// that is no package name) when the name it was given is not locked, and with E063 when a registry install needs a
 /// registry and none is configured. Fails with the change's error (E032
 /// naming the package whose binary could not be placed, E033 for the lock)
 /// when applying it fails; everything is put back, and what could not be is
@@ -319,16 +320,25 @@ pub fn update(
         }
     };
 
+    // A name the lock does not hold is refused before any registry is asked.
+    if let Some(name) = req.name
+        && !lock.entries.iter().any(|entry| entry.name.as_str() == name)
+    {
+        return Err(not_locked(name));
+    }
+
     // Every newer package is fetched and staged; every upgrade is then judged against the lock as
     // the whole update leaves it, whatever order the lock lists the extensions in.
-    let mut plan = LockPlan::new(&installed, &config.extensions, runtime, Verb::Update)?;
-    let fetch = Fetch {
-        installed: &installed,
-        registry,
+    let mut plan = LockPlan::updating(
+        &installed,
+        &config.extensions,
         runtime,
-        allow_unsigned: req.allow_unsigned,
-        trust: req.trust,
-    };
+        Fetching {
+            registry,
+            allow_unsigned: req.allow_unsigned,
+            trust: req.trust,
+        },
+    )?;
     let mut extensions = Vec::new();
     for entry in lock
         .entries
@@ -340,7 +350,7 @@ pub fn update(
                 source: entry.source.to_string(),
             }
         } else {
-            match newer(req.reach, &fetch, &entry.name, &entry.version) {
+            match newer(req.reach, registry, &plan, &entry.name, &entry.version) {
                 Ok(None) => UpdateStatus::UpToDate {
                     version: entry.version.clone(),
                 },
@@ -354,7 +364,7 @@ pub fn update(
                             .cloned()
                             .expect("a fetched install has a publisher"),
                     };
-                    plan.stage(install);
+                    plan.install(Ask(extensions.len()), install);
                     status
                 }
                 Err(error) if error.is(NO_REGISTRY) => return Err(error),
@@ -370,10 +380,8 @@ pub fn update(
     let checked = match plan.check() {
         Ok(checked) => Some(checked),
         Err(refused) => {
-            for (name, error) in refused.failures {
-                if let Some(e) = extensions.iter_mut().find(|e| e.name == name.as_str()) {
-                    e.status = UpdateStatus::Failed(error);
-                }
+            for (Ask(row), error) in refused.failures() {
+                extensions[row].status = UpdateStatus::Failed(error);
             }
             None
         }
@@ -384,24 +392,41 @@ pub fn update(
     if let Some(checked) =
         checked.filter(|_| outcome.applied() && outcome.updated().next().is_some())
     {
-        checked.commit(req.root.dir())?;
+        checked.finish(req.root.dir(), Vec::new())?;
     }
     Ok(outcome)
+}
+
+/// The refusal of an update by a name the lock does not hold: E072 for a name that is no package
+/// name, else `extension_not_found`, telling a builtin's name that builtins update with specforge.
+fn not_locked(name: &str) -> OpError {
+    if let Err(why) = PackageName::parse(name) {
+        return OpError::of(
+            OpErrorKind::InvalidInput,
+            specforge_common::package::invalid(&why),
+        );
+    }
+    let error = super::not_installed(name, None);
+    if super::builtin_name(name).is_some() {
+        error.with_suggestion("builtins are part of specforge: update specforge to update them")
+    } else {
+        error
+    }
 }
 
 /// The package `name` (locked at `locked`) moves to, fetched, or `None` when it is up to date:
 /// its upgrade target within `reach` ([`super::upgrade`]).
 fn newer<'a>(
     reach: Reach,
-    fetch: &Fetch<'a>,
+    registry: &dyn Registry,
+    plan: &LockPlan<'a>,
     name: &PackageName,
     locked: &str,
 ) -> Result<Option<Install<'a>>, OpError> {
-    let Some(target) = super::upgrade(fetch.registry, name, &LockedVersion::read(locked), reach)?
-    else {
+    let Some(target) = super::upgrade(registry, name, &LockedVersion::read(locked), reach)? else {
         return Ok(None);
     };
-    fetch.install(name, &target).map(Some)
+    plan.fetch(name, &target).map(Some)
 }
 
 #[cfg(test)]
@@ -1008,6 +1033,38 @@ mod tests {
                 source: "local:greet.wasm".into()
             }
         );
+    }
+
+    #[specforge_test(
+        behavior = "update_all_extensions",
+        verify = "an update of a name the lock does not hold is refused before any registry is asked"
+    )]
+    fn an_update_of_a_name_the_lock_does_not_hold_is_refused() {
+        let dir = enabled_project(vec![entry("@acme/a", "1.0.0", "registry", &[])]);
+        let registry = MemoryRegistry::new().serving(old("@acme/a", "1.1.0"));
+        let root = specforge_common::ProjectRoot::of(dir.path()).unwrap();
+        let named = |name| UpdateRequest {
+            name: Some(name),
+            ..request(&root, Reach::Major)
+        };
+
+        let typo = update(&named("@nope/typo"), &registry, &runtime()).unwrap_err();
+        assert_eq!(typo.code, "extension_not_found", "{typo:?}");
+        assert_eq!(typo.message, "extension '@nope/typo' is not installed");
+
+        let bad = update(&named("Bad Name"), &registry, &runtime()).unwrap_err();
+        assert_eq!(bad.code, "E072", "{bad:?}");
+
+        let builtin = update(&named("@specforge/product"), &registry, &runtime()).unwrap_err();
+        assert_eq!(builtin.code, "extension_not_found", "{builtin:?}");
+        assert!(
+            builtin
+                .suggestion
+                .as_deref()
+                .is_some_and(|s| s.contains("builtins")),
+            "{builtin:?}"
+        );
+        assert!(registry.asked().is_empty(), "no registry is asked");
     }
 
     #[test]

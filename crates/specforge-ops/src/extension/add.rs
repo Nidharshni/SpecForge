@@ -1,14 +1,14 @@
 //! `specforge add` and `specforge.add_extension`.
 
 use super::candidate::LocalFile;
-use super::lock_plan::{Appended, Fetch, Install, LockPlan, Verb};
+use super::lock_plan::{Ask, Asked, Fetching, Install, LockPlan, Purpose};
 use super::{Origin, builtin_name};
 use crate::registry::{Acceptance, Publisher, Registry};
 use crate::{OpError, OpErrorKind, Writes};
 use serde::Serialize;
 use specforge_common::codes;
 use specforge_common::shape::Shape;
-use specforge_installed::{Installed, LockSource};
+use specforge_installed::Installed;
 use specforge_package::SpecifierError;
 use specforge_package::{PackageName, PackageRef};
 use specforge_wasm::WasmRuntime;
@@ -27,10 +27,13 @@ pub enum Source {
     Git { url: String },
 }
 
-/// Read an `add` argument once (ADR 0036): a builtin name, a `.wasm` path
-/// (or any `./`, `../` or `/` path), a `git+<url>`, or a package reference
-/// `@scope/name[@requirement]`. Anything else is E054; a requirement that
-/// is none is R-RES-003. No registry is asked for either.
+/// Read an `add` argument once (ADR 0036): a builtin name, a `git+<url>`, a
+/// package reference `@scope/name[@requirement]` (it starts with `@` and does
+/// not end in `.wasm`), or else a local path (a `.wasm` file or an extension's
+/// crate directory, with or without `./`). A package reference that is not one
+/// is E054, a requirement that is none R-RES-003, and a path that names
+/// nothing is E054 when it is read ([`LocalFile::read`]). No registry is
+/// asked for either.
 pub fn parse(specifier: &str) -> Result<Source, OpError> {
     let specifier = specifier.trim();
     if specifier.is_empty() {
@@ -51,10 +54,12 @@ pub fn parse(specifier: &str) -> Result<Source, OpError> {
             url: url.to_string(),
         });
     }
+    // Registry packages are always `@scope/name` (ADR 0036): nothing else names one.
     if specifier.ends_with(".wasm")
         || ["./", "../", "/"]
             .iter()
             .any(|prefix| specifier.starts_with(prefix))
+        || !specifier.starts_with('@')
     {
         return Ok(Source::Local(PathBuf::from(specifier)));
     }
@@ -62,7 +67,7 @@ pub fn parse(specifier: &str) -> Result<Source, OpError> {
 }
 
 /// What an `add` argument may be, as the suggestion of E054.
-const SPECIFIER_FORMS: &str =
+pub(crate) const SPECIFIER_FORMS: &str =
     "use a builtin's name, './local/path.wasm', 'git+https://...', or '@scope/name[@version]'";
 
 /// E054 for a package reference that is not one, R-RES-003 for a
@@ -132,7 +137,7 @@ impl std::fmt::Display for Source {
 
 impl Source {
     /// Whether adding it installs a module under `.specforge/extensions/` and locks it.
-    fn installs(&self) -> bool {
+    pub(crate) fn installs(&self) -> bool {
         matches!(self, Source::Local(_) | Source::Registry(_))
     }
 }
@@ -158,6 +163,15 @@ pub fn specified<S: AsRef<str>>(specifiers: &[S]) -> Result<Vec<Specified>, OpEr
         .collect()
 }
 
+/// E064: a git source is not installable yet.
+pub(crate) fn git_not_supported(url: &str) -> OpError {
+    OpError::coded(
+        crate::OpErrorKind::InvalidInput,
+        codes::E064,
+        format!("git source '{url}' not yet supported"),
+    )
+}
+
 /// E054: an add with nothing to add.
 fn no_specifier() -> OpError {
     OpError::coded(
@@ -169,7 +183,7 @@ fn no_specifier() -> OpError {
 }
 
 /// `error`, naming the specifier it refuses when the add has several.
-fn named(several: bool, specifier: &str, error: OpError) -> OpError {
+pub(crate) fn named(several: bool, specifier: &str, error: OpError) -> OpError {
     if several {
         error.prefixed(format!("adding '{specifier}': "))
     } else {
@@ -197,9 +211,10 @@ pub struct AddRequest<'a> {
     /// Accept a registry package with no publisher signature.
     pub allow_unsigned: bool,
     pub trust: Trust,
-    /// Resolve and report what the add would do; write and download nothing. An extension
-    /// already present answers as the real add would (`AlreadyPresent`, or
-    /// `Builtin { changed: false }`).
+    /// The add's lock plan judged and not committed: report what the add would do, or the refusal it
+    /// would give; write, pin and download nothing. A registry package is judged by the
+    /// declaration it was published with (its manifest). An extension already present answers as
+    /// the real add would (`AlreadyPresent`, or `Builtin { changed: false }`).
     pub dry_run: bool,
 }
 
@@ -227,11 +242,13 @@ pub enum AddOutcome {
     /// Already installed at this version (or, from a local file, with
     /// these exact bytes) and enabled: nothing changed.
     AlreadyPresent { name: String, version: String },
-    /// A dry run: what would be installed or enabled.
+    /// A dry run: what would be installed or enabled, and the required builtins that would be
+    /// enabled with it, dependencies first.
     Planned {
         name: String,
         version: Option<String>,
         origin: Origin,
+        peers_enabled: Vec<&'static str>,
     },
     /// An extension an earlier specifier of the same add names, as that one adds it: added
     /// once, by `first` (that specifier).
@@ -312,11 +329,16 @@ impl AddedExtension {
                 name,
                 version,
                 origin,
+                peers_enabled,
             } => AddResult::Planned(PlannedAdd {
                 specifier,
                 extension: name.clone(),
                 version: version.clone(),
                 source: origin.source(),
+                peers_enabled: peers_enabled
+                    .iter()
+                    .map(|peer| (*peer).to_string())
+                    .collect(),
             }),
             AddOutcome::Duplicate { name, first } => AddResult::Duplicate(DuplicateSpecifier {
                 specifier,
@@ -407,6 +429,8 @@ pub struct PlannedAdd {
     pub version: Option<String>,
     /// `builtin`, `registry` or `local:<path>`.
     pub source: String,
+    /// The required builtins the add would enable with it, dependencies first.
+    pub peers_enabled: Vec<String>,
 }
 
 /// A specifier naming an extension an earlier one of the same add names.
@@ -481,11 +505,22 @@ pub fn add(
     let several = req.extensions.len() > 1;
     let installed = Installed::at(req.root.dir());
     // A specforge.lock that can't be read refuses before a file is read or a registry asked.
-    let plan = if req.extensions.iter().any(|e| e.source.installs()) {
-        LockPlan::new(&installed, &config.extensions, runtime, Verb::Install)?
-    } else {
-        LockPlan::enabling(&installed, &config.extensions, runtime)
-    };
+    let plan = LockPlan::adding(
+        &installed,
+        &config.extensions,
+        runtime,
+        Fetching {
+            registry,
+            allow_unsigned: req.allow_unsigned,
+            trust: req.trust,
+        },
+        if req.dry_run {
+            Purpose::Preview
+        } else {
+            Purpose::Commit
+        },
+        req.extensions.iter().any(|e| e.source.installs()),
+    )?;
     let mut resolver = Resolver {
         req,
         config: &config,
@@ -504,14 +539,7 @@ pub fn add(
             })?;
         steps.push(step);
     }
-    let fetch = Fetch {
-        installed: &installed,
-        registry,
-        runtime,
-        allow_unsigned: req.allow_unsigned,
-        trust: req.trust,
-    };
-    apply(req, &config, plan, &fetch, steps)
+    apply(req, &config, plan, steps)
 }
 
 /// What the add does for one specifier, once it is resolved.
@@ -570,11 +598,7 @@ impl<'a> Resolver<'_, 'a> {
                 self.local(wanted, Install::local(self.req.root.dir(), local)?)
             }
             Source::Registry(package) => self.package(before, wanted, package),
-            Source::Git { url } => Err(Resolved::Refused(OpError::coded(
-                crate::OpErrorKind::InvalidInput,
-                codes::E064,
-                format!("git source '{url}' not yet supported"),
-            ))),
+            Source::Git { url } => Err(Resolved::Refused(git_not_supported(url))),
         }
     }
 
@@ -627,13 +651,6 @@ impl<'a> Resolver<'_, 'a> {
                 peers_enabled: Vec::new(),
             }));
         }
-        if self.req.dry_run {
-            return Ok(Step::Unchanged(AddOutcome::Planned {
-                name: name.to_string(),
-                version: None,
-                origin: Origin::Builtin,
-            }));
-        }
         Ok(Step::Enable { name })
     }
 
@@ -649,15 +666,6 @@ impl<'a> Resolver<'_, 'a> {
             e.wasm_hash == install.sha256() && e.source.local_path().is_some()
         }) {
             return Ok(Step::Unchanged(present));
-        }
-        if self.req.dry_run {
-            return Ok(Step::Unchanged(AddOutcome::Planned {
-                name: name.to_string(),
-                version: Some(install.version().to_string()),
-                origin: Origin::Installed {
-                    source: install.source().clone(),
-                },
-            }));
         }
         Ok(Step::Local(install))
     }
@@ -688,15 +696,6 @@ impl<'a> Resolver<'_, 'a> {
         }) {
             return Ok(Step::Unchanged(present));
         }
-        if self.req.dry_run {
-            return Ok(Step::Unchanged(AddOutcome::Planned {
-                name: name.to_string(),
-                version: Some(version.to_string()),
-                origin: Origin::Installed {
-                    source: LockSource::Registry,
-                },
-            }));
-        }
         Ok(Step::Fetch(package.name.clone(), version))
     }
 }
@@ -722,58 +721,110 @@ fn already_present(
     })
 }
 
-/// What an install did, before it is staged.
-fn installed_outcome(install: &Install<'_>) -> AddOutcome {
-    AddOutcome::Installed {
-        name: install.name().to_string(),
-        version: install.version().to_string(),
-        sha256: install.sha256().to_string(),
-        publisher: install.publisher().cloned(),
-        origin: Origin::Installed {
-            source: install.source().clone(),
-        },
-        peers_enabled: Vec::new(),
+/// What a specifier asks the plan for, to turn the plan's answer for its ask into an outcome.
+enum Wanted {
+    Builtin(&'static str),
+    Package {
+        name: String,
+        version: String,
+        sha256: String,
+        publisher: Option<Publisher>,
+        origin: Origin,
+    },
+}
+
+impl Wanted {
+    fn of(install: &Install<'_>) -> Wanted {
+        Wanted::Package {
+            name: install.name().to_string(),
+            version: install.version().to_string(),
+            sha256: install.sha256().to_string(),
+            publisher: install.publisher().cloned(),
+            origin: Origin::Installed {
+                source: install.source().clone(),
+            },
+        }
+    }
+
+    /// What the add did (or, for a dry run, would do) for it, given what the plan did for its ask.
+    fn outcome(self, asked: Asked, dry_run: bool) -> AddOutcome {
+        match self {
+            Wanted::Builtin(name) if dry_run => AddOutcome::Planned {
+                name: name.to_string(),
+                version: None,
+                origin: Origin::Builtin,
+                peers_enabled: asked.peers_enabled,
+            },
+            Wanted::Package {
+                name,
+                version,
+                origin,
+                ..
+            } if dry_run => AddOutcome::Planned {
+                name,
+                version: Some(version),
+                origin,
+                peers_enabled: asked.peers_enabled,
+            },
+            Wanted::Builtin(name) => AddOutcome::Builtin {
+                name,
+                changed: asked.appended,
+                peers_enabled: asked.peers_enabled,
+            },
+            Wanted::Package {
+                name,
+                version,
+                sha256,
+                publisher,
+                origin,
+            } => AddOutcome::Installed {
+                name,
+                version,
+                sha256,
+                publisher,
+                origin,
+                peers_enabled: asked.peers_enabled,
+            },
+        }
     }
 }
 
-/// Fetch what `steps` install from a registry, stage every install and enable every entry in
-/// `plan`, check it once and commit it with the `specforge.json` entries (each builtin after the
-/// builtins it requires, each install by its bare name): one change that puts everything back
-/// when a step fails. A plan the peer rule refuses writes nothing, its refusal naming the
-/// specifier when there are several (ADR 0041).
+/// Ask `plan` for what `steps` name, check it once and commit it with the `specforge.json`
+/// entries (each builtin after the builtins it requires, each install by its bare name): one
+/// change that puts everything back when a step fails. A plan the peer rule refuses writes
+/// nothing, its refusal naming the specifier when there are several (ADR 0041).
 fn apply<'a>(
     req: &AddRequest,
     config: &specforge_common::ProjectConfig,
     mut plan: LockPlan<'a>,
-    fetch: &Fetch<'a>,
     steps: Vec<Step<'a>>,
 ) -> Result<Added, OpError> {
     let several = req.extensions.len() > 1;
     let specifier = |at: usize| req.extensions[at].specifier.as_str();
     let mut outcomes: Vec<Option<AddOutcome>> = Vec::with_capacity(steps.len());
-    // Each specifier that adds something: its position and the extension it enables.
-    let mut asked: Vec<(usize, String)> = Vec::new();
+    // Each specifier that adds something, and what it asked for.
+    let mut asked: Vec<(usize, Wanted)> = Vec::new();
     for (at, step) in steps.into_iter().enumerate() {
         outcomes.push(None);
-        let install = match step {
-            Step::Unchanged(outcome) => {
-                outcomes[at] = Some(outcome);
-                continue;
-            }
+        let ask = Ask(at);
+        match step {
+            Step::Unchanged(outcome) => outcomes[at] = Some(outcome),
             Step::Enable { name } => {
-                plan.enable(name);
-                asked.push((at, name.to_string()));
-                continue;
+                plan.enable(ask, name);
+                asked.push((at, Wanted::Builtin(name)));
             }
-            Step::Local(install) => install,
-            Step::Fetch(name, version) => fetch
-                .install(&name, &version)
-                .map_err(|error| named(several, specifier(at), error))?,
-        };
-        outcomes[at] = Some(installed_outcome(&install));
-        asked.push((at, install.name().to_string()));
-        plan.enable(install.name().as_str());
-        plan.stage(install);
+            Step::Local(install) => {
+                asked.push((at, Wanted::of(&install)));
+                plan.install(ask, install);
+            }
+            Step::Fetch(name, version) => {
+                let install = plan
+                    .fetch(&name, &version)
+                    .map_err(|error| named(several, specifier(at), error))?;
+                asked.push((at, Wanted::of(&install)));
+                plan.install(ask, install);
+            }
+        }
     }
     if asked.is_empty() {
         return Ok(Added {
@@ -783,82 +834,21 @@ fn apply<'a>(
         });
     }
 
-    // The builtins the add requires are enabled first; a builtin that does not load refuses.
-    plan.close()?;
-    let appended = plan.appended().to_vec();
-    let checked = plan.check().map_err(|refused| {
-        let (name, error) = refused.decisive();
-        named(
-            several,
-            specifier(specifier_of(name.as_str(), &asked, &appended)),
-            error,
-        )
-    })?;
-    let applied = checked.commit(req.root.dir())?;
-    let written = |name: &str| {
-        applied
-            .enabled
-            .as_ref()
-            .is_some_and(|enabled| enabled.appended.iter().any(|a| a == name))
-    };
-
-    // The required builtins an extension asked for enabled with it, dependencies first; each is
-    // reported once, by the extension that first required it.
-    let peers_enabled = |root: &str| -> Vec<&'static str> {
-        appended
-            .iter()
-            .filter(|entry| entry.required_by.as_deref() == Some(root) && written(&entry.name))
-            .filter_map(|entry| super::builtin_name(&entry.name))
-            .collect()
-    };
-    for (at, name) in &asked {
-        let peers = peers_enabled(name);
-        outcomes[*at] = Some(match outcomes[*at].take() {
-            Some(AddOutcome::Installed {
-                name,
-                version,
-                sha256,
-                publisher,
-                origin,
-                ..
-            }) => AddOutcome::Installed {
-                name,
-                version,
-                sha256,
-                publisher,
-                origin,
-                peers_enabled: peers,
-            },
-            _ => AddOutcome::Builtin {
-                name: super::builtin_name(name).expect("an enabled builtin"),
-                changed: written(name),
-                peers_enabled: peers,
-            },
-        });
+    let done = plan
+        .check()
+        .map_err(|refused| {
+            let (Ask(at), error) = refused.decisive();
+            named(several, specifier(at), error)
+        })?
+        .finish(req.root.dir(), Vec::new())?;
+    for (at, wanted) in asked {
+        outcomes[at] = Some(wanted.outcome(done.asked(Ask(at)), req.dry_run));
     }
     Ok(Added {
         added: added(req, outcomes),
-        extensions_enabled: applied
-            .enabled
-            .as_ref()
-            .map_or(config.extensions.len(), |enabled| enabled.total),
-        writes: applied.writes,
+        extensions_enabled: done.enabled,
+        writes: done.writes,
     })
-}
-
-/// The specifier a refusal of the extension `name` belongs to: the one that asked for it, or, for
-/// a builtin the plan enabled because an extension requires it, the one that asked for that
-/// extension.
-fn specifier_of(name: &str, asked: &[(usize, String)], appended: &[Appended]) -> usize {
-    let root = appended
-        .iter()
-        .find(|entry| entry.name == name)
-        .and_then(|entry| entry.required_by.as_deref())
-        .unwrap_or(name);
-    asked
-        .iter()
-        .find(|(_, asked)| asked == root)
-        .map_or(0, |(at, _)| *at)
 }
 
 /// Each specifier of `req` with its outcome.
@@ -922,7 +912,8 @@ mod tests {
             })
         );
         assert_eq!(parse("").unwrap_err().code, "E054");
-        assert_eq!(parse("not-scoped").unwrap_err().code, "E054");
+        // Registry packages are always `@scope/name`: anything else names a path.
+        assert_eq!(parse("not-scoped"), Ok(Source::Local("not-scoped".into())));
         assert_eq!(parse("@acme/").unwrap_err().code, "E054");
     }
 
@@ -937,6 +928,9 @@ mod tests {
         fn registry(reference: &str) -> Result<Source, String> {
             Ok(Source::Registry(PackageRef::parse(reference).unwrap()))
         }
+        fn local(path: &str) -> Result<Source, String> {
+            Ok(Source::Local(PathBuf::from(path)))
+        }
         let cases: Vec<(&str, Result<Source, String>)> = vec![
             ("@acme/tool", registry("@acme/tool")),                 // I1
             ("@acme/tool@", Err("E054".into())),                    // I2
@@ -946,15 +940,15 @@ mod tests {
             ("@acme/tool@1.2", registry("@acme/tool@1.2")),         // I6
             ("@acme/tool@1.0.0/x", Err("R-RES-003".into())),        // I7
             ("@acme/tool@1.0.0?x=1", Err("R-RES-003".into())),      // I8
-            ("foo@/bar", Err("E054".into())),                       // I9
-            ("tool@1.0.0", Err("E054".into())),                     // I10
-            ("tool", Err("E054".into())),                           // I11
+            ("foo@/bar", local("foo@/bar")),                        // I9
+            ("tool@1.0.0", local("tool@1.0.0")),                    // I10
+            ("tool", local("tool")),                                // I11
             ("@acme/..", Err("E054".into())),                       // I12
             ("@acme/aa/bb", Err("E054".into())),                    // I13
             ("@acme/a/b", Err("E054".into())),                      // I14
             ("@a/x", registry("@a/x")),                             // I15
             ("@acme/T ool", Err("E054".into())),                    // I16
-            ("Acme@1", Err("E054".into())),                         // I17
+            ("Acme@1", local("Acme@1")),                            // I17
             ("@acme/tool@latest", registry("@acme/tool")),          // I18
             ("@acme/tool@*", registry("@acme/tool")),               // I18
             ("@acme/tool@>=1, <2", registry("@acme/tool@>=1, <2")), // I19
@@ -1589,7 +1583,7 @@ mod tests {
         // init refuses the same way, before it writes anything.
         let target = tempfile::tempdir().unwrap();
         let extensions = vec!["@specforge/formal".to_string()];
-        let error = crate::init::plan(
+        let error = crate::init::init(
             &crate::init::Request {
                 dir: &target.path().join("demo"),
                 name: Some("demo"),
@@ -2326,8 +2320,9 @@ mod tests {
                     name: "@specforge/product".into(),
                     version: None,
                     origin: Origin::Builtin,
+                    peers_enabled: vec!["@specforge/software"],
                 },
-                serde_json::json!({"specifier": "s", "action": "planned", "extension": "@specforge/product", "source": "builtin"}),
+                serde_json::json!({"specifier": "s", "action": "planned", "extension": "@specforge/product", "source": "builtin", "peers_enabled": ["@specforge/software"]}),
             ),
         ];
         let cases = cases.into_iter().chain([(
@@ -2544,15 +2539,15 @@ mod tests {
             ]
         );
 
-        let error = specified(&["@specforge/product", "tool", "@acme/"]).unwrap_err();
+        let error = specified(&["@specforge/product", "@acme/tool@", "@acme/"]).unwrap_err();
         assert_eq!(error.code, "E054");
         assert!(
             error
                 .message
-                .starts_with("adding 'tool': invalid extension specifier: "),
+                .starts_with("adding '@acme/tool@': invalid extension specifier: "),
             "{error:?}"
         );
-        let alone = specified(&["tool"]).unwrap_err();
+        let alone = specified(&["@acme/"]).unwrap_err();
         assert!(
             alone.message.starts_with("invalid extension specifier: "),
             "{alone:?}"
@@ -2824,6 +2819,7 @@ mod tests {
                 name: "@specforge/product".into(),
                 version: None,
                 origin: Origin::Builtin,
+                peers_enabled: vec![],
             }
         );
         assert!(
@@ -2854,5 +2850,146 @@ mod tests {
         assert_eq!(error.code, "E054");
         assert!(error.message.starts_with("adding '"), "{error:?}");
         assert_eq!(files_under(dir.path()), before);
+    }
+
+    #[specforge_test(
+        behavior = "add_extension_to_existing_project",
+        verify = "a dry run of several specifiers previews each and writes nothing"
+    )]
+    fn a_dry_run_reports_the_builtins_it_would_enable() {
+        let dir = project_with(EMPTY_PROJECT);
+        let chain = serving_builtin(
+            serving_builtin(
+                runtime_with_product(),
+                "@specforge/formal",
+                declaring(
+                    "@specforge/formal",
+                    "1.0.0",
+                    &[("@specforge/software", "^1.0", false)],
+                ),
+            ),
+            "@specforge/software",
+            declaring("@specforge/software", "1.0.0", &[]),
+        );
+
+        let added = add(
+            &several(
+                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                vec![Source::Builtin("@specforge/formal").into()],
+                true,
+            ),
+            &crate::registry::Unconfigured("add"),
+            &chain,
+        )
+        .unwrap();
+
+        let document = serde_json::to_value(added.document()).unwrap();
+        assert_eq!(document["added"][0]["action"], "planned");
+        assert_eq!(
+            document["added"][0]["peers_enabled"],
+            serde_json::json!(["@specforge/software"]),
+            "{document}"
+        );
+    }
+
+    #[specforge_test(
+        behavior = "add_extension_to_existing_project",
+        verify = "a dry run judges a registry package by the declaration it was published with, downloading nothing"
+    )]
+    fn a_dry_run_judges_a_registry_package_by_its_published_declaration() {
+        let published = || {
+            MemoryRegistry::new()
+                .serving(Published::new(
+                    b"\0asm base1".to_vec(),
+                    declaration("@acme/base", "1.0.0", &[]),
+                ))
+                .serving(Published::new(
+                    b"\0asm base2".to_vec(),
+                    declaration("@acme/base", "2.0.0", &[]),
+                ))
+                .serving(Published::new(
+                    b"\0asm app".to_vec(),
+                    declaration("@acme/app", "1.0.0", &[("@acme/base", "^2.0")]),
+                ))
+        };
+        let dir = add_project(vec![entry("@acme/base", "1.0.0", "registry", &[])]);
+        let root = specforge_common::ProjectRoot::of(dir.path()).unwrap();
+        let request = |dry_run| AddRequest {
+            root: &root,
+            extensions: vec![
+                Source::Registry(PackageRef::parse("@acme/app@1.0.0").unwrap()).into(),
+            ],
+            allow_unsigned: true,
+            trust: Trust::Refuse,
+            dry_run,
+        };
+
+        let real = add(&request(false), &published(), &runtime()).unwrap_err();
+        assert_eq!(real.code, "R-RES-006", "{real:?}");
+        assert!(real.message.contains("2.0.0"), "{real:?}");
+
+        let registry = published();
+        let dry = add(&request(true), &registry, &runtime()).unwrap_err();
+        assert_eq!((dry.code, dry.message), (real.code, real.message));
+        let asked = registry.asked();
+        assert!(
+            asked.contains(&crate::registry::testing::Asked::Published(
+                PackageName::parse("@acme/app").unwrap(),
+                specforge_package::Version::new(1, 0, 0)
+            )),
+            "{asked:?}"
+        );
+        assert!(
+            !asked
+                .iter()
+                .any(|asked| matches!(asked, crate::registry::testing::Asked::Fetch(..))),
+            "a dry run downloads nothing: {asked:?}"
+        );
+    }
+
+    #[specforge_test(
+        behavior = "parse_extension_specifier",
+        verify = "a specifier that is no builtin's name, git+ URL or @scope/name reference is a local path, a bare crate directory included"
+    )]
+    fn a_bare_path_is_a_local_source() {
+        assert_eq!(parse("ext").unwrap(), Source::Local("ext".into()));
+        assert_eq!(
+            parse("tools/greet").unwrap(),
+            Source::Local("tools/greet".into())
+        );
+        assert!(matches!(parse("@acme/x").unwrap(), Source::Registry(_)));
+        assert_eq!(
+            parse("@acme/x.wasm").unwrap(),
+            Source::Local("@acme/x.wasm".into())
+        );
+
+        let dir = project_with(EMPTY_PROJECT);
+        let krate = dir.path().join("ext");
+        let release = krate.join("target/wasm32-wasip2/release");
+        std::fs::create_dir_all(&release).unwrap();
+        std::fs::write(krate.join("Cargo.toml"), "[package]\nname = \"greet\"\n").unwrap();
+        std::fs::write(release.join("greet.wasm"), GREET).unwrap();
+        let root = specforge_common::ProjectRoot::of(dir.path()).unwrap();
+        let specified = Specified {
+            specifier: "ext".into(),
+            source: parse("ext").unwrap(),
+        }
+        .relative_to(dir.path());
+
+        let added = add(
+            &several(&root, vec![specified], false),
+            &crate::registry::Unconfigured("add"),
+            &runtime(),
+        )
+        .unwrap();
+
+        let AddOutcome::Installed { name, origin, .. } = &added.added[0].outcome else {
+            panic!("{:?}", added.added[0].outcome);
+        };
+        assert_eq!(name, "@sdk/greet");
+        assert_eq!(
+            origin.source(),
+            "local:ext/target/wasm32-wasip2/release/greet.wasm"
+        );
     }
 }

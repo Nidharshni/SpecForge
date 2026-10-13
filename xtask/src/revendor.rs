@@ -1,19 +1,21 @@
 //! One command that leaves the tree consistent after a change to what the
-//! builtin extensions compile from (their sources, the SDK and its macros,
+//! committed blobs compile from (their sources, the SDK and its macros,
 //! protocol-types, coverage, any `inputs.json` input). See docs/agents/revendor.md.
 //!
 //!   cargo run -p xtask --bin revendor
 //!
-//! In order: refuse a place it cannot work from; refresh the guest lockfiles;
-//! rebuild and vendor the builtin blobs (`extensions/*/wasm`, `inputs.json`);
-//! rebuild the SDK greet fixture blob; rewrite the declaration snapshots;
-//! check the lot and print the paths to stage.
+//! In order: refuse a place it cannot work from; refresh the lockfile of every
+//! committed blob's crate (`specforge_component::committed::COMMITTED`); rebuild
+//! and vendor every blob with its `inputs.json` (`build-builtins --install`);
+//! rewrite the declaration snapshots of every SDK blob, in process; check what it
+//! did not write (`build-builtins --check` and the declarations test) and print
+//! the paths to stage.
 
-use specforge_component::builtins::BUILTINS;
+use specforge_component::ComponentRuntime;
+use specforge_component::committed::{COMMITTED, snapshots, wire_answers};
+use specforge_wasm::runtime::WasmRuntime;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-
-const GREET: &str = "fixtures/greet-extension";
 
 fn main() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -58,29 +60,33 @@ fn preflight(root: &Path, target_dir_set: bool) -> Result<(), String> {
 fn run(root: &Path) -> Result<(), String> {
     println!("== lockfiles");
     let mut changed = Vec::new();
-    let mut guests: Vec<String> = BUILTINS
-        .iter()
-        .map(|b| format!("extensions/{}", b.dir))
-        .collect();
-    guests.push(GREET.to_string());
-    for guest in &guests {
-        if refresh_lockfile(root, guest)? {
-            changed.push(format!("{guest}/Cargo.lock"));
+    for blob in COMMITTED {
+        if refresh_lockfile(root, blob.crate_dir)? {
+            changed.push(format!("{}/Cargo.lock", blob.crate_dir));
         }
     }
-    println!("== builtin blobs");
+    println!("== blobs");
     xtask(root, "build-builtins", &["--install"])?;
-    println!("== greet fixture");
-    build_greet(root)?;
     println!("== declaration snapshots");
-    xtask(root, "snapshot-builtins", &[])?;
+    let written = write_snapshots()?;
+    println!("[ok]     {written} snapshot files written");
     println!("== checks");
     xtask(root, "build-builtins", &["--check"])?;
-    xtask(root, "snapshot-builtins", &["--check"])?;
+    declarations_test(root)?;
 
     println!("\nre-vendored. Review `git diff --stat`, then stage:");
+    let paths: Vec<String> = COMMITTED
+        .iter()
+        .flat_map(|blob| {
+            [
+                format!("{}/wasm", blob.crate_dir),
+                format!("{}/Cargo.lock", blob.crate_dir),
+            ]
+        })
+        .collect();
     println!(
-        "  git add extensions/*/wasm extensions/*/Cargo.lock {GREET} crates/specforge-component/tests/declarations"
+        "  git add {} crates/specforge-component/tests/declarations",
+        paths.join(" ")
     );
     if !changed.is_empty() {
         println!("lockfiles refreshed: {}", changed.join(", "));
@@ -119,31 +125,59 @@ fn refresh_lockfile(root: &Path, guest: &str) -> Result<bool, String> {
     Ok(changed)
 }
 
-/// Rebuild the greet fixture blob and vendor it beside its sources.
-fn build_greet(root: &Path) -> Result<(), String> {
-    let dir = root.join(GREET);
+/// Rewrite the pinned wire answers of every SDK blob from the blobs just vendored, and remove a
+/// snapshot directory no SDK blob names any more. Returns the number of files written.
+fn write_snapshots() -> Result<usize, String> {
+    let root = snapshots();
+    let runtime = ComponentRuntime::new();
+    let mut written = 0;
+    let mut kept = Vec::new();
+    for blob in COMMITTED.iter().filter(|blob| blob.is_sdk()) {
+        runtime
+            .load(blob.name, &blob.read())
+            .map_err(|e| format!("{}: {e}", blob.name))?;
+        let dir = root.join(blob.snapshot_dir());
+        std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+        for answer in wire_answers(&runtime, blob)? {
+            let path = dir.join(&answer.file);
+            std::fs::write(&path, &answer.bytes).map_err(|e| format!("{}: {e}", path.display()))?;
+            written += 1;
+        }
+        kept.push(blob.snapshot_dir());
+    }
+    for entry in std::fs::read_dir(&root).map_err(|e| format!("{}: {e}", root.display()))? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if entry.path().is_dir() && !kept.contains(&name.as_str()) {
+            std::fs::remove_dir_all(entry.path())
+                .map_err(|e| format!("{}: {e}", entry.path().display()))?;
+        }
+    }
+    Ok(written)
+}
+
+/// The declarations test: the snapshot set, the typed round trip and the protocol freshness test
+/// can fail on a fresh write. (The comparison with the files just written cannot.)
+fn declarations_test(root: &Path) -> Result<(), String> {
     let status = Command::new("cargo")
         .args([
-            "build",
-            "--release",
-            "--target",
-            "wasm32-wasip2",
-            "--manifest-path",
+            "test",
+            "-q",
+            "-p",
+            "specforge-component",
+            "--test",
+            "declarations",
+            "--",
+            "--include-ignored",
         ])
-        .arg(dir.join("Cargo.toml"))
+        .current_dir(root)
         .status()
         .map_err(|e| format!("cannot run cargo: {e}"))?;
-    if !status.success() {
-        return Err(format!(
-            "building {GREET} failed (rustup target add wasm32-wasip2?)"
-        ));
+    if status.success() {
+        Ok(())
+    } else {
+        Err("the declarations test failed".to_string())
     }
-    let built = dir.join("target/wasm32-wasip2/release/greet.wasm");
-    std::fs::copy(&built, dir.join("greet.wasm"))
-        .map_err(|e| format!("cannot copy {}: {e}", built.display()))?;
-    let _ = std::fs::remove_dir_all(dir.join("target"));
-    println!("[ok]     {GREET}/greet.wasm");
-    Ok(())
 }
 
 /// Run a sibling xtask bin from the repository root.
@@ -164,6 +198,31 @@ fn xtask(root: &Path, bin: &str, args: &[&str]) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_committed_wasm_is_listed() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+        let out = Command::new("git")
+            .args(["ls-files", "-z", "*.wasm"])
+            .current_dir(&root)
+            .output()
+            .expect("git runs");
+        assert!(out.status.success(), "git ls-files failed");
+        let tracked: std::collections::BTreeSet<String> = String::from_utf8(out.stdout)
+            .unwrap()
+            .split('\0')
+            .filter(|path| !path.is_empty())
+            .map(str::to_string)
+            .collect();
+        let listed: std::collections::BTreeSet<String> = specforge_component::committed::COMMITTED
+            .iter()
+            .map(|blob| blob.repo_path())
+            .collect();
+        assert_eq!(
+            tracked, listed,
+            "git tracks these .wasm files; list each in specforge_component::committed"
+        );
+    }
 
     #[test]
     fn refuses_when_cargo_target_dir_is_set() {

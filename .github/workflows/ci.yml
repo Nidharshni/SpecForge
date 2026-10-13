@@ -53,10 +53,7 @@ jobs:
       # can rebuild every builtin component blob from source via the xtask
       # escape hatch (wayfinder map #1, ticket #4).
       # Each blob is built in a staged workspace, so its bytes do not depend on the
-      # checkout path: --verify rebuilds all nine and fails if one differs from the
+      # checkout path: --verify rebuilds every committed blob (the builtins and the fixtures) and fails if one differs from the
       # vendored bytes (a blob vendored by another rustc is built, not compared).
       - name: Build all builtin component blobs from source and compare them with the vendored ones
         run: cargo gate bootstrap
-
-      - name: Build SDK greet fixture
-        run: cargo build --manifest-path fixtures/greet-extension/Cargo.toml --target wasm32-wasip2 --release
