@@ -1,10 +1,10 @@
 //! Every wasm component this repository commits, where each is built from, and what an SDK
 //! blob answers on the wire. Test support (feature `testing`): the declaration snapshots and
-//! their tests, `xtask build-builtins` and `xtask revendor` read it, and every test that loads
+//! their tests, `xtask build-blobs` and `xtask revendor` read it, and every test that loads
 //! a fixture blob names it here. No production code reads it.
 //!
 //! A committed blob lives at `<crate_dir>/wasm/<artifact>`, beside the `inputs.json` that
-//! `build-builtins --install` records for it. `git ls-files '*.wasm'` is exactly [`COMMITTED`]
+//! `build-blobs --install` records for it. `git ls-files '*.wasm'` is exactly [`COMMITTED`]
 //! (`xtask`'s `every_committed_wasm_is_listed`).
 
 use crate::builtins::BUILTINS;

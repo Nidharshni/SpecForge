@@ -339,7 +339,7 @@ fn doctests_run_for_the_changed_members_that_hold_one() {
 
 #[test]
 fn quick_runs_the_builtins_check_when_a_recorded_input_changes() {
-    // §3.1: quick passed all four of these edits while `build-builtins --check` failed on them.
+    // §3.1: quick passed all four of these edits while `build-blobs --check` failed on them.
     for path in [
         "crates/specforge-coverage/src/lib.rs",
         "crates/specforge-protocol-types/src/lib.rs",

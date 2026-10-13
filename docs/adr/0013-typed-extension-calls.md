@@ -130,7 +130,7 @@ what its bytes prove: its declaration snapshots (`tests/declarations.rs`), that 
 command answers through it as the host calls it (`tests/builtins.rs`, `tests/product_blob.rs`), and
 what the in-process runtime cannot hold it to (the component's stack, as `product_blob.rs`'s long
 chain; the sandbox and the deadline, above). In this repository the extension crates are outside the
-workspace, so their linked tests are recorded by the gate (`scripts/gate.sh full` runs them into
+workspace, so their linked tests are recorded by the gate (`cargo gate full` runs them into
 `target/specforge` before `collect --no-run`), not by a bare `specforge collect`.
 
 ## D9. One `PassDiagnostic`, without the host's diagnostic data

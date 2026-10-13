@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Exercises .githooks/pre-commit in a throwaway clone: three bad stages must be
-# refused, a clean stage accepted. Slow the first time (the clone builds).
+# Exercises .githooks/pre-commit in a throwaway clone: bad stages must be
+# refused, clean ones (and a starter template) accepted. Slow the first time (the clone builds).
 set -uo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 TMP=$(mktemp -d)
@@ -40,31 +40,17 @@ cargo fmt --all
 git add crates/specforge-common/src/lib.rs
 expect accepted "a clean stage"
 
-# xfail WANT LABEL: a known gap of the hook, fixed when the hook runs the check
-# list. The outcome that differs from WANT is today's; one that matches means
-# the gap is closed, so the case must become an `expect`.
-xfail() {
-    local want=$1 label=$2
-    if git commit -q -m "test: $label" >"$TMP/out" 2>&1; then got=accepted; else got=refused; fi
-    if [ "$got" = "$want" ]; then
-        echo "XPASS $label: turn it into expect"; failures=$((failures + 1))
-    else
-        echo "XFAIL $label (fixed by T5)"
-    fi
-    git reset -q --hard HEAD
-}
-
 printf '\nfn   unformatted_probe( )  {   }\n' >>extensions/governance/src/lib.rs
 git add extensions/governance/src/lib.rs
-xfail refused "an unformatted guest"
+expect refused "an unformatted guest"
 
 echo "// a note" >>extensions/software/src/starter.spec
 git add extensions/software/src/starter.spec
-xfail accepted "a staged starter template"
+expect accepted "a staged starter template"
 
 perl -pi -e 's#extras: \(\$\) => \[/\\s/, \$\.comment\]#extras: (\$) => [/\\s/, /;/, \$.comment]#' \
     crates/tree-sitter-specforge/grammar.js
 git add crates/tree-sitter-specforge/grammar.js
-xfail refused "a stale grammar artifact"
+expect refused "a stale grammar artifact"
 
 [ "$failures" = 0 ]

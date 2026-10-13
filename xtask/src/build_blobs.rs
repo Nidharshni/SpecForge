@@ -3,11 +3,11 @@
 //! `specforge-component` embeds — in step with their sources.
 //!
 //! ```text
-//! build-builtins             build any blob missing from target/builtin-stage/
-//! build-builtins --force     rebuild every blob into target/builtin-stage/
-//! build-builtins --install   rebuild, vendor into <crate_dir>/wasm/, record inputs.json
-//! build-builtins --check     fail if a vendored blob or any recorded input changed (no build)
-//! build-builtins --verify    rebuild every blob and fail if one differs from its vendored bytes
+//! build-blobs             build any blob missing from target/blob-stage/
+//! build-blobs --force     rebuild every blob into target/blob-stage/
+//! build-blobs --install   rebuild, vendor into <crate_dir>/wasm/, record inputs.json
+//! build-blobs --check     fail if a vendored blob or any recorded input changed (no build)
+//! build-blobs --verify    rebuild every blob and fail if one differs from its vendored bytes
 //!                            (a blob vendored by another rustc is built, not compared)
 //! ```
 //!
@@ -48,7 +48,7 @@ fn main() {
         ["--verify"] => Mode::Verify,
         other => {
             eprintln!(
-                "usage: build-builtins [--force | --install | --check | --verify] (got {other:?})"
+                "usage: build-blobs [--force | --install | --check | --verify] (got {other:?})"
             );
             std::process::exit(2);
         }
@@ -84,7 +84,7 @@ fn main() {
     std::process::exit(i32::from(failed));
 }
 
-/// The directory under `target/builtin-stage/` that holds `blob`'s stage: the last segment of its crate directory
+/// The directory under `target/blob-stage/` that holds `blob`'s stage: the last segment of its crate directory
 /// (unique over [`COMMITTED`]; a test asserts it).
 fn stage_name(blob: &CommittedBlob) -> &'static str {
     blob.crate_dir.rsplit('/').next().unwrap_or(blob.crate_dir)
@@ -93,7 +93,7 @@ fn stage_name(blob: &CommittedBlob) -> &'static str {
 /// Where `blob` is built.
 fn staged_blob(root: &Path, blob: &CommittedBlob) -> PathBuf {
     root.join(format!(
-        "target/builtin-stage/{}/target/{TARGET}/release/{}",
+        "target/blob-stage/{}/target/{TARGET}/release/{}",
         stage_name(blob),
         blob.artifact
     ))
@@ -130,7 +130,7 @@ fn build(root: &Path, committed: &CommittedBlob, force: bool) -> Option<PathBuf>
 /// Each crate is its own workspace, so cargo hashes the absolute path of every path
 /// dependency outside it (the SDK, the protocol types, ...) into `-C metadata`. That renames
 /// the symbols and reorders generic code, and no rustc flag reaches it. The stage is a workspace
-/// under `<repo>/target/builtin-stage/<last segment of the crate dir>/` holding the crate and every path package its
+/// under `<repo>/target/blob-stage/<last segment of the crate dir>/` holding the crate and every path package its
 /// `wasm32-wasip2` build compiles, at their repo-relative paths: cargo then hashes their paths
 /// relative to the stage, and passes them to rustc relative. The cargo home is remapped to
 /// `/cargo` and the stage to `/specforge`.
@@ -155,7 +155,7 @@ impl Stage {
     /// - the extension's `Cargo.lock` and the toolchain file.
     fn prepare(repo: &Path, blob: &CommittedBlob) -> Result<Stage, String> {
         let crate_dir = blob.crate_dir;
-        let dir = repo.join(format!("target/builtin-stage/{}", stage_name(blob)));
+        let dir = repo.join(format!("target/blob-stage/{}", stage_name(blob)));
         if dir.exists() {
             std::fs::remove_dir_all(&dir).map_err(|e| format!("empty {}: {e}", dir.display()))?;
         }
@@ -472,7 +472,7 @@ fn install(root: &Path, committed: &CommittedBlob, built: &Path) -> bool {
     let result = (|| -> Result<usize, String> {
         let bytes = std::fs::read(built).map_err(|e| format!("read {}: {e}", built.display()))?;
         let stage = std::fs::canonicalize(
-            root.join(format!("target/builtin-stage/{}", stage_name(committed))),
+            root.join(format!("target/blob-stage/{}", stage_name(committed))),
         )
         .map_err(|e| e.to_string())?;
         let inputs = collect_inputs(root, &stage, name, &built.with_extension("d"))?;
@@ -699,7 +699,7 @@ mod tests {
 
     #[test]
     fn a_stage_mirrors_the_repo_layout() {
-        let stage = Path::new("/r/target/builtin-stage/product");
+        let stage = Path::new("/r/target/blob-stage/product");
         assert_eq!(
             stage_key(stage, &stage.join("crates/x/src/lib.rs")),
             Some("crates/x/src/lib.rs".to_string())

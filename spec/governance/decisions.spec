@@ -934,7 +934,7 @@ decision wasm_component_runtime "All Extensions Execute as wasip2 Components" {
     (wasm32-wasip2 target) in a staged workspace that holds each crate and
     its path crates at their repo-relative paths, with the cargo home
     remapped, so a blob's bytes depend only on its sources and the
-    toolchain, never on the checkout path. `build-builtins --check` fails
+    toolchain, never on the checkout path. `build-blobs --check` fails
     when a committed blob drifts from its sources, and `--verify` rebuilds
     every blob and fails when one differs.
   """
