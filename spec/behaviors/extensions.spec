@@ -666,6 +666,7 @@ behavior resolve_registry_source "Resolve Registry Source" {
     no_registry_refused       "A name no scope_filter matches, with no default registry, is refused with R-OPS-001 before any network call"
     network_error_diagnosed   "Network errors produce ExtensionError diagnostic with retry guidance"
     registry_resolved_emitted "registry_resolved event fires on successful resolution"
+    address_from_root         "Each call goes to the registry's root, then the protocol's version prefix and the call's path; the server mounts the same routes"
   }
   contract   """
     When resolving an extension specifier with @scope/name format, the
@@ -679,6 +680,9 @@ behavior resolve_registry_source "Resolve Registry Source" {
     name: the system MUST refuse with R-OPS-001, naming the scope, before
     any network call, and MUST NOT ask another registry. add, update and
     publish choose the registry for a name by this one rule (ADR 0045).
+    Every call MUST go to the configured registry's root followed by the
+    protocol's version prefix (/v1) and the call's path; the server MUST
+    mount the same routes (ADR 0075).
     Network errors MUST produce an ExtensionError diagnostic with retry guidance.
   """
   verify unit "scope-specific registry queried for matching scope"
@@ -688,7 +692,8 @@ behavior resolve_registry_source "Resolve Registry Source" {
   verify unit "a fetch requests the name and version it was given, from the registry it was given"
   verify unit "a name no registry serves is refused with R-OPS-001 before any request"
   verify integration "the registry server answers every call in the JSON its client reads"
-  verify contract "Resolve Registry Source: registry source resolution holds — registries_configured_fired, registry_client_available, scope_routed, default_fallback_used, no_registry_refused, network_error_diagnosed, registry_resolved_emitted"
+  verify unit "every call goes to its address under the registry's root, where the server mounts it"
+  verify contract "Resolve Registry Source: registry source resolution holds — registries_configured_fired, registry_client_available, scope_routed, default_fallback_used, no_registry_refused, network_error_diagnosed, registry_resolved_emitted, address_from_root"
 }
 
 behavior search_registry "Search Registry" {
@@ -900,11 +905,17 @@ behavior check_registry_reply "Check Registry Reply" {
     manifest_fails_closed  "A missing or unreadable served manifest is refused with R-OPS-004, never read as declaring no peers"
     peers_from_manifest    "The peers the served declaration declares are the ones the ADR-0001 diamond gate checks"
     declaration_matches    "A binary whose declaration differs from the served one is refused with R-TRUST-004 naming the first differing category"
+    answer_from_registry   "A 404 without the protocol's NOT_FOUND error, and a wasm_url that is neither an http or https URL nor a path at the registry's root, are refused with R009: no registry gave that answer"
   }
   contract   """
     A reply that isn't the registry protocol's JSON for the request (a
     publisher signature that isn't one among them) MUST be refused (R009)
     before anything else is checked: no flag accepts it.
+    A 404 is the registry's "not found" only when it carries the protocol's
+    NOT_FOUND error; a 404 without it (an address no registry serves, such as
+    a url that isn't the registry's root) MUST be refused with R009, not
+    reported as a missing package. A wasm_url MUST be an http or https URL or
+    a path at the registry's root.
     Before a registry package's signature is checked or its key pinned,
     the system MUST refuse the reply when it describes another package or
     version than the one requested, or when its manifest does: the
@@ -921,6 +932,8 @@ behavior check_registry_reply "Check Registry Reply" {
     A refused reply pins no key and installs nothing.
   """
   verify unit "a reply that is not the protocol's JSON is refused with R009, even with --allow-unsigned"
+  verify unit "a 404 without the protocol's NOT_FOUND error is R009, not package not found"
+  verify unit "a download URL is an http or https URL or a path at the registry's root, else R009"
   verify integration "a reply for another package is refused and pins nothing"
   verify integration "a manifest that cannot be read is refused and pins nothing"
   verify integration "the peers the served manifest declares reach the package"
@@ -1049,11 +1062,16 @@ behavior configure_registries "Configure Registries" {
     no_registries_diagnosed       "Empty registries configuration produces I003 info diagnostic"
     no_hardcoded_urls             "No registry URLs are compiled-in constants in compiler source"
     registries_configured_emitted "registries_configured event fires after all entries are parsed"
+    root_urls                     "Each entry's url is the registry's root: an http or https URL with no query, fragment or user info, not ending in the protocol's version prefix /v1; another is refused with E067 naming the root"
+    unreadable_entry_refused      "An entry that can't be read refuses every registry operation with E067 before any request: no other registry serves its names"
   }
   contract   """
     At startup, the compiler MUST parse the registries array from
     specforge.json into RegistryConfig entries. Each entry MUST have an
-    alias (unique identifier), url, and optional scope_filter array.
+    alias (unique identifier) and a url naming the registry's root (an http
+    or https URL with no query, fragment or user info; the client adds the
+    protocol's version prefix /v1, and a url ending in it is refused with
+    E067 naming the root), and MAY have a scope_filter.
     When resolving extension specifiers, scope_filter MUST route @scope/
     prefixed specifiers to the matching registry. A configuration with no
     registries array, or with no entry marked `default_registry: true`,
@@ -1068,8 +1086,11 @@ behavior configure_registries "Configure Registries" {
     extensions and local .wasm files MUST install with no registry
     configured. First-use MUST NOT require network access — registries are
     opt-in configuration, and first use is always local/offline per P8.
-    The diagnostics of reading the registries array (E067, W140, I003) are
-    shown by an operation only once it has asked a registry: an add of an
+    An entry that can't be read (E067) refuses every registry operation
+    before any request, so no other registry serves the names its
+    scope_filter claims. The other diagnostics of reading the registries
+    array (W140, I003) are shown by an operation only once it has asked a
+    registry: an add of an
     exact version already installed asks none and shows none; a dry run of
     a registry package asks its registry for the package's manifest and
     shows them.
@@ -1085,7 +1106,9 @@ behavior configure_registries "Configure Registries" {
   verify unit "builtins and local .wasm files install with no registry configured"
   verify unit "no registry URL on the specforge.dev domain is compiled into non-test source"
   verify unit "an operation shows the registry configuration's diagnostics once it has asked a registry"
-  verify contract "Configure Registries: registry configuration holds — specforge_json_parsed, filesystem_available, registry_entries_created, scope_filters_set, no_registries_diagnosed, no_hardcoded_urls, registries_configured_emitted"
+  verify unit "a registry url is the registry's root, and one ending in the protocol's version prefix is refused with E067 naming the root"
+  verify unit "a registries entry that can't be read refuses every registry operation with E067 before any request"
+  verify contract "Configure Registries: registry configuration holds — specforge_json_parsed, filesystem_available, registry_entries_created, scope_filters_set, no_registries_diagnosed, no_hardcoded_urls, registries_configured_emitted, root_urls, unreadable_entry_refused"
 }
 
 // ── Registry Authentication ──────────────────────────────────

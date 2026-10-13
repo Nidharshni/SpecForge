@@ -41,7 +41,7 @@ impl World {
     /// One registry, `acme`, serving `@acme`.
     fn acme() -> Self {
         Self::with(serde_json::json!([
-            { "alias": "acme", "url": "memory://acme", "scope_filter": "@acme" }
+            { "alias": "acme", "url": "https://acme.invalid", "scope_filter": "@acme" }
         ]))
     }
 
@@ -292,8 +292,8 @@ fn a_corrupt_signing_key_is_refused_with_e074_before_any_request() {
 )]
 fn publish_asks_the_registry_fetch_asks() {
     let world = World::with(serde_json::json!([
-        { "alias": "acme", "url": "memory://acme", "scope_filter": "@acme" },
-        { "alias": "main", "url": "memory://main", "default_registry": true }
+        { "alias": "acme", "url": "https://acme.invalid", "scope_filter": "@acme" },
+        { "alias": "main", "url": "https://main.invalid", "default_registry": true }
     ]));
     let registry = world.registry(Some("t"));
     let acme = pkg("@acme/x", "1.0.0");

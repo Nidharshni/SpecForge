@@ -103,12 +103,11 @@ fn name(text: &str) -> specforge_package::PackageName {
 }
 
 const ACME_AND_MAIN: &str = r#"[
-    {"alias":"acme","url":"https://acme.example/v1","scope_filter":"@acme"},
-    {"alias":"main","url":"https://main.example/v1","default_registry":true}
+    {"alias":"acme","url":"https://acme.example","scope_filter":"@acme"},
+    {"alias":"main","url":"https://main.example","default_registry":true}
 ]"#;
 
-const ACME_ONLY: &str =
-    r#"[{"alias":"acme","url":"https://acme.example/v1","scope_filter":"@acme"}]"#;
+const ACME_ONLY: &str = r#"[{"alias":"acme","url":"https://acme.example","scope_filter":"@acme"}]"#;
 
 #[specforge_test(
     behavior = "resolve_registry_source",
@@ -136,7 +135,7 @@ fn a_name_no_scope_matches_goes_to_the_default_registry() {
 
     // A registry that is both scoped and the default serves the rest too.
     let both = configured_with(
-        r#"[{"alias":"all","url":"https://a.example/v1","scope_filter":"@acme","default_registry":true}]"#,
+        r#"[{"alias":"all","url":"https://a.example","scope_filter":"@acme","default_registry":true}]"#,
     );
     assert_eq!(
         both.registry_for(&name("@other/tool")).unwrap().alias,
@@ -170,8 +169,8 @@ fn a_name_no_registry_serves_is_refused_with_r_ops_001() {
 #[test]
 fn the_first_entry_of_a_scope_serves_it() {
     let found = configured_with(
-        r#"[{"alias":"one","url":"https://1.example/v1","scope_filter":"@acme"},
-            {"alias":"two","url":"https://2.example/v1","scope_filter":"@acme"}]"#,
+        r#"[{"alias":"one","url":"https://1.example","scope_filter":"@acme"},
+            {"alias":"two","url":"https://2.example","scope_filter":"@acme"}]"#,
     );
 
     assert_eq!(
@@ -225,8 +224,8 @@ fn named_is_the_alias_given_else_the_default() {
 fn the_configuration_is_reported_once_the_registry_is_asked() {
     let dir = project(
         r#"{"name": "p", "extensions": [], "registries": [
-            {"alias": "main", "url": "memory://local", "default_registry": true},
-            {"alias": "main", "url": "memory://other"}
+            {"alias": "main", "url": "https://local.invalid", "default_registry": true},
+            {"alias": "main", "url": "https://other.invalid"}
         ]}"#,
     );
     let registry = ConfiguredRegistry::for_project(
@@ -243,4 +242,31 @@ fn the_configuration_is_reported_once_the_registry_is_asked() {
     let reported = registry.reported();
     let reported: Vec<&str> = reported.iter().map(|d| d.code.as_str()).collect();
     assert!(reported.contains(&"W140"), "{reported:?}");
+}
+
+#[specforge_test(
+    behavior = "configure_registries",
+    verify = "registries parsed from specforge.json"
+)]
+fn an_entry_that_cannot_be_read_serves_no_name() {
+    let dir = project(
+        r#"{"name":"p","version":"0.1.0","extensions":[],"registries":[
+            {"alias":"acme","url":5,"scope_filter":"@acme"},
+            {"alias":"main","url":"https://main.example","default_registry":true}
+        ]}"#,
+    );
+
+    let refused = configured(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        "add",
+    )
+    .map(|found| {
+        found
+            .registry_for(&name("@acme/tool"))
+            .map(|r| r.alias.clone())
+    })
+    .unwrap_err();
+
+    assert_eq!(refused.code, "E067");
+    assert!(refused.message.contains("index 0"), "{}", refused.message);
 }

@@ -59,7 +59,7 @@ fn name(text: &str) -> PackageName {
 )]
 fn the_adapter_requests_these_paths() {
     let served = serving(&["1.4.0", "2.0.0-beta.1"]);
-    let dir = project_with(&default_registry(served.url()));
+    let dir = project_with(&default_registry(served.root().as_str()));
     let registry = ConfiguredRegistry::for_project(
         &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
         "add",
@@ -120,7 +120,7 @@ fn the_adapter_asks_no_registry_for_a_name_none_serves() {
     let served = serving(&["1.0.0"]);
     let dir = project_with(&format!(
         r#"{{"alias":"acme","url":"{}","scope_filter":"@acme"}}"#,
-        served.url()
+        served.root().as_str()
     ));
     let registry = ConfiguredRegistry::for_project(
         &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
@@ -148,7 +148,7 @@ fn the_registry_is_chosen_once() {
     // One default registry: the adapter chooses it, and the client fetches
     // from it (§3 R4).
     let served = serving(&["1.0.0"]);
-    let dir = project_with(&default_registry(served.url()));
+    let dir = project_with(&default_registry(served.root().as_str()));
     let home = User::at(dir.path().join("home"), None);
     let registry = ConfiguredRegistry::for_project(
         &specforge_common::ProjectRoot::of(dir.path()).unwrap(),

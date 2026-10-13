@@ -237,7 +237,7 @@ catalog! {
         "`specforge new --extension` couldn't write the project: creating a directory or writing one of the generated files failed. Check permissions and free space at the destination, remove the partial project, and retry.";
     E067: Error core,
         "Invalid registry configuration",
-        "The registry configuration in `specforge.json` can't be read: the file isn't valid JSON, `registries` isn't an array, or an entry at the reported index is missing a required field or has the wrong type. That part of the configuration is ignored. Fix the reported entry.";
+        "The registry configuration in `specforge.json` can't be read: the file isn't valid JSON, `registries` isn't an array, or an entry at the reported index is missing a required field, has the wrong type, or has a `url` that isn't a registry's root (an `http` or `https` URL with no query, fragment or user name; write `https://registry.example`, not `https://registry.example/v1`: SpecForge adds the protocol's `/v1`). No registry is asked while an entry can't be read, so a package whose scope that entry serves never goes to another registry. Fix the reported entry.";
     E068: Error core,
         "Coverage gate without a coverage figure",
         "`specforge analyze --min N` (and `specforge.analyze`'s `min`) gates on proof coverage, which the `coverage` pass of `@specforge/testing` computes. Either that pass will not run (the extension isn't enabled, or the run selects a different pass), and the analysis is refused before any pass runs; or it ran and gave no figure this specforge reads (it failed, or `@specforge/testing` is a different version), and the run is unjudged. Enable it with `specforge add @specforge/testing`, run the `coverage` (or `all`) pass, and keep the extension at the version this specforge ships. The run exits 2.";
@@ -474,7 +474,7 @@ catalog! {
         "A request to the registry failed at the network level. Check the network connection and the registry URL.";
     R006: Error core,
         "Package version not found",
-        "The registry answered 404 for the package or version. Check the package name and version.";
+        "The registry answered that it has no such package or version (HTTP 404 with the registry protocol's NOT_FOUND error). Check the package name and version.";
     R007: Error core,
         "Version already published",
         "`specforge publish` tried to publish a version that already exists for the package, and published versions are immutable. Bump the version in the manifest and publish again.";
@@ -483,7 +483,7 @@ catalog! {
         "The registry read the request and refused it (HTTP 400), naming its reason and code: for a publish, a package that isn't signed or whose signature isn't one or doesn't verify over the uploaded binary and manifest (INVALID_SIGNATURE), a binary that isn't a Wasm module, or a manifest that isn't an extension declaration or names another package. Nothing was stored, and the version can still be published. Fix what the message names and try again; sending the same request again is refused the same way.";
     R009: Error core,
         "Registry reply unreadable",
-        "The registry answered with a body that isn't the JSON the registry protocol defines for that request, such as a publisher signature that isn't an Ed25519 signature object, or a publish receipt that describes another upload than the one sent. The registry is broken, or the URL isn't a SpecForge registry. Nothing is installed and no key is pinned, and `--allow-unsigned` doesn't accept such a package. Check the registry.";
+        "The registry's answer isn't one the registry protocol defines for that request: a body that isn't the request's JSON (such as a publisher signature that isn't an Ed25519 signature object, or a publish receipt that describes another upload than the one sent), a 404 without the protocol's NOT_FOUND error (no registry serves that address: the configured `url` isn't a SpecForge registry's root), or a download URL that is neither an `http`/`https` URL nor a path at the registry's root. The registry is broken, or the URL isn't a SpecForge registry's root. Nothing is installed and no key is pinned, and `--allow-unsigned` doesn't accept such a package. Check the registry and its `url` in `specforge.json`.";
     R010: Error core,
         "Registry token variable not set",
         "The registry's credential is a reference to an environment variable (`specforge login --token-env`, or a `token_env` entry in `~/.specforge/credentials.json`) that isn't set, or is blank, where the command runs. Set it, or log in again with another source.";

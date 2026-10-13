@@ -7,7 +7,7 @@ use std::time::Duration;
 use axum::extract::{Request, State};
 use axum::middleware::Next;
 use axum::response::Response;
-use specforge_registry_wire::PackageMetadata;
+use specforge_registry_wire::{PackageMetadata, RegistryRoot};
 use tempfile::TempDir;
 
 use crate::db::PackageVersion;
@@ -18,7 +18,7 @@ use crate::{auth, handlers};
 /// dropped. It runs on its own runtime: create and drop it outside an async context (a `#[test]`, not a
 /// `#[tokio::test]`; those drive `handlers::router` with `oneshot`).
 pub struct LocalRegistry {
-    url: String,
+    root: RegistryRoot,
     token: String,
     state: Arc<AppState>,
     requests: Arc<Mutex<Vec<String>>>,
@@ -66,11 +66,11 @@ impl LocalRegistry {
         ));
 
         let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("a free local port");
-        let url = format!(
-            "http://{}{}",
-            listener.local_addr().expect("a bound address"),
-            specforge_registry_wire::path::PREFIX
-        );
+        let root = RegistryRoot::parse(&format!(
+            "http://{}",
+            listener.local_addr().expect("a bound address")
+        ))
+        .expect("a local address is a registry root");
         listener
             .set_nonblocking(true)
             .expect("a non-blocking listener");
@@ -85,7 +85,7 @@ impl LocalRegistry {
         });
 
         LocalRegistry {
-            url,
+            root,
             token,
             state,
             requests,
@@ -95,9 +95,9 @@ impl LocalRegistry {
         }
     }
 
-    /// The base URL, as `specforge.json` names a registry: `http://127.0.0.1:{port}/v1`.
-    pub fn url(&self) -> &str {
-        &self.url
+    /// The registry's root, as `specforge.json` names it: `http://127.0.0.1:{port}`.
+    pub fn root(&self) -> &RegistryRoot {
+        &self.root
     }
 
     /// A bearer token it accepts for publishing (no scope, a day's expiry).
@@ -107,7 +107,7 @@ impl LocalRegistry {
 
     /// The `registries` value naming this registry as the default, alias `local`.
     pub fn config_entry(&self) -> serde_json::Value {
-        serde_json::json!([{ "alias": "local", "url": self.url, "default_registry": true }])
+        serde_json::json!([{ "alias": "local", "url": self.root.as_str(), "default_registry": true }])
     }
 
     /// Store `metadata` and `wasm` as a published version, past the publish checks (signature, magic bytes,

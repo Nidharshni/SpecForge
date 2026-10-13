@@ -64,7 +64,10 @@ port RegistryClient {
   direction outbound
   category  "io/registry"
   // The transport to a package registry (ADR 0044): it chooses no registry
-  // and checks no reply. Its adapters are the HTTP client (production) and
+  // and checks no reply. Each call goes to the registry's root, the protocol's
+  // version prefix and the call's path (specforge_registry_wire::address); an
+  // answer no registry gives (a 404 without the protocol's NOT_FOUND error) is
+  // R009, not a missing package. Its adapters are the HTTP client (production) and
   // the in-memory client (tests); both keep one contract suite.
   // A read carries the credential the user keeps for the registry, when
   // there is one; a download carries it only to the registry's own origin.

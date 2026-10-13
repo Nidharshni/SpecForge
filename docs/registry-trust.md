@@ -12,12 +12,15 @@ registries it trusts in `specforge.json`:
 ```json
 {
   "registries": [
-    { "alias": "main", "url": "https://registry.example.com/v1", "default_registry": true },
-    { "alias": "acme", "url": "https://extensions.acme.internal/v1", "scope_filter": "@acme" }
+    { "alias": "main", "url": "https://registry.example.com", "default_registry": true },
+    { "alias": "acme", "url": "https://extensions.acme.internal", "scope_filter": "@acme" }
   ]
 }
 ```
 
+- `url` is the registry's root: SpecForge adds the protocol's `/v1` to every
+  request. A url ending in `/v1`, or one that isn't an `http`/`https` URL, is refused with
+  [E067](diagnostics.md#e067), and so is every registry operation while any entry can't be read.
 - A package whose scope matches an entry's `scope_filter` comes from that
   registry; every other package comes from the entry marked
   `default_registry`.
@@ -66,7 +69,7 @@ it can only replay previously signed packages (see [residual risks](#residual-ri
 | Binary declares other than the served declaration | **Always refused** ([R-TRUST-004](diagnostics.md#r-trust-004)), naming the first category that differs |
 | Package unsigned | Refused. `--allow-unsigned` accepts the risk explicitly |
 | Signature doesn't verify (tampered wasm/manifest) | **Always refused** ([R-TRUST-002](diagnostics.md#r-trust-002)): `--allow-unsigned` does not bypass a broken signature |
-| Registry answer isn't the protocol's JSON (e.g. a signature that isn't one) | **Always refused** ([R009](diagnostics.md#r009)), before any key is pinned |
+| Registry answer isn't the protocol's (e.g. a signature that isn't one, or a 404 without the protocol's NOT_FOUND error: the url isn't a registry's root) | **Always refused** ([R009](diagnostics.md#r009)), before any key is pinned |
 | Key differs from the pinned key | Refused with both key ids; interactive re-pin offered (`y/N`); `--yes` accepts non-interactively for CI |
 | Key differs from the key `specforge.lock` records (no pin of yours) | Refused like a pinned key change, naming `specforge.lock`; `--yes` or a yes at the prompt accepts it |
 | `known-keys.json` can't be read | **Always refused** ([R-TRUST-006](diagnostics.md#r-trust-006)); the file is never overwritten |
