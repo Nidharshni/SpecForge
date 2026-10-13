@@ -80,19 +80,26 @@ behavior create_user "Create User" {
 
 | To | Edge Type | Meaning |
 |----|-----------|---------|
-| `invariant` | `references` | "This behavior depends on these invariants holding true" |
-| `type` | `uses_type` | "This behavior uses these type definitions" (via `types` field) |
-| `port` | `uses_port` | "This behavior uses these port interfaces" (via `ports` field) |
-| `event` | `produces` | "This behavior emits these events on success" |
-| `ref` | `links_to` | "This behavior links to these external references" |
+| `event` | `BehaviorConsumesEvent` | "This behavior consumes these events" (via `consumes` field) |
+| `invariant` | `BehaviorEnforcesInvariant` | "This behavior enforces these invariants" (via `invariants` field) |
+| `feature` | `BehaviorImplementsFeature` | "This behavior implements these features" (via `features` field) |
+| `event` | `BehaviorProducesEvent` | "This behavior emits these events" (via `produces` field) |
+| `type` | `BehaviorReferencesType` | "This behavior uses these types" (via `types` field) |
+| `behavior` | `BehaviorRefinesBehavior` | "This behavior refines these behaviors" (via `refines` field) |
+| `property` | `BehaviorSatisfiesProperty` | "This behavior satisfies these properties" (via `satisfies` field) |
+| `port` | `BehaviorUsesPort` | "This behavior uses these ports" (via `ports` field) |
 
 ### Incoming edges
 
 | From | Edge Type | Meaning |
 |------|-----------|---------|
-| `feature` | `implements` | "This behavior is part of this feature" |
-| `constraint` | `constrains` | "This quality requirement applies to this behavior" |
-| `event` | `consumes` | "This behavior is triggered by this event" |
+| `behavior` | `BehaviorRefinesBehavior` | "Behaviors that refine this behavior" (via `refines` field) |
+| `constraint` | `ConstraintConstrainsBehavior` | "Constraints that constrain this behavior" (via `constrains` field) |
+| `constraint` | `ConstraintEnforcedByBehavior` | "Constraints that are enforced by this behavior" (via `enforced_by` field) |
+| `failure_mode` | `FailureModeAffectsBehavior` | "Failure modes that affect this behavior" (via `affected_behaviors` field) |
+| `milestone` | `MilestoneIncludesBehavior` | "Milestones that deliver this behavior" (via `behaviors` field) |
+| `refinement` | `RefinementRefinesAbstract` | "Refinements that map from this behavior" (via `abstract_entity` field) |
+| `refinement` | `RefinementRefinesConcrete` | "Refinements that map to this behavior" (via `concrete_entity` field) |
 
 ## Validation Rules
 
@@ -161,14 +168,21 @@ Each behavior should describe **one logical operation**. If a behavior has multi
 
 | Direction | Entity | Edge | Meaning |
 |-----------|--------|------|---------|
-| outgoing | [invariant](invariant.md) | `references` | Invariants this behavior depends on |
-| outgoing | [event](event.md) | `produces` | Events this behavior emits |
-| outgoing | [type](type.md) | `uses_type` | Type definitions this behavior uses |
-| outgoing | [port](port.md) | `uses_port` | Port interfaces this behavior uses |
-| outgoing | [ref](ref.md) | `links_to` | External references linked to this behavior |
-| incoming | [feature](feature.md) | `implements` | Features that include this behavior |
-| incoming | [event](event.md) | `consumes` | Events that trigger this behavior |
-| incoming | [constraint](constraint.md) | `constrains` | Quality requirements that apply to this behavior |
+| outgoing | [event](event.md) | `BehaviorConsumesEvent` | Events this behavior consumes |
+| outgoing | [invariant](invariant.md) | `BehaviorEnforcesInvariant` | Invariants this behavior enforces |
+| outgoing | [feature](feature.md) | `BehaviorImplementsFeature` | Features this behavior implements |
+| outgoing | [event](event.md) | `BehaviorProducesEvent` | Events this behavior emits |
+| outgoing | [type](type.md) | `BehaviorReferencesType` | Types this behavior uses |
+| outgoing | [behavior](behavior.md) | `BehaviorRefinesBehavior` | Behaviors this behavior refines |
+| outgoing | `property` | `BehaviorSatisfiesProperty` | Properties this behavior satisfies |
+| outgoing | [port](port.md) | `BehaviorUsesPort` | Ports this behavior uses |
+| incoming | [behavior](behavior.md) | `BehaviorRefinesBehavior` | Behaviors that refine this behavior |
+| incoming | [constraint](constraint.md) | `ConstraintConstrainsBehavior` | Constraints that constrain this behavior |
+| incoming | [constraint](constraint.md) | `ConstraintEnforcedByBehavior` | Constraints that are enforced by this behavior |
+| incoming | [failure_mode](failure-mode.md) | `FailureModeAffectsBehavior` | Failure modes that affect this behavior |
+| incoming | [milestone](milestone.md) | `MilestoneIncludesBehavior` | Milestones that deliver this behavior |
+| incoming | `refinement` | `RefinementRefinesAbstract` | Refinements that map from this behavior |
+| incoming | `refinement` | `RefinementRefinesConcrete` | Refinements that map to this behavior |
 
 ## Examples
 

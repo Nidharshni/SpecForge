@@ -71,7 +71,14 @@ term invariant_violation "Invariant Violation" {
 
 ## Relationships
 
-Term entities participate in the graph via `TermSeeAlso` edges, which are **navigation-only** — they model cross-references between terms for discovery and browsing, but do not carry traceability semantics. The `see_also` field creates `TermSeeAlso` edges (term→term) in the graph, enabling tools to build term relationship maps.
+Term entities participate in the graph via two edge types. `TermReferencesRelatedTerm` (term→term, from the `see_also` field) is **navigation-only** — it models cross-references between terms for discovery and browsing, but carries no traceability semantics, and enables tools to build term relationship maps. `TermBelongsToModule` (term→module, from the `module` field) places a term in a module's bounded context.
+
+| To | Edge Type | Meaning |
+|----|-----------|---------|
+| `module` | `TermBelongsToModule` | "This term belongs to this module" (via `module` field) |
+| `term` | `TermReferencesRelatedTerm` | "This term cross-references these terms" (via `see_also` field) |
+
+Both edges are declared by `@specforge/product`.
 
 Terms are documentation aids. Their edges support navigation and consistency checking (e.g., unreferenced term detection via I010), not dependency tracking or coverage computation.
 
@@ -79,7 +86,7 @@ Terms are documentation aids. Their edges support navigation and consistency che
 
 | Code | Level | Rule |
 |------|-------|------|
-| I010 | info | Term not referenced by any other term via `TermSeeAlso` (unreferenced term). |
+| I010 | info | Term not referenced by any other term via `see_also` (unreferenced term). |
 
 ## Design Guidance
 
@@ -121,9 +128,9 @@ This prevents confusion when someone says "behavioral contract" in a meeting and
 
 > **Alias uniqueness:** Keep aliases unique across all terms (case-insensitive), and don't reuse another term's entity ID as an alias, so the same word never resolves to two definitions. The compiler doesn't check this.
 
-### TermSeeAlso Edge Scope
+### TermReferencesRelatedTerm Edge Scope
 
-The `see_also` field accepts `EntityId[]` — references to any entity kind — and all references pass E001 resolution. However, only **term-to-term** references produce `TermSeeAlso` graph edges. References to non-term entities (behaviors, invariants, decisions, etc.) are documentation-only: they validate at compile time but create no graph edge.
+The `see_also` field accepts `EntityId[]` — references to any entity kind — and all references pass E001 resolution. However, only **term-to-term** references produce `TermReferencesRelatedTerm` graph edges. References to non-term entities (behaviors, invariants, decisions, etc.) are documentation-only: they validate at compile time but create no graph edge.
 
 This is by design. Terms are navigation aids for vocabulary consistency, not dependency-tracking nodes. Cross-kind edges from terms would pollute dependency analysis, cycle detection, and graph traversal with non-structural relationships.
 
@@ -132,7 +139,7 @@ term committed_write "Committed Write" {
   definition "A write that has been acknowledged and durably persisted."
   see_also [data_persistence, create_user]
   //        ^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^
-  //        term → TermSeeAlso edge    behavior → documentation-only (no edge)
+  //        term → TermReferencesRelatedTerm edge    behavior → documentation-only (no edge)
 }
 ```
 
@@ -153,7 +160,7 @@ Terms can live in any `.spec` file, but by convention they should be in `terms.s
 
 ## Related Entities
 
-Terms participate in the graph via navigation-only `TermSeeAlso` edges (term→term). The `see_also` field creates these edges for discovery and browsing, but they carry no traceability semantics. The `refs` field links to external references (e.g., `[gh.issue:42]`) via the `links_to` edge.
+Terms participate in the graph via the navigation-only `TermReferencesRelatedTerm` edge (term→term, from the `see_also` field), which carries no traceability semantics, and place themselves in a module with `TermBelongsToModule`. The `refs` field links to external references (e.g., `[gh.issue:42]`) but creates no graph edge.
 
 ## Examples
 

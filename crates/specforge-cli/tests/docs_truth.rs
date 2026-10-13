@@ -332,7 +332,6 @@ fn tables(text: &str) -> Vec<(usize, Vec<String>, Vec<(usize, Vec<String>)>)> {
 /// kinds, `Creates `X` edges` names a declared label, and an extension's edge
 /// heading counts its declared labels.
 #[test]
-#[ignore = "fixed by T12"]
 fn the_entity_docs_name_declared_edge_types() {
     let edges = declared_edges();
     let root = repo_root();
