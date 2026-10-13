@@ -473,14 +473,16 @@ type McpFormatResult {
   changed_files string[]
   total_checked integer
   /// The verdict specforge format exits by (0 when true): every file read and
-  /// written, no region left unformatted, and under check no file that would change.
+  /// written, no region left unformatted, specforge.json used as written (no
+  /// E069), and under check no file that would change.
   ok            boolean
   /// True only when every file was read and is in canonical form: no change,
   /// no failure, no region left unformatted.
   all_clean     boolean
   /// The call did not write (check or diff).
   check_only    boolean
-  /// W141 per configuration file used, W142 per region kept verbatim.
+  /// E069 per problem in a specforge.json the run went around, then W141 per
+  /// configuration file used, W142 per region kept verbatim.
   diagnostics   Diagnostic[]
   /// The files that would change, before and after.
   diffs         FormatDiff[]       @optional
@@ -858,13 +860,16 @@ type McpStrandedEntity "An entity a removal strands" {
 }
 
 type McpMigrateResult "A migration: what it ran or previewed, or that nothing was pending" {
-  /// No file failed and nothing was rolled back: the verdict specforge migrate exits by.
+  /// No file failed, nothing was rolled back and specforge.json is used as written:
+  /// the verdict specforge migrate exits by.
   ok                       boolean
   /// Some file was behind to_version; when false nothing else ran.
   pending                  boolean
   /// The oldest format version among the project's files.
   from_version             string
   to_version               string
+  /// One E069 per problem in specforge.json the run went around; any makes ok false.
+  diagnostics              Diagnostic[]
   /// The migrated files are on disk now.
   migrated                 boolean
   dry_run                  boolean

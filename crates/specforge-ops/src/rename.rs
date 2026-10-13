@@ -101,12 +101,27 @@ impl RenamePlan {
 /// each file read through the navigator. A rename is all or nothing: one
 /// that cannot see every token (a file it cannot read, or whose text no
 /// longer spells the ID where the graph says) is refused, rather than
-/// guessing or leaving a reference behind.
+/// guessing or leaving a reference behind. Refused with `config_invalid`
+/// when the compile's `specforge.json` does not say which files are the
+/// project's sources
+/// ([`ConfigProblem::blocks_rewrites`](specforge_common::ConfigProblem::blocks_rewrites)).
 pub fn plan<F: Fn(&str) -> Option<String>>(
     nav: &Navigator<'_, F>,
     old_id: &str,
     new_id: &str,
 ) -> Result<RenamePlan, OpError> {
+    // A rename rewrites the project's sources: a config that does not say
+    // which files they are refuses it, from the compile's problems (as
+    // `remove` refuses from them, ADR 0015 M5), before anything is planned.
+    if let Some(problem) = nav
+        .view()
+        .env()
+        .config_problems()
+        .iter()
+        .find(|problem| problem.blocks_rewrites())
+    {
+        return Err(crate::config::refusal(problem));
+    }
     validate_id(new_id)?;
     let graph = nav.view().graph();
     if graph.node(old_id).is_none() {
@@ -251,12 +266,18 @@ mod tests {
     }
 
     fn project(files: &[(&str, &str)]) -> (tempfile::TempDir, specforge_project::CompiledProject) {
-        let dir = tempfile::tempdir().unwrap();
-        std::fs::write(
-            dir.path().join("specforge.json"),
+        project_with_config(
             r#"{"name":"r","extensions":["@specforge/software"]}"#,
+            files,
         )
-        .unwrap();
+    }
+
+    fn project_with_config(
+        config: &str,
+        files: &[(&str, &str)],
+    ) -> (tempfile::TempDir, specforge_project::CompiledProject) {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("specforge.json"), config).unwrap();
         for (name, text) in files {
             std::fs::write(dir.path().join(name), text).unwrap();
         }
@@ -278,6 +299,33 @@ mod tests {
 
     const LIMIT: &str = "invariant session_limit \"Limit\" {\n  guarantee \"x\"\n}\n";
     const LOGIN: &str = "behavior login \"Login\" {\n  invariants [session_limit]\n}\n";
+
+    #[specforge_test(
+        behavior = "rename_entity_id",
+        verify = "a rename is refused when specforge.json does not say which files are the project's sources"
+    )]
+    fn a_config_that_hides_the_sources_refuses_the_rename() {
+        let hiding = r#"{"name":"r","extensions":["@specforge/software"],"spec_root":["spec"]}"#;
+        let (dir, project) = project_with_config(hiding, &[("limit.spec", LIMIT)]);
+        let read = |f: &str| std::fs::read_to_string(dir.path().join(f)).ok();
+        let refused = plan(&nav(&project, read), "session_limit", "session_cap").unwrap_err();
+        assert_eq!(refused.code, "config_invalid");
+        assert!(
+            refused.message.contains("\"spec_root\""),
+            "{}",
+            refused.message
+        );
+        // The refusal wins over a bad name.
+        let read = |f: &str| std::fs::read_to_string(dir.path().join(f)).ok();
+        let refused = plan(&nav(&project, read), "session_limit", "1 bad").unwrap_err();
+        assert_eq!(refused.code, "config_invalid");
+
+        // A problem the plan goes around plans as usual.
+        let around = r#"{"name":7,"extensions":["@specforge/software"]}"#;
+        let (dir, project) = project_with_config(around, &[("limit.spec", LIMIT)]);
+        let read = |f: &str| std::fs::read_to_string(dir.path().join(f)).ok();
+        assert!(plan(&nav(&project, read), "session_limit", "session_cap").is_ok());
+    }
 
     #[test]
     fn a_plan_renames_the_declaration_and_every_reference() {

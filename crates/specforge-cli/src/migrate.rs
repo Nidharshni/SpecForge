@@ -65,7 +65,12 @@ impl Args {
             dry_run,
             no_backup,
         };
-        let outcome = migrate::run(&request, Some(runtime));
+        let outcome = match migrate::run(&request, Some(runtime)) {
+            Ok(outcome) => outcome,
+            // A config that does not say which files are the sources or
+            // which extensions load: nothing was read or written.
+            Err(error) => return Refusal::of(format).report(terminal, &error),
+        };
         // Each migrated file and each backup (none for a dry run).
         let written = (!dry_run).then(|| outcome.writes.names_under(path));
         print_migration(&outcome.document(), written, format, terminal);
@@ -157,6 +162,9 @@ fn print_migration(
                 for d in &document.diffs {
                     outln!(terminal, "{}", d.unified_text);
                 }
+            }
+            for d in &document.diagnostics.0 {
+                errln!(terminal, "{}[{}]: {}", d.severity, d.code, d.message);
             }
 
             errln!(
