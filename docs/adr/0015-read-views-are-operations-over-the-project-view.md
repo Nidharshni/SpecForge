@@ -106,6 +106,9 @@ has one coverage-row presenter (`tools::coverage::row_json`) and one gap present
   reads it.
   *(ADR 0067: it records the versioned schema with its content hash, after a successful export of any
   format; every reader versions against the record through `SchemaCache::version`.)*
+  *(Round 8 plan 11: every document that names a schema version names the view's versioned schema's: the
+  export in every format, schema attached or not, trace, the model, and the graph an extension command
+  receives. No output carries a hand-kept version constant: `SCHEMA_VERSION = "0.1.0"` is gone.)*
 - **D11. Trace errors are typed**: `TraceError::EntityNotFound { entity_id, near }` replaces the
   emitter error that carried `E003: …` in its message for MCP to re-parse. It converts to an
   `OpError` E003 with a did-you-mean; the CLI prints `error[E003]: …` with a help line.

@@ -82,6 +82,15 @@ Amended by plan 15 (round 5): a number argument reads as above (its wording is
 `<name> must be a number, got <value>`, not `normalize_arg`'s, which has no number type), and a graph
 resource reads a count in its query by the same rule and wording.
 
+Amended by plan 11 (round 8): an operation's refusal names its argument through the tool spec. Each core tool
+declares which argument each refusal code of its operations is about (`CoreTool::REFUSAL_ARGUMENTS`), and the
+dispatcher names it on the refusal its handler returns; a debug build fails an `invalid_input` refusal that
+names none. The five per-tool mechanisms (by code, by a `data` key, by kind, by variant, every refusal) are
+gone, and an operation writes no argument name in its refusal's `data` (the spelling is the surface's, ADR 0029
+D2). Refusals that shared a code have their own (`unknown_severity`, `unknown_lint_profile`,
+`source_root_outside_root`). A surface that parses its own argument through an ops helper (`render`'s `format`,
+`infer_session`'s `action`) still names it where it reads it, as D2's argument reading does.
+
 ## What would reopen it
 
 A second crate that needs the derive (it moves out of `specforge-mcp`'s namespace), an MCP revision

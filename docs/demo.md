@@ -47,7 +47,7 @@ Undo the typo. `specforge format` keeps the files in one layout.
 
 ```console
 $ specforge export --format context
-{"schema_version":"0.1.0","nodes":[{"id":"add_item","kind":"behavior","title":"Add an item to the cart","contract":"Adding a named item puts it in the cart once","verify":[...]}, ...],"edges":[...]}
+{"schema_version":"1.0.0","nodes":[{"id":"add_item","kind":"behavior","title":"Add an item to the cart","contract":"Adding a named item puts it in the cart once","verify":[...]}, ...],"edges":[...]}
 ```
 
 About 800 bytes for the whole project: the contracts, the obligations and

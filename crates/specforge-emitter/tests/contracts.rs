@@ -229,7 +229,7 @@ fn context_contract_includes_contracts_and_verify_omits_prose() {
     let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
 
     // schema_version_present
-    assert_eq!(parsed["schema_version"], "0.1.0");
+    assert_eq!(parsed["schema_version"], "1.0.0");
 
     // token_optimized_output: contract, status and verify kept; the prose
     // description and source locations left out.
@@ -290,7 +290,7 @@ fn graph_format_contract_finalized_graph_produces_full_output() {
     let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
 
     // schema_version_present
-    assert_eq!(parsed["schema_version"], "0.1.0");
+    assert_eq!(parsed["schema_version"], "1.0.0");
 
     // full_fidelity_output: every node with every field and its location,
     // every edge.

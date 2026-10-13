@@ -9,8 +9,6 @@ use specforge_graph::Graph;
 use specforge_registry::RegistryBuild;
 use std::collections::{BTreeMap, BTreeSet, HashSet, VecDeque};
 
-use specforge_emitter::SCHEMA_VERSION;
-
 use crate::OpError;
 use crate::plan::PlanGap;
 use crate::view::ProjectView;
@@ -178,6 +176,9 @@ pub enum Target<'t> {
 #[derive(Debug)]
 pub struct TraceOutcome {
     pub chains: Vec<TraceChain>,
+    /// The project's versioned schema version, as `specforge export` and
+    /// `specforge schema` state it.
+    schema_version: String,
     /// One entity was traced (else every one).
     single: bool,
 }
@@ -186,13 +187,13 @@ impl Serialize for TraceOutcome {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match (self.single, self.chains.first()) {
             (true, Some(chain)) => ChainDocument {
-                schema_version: SCHEMA_VERSION,
+                schema_version: self.schema_version.clone(),
                 chain,
             }
             .serialize(serializer),
             _ => {
                 let mut doc = serializer.serialize_struct("TraceAll", 2)?;
-                doc.serialize_field("schema_version", SCHEMA_VERSION)?;
+                doc.serialize_field("schema_version", &self.schema_version)?;
                 doc.serialize_field("traces", &self.chains)?;
                 doc.end()
             }
@@ -205,7 +206,7 @@ impl Serialize for TraceOutcome {
 /// downstream, missing}`.
 #[derive(Debug, Serialize, Shape)]
 pub struct ChainDocument<C> {
-    pub schema_version: &'static str,
+    pub schema_version: String,
     #[serde(flatten)]
     pub chain: C,
 }
@@ -215,12 +216,13 @@ impl TraceOutcome {
     /// (`None` for a trace of every entity).
     pub fn into_chain(self) -> Option<ChainDocument<TraceChain>> {
         let single = self.single;
+        let schema_version = self.schema_version;
         self.chains
             .into_iter()
             .next()
             .filter(|_| single)
             .map(|chain| ChainDocument {
-                schema_version: SCHEMA_VERSION,
+                schema_version,
                 chain,
             })
     }
@@ -300,6 +302,7 @@ impl From<TraceError> for OpError {
 pub fn trace(view: &ProjectView, target: Target) -> Result<TraceOutcome, TraceError> {
     let expectations = TraceExpectations::of(view.registries());
     let graph = view.graph();
+    let schema_version = view.versioned_schema().version().to_string();
     match target {
         Target::Entity(entity_id) => {
             let chain = chain(graph, entity_id, &expectations).ok_or_else(|| {
@@ -314,6 +317,7 @@ pub fn trace(view: &ProjectView, target: Target) -> Result<TraceOutcome, TraceEr
             })?;
             Ok(TraceOutcome {
                 chains: vec![chain],
+                schema_version,
                 single: true,
             })
         }
@@ -326,6 +330,7 @@ pub fn trace(view: &ProjectView, target: Target) -> Result<TraceOutcome, TraceEr
             chains.sort_by(|a, b| a.entity_id.cmp(&b.entity_id));
             Ok(TraceOutcome {
                 chains,
+                schema_version,
                 single: false,
             })
         }

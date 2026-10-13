@@ -23,7 +23,6 @@ pub mod schema;
 pub use dot::DotOptions;
 pub use emit::{EmitFormat, EmitOptions, document_schema, emit};
 pub use error::EmitterError;
-pub use json::SCHEMA_VERSION;
 pub use publish::publish;
 pub use schema::{
     GraphProtocolSchema, SchemaEdgeType, SchemaEntityKind, SchemaExtensionInfo, SchemaField,

@@ -97,7 +97,8 @@ fn every_format_schema_scope_and_budget_renders_as_today() {
                 let unbudgeted = EmitOptions {
                     format,
                     scope,
-                    schema: with_schema.then_some(&schema),
+                    schema: &schema,
+                    attach_schema: with_schema,
                     field_registry: Some(&fields),
                     ..Default::default()
                 };
