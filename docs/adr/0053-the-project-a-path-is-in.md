@@ -19,7 +19,8 @@ the LSP and format.
   `specforge.json`. The compile, the session open, the environment load, add, update, format, migrate and the
   registry configuration take a `ProjectRoot`, never a raw path, so no surface can choose its own rule;
   `project_root_of`, `find_project_root`, `is_project_root` and `enclosing_project_root` are deleted. A session
-  keeps the root it was opened at.
+  keeps the root it was opened at. *(Round 9, plan 11: a project's sources end at a nested project, so the project a source is in is
+  the project that compiles it; ADR 0080.)*
 - **D2. Only `specforge.json` marks a project.** `specforge.spec` carries no configuration; as a marker it made
   a configless project inside the real one. It is a source like any other.
 - **D3. No project above a path: a loose root.** The path's own directory, with the default configuration;

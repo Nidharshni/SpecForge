@@ -125,3 +125,14 @@ file is read, in every mode; every other problem is an E069 first among the outc
 gains one condition: `Outcome::ok()` also requires every config the run read to be used as written (no E069), so
 `format --check` fails on a config `check` fails on; `all_clean` stays a fact about formatting. Migrate's sources
 are selected in `specforge_ops::migrate` and handed to `specforge_migrate::migrate_project`.
+
+## Amendment: a project's sources end at a nested project (2026-10-13, architecture round 9, plan 11)
+
+D3's "so naming a project never reaches its fixtures" did not hold for a project whose spec root is its root:
+`ProjectConfig::spec_files` entered nested projects, so `specforge format` and `format .` formatted their files,
+even those their own `exclude` left out. The sources now end at every nested project (ADR 0080):
+- a run with no paths, or naming a project, formats that project's sources only;
+- a walk of a directory that is no project takes the sources of each project it reaches, and not those of
+  projects nested in them.
+
+`ProjectConfig::spec_files` is `ProjectConfig::sources(root).files()`.
