@@ -34,6 +34,7 @@ mod format_corpus;
 mod init;
 mod inspect_views;
 mod installed_extensions;
+mod isolation;
 mod mcp;
 mod mcp_add;
 #[allow(deprecated)]
