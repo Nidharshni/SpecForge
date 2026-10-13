@@ -166,6 +166,31 @@ mod tests {
     use super::*;
 
     #[test]
+    fn every_committed_wasm_is_listed() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+        let out = Command::new("git")
+            .args(["ls-files", "-z", "*.wasm"])
+            .current_dir(&root)
+            .output()
+            .expect("git runs");
+        assert!(out.status.success(), "git ls-files failed");
+        let tracked: std::collections::BTreeSet<String> = String::from_utf8(out.stdout)
+            .unwrap()
+            .split('\0')
+            .filter(|path| !path.is_empty())
+            .map(str::to_string)
+            .collect();
+        let listed: std::collections::BTreeSet<String> = specforge_component::committed::COMMITTED
+            .iter()
+            .map(|blob| blob.repo_path())
+            .collect();
+        assert_eq!(
+            tracked, listed,
+            "git tracks these .wasm files; list each in specforge_component::committed"
+        );
+    }
+
+    #[test]
     fn refuses_when_cargo_target_dir_is_set() {
         let err = preflight(Path::new("/nowhere/repo"), true).unwrap_err();
         assert!(err.contains("CARGO_TARGET_DIR"), "{err}");

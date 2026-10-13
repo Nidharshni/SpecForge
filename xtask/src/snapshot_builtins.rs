@@ -1,24 +1,20 @@
-//! Pins the wire declaration of every builtin and of the SDK greet fixture:
-//! the exact bytes each blob answers to `__handshake` and to `__describe`
-//! for every category the protocol defines, written to
+//! Pins the wire declaration of every committed SDK blob: the exact bytes each
+//! answers to `__handshake` and to `__describe` for every category the protocol
+//! defines, written to
 //! `crates/specforge-component/tests/declarations/<dir>/{handshake,describe_<category>}.json`.
 //!
 //! The files are generated, never edited: they are the golden wire fixtures
 //! `crates/specforge-component/tests/declarations.rs` compares every blob
-//! against, byte for byte. Re-run after a change that is meant to change a
-//! declaration (re-vendor first), and review the diff:
+//! against, byte for byte. The list of blobs is
+//! `specforge_component::committed::COMMITTED`. Re-run after a change that is
+//! meant to change a declaration (re-vendor first), and review the diff:
 //!
 //!   cargo run -p xtask --bin snapshot-builtins            write every snapshot
 //!   cargo run -p xtask --bin snapshot-builtins -- --check fail if any differs (no write)
 
 use specforge_component::ComponentRuntime;
-use specforge_component::builtins::BUILTIN_EXTENSIONS;
-use specforge_protocol_types::{DeclaredCategory, PROTOCOL_VERSION};
-use specforge_wasm::runtime::{WasmCallResult, WasmRuntime};
-use std::path::Path;
-
-/// The SDK fixture pinned beside the builtins, under the directory `greet`.
-const GREET: (&str, &str) = ("@sdk/greet", "fixtures/greet-extension/greet.wasm");
+use specforge_component::committed::{COMMITTED, snapshots, wire_answers};
+use specforge_wasm::runtime::WasmRuntime;
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -30,33 +26,18 @@ fn main() {
             std::process::exit(2);
         }
     };
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .expect("xtask lives in the workspace root");
-    let out = root.join("crates/specforge-component/tests/declarations");
-
+    let out = snapshots();
     let runtime = ComponentRuntime::new();
-    let mut extensions: Vec<(String, String)> = Vec::new();
-    for (name, bytes) in BUILTIN_EXTENSIONS {
-        if let Err(e) = runtime.load(name, bytes) {
-            eprintln!("[fail]   {name}: {e}");
-            std::process::exit(1);
-        }
-        let dir = name.rsplit('/').next().unwrap_or(name).to_string();
-        extensions.push((name.to_string(), dir));
-    }
-    let greet = std::fs::read(root.join(GREET.1))
-        .unwrap_or_else(|e| panic!("cannot read {}: {e}", GREET.1));
-    if let Err(e) = runtime.load(GREET.0, &greet) {
-        eprintln!("[fail]   {}: {e}", GREET.0);
-        std::process::exit(1);
-    }
-    extensions.push((GREET.0.to_string(), "greet".to_string()));
-
     let mut failed = false;
-    for (name, dir) in &extensions {
+    for blob in COMMITTED.iter().filter(|blob| blob.is_sdk()) {
+        let dir = blob.snapshot_dir();
+        if let Err(e) = runtime.load(blob.name, &blob.read()) {
+            eprintln!("[fail]   {}: {e}", blob.name);
+            failed = true;
+            continue;
+        }
         let dir_path = out.join(dir);
-        let answers = match wire_answers(&runtime, name) {
+        let answers = match wire_answers(&runtime, blob) {
             Ok(answers) => answers,
             Err(e) => {
                 eprintln!("[fail]   {dir}: {e}");
@@ -66,8 +47,10 @@ fn main() {
         };
         let stale: Vec<&str> = answers
             .iter()
-            .filter(|(file, bytes)| std::fs::read(dir_path.join(file)).ok().as_ref() != Some(bytes))
-            .map(|(file, _)| file.as_str())
+            .filter(|answer| {
+                std::fs::read(dir_path.join(&answer.file)).ok().as_ref() != Some(&answer.bytes)
+            })
+            .map(|answer| answer.file.as_str())
             .collect();
         if check {
             if stale.is_empty() {
@@ -80,9 +63,9 @@ fn main() {
         }
         std::fs::create_dir_all(&dir_path)
             .unwrap_or_else(|e| panic!("cannot create {}: {e}", dir_path.display()));
-        for (file, bytes) in &answers {
-            let path = dir_path.join(file);
-            std::fs::write(&path, bytes)
+        for answer in &answers {
+            let path = dir_path.join(&answer.file);
+            std::fs::write(&path, &answer.bytes)
                 .unwrap_or_else(|e| panic!("cannot write {}: {e}", path.display()));
         }
         println!(
@@ -96,45 +79,5 @@ fn main() {
             eprintln!("declaration snapshots are stale: cargo run -p xtask --bin revendor");
         }
         std::process::exit(1);
-    }
-}
-
-/// Every wire answer of `extension`, as (file name, exact bytes): its
-/// handshake, then its describe answer for each category the protocol defines.
-fn wire_answers(
-    runtime: &ComponentRuntime,
-    extension: &str,
-) -> Result<Vec<(String, Vec<u8>)>, String> {
-    let request = serde_json::json!({
-        "host_version": PROTOCOL_VERSION,
-    });
-    let mut answers = vec![(
-        "handshake.json".to_string(),
-        answer(runtime, extension, "__handshake", &request)?,
-    )];
-    for category in DeclaredCategory::ALL {
-        let category = category.name();
-        let request = serde_json::json!({ "category": category });
-        answers.push((
-            format!("describe_{category}.json"),
-            answer(runtime, extension, "__describe", &request)?,
-        ));
-    }
-    Ok(answers)
-}
-
-fn answer(
-    runtime: &ComponentRuntime,
-    extension: &str,
-    export: &str,
-    request: &serde_json::Value,
-) -> Result<Vec<u8>, String> {
-    let input = serde_json::to_vec(request).expect("requests serialize");
-    match runtime.call_export(extension, export, &input) {
-        WasmCallResult::Ok(bytes) => Ok(bytes),
-        WasmCallResult::Trap(trap) => Err(format!(
-            "{export} {request}: {}: {}",
-            trap.kind, trap.message
-        )),
     }
 }

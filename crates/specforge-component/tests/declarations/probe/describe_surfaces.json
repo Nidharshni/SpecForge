@@ -1,0 +1,72 @@
+{
+  "category": "surfaces",
+  "items": [
+    {
+      "commands": [
+        {
+          "args": [
+            {
+              "arg_type": "integer",
+              "description": "A port the host listens on",
+              "name": "port",
+              "required": false
+            }
+          ],
+          "description": "Try every capability and report what was granted",
+          "export": "cmd__probe",
+          "id": "probe",
+          "sandbox": {
+            "fs_read": true,
+            "fs_write": true,
+            "network": true
+          },
+          "title": "Probe the sandbox"
+        },
+        {
+          "args": [],
+          "description": "Panic",
+          "export": "cmd__trap",
+          "id": "trap",
+          "title": "Trap"
+        }
+      ],
+      "mcp_resources": [
+        {
+          "description": "Try every capability and report what was granted",
+          "export": "mcp__probe_resource",
+          "mime_type": "application/json",
+          "name": "probe-resource",
+          "sandbox": {
+            "fs_read": true,
+            "fs_write": true,
+            "network": true
+          },
+          "uri_template": "specforge://ext/probe/{dir}"
+        }
+      ],
+      "mcp_tools": [
+        {
+          "description": "Try every capability and report what was granted",
+          "export": "mcp__probe_tool",
+          "input_schema": {
+            "properties": {
+              "dir": {
+                "type": "string"
+              },
+              "port": {
+                "type": "integer"
+              }
+            },
+            "type": "object"
+          },
+          "name": "probe.tool",
+          "sandbox": {
+            "fs_read": true,
+            "fs_write": true,
+            "network": true
+          }
+        }
+      ]
+    }
+  ]
+}

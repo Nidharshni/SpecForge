@@ -28,7 +28,7 @@ proc-macro2 = { version = "1", features = ["span-locations"] }
 strsim = { workspace = true }
 syn = { version = "2", features = ["full", "visit"] }
 walkdir = { workspace = true }
-specforge-component = { path = "../crates/specforge-component" }
+specforge-component = { path = "../crates/specforge-component", features = ["testing"] }
 serde = "1.0"
 specforge-emitter = { path = "../crates/specforge-emitter" }
 specforge-installed = { path = "../crates/specforge-installed" }
