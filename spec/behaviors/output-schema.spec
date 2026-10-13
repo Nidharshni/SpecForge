@@ -501,6 +501,9 @@ behavior publish_schema_specification "Publish Schema Specification" {
     exactly by SpecForge's own. An export of a project whose check reports
     no error MUST validate against the published schema of its format.
     Each format's document has its own $id.
+    A node of every format MAY carry coverage_status (covered, partial
+    or uncovered), the status a query with coverage gives each entity;
+    the published schema of every format admits it.
     The published schema describes the export format --format names
     (graph, context or brief; json is graph). --format applies only with
     --publish, and --kind cannot be combined with --publish: either is
@@ -520,6 +523,7 @@ behavior publish_schema_specification "Publish Schema Specification" {
   verify integration "this repository's and its example projects' exports validate against their published schemas"
   verify unit "the published schema is the export document's schema narrowed by the project"
   verify unit "the published schema uses only keywords the in-repo checker reads"
+  verify unit "the published schema of every format admits a node's coverage_status"
   verify contract "Publish Schema Specification: schema specification publication holds — schema_version_computed_fired, validation_complete_fired, valid_json_schema_produced, all_kinds_described, third_party_usable, render_complete_emitted"
   verify unit "description includes version"
 }

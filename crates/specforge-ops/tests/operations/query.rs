@@ -317,7 +317,6 @@ fn queried(project: &Project, entity: &str, format: Format, include_coverage: bo
     behavior = "query_graph_multi_resolution",
     verify = "a query with --include-coverage validates against the published schema of its format"
 )]
-#[ignore = "fixed by T2"]
 fn a_query_with_coverage_conforms_to_the_published_schema() {
     use specforge_common::shape::{unchecked_keywords, violations};
     let project = covered();
@@ -342,7 +341,6 @@ fn a_query_with_coverage_conforms_to_the_published_schema() {
     behavior = "query_graph_multi_resolution",
     verify = "--include-coverage gives each entity its coverage status"
 )]
-#[ignore = "fixed by T2"]
 fn a_query_with_coverage_is_the_export_with_one_key_per_node() {
     let project = covered();
     for format in [Format::Graph, Format::Context, Format::Brief] {

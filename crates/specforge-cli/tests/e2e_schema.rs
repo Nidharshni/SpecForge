@@ -683,8 +683,13 @@ fn schema_publish_describes_the_requested_format() {
         brief["properties"]
             .as_object()
             .map(|o| o.keys().cloned().collect::<Vec<_>>()),
-        Some(vec!["id".into(), "kind".into(), "title".into()]),
-        "brief schema exposes exactly id/kind/title"
+        Some(vec![
+            "coverage_status".into(),
+            "id".into(),
+            "kind".into(),
+            "title".into()
+        ]),
+        "brief schema exposes exactly id/kind/title and the optional coverage_status"
     );
 }
 

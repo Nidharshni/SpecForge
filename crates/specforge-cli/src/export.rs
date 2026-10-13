@@ -75,6 +75,7 @@ impl Args {
                 _ => export::Schema::Default,
             },
             schema_version: self.schema_version.as_deref(),
+            coverage: None,
         }
     }
 

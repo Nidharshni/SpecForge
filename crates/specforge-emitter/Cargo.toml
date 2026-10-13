@@ -18,6 +18,8 @@ specforge-registry = { workspace = true }
 specforge-protocol-types = { path = "../specforge-protocol-types" }
 specforge-diagnostics = { path = "../specforge-diagnostics" }
 specforge-common = { path = "../specforge-common" }
+# A node's coverage status (`Verdict::status`): pure, no I/O (ADR 0004 D1-d).
+specforge-coverage = { path = "../specforge-coverage" }
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true

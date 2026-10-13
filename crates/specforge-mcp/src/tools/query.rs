@@ -29,10 +29,10 @@ pub struct Args {
 }
 
 /// `specforge.query`'s reply: the export document of the requested format
-/// (ADR 0007), its nodes optionally carrying `coverage_status`. Its schema
-/// is the emitter's derived document schemas plus that key
-/// ([`specforge_ops::query::document_schema`]); the document itself reaches
-/// MCP as the text the emitter wrote.
+/// (ADR 0007), its nodes carrying `coverage_status` when asked. Its schema
+/// is the emitter's derived document schemas
+/// ([`specforge_ops::query::document_schema`]); the document reaches MCP as
+/// the text the emitter wrote, read once into the structured result.
 #[derive(Debug, Serialize)]
 #[serde(transparent)]
 pub struct Reply(Value);
