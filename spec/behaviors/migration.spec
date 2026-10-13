@@ -135,7 +135,9 @@ behavior migrate_spec_files_in_place "Migrate Spec Files In Place" {
     migration with config_invalid, dry run included, and nothing is written.
     Each other problem is one E069 in the migration document's diagnostics
     and makes ok false; the migration still runs. The preview and the
-    migration rewrite the same sources.
+    migration rewrite the same sources: the project's sources
+    (resolve_use_imports), so a nested project's files are its own
+    project's to migrate.
   """
   verify integration "migrate --format json lists each migrated file and its backup in files_written"
   verify integration "migrate --format json prints the migration document specforge.migrate answers, with files_written"

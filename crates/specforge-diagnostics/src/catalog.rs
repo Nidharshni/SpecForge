@@ -147,7 +147,7 @@ catalog! {
         "An entity block uses a kind keyword that neither the core grammar nor any installed extension declares. Install the extension that provides the keyword, or fix a typo in the kind name.";
     E025: Error core,
         "Import resolution failed",
-        "Either a `.spec` file discovery found can't be read (not UTF-8, no permission): it is named, left out of the graph, and an import of it reports nothing more; or a `use` import names no source of the project: no `.spec` file by that path under the spec root that discovery keeps. A file an `exclude` entry leaves out, one under a skipped directory (`target`, `build`, ...), one above the spec root and one whose name differs only in case are no source. Fix the import path or the `exclude` entry; a `did you mean` suggestion is included when a close match exists.";
+        "Either a `.spec` file discovery found can't be read (not UTF-8, no permission): it is named, left out of the graph, and an import of it reports nothing more; or a `use` import names no source of the project: no `.spec` file by that path under the spec root that discovery keeps. A file an `exclude` entry leaves out, one under a skipped directory (`target`, `build`, ...), one inside a nested project (a directory below the spec root holding its own `specforge.json`), one above the spec root and one whose name differs only in case are no source. Fix the import path or the `exclude` entry; a `did you mean` suggestion is included when a close match exists.";
     E026: Error core,
         "Entity kind registration conflict",
         "Two extensions register the same entity kind keyword; the first registration wins and the later one is rejected. Rename the conflicting kind keyword.";

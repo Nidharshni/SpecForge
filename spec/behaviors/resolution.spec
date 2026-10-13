@@ -36,7 +36,8 @@ behavior resolve_use_imports "Resolve Use Imports" {
     index.spec names the directory. Paths compare exactly, whatever the
     case rules of the file system. An import that names no source MUST
     produce E025: no file by that path, a file an exclude entry leaves
-    out, one under a skipped directory, one inside a symlinked
+    out, one under a skipped directory, one inside a nested project, one
+    inside a symlinked
     directory, and one above the spec root (whichever step of the
     cascade names it) are all no source. An @scope/name import names an
     extension (I004 when it is not installed). A .spec file discovery
@@ -62,8 +63,12 @@ behavior resolve_use_imports "Resolve Use Imports" {
     a glob pattern) is ignored, and specforge.json reports it (E069).
     A file under a skipped directory (target, node_modules, .git, .hg,
     dist, build) inside the spec root is not compiled either, on every
-    surface; the spec root itself is read whatever its own name. Only
-    files are sources: a directory named like a .spec file is none, and
+    surface; the spec root itself is read whatever its own name and
+    whatever it holds. A directory below the spec root that holds
+    specforge.json is a nested project: no file inside it is a source of
+    this project, on every surface (check, watch, the LSP, MCP, format,
+    migrate, rename), an editor buffer of one included, and no import
+    names it; its own project compiles it. Only files are sources: a directory named like a .spec file is none, and
     a symlink is a source only when it resolves to a file, read through
     the link wherever it points and keyed by its own path; a symlinked
     directory is never entered.

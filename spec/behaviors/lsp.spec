@@ -110,7 +110,8 @@ behavior document_open_close "Document Open/Close" {
     its open document set. The buffer is no longer the truth for its
     file: a project source MUST be compiled from the file on disk again
     (unsaved edits are dropped), and any other file (outside the spec root,
-    excluded, or any file when no project is open) MUST leave the project.
+    excluded, inside a nested project, or any file when no project is
+    open) MUST leave the project.
     While a document is open its buffer is the truth for its file,
     whatever happens to the file on disk, its deletion included (the
     session holds it, hold_editor_buffers).

@@ -189,7 +189,6 @@ fn the_formatter_layer_survives_another_documents_publish() {
     );
 }
 
-#[ignore = "fixed by T2"]
 #[specforge_test_macros::test(
     behavior = "document_open_close",
     verify = "a document in a nested project is no source of the workspace project and gets none of its diagnostics"

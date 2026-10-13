@@ -535,7 +535,6 @@ fn excluded_files_stay_out_of_the_compile_and_the_session() {
     behavior = "resolve_use_imports",
     verify = "a nested project's files are not compiled, an editor buffer of one included"
 )]
-#[ignore = "fixed by T2"]
 fn a_nested_projects_files_are_not_compiled() {
     let dir = project(
         CONFIG,

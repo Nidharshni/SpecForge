@@ -1193,7 +1193,6 @@ fn a_repeated_rename_changes_nothing() {
     );
 }
 
-#[ignore = "fixed by T2"]
 #[specforge_test(
     behavior = "provide_mcp_rename_tool",
     verify = "rename never edits a nested project's files"

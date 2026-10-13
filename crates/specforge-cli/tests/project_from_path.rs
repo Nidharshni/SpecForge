@@ -456,7 +456,6 @@ fn a_file_path_names_the_project_it_is_in() {
     assert_eq!(stderr, project_stderr);
 }
 
-#[ignore = "fixed by T2"]
 #[specforge_test(
     behavior = "locate_project_root",
     verify = "a file in a nested project is checked by its own project and by no project above it"

@@ -336,7 +336,6 @@ fn files_at_target_version_are_skipped() {
     );
 }
 
-#[ignore = "fixed by T2"]
 #[specforge_test(
     behavior = "migrate_spec_files_in_place",
     verify = "migrate leaves a nested project's files alone"

@@ -5,7 +5,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::Exclude;
+use crate::{Exclude, ProjectRoot};
 
 /// Directories never entered below a walked root: build artifacts,
 /// dependency trees, and VCS internals. A walked root is entered whatever
@@ -32,7 +32,8 @@ pub struct Walked {
 /// - a directory below `root` for which `stop` holds is not entered but is
 ///   listed in [`Walked::stopped`].
 ///
-/// No `exclude` entry applies here; a project's sources are [`SourceRoot`].
+/// No `exclude` entry and no project boundary applies here; a project's
+/// sources are [`SourceRoot`].
 pub fn walk_spec_files(root: &Path, mut stop: impl FnMut(&Path) -> bool) -> Walked {
     let mut stopped: Vec<PathBuf> = Vec::new();
     let mut files: Vec<PathBuf> = walkdir::WalkDir::new(root)
@@ -85,9 +86,12 @@ fn is_source_entry(ft: std::fs::FileType, path: &Path) -> bool {
 /// sources" ([`Self::files`]), "which are at this path" ([`Self::files_at`])
 /// and "is this one of them" ([`Self::holds`]).
 ///
-/// The walk enters the spec root whatever its own name, and below it enters
-/// no [`SKIP_DIRS`] directory and no symlink. Only files are sources, a
-/// symlink only when it resolves to a file.
+/// The walk enters the spec root whatever its own name and whatever it
+/// holds, and below it enters no [`SKIP_DIRS`] directory, no symlink, and no
+/// directory that holds `specforge.json`: that directory is a nested
+/// project, whose files are its own project's sources and none of this
+/// one's (ADR 0080). Only files are sources, a symlink only when it
+/// resolves to a file.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SourceRoot {
     dir: PathBuf,
@@ -109,7 +113,7 @@ impl SourceRoot {
     /// reaches under the spec root that no `exclude` entry leaves out (the
     /// project's `specforge.json` `exclude`, ADR 0055 D7).
     pub fn files(&self) -> Vec<PathBuf> {
-        walk_spec_files(&self.dir, |_| false)
+        walk_spec_files(&self.dir, ProjectRoot::is_root)
             .files
             .into_iter()
             .filter(|path| self.keeps(path))
@@ -143,20 +147,28 @@ impl SourceRoot {
         {
             return Vec::new();
         }
-        // No directory on the way is a symlink: the walk never enters one.
+        // No directory on the way is a symlink or a nested project: the walk
+        // never enters one.
         let mut walked = self.dir.clone();
         for name in &names[..names.len() - 1] {
             walked.push(name);
-            if std::fs::symlink_metadata(&walked).is_ok_and(|m| m.file_type().is_symlink()) {
+            if std::fs::symlink_metadata(&walked).is_ok_and(|m| m.file_type().is_symlink())
+                || ProjectRoot::is_root(&walked)
+            {
                 return Vec::new();
             }
         }
         match std::fs::symlink_metadata(path) {
-            Ok(meta) if meta.file_type().is_dir() => walk_spec_files(path, |_| false)
-                .files
-                .into_iter()
-                .filter(|file| self.keeps(file))
-                .collect(),
+            Ok(meta) if meta.file_type().is_dir() => {
+                if ProjectRoot::is_root(path) {
+                    return Vec::new();
+                }
+                walk_spec_files(path, ProjectRoot::is_root)
+                    .files
+                    .into_iter()
+                    .filter(|file| self.keeps(file))
+                    .collect()
+            }
             Ok(meta)
                 if is_source_entry(meta.file_type(), path)
                     && self.holds(&relative.to_string_lossy()) =>
@@ -168,14 +180,20 @@ impl SourceRoot {
     }
 
     /// Whether `key`, a path relative to the spec root, is one [`Self::files`]
-    /// lists once the file exists: a `.spec` path inside the spec root (no
-    /// `..`, not absolute), under no [`SKIP_DIRS`] directory, that no
-    /// `exclude` entry leaves out. A surface told about one changed path
-    /// applies the walk's policy through it.
+    /// lists once the file exists:
+    /// - a `.spec` path inside the spec root (no `..`, not absolute);
+    /// - under no [`SKIP_DIRS`] directory;
+    /// - in no directory below the spec root that holds `specforge.json` now
+    ///   (it reads whether each directory on the way holds one, nothing
+    ///   else);
+    /// - not left out by an `exclude` entry.
+    ///
+    /// A surface told about one changed path applies the walk's policy
+    /// through it.
     pub fn holds(&self, key: &str) -> bool {
         use std::path::Component;
         let path = Path::new(key);
-        path.extension().is_some_and(|ext| ext == "spec")
+        let lexical = path.extension().is_some_and(|ext| ext == "spec")
             && path.parent().is_none_or(|dir| {
                 dir.components().all(|c| match c {
                     Component::Normal(name) => {
@@ -185,7 +203,13 @@ impl SourceRoot {
                     _ => false,
                 })
             })
-            && !self.exclude.excludes(path)
+            && !self.exclude.excludes(path);
+        lexical
+            && path
+                .ancestors()
+                .skip(1)
+                .filter(|dir| !dir.as_os_str().is_empty())
+                .all(|dir| !ProjectRoot::is_root(&self.dir.join(dir)))
     }
 
     /// Whether no `exclude` entry leaves out `file`, a path under the spec root.
@@ -375,14 +399,14 @@ mod tests {
             fs::write(root.join(path), text).unwrap();
         }
 
-        let walked = walk_spec_files(root, crate::ProjectRoot::is_root);
+        let walked = walk_spec_files(root, ProjectRoot::is_root);
         assert_eq!(
             walked.files,
             vec![root.join("a.spec"), root.join("q/c.spec")]
         );
         assert_eq!(walked.stopped, vec![root.join("p")]);
         // A root `stop` would hold for is still walked.
-        let inside = walk_spec_files(&root.join("p"), crate::ProjectRoot::is_root);
+        let inside = walk_spec_files(&root.join("p"), ProjectRoot::is_root);
         assert_eq!(inside.files, vec![root.join("p/b.spec")]);
     }
 
@@ -401,6 +425,11 @@ mod tests {
             "target/gen.spec",
             "drafts/d.spec",
             "archive.spec/inner.spec",
+            "nested/specforge.json",
+            "nested/n.spec",
+            "nested/deep/m.spec",
+            "sub/inner/specforge.json",
+            "sub/inner/i.spec",
         ] {
             fs::create_dir_all(root.join(path).parent().unwrap()).unwrap();
             fs::write(root.join(path), "").unwrap();
@@ -452,7 +481,6 @@ mod tests {
         tmp
     }
 
-    #[ignore = "fixed by T2"]
     #[specforge_test(
         behavior = "resolve_use_imports",
         verify = "a .spec file inside a nested project below the spec root is no source"
@@ -466,7 +494,6 @@ mod tests {
         );
     }
 
-    #[ignore = "fixed by T2"]
     #[specforge_test(
         behavior = "resolve_use_imports",
         verify = "a .spec file inside a nested project below the spec root is no source"
