@@ -23,10 +23,11 @@ pub struct GraphInputs {
     /// declares, mapped to that kind: an unresolved reference there is an
     /// I004 hint (the kind's extension isn't enabled), not an E003.
     pub absent_reference_targets: HashMap<(String, String), String>,
-    /// (kind, field) -> how a value is coerced to the field's declared
-    /// type. Applied before references resolve, so a single reference on
-    /// a reference_list field links like `field [id]`.
-    pub field_coercions: HashMap<(String, String), crate::FieldCoercion>,
+    /// (kind, field) -> the field's form, for every registered field: the
+    /// graph build stores each written value as its form coerces it, before
+    /// references resolve, so a single reference on a reference_list field
+    /// links like `field [id]`.
+    pub field_forms: HashMap<(String, String), crate::FieldForm>,
     /// Registered fields whose edges come from the type names an entity
     /// writes in its field types or method signatures (`derived_from`),
     /// sorted by kind and field.
@@ -432,7 +433,7 @@ fn link_and_diagnose(graph: &mut Graph, config: &GraphConfig) -> Vec<Diagnostic>
     let mut diagnostics = Vec::new();
 
     // Values take their declared types before anything reads them.
-    graph.coerce_field_values(&config.inputs.field_coercions);
+    graph.coerce_field_values(&config.inputs.field_forms);
 
     // Link references -> edges.
     let mut ref_diags =

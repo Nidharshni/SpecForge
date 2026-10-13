@@ -2944,6 +2944,7 @@ dependencies = [
  "serde_json",
  "specforge-common",
  "specforge-parser",
+ "specforge-protocol-types",
  "specforge-test",
  "specforge-test-macros",
  "tempfile",

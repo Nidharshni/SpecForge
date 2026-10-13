@@ -114,6 +114,16 @@ impl Definitions {
             .unwrap_or(schema)
     }
 
+    /// `root` with this document's definitions under `$defs` (no `$defs`
+    /// when there are none): what [`build`] returns, for a document whose
+    /// root is narrowed after it is derived.
+    pub fn finish(self, mut root: Value) -> Value {
+        if let (Some(object), Some(defined)) = (root.as_object_mut(), self.into_value()) {
+            object.insert("$defs".into(), defined);
+        }
+        root
+    }
+
     /// The definitions as the `$defs` object; `None` when there are none.
     fn into_value(self) -> Option<Value> {
         if self.defined.is_empty() {
@@ -138,11 +148,8 @@ impl Definitions {
 /// fresh build each call; [`document`] keeps one per type.
 pub fn build<T: Shape + ?Sized>() -> Value {
     let mut defs = Definitions::default();
-    let mut root = T::body(&mut defs);
-    if let (Some(object), Some(defined)) = (root.as_object_mut(), defs.into_value()) {
-        object.insert("$defs".into(), defined);
-    }
-    root
+    let root = T::body(&mut defs);
+    defs.finish(root)
 }
 
 /// `T`'s document ([`build`]), built on first use and kept for the life of

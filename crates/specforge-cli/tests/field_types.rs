@@ -213,7 +213,6 @@ fn a_list_on_a_string_field_is_an_error() {
     behavior = "check_field_value_types",
     verify = "a single integer, boolean or date, or a mixed list, on a list field becomes a list of strings"
 )]
-#[ignore = "fixed by 01-T3"]
 fn a_single_integer_or_a_mixed_list_on_a_list_field_is_exported_as_a_list() {
     let dir = governance_project(
         r#"decision d1 "D" {

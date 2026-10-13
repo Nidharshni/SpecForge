@@ -2,7 +2,9 @@
 
 use specforge_common::{Diagnostic, codes, find_close_match};
 
-use crate::entity::{EntityRecord, FieldRecord, ValueShape};
+use specforge_graph::ValueShape;
+
+use crate::entity::{EntityRecord, FieldRecord};
 use crate::{FieldRegistry, FieldRegistryEntry, FieldType, KindRegistry};
 
 /// E061 for every registered field whose (coerced) value can't be its
