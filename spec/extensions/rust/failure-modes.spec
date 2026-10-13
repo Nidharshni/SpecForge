@@ -31,7 +31,7 @@ failure_mode rust_proc_macro_silent_drop "Rust Proc Macro Silent Drop" {
   rpn        50
   cause      "TestGuard Drop handler fails to record result — e.g., atexit handler not registered, file write fails, or process killed before Drop"
   effect     "Test result lost — entity shows as untested in coverage report despite passing test"
-  mitigation "Atexit handler registered on first guard creation; a JSONL line is appended as each test finishes, surviving aborts; collect fails with E045 when a run leaves no report"
+  mitigation "Atexit handler registered on first guard creation writes one report per test target; a target whose process dies before exit leaves no report, so its tests reach collect only through libtest's output; collect fails with E045 when a run leaves no report"
   post_mitigation {
     severity   medium
     occurrence rare

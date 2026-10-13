@@ -25,7 +25,7 @@ fn groups_entries_by_entity_across_binaries() {
                 "target/specforge/b.json",
                 r#"{"entries":[{"entity_kind":"type","entity_id":"user","test_name":"t","file":"b.rs","duration_ms":0,"status":"skipped"}]}"#,
             ),
-            file("target/specforge/graph.json", r#"{"nodes":[]}"#),
+            file("target/specforge/notes.json", r#"{"nodes":[]}"#),
             file("target/specforge/junk.json", "not json"),
         ],
         ..CollectInput::default()

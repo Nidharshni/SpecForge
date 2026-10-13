@@ -45,14 +45,13 @@
           "type": "string",
           "description": "Source file containing the test."
         },
+        "module_path": {
+          "type": "string",
+          "description": "The test's module_path!() (my_crate::cart::tests): with test_name it names the test as libtest prints it."
+        },
         "verify": {
           "type": "string",
           "description": "The verify description this test covers, if any."
-        },
-        "verify_kind": {
-          "type": "string",
-          "description": "Kind-level traceability (C11-07): the verify statement's kind (e.g. 'unit', 'e2e') stamped from the exported graph.",
-          "enum": ["unit", "integration", "e2e", "contract", "property", "mutation", "load"]
         },
         "duration_ms": {
           "type": "integer",

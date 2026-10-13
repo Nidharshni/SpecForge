@@ -14,11 +14,6 @@ pub struct TestRecordEntry {
     pub file: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub verify: Option<String>,
-    /// Kind-level traceability (C11-07): `unit` vs `e2e` — stamped at
-    /// finalize time from the exported graph, since the spec (not the test)
-    /// declares the kind.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub verify_kind: Option<String>,
     /// Wall-clock duration in milliseconds (C11-04).
     pub duration_ms: u64,
     #[serde(rename = "status")]
