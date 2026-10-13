@@ -33,6 +33,7 @@ members = [
     "crates/specforge-cli",
     "crates/specforge-registry-server",
     "xtask",
+    "gate",
 ]
 
 [workspace.package]
