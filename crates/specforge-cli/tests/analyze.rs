@@ -1,8 +1,10 @@
 // `specforge analyze` — end-to-end tests against the real binary.
 
 use std::fs;
+use std::path::Path;
 
 use assert_cmd::Command;
+use serde_json::Value;
 use specforge_test_macros::test as specforge_test;
 use tempfile::TempDir;
 
@@ -701,14 +703,7 @@ fn analyze_orders_extension_passes_by_constraints() {
 
 #[test]
 fn analyze_prove_flags_unsatisfiable_constraint() {
-    if std::process::Command::new("z3")
-        .arg("--version")
-        .output()
-        .is_err()
-    {
-        eprintln!("z3 not installed — skipping prove e2e");
-        return;
-    }
+    crate::toolchain::require_z3();
 
     let dir = TempDir::new().unwrap();
     fs::write(
@@ -765,6 +760,7 @@ fn analyze_prove_flags_unsatisfiable_constraint() {
 
 #[test]
 fn analyze_prove_satisfiable_constraint_exits_zero() {
+    crate::toolchain::require_z3();
     let dir = TempDir::new().unwrap();
     fs::write(
         dir.path().join("specforge.json"),
@@ -818,13 +814,7 @@ fn analyze_prove_satisfiable_constraint_exits_zero() {
 fn analyze_proved_claims_discharge_verify_property_obligations() {
     // This test is a linked proof: skipping it would still record a pass,
     // so without z3 it fails instead (CI installs z3).
-    assert!(
-        std::process::Command::new("z3")
-            .arg("--version")
-            .output()
-            .is_ok_and(|o| o.status.success()),
-        "z3 is required for this test: install it (brew install z3 / apt-get install z3)"
-    );
+    crate::toolchain::require_z3();
 
     // A constraint's metric is a bound (governance), an invariant's
     // expression a claim (formal's enhancement of software's invariant).
@@ -1131,4 +1121,212 @@ fn an_event_in_a_process_is_used_and_not_w029() {
         .filter(|f| f["code"] == "W029")
         .count();
     assert_eq!(w029, 0, "participation is usage: {report}");
+}
+
+/// A project whose two bounds contradict each other (governance's metric is a bound).
+fn impossible_bounds() -> TempDir {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("specforge.json"),
+        r#"{"extensions": ["@specforge/governance"]}"#,
+    )
+    .unwrap();
+    fs::write(
+        dir.path().join("main.spec"),
+        concat!(
+            "constraint impossible \"Impossible Bounds\" {\n",
+            "  description \"Bounds that can never both hold\"\n",
+            "  category performance\n",
+            "  priority critical\n",
+            "  metric \"\"\"\n",
+            "    latency < 100ms\n",
+            "    latency > 500ms\n",
+            "  \"\"\"\n",
+            "}\n",
+        ),
+    )
+    .unwrap();
+    dir
+}
+
+/// The prove pass's report from `analyze --prove --format json` with `path` as PATH.
+fn prove_report(dir: &Path, path: &Path, extra: &[&str]) -> (Value, Option<i32>) {
+    let output = specforge_cmd()
+        .args(["analyze", "--prove", "--format", "json", "--path"])
+        .arg(dir)
+        .args(extra)
+        .env("PATH", path)
+        .output()
+        .unwrap();
+    let doc: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let prove = doc["passes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["pass"] == "prove")
+        .unwrap_or_else(|| panic!("no prove pass in {doc}"))
+        .clone();
+    (prove, output.status.code())
+}
+
+#[cfg(unix)]
+#[test]
+fn a_z3_that_does_not_run_says_why() {
+    let dir = impossible_bounds();
+    let (prove, code) = prove_report(dir.path(), &crate::toolchain::z3_broken(), &[]);
+    assert_eq!(code, Some(0));
+    assert_eq!(
+        prove["findings"][0]["message"],
+        "the SMT solver z3 does not run (`z3 --version` failed: exit status: 1): `specforge analyze --prove` skips its consistency and entailment checks"
+    );
+    assert!(prove["summary"]["solver"].is_null(), "{prove}");
+}
+
+#[cfg(unix)]
+#[specforge_test_macros::test(
+    behavior = "prove_declared_bounds_and_claims",
+    verify = "a solver that does not run is one W098, the finding doctor states, and nothing is solved"
+)]
+fn analyze_prove_without_z3_is_one_w098_and_strict_fails() {
+    let dir = impossible_bounds();
+    let (prove, code) = prove_report(dir.path(), &crate::toolchain::z3_absent(), &[]);
+    assert_eq!(code, Some(0));
+    let findings = prove["findings"].as_array().unwrap();
+    assert_eq!(findings.len(), 1, "{prove}");
+    assert_eq!(findings[0]["code"], "W098");
+    assert_eq!(
+        findings[0]["message"],
+        "the SMT solver z3 is not on PATH: `specforge analyze --prove` skips its consistency and entailment checks"
+    );
+    assert_eq!(prove["summary"]["solver_available"], false);
+
+    let (_, strict) = prove_report(dir.path(), &crate::toolchain::z3_absent(), &["--strict"]);
+    assert_eq!(strict, Some(1));
+}
+
+#[cfg(unix)]
+#[specforge_test_macros::test(
+    behavior = "prove_declared_bounds_and_claims",
+    verify = "a solver call ends at its timeout, even when the solver leaves a child process"
+)]
+fn doctor_answers_within_the_probe_timeout_when_z3_hangs() {
+    let dir = impossible_bounds();
+    let started = std::time::Instant::now();
+    let out = specforge_cmd()
+        .args(["doctor", "--format", "json", "--path"])
+        .arg(dir.path())
+        .env("PATH", crate::toolchain::z3_hung())
+        .output()
+        .unwrap();
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(15),
+        "{:?}",
+        started.elapsed()
+    );
+    let report: Value = serde_json::from_slice(&out.stdout).unwrap();
+    let toolchain = report["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["about"] == "toolchain")
+        .expect("a toolchain finding");
+    assert_eq!(toolchain["code"], "W098");
+    assert!(
+        toolchain["check"]
+            .as_str()
+            .unwrap()
+            .contains("did not answer within 5s"),
+        "{toolchain}"
+    );
+}
+
+#[cfg(unix)]
+#[specforge_test_macros::test(
+    behavior = "run_doctor_check",
+    verify = "doctor's toolchain finding is the W098 specforge analyze --prove prints"
+)]
+fn doctor_states_the_w098_analyze_prints_when_z3_is_missing() {
+    let dir = impossible_bounds();
+    let absent = crate::toolchain::z3_absent();
+    let (prove, _) = prove_report(dir.path(), &absent, &[]);
+    let w098 = &prove["findings"][0];
+
+    let out = specforge_cmd()
+        .args(["doctor", "--format", "json", "--path"])
+        .arg(dir.path())
+        .env("PATH", &absent)
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(0));
+    let report: Value = serde_json::from_slice(&out.stdout).unwrap();
+    let toolchain = report["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["about"] == "toolchain")
+        .expect("a toolchain finding");
+    assert_eq!(toolchain["code"], "W098");
+    assert_eq!(toolchain["status"], "warn");
+    assert_eq!(toolchain["check"], w098["message"]);
+    assert_eq!(toolchain["remediation"], w098["suggestion"]);
+    assert_eq!(report["z3_available"], false);
+
+    let human = specforge_cmd()
+        .args(["doctor", "--path"])
+        .arg(dir.path())
+        .env("PATH", &absent)
+        .output()
+        .unwrap();
+    let text = String::from_utf8_lossy(&human.stdout);
+    assert!(
+        text.contains("Toolchain:\n  [WARN] [W098] the SMT solver z3 is not on PATH"),
+        "{text}"
+    );
+    assert!(!text.contains("z3 not on PATH \u{2014}"), "{text}");
+}
+
+#[cfg(unix)]
+#[specforge_test_macros::test(
+    behavior = "prove_declared_bounds_and_claims",
+    verify = "specforge analyze --prove-timeout sets the solver's timeout and needs --prove"
+)]
+fn prove_timeout_stops_a_slow_solve() {
+    let dir = impossible_bounds();
+    let started = std::time::Instant::now();
+    let (prove, code) = prove_report(
+        dir.path(),
+        &crate::toolchain::z3_slow(),
+        &["--prove-timeout", "1"],
+    );
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(10),
+        "{:?}",
+        started.elapsed()
+    );
+    assert_eq!(code, Some(0));
+    let findings = prove["findings"].as_array().unwrap();
+    assert_eq!(findings.len(), 1, "{prove}");
+    assert_eq!(findings[0]["code"], "W098");
+    assert!(
+        findings[0]["message"]
+            .as_str()
+            .unwrap()
+            .starts_with("the SMT solver timed out after 1s"),
+        "{prove}"
+    );
+    assert!(
+        findings[0]["suggestion"]
+            .as_str()
+            .unwrap()
+            .contains("--prove-timeout"),
+        "{prove}"
+    );
+
+    let refused = specforge_cmd()
+        .args(["analyze", "--prove-timeout", "1", "--path"])
+        .arg(dir.path())
+        .env("PATH", crate::toolchain::z3_slow())
+        .output()
+        .unwrap();
+    assert_eq!(refused.status.code(), Some(2));
 }

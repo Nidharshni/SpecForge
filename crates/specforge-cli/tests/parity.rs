@@ -27,9 +27,11 @@
 
 use serde_json::{Map, Value, json};
 use specforge_mcp::McpServer;
+use specforge_ops::testing::ScriptedSolver;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::Arc;
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 enum Aspect {
@@ -496,6 +498,8 @@ fn cli() -> Command {
     let mut cmd = Command::new(assert_cmd::cargo_bin!("specforge"));
     // No user credentials or caches leak into the snapshots.
     cmd.env("HOME", std::env::temp_dir().join("specforge-parity-home"));
+    // And no machine toolchain: z3 runs, as the MCP side's solver says.
+    cmd.env("PATH", crate::toolchain::z3_ready());
     cmd
 }
 
@@ -519,7 +523,8 @@ fn run_mcp(scenario: &Scenario, root: &Path) -> Run {
         McpServer::with_project_root(root.to_path_buf())
     } else {
         McpServer::new()
-    };
+    }
+    .with_solver(Arc::new(ScriptedSolver::ready()));
     let init = json!({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}});
     server.handle_message(&init.to_string());
     let (tool, arguments) = (scenario.mcp)(root);
@@ -661,7 +666,7 @@ fn observe(
 
 /// `value` with the parts that churn for reasons outside this harness
 /// redacted: the embedded Graph Protocol schema (any extension change moves
-/// it), and whether z3 is installed on this machine.
+/// it).
 fn redacted(value: &Value) -> Value {
     match value {
         Value::Object(map) => Value::Object(
@@ -669,7 +674,6 @@ fn redacted(value: &Value) -> Value {
                 .map(|(k, v)| {
                     let v = match k.as_str() {
                         "schema" if v.is_object() => json!("[SCHEMA]"),
-                        "z3_available" => json!("[Z3]"),
                         _ => redacted(v),
                     };
                     (k.clone(), v)
@@ -1013,7 +1017,8 @@ fn parity_check_cache() {
 
 /// An initialized MCP server on `root`.
 fn mcp_on(root: &Path) -> McpServer {
-    let mut server = McpServer::with_project_root(root.to_path_buf());
+    let mut server = McpServer::with_project_root(root.to_path_buf())
+        .with_solver(Arc::new(ScriptedSolver::ready()));
     let init = json!({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}});
     server.handle_message(&init.to_string());
     server

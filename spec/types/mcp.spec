@@ -447,6 +447,7 @@ type McpDoctorReport {
   /// "stale" when an installed binary is missing or its hash drifted.
   cache_status    "ok" | "stale"
   installed_count integer
+  /// Whether the SMT solver z3 runs here: false exactly when a toolchain finding (W098) says why not.
   z3_available    boolean
   extensions      McpDoctorExtension[]
   /// Entity enhancements keyed by the entity kind they target.

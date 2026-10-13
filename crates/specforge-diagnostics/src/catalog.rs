@@ -660,7 +660,7 @@ catalog! {
         "`specforge analyze` read a recorded test result (in `specforge-report.json`) for an entity ID that no spec declares, so the result counts toward nothing; a `did you mean` hint names a close match when there is one. Fix the entity ID the test names, or declare the entity.";
     W098: Warning core,
         "SMT solver unavailable",
-        "The `z3` SMT solver could not be found on `PATH`, or failed to execute, so formal entailment and consistency checks during `--prove` were skipped. Install z3 (https://github.com/Z3Prover/z3) and ensure it is executable to enable these checks.";
+        "`specforge analyze --prove` could not ask the SMT solver z3 everything it had to: z3 is not on `PATH` or does not run (`specforge doctor` states the same warning as a toolchain finding), a solve ran past the timeout (`--prove-timeout`, 30 seconds by default), or z3 failed mid-run. The checks it could not answer were skipped: no bound was found contradictory and no claim was proved by them. Install z3 (https://github.com/Z3Prover/z3) and make sure `z3 --version` runs.";
     W110: Warning formal,
         "Refines non-abstract behavior",
         "A behavior's `refines` field names a target behavior that is not marked `abstract true`. Add `abstract true` to the target behavior, or point `refines` at a behavior that is actually abstract.";

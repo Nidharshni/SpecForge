@@ -55,6 +55,7 @@ mod registry;
 mod schema_cache;
 mod stats;
 mod surface_parity;
+mod toolchain;
 mod trace;
 mod watch;
 mod watch_reload;
