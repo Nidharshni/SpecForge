@@ -860,13 +860,16 @@ type McpStrandedEntity "An entity a removal strands" {
 }
 
 type McpMigrateResult "A migration: what it ran or previewed, or that nothing was pending" {
-  /// No file failed and nothing was rolled back: the verdict specforge migrate exits by.
+  /// No file failed, nothing was rolled back and specforge.json is used as written:
+  /// the verdict specforge migrate exits by.
   ok                       boolean
   /// Some file was behind to_version; when false nothing else ran.
   pending                  boolean
   /// The oldest format version among the project's files.
   from_version             string
   to_version               string
+  /// One E069 per problem in specforge.json the run went around; any makes ok false.
+  diagnostics              Diagnostic[]
   /// The migrated files are on disk now.
   migrated                 boolean
   dry_run                  boolean

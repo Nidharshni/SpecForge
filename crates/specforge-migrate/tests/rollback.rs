@@ -24,6 +24,7 @@ fn project() -> TempDir {
 fn migrated(dir: &TempDir) {
     let summary = migrate_project(
         &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        &[dir.path().join("spec/a.spec")],
         &CURRENT_FORMAT_VERSION,
         false,
         false,
@@ -100,6 +101,7 @@ fn restore_writes_back_the_texts_a_run_read_without_any_backup() {
     let dir = project();
     let summary = migrate_project(
         &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        &[dir.path().join("spec/a.spec")],
         &CURRENT_FORMAT_VERSION,
         false,
         true,
@@ -126,6 +128,7 @@ fn a_migrated_file_is_read_once() {
 
     let summary = migrate_project(
         &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        &[dir.path().join("spec/a.spec")],
         &CURRENT_FORMAT_VERSION,
         false,
         false,
@@ -140,5 +143,30 @@ fn a_migrated_file_is_read_once() {
     assert_eq!(
         summary.diffs[0].before_hash,
         format!("{:x}", sha2::Sha256::digest(OLD.as_bytes()))
+    );
+}
+
+#[specforge_test(
+    behavior = "migrate_spec_files_in_place",
+    verify = "the preview and the migration rewrite the same sources, read once"
+)]
+fn migrate_project_rewrites_only_the_sources_it_is_given() {
+    let dir = project();
+    std::fs::write(dir.path().join("spec/b.spec"), OLD).unwrap();
+    let root = specforge_common::ProjectRoot::of(dir.path()).unwrap();
+    let given = [dir.path().join("spec/a.spec")];
+
+    let summary = migrate_project(&root, &given, &CURRENT_FORMAT_VERSION, false, true);
+
+    assert_eq!(summary.results.len(), 1, "{summary:?}");
+    assert!(summary.results[0].file_path.ends_with("spec/a.spec"));
+    assert_ne!(
+        std::fs::read_to_string(dir.path().join("spec/a.spec")).unwrap(),
+        OLD
+    );
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("spec/b.spec")).unwrap(),
+        OLD,
+        "a file not handed over keeps its header"
     );
 }

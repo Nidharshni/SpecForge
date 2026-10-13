@@ -734,14 +734,16 @@ fn a_migration_writes_each_file_and_its_backup() {
     let preview = specforge_ops::migrate::run(
         &migration(&specforge_common::ProjectRoot::of(root).unwrap(), true),
         None,
-    );
+    )
+    .unwrap();
     assert!(preview.writes.is_empty());
     assert_eq!(changed_since(root, &before), Vec::<String>::new());
 
     let outcome = specforge_ops::migrate::run(
         &migration(&specforge_common::ProjectRoot::of(root).unwrap(), false),
         None,
-    );
+    )
+    .unwrap();
 
     let written = [
         ".specforge/migration.json",
@@ -771,7 +773,8 @@ fn a_rolled_back_migration_keeps_only_its_backups() {
     let outcome = specforge_ops::migrate::run(
         &migration(&specforge_common::ProjectRoot::of(root).unwrap(), false),
         Some(std::sync::Arc::new(runtime)),
-    );
+    )
+    .unwrap();
 
     assert!(outcome.rollback.is_some());
     assert_eq!(listed(&outcome.writes, root), ["old.spec.bak"]);

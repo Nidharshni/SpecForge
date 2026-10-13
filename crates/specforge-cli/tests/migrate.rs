@@ -1626,10 +1626,11 @@ fn migrate_json_lists_each_file_and_its_backup() {
 // Plan 14, T0 pins: what migrate prints today
 // ===================================================================
 
-/// `MigrationSummary` carries no `diagnostics`: nothing ever filled it (plan
-/// 14 D4), so the JSON does not claim an empty list.
+/// The migration document's `diagnostics` are the problems of `specforge.json`
+/// the run went around (plan 03): none for a usable config, but the key is
+/// there (the summary's own list stays gone, plan 14 D4).
 #[test]
-fn migrate_json_has_no_diagnostics_key() {
+fn migrate_json_diagnostics_are_the_configs_problems() {
     let tmp = TempDir::new().unwrap();
     let root = tmp.path();
     setup_project(root);
@@ -1651,7 +1652,7 @@ fn migrate_json_has_no_diagnostics_key() {
         .output()
         .unwrap();
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert!(json.get("diagnostics").is_none(), "{json}");
+    assert_eq!(json["diagnostics"], serde_json::json!([]), "{json}");
 }
 
 /// A dry-run diff labels each file with its path from the project root, so
@@ -1773,7 +1774,6 @@ fn a_format_only_migration_passes_graph_protocol_compatibility_silently() {
 /// The `0.9`-header text of a spec file, to migrate.
 const OLD: &str = "// specforge-format: 0.9\nbehavior alpha \"Alpha\" {\n}\n";
 
-#[ignore = "fixed by T3"]
 #[specforge_test(
     behavior = "migrate_spec_files_in_place",
     verify = "a specforge.json that does not say which files are the project's sources refuses the migration, dry run included, and nothing is written"
@@ -1800,7 +1800,6 @@ fn migrate_refuses_a_config_that_does_not_say_which_files_are_its_sources() {
     }
 }
 
-#[ignore = "fixed by T3"]
 #[specforge_test(
     behavior = "migrate_spec_files_in_place",
     verify = "a problem in specforge.json the migration goes around is an E069 in its document and fails it"

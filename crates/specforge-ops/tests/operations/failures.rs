@@ -228,6 +228,7 @@ fn hooks_run_for_the_project_a_sub_path_is_in() {
             },
             Some(runtime.clone()),
         )
+        .unwrap()
         .hooks_invoked
     };
 

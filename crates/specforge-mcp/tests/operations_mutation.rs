@@ -2333,7 +2333,6 @@ fn format_check_reports_a_config_problem_it_goes_around() {
     assert_eq!(parsed["diagnostics"][0]["code"], "E069", "{parsed}");
 }
 
-#[ignore = "fixed by T3"]
 #[specforge_test(
     behavior = "provide_mcp_migrate_tool",
     verify = "a specforge.json that does not say which files are the project's sources fails the call as config_invalid and writes nothing"

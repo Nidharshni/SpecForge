@@ -372,15 +372,21 @@ behavior provide_mcp_migrate_tool "Provide MCP Migrate Tool" {
     MUST report the hooks run, the structural differences found, and
     whether the migration was rolled back. The result (and a failed call's
     data) MUST carry ok, the verdict specforge migrate exits by: false when
-    a file failed to migrate or the migration was rolled back. A failed
+    a file failed to migrate, the migration was rolled back, or
+    specforge.json has a problem the run went around (E069, in
+    diagnostics). A failed
     migration's error names its cause: a migration hook that failed
     (internal_error), a migrated project whose graph changed (W054) or that
     does not compile (compilation_failed), or files that could not be
-    migrated (schema_mismatch); its data is the migration document. A path
+    migrated or a specforge.json not used as written (config_invalid,
+    schema_mismatch); its data is the migration document. A path
     naming a directory that is no project
     MUST be migrated as specforge migrate migrates it. A project with nothing to
     migrate MUST be reported as already at the target version, without
     running hooks or validation.
+    A specforge.json that does not say which files are the project's
+    sources or which extensions it loads MUST fail the call as
+    config_invalid before any file is read, writing nothing.
   """
   verify unit "specforge.migrate applies pending migrations"
   verify unit "dry_run returns diff without modifying files"
