@@ -137,6 +137,11 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   extension declaration, the operation payloads, the extension vocabulary and the command-arg rule. Every
   builtin blob is built from it, so it holds nothing only the host reads: the host's reading of package names,
   version requirements and peer ranges is `specforge-package` (ADR 0050).
+- **Committed blob**: a wasm component the repository commits, at `<crate>/wasm/<artifact>` with the `inputs.json` its
+  build recorded: a builtin (`extensions/<name>`, embedded in the host) or a test fixture (`fixtures/<name>`). Listed
+  once, `specforge_component::committed::COMMITTED`; git tracks exactly that list. An SDK blob answers the host's
+  protocol and its wire answers are pinned; a bridge blob (the runtime's own test component) is written without the
+  SDK and declares the canned protocol it answers. `revendor` rebuilds every one (ADR 0070).
 - **Installed extension**: an extension placed in the project under
   `.specforge/extensions/<name>/extension.wasm` and pinned by its `specforge.lock` entry (version,
   source `registry` or `local:<path>`, the SHA-256 of the binary and, for a signed registry package, its

@@ -40,6 +40,8 @@ testing = ["dep:chrono"]
 
 [dev-dependencies]
 specforge-mcp = { path = ".", features = ["testing"] }
+# The committed blobs the tests load (`specforge_component::committed`).
+specforge-component = { path = "../specforge-component", features = ["testing"] }
 chrono = "0.4.41"
 specforge-extension-sdk = { path = "../specforge-extension-sdk" }
 # Candidates served in process (`specforge_ops::testing`).

@@ -44,8 +44,7 @@ fn server_over(config: Value) -> (McpServer, tempfile::TempDir) {
 }
 
 fn greet_blob() -> std::path::PathBuf {
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../fixtures/greet-extension/greet.wasm")
+    specforge_component::committed::GREET.path()
 }
 
 /// A served project with `@sdk/greet` installed from its local blob: a lock

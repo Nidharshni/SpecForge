@@ -2364,8 +2364,7 @@ fn add_of_a_crate_directory_installs_its_component() {
         "[package]\nname = \"my-ext\"\nversion = \"0.1.0\"\n",
     )
     .unwrap();
-    let greet = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../fixtures/greet-extension/greet.wasm");
+    let greet = specforge_component::committed::GREET.path();
     fs::copy(greet, release.join("my_ext.wasm")).unwrap();
 
     let out = specforge_cmd()

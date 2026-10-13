@@ -51,7 +51,7 @@ pub fn docref_project(spec: &str) -> tempfile::TempDir {
     });
     std::fs::write(root.join("specforge.json"), config.to_string()).unwrap();
     std::fs::copy(
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/docref-extension/docref.wasm"),
+        specforge_component::committed::DOCREF.path(),
         root.join("ext/docref.wasm"),
     )
     .unwrap();
