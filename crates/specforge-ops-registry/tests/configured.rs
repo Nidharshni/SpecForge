@@ -244,3 +244,31 @@ fn the_configuration_is_reported_once_the_registry_is_asked() {
     let reported: Vec<&str> = reported.iter().map(|d| d.code.as_str()).collect();
     assert!(reported.contains(&"W140"), "{reported:?}");
 }
+
+#[specforge_test(
+    behavior = "configure_registries",
+    verify = "registries parsed from specforge.json"
+)]
+#[ignore = "fixed by T5"]
+fn an_entry_that_cannot_be_read_serves_no_name() {
+    let dir = project(
+        r#"{"name":"p","version":"0.1.0","extensions":[],"registries":[
+            {"alias":"acme","url":5,"scope_filter":"@acme"},
+            {"alias":"main","url":"https://main.example","default_registry":true}
+        ]}"#,
+    );
+
+    let refused = configured(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        "add",
+    )
+    .map(|found| {
+        found
+            .registry_for(&name("@acme/tool"))
+            .map(|r| r.alias.clone())
+    })
+    .unwrap_err();
+
+    assert_eq!(refused.code, "E067");
+    assert!(refused.message.contains("index 0"), "{}", refused.message);
+}

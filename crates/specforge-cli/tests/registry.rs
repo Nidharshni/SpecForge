@@ -1709,3 +1709,63 @@ fn a_refused_add_of_several_specifiers_pins_no_key() {
     );
     assert_eq!(t.pinned("@sdk/greet"), Some(t.k1.key_id()));
 }
+
+/// `specforge <args> --format json --path <dir>` with `home` as `$HOME`; its exit status and JSON.
+fn json_run(
+    args: &[&str],
+    dir: &TempDir,
+    home: &TempDir,
+) -> (bool, serde_json::Value, std::process::Output) {
+    let output = specforge_cmd()
+        .args(args)
+        .args(["--format", "json", "--path"])
+        .arg(dir.path())
+        .env("HOME", home.path())
+        .env_remove("SPECFORGE_REGISTRY_TOKEN")
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+    let json = serde_json::from_str(&stdout).unwrap_or_else(|e| panic!("not JSON ({e}): {stdout}"));
+    (output.status.success(), json, output)
+}
+
+#[specforge_test(
+    behavior = "search_registry",
+    verify = "queries all configured registries"
+)]
+#[ignore = "fixed by T3"]
+fn a_registry_named_by_its_root_is_searched() {
+    use crate::published::{Package, serve};
+    let registry = serve(vec![Package::new("@sdk/greet", "0.1.0", greet_wasm())]);
+    let root = registry.url().strip_suffix("/v1").unwrap().to_string();
+    let dir = project_with_registries(
+        serde_json::json!([{"alias": "local", "url": root, "default_registry": true}]),
+    );
+    let home = TempDir::new().unwrap();
+
+    let (ok, json, _) = json_run(&["search", "greet"], &dir, &home);
+
+    assert!(ok, "{json}");
+    assert!(json.to_string().contains("@sdk/greet"), "{json}");
+    assert!(json.to_string().contains("0.1.0"), "{json}");
+}
+
+#[specforge_test(
+    behavior = "authenticate_registry_request",
+    verify = "every registry call reads an answer's status as one error"
+)]
+#[ignore = "fixed by T4"]
+fn login_at_an_address_no_registry_serves_is_r009() {
+    use crate::published::{Package, serve};
+    let registry = serve(vec![Package::new("@sdk/greet", "0.1.0", greet_wasm())]);
+    let root = registry.url().strip_suffix("/v1").unwrap();
+    let dir = project_with_registries(serde_json::json!([
+        {"alias": "local", "url": format!("{root}/elsewhere"), "default_registry": true}
+    ]));
+    let home = TempDir::new().unwrap();
+
+    let (ok, json, _) = json_run(&["login", "--token", "t"], &dir, &home);
+
+    assert!(!ok, "{json}");
+    assert_eq!(json["code"], "R009", "{json}");
+}
