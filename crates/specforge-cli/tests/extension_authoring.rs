@@ -307,7 +307,7 @@ fn a_scaffolded_extension_builds_and_validates() {
 // ===============================================================
 
 fn greet_wasm() -> PathBuf {
-    repo_root().join("fixtures/greet-extension/greet.wasm")
+    specforge_component::committed::GREET.path()
 }
 
 #[specforge_test(

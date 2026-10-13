@@ -939,7 +939,11 @@ fn a_name_two_entries_enable_is_refused_as_ambiguous() {
 )]
 fn removing_a_wasm_file_entry_another_requires_is_e027_unless_forced() {
     let dir = greet_file_project();
-    enable(dir.path(), json!(["@specforge/software", "greet.wasm"]));
+    // The dependent is enabled: a locked extension no entry enables is not judged.
+    enable(
+        dir.path(),
+        json!(["@specforge/software", "greet.wasm", "@acme/uses-greet"]),
+    );
     let lock = json!({
         "lockfile_version": 1,
         "entries": [{"name": "@acme/uses-greet", "version": "1.0.0", "source": "registry",
@@ -961,10 +965,41 @@ fn removing_a_wasm_file_entry_another_requires_is_e027_unless_forced() {
     );
     assert_eq!(
         enabled(dir.path()),
-        json!(["@specforge/software", "greet.wasm"])
+        json!(["@specforge/software", "greet.wasm", "@acme/uses-greet"])
     );
 
     let (ok, output) = remove(dir.path(), "@sdk/greet", &["--force"]);
+    assert!(ok, "{output}");
+    assert_eq!(
+        enabled(dir.path()),
+        json!(["@specforge/software", "@acme/uses-greet"])
+    );
+    assert_eq!(
+        std::fs::read(dir.path().join("specforge.lock")).unwrap(),
+        lock_before
+    );
+    assert!(dir.path().join("greet.wasm").is_file());
+}
+
+#[specforge_test(
+    behavior = "remove_extension",
+    verify = "a locked extension no specforge.json entry enables does not keep its peer from being removed"
+)]
+fn removing_a_wasm_file_entry_a_disabled_lock_entry_requires_is_accepted() {
+    let dir = greet_file_project();
+    // `@acme/uses-greet` is locked and requires `@sdk/greet`, but no entry enables it.
+    enable(dir.path(), json!(["@specforge/software", "greet.wasm"]));
+    let lock = json!({
+        "lockfile_version": 1,
+        "entries": [{"name": "@acme/uses-greet", "version": "1.0.0", "source": "registry",
+                     "wasm_hash": "00",
+                     "peer_dependencies": [{"name": "@sdk/greet", "version": "^0.1.0"}]}],
+    });
+    std::fs::write(dir.path().join("specforge.lock"), lock.to_string()).unwrap();
+    let lock_before = std::fs::read(dir.path().join("specforge.lock")).unwrap();
+
+    let (ok, output) = remove(dir.path(), "greet.wasm", &[]);
+
     assert!(ok, "{output}");
     assert_eq!(enabled(dir.path()), json!(["@specforge/software"]));
     assert_eq!(
@@ -1080,4 +1115,185 @@ fn a_removal_with_an_unreadable_config_changes_nothing() {
     let lock = std::fs::read_to_string(dir.path().join("specforge.lock")).unwrap();
     assert!(!lock.contains("@sdk/greet"), "{lock}");
     assert!(!dir.path().join(".specforge/extensions/@sdk/greet").exists());
+}
+
+/// Every file under `root` with its bytes: what a dry run must leave as it was.
+fn tree(root: &Path) -> std::collections::BTreeMap<std::path::PathBuf, Vec<u8>> {
+    let mut files = std::collections::BTreeMap::new();
+    let mut dirs = vec![root.to_path_buf()];
+    while let Some(dir) = dirs.pop() {
+        for entry in std::fs::read_dir(&dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                dirs.push(path);
+            } else {
+                files.insert(path.clone(), std::fs::read(&path).unwrap());
+            }
+        }
+    }
+    files
+}
+
+#[specforge_test(
+    invariant = "dry_run_side_effect_freedom",
+    verify = "--dry-run produces output without modifying files"
+)]
+fn add_dry_run_prints_the_plan_and_writes_nothing() {
+    let dir = greet_file_project();
+    enable(dir.path(), json!([]));
+    let before = tree(dir.path());
+
+    // A builtin that requires another: the plan names both, dependencies first.
+    let human = specforge()
+        .args([
+            "add",
+            "--dry-run",
+            "@specforge/formal",
+            "greet.wasm",
+            "--path",
+        ])
+        .arg(dir.path())
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    assert!(human.status.success(), "{human:?}");
+    let text = String::from_utf8(human.stdout).unwrap();
+    let lines: Vec<&str> = text.lines().collect();
+    assert_eq!(
+        lines,
+        [
+            "would enable builtin @specforge/software (required by @specforge/formal)",
+            "would enable builtin @specforge/formal",
+            "would install @sdk/greet v0.1.0 (local:greet.wasm)",
+        ],
+        "{text}"
+    );
+
+    let json = specforge()
+        .args([
+            "add",
+            "--dry-run",
+            "@specforge/formal",
+            "--format",
+            "json",
+            "--path",
+        ])
+        .arg(dir.path())
+        .output()
+        .unwrap();
+    assert!(json.status.success(), "{json:?}");
+    let document: Value = serde_json::from_slice(&json.stdout).unwrap();
+    assert_eq!(document["added"][0]["action"], "planned", "{document}");
+    assert_eq!(
+        document["added"][0]["peers_enabled"],
+        json!(["@specforge/software"]),
+        "{document}"
+    );
+    assert_eq!(document["files_written"], json!([]), "{document}");
+
+    assert_eq!(tree(dir.path()), before, "a dry run writes nothing");
+}
+
+#[specforge_test(
+    invariant = "dry_run_side_effect_freedom",
+    verify = "--dry-run produces output without modifying files"
+)]
+fn remove_dry_run_prints_the_plan_and_writes_nothing() {
+    let dir = greet_file_project();
+    enable(dir.path(), json!(["@specforge/software", "greet.wasm"]));
+    let before = tree(dir.path());
+
+    let human = specforge()
+        .args(["remove", "--dry-run", "greet.wasm", "--path"])
+        .arg(dir.path())
+        .output()
+        .unwrap();
+    assert!(human.status.success(), "{human:?}");
+    let text = String::from_utf8(human.stdout).unwrap();
+    assert!(
+        text.starts_with("Would disable extension '@sdk/greet' loaded from greet.wasm"),
+        "{text}"
+    );
+
+    let (ok, output) = remove(dir.path(), "greet.wasm", &["--dry-run"]);
+    assert!(ok, "{output}");
+    assert_eq!(output["action"], "planned", "{output}");
+    assert_eq!(output["files_written"], json!([]), "{output}");
+
+    assert_eq!(tree(dir.path()), before, "a dry run writes nothing");
+}
+
+#[specforge_test(
+    behavior = "add_extension_to_existing_project",
+    verify = "a dry run answers what the add answers, refusals and the builtins it enables included, and writes nothing"
+)]
+fn add_dry_run_refuses_what_add_refuses() {
+    let dir = greet_file_project();
+    enable(dir.path(), json!(["@x/y"]));
+    let lock = json!({
+        "lockfile_version": 1,
+        "entries": [{"name": "@x/y", "version": "1.0.0", "source": "registry", "wasm_hash": "00",
+                     "peer_dependencies": [{"name": "@sdk/greet", "version": "^9.0"}]}],
+    });
+    std::fs::write(dir.path().join("specforge.lock"), lock.to_string()).unwrap();
+    let before = tree(dir.path());
+
+    let run = |dry: bool| {
+        let mut command = specforge();
+        command
+            .args(["add", "greet.wasm", "--path"])
+            .arg(dir.path())
+            .current_dir(dir.path());
+        if dry {
+            command.arg("--dry-run");
+        }
+        let out = command.output().unwrap();
+        (out.status.code(), String::from_utf8(out.stderr).unwrap())
+    };
+    let (dry_code, dry_stderr) = run(true);
+    assert_eq!(tree(dir.path()), before, "a dry run writes nothing");
+    let (real_code, real_stderr) = run(false);
+
+    assert_eq!(dry_code, Some(1), "{dry_stderr}");
+    assert!(dry_stderr.contains("E027"), "{dry_stderr}");
+    assert_eq!((dry_code, dry_stderr), (real_code, real_stderr));
+    assert_eq!(tree(dir.path()), before, "a refused add writes nothing");
+}
+
+#[test]
+fn update_of_a_local_install_says_it_is_not_from_a_registry() {
+    let dir = greeting_project();
+    add_local_greet(dir.path());
+
+    let update = |name: &str| {
+        specforge()
+            .args(["update", name, "--path"])
+            .arg(dir.path())
+            .output()
+            .unwrap()
+    };
+    let out = update("@sdk/greet");
+    assert!(out.status.success(), "{out:?}");
+    let text = String::from_utf8(out.stdout).unwrap();
+    assert!(
+        text.starts_with(
+            "@sdk/greet is not from a registry (local:greet.wasm): update never replaces it\n"
+        ),
+        "{text}"
+    );
+
+    // A name the lock does not hold is refused, whatever it is.
+    for (name, code) in [
+        ("@nope/typo", "extension_not_found"),
+        ("Bad Name", "E072"),
+        ("@specforge/product", "extension_not_found"),
+    ] {
+        let out = update(name);
+        assert_eq!(out.status.code(), Some(1), "{name}: {out:?}");
+        let stderr = String::from_utf8(out.stderr).unwrap();
+        assert!(
+            stderr.contains(&format!("error[{code}]")),
+            "{name}: {stderr}"
+        );
+    }
 }

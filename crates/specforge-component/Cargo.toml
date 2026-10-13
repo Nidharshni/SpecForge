@@ -7,14 +7,17 @@ repository.workspace = true
 
 [features]
 # `builtins::load_builtins` and `load_builtins_for`: put builtins into a
-# runtime outside the extension load, for tests.
-testing = []
+# runtime outside the extension load, for tests. `committed`: the list of every
+# committed blob and its wire answers.
+testing = ["dep:specforge-protocol-types", "dep:serde_json"]
 
 [dependencies]
 specforge-wasm = { path = "../specforge-wasm" }
 specforge-common = { workspace = true }
 wasmtime = { version = "49.0.2", features = ["component-model", "cache"] }
 wasmtime-wasi = "49.0.2"
+specforge-protocol-types = { path = "../specforge-protocol-types", optional = true }
+serde_json = { workspace = true, optional = true }
 
 [dev-dependencies]
 specforge-protocol-types = { path = "../specforge-protocol-types" }

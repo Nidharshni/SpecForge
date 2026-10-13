@@ -24,6 +24,10 @@ pub(crate) struct Args {
     /// Accept key changes non-interactively (for CI)
     #[arg(long, default_value_t = false)]
     yes: bool,
+
+    /// Report what the add would do; write, pin and download nothing
+    #[arg(long)]
+    dry_run: bool,
 }
 
 impl Args {
@@ -49,7 +53,7 @@ impl Args {
             extensions,
             allow_unsigned: self.allow_unsigned,
             trust: format.trust(self.yes),
-            dry_run: false,
+            dry_run: self.dry_run,
         };
         let added = extension::add(&request, &registry, &runtime);
         // What reading the registry configuration reported, once the add
@@ -128,8 +132,25 @@ fn print_human(added: &AddedExtension, terminal: &Terminal) {
                 added.specifier
             );
         }
-        // `specforge add` has no dry run.
-        AddOutcome::Planned { .. } => {}
+        // A dry run: what the add would do.
+        AddOutcome::Planned {
+            name,
+            version,
+            origin,
+            peers_enabled,
+        } => {
+            for peer in peers_enabled {
+                outln!(terminal, "would enable builtin {peer} (required by {name})");
+            }
+            match version {
+                None => outln!(terminal, "would enable builtin {name}"),
+                Some(version) => outln!(
+                    terminal,
+                    "would install {name} v{version} ({})",
+                    origin.source()
+                ),
+            }
+        }
     }
 }
 

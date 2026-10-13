@@ -1,8 +1,12 @@
-//! The lock plan (ADR 0041, amendment round 7): the one way `add`, `update` and `init` install
-//! extensions and enable entries.
+//! The lock plan (ADR 0041, amendment round 7; ADR 0065): the one way `add`, `update`, `init` and
+//! `remove` change what a project installs and enables.
 //!
-//! Each install is staged into the lock as the operation will leave it. The package's previous
-//! entry is replaced, never counted beside it. Once everything is staged, the peer rule judges,
+//! An operation opens the plan for its verb ([`LockPlan::adding`], [`LockPlan::updating`],
+//! [`LockPlan::initializing`], [`LockPlan::removing`]) and names what it asks for, each charged to
+//! an [`Ask`]: it installs, enables, disables, uninstalls, or fetches from the plan's registry. It
+//! never drives the plan's own steps: the plan
+//! stages each install into the lock as the operation will leave it (the package's previous entry
+//! is replaced, never counted beside it), closes over the builtins what it adds requires, and judges,
 //! once, the **project peer set** as the change leaves it (the extensions the project's
 //! `specforge.json` entries load, `peer_set`): every declared peer whose dependent or peer the
 //! change touches, a missing required peer included. An unsatisfied peer installed from a registry
@@ -11,20 +15,22 @@
 //! is each binary fetched from a registry loaded, and it must declare what was published
 //! (ADR 0012). What passes is committed as one change (ADR 0028 D4): the modules, the lock, the
 //! appended `specforge.json` entries and, last, the publisher keys its fetches accepted (ADR
-//! 0059). A refused or failed plan writes and pins nothing.
+//! 0059). A refused or failed plan writes and pins nothing. Refusals and outcomes are answered per
+//! ask.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
+use crate::view::ProjectView;
 use specforge_common::{Diagnostic, codes};
-use specforge_installed::{Change, Installed, LockSource, Module, Pin};
+use specforge_installed::{Installed, LockFile, LockSource, LockState, Module, Pin};
 use specforge_package::peers::{PeerRequirement, Verdict};
 use specforge_package::{PackageName, Version, highest_matching};
 use specforge_protocol_types::{DeclaredCategory, ExtensionDeclaration, PeerDependency};
 use specforge_wasm::WasmRuntime;
 
-use super::Trust;
 use super::candidate::{Installable, LocalFile};
-use super::peer_set::{Declarations, MemberOrigin, ProjectPeers};
+use super::peer_set::{Declarations, ProjectPeers};
+use super::{Origin, Trust};
 use crate::registry::{KeyPin, METADATA_MISMATCH, Publisher, Registry, TrustPolicy};
 use crate::{OpError, OpErrorKind, Writes};
 
@@ -36,6 +42,8 @@ pub(crate) enum Verb {
     Install,
     /// `update`.
     Update,
+    /// `remove`.
+    Remove,
 }
 
 impl Verb {
@@ -49,6 +57,7 @@ impl Verb {
         match self {
             Verb::Install => "installing",
             Verb::Update => "updating",
+            Verb::Remove => "removing",
         }
     }
 
@@ -56,27 +65,58 @@ impl Verb {
         match self {
             Verb::Install => "install",
             Verb::Update => "update",
+            Verb::Remove => "removal",
         }
     }
 }
 
-/// Where registry installs come from and how they are accepted: the registry port, the runtime
-/// their binaries load in once the gate has passed, the lock whose keys they are held to, and the
-/// caller's two trust choices.
+/// One thing an operation asked for, by its position among the operation's own requests (add's and
+/// init's specifiers, update's lock entries). Refusals and outcomes are answered per ask.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct Ask(pub(crate) usize);
+
+/// Whether a checked plan is written or only answered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Purpose {
+    Commit,
+    /// A dry run: judged exactly as a commit is, written, pinned and downloaded never.
+    Preview,
+}
+
+/// Which `specforge.json` entries a removal drops.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Disabled {
+    /// Every entry naming this extension (`config::remove_extension`).
+    Named(String),
+    /// The entries written exactly so (a `.wasm` file entry; `config::remove_entry`).
+    Entry(String),
+}
+
+impl Disabled {
+    /// Whether `entry` (a `specforge.json` entry) is dropped by it.
+    fn drops(&self, entry: &str) -> bool {
+        match self {
+            Disabled::Named(name) => specforge_common::extension_entry_name(entry) == name,
+            Disabled::Entry(text) => entry.trim() == text.trim(),
+        }
+    }
+}
+
+/// Where a plan's registry installs come from, and how their publishers are accepted: the
+/// registry port and the caller's two trust choices.
 #[derive(Clone, Copy)]
-pub(crate) struct Fetch<'a> {
+pub(crate) struct Fetching<'a> {
     pub(crate) registry: &'a dyn Registry,
-    pub(crate) runtime: &'a dyn WasmRuntime,
-    /// The project's installed extensions: the publisher key its lock records for a name is the
-    /// pin when the user has none.
-    pub(crate) installed: &'a Installed,
     pub(crate) allow_unsigned: bool,
     pub(crate) trust: Trust,
 }
 
-/// One install a lock plan stages: a module and the lock entry that pins it.
+/// One install a lock plan stages: a module (none for a preview's registry package, which has not
+/// been downloaded) and the lock entry that pins it.
 pub(crate) struct Install<'a> {
-    module: Module,
+    module: Option<Module>,
+    /// The SHA-256 the lock pins: the module's, or for a preview the one its registry publishes.
+    sha256: String,
     pin: Pin,
     from: From<'a>,
 }
@@ -85,50 +125,18 @@ pub(crate) struct Install<'a> {
 enum From<'a> {
     /// A `.wasm` file: loaded and checked when it was read.
     File,
-    /// A registry: `bytes` (a copy of the module) load after the gate, and must declare
-    /// `declaration`.
+    /// A preview's registry package: judged by the declaration it was published with, never
+    /// downloaded, loaded or committed.
+    Published { registry: &'a dyn Registry },
+    /// A registry: `bytes` (a copy of the module) load in `runtime` after the gate, and must
+    /// declare `declaration`.
     Registry {
-        fetch: Fetch<'a>,
+        registry: &'a dyn Registry,
+        runtime: &'a dyn WasmRuntime,
         declaration: Box<ExtensionDeclaration>,
         publisher: Publisher,
         bytes: Module,
     },
-}
-
-impl<'a> Fetch<'a> {
-    /// `name@version` fetched as an install. The registry adapter checks integrity and the
-    /// publisher signature under the TOFU policy. Its pin is read from the published declaration:
-    /// its version and its peers, the publisher's key id, `source: registry`. Its binary is not
-    /// loaded: [`LockPlan::check`] loads it after the gate. It is held to the key the lock records
-    /// for `name` when the user has no pin of their own. Nothing is pinned for the user: the
-    /// publisher the fetch decided is pinned when the plan commits.
-    pub(crate) fn install(
-        &self,
-        name: &PackageName,
-        version: &Version,
-    ) -> Result<Install<'a>, OpError> {
-        let policy = TrustPolicy::new(self.allow_unsigned, self.trust)
-            .locked(self.installed.locked_key(name));
-        let mut package = self.registry.fetch(name, version, policy)?;
-        let module = Module::new(std::mem::take(&mut package.wasm));
-        let pin = Pin {
-            name: package.name.clone(),
-            version: package.version.to_string(),
-            source: LockSource::Registry,
-            key_id: package.publisher.key_id().map(str::to_string),
-            peers: package.declaration.peers().to_vec(),
-        };
-        Ok(Install {
-            from: From::Registry {
-                fetch: *self,
-                declaration: Box::new(package.declaration),
-                publisher: package.publisher,
-                bytes: module.clone(),
-            },
-            module,
-            pin,
-        })
-    }
 }
 
 impl<'a> Install<'a> {
@@ -144,8 +152,10 @@ impl<'a> Install<'a> {
             key_id: None,
             peers: candidate.peers().to_vec(),
         };
+        let module = local.binary.into_module();
         Ok(Install {
-            module: local.binary.into_module(),
+            sha256: module.digest().to_string(),
+            module: Some(module),
             pin,
             from: From::File,
         })
@@ -162,7 +172,7 @@ impl<'a> Install<'a> {
 
     /// The module's SHA-256: what the lock pins.
     pub(crate) fn sha256(&self) -> &str {
-        self.module.digest()
+        &self.sha256
     }
 
     pub(crate) fn source(&self) -> &LockSource {
@@ -173,15 +183,18 @@ impl<'a> Install<'a> {
     pub(crate) fn publisher(&self) -> Option<&Publisher> {
         match &self.from {
             From::Registry { publisher, .. } => Some(publisher),
-            From::File => None,
+            From::File | From::Published { .. } => None,
         }
     }
 }
 
-/// What the plan keeps of an install once its module and pin are in the change.
+/// An install the plan staged, for the ask that wanted it.
 struct Staged<'a> {
+    ask: Ask,
     name: PackageName,
     version: String,
+    module: Option<Module>,
+    pin: Pin,
     from: From<'a>,
 }
 
@@ -191,7 +204,7 @@ impl Staged<'_> {
     fn key_pin(&self) -> Option<KeyPin> {
         match &self.from {
             From::Registry { publisher, .. } => publisher.pin(&self.name),
-            From::File => None,
+            From::File | From::Published { .. } => None,
         }
     }
 
@@ -199,7 +212,7 @@ impl Staged<'_> {
     /// local file (E027).
     fn registry(&self) -> Option<&dyn Registry> {
         match &self.from {
-            From::Registry { fetch, .. } => Some(fetch.registry),
+            From::Registry { registry, .. } | From::Published { registry } => Some(*registry),
             From::File => None,
         }
     }
@@ -208,15 +221,16 @@ impl Staged<'_> {
     /// file was checked when it was read.
     fn load(&self) -> Result<(), OpError> {
         let From::Registry {
-            fetch,
+            runtime,
             declaration,
             bytes,
             ..
         } = &self.from
         else {
+            // A local file was checked when it was read; a preview loads nothing.
             return Ok(());
         };
-        let binary = Installable::read(fetch.runtime, bytes.clone())?;
+        let binary = Installable::read(*runtime, bytes.clone())?;
         let declared = binary.candidate();
         if declared.name() != self.name.as_str() || declared.version() != self.version {
             return Err(OpError::coded(
@@ -248,109 +262,285 @@ impl Staged<'_> {
 
 /// An entry the change appends to `specforge.json`'s `extensions`.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct Appended {
-    pub(crate) name: String,
+struct Appended {
+    name: String,
+    /// The ask it is charged to: the one that asked for it, or, for a builtin the plan enabled
+    /// because an extension requires it, the ask of that extension.
+    ask: Ask,
     /// For a builtin the plan enabled because an extension the change asked for requires it, that
     /// extension (the root of the chain: `formal` for `software` and for `product` under it);
     /// `None` for an entry asked for.
-    pub(crate) required_by: Option<String>,
+    required_by: Option<String>,
 }
 
 /// The lock and the `extensions` entries as the operation leaves them, staged in memory.
 pub(crate) struct LockPlan<'a> {
     installed: &'a Installed,
-    /// `None` for a plan that only enables (`LockPlan::enabling`).
-    change: Option<Change<'a>>,
+    /// The lock as the change leaves it; `None` for a plan that installs nothing (it accepts any
+    /// lock: an unreadable one hides the installed extensions, as it hides them from the compile).
+    lock: Option<LockFile>,
     staged: Vec<Staged<'a>>,
     /// What `specforge.json` enables before the change.
     entries: Vec<String>,
     appended: Vec<Appended>,
+    /// The extension each ask enables, in the order they were asked.
+    wanted: Vec<(Ask, String)>,
     declarations: Declarations<'a>,
+    /// The runtime the plan's fetched binaries load in; `None` for a plan that fetches nothing
+    /// and reads its declarations from a compiled project (`remove`).
+    runtime: Option<&'a dyn WasmRuntime>,
     verb: Verb,
-    /// The registry port its registry installs came from: an operation fetches through one.
-    registry: Option<&'a dyn Registry>,
+    purpose: Purpose,
+    /// A removal is not judged (`remove --force`).
+    force: bool,
+    /// Whether the change edits an existing `specforge.json`; `init` writes its own.
+    edits_config: bool,
+    /// `(trigger, companion)`: the companion is enabled whenever the change leaves the trigger
+    /// enabled.
+    companions: Vec<(&'static str, &'static str)>,
+    /// The entries a removal drops, and the packages it uninstalls, each for its ask.
+    disabled: Vec<(Ask, Disabled)>,
+    uninstalled: Vec<(Ask, PackageName)>,
+    /// Where registry installs come from; `None` for a plan that fetches nothing.
+    fetching: Option<Fetching<'a>>,
+    /// The operation's name, for the refusal of a fetch from no registry.
+    operation: &'static str,
 }
 
 impl<'a> LockPlan<'a> {
-    /// A plan that installs: over the lock `installed` read and the `extensions` entries
-    /// `specforge.json` holds, the declarations of its builtins and `.wasm` file entries read
-    /// through `runtime`. E033 when `specforge.lock` is there and can't be read: writing one would
-    /// drop what it records.
-    pub(crate) fn new(
+    /// `add`'s plan over the project `installed` is rooted at, whose `specforge.json` enables
+    /// `entries`. Builtins and `.wasm` file entries are read through `runtime`, as are the local
+    /// files it installs and, once the gate passed, what it fetched. `installs`: whether a
+    /// specifier installs; then an unreadable lock refuses here (E033), before a file is read or a
+    /// registry asked. A preview fetches nothing: a registry package is judged by its [`Manifest`].
+    pub(crate) fn adding(
         installed: &'a Installed,
         entries: &[String],
         runtime: &'a dyn WasmRuntime,
-        verb: Verb,
+        fetching: Fetching<'a>,
+        purpose: Purpose,
+        installs: bool,
     ) -> Result<LockPlan<'a>, OpError> {
+        let mut plan = LockPlan::open(
+            installed,
+            entries,
+            Some(runtime),
+            Declarations::through(runtime),
+            Verb::Install,
+            Some(fetching),
+            "add",
+            installs,
+        )?;
+        plan.purpose = purpose;
+        Ok(plan)
+    }
+
+    /// `update`'s plan: as [`Self::adding`], never enabling; E033 for an unreadable lock.
+    pub(crate) fn updating(
+        installed: &'a Installed,
+        entries: &[String],
+        runtime: &'a dyn WasmRuntime,
+        fetching: Fetching<'a>,
+    ) -> Result<LockPlan<'a>, OpError> {
+        LockPlan::open(
+            installed,
+            entries,
+            Some(runtime),
+            Declarations::through(runtime),
+            Verb::Update,
+            Some(fetching),
+            "update",
+            true,
+        )
+    }
+
+    /// `init`'s plan: a project with no `specforge.json` yet, whose config the caller's [`Also`]
+    /// writes from [`Checked::entries`]. It installs local files only (no registry); `installs` as
+    /// in [`Self::adding`].
+    pub(crate) fn initializing(
+        installed: &'a Installed,
+        runtime: &'a dyn WasmRuntime,
+        installs: bool,
+    ) -> Result<LockPlan<'a>, OpError> {
+        let mut plan = LockPlan::open(
+            installed,
+            &[],
+            Some(runtime),
+            Declarations::through(runtime),
+            Verb::Install,
+            None,
+            "init",
+            installs,
+        )?;
+        plan.edits_config = false;
+        Ok(plan)
+    }
+
+    /// `remove`'s plan over the compiled project `view`: its lock as the compile read it, its
+    /// entries, the declarations its compile loaded (read again through the view's runtime only
+    /// for an entry the removal lets load). `uninstalls`: whether it uninstalls (then an
+    /// unreadable lock is E033). `force`: the peer rule is not applied (`remove --force`).
+    pub(crate) fn removing(
+        view: &ProjectView<'a>,
+        purpose: Purpose,
+        force: bool,
+        uninstalls: bool,
+    ) -> Result<LockPlan<'a>, OpError> {
+        let entries: Vec<String> = view
+            .env()
+            .enabled()
+            .iter()
+            .map(|entry| entry.entry.clone())
+            .collect();
+        let mut plan = LockPlan::open(
+            view.installed(),
+            &entries,
+            view.runtime().map(|runtime| &**runtime),
+            Declarations::loaded_by(view),
+            Verb::Remove,
+            None,
+            "remove",
+            uninstalls,
+        )?;
+        plan.purpose = purpose;
+        plan.force = force;
+        Ok(plan)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn open(
+        installed: &'a Installed,
+        entries: &[String],
+        runtime: Option<&'a dyn WasmRuntime>,
+        declarations: Declarations<'a>,
+        verb: Verb,
+        fetching: Option<Fetching<'a>>,
+        operation: &'static str,
+        installs: bool,
+    ) -> Result<LockPlan<'a>, OpError> {
+        let lock = if installs {
+            Some(
+                installed
+                    .writable_lock()
+                    .map_err(|why| OpError::of(OpErrorKind::SchemaMismatch, why))?,
+            )
+        } else {
+            None
+        };
         Ok(LockPlan {
             installed,
-            change: Some(
-                installed
-                    .change()
-                    .map_err(|why| OpError::of(OpErrorKind::SchemaMismatch, why))?,
-            ),
+            lock,
             staged: Vec::new(),
             entries: entries.to_vec(),
             appended: Vec::new(),
-            declarations: Declarations::new(runtime),
+            wanted: Vec::new(),
+            declarations,
+            runtime,
             verb,
-            registry: None,
+            purpose: Purpose::Commit,
+            force: false,
+            edits_config: true,
+            companions: Vec::new(),
+            disabled: Vec::new(),
+            uninstalled: Vec::new(),
+            fetching,
+            operation,
         })
     }
 
-    /// A plan that only enables entries (an `add` or `init` of builtins only). It stages nothing,
-    /// so it opens no change and accepts any lock: an unreadable one hides the installed
-    /// extensions from the set, as it hides them from the compile (E033 is `check`'s, ADR 0028).
-    pub(crate) fn enabling(
-        installed: &'a Installed,
-        entries: &[String],
-        runtime: &'a dyn WasmRuntime,
-    ) -> LockPlan<'a> {
-        LockPlan {
-            installed,
-            change: None,
-            staged: Vec::new(),
-            entries: entries.to_vec(),
-            appended: Vec::new(),
-            declarations: Declarations::new(runtime),
-            verb: Verb::Install,
-            registry: None,
+    /// `name@version` from the plan's registry, fetched: downloaded, integrity- and
+    /// signature-checked under the plan's trust choices, held to the key the lock records for
+    /// `name` when the user has no pin of their own, nothing written. Its pin is read from the
+    /// published declaration: its version and its peers, the publisher's key id, `source:
+    /// registry`. Its binary is not loaded: [`Self::check`] loads it after the gate. Nothing is
+    /// pinned for the user: the publisher the fetch decided is pinned when the plan commits. For a
+    /// preview, its [`Manifest`] only: nothing is downloaded and no publisher is decided. E063
+    /// when the plan fetches from no registry.
+    pub(crate) fn fetch(
+        &self,
+        name: &PackageName,
+        version: &Version,
+    ) -> Result<Install<'a>, OpError> {
+        let Some(fetching) = self.fetching else {
+            return Err(crate::registry::no_registry(self.operation));
+        };
+        if self.purpose == Purpose::Preview {
+            let manifest = fetching.registry.published(name, version)?;
+            let pin = Pin {
+                name: manifest.name,
+                version: manifest.version.to_string(),
+                source: LockSource::Registry,
+                key_id: None,
+                peers: manifest.declaration.peers().to_vec(),
+            };
+            return Ok(Install {
+                module: None,
+                sha256: manifest.sha256,
+                pin,
+                from: From::Published {
+                    registry: fetching.registry,
+                },
+            });
         }
+        let policy = TrustPolicy::new(fetching.allow_unsigned, fetching.trust)
+            .locked(self.installed.locked_key(name));
+        let mut package = fetching.registry.fetch(name, version, policy)?;
+        let module = Module::new(std::mem::take(&mut package.wasm));
+        let pin = Pin {
+            name: package.name.clone(),
+            version: package.version.to_string(),
+            source: LockSource::Registry,
+            key_id: package.publisher.key_id().map(str::to_string),
+            peers: package.declaration.peers().to_vec(),
+        };
+        Ok(Install {
+            from: From::Registry {
+                registry: fetching.registry,
+                runtime: self.runtime.expect("a plan that fetches has a runtime"),
+                declaration: Box::new(package.declaration),
+                publisher: package.publisher,
+                bytes: module.clone(),
+            },
+            sha256: module.digest().to_string(),
+            module: Some(module),
+            pin,
+        })
     }
 
-    /// Stage `install`. Its entry replaces the package's previous one, if the lock has one.
-    /// Nothing is judged yet.
+    /// Install `install` for `ask`: its lock entry replaces the package's previous one. A verb that
+    /// enables also enables it by its bare name (nothing when an entry already does). Nothing is
+    /// judged yet.
     ///
     /// # Panics
-    /// When a registry install comes through another registry port than one staged before: an
-    /// operation passes one port, which routes each name itself (ADR 0045). On a plan made by
-    /// [`Self::enabling`], which stages nothing.
-    pub(crate) fn stage(&mut self, install: Install<'a>) {
-        let Install { module, pin, from } = install;
-        if let From::Registry { fetch, .. } = &from {
-            match self.registry {
-                None => self.registry = Some(fetch.registry),
-                Some(first) => assert!(
-                    std::ptr::addr_eq(first, fetch.registry),
-                    "a lock plan stages installs from one registry port"
-                ),
-            }
+    /// On a plan opened with `installs: false` (it changes no lock, so it accepted any lock).
+    pub(crate) fn install(&mut self, ask: Ask, install: Install<'a>) {
+        let Install {
+            module,
+            sha256,
+            pin,
+            from,
+        } = install;
+        self.lock
+            .as_mut()
+            .expect("a plan opened with installs: false stages no install")
+            .put(pin.entry(&sha256));
+        if self.verb.enables() {
+            self.enable(ask, pin.name.as_str());
         }
-        let staged = Staged {
+        self.staged.push(Staged {
+            ask,
             name: pin.name.clone(),
             version: pin.version.clone(),
+            module,
+            pin,
             from,
-        };
-        self.change
-            .as_mut()
-            .expect("a plan that only enables stages nothing")
-            .install(module, pin);
-        self.staged.push(staged);
+        });
     }
 
-    /// Enable `name` (a builtin, or an install's bare name) with an entry of its own, after the
-    /// entries `specforge.json` holds; nothing when an entry already enables it.
-    pub(crate) fn enable(&mut self, name: &str) {
+    /// Enable `name` (a builtin, or an install's bare name) for `ask` with an entry of its own,
+    /// after the entries `specforge.json` holds; nothing when an entry already enables it.
+    pub(crate) fn enable(&mut self, ask: Ask, name: &str) {
+        self.wanted.push((ask, name.to_string()));
         let enabled = self
             .entries
             .iter()
@@ -359,20 +549,45 @@ impl<'a> LockPlan<'a> {
         if !enabled {
             self.appended.push(Appended {
                 name: name.to_string(),
+                ask,
                 required_by: None,
             });
         }
     }
 
-    /// The entries the change appends, in order: dependencies first once [`Self::close`] ran.
-    pub(crate) fn appended(&self) -> &[Appended] {
-        &self.appended
+    /// Drop the entries `disabled` selects, for `ask`.
+    pub(crate) fn disable(&mut self, ask: Ask, disabled: Disabled) {
+        self.disabled.push((ask, disabled));
+    }
+
+    /// Uninstall `name` (its module and lock entry), for `ask`. A name the lock does not hold
+    /// changes nothing.
+    ///
+    /// # Panics
+    /// On a plan opened with `uninstalls: false` (it changes no lock, so it accepted any lock).
+    pub(crate) fn uninstall(&mut self, ask: Ask, name: &PackageName) {
+        let lock = self
+            .lock
+            .as_mut()
+            .expect("a plan opened with uninstalls: false uninstalls nothing");
+        if lock.without(name) {
+            self.uninstalled.push((ask, name.clone()));
+        }
+    }
+
+    /// Enable `companion` whenever the change leaves `trigger` enabled (`init`: `@specforge/testing`
+    /// beside `@specforge/software`, a test runner's extension beside `@specforge/testing`).
+    /// Charged to the ask that enabled `trigger`.
+    pub(crate) fn accompany(&mut self, trigger: &'static str, companion: &'static str) {
+        self.companions.push((trigger, companion));
     }
 
     /// The project's installed extensions as the change leaves them.
     fn view(&self) -> Installed {
-        match &self.change {
-            Some(change) => change.installed(),
+        match &self.lock {
+            Some(lock) => {
+                Installed::with_lock(self.installed.root(), LockState::Read(lock.clone()))
+            }
             None => self.installed.clone(),
         }
     }
@@ -381,6 +596,12 @@ impl<'a> LockPlan<'a> {
     fn entries_after(&self) -> Vec<String> {
         self.entries
             .iter()
+            .filter(|entry| {
+                !self
+                    .disabled
+                    .iter()
+                    .any(|(_, disabled)| disabled.drops(entry))
+            })
             .cloned()
             .chain(self.appended.iter().map(|appended| appended.name.clone()))
             .collect()
@@ -394,7 +615,7 @@ impl<'a> LockPlan<'a> {
     ///
     /// A cycle among required builtins ends it too: its builtins are enabled once, and the cycle's
     /// E027 stays the compile's (ADR 0041 D4).
-    pub(crate) fn close(&mut self) -> Result<(), OpError> {
+    fn close(&mut self) -> Result<(), OpError> {
         if !self.verb.enables() {
             return Ok(());
         }
@@ -417,22 +638,75 @@ impl<'a> LockPlan<'a> {
                 }
             }
             if wanted.is_empty() {
+                if self.accompany_enabled() {
+                    continue;
+                }
                 self.dependencies_first(&set);
                 return Ok(());
             }
             for (dependent, builtin) in wanted {
-                let root = self
+                let (ask, root) = match self
                     .appended
                     .iter()
                     .find(|appended| appended.name == dependent)
-                    .and_then(|appended| appended.required_by.clone())
-                    .unwrap_or_else(|| dependent.clone());
+                {
+                    Some(appended) => (
+                        appended.ask,
+                        appended
+                            .required_by
+                            .clone()
+                            .unwrap_or_else(|| dependent.clone()),
+                    ),
+                    None => (
+                        self.staged
+                            .iter()
+                            .find(|staged| staged.name.as_str() == dependent)
+                            .map_or(Ask(0), |staged| staged.ask),
+                        dependent.clone(),
+                    ),
+                };
                 self.appended.push(Appended {
                     name: builtin.to_string(),
+                    ask,
                     required_by: Some(root),
                 });
             }
         }
+    }
+
+    /// Append each companion whose trigger the change leaves enabled and that no entry enables:
+    /// whether it appended any.
+    fn accompany_enabled(&mut self) -> bool {
+        let mut added = false;
+        for (trigger, companion) in self.companions.clone() {
+            let after = self.entries_after();
+            let enabled = |name: &str| {
+                after
+                    .iter()
+                    .any(|entry| specforge_common::extension_entry_name(entry) == name)
+            };
+            if enabled(trigger) && !enabled(companion) {
+                let ask = self
+                    .appended
+                    .iter()
+                    .find(|appended| appended.name == trigger)
+                    .map(|appended| appended.ask)
+                    .or_else(|| {
+                        self.staged
+                            .iter()
+                            .find(|staged| staged.name.as_str() == trigger)
+                            .map(|staged| staged.ask)
+                    })
+                    .unwrap_or(Ask(0));
+                self.appended.push(Appended {
+                    name: companion.to_string(),
+                    ask,
+                    required_by: None,
+                });
+                added = true;
+            }
+        }
+        added
     }
 
     /// The appended entries, each after the appended builtins it requires (its non-optional
@@ -498,41 +772,53 @@ impl<'a> LockPlan<'a> {
     ///
     ///    A member the change breaks is named: "<installing|updating|enabling> '<name>' <version>
     ///    breaks '<dependent>': ...".
-    /// 2. Each fetched install the gate did not refuse: its binary loaded in the fetch's runtime
+    /// 2. Each fetched install the gate did not refuse: its binary loaded in the plan's runtime
     ///    (E028, `extension_conflict`), declaring the name and version it was published as
     ///    (E028) and the declaration it was published with (R-TRUST-004).
     ///
-    /// What passes carries the pins its registry fetches decided (`Publisher::pin`), in staging
-    /// order, for [`Checked::commit`] to save. Lock order and entry order decide nothing.
+    /// Each failure is charged to an ask: a staged install's or appended entry's own, a required
+    /// builtin's to the ask whose extension required it. What passes carries the pins its registry
+    /// fetches decided (`Publisher::pin`), in staging order, for [`Checked::finish`] to save. Lock
+    /// order and entry order decide nothing.
     pub(crate) fn check(mut self) -> Result<Checked<'a>, Refused> {
-        if let Err(error) = self.close() {
-            return Err(Refused::of(
-                &Changing::of(&self.staged, &self.appended),
-                error,
-            ));
-        }
-        let changing = Changing::of(&self.staged, &self.appended);
+        let changing = self.touched()?;
         let mut failed: Vec<Option<(OpError, bool)>> =
             changing.names.iter().map(|_| None).collect();
-        if !changing.names.is_empty() {
+        if !changing.names.is_empty() && !(self.verb == Verb::Remove && self.force) {
             let (view, after) = (self.view(), self.entries_after());
             let set = match ProjectPeers::of(&view, &after, &mut self.declarations) {
                 Ok(set) => set,
                 Err(error) => return Err(Refused::of(&changing, error)),
             };
-            for edge in unsatisfied(&set, &changing) {
+            let edges = unsatisfied(&set, &changing);
+            for edge in &edges {
                 let owner = edge.owner(&changing);
                 if failed[owner].is_none() {
-                    let error = refusal(&set, &self.staged, &changing, owner, &edge, self.verb);
+                    let error = refusal(
+                        &set,
+                        &self.staged,
+                        &changing,
+                        owner,
+                        edge,
+                        &edges,
+                        self.verb,
+                    );
                     failed[owner] = Some((error, true));
                 }
             }
         }
         let LockPlan {
-            change,
+            installed,
+            lock,
             staged,
+            entries,
             appended,
-            registry,
+            wanted,
+            fetching,
+            purpose,
+            disabled,
+            uninstalled,
+            edits_config,
             ..
         } = self;
         for (i, s) in staged.iter().enumerate() {
@@ -540,22 +826,82 @@ impl<'a> LockPlan<'a> {
                 failed[i] = s.load().err().map(|error| (error, false));
             }
         }
-        let (failures, judged): (Vec<(PackageName, OpError)>, Vec<bool>) = changing
-            .names
+        let (failures, judged): (Vec<(Ask, OpError)>, Vec<bool>) = changing
+            .asks
             .iter()
             .zip(failed)
-            .filter_map(|(name, f)| f.map(|(e, judged)| ((package_of(name), e), judged)))
+            .filter_map(|(ask, f)| f.map(|(e, judged)| ((*ask, e), judged)))
             .unzip();
-        if failures.is_empty() {
-            let pins = staged.iter().filter_map(Staged::key_pin).collect();
-            Ok(Checked {
-                change,
-                pins: registry.map(|registry| (registry, pins)),
-                appended,
-            })
-        } else {
-            Err(Refused { failures, judged })
+        if !failures.is_empty() {
+            return Err(Refused { failures, judged });
         }
+        let pins = staged.iter().filter_map(Staged::key_pin).collect();
+        Ok(Checked {
+            installed,
+            changes_lock: lock.is_some(),
+            installs: staged
+                .into_iter()
+                .filter_map(|staged| staged.module.map(|module| (module, staged.pin)))
+                .collect(),
+            uninstalls: uninstalled.into_iter().map(|(_, name)| name).collect(),
+            disabled: disabled.into_iter().map(|(_, disabled)| disabled).collect(),
+            purpose,
+            edits_config,
+            pins: fetching.map(|fetching| (fetching.registry, pins)),
+            entries,
+            appended,
+            wanted,
+        })
+    }
+
+    /// What the change touches, once what it enables is closed over (E028 refuses the plan when a
+    /// builtin it needs does not load): a staged install, an appended entry, and for a removal the
+    /// members it takes out of the project's peer set or lets load.
+    fn touched(&mut self) -> Result<Changing, Refused> {
+        if self.verb == Verb::Remove {
+            return self.removal_touched();
+        }
+        if let Err(error) = self.close() {
+            return Err(Refused::of(
+                &Changing::of(&self.staged, &self.appended),
+                error,
+            ));
+        }
+        Ok(Changing::of(&self.staged, &self.appended))
+    }
+
+    /// The members that differ between the project peer set before the removal and after it: a
+    /// member it removes, or one it lets load (a `.wasm` file entry another entry shadowed), each
+    /// charged to the first ask.
+    fn removal_touched(&mut self) -> Result<Changing, Refused> {
+        let none = || Changing {
+            names: Vec::new(),
+            asks: Vec::new(),
+            staged: 0,
+        };
+        let before = ProjectPeers::of(self.installed, &self.entries, &mut self.declarations)
+            .map_err(|error| Refused::of(&none(), error))?;
+        let after = ProjectPeers::of(&self.view(), &self.entries_after(), &mut self.declarations)
+            .map_err(|error| Refused::of(&none(), error))?;
+        let mut names: Vec<String> = Vec::new();
+        for member in before.members().iter().chain(after.members()) {
+            if before.member(&member.name) != after.member(&member.name)
+                && !names.contains(&member.name)
+            {
+                names.push(member.name.clone());
+            }
+        }
+        let ask = self
+            .disabled
+            .first()
+            .map(|(ask, _)| *ask)
+            .or_else(|| self.uninstalled.first().map(|(ask, _)| *ask))
+            .unwrap_or(Ask(0));
+        Ok(Changing {
+            asks: names.iter().map(|_| ask).collect(),
+            names,
+            staged: 0,
+        })
     }
 }
 
@@ -563,27 +909,27 @@ impl<'a> LockPlan<'a> {
 /// (an `add`'s install is both, and counts once, as staged).
 struct Changing {
     names: Vec<String>,
+    /// The ask each of `names` is charged to.
+    asks: Vec<Ask>,
     /// How many of `names` are staged installs: the first ones.
     staged: usize,
-}
-
-/// The package a touched name is: staged installs and appended entries are package names.
-fn package_of(name: &str) -> PackageName {
-    PackageName::parse(name).expect("a touched name is a package name")
 }
 
 impl Changing {
     fn of(staged: &[Staged], appended: &[Appended]) -> Changing {
         let mut names: Vec<String> = staged.iter().map(|s| s.name.to_string()).collect();
+        let mut asks: Vec<Ask> = staged.iter().map(|s| s.ask).collect();
         let installs = names.len();
         for entry in appended {
             let name = specforge_common::extension_entry_name(&entry.name);
             if !names.iter().any(|touched| touched == name) {
                 names.push(name.to_string());
+                asks.push(entry.ask);
             }
         }
         Changing {
             names,
+            asks,
             staged: installs,
         }
     }
@@ -604,74 +950,192 @@ impl Changing {
 /// A lock plan the peer rule accepts and whose binaries all loaded as published: what may be
 /// written, and the publisher keys to pin once it is.
 pub(crate) struct Checked<'a> {
-    /// `None` for a plan that stages no install.
-    change: Option<Change<'a>>,
+    installed: &'a Installed,
+    /// Whether the change writes the lock (the plan was opened to install or uninstall).
+    changes_lock: bool,
+    /// The modules to place, each with the lock entry that pins it, in staging order.
+    installs: Vec<(Module, Pin)>,
+    /// The packages to uninstall.
+    uninstalls: Vec<PackageName>,
+    /// The `specforge.json` entries to drop.
+    disabled: Vec<Disabled>,
+    purpose: Purpose,
+    edits_config: bool,
     /// The pins its registry installs call for, and the registry port that pins them; none for a
-    /// plan with no registry install.
+    /// plan that fetches nothing.
     pins: Option<(&'a dyn Registry, Vec<KeyPin>)>,
+    /// What `specforge.json` enabled before the change.
+    entries: Vec<String>,
     appended: Vec<Appended>,
+    wanted: Vec<(Ask, String)>,
 }
 
-/// What a committed plan changed.
+/// A file the change's last step writes after `specforge.json`'s edit and before the pins (`init`'s
+/// config, `.gitignore` and starter). Put back, or removed when it was not there, when the change
+/// fails.
+pub(crate) struct Also<'f> {
+    pub(crate) path: PathBuf,
+    pub(crate) write: Box<dyn FnOnce() -> Result<(), OpError> + 'f>,
+}
+
+/// What a finished plan did, or for a preview would do.
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct Applied {
+pub(crate) struct Done {
+    /// The files written; none for a preview.
     pub(crate) writes: Writes,
-    /// The `specforge.json` edit: the names it appended (an entry another writer added since is
-    /// not appended twice) and how many extensions the file enables after it. `None` when the plan
-    /// appended nothing.
-    pub(crate) enabled: Option<crate::config::Enabled>,
+    /// How many extensions `specforge.json` enables after the change (would, for a preview).
+    pub(crate) enabled: usize,
+    asked: Vec<(Ask, Asked)>,
+}
+
+/// What a finished plan did for one ask.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub(crate) struct Asked {
+    /// The entry of the extension it asked for was appended by this change (would be, for a
+    /// preview); `false` when an entry already enabled it, or another writer added it since the
+    /// plan read the file.
+    pub(crate) appended: bool,
+    /// The builtins enabled because its extension requires them, dependencies first.
+    pub(crate) peers_enabled: Vec<&'static str>,
+}
+
+impl Done {
+    /// What the plan did for `ask` (nothing, for an ask the plan changed nothing for).
+    pub(crate) fn asked(&self, ask: Ask) -> Asked {
+        self.asked
+            .iter()
+            .find(|(asked, _)| *asked == ask)
+            .map(|(_, asked)| asked.clone())
+            .unwrap_or_default()
+    }
+}
+
+/// `result`, a missing `specforge.json` being nothing to edit: a project without one (an install
+/// only the lock knows) has no entry to drop.
+fn edited(result: Result<bool, OpError>) -> Result<(), OpError> {
+    match result {
+        Err(error) if error.code == "config_not_found" => Ok(()),
+        other => other.map(|_| ()),
+    }
 }
 
 impl Checked<'_> {
-    /// The entries the change appends, dependencies first.
-    pub(crate) fn appended(&self) -> &[Appended] {
-        &self.appended
+    /// What `specforge.json` enables as the change leaves it, in order: the entries it held
+    /// without the dropped ones, then the appended ones, dependencies first.
+    pub(crate) fn entries(&self) -> Vec<String> {
+        self.entries
+            .iter()
+            .filter(|entry| !self.disabled.iter().any(|disabled| disabled.drops(entry)))
+            .cloned()
+            .chain(self.appended.iter().map(|appended| appended.name.clone()))
+            .collect()
     }
 
-    /// Write it, all or nothing (ADR 0028 D4): each staged module placed, the lock written once,
-    /// then the appended entries (`config::enable`, the change's `specforge.json` edit) and last
-    /// the publisher keys pinned (ADR 0059). A plan that stages no install writes no module and no
-    /// lock: only the edit runs. A failure at any step, the pins' included (R-TRUST-006), puts
-    /// every file back and pins nothing. The error's writes name what could not be put back
-    /// (normally nothing).
-    pub(crate) fn commit(self, root: &Path) -> Result<Applied, OpError> {
+    /// A preview answers without writing. A commit writes, all or nothing (ADR 0028 D4): each
+    /// staged module placed and each uninstalled one moved aside, the lock once (when a module
+    /// changed), then the last step: `specforge.json`'s edit (the appended entries, the dropped
+    /// ones) and last the publisher keys its fetches accepted (ADR 0059). A plan that stages no
+    /// module writes no lock. A failure at any step, the pins' included (R-TRUST-006), puts every
+    /// file back and pins nothing. The error's writes name what could not be put back (normally
+    /// nothing).
+    pub(crate) fn finish(self, root: &Path, also: Vec<Also<'_>>) -> Result<Done, OpError> {
+        let final_entries = self.entries();
         let Checked {
-            change,
+            installed,
+            changes_lock,
+            installs,
+            uninstalls,
+            disabled,
+            purpose,
+            edits_config,
             pins,
             appended,
+            wanted,
+            ..
         } = self;
         let names: Vec<&str> = appended
             .iter()
             .map(|appended| appended.name.as_str())
             .collect();
-        let config_path = root.join(crate::config::CONFIG_FILE);
+        let edited_config = edits_config && (!names.is_empty() || !disabled.is_empty());
+        let also_paths: Vec<PathBuf> = also.iter().map(|also| also.path.clone()).collect();
         let mut enabled = None;
-        let last = || -> Result<(), OpError> {
-            if !names.is_empty() {
-                enabled = Some(crate::config::enable(root, &names)?);
+        let mut writes = Writes::none();
+        if purpose == Purpose::Commit {
+            let config_path = root.join(crate::config::CONFIG_FILE);
+            let last = || -> Result<(), OpError> {
+                if edits_config && !names.is_empty() {
+                    enabled = Some(crate::config::enable(root, &names)?);
+                }
+                for dropped in &disabled {
+                    edited(match dropped {
+                        Disabled::Named(name) => crate::config::remove_extension(root, name),
+                        Disabled::Entry(entry) => crate::config::remove_entry(root, entry),
+                    })?;
+                }
+                for file in also {
+                    (file.write)()?;
+                }
+                record(pins)
+            };
+            let mut change = if changes_lock {
+                installed
+                    .change()
+                    .map_err(|why| OpError::of(OpErrorKind::SchemaMismatch, why))?
+            } else {
+                installed.change_entries()
+            };
+            for (module, pin) in installs {
+                change.install(module, pin);
             }
-            record(pins)
-        };
-        let writes = match change {
-            Some(change) => change
-                .commit_with(
-                    (!names.is_empty()).then_some(config_path.as_path()),
-                    last,
-                    |why| OpError::of(OpErrorKind::Internal, why),
+            for name in &uninstalls {
+                change.uninstall(name);
+            }
+            let committed = change
+                .files(
+                    edited_config
+                        .then(|| config_path.clone())
+                        .into_iter()
+                        .chain(also_paths),
                 )
-                .map(|committed| Writes::of(committed.changed))
-                .map_err(|failed| failed.error.with_writes(Writes::of(failed.left)))?,
-            None => {
-                last()?;
-                let mut writes = Writes::none();
-                writes.record_if(
-                    enabled.as_ref().is_some_and(|e| !e.appended.is_empty()),
-                    &config_path,
-                );
-                writes
-            }
+                .commit_with(last, |why| OpError::of(OpErrorKind::Internal, why))
+                .map_err(|failed| failed.error.with_writes(Writes::of(failed.left)))?;
+            writes = Writes::of(committed.changed);
+        }
+
+        let written = |name: &str| match purpose {
+            Purpose::Commit if !edits_config => names.contains(&name),
+            Purpose::Commit => enabled
+                .as_ref()
+                .is_some_and(|enabled| enabled.appended.iter().any(|a| a == name)),
+            Purpose::Preview => names.contains(&name),
         };
-        Ok(Applied { writes, enabled })
+        let mut asked: Vec<(Ask, Asked)> = Vec::new();
+        for (ask, name) in &wanted {
+            if asked.iter().any(|(known, _)| known == ask) {
+                continue;
+            }
+            asked.push((
+                *ask,
+                Asked {
+                    appended: written(name),
+                    // Each is reported once, by the ask whose extension first required it.
+                    peers_enabled: appended
+                        .iter()
+                        .filter(|entry| entry.ask == *ask && entry.required_by.is_some())
+                        .filter(|entry| written(&entry.name))
+                        .filter_map(|entry| super::builtin_name(&entry.name))
+                        .collect(),
+                },
+            ));
+        }
+        Ok(Done {
+            writes,
+            enabled: enabled
+                .as_ref()
+                .map_or(final_entries.len(), |enabled| enabled.total),
+            asked,
+        })
     }
 }
 
@@ -683,28 +1147,28 @@ fn record(pins: Option<(&dyn Registry, Vec<KeyPin>)>) -> Result<(), OpError> {
     }
 }
 
-/// Why a lock plan was refused: each touched package that can't be installed or enabled, with its
-/// first reason, in staging order.
+/// Why a lock plan was refused: each ask that can't be done, with its first reason, in staging
+/// order.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Refused {
-    pub(crate) failures: Vec<(PackageName, OpError)>,
+    failures: Vec<(Ask, OpError)>,
     /// For each failure, whether the peer rule refused it (else its binary did not load).
     judged: Vec<bool>,
 }
 
 impl Refused {
-    /// `error`, refusing the plan as a whole: charged to the first package it touches.
+    /// `error`, refusing the plan as a whole: charged to the first ask it touches.
     fn of(changing: &Changing, error: OpError) -> Refused {
         Refused {
-            failures: vec![(package_of(&changing.names[0]), error)],
+            failures: vec![(changing.asks.first().copied().unwrap_or(Ask(0)), error)],
             judged: vec![true],
         }
     }
 
-    /// What an operation installing a set all or nothing reports (`add` of several): the first
-    /// install the peer rule refused, else the first whose binary did not load. A refusal the set
-    /// earns is not hidden by a binary the plan would never have loaded.
-    pub(crate) fn decisive(self) -> (PackageName, OpError) {
+    /// What an all-or-nothing operation reports (`add`, `init`): the first ask the peer rule
+    /// refused, else the first whose binary did not load. A refusal the set earns is not hidden by
+    /// a binary the plan would never have loaded.
+    pub(crate) fn decisive(self) -> (Ask, OpError) {
         let at = self
             .judged
             .iter()
@@ -716,13 +1180,9 @@ impl Refused {
             .expect("a refused plan has a failure")
     }
 
-    /// The first failure: what an operation that stages one install reports.
-    pub(crate) fn first(self) -> OpError {
+    /// Every refused ask, in staging order (`update` marks each row).
+    pub(crate) fn failures(self) -> Vec<(Ask, OpError)> {
         self.failures
-            .into_iter()
-            .next()
-            .map(|(_, error)| error)
-            .expect("a refused plan has a failure")
     }
 }
 
@@ -769,8 +1229,12 @@ fn refusal(
     changing: &Changing,
     owner: usize,
     edge: &Edge,
+    edges: &[Edge],
     verb: Verb,
 ) -> OpError {
+    if verb == Verb::Remove {
+        return removal_refusal(changing, owner, edge, edges);
+    }
     let peer = edge.declared.name.as_str();
     let checks = || {
         OpError::of(
@@ -787,10 +1251,10 @@ fn refusal(
         Verdict::Missing => checks(),
         Verdict::OutOfRange { installed } | Verdict::NotSemver { installed } => {
             match set.member(peer).map(|member| &member.origin) {
-                Some(MemberOrigin::Builtin) => {
+                Some(Origin::Builtin) => {
                     let dependent_is_builtin = set
                         .member(edge.dependent)
-                        .is_some_and(|member| member.origin == MemberOrigin::Builtin);
+                        .is_some_and(|member| member.origin == Origin::Builtin);
                     checks().with_suggestion(if dependent_is_builtin {
                         "this specforge build's builtin extensions disagree: reinstall specforge"
                             .to_string()
@@ -801,7 +1265,7 @@ fn refusal(
                         )
                     })
                 }
-                Some(MemberOrigin::Installed(_)) => {
+                Some(Origin::Installed { .. }) => {
                     match staged.get(owner).and_then(Staged::registry) {
                         None => checks(),
                         Some(registry) => {
@@ -816,7 +1280,7 @@ fn refusal(
                         }
                     }
                 }
-                Some(MemberOrigin::File(_)) | None => checks(),
+                Some(Origin::File { .. } | Origin::Unknown) | None => checks(),
             }
         }
         Verdict::Satisfied => unreachable!("filtered by `unsatisfied`"),
@@ -843,6 +1307,37 @@ fn refusal(
             edge.dependent
         ))
     }
+}
+
+/// Why a removal is refused for `edge`: what it takes out of the project's peer set (or lets load)
+/// leaves a member's required peer unsatisfied. "removing '<name>' breaks '<dependent>': ...",
+/// its suggestion naming every member the removal leaves that way.
+fn removal_refusal(changing: &Changing, owner: usize, edge: &Edge, edges: &[Edge]) -> OpError {
+    let diagnostic = match &edge.verdict {
+        Verdict::Unreadable(why) => {
+            specforge_common::peers::unreadable(edge.dependent, edge.declared, why)
+        }
+        verdict => specforge_common::peers::of(edge.dependent, edge.declared, verdict)
+            .expect("an unsatisfied peer is a diagnostic"),
+    };
+    let error = OpError::of(OpErrorKind::Conflict, diagnostic);
+    if changing.contains(edge.dependent) {
+        return error;
+    }
+    let name = &changing.names[owner];
+    let mut dependents: Vec<String> = edges
+        .iter()
+        .filter(|other| other.declared.name == *name && !changing.contains(other.dependent))
+        .map(|other| format!("'{}'", other.dependent))
+        .collect();
+    dependents.sort();
+    dependents.dedup();
+    error
+        .prefixed(format!("removing '{name}' breaks '{}': ", edge.dependent))
+        .with_suggestion(format!(
+            "remove {} first, or use --force to remove '{name}' anyway",
+            dependents.join(", ")
+        ))
 }
 
 /// R-RES-006 naming the version of `edge`'s peer every requirer in `set` accepts, or R-RES-005
@@ -952,29 +1447,6 @@ fn shown_path(root: &Path, path: &Path) -> String {
         .to_string()
 }
 
-/// Install `locals`, read once by `init`'s plan, into the project at `root` whose `specforge.json`
-/// enables `entries`, as one change, judged again (only a `Checked` commits). No writes when
-/// `locals` is empty.
-pub(crate) fn install_local(
-    root: &Path,
-    entries: &[String],
-    locals: Vec<LocalFile>,
-    runtime: &dyn WasmRuntime,
-) -> Result<Writes, OpError> {
-    if locals.is_empty() {
-        return Ok(Writes::none());
-    }
-    let installed = Installed::at(root);
-    let mut plan = LockPlan::new(&installed, entries, runtime, Verb::Install)?;
-    for local in locals {
-        plan.stage(Install::local(root, local)?);
-    }
-    plan.check()
-        .map_err(Refused::first)?
-        .commit(root)
-        .map(|applied| applied.writes)
-}
-
 #[cfg(test)]
 mod tests {
     use super::super::fixtures::entry;
@@ -1059,15 +1531,16 @@ mod tests {
             .serving(published("2.0.0", b"\0asm b2"))
     }
 
-    fn fetch<'a>(
-        registry: &'a MemoryRegistry,
-        runtime: &'a InProcessRuntime,
-        installed: &'a Installed,
-    ) -> Fetch<'a> {
-        Fetch {
+    /// The registry of a plan that fetches nothing.
+    fn no_registry() -> &'static MemoryRegistry {
+        static NONE: std::sync::LazyLock<MemoryRegistry> =
+            std::sync::LazyLock::new(MemoryRegistry::new);
+        &NONE
+    }
+
+    fn fetching(registry: &MemoryRegistry) -> Fetching<'_> {
+        Fetching {
             registry,
-            runtime,
-            installed,
             allow_unsigned: true,
             trust: Trust::Refuse,
         }
@@ -1086,10 +1559,12 @@ mod tests {
         .unwrap()
     }
 
-    /// A plan over `installed` whose `specforge.json` enables every locked extension.
-    fn plan<'a>(
+    /// A plan over `installed` whose `specforge.json` enables every locked extension, fetching
+    /// from `registry`.
+    fn plan_from<'a>(
         installed: &'a Installed,
         runtime: &'a InProcessRuntime,
+        registry: &'a MemoryRegistry,
         verb: Verb,
     ) -> LockPlan<'a> {
         let entries: Vec<String> = installed
@@ -1098,17 +1573,43 @@ mod tests {
             .iter()
             .map(|e| e.name.to_string())
             .collect();
-        LockPlan::new(installed, &entries, runtime, verb).unwrap()
+        match verb {
+            Verb::Install => LockPlan::adding(
+                installed,
+                &entries,
+                runtime,
+                fetching(registry),
+                Purpose::Commit,
+                true,
+            ),
+            Verb::Update => LockPlan::updating(installed, &entries, runtime, fetching(registry)),
+            Verb::Remove => unreachable!("a removal is planned over a compiled project"),
+        }
+        .unwrap()
     }
 
-    /// Stage `install`, enabled by its bare name as `add` enables it.
+    /// [`plan_from`] a registry that serves nothing.
+    fn plan<'a>(
+        installed: &'a Installed,
+        runtime: &'a InProcessRuntime,
+        verb: Verb,
+    ) -> LockPlan<'a> {
+        plan_from(installed, runtime, no_registry(), verb)
+    }
+
+    /// Stage `install` for the first ask; `add` enables it by its bare name.
     fn stage<'a>(plan: &mut LockPlan<'a>, install: Install<'a>) {
-        plan.enable(install.name().as_str());
-        plan.stage(install);
+        plan.install(Ask(0), install);
+    }
+
+    /// `name@version` fetched from the plan's registry and staged.
+    fn stage_fetched(plan: &mut LockPlan<'_>, name: &PackageName, version: Version) {
+        let install = plan.fetch(name, &version).unwrap();
+        stage(plan, install);
     }
 
     fn refused(plan: LockPlan<'_>) -> OpError {
-        plan.check().map(drop).unwrap_err().first()
+        plan.check().map(drop).unwrap_err().failures().remove(0).1
     }
 
     #[specforge_test(
@@ -1123,15 +1624,11 @@ mod tests {
             declaration("@acme/app", "1.0.0", &[("@acme/base", "^2.0")]),
         );
         let registry = registry.serving(app);
-        let mut plan = plan(&installed, &runtime, Verb::Install);
-        stage(
+        let mut plan = plan_from(&installed, &runtime, &registry, Verb::Install);
+        stage_fetched(
             &mut plan,
-            fetch(&registry, &runtime, &installed)
-                .install(
-                    &PackageName::parse("@acme/app").unwrap(),
-                    &Version::new(1, 0, 0),
-                )
-                .unwrap(),
+            &PackageName::parse("@acme/app").unwrap(),
+            Version::new(1, 0, 0),
         );
 
         let err = refused(plan);
@@ -1160,15 +1657,11 @@ mod tests {
             declaration("@acme/app", "1.0.0", &[("@acme/base", "^2.0")]),
         ));
         let runtime = runtime();
-        let mut plan = plan(&installed, &runtime, Verb::Install);
-        stage(
+        let mut plan = plan_from(&installed, &runtime, &registry, Verb::Install);
+        stage_fetched(
             &mut plan,
-            fetch(&registry, &runtime, &installed)
-                .install(
-                    &PackageName::parse("@acme/app").unwrap(),
-                    &Version::new(1, 0, 0),
-                )
-                .unwrap(),
+            &PackageName::parse("@acme/app").unwrap(),
+            Version::new(1, 0, 0),
         );
 
         let err = refused(plan);
@@ -1208,15 +1701,11 @@ mod tests {
             declaration("@acme/app", "1.0.0", &[("@acme/base", "^2.0")]),
         ));
         let runtime = runtime();
-        let mut plan = plan(&installed, &runtime, Verb::Install);
-        stage(
+        let mut plan = plan_from(&installed, &runtime, &registry, Verb::Install);
+        stage_fetched(
             &mut plan,
-            fetch(&registry, &runtime, &installed)
-                .install(
-                    &PackageName::parse("@acme/app").unwrap(),
-                    &Version::new(1, 0, 0),
-                )
-                .unwrap(),
+            &PackageName::parse("@acme/app").unwrap(),
+            Version::new(1, 0, 0),
         );
 
         let err = refused(plan);
@@ -1254,15 +1743,11 @@ mod tests {
             declaration("@acme/app", "1.0.0", &[("@acme/base", ">=1.0.0")]),
         ));
         let runtime = runtime();
-        let mut plan = plan(&installed, &runtime, Verb::Install);
-        stage(
+        let mut plan = plan_from(&installed, &runtime, &registry, Verb::Install);
+        stage_fetched(
             &mut plan,
-            fetch(&registry, &runtime, &installed)
-                .install(
-                    &PackageName::parse("@acme/app").unwrap(),
-                    &Version::new(1, 0, 0),
-                )
-                .unwrap(),
+            &PackageName::parse("@acme/app").unwrap(),
+            Version::new(1, 0, 0),
         );
 
         let err = refused(plan);
@@ -1281,15 +1766,11 @@ mod tests {
                 .unwrap()
                 .0,
         ));
-        let mut plan = plan(&installed, &runtime, Verb::Install);
-        stage(
+        let mut plan = plan_from(&installed, &runtime, &registry, Verb::Install);
+        stage_fetched(
             &mut plan,
-            fetch(&registry, &runtime, &installed)
-                .install(
-                    &PackageName::parse("@acme/app").unwrap(),
-                    &Version::new(1, 0, 0),
-                )
-                .unwrap(),
+            &PackageName::parse("@acme/app").unwrap(),
+            Version::new(1, 0, 0),
         );
 
         plan.check().map(drop).unwrap();
@@ -1312,15 +1793,11 @@ mod tests {
             declaration("@acme/app", "1.0.0", &[("@acme/base", "^2.0")]),
         ));
         let runtime = runtime();
-        let mut plan = plan(&installed, &runtime, Verb::Install);
-        stage(
+        let mut plan = plan_from(&installed, &runtime, &registry, Verb::Install);
+        stage_fetched(
             &mut plan,
-            fetch(&registry, &runtime, &installed)
-                .install(
-                    &PackageName::parse("@acme/app").unwrap(),
-                    &Version::new(1, 0, 0),
-                )
-                .unwrap(),
+            &PackageName::parse("@acme/app").unwrap(),
+            Version::new(1, 0, 0),
         );
 
         let err = refused(plan);
@@ -1341,21 +1818,17 @@ mod tests {
             declaration("@acme/app", "2.0.0", &[("@acme/base", "^2")]),
         ));
         let runtime = runtime();
-        let mut plan = plan(&installed, &runtime, Verb::Install);
-        stage(
+        let mut plan = plan_from(&installed, &runtime, &registry, Verb::Install);
+        stage_fetched(
             &mut plan,
-            fetch(&registry, &runtime, &installed)
-                .install(
-                    &PackageName::parse("@acme/app").unwrap(),
-                    &Version::new(2, 0, 0),
-                )
-                .unwrap(),
+            &PackageName::parse("@acme/app").unwrap(),
+            Version::new(2, 0, 0),
         );
 
         // The staged entry replaced the previous one: base has one requirer, at ^2.
-        let view = plan.change.as_ref().unwrap().installed();
+        let view = plan.view();
         let entries = ["@acme/base".to_string(), "@acme/app".to_string()];
-        let set = ProjectPeers::of(&view, &entries, &mut Declarations::new(&runtime)).unwrap();
+        let set = ProjectPeers::of(&view, &entries, &mut Declarations::through(&runtime)).unwrap();
         let listed = set.requirers("@acme/base");
         assert_eq!(listed.len(), 1);
         assert_eq!(
@@ -1443,7 +1916,15 @@ mod tests {
         ]);
         let runtime = runtime();
         // No entry enables `@acme/other`: it is in the lock only.
-        let mut plan = LockPlan::new(&installed, &[], &runtime, Verb::Install).unwrap();
+        let mut plan = LockPlan::adding(
+            &installed,
+            &[],
+            &runtime,
+            fetching(no_registry()),
+            Purpose::Commit,
+            true,
+        )
+        .unwrap();
         stage(&mut plan, local(&runtime, BASE, "base.wasm"));
 
         assert!(plan.check().is_ok());
@@ -1517,15 +1998,11 @@ mod tests {
             declaration("@acme/app", "1.0.0", &[("@acme/base", "^2.0")]),
         ));
         let runtime = runtime();
-        let mut plan = plan(&installed, &runtime, Verb::Install);
-        stage(
+        let mut plan = plan_from(&installed, &runtime, &registry, Verb::Install);
+        stage_fetched(
             &mut plan,
-            fetch(&registry, &runtime, &installed)
-                .install(
-                    &PackageName::parse("@acme/app").unwrap(),
-                    &Version::new(1, 0, 0),
-                )
-                .unwrap(),
+            &PackageName::parse("@acme/app").unwrap(),
+            Version::new(1, 0, 0),
         );
 
         let err = refused(plan);
@@ -1573,16 +2050,8 @@ mod tests {
         runtime: &'a InProcessRuntime,
         installed: &'a Installed,
     ) -> LockPlan<'a> {
-        let mut plan = plan(installed, runtime, Verb::Install);
-        stage(
-            &mut plan,
-            fetch(registry, runtime, installed)
-                .install(
-                    &PackageName::parse("@acme/app").unwrap(),
-                    &Version::new(1, 0, 0),
-                )
-                .unwrap(),
-        );
+        let mut plan = plan_from(installed, runtime, registry, Verb::Install);
+        stage_fetched(&mut plan, &app(), Version::new(1, 0, 0));
         plan
     }
 
@@ -1606,13 +2075,8 @@ mod tests {
             )
             .signed_by("k1"),
         );
-        let mut plan = plan(&installed, &runtime, Verb::Install);
-        stage(
-            &mut plan,
-            fetch(&refused_app, &runtime, &installed)
-                .install(&app(), &Version::new(1, 0, 0))
-                .unwrap(),
-        );
+        let mut plan = plan_from(&installed, &runtime, &refused_app, Verb::Install);
+        stage_fetched(&mut plan, &app(), Version::new(1, 0, 0));
         assert_eq!(refused(plan).code, "R-RES-005");
         assert!(refused_app.pins().is_empty());
 
@@ -1627,7 +2091,7 @@ mod tests {
 
         // Committed: pinned.
         let checked = stage_app(&registry, &runtime, &installed).check().unwrap();
-        checked.commit(dir.path()).unwrap();
+        checked.finish(dir.path(), Vec::new()).unwrap();
         assert_eq!(registry.pins(), [(app(), "k1".to_string())].into());
     }
 
@@ -1643,7 +2107,7 @@ mod tests {
         stage_app(&registry, &runtime, &installed)
             .check()
             .unwrap()
-            .commit(dir.path())
+            .finish(dir.path(), Vec::new())
             .unwrap();
 
         let lock = specforge_installed::read_lock_file(&specforge_installed::lock_path(dir.path()))
@@ -1680,7 +2144,7 @@ mod tests {
         let error = stage_app(&registry, &runtime, &installed)
             .check()
             .unwrap()
-            .commit(dir.path())
+            .finish(dir.path(), Vec::new())
             .unwrap_err();
 
         assert!(error.is(codes::R_TRUST_006), "{error:?}");
@@ -1701,7 +2165,7 @@ mod tests {
         stage_app(&registry, &runtime, &installed)
             .check()
             .unwrap()
-            .commit(dir.path())
+            .finish(dir.path(), Vec::new())
             .unwrap();
         assert_eq!(registry.pins(), [(app(), "k1".to_string())].into());
 
@@ -1712,7 +2176,7 @@ mod tests {
         stage_app(&registry, &runtime, &installed)
             .check()
             .unwrap()
-            .commit(dir.path())
+            .finish(dir.path(), Vec::new())
             .unwrap();
         assert!(registry.pins().is_empty());
     }
@@ -1726,15 +2190,11 @@ mod tests {
             declaration("@acme/app", "1.0.0", &[]),
         ));
         let runtime = runtime();
-        let mut plan = plan(&installed, &runtime, Verb::Install);
-        stage(
+        let mut plan = plan_from(&installed, &runtime, &registry, Verb::Install);
+        stage_fetched(
             &mut plan,
-            fetch(&registry, &runtime, &installed)
-                .install(
-                    &PackageName::parse("@acme/app").unwrap(),
-                    &Version::new(1, 0, 0),
-                )
-                .unwrap(),
+            &PackageName::parse("@acme/app").unwrap(),
+            Version::new(1, 0, 0),
         );
 
         let err = refused(plan);
@@ -1748,17 +2208,13 @@ mod tests {
         let installed = nowhere(base_and_other("^1.0"));
         let runtime = runtime();
         let mut plan = plan(&installed, &runtime, Verb::Install);
-        stage(&mut plan, local(&runtime, APP_NEEDS_BASE_3, "app.wasm"));
-        stage(&mut plan, local(&runtime, BASE, "base.wasm"));
+        plan.install(Ask(0), local(&runtime, APP_NEEDS_BASE_3, "app.wasm"));
+        plan.install(Ask(1), local(&runtime, BASE, "base.wasm"));
 
         let refused = plan.check().map(drop).unwrap_err();
 
-        let names: Vec<String> = refused
-            .failures
-            .iter()
-            .map(|(name, _)| name.to_string())
-            .collect();
-        assert_eq!(names, ["@acme/app", "@acme/base"]);
+        let asks: Vec<Ask> = refused.failures().iter().map(|(ask, _)| *ask).collect();
+        assert_eq!(asks, [Ask(0), Ask(1)]);
     }
 
     /// `bytes` published as the package the in-process probe runtime says they declare.
@@ -1776,15 +2232,19 @@ mod tests {
         let registry =
             MemoryRegistry::new().serving(published_probe(crate::testing::NEEDS_SOFTWARE_9));
         let entries = ["@specforge/software".to_string()];
-        let mut plan = LockPlan::new(&installed, &entries, &runtime, Verb::Install).unwrap();
-        stage(
+        let mut plan = LockPlan::adding(
+            &installed,
+            &entries,
+            &runtime,
+            fetching(&registry),
+            Purpose::Commit,
+            true,
+        )
+        .unwrap();
+        stage_fetched(
             &mut plan,
-            fetch(&registry, &runtime, &installed)
-                .install(
-                    &PackageName::parse("@probe/needs-software").unwrap(),
-                    &Version::new(1, 0, 0),
-                )
-                .unwrap(),
+            &PackageName::parse("@probe/needs-software").unwrap(),
+            Version::new(1, 0, 0),
         );
 
         let err = refused(plan);
@@ -1820,7 +2280,7 @@ mod tests {
         )]);
         let runtime = crate::testing::probes();
         let mut plan = plan(&installed, &runtime, Verb::Install);
-        plan.enable("@specforge/software");
+        plan.enable(Ask(0), "@specforge/software");
 
         let err = refused(plan);
 
@@ -1848,7 +2308,15 @@ mod tests {
         // `dep.wasm` wants `@probe/base` ^1: installing base 2.0.0 breaks it.
         std::fs::write(dir.path().join("dep.wasm"), crate::testing::DEP_1).unwrap();
         let entries = ["dep.wasm".to_string()];
-        let mut plan = LockPlan::new(&installed, &entries, &runtime, Verb::Install).unwrap();
+        let mut plan = LockPlan::adding(
+            &installed,
+            &entries,
+            &runtime,
+            fetching(no_registry()),
+            Purpose::Commit,
+            true,
+        )
+        .unwrap();
         stage(
             &mut plan,
             local(&runtime, crate::testing::BASE_2, "base.wasm"),
@@ -1864,7 +2332,15 @@ mod tests {
         // `base.wasm` is 2.0.0: the dep installed beside it does not get the ^1 it wants.
         std::fs::write(dir.path().join("base.wasm"), crate::testing::BASE_2).unwrap();
         let entries = ["base.wasm".to_string()];
-        let mut plan = LockPlan::new(&installed, &entries, &runtime, Verb::Install).unwrap();
+        let mut plan = LockPlan::adding(
+            &installed,
+            &entries,
+            &runtime,
+            fetching(no_registry()),
+            Purpose::Commit,
+            true,
+        )
+        .unwrap();
         stage(
             &mut plan,
             local(&runtime, crate::testing::DEP_1, "dep.wasm"),
@@ -1898,15 +2374,19 @@ mod tests {
             declaration("@acme/app", "1.0.0", &[("@acme/base", "^2.0")]),
         ));
         let entries = ["@acme/base".to_string(), "x.wasm".to_string()];
-        let mut plan = LockPlan::new(&installed, &entries, &runtime, Verb::Install).unwrap();
-        stage(
+        let mut plan = LockPlan::adding(
+            &installed,
+            &entries,
+            &runtime,
+            fetching(&registry),
+            Purpose::Commit,
+            true,
+        )
+        .unwrap();
+        stage_fetched(
             &mut plan,
-            fetch(&registry, &runtime, &installed)
-                .install(
-                    &PackageName::parse("@acme/app").unwrap(),
-                    &Version::new(1, 0, 0),
-                )
-                .unwrap(),
+            &PackageName::parse("@acme/app").unwrap(),
+            Version::new(1, 0, 0),
         );
 
         let err = refused(plan);
@@ -1925,7 +2405,15 @@ mod tests {
         // The runtime serves `APP`, not the builtin `@specforge/software`.
         let runtime = runtime();
         let entries = ["@specforge/software".to_string()];
-        let mut plan = LockPlan::new(&installed, &entries, &runtime, Verb::Install).unwrap();
+        let mut plan = LockPlan::adding(
+            &installed,
+            &entries,
+            &runtime,
+            fetching(no_registry()),
+            Purpose::Commit,
+            true,
+        )
+        .unwrap();
         stage(&mut plan, local(&runtime, APP, "app.wasm"));
 
         let err = refused(plan);
@@ -1947,12 +2435,28 @@ mod tests {
         let runtime = crate::testing::probes();
 
         // A plan that only enables opens no change: the lock hides the installed extensions.
-        let mut enabling = LockPlan::enabling(&installed, &[], &runtime);
-        enabling.enable("@specforge/software");
+        let mut enabling = LockPlan::adding(
+            &installed,
+            &[],
+            &runtime,
+            fetching(no_registry()),
+            Purpose::Commit,
+            false,
+        )
+        .unwrap();
+        enabling.enable(Ask(0), "@specforge/software");
         assert!(enabling.check().is_ok());
 
         // One that installs refuses: writing a lock would drop what it records.
-        let refused = LockPlan::new(&installed, &[], &runtime, Verb::Install).map(drop);
+        let refused = LockPlan::adding(
+            &installed,
+            &[],
+            &runtime,
+            fetching(no_registry()),
+            Purpose::Commit,
+            true,
+        )
+        .map(drop);
         assert_eq!(refused.unwrap_err().code, "E033");
     }
 
@@ -1983,12 +2487,20 @@ mod tests {
         );
         let installed = nowhere(Vec::new());
 
-        let mut plan = LockPlan::new(&installed, &[], &runtime, Verb::Install).unwrap();
+        let mut plan = LockPlan::adding(
+            &installed,
+            &[],
+            &runtime,
+            fetching(no_registry()),
+            Purpose::Commit,
+            true,
+        )
+        .unwrap();
         stage(&mut plan, local(&runtime, APP_NEEDS_FORMAL, "app.wasm"));
         plan.close().unwrap();
 
         let appended: Vec<(&str, Option<&str>)> = plan
-            .appended()
+            .appended
             .iter()
             .map(|a| (a.name.as_str(), a.required_by.as_deref()))
             .collect();
@@ -2002,14 +2514,22 @@ mod tests {
             "the optional product is not enabled"
         );
         plan.close().unwrap();
-        assert_eq!(plan.appended().len(), 3, "idempotent");
+        assert_eq!(plan.appended.len(), 3, "idempotent");
 
         // Asked in the wrong order, a builtin still comes after the builtin it requires.
-        let mut plan = LockPlan::enabling(&installed, &[], &runtime);
-        plan.enable("@specforge/formal");
-        plan.enable("@specforge/software");
+        let mut plan = LockPlan::adding(
+            &installed,
+            &[],
+            &runtime,
+            fetching(no_registry()),
+            Purpose::Commit,
+            false,
+        )
+        .unwrap();
+        plan.enable(Ask(0), "@specforge/formal");
+        plan.enable(Ask(0), "@specforge/software");
         plan.close().unwrap();
-        let names: Vec<&str> = plan.appended().iter().map(|a| a.name.as_str()).collect();
+        let names: Vec<&str> = plan.appended.iter().map(|a| a.name.as_str()).collect();
         assert_eq!(names, ["@specforge/software", "@specforge/formal"]);
     }
 
@@ -2027,6 +2547,62 @@ mod tests {
             err.message,
             "extension '@acme/app' requires peer dependency '@acme/base' ^2.0 which is not installed"
         );
+    }
+
+    #[specforge_test(
+        behavior = "add_extension_to_existing_project",
+        verify = "add enables the builtins a required builtin peer requires, dependencies first"
+    )]
+    fn each_ask_is_answered_with_the_builtins_its_extension_required() {
+        let builtin = |runtime, name: &'static str, peers| {
+            crate::testing::serving_builtin(runtime, name, declaring(name, "1.0.0", peers))
+        };
+        let runtime = builtin(
+            builtin(
+                runtime(),
+                "@specforge/formal",
+                &[("@specforge/software", "^1.0", false)],
+            ),
+            "@specforge/software",
+            &[],
+        );
+        let enabling = |asked: &[&'static str]| {
+            let dir = tempfile::tempdir().unwrap();
+            std::fs::write(
+                dir.path().join("specforge.json"),
+                "{\"name\":\"p\",\"version\":\"0.1.0\",\"extensions\":[]}",
+            )
+            .unwrap();
+            let installed = Installed::at(dir.path());
+            let mut plan = LockPlan::adding(
+                &installed,
+                &[],
+                &runtime,
+                fetching(no_registry()),
+                Purpose::Commit,
+                false,
+            )
+            .unwrap();
+            for (at, name) in asked.iter().enumerate() {
+                plan.enable(Ask(at), name);
+            }
+            plan.check()
+                .ok()
+                .unwrap()
+                .finish(dir.path(), Vec::new())
+                .unwrap()
+        };
+
+        // software first: formal's requirement is already met by the earlier ask.
+        let done = enabling(&["@specforge/software", "@specforge/formal"]);
+        assert_eq!(done.asked(Ask(0)).peers_enabled, Vec::<&str>::new());
+        assert_eq!(done.asked(Ask(1)).peers_enabled, Vec::<&str>::new());
+        assert!(done.asked(Ask(0)).appended && done.asked(Ask(1)).appended);
+
+        // formal alone enables software with it.
+        let done = enabling(&["@specforge/formal"]);
+        assert_eq!(done.asked(Ask(0)).peers_enabled, ["@specforge/software"]);
+        assert_eq!(done.enabled, 2);
     }
 
     fn req(requirer: &'static str, range: &str) -> (&'static str, PeerDependency) {

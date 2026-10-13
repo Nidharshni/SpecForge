@@ -19,7 +19,7 @@ pub struct Args {
     depth: Option<usize>,
     /// Keep only entities of these kinds; the scoped entity always stays
     kinds: Vec<String>,
-    /// Request a specific schema version for the export
+    /// Fail unless a reader of this schema version reads the export: the same major version, not newer than the project's schema
     schema_version: Option<String>,
     /// Optional token budget; truncates the export to the most central entities that fit
     max_tokens: Option<usize>,

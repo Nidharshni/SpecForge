@@ -7,7 +7,7 @@ use crate::tool::{ErrorCode, McpError};
 /// same document `specforge.schema` returns unfiltered.
 pub fn read(view: &ProjectView) -> ReadOutcome {
     let schema = view.versioned_schema();
-    let schema_json = serde_json::to_string(&schema).map_err(|err| {
+    let schema_json = serde_json::to_string(schema.schema()).map_err(|err| {
         Box::new(McpError::new(
             ErrorCode::InternalError,
             format!("schema serialization failed: {err}"),

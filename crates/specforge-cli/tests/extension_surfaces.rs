@@ -219,8 +219,7 @@ fn one_mistake_is_one_error_object_on_both_surfaces() {
 /// traps.
 fn probe_project() -> TempDir {
     let dir = TempDir::new().unwrap();
-    let probe = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../fixtures/sandbox-probe/probe.wasm");
+    let probe = specforge_component::committed::PROBE.path();
     std::fs::copy(probe, dir.path().join("probe.wasm")).unwrap();
     std::fs::write(
         dir.path().join("specforge.json"),

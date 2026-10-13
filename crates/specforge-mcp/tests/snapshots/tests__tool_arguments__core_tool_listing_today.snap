@@ -1131,7 +1131,7 @@ expression: listing
           "type": "boolean"
         },
         "schema_version": {
-          "description": "Request a specific schema version for the export",
+          "description": "Fail unless a reader of this schema version reads the export: the same major version, not newer than the project's schema",
           "type": "string"
         },
         "scope": {
@@ -4072,6 +4072,12 @@ expression: listing
                   "extension": {
                     "type": "string"
                   },
+                  "peers_enabled": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
                   "source": {
                     "type": "string"
                   },
@@ -4086,7 +4092,8 @@ expression: listing
                   "action",
                   "specifier",
                   "extension",
-                  "source"
+                  "source",
+                  "peers_enabled"
                 ],
                 "type": "object"
               },
@@ -4745,12 +4752,6 @@ expression: listing
         "rolled_back": {
           "type": "boolean"
         },
-        "schema_warnings": {
-          "items": {
-            "$ref": "#/$defs/Diagnostic"
-          },
-          "type": "array"
-        },
         "structural_differences": {
           "items": {
             "$ref": "#/$defs/Diagnostic"
@@ -4777,7 +4778,6 @@ expression: listing
         "backups",
         "hooks_invoked",
         "hook_failures",
-        "schema_warnings",
         "structural_differences",
         "rolled_back",
         "post_migration_validated",

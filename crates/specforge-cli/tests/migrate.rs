@@ -1379,10 +1379,6 @@ fn migration_diff_contract() {
 // ===================================================================
 
 // ===================================================================
-// Phase N: verify_graph_protocol_compatibility — additional coverage
-// ===================================================================
-
-// ===================================================================
 // Phase O: rollback_failed_migration — additional coverage
 // ===================================================================
 
@@ -1700,12 +1696,10 @@ fn dry_run_diff_labels_are_relative_to_the_project_root() {
     );
 }
 
-// The binary half of the migration crate's `non_breaking_schema_change_no_w053`
-// (tests/compare.rs): a real migration of an entity-bearing project passes
-// silently.
+// A real migration of an entity-bearing project passes silently.
 #[specforge_test(
-    behavior = "verify_graph_protocol_compatibility_after_migration",
-    verify = "non-breaking graph change passes silently"
+    behavior = "validate_post_migration_integrity",
+    verify = "structural equivalence verified between pre and post graphs"
 )]
 fn a_migration_of_an_entity_bearing_project_prints_only_the_summary() {
     let tmp = TempDir::new().unwrap();
@@ -1730,17 +1724,13 @@ fn a_migration_of_an_entity_bearing_project_prints_only_the_summary() {
     );
 }
 
-// The binary half of the migration crate's `graph_protocol_compatibility_contract`
-// (tests/compare.rs): `specforge migrate` snapshots the schema before touching
-// files (pre_migration_snapshot_available), runs the extension hooks
-// (extension_hooks_complete), then compares and finishes
-// (graph_protocol_compatibility_emitted). A format-only migration keeps the
-// schema, so it passes with nothing but the summary.
+// A format-only migration keeps the graph, so it passes with nothing but the
+// summary.
 #[specforge_test(
-    behavior = "verify_graph_protocol_compatibility_after_migration",
-    verify = "Verify Graph Protocol Compatibility After Migration: graph protocol compatibility verification holds — pre_migration_snapshot_available, extension_hooks_complete, compatibility_verified, breaking_changes_warned, graph_protocol_compatibility_emitted"
+    behavior = "validate_post_migration_integrity",
+    verify = "post-migration check runs automatically"
 )]
-fn a_format_only_migration_passes_graph_protocol_compatibility_silently() {
+fn a_format_only_migration_passes_silently() {
     let tmp = TempDir::new().unwrap();
     let root = tmp.path();
     fs::write(

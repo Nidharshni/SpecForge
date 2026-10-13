@@ -819,14 +819,16 @@ type McpAddExtensionPresent "An extension already installed and enabled: nothing
 }
 
 type McpAddExtensionPlanned "What a dry run would install or enable" {
-  action    "planned" @literal
+  action        "planned" @literal
   /// The specifier as the call gave it.
-  specifier string
-  extension string    @readonly
+  specifier     string
+  extension     string    @readonly
   /// Absent for a builtin, which tracks the binary.
-  version   string    @optional
+  version       string    @optional
   /// "builtin", "registry", or "local:<path>".
-  source    string
+  source        string
+  /// The required builtins the add would enable with it, dependencies first.
+  peers_enabled string[]
   verify unit "McpAddExtensionPlanned schema is valid"
 }
 
@@ -884,8 +886,6 @@ type McpMigrateResult "A migration: what it ran or previewed, or that nothing wa
   hooks_invoked            string[]
   /// Why each failing hook failed.
   hook_failures            string[]
-  /// Breaking Graph Protocol schema changes (W053).
-  schema_warnings          Diagnostic[]
   /// How the migrated graph differs from the one before (W054).
   structural_differences   Diagnostic[]
   rolled_back              boolean

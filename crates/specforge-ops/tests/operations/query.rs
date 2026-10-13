@@ -170,7 +170,7 @@ fn query_includes_schema_version() {
     assert_eq!(document["format_version"], "2.0");
     assert_eq!(
         document["schema_version"].as_str().unwrap(),
-        project.view().versioned_schema().schema_version.to_string()
+        project.view().versioned_schema().version().to_string()
     );
     assert!(document["schema_ref"]["content_hash"].is_string());
 }

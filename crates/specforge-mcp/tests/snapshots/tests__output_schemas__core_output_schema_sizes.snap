@@ -19,9 +19,9 @@ specforge.suggest_fixes 943
 specforge.format 3513
 specforge.rename 3096
 specforge.init 434
-specforge.add_extension 1923
+specforge.add_extension 1998
 specforge.remove_extension 500
-specforge.migrate 5223
+specforge.migrate 5132
 specforge.extensions 931
 specforge.providers 2922
 specforge.doctor 6084
@@ -32,4 +32,4 @@ specforge.infer_gaps 1101
 specforge.infer_session 295
 specforge.find_implementation 502
 specforge.find_spec_for_source 642
-total 54215
+total 54199

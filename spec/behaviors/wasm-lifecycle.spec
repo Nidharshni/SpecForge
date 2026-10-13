@@ -223,10 +223,11 @@ behavior uninstall_wasm_extension "Uninstall Wasm Extension" {
     When called by remove_extension (behaviors/extensions.spec), the system
     MUST perform the full Wasm lifecycle cleanup: remove the extension entry
     from specforge.json, delete the .wasm binary from the project, and
-    update specforge.lock. If other installed extensions declare a peer
-    dependency on the removed extension, the system MUST reject the removal
-    with a diagnostic listing the dependent extensions unless --force is
-    provided. The session runtime drops the extension's loaded instance
+    update specforge.lock. If an extension of the project's peer set (the
+    extensions its specforge.json entries load, ADR 0041) requires the
+    removed extension as a non-optional peer, the system MUST reject the
+    removal with E027 naming the dependents unless --force is provided; the
+    removal is one lock-plan change, judged before anything is written. The session runtime drops the extension's loaded instance
     (see reuse_session_runtime); stale engine cache entries are inert —
     cache keys include binary content. The binary, the lock entry and the
     specforge.json entry MUST be removed as one change: on failure, every

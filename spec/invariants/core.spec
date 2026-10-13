@@ -207,7 +207,8 @@ invariant dry_run_side_effect_freedom "Dry-Run Side-Effect Freedom" {
     Any command invoked with --dry-run or --check MUST NOT modify any files
     on disk. These flags guarantee read-only execution. If a code path
     reachable from a dry-run context writes to the filesystem, it is a P0
-    bug. This applies to specforge migrate --dry-run, specforge format --check,
+    bug. This applies to specforge migrate --dry-run, specforge add
+    --dry-run, specforge remove --dry-run, specforge format --check,
     specforge format --diff, and any future commands that support dry-run mode.
     Over MCP a preview flag is read by its type: dry_run, check or diff sent as
     the string "true" is a preview.

@@ -97,7 +97,7 @@ pub fn json_schema(view: &ProjectView, format: export::Format) -> Result<Value, 
             .expect_err("a format the agent table does not admit is refused"));
     }
     Ok(
-        specforge_emitter::publish(&view.versioned_schema(), format.emit_format())
+        specforge_emitter::publish(view.versioned_schema().schema(), format.emit_format())
             .expect("an agent format has a schema"),
     )
 }
@@ -106,7 +106,7 @@ pub fn json_schema(view: &ProjectView, format: export::Format) -> Result<Value, 
 /// extension declares is `unknown_kind` ([`ProjectView::kinds`]), naming the
 /// closest one.
 pub fn schema(view: &ProjectView, request: &SchemaRequest) -> Result<SchemaOutcome, OpError> {
-    let mut schema = view.versioned_schema();
+    let mut schema = view.versioned_schema().into_schema();
     if let Some(kind) = request.kind {
         view.kinds().declared(kind)?;
         schema.entity_kinds.retain(|entry| entry.name == kind);

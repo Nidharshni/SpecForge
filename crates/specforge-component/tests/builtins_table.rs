@@ -3,6 +3,7 @@
 //! reads is its rows.
 
 use specforge_component::builtins::{BUILTIN_EXTENSIONS, BUILTINS};
+use specforge_component::committed::{COMMITTED, FIXTURES};
 use specforge_test_macros::test as specforge_test;
 use std::path::Path;
 
@@ -50,5 +51,39 @@ fn the_table_is_the_extensions_directory() {
     for (view, builtin) in BUILTIN_EXTENSIONS.iter().zip(BUILTINS) {
         assert_eq!(view.0, builtin.name);
         assert_eq!(view.1, builtin.bytes);
+    }
+}
+
+#[specforge_test(
+    behavior = "load_extension_manifests",
+    verify = "every fixture crate is listed once, by its directory under fixtures/"
+)]
+fn the_fixtures_are_the_fixtures_directory() {
+    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures");
+    let mut on_disk: Vec<String> = std::fs::read_dir(&fixtures)
+        .expect("fixtures/")
+        .flatten()
+        .filter(|entry| entry.path().join("Cargo.toml").is_file())
+        .map(|entry| format!("fixtures/{}", entry.file_name().to_string_lossy()))
+        .collect();
+    on_disk.sort();
+    let mut listed: Vec<&str> = FIXTURES.iter().map(|b| b.crate_dir).collect();
+    listed.sort();
+    assert_eq!(
+        listed, on_disk,
+        "FIXTURES lists every crate under fixtures/, once"
+    );
+
+    // Each committed blob's wasm/ holds its artifact, and `inputs.json` once it is recorded.
+    for blob in COMMITTED {
+        let wasm = blob.path().parent().expect("a file path").to_path_buf();
+        let mut held: Vec<String> = std::fs::read_dir(&wasm)
+            .unwrap_or_else(|e| panic!("{}: {e}", wasm.display()))
+            .flatten()
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .filter(|name| name != "inputs.json")
+            .collect();
+        held.sort();
+        assert_eq!(held, [blob.artifact], "{}: its wasm/ directory", blob.name);
     }
 }

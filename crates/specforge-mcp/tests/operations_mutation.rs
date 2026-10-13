@@ -954,7 +954,9 @@ fn init_rejects_an_unknown_extension() {
                "extensions": ["@specforge/software", "@specforge/nonexistent"]}),
     );
 
-    assert_eq!(error["code"], "extension_not_found", "{error}");
+    // A new project has no registry: refused as `add` refuses a registry package with none
+    // configured (E063), naming the specifier.
+    assert_eq!(error["code"], "precondition_failed", "{error}");
     assert!(
         error["message"]
             .as_str()
@@ -962,7 +964,8 @@ fn init_rejects_an_unknown_extension() {
             .contains("@specforge/nonexistent"),
         "{error}"
     );
-    assert!(error["data"]["suggestion"].is_string(), "{error}");
+    assert_eq!(error["diagnostic"]["code"], "E063", "{error}");
+    assert!(error["diagnostic"]["suggestion"].is_string(), "{error}");
     assert!(
         !dir.path().join("specforge.json").exists(),
         "nothing is written"
@@ -1044,7 +1047,7 @@ fn init_contract() {
         json!({"path": other.path().to_str().unwrap(), "name": "other",
                "extensions": ["@specforge/nonexistent"]}),
     );
-    assert_eq!(error["code"], "extension_not_found", "{error}");
+    assert_eq!(error["code"], "precondition_failed", "{error}");
     assert!(!other.path().join("specforge.json").exists());
 
     // project_initialized_emitted (once: only for the created project),
@@ -1064,19 +1067,7 @@ fn add_extension_returns_result() {
     let mut server = TestProject::new().serve_components();
     let dir = server.root().to_path_buf();
     assert!(dir.join("specforge.json").is_file());
-    let blob = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("fixtures/greet-extension/greet.wasm");
-    eprintln!("DEBUG blob exists: {}", blob.exists());
-    let blob = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("fixtures/greet-extension/greet.wasm");
+    let blob = specforge_component::committed::GREET.path();
     let resp = call_tool(
         &mut server,
         "specforge.add_extension",
@@ -1109,8 +1100,7 @@ fn listed_hint(server: &mut McpServer, tool: &str, key: &str) -> Value {
 fn add_extension_overwrites_a_changed_module() {
     let mut server = components_server();
     let root = server.root().to_path_buf();
-    let blob =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/greet-extension/greet.wasm");
+    let blob = specforge_component::committed::GREET.path();
     let add = |server: &mut McpServer| {
         let resp = call_tool(
             server,
@@ -1259,7 +1249,7 @@ fn add_extension_missing_specifier() {
 /// The product blob the build vendors; a local `.wasm` install names the
 /// extension after its file stem.
 fn greet_blob() -> std::path::PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/greet-extension/greet.wasm")
+    specforge_component::committed::GREET.path()
 }
 
 const GREET: &str = "@sdk/greet";
@@ -1504,12 +1494,7 @@ fn add_extension_already_installed_placeholder() {
     let mut server = TestProject::new().serve_components();
     let dir = server.root().to_path_buf();
     assert!(dir.join("specforge.json").is_file());
-    let blob = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("fixtures/greet-extension/greet.wasm");
+    let blob = specforge_component::committed::GREET.path();
     let first = call_tool(
         &mut server,
         "specforge.add_extension",
@@ -1681,12 +1666,7 @@ fn add_extension_dry_run() {
     let mut server = TestProject::new().serve_components();
     let dir = server.root().to_path_buf();
     assert!(dir.join("specforge.json").is_file());
-    let blob = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("fixtures/greet-extension/greet.wasm");
+    let blob = specforge_component::committed::GREET.path();
     let resp = call_tool(
         &mut server,
         "specforge.add_extension",
@@ -1704,12 +1684,7 @@ fn remove_extension_dry_run() {
     let mut server = TestProject::new().serve_components();
     let dir = server.root().to_path_buf();
     assert!(dir.join("specforge.json").is_file());
-    let blob = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("fixtures/greet-extension/greet.wasm");
+    let blob = specforge_component::committed::GREET.path();
     let _install = call_tool(
         &mut server,
         "specforge.add_extension",
@@ -1862,12 +1837,7 @@ fn remove_extension_contract() {
     let mut server = TestProject::new().serve_components();
     let dir = server.root().to_path_buf();
     assert!(dir.join("specforge.json").is_file());
-    let blob = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("fixtures/greet-extension/greet.wasm");
+    let blob = specforge_component::committed::GREET.path();
     let _install = call_tool(
         &mut server,
         "specforge.add_extension",
@@ -2094,12 +2064,13 @@ fn add_extension_from_a_registry_reports_a_duplicate_registry_alias() {
     assert!(builtin["result"]["_meta"].is_null(), "{builtin}");
 }
 
-// §3 R4 (plan 05): a dry run of an exact version asks no registry, so its configuration is not shown.
+// A dry run of a registry package asks its registry for the package's manifest, so the registry
+// configuration's diagnostics are shown, as for the real add (the reply may be the registry's failure).
 #[specforge_test(
     behavior = "configure_registries",
     verify = "an operation shows the registry configuration's diagnostics once it has asked a registry"
 )]
-fn add_extension_dry_run_of_an_exact_version_reports_no_registry_configuration() {
+fn add_extension_dry_run_shows_the_registry_configuration_it_asked() {
     let dir = project_with_duplicate_registry_alias();
     let mut server = test_server();
     let path = dir.path().to_str().unwrap();
@@ -2113,7 +2084,7 @@ fn add_extension_dry_run_of_an_exact_version_reports_no_registry_configuration()
         .as_array()
         .map(|all| all.iter().filter_map(|d| d["code"].as_str()).collect())
         .unwrap_or_default();
-    assert!(!codes.contains(&"W140"), "{resp}");
+    assert!(codes.contains(&"W140"), "{resp}");
 }
 
 /// The new name follows the entity-ID rule (the grammar's identifier,

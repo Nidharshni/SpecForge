@@ -8,7 +8,7 @@ use crate::view::ProjectView;
 use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_installed::{EnabledExtension, LoadFailure, LockFileEntry};
-use specforge_protocol_types::{ExtensionDeclaration, PeerDependency};
+use specforge_protocol_types::ExtensionDeclaration;
 use std::collections::BTreeSet;
 
 /// Whether an extension of the project is part of the compiled project.
@@ -97,6 +97,11 @@ pub fn inventory<'a>(view: &ProjectView<'a>) -> Inventory<'a> {
     let entries: &'a [EnabledExtension] = view.env().enabled();
     let declarations: &'a [ExtensionDeclaration] = view.registries().declarations();
     let locked: &'a [LockFileEntry] = view.lock().entries();
+    // What each entry names, decided as the extension load decides it (`Installed::resolve`):
+    // aligned with `entries` by index.
+    let texts: Vec<String> = entries.iter().map(|e| e.entry.clone()).collect();
+    let builtins = specforge_project::builtins();
+    let resolution = view.installed().resolve(&texts, &builtins);
     let names: BTreeSet<&'a str> = entries
         .iter()
         .map(|e| e.name.as_str())
@@ -108,10 +113,25 @@ pub fn inventory<'a>(view: &ProjectView<'a>) -> Inventory<'a> {
         .map(|name| {
             let enabling: Vec<&'a EnabledExtension> =
                 entries.iter().filter(|e| e.name == name).collect();
+            // The entry that loaded it, else the first that tried, in the order the load tries
+            // them.
+            let in_load_order: Vec<usize> = resolution
+                .in_load_order()
+                .map(|(at, _)| at)
+                .filter(|at| entries[*at].name == name)
+                .collect();
+            let loaded_by = in_load_order
+                .iter()
+                .copied()
+                .find(|at| entries[*at].failure.is_none())
+                .or_else(|| in_load_order.first().copied());
             let declaration = declarations.iter().find(|d| d.name() == name);
             let lock = locked.iter().find(|e| e.name.as_str() == name);
             ProjectExtension {
-                origin: origin(name, &enabling, lock),
+                origin: match loaded_by {
+                    Some(at) => Origin::of(&resolution, at),
+                    None => unlisted_origin(name, lock),
+                },
                 status: match (enabling.is_empty(), declaration) {
                     (false, Some(_)) => Status::Loaded,
                     (false, None) => Status::NotLoaded,
@@ -127,22 +147,14 @@ pub fn inventory<'a>(view: &ProjectView<'a>) -> Inventory<'a> {
     Inventory { entries, rows }
 }
 
-/// Where `name` comes from, in the order the extension load tries
-/// (`Installed::load`): named entries load before `.wasm` file entries,
-/// and a named entry is a builtin before it is a lock entry. So a `.wasm`
-/// file is the origin only when no named entry enables the name.
-fn origin(name: &str, entries: &[&EnabledExtension], lock: Option<&LockFileEntry>) -> Origin {
-    let named = entries.iter().any(|e| e.file.is_none());
-    if !named && let Some(path) = entries.iter().find_map(|e| e.file.clone()) {
-        return Origin::File { path };
-    }
-    if builtin_name(name).is_some() {
-        return Origin::Builtin;
-    }
+/// Where `name` comes from when no entry enables it: its lock entry's source, else a builtin,
+/// else unknown.
+fn unlisted_origin(name: &str, lock: Option<&LockFileEntry>) -> Origin {
     match lock {
         Some(entry) => Origin::Installed {
             source: entry.source.clone(),
         },
+        None if builtin_name(name).is_some() => Origin::Builtin,
         None => Origin::Unknown,
     }
 }
@@ -189,23 +201,6 @@ impl<'a> Inventory<'a> {
     /// The row named `name`.
     pub fn get(&self, name: &str) -> Option<&ProjectExtension<'a>> {
         self.rows.iter().find(|row| row.name == name)
-    }
-
-    /// The extensions that require `name` as a non-optional peer: loaded
-    /// ones by their declaration, locked ones by the peers recorded at
-    /// install; sorted by name, `name` itself excluded.
-    pub fn dependents(&self, name: &str) -> Vec<&'a str> {
-        let requires =
-            |peers: &[PeerDependency]| peers.iter().any(|p| p.name == name && !p.optional);
-        self.rows
-            .iter()
-            .filter(|row| row.name != name)
-            .filter(|row| {
-                row.declaration.is_some_and(|d| requires(d.peers()))
-                    || row.lock.is_some_and(|e| requires(&e.peer_dependencies))
-            })
-            .map(|row| row.name)
-            .collect()
     }
 
     /// What `argument` names (a `remove` argument): a `.wasm` file entry by
@@ -488,30 +483,6 @@ mod tests {
         assert_eq!(probe.status, Status::NotLoaded);
         assert_eq!(probe.version, None);
         assert!(probe.locked);
-    }
-
-    #[test]
-    fn the_dependents_are_the_loaded_and_locked_extensions_that_require_a_name() {
-        let peer = |optional| PeerDependency {
-            name: "@a/base".into(),
-            version: "^1".into(),
-            optional,
-        };
-        let mut dep = Fixture::declaration("@a/dep", "1.0.0");
-        dep.handshake.peer_dependencies = vec![peer(false)];
-        let mut opt = Fixture::declaration("@a/opt", "1.0.0");
-        opt.handshake.peer_dependencies = vec![peer(true)];
-        let mut fixture = Fixture::new()
-            .declarations(vec![dep, opt, Fixture::declaration("@a/base", "1.0.0")])
-            .lock(&[("@a/locked", "1.0.0", "registry")]);
-        let mut lock = fixture.env().installed().lock().file().unwrap().clone();
-        lock.entries[0].peer_dependencies = vec![peer(false)];
-        fixture = fixture.with_lock_file(lock);
-        let view = fixture.view();
-        let inventory = inventory(&view);
-
-        assert_eq!(inventory.dependents("@a/base"), ["@a/dep", "@a/locked"]);
-        assert!(inventory.dependents("@a/dep").is_empty());
     }
 
     #[test]

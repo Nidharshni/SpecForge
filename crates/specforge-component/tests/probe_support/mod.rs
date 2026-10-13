@@ -1,4 +1,4 @@
-//! The sandbox probe (`fixtures/sandbox-probe`, vendored as `probe.wasm`)
+//! The sandbox probe (`fixtures/sandbox-probe`, `specforge_component::committed::PROBE`)
 //! and what a test needs to run it: the bait it is told about and must not
 //! reach, and what its report says. Shared by `sandbox_probe.rs` and
 //! `sandbox_limits.rs`.
@@ -11,13 +11,11 @@ use specforge_component::ComponentRuntime;
 use specforge_protocol_types::{CommandInput, RawGraph};
 use specforge_wasm::runtime::{WasmCallResult, WasmRuntime};
 use std::net::TcpListener;
-use std::path::Path;
 
 pub const PROBE: &str = "@test/probe";
 
 pub fn probe_runtime() -> ComponentRuntime {
-    let path =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/sandbox-probe/probe.wasm");
+    let path = specforge_component::committed::PROBE.path();
     let blob = std::fs::read(path).expect("vendored sandbox probe blob");
     let runtime = ComponentRuntime::new();
     runtime.load(PROBE, &blob).expect("the probe instantiates");

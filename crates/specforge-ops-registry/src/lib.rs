@@ -10,9 +10,9 @@
 use specforge_common::{Code, Diagnostic, codes};
 use specforge_ops::extension::Trust;
 use specforge_ops::registry::{
-    Found, KeyPin, METADATA_MISMATCH, NO_REGISTRY, NO_REGISTRY_FOR_NAME, NOT_AUTHENTICATED,
-    Package, Published, Publisher, Registry, Searched, TrustPolicy, UNREADABLE_MANIFEST,
-    UNUSABLE_SIGNING_KEY, Upload, no_registry,
+    Found, KeyPin, METADATA_MISMATCH, Manifest, NO_REGISTRY, NO_REGISTRY_FOR_NAME,
+    NOT_AUTHENTICATED, Package, Published, Publisher, Registry, Searched, TrustPolicy,
+    UNREADABLE_MANIFEST, UNUSABLE_SIGNING_KEY, Upload, no_registry,
 };
 use specforge_ops::{OpError, OpErrorKind};
 use specforge_package::PackageName;
@@ -319,6 +319,42 @@ impl ConfiguredRegistry {
     }
 }
 
+/// What a registry answers about `name@version` before its binary: the registry that serves it,
+/// the credential used, its metadata and the declaration its manifest reads as.
+struct Described<'r> {
+    registry: &'r RegistryConfig,
+    credential: Option<RegistryCredential>,
+    metadata: PackageMetadata,
+    declaration: ExtensionDeclaration,
+}
+
+impl ConfiguredRegistry {
+    /// The first half of the fetch policy, which writes nothing and downloads nothing: the registry
+    /// that serves `name`, its credential (R-AUTH-020/021, R010, R011, R012), the metadata of
+    /// `name@version`, which must name that package and version (1), and its manifest, which must
+    /// read as that package's declaration (3). The served manifest is the package's declaration
+    /// (ADR 0012): the peers the diamond gate (ADR 0001) decides on, and what the binary must
+    /// declare once loaded. One that can't be read must not pass as "no peers", and one describing
+    /// another package must not be installed as this one.
+    fn described(&self, name: &PackageName, version: &Version) -> Result<Described<'_>, OpError> {
+        let registry = self.registry_for(name)?;
+        let credential = self.read_credential(registry)?;
+        let metadata = self
+            .client
+            .metadata(name, version, registry, credential.as_ref())
+            .map_err(failure)?;
+        reply_names(name, version, &metadata)?; // 1
+        let declaration = read_declaration(name, version, &metadata.manifest)?; // 3
+        declaration_names(name, version, &declaration)?; // 3
+        Ok(Described {
+            registry,
+            credential,
+            metadata,
+            declaration,
+        })
+    }
+}
+
 impl Registry for ConfiguredRegistry {
     fn fetch(
         &self,
@@ -326,28 +362,18 @@ impl Registry for ConfiguredRegistry {
         version: &Version,
         policy: TrustPolicy<'_>,
     ) -> Result<Package, OpError> {
-        let registry = self.registry_for(name)?;
-        let credential = self.read_credential(registry)?; // R-AUTH-020/021, R010, R011, R012
-        let metadata = self
-            .client
-            .metadata(name, version, registry, credential.as_ref())
-            .map_err(failure)?;
-        reply_names(name, version, &metadata)?; // 1
+        let Described {
+            registry,
+            credential,
+            metadata,
+            declaration,
+        } = self.described(name, version)?; // 1, 3: checked before the signature, so a refused package pins no key
         let wasm = self
             .client
             .download(&metadata.wasm_url, registry, credential.as_ref())
             .map_err(failure)?;
         verify_registry_integrity(&wasm, &metadata.sha256)
             .map_err(|why| OpError::of(OpErrorKind::SchemaMismatch, why))?; // 2
-
-        // The served manifest is the package's declaration (ADR 0012): the
-        // peers the diamond gate (ADR 0001) decides on, and what the binary
-        // must declare once loaded. One that can't be read must not pass as
-        // "no peers", and one describing another package must not be
-        // installed as this one. Checked before the signature, so a refused
-        // package pins no key.
-        let declaration = read_declaration(name, version, &metadata.manifest)?; // 3
-        declaration_names(name, version, &declaration)?; // 3
 
         // Publisher signature and the TOFU pin policy.
         let trusted = specforge_registry_client::trust_flow::check(
@@ -376,6 +402,16 @@ impl Registry for ConfiguredRegistry {
                 Accepted::Signed { key_id, first_use } => Publisher::Signed { key_id, first_use },
                 Accepted::Repinned { key_id, previous } => Publisher::Repinned { key_id, previous },
             },
+        })
+    }
+
+    fn published(&self, name: &PackageName, version: &Version) -> Result<Manifest, OpError> {
+        let described = self.described(name, version)?;
+        Ok(Manifest {
+            name: name.clone(),
+            version: version.clone(),
+            sha256: described.metadata.sha256,
+            declaration: described.declaration,
         })
     }
 

@@ -9,30 +9,26 @@ use "types/zero-entity-core"
 //     → ProviderConfig { scheme, alias (from positional string), extension, settings }
 
 type CompilerConfig {
-  schema               string           @optional
+  schema         string           @optional
   // Serialized as "$schema" in JSON ($ prefix is a JSON convention)
-  name                 string           @readonly
-  version              string           @readonly
-  spec_root            string           @optional
+  name           string           @readonly
+  version        string           @readonly
+  spec_root      string           @optional
   // Gitignore-style patterns over a file's path relative to the spec root
   // (resolve_use_imports): a .spec file one leaves out is no source on any
   // surface, and no import names it.
-  exclude              string[]         @optional
-  strict               boolean          @optional
-  namespace            string           @optional
-  display_prefix       string           @optional
-  extensions           string[]
-  providers            ProviderConfig[] @optional
+  exclude        string[]         @optional
+  strict         boolean          @optional
+  namespace      string           @optional
+  display_prefix string           @optional
+  extensions     string[]
+  providers      ProviderConfig[] @optional
   // Coverage configuration is owned by @specforge/coverage extension.
   // At runtime this is a FieldMap deserialized into the extension's CoverageConfig type.
-  coverage             FieldMap         @optional
+  coverage       FieldMap         @optional
   // The only source of registries: SpecForge ships none (E063 without one).
-  registries           RegistryConfig[] @optional
+  registries     RegistryConfig[] @optional
   // federation config is extension-provided (see @specforge/federation extension)
-  // Graph Protocol schema version compatibility range for agent negotiation.
-  // Defaults to current major range (e.g., 1.0.0..1.x.x). See ADR graph_protocol_version_management.
-  supported_schema_min SchemaVersion    @optional
-  supported_schema_max SchemaVersion    @optional
   verify unit "CompilerConfig schema is valid"
 }
 
@@ -197,6 +193,16 @@ type RegistryPackage "Registry Package" {
   declaration ExtensionDeclaration
   key_id      string @optional
   verify unit "RegistryPackage is what a package that passed the fetch policy hands an operation"
+}
+
+type RegistryManifest "What a registry says it publishes as one version, without its binary" {
+  name        PackageName
+  version     string
+  /// The SHA-256 its binary must have.
+  sha256      string
+  /// The declaration it was published with (its manifest).
+  declaration ExtensionDeclaration
+  verify unit "RegistryManifest schema is valid"
 }
 
 // How a fetch decides a package's publisher (specforge_ops::registry::TrustPolicy):

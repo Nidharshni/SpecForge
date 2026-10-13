@@ -2,7 +2,6 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use specforge_common::shape::Shape;
 use specforge_common::{Diagnostic, ProjectRoot, Severity, codes};
-use specforge_emitter::schema::{GraphProtocolSchema, SchemaMigration, diff_schemas};
 use specforge_formatter::unified_diff;
 use specforge_graph::{EdgeChange, GraphDelta, ModifiedNodeChange, NodeAspect};
 use specforge_parser::{FORMAT_HEADER_PREFIX, FormatVersion, detect_format_version};
@@ -218,31 +217,6 @@ fn sha256_hash(content: &str) -> String {
 // ---------------------------------------------------------------------------
 // Post-migration checks
 // ---------------------------------------------------------------------------
-
-/// Compare pre/post migration schemas and return breaking change diagnostics.
-pub fn check_schema_compatibility(
-    pre: &GraphProtocolSchema,
-    post: &GraphProtocolSchema,
-) -> Vec<Diagnostic> {
-    let migration: SchemaMigration = diff_schemas(pre, post);
-    let mut diagnostics = Vec::new();
-
-    for change in &migration.changes {
-        if change.is_breaking() {
-            diagnostics.push(
-                Diagnostic::new(
-                    codes::W053,
-                    format!("breaking schema change after migration: {change:?}"),
-                )
-                .with_suggestion(
-                    "Review the migration to ensure backward compatibility.".to_string(),
-                ),
-            );
-        }
-    }
-
-    diagnostics
-}
 
 /// What a migration changed in the graph, as W054 warnings, from the graph delta between the graph before it and the
 /// graph after (source positions ignored, ADR 0032): one per entity removed, one per entity added, one per entity

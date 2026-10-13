@@ -73,3 +73,42 @@ fn the_configured_registry_over_memory_keeps_the_registry_contract() {
 
     assert_registry_contract(&registry, &published);
 }
+
+#[test]
+fn a_published_manifest_is_read_without_downloading_the_binary() {
+    use specforge_ops::registry::Registry;
+    use specforge_package::{PackageName, Version};
+    use specforge_registry_client::testing::CallKind;
+
+    let config = RegistryConfig {
+        alias: "local".to_string(),
+        url: "memory://local".to_string(),
+        scope_filter: None,
+        default_registry: true,
+    };
+    let client = MemoryClient::new().accepting("token");
+    let key = SigningKey::generate();
+    let published = contract_packages(&key.key_id());
+    for p in &published {
+        client.store(&config, stored(p, &key), p.wasm.clone());
+    }
+    let dir = project(serde_json::json!([
+        { "alias": "local", "url": "memory://local", "default_registry": true }
+    ]));
+    let registry = ConfiguredRegistry::for_project(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        "add",
+    )
+    .with_client(client.clone())
+    .as_user(User::at(dir.path(), Some("token".to_string())));
+    let base = PackageName::parse("@contract/base").unwrap();
+
+    let manifest = registry
+        .published(&base, &Version::parse("1.1.0").unwrap())
+        .unwrap();
+
+    assert_eq!(manifest.name, base);
+    assert!(!manifest.sha256.is_empty());
+    let kinds: Vec<CallKind> = client.calls().iter().map(|call| call.kind).collect();
+    assert_eq!(kinds, [CallKind::Metadata], "no download: {kinds:?}");
+}

@@ -8,8 +8,7 @@ use specforge_component::ComponentRuntime;
 use specforge_wasm::runtime::WasmRuntime;
 
 fn component_path() -> std::path::PathBuf {
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../fixtures/test-component/test_component.wasm")
+    specforge_component::committed::BRIDGE.path()
 }
 
 #[test]

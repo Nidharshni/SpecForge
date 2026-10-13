@@ -31,7 +31,7 @@ pub use connectivity::{Connectivity, Degree};
 pub use kinds::{KnownKinds, UNKNOWN_KIND};
 
 use crate::OpError;
-use crate::schema_cache::SchemaCache;
+use crate::schema_version::{SchemaCache, VersionedSchema};
 
 /// The compiled project as one surface sees it, borrowed: what every
 /// operation over a project reads (CONTEXT.md "Project view", ADR 0015).
@@ -233,18 +233,17 @@ impl<'a> ProjectView<'a> {
         generate_schema(self.registries())
     }
 
-    /// [`Self::schema`], versioned against the schema cache at the root
-    /// (`specforge export`'s rule); without a root, unversioned. Only reads
-    /// the cache.
-    pub fn versioned_schema(&self) -> GraphProtocolSchema {
-        let mut schema = self.schema();
-        if let Some(cache) = self.schema_cache() {
-            cache.version(&mut schema);
+    /// [`Self::schema`], versioned against the schema record at the root
+    /// (`specforge export`'s rule); without a root, unrecorded. Only reads
+    /// the record.
+    pub fn versioned_schema(&self) -> VersionedSchema {
+        match self.schema_cache() {
+            Some(cache) => cache.version(self.schema()),
+            None => VersionedSchema::unrecorded(self.schema()),
         }
-        schema
     }
 
-    /// The schema cache at `<root>/.specforge/`; `None` without a root.
+    /// The schema record at `<root>/.specforge/`; `None` without a root.
     pub(crate) fn schema_cache(&self) -> Option<SchemaCache> {
         self.root.map(SchemaCache::of_root)
     }
@@ -421,13 +420,6 @@ pub(crate) mod testing {
                 &specforge_installed::lock_path(self.dir.path()),
             )
             .unwrap();
-            self.installed = Installed::with_lock(self.dir.path(), LockState::Read(lock));
-            self.assembled()
-        }
-
-        /// The compile read exactly `lock` (not written to disk), for a lock
-        /// a test edits after `lock(..)` built it.
-        pub fn with_lock_file(mut self, lock: specforge_installed::LockFile) -> Self {
             self.installed = Installed::with_lock(self.dir.path(), LockState::Read(lock));
             self.assembled()
         }
