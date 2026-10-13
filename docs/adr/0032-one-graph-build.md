@@ -102,3 +102,20 @@ carrying the delta in `MigrateDocument` (the W054 list names every change, and a
 **What would reopen it.** A node attribute added to `Node`: the delta's `changes` and the verification's signature
 must both compare it (the verification serializes fields and methods whole, so only a new top-level attribute
 needs both).
+
+## Moves are reported beside the delta (amendment, architecture round 9, plan 12)
+
+A moved entity changed `specforge://graph` (each node's `file` and `line`) with no `resources/updated`: MCP read
+"the graph changed" from the delta, which ignores positions by contract.
+
+- **The delta stays positions-free.** Migrate keeps a migration that only shifts lines; `graphChanged` announces
+  graph facts only.
+- **An apply lists its moved nodes.** `Applied::moved` / `Update::moved`: the nodes among the changed IDs that are
+  in both graphs and declared at another file or start line (`NodeChange`, where each is now). Column and content
+  are not a place. `replacing` lists them over the whole graph.
+- **A resource declares what it changes with** (`ResourceSpec::changes_with`): the graph documents (`graph`,
+  `graph/{entity_id}`) change with the delta and with moves; the other graph views and extension resources with
+  the delta only.
+
+**Rejected.** A `position` aspect on modified nodes (a migration that shifts lines would roll back; `graphChanged`
+would announce non-changes; the "position mode" rejected above); notifying every graph resource on any re-parse.
