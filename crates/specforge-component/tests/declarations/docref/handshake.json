@@ -1,5 +1,5 @@
 {
-  "protocol_version": "1.2.0",
+  "protocol_version": "1.4.0",
   "name": "@sdk/docref",
   "version": "0.1.0",
   "peer_dependencies": [],

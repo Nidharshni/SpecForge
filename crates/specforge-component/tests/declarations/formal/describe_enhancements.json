@@ -5,36 +5,36 @@
       "fields": [
         {
           "default_value": null,
-          "description": "Invariants that must hold as preconditions before execution",
-          "edge": "BehaviorRequiresInvariant",
-          "field_type": "reference_list",
+          "description": "Named preconditions: each condition's name and what it requires",
+          "edge": null,
+          "field_type": "block",
           "file_reference": false,
           "inverse_of": null,
           "name": "requires",
           "required": false,
-          "target_kind": "invariant"
+          "target_kind": null
         },
         {
           "default_value": null,
-          "description": "Invariants guaranteed as postconditions after successful execution",
-          "edge": "BehaviorEnsuresInvariant",
-          "field_type": "reference_list",
+          "description": "Named postconditions: each condition's name and what it guarantees",
+          "edge": null,
+          "field_type": "block",
           "file_reference": false,
           "inverse_of": null,
           "name": "ensures",
           "required": false,
-          "target_kind": "invariant"
+          "target_kind": null
         },
         {
           "default_value": null,
-          "description": "Invariants preserved throughout execution",
-          "edge": "BehaviorMaintainsInvariant",
-          "field_type": "reference_list",
+          "description": "Named frame conditions that hold throughout execution",
+          "edge": null,
+          "field_type": "block",
           "file_reference": false,
           "inverse_of": null,
           "name": "maintains",
           "required": false,
-          "target_kind": "invariant"
+          "target_kind": null
         },
         {
           "default_value": null,
@@ -49,9 +49,9 @@
         },
         {
           "default_value": null,
-          "description": "Synchronization constraints for execution",
+          "description": "Synchronization bound: barrier, timeout or delivery",
           "edge": null,
-          "field_type": "string_list",
+          "field_type": "block",
           "file_reference": false,
           "inverse_of": null,
           "name": "sync",
@@ -111,9 +111,9 @@
         },
         {
           "default_value": null,
-          "description": "Synchronization constraints for event processing",
+          "description": "Synchronization bound: barrier, timeout or delivery",
           "edge": null,
-          "field_type": "string_list",
+          "field_type": "block",
           "file_reference": false,
           "inverse_of": null,
           "name": "sync",
