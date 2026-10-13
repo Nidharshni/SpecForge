@@ -535,6 +535,7 @@ fn doctor_reports_health_check() {
 
     let output = specforge_cmd()
         .args(["doctor", "--path"])
+        .env("PATH", crate::toolchain::z3_ready())
         .arg(dir.path())
         .args(["--format", "json"])
         .output()
@@ -562,6 +563,7 @@ fn doctor_missing_binary() {
 
     let output = specforge_cmd()
         .args(["doctor", "--path"])
+        .env("PATH", crate::toolchain::z3_ready())
         .arg(dir.path())
         .args(["--format", "json"])
         .output()
@@ -588,6 +590,7 @@ fn doctor_no_lock_file() {
 
     let output = specforge_cmd()
         .args(["doctor", "--path"])
+        .env("PATH", crate::toolchain::z3_ready())
         .arg(dir.path())
         .args(["--format", "json"])
         .output()
@@ -643,6 +646,7 @@ fn doctor_lists_enhancements() {
 
     let output = specforge_cmd()
         .args(["doctor", "--path"])
+        .env("PATH", crate::toolchain::z3_ready())
         .arg(dir.path())
         .args(["--format", "json"])
         .output()
@@ -671,6 +675,7 @@ fn doctor_detects_stale_hash() {
 
     let output = specforge_cmd()
         .args(["doctor", "--path"])
+        .env("PATH", crate::toolchain::z3_ready())
         .arg(dir.path())
         .args(["--format", "json"])
         .output()
@@ -717,6 +722,7 @@ fn doctor_healthy_lock_entry() {
 
     let output = specforge_cmd()
         .args(["doctor", "--path"])
+        .env("PATH", crate::toolchain::z3_ready())
         .arg(dir.path())
         .args(["--format", "json"])
         .output()
@@ -758,6 +764,7 @@ const SHADOWING_ID: &str = "type behavior \"Shadow\" {\n}\n";
 fn doctor_json(dir: &std::path::Path) -> (serde_json::Value, i32) {
     let output = specforge_cmd()
         .args(["doctor", "--path"])
+        .env("PATH", crate::toolchain::z3_ready())
         .arg(dir)
         .args(["--format", "json"])
         .output()
@@ -771,6 +778,7 @@ fn doctor_json(dir: &std::path::Path) -> (serde_json::Value, i32) {
 fn doctor_human(dir: &std::path::Path) -> (String, i32) {
     let output = specforge_cmd()
         .args(["doctor", "--path"])
+        .env("PATH", crate::toolchain::z3_ready())
         .arg(dir)
         .output()
         .unwrap();
@@ -1039,7 +1047,7 @@ fn add_validates_registry_specifier() {
     fs::write(
         dir.path().join("specforge.json"),
         r#"{"name":"t","version":"0.1.0","extensions":[],
-            "registries":[{"alias":"local","url":"http://127.0.0.1:9/v1","default_registry":true}]}"#,
+            "registries":[{"alias":"local","url":"http://127.0.0.1:9","default_registry":true}]}"#,
     )
     .unwrap();
     let output = specforge_cmd()
@@ -1936,17 +1944,6 @@ fn a_legacy_entry_that_did_not_load_is_listed_with_its_written_version() {
     assert_eq!(missing["source"], "unknown", "{missing}");
 }
 
-/// Doctor's findings, without the z3 probe's (it depends on PATH).
-fn project_findings(report: &serde_json::Value) -> Vec<serde_json::Value> {
-    report["findings"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .filter(|f| f["code"] != "z3_missing")
-        .cloned()
-        .collect()
-}
-
 // Panel D5 (plan 05): a directory without specforge.json is a valid
 // default project, but doctor says so, as a warning.
 #[specforge_test(
@@ -1962,7 +1959,7 @@ fn doctor_without_specforge_json_says_so() {
     assert_eq!(report["ok"], true, "{report}");
     assert_eq!(report["extensions"], serde_json::json!([]), "{report}");
     assert_eq!(report["installed_count"], 0, "{report}");
-    let findings = project_findings(&report);
+    let findings = report["findings"].as_array().unwrap();
     let codes: Vec<(&str, &str)> = findings
         .iter()
         .map(|f| (f["code"].as_str().unwrap(), f["status"].as_str().unwrap()))
@@ -2000,7 +1997,7 @@ fn doctor_reports_a_corrupt_lock_as_an_error_finding() {
     let (report, code) = doctor_json(dir.path());
 
     assert_eq!(code, 1, "{report}");
-    let findings = project_findings(&report);
+    let findings = report["findings"].as_array().unwrap();
     // The lock, then the I002 of a project that enables nothing.
     assert_eq!(findings.len(), 2, "{report}");
     assert_eq!(findings[1]["code"], "I002", "{report}");
@@ -2268,7 +2265,9 @@ fn remove_json_lists_the_files_it_wrote() {
 
 /// `specforge.doctor`'s reply over an in-process MCP server serving `root`.
 fn mcp_doctor_json(root: &std::path::Path) -> serde_json::Value {
-    let mut server = specforge_mcp::McpServer::with_project_root(root.to_path_buf());
+    let mut server = specforge_mcp::McpServer::with_project_root(root.to_path_buf()).with_solver(
+        std::sync::Arc::new(specforge_ops::testing::ScriptedSolver::ready()),
+    );
     let init = serde_json::json!({"jsonrpc": "2.0", "id": 0, "method": "initialize", "params": {}});
     server.handle_message(&init.to_string());
     let call = serde_json::json!({

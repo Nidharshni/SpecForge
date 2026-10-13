@@ -24,6 +24,7 @@ use specforge_project::coverage::TestReport;
 use specforge_project::passes::{self, AnalysisContext};
 use specforge_registry::DeclaredPass;
 
+use crate::solver::Solver;
 use crate::{OpError, OpErrorKind, Refusal, RunVerdict};
 
 pub use crate::view::ProjectView;
@@ -42,8 +43,6 @@ pub enum ReportSource {
     None,
 }
 
-pub use crate::prove::ProveOptions;
-
 /// The pass name that runs every pass: what an absent pass means on every
 /// surface (`specforge analyze`, `specforge.analyze`).
 pub const EVERY_PASS: &str = "all";
@@ -53,18 +52,33 @@ pub const UNKNOWN_PASS: &str = "unknown_pass";
 pub const INVALID_MIN: &str = "invalid_min";
 
 /// What to run. `Default` is a plain `analyze all`.
-#[derive(Debug, Clone)]
-pub struct AnalyzeOptions {
+#[derive(Clone)]
+pub struct AnalyzeOptions<'s> {
     /// `all`, `coverage`, a built-in pass, or a declared `<extension>:<pass>`.
     pub pass: String,
     pub strict: bool,
     pub report: ReportSource,
     /// The proof-coverage threshold the caller will gate on; it needs a report.
     pub min: Option<f64>,
-    pub prove: Option<ProveOptions>,
+    /// The solver to run the prove step with (`specforge analyze --prove`);
+    /// `None` runs no prove step, and the extension passes receive no proved
+    /// claims.
+    pub prove: Option<&'s dyn Solver>,
 }
 
-impl Default for AnalyzeOptions {
+impl std::fmt::Debug for AnalyzeOptions<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AnalyzeOptions")
+            .field("pass", &self.pass)
+            .field("strict", &self.strict)
+            .field("report", &self.report)
+            .field("min", &self.min)
+            .field("prove", &self.prove.is_some())
+            .finish()
+    }
+}
+
+impl Default for AnalyzeOptions<'_> {
     fn default() -> Self {
         Self {
             pass: EVERY_PASS.to_string(),
@@ -441,21 +455,11 @@ impl From<AnalyzeError> for Refusal<AnalyzeField> {
 }
 
 /// Run the selected passes over `view`; the extension passes in the view's
-/// runtime, when it has one and a root.
+/// runtime, when it has one and a root. With `options.prove`, the prove step
+/// first, over that solver.
 pub fn analyze(
     view: &ProjectView,
-    options: &AnalyzeOptions,
-) -> Result<AnalyzeOutcome, AnalyzeError> {
-    analyze_via(view, options, &crate::prove::run_prove_with)
-}
-
-/// The prove step as the operation sees it; tests swap in a scripted solver.
-type ProveFn<'a> = &'a dyn Fn(&AnalysisContext, &ProveOptions) -> crate::prove::ProveReport;
-
-fn analyze_via(
-    view: &ProjectView,
-    options: &AnalyzeOptions,
-    prove: ProveFn,
+    options: &AnalyzeOptions<'_>,
 ) -> Result<AnalyzeOutcome, AnalyzeError> {
     let selection = select(view, &options.pass)?;
     if let Some(min) = options.min {
@@ -490,10 +494,7 @@ fn analyze_via(
     // The proof pass runs first: its entailment verdicts feed the coverage
     // discharge funnel (a proved claim discharges `verify property`
     // obligations without executable tests).
-    let proved = options
-        .prove
-        .as_ref()
-        .map(|prove_options| prove(&base, prove_options));
+    let proved = options.prove.map(|solver| crate::prove::run(&base, solver));
     let proved_claims: std::collections::HashSet<String> = proved
         .as_ref()
         .map(|r| r.proved_claim_ids.iter().cloned().collect())
@@ -674,12 +675,12 @@ mod tests {
     }
 
     use super::*;
+    use crate::testing::ScriptedSolver;
     use serde_json::{Value, json};
     use specforge_extension_sdk::prelude::*;
     use specforge_test_macros::test as specforge_test;
     use specforge_wasm::runtime::{WasmCallResult, WasmTrapInfo};
     use specforge_wasm::testing::InProcessRuntime;
-    use std::sync::Mutex;
 
     const EXT: &str = "@t/x";
     const TESTING: &str = "@specforge/testing";
@@ -787,7 +788,7 @@ mod tests {
         outcome.passes.iter().map(|p| p.name.as_str()).collect()
     }
 
-    fn pass(name: &str) -> AnalyzeOptions {
+    fn pass(name: &str) -> AnalyzeOptions<'static> {
         AnalyzeOptions {
             pass: name.to_string(),
             ..Default::default()
@@ -1048,8 +1049,9 @@ mod tests {
         assert_eq!(proved_seen(&project.runtime), vec![Value::Null]);
 
         project.runtime.clear_calls();
+        let solver = ScriptedSolver::ready();
         let options = AnalyzeOptions {
-            prove: Some(ProveOptions::default()),
+            prove: Some(&solver),
             ..Default::default()
         };
         let outcome = analyze(&project.view(), &options).unwrap();
@@ -1274,50 +1276,15 @@ mod tests {
         );
     }
 
-    struct NoZ3;
-    impl crate::prove::Solver for NoZ3 {
-        fn version(&self) -> Option<String> {
-            None
-        }
-        fn solve(&self, _: &str) -> Result<String, crate::prove::SolveFailure> {
-            unreachable!("no solver, nothing to solve")
-        }
-    }
-
-    fn prove_options(secs: u64) -> AnalyzeOptions {
-        AnalyzeOptions {
-            prove: Some(ProveOptions {
-                z3_timeout: std::time::Duration::from_secs(secs),
-            }),
+    #[test]
+    fn prove_without_a_solver_is_a_last_w098_report_with_empty_proved_claims() {
+        let project = Project::new();
+        let missing = ScriptedSolver::not_found();
+        let mut options = AnalyzeOptions {
+            prove: Some(&missing),
             ..Default::default()
-        }
-    }
-
-    #[test]
-    fn the_z3_timeout_reaches_the_prove_step_and_its_claims_reach_coverage() {
-        let project = Project::new();
-        let seen = Mutex::new(None);
-        let prove = |ctx: &AnalysisContext, o: &ProveOptions| {
-            *seen.lock().unwrap() = Some(o.z3_timeout);
-            let mut r = crate::prove::analyze_with(ctx, &NoZ3);
-            r.proved_claim_ids = vec!["claim_a".to_string()];
-            r
         };
-        analyze_via(&project.view(), &prove_options(7), &prove).unwrap();
-        assert_eq!(
-            *seen.lock().unwrap(),
-            Some(std::time::Duration::from_secs(7))
-        );
-        assert_eq!(proved_seen(&project.runtime), vec![json!(["claim_a"])]);
-    }
-
-    #[test]
-    fn prove_with_z3_missing_is_a_last_w098_report_with_empty_proved_claims() {
-        let project = Project::new();
-        let prove =
-            |ctx: &AnalysisContext, _: &ProveOptions| crate::prove::analyze_with(ctx, &NoZ3);
-        let mut options = prove_options(1);
-        let lenient = analyze_via(&project.view(), &options, &prove).unwrap();
+        let lenient = analyze(&project.view(), &options).unwrap();
         assert_eq!(names(&lenient).last().copied(), Some("prove"));
         let report = lenient.passes.last().unwrap();
         assert!(report.findings.iter().any(|f| f.code == "W098"));
@@ -1325,8 +1292,54 @@ mod tests {
         assert_eq!(proved_seen(&project.runtime), vec![json!([])]);
 
         options.strict = true;
-        let strict = analyze_via(&project.view(), &options, &prove).unwrap();
+        let strict = analyze(&project.view(), &options).unwrap();
         assert!(!strict.ok(), "strict promotes the prove report too");
+    }
+
+    /// `@t/x` as [`scanning`] declares it, plus a `claim` kind whose `holds`
+    /// field is a claim.
+    fn claiming() -> ContributionsBuilder {
+        let mut c = scanning();
+        c.kind("Claim", |k| {
+            k.keyword("claim");
+            k.field("holds", |f| {
+                f.field_type(FieldType::String).proof_role("claim");
+            });
+        });
+        c
+    }
+
+    #[specforge_test(
+        behavior = "prove_declared_bounds_and_claims",
+        verify = "a claim the bounds entail reaches the extension passes as a proved claim"
+    )]
+    fn a_claim_the_solver_entails_reaches_the_extension_passes() {
+        let mut project = Project::serving(InProcessRuntime::new().with(claiming), &[EXT]);
+        add_entity_with(
+            &mut project,
+            "fast",
+            "claim",
+            [(
+                "holds",
+                specforge_parser::FieldValue::String("latency <= latency".into()),
+            )],
+        );
+        let solver = ScriptedSolver::answering([Ok("unsat\n".to_string())]);
+        let outcome = analyze(
+            &project.view(),
+            &AnalyzeOptions {
+                prove: Some(&solver),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(names(&outcome).last().copied(), Some("prove"));
+        assert_eq!(proved_seen(&project.runtime), vec![json!(["fast"])]);
+        assert_eq!(
+            solver.scripts().len(),
+            1,
+            "no bounds: one entailment check, no consistency check"
+        );
     }
 
     fn write_report(project: &Project, ids: &[&str]) {
@@ -1347,15 +1360,29 @@ mod tests {
     }
 
     fn add_entity(project: &mut Project, id: &str) {
+        add_entity_with(project, id, "behavior", []);
+    }
+
+    /// A node of `kind` carrying `fields`.
+    fn add_entity_with(
+        project: &mut Project,
+        id: &str,
+        kind: &str,
+        fields: impl IntoIterator<Item = (&'static str, specforge_parser::FieldValue)>,
+    ) {
         use specforge_common::{SourceSpan, Sym};
         use specforge_parser::{EntityId, EntityKind, FieldMap};
+        let mut map = FieldMap::new();
+        for (name, value) in fields {
+            map.push(Sym::new(name), value);
+        }
         project.graph.add_node(specforge_graph::Node {
             id: EntityId { raw: Sym::new(id) },
             kind: EntityKind {
-                raw: Sym::new("behavior"),
+                raw: Sym::new(kind),
             },
             title: None,
-            fields: FieldMap::new(),
+            fields: map,
             source_span: SourceSpan {
                 file: Sym::new("t.spec"),
                 start_line: 1,

@@ -6,7 +6,9 @@ use super::registry_client::{RegistryClient, RegistryError};
 use super::registry_config::{RegistryConfig, RegistryCredential};
 use specforge_package::{PackageName, Version};
 use specforge_protocol_types::ExtensionDeclaration;
-use specforge_registry_wire::{PackageMetadata, PublishReceipt, SignedContent, path, sha256_hex};
+use specforge_registry_wire::{
+    PackageMetadata, PublishReceipt, SignedContent, address::Call, sha256_hex,
+};
 
 /// Why a publish did not reach the registry, or what the registry answered.
 #[derive(Debug, Clone, PartialEq)]
@@ -95,11 +97,7 @@ pub fn publish_to_registry(
             message: format!("its receipt describes another upload than the one sent: {receipt:?}"),
         }));
     }
-    Ok(format!(
-        "{}{}",
-        registry.url.trim_end_matches('/'),
-        path::version(&name, &version)
-    ))
+    Ok(registry.url.address(&Call::Version(&name, &version)))
 }
 
 /// Verify SHA256 integrity of downloaded bytes against an expected hash.

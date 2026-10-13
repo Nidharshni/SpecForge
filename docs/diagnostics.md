@@ -779,8 +779,12 @@ E067: Invalid registry configuration
 
 The registry configuration in `specforge.json` can't be read: the file isn't
 valid JSON, `registries` isn't an array, or an entry at the reported index is
-missing a required field or has the wrong type. That part of the configuration
-is ignored. Fix the reported entry.
+missing a required field, has the wrong type, or has a `url` that isn't a
+registry's root (an `http` or `https` URL with no query, fragment or user name;
+write `https://registry.example`, not `https://registry.example/v1`: SpecForge
+adds the protocol's `/v1`). No registry is asked while an entry can't be read,
+so a package whose scope that entry serves never goes to another registry. Fix
+the reported entry.
 
 Owner: core
 Level: error
@@ -1899,8 +1903,8 @@ Level: error
 ```
 R006: Package version not found
 
-The registry answered 404 for the package or version. Check the package name and
-version.
+The registry answered that it has no such package or version (HTTP 404 with the
+registry protocol's NOT_FOUND error). Check the package name and version.
 
 Owner: core
 Level: error
@@ -1941,12 +1945,15 @@ Level: error
 ```
 R009: Registry reply unreadable
 
-The registry answered with a body that isn't the JSON the registry protocol
-defines for that request, such as a publisher signature that isn't an Ed25519
-signature object, or a publish receipt that describes another upload than the
-one sent. The registry is broken, or the URL isn't a SpecForge registry. Nothing
-is installed and no key is pinned, and `--allow-unsigned` doesn't accept such a
-package. Check the registry.
+The registry's answer isn't one the registry protocol defines for that request:
+a body that isn't the request's JSON (such as a publisher signature that isn't
+an Ed25519 signature object, or a publish receipt that describes another upload
+than the one sent), a 404 without the protocol's NOT_FOUND error (no registry
+serves that address: the configured `url` isn't a SpecForge registry's root), or
+a download URL that is neither an `http`/`https` URL nor a path at the
+registry's root. The registry is broken, or the URL isn't a SpecForge registry's
+root. Nothing is installed and no key is pinned, and `--allow-unsigned` doesn't
+accept such a package. Check the registry and its `url` in `specforge.json`.
 
 Owner: core
 Level: error
@@ -2211,10 +2218,11 @@ appropriate peer dependency (a validation rule on another extension's kind that
 this one works without names that extension as its `target_extension` instead).
 The same code reports a declaration the registry refuses: a `derived_from` that
 derives nothing, a `proof_role` other than `bound` or `claim`, or a
-`lifecycle_field` that is not one of the kind's fields. A field that writes a
-declared edge type from a kind outside its declared `source_kind`, or to a kind
-outside its declared `target_kind`, is W021 too, and its edges are of no edge
-type.
+`lifecycle_field` that is not one of the kind's fields, an `enum` field that
+declares no values, or a `default_value` an enum field does not take. A field
+that writes a declared edge type from a kind outside its declared `source_kind`,
+or to a kind outside its declared `target_kind`, is W021 too, and its edges are
+of no edge type.
 
 Owner: core
 Level: warning
@@ -2729,10 +2737,13 @@ Level: warning
 ```
 W098: SMT solver unavailable
 
-The `z3` SMT solver could not be found on `PATH`, or failed to execute, so
-formal entailment and consistency checks during `--prove` were skipped. Install
-z3 (https://github.com/Z3Prover/z3) and ensure it is executable to enable these
-checks.
+`specforge analyze --prove` could not ask the SMT solver z3 everything it had
+to: z3 is not on `PATH` or does not run (`specforge doctor` states the same
+warning as a toolchain finding), a solve ran past the timeout
+(`--prove-timeout`, 30 seconds by default), or z3 failed mid-run. The checks it
+could not answer were skipped: no bound was found contradictory and no claim was
+proved by them. Install z3 (https://github.com/Z3Prover/z3) and make sure `z3
+--version` runs.
 
 Owner: core
 Level: warning

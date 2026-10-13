@@ -296,8 +296,12 @@ pub struct FieldDescriptor {
     pub target_kind: Option<String>,
     #[serde(default)]
     pub file_reference: bool,
+    /// What an absent value counts as: for an enum, one of its `enum_values`
+    /// (W021 otherwise). The host never writes it into the graph; the schema,
+    /// the model, the guide and the hover show it.
     #[serde(default)]
     pub default_value: Option<String>,
+    /// An enum's values, in order (W021 when an enum declares none).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub enum_values: Vec<String>,
     #[serde(default)]

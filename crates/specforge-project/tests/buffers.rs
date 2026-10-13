@@ -300,14 +300,19 @@ fn the_session_classifies_a_held_file_as_nothing() {
     let rt = counting();
     let (dir, mut session) = opened(&rt);
     hold(&mut session, &dir, OMEGA);
-    let paths = [dir.path().join("a.spec"), dir.path().join("specforge.json")];
+    // A file as the session read it changes nothing: write the config again.
+    let root = std::fs::canonicalize(dir.path()).unwrap();
+    let config = std::fs::read_to_string(root.join("specforge.json")).unwrap();
+    std::fs::write(root.join("specforge.json"), format!("{config}\n")).unwrap();
+    std::fs::write(root.join("a.spec"), "type other \"O\" {}\n").unwrap();
+    let paths = [root.join("a.spec"), root.join("specforge.json")];
     let changes = session.changes(paths.iter().map(PathBuf::as_path));
     assert_eq!(
         changes,
         Changes {
             sources: vec![],
-            environment: true,
-            check_inputs: false
+            environment: vec![root.join("specforge.json")],
+            check_inputs: vec![]
         }
     );
 }

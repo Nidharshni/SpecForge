@@ -22,3 +22,10 @@ pub use extension::TestExtension;
 pub use project::{Served, TestProject};
 pub use rpc::*;
 pub use spec::spec_files;
+
+use std::sync::Arc;
+
+/// The solver every served test project's doctor sees: z3 runs (ADR 0079 D5).
+pub fn z3_ready() -> Arc<dyn specforge_ops::solver::Solver> {
+    Arc::new(specforge_ops::testing::ScriptedSolver::ready())
+}

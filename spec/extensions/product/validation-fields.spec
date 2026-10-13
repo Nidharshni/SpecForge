@@ -9,6 +9,56 @@
 use "types/diagnostics"
 use "types/graph"
 
+behavior validate_product_vocabularies "Validate Product Field Vocabularies" {
+  category validation
+  types    [
+    ProductFeature,
+    ProductJourney,
+    ProductDeliverable,
+    ProductMilestone,
+    ProductPersona,
+    ProductChannel,
+    ProductRelease,
+    Priority,
+    FeatureStatus,
+    DeliverableStatus,
+    MilestoneStatus,
+    ReleaseStatus,
+    PersonaStatus,
+    ChannelStatus,
+    Effort,
+    ArtifactType,
+    TechnicalLevel,
+    InteractionModel,
+    Diagnostic,
+  ]
+  contract """
+    The @specforge/product extension MUST declare each of its closed
+    vocabularies once and declare every field that takes one as an enum of
+    it: feature status (FeatureStatus), priority (Priority) and effort
+    (Effort); journey priority; deliverable artifact_type (ArtifactType) and
+    status (DeliverableStatus); milestone status (MilestoneStatus) and
+    priority; persona technical_level (TechnicalLevel) and status
+    (PersonaStatus); channel interaction_model (InteractionModel) and status
+    (ChannelStatus); release status (ReleaseStatus). A status field
+    declares as its default the value an absent status counts as: feature
+    proposed, deliverable draft, milestone and release planned, persona and
+    channel active. The core refuses a written value outside the
+    vocabulary with E061, naming the closest value; an absent field is not
+    checked. The list commands filter and sort by the same vocabulary, and
+    the lifecycle rules and rollups read an absent status as its default.
+  """
+  ensures {
+    off_vocabulary_e061 "a vocabulary field with a value outside its vocabulary produces E061"
+    absent_passes       "a vocabulary field that is not written produces nothing"
+    absent_counts_as    "a status field declares the value an absent status counts as"
+    lists_agree         "every value check admits, the list filters take"
+  }
+  features [pe_validation_suite]
+  verify unit "every vocabulary field is declared an enum of its vocabulary, with its absent value as default, and every closed list filter reads the same vocabulary"
+  verify unit "check admits every value the list filters take, and the lists find it"
+}
+
 behavior validate_feature_status_field "Validate Feature Status Field" {
   category validation
   types    [ProductFeature, FeatureStatus, Diagnostic]

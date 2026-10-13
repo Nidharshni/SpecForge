@@ -880,3 +880,199 @@ fn watch_reports_what_check_reports_when_an_excluded_import_target_appears() {
         diagnostic_set(&check(&project))
     );
 }
+
+/// A directory moved inside the spec root, its file removed, another file
+/// declaring the same ID written: watch reports what `check` reports, and
+/// no E002 for the entity that left with the directory (plan 03, repro 1).
+#[specforge_test(
+    behavior = "watch_file_system_for_changes",
+    verify = "a directory moved inside the spec root leaves watch reporting what check reports"
+)]
+fn watch_reports_what_check_reports_after_a_directory_move() {
+    let project = TempDir::new().unwrap();
+    fs::write(
+        project.path().join("specforge.json"),
+        r#"{"extensions":[]}"#,
+    )
+    .unwrap();
+    fs::write(project.path().join("r.spec"), "thing root_one \"R\" {}\n").unwrap();
+    fs::create_dir_all(project.path().join("old")).unwrap();
+    fs::write(
+        project.path().join("old/a.spec"),
+        "thing alpha_one \"A\" {\n}\n",
+    )
+    .unwrap();
+
+    let (rx, child) = spawn_watch(&project);
+    wait_for_line(&rx, "\"event\":\"ready\"", Duration::from_secs(60))
+        .expect("watch never reported ready");
+    settle(&rx);
+
+    fs::rename(project.path().join("old"), project.path().join("new")).unwrap();
+    std::thread::sleep(Duration::from_millis(500));
+    fs::remove_file(project.path().join("new/a.spec")).unwrap();
+    std::thread::sleep(Duration::from_millis(500));
+    fs::write(
+        project.path().join("r2.spec"),
+        "thing alpha_one \"A again\" {\n}\n",
+    )
+    .unwrap();
+
+    let mut last = None;
+    while let Some(event) = next_event(&rx, Duration::from_secs(3)) {
+        last = Some(event);
+    }
+    drop(child);
+    let last = last.expect("watch reported nothing");
+
+    let check = specforge_cmd()
+        .args(["check", "--format", "json", "--path"])
+        .arg(project.path())
+        .output()
+        .unwrap();
+    let check: serde_json::Value = serde_json::from_slice(&check.stdout).unwrap();
+    assert_eq!(
+        diagnostic_set(&last["diagnostics"]),
+        diagnostic_set(&check),
+        "{last}"
+    );
+    assert!(
+        last["diagnostics"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|d| d["code"] != "E002"),
+        "{last}"
+    );
+}
+
+/// An edit to a symlinked source's target, in a directory outside the
+/// project, is seen as an edit to the link (plan 03, repro 4).
+#[cfg(unix)]
+#[specforge_test(
+    behavior = "watch_file_system_for_changes",
+    verify = "an edit to a symlinked source's target is seen"
+)]
+fn watch_sees_an_edit_to_a_symlinked_sources_target() {
+    let outside = TempDir::new().unwrap();
+    let target = fs::canonicalize(outside.path()).unwrap().join("real.spec");
+    fs::write(&target, "thing real_one \"R\" {}\n").unwrap();
+    let project = TempDir::new().unwrap();
+    fs::write(
+        project.path().join("specforge.json"),
+        r#"{"extensions":[]}"#,
+    )
+    .unwrap();
+    fs::write(project.path().join("r.spec"), "thing root_one \"R\" {}\n").unwrap();
+    std::os::unix::fs::symlink(&target, project.path().join("link.spec")).unwrap();
+
+    let (rx, child) = spawn_watch(&project);
+    wait_for_line(&rx, "\"event\":\"ready\"", Duration::from_secs(60))
+        .expect("watch never reported ready");
+    settle(&rx);
+
+    fs::write(
+        &target,
+        "thing real_one \"R\" {}\nthing real_two \"R\" {}\n",
+    )
+    .unwrap();
+    let event = next_event(&rx, Duration::from_secs(20));
+    drop(child);
+
+    let event = event.expect("no event after the target was edited");
+    assert_eq!(
+        event["changed"],
+        serde_json::json!(["link.spec"]),
+        "{event}"
+    );
+    assert!(
+        event["delta"]["added_nodes"]
+            .to_string()
+            .contains("real_two"),
+        "{event}"
+    );
+}
+
+/// The `(code, line)` of each diagnostic in `list` that has a line.
+fn located(list: &serde_json::Value) -> Vec<(String, i64)> {
+    list.as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|d| Some((d["code"].as_str()?.to_string(), d["line"].as_i64()?)))
+        .collect()
+}
+
+/// The next event whose `diagnostics` hold an E025 at `line`.
+fn event_with_e025_at(rx: &mpsc::Receiver<String>, line: i64) -> serde_json::Value {
+    // Not `next_event`: a change that only moves a diagnostic leaves the
+    // graph delta empty, and `next_event` skips such an update.
+    let deadline = Instant::now() + Duration::from_secs(60);
+    while Instant::now() < deadline {
+        let Ok(text) = rx.recv_timeout(Duration::from_millis(200)) else {
+            continue;
+        };
+        let Ok(event) = serde_json::from_str::<serde_json::Value>(&text) else {
+            continue;
+        };
+        if event["event"] == "rebuilt"
+            && located(&event["diagnostics"]).contains(&("E025".to_string(), line))
+        {
+            return event;
+        }
+    }
+    panic!("no rebuilt event reported an E025 at line {line}");
+}
+
+#[specforge_test(
+    behavior = "notify_delta_subscribers",
+    verify = "watch --format json prints the diagnostics each update added and removed"
+)]
+fn watch_prints_the_diagnostics_each_update_added_and_removed() {
+    let project = TempDir::new().unwrap();
+    fs::write(
+        project.path().join("specforge.json"),
+        r#"{"name":"w","version":"0.1.0"}"#,
+    )
+    .unwrap();
+    let alpha = "behavior alpha \"Alpha\" {\n}\n";
+    fs::write(project.path().join("main.spec"), alpha).unwrap();
+
+    let (rx, child) = spawn_watch(&project);
+    wait_for_line(&rx, "\"event\":\"ready\"", Duration::from_secs(60))
+        .expect("watch never reported ready");
+    std::thread::sleep(Duration::from_millis(300));
+
+    // An import that resolves to nothing adds an E025: a diagnostic the
+    // graph build does not report.
+    fs::write(
+        project.path().join("main.spec"),
+        format!("use \"missing\"\n{alpha}"),
+    )
+    .unwrap();
+    let added = event_with_e025_at(&rx, 1);
+    assert_eq!(
+        located(&added["diagnostics_delta"]["added"]),
+        [("E025".to_string(), 1)],
+        "{added}"
+    );
+    assert_eq!(added["diagnostics_delta"]["removed"], serde_json::json!([]));
+
+    // Moving it two lines down removes it where it was and adds it where it is.
+    fs::write(
+        project.path().join("main.spec"),
+        format!("\n\nuse \"missing\"\n{alpha}"),
+    )
+    .unwrap();
+    let moved = event_with_e025_at(&rx, 3);
+    drop(child);
+    assert_eq!(
+        located(&moved["diagnostics_delta"]["removed"]),
+        [("E025".to_string(), 1)],
+        "{moved}"
+    );
+    assert_eq!(
+        located(&moved["diagnostics_delta"]["added"]),
+        [("E025".to_string(), 3)],
+        "{moved}"
+    );
+}

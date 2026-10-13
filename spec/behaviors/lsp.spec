@@ -290,6 +290,7 @@ behavior hover_information "Hover Information" {
   verify unit "hover returns markdown-formatted content"
   verify unit "field help answers only on a field's name"
   verify unit "field help names a field's type as E061 does, an enum's declared values included"
+  verify unit "field help says what an absent value counts as"
   verify contract "Hover Information: hover information holds — graph_available, kind_registry_available, hover_delegated, markdown_produced"
 }
 
@@ -510,6 +511,7 @@ behavior emit_live_diagnostics "Live Diagnostics" {
   verify unit "each file's diagnostics are published under the URI the client named it by"
   verify integration "diagnostics appear within 100ms"
   verify unit "a spanless diagnostic about entities is published at the first one's name"
+  verify unit "a spanless diagnostic is published at its entity's new name when only the entity moved"
   verify unit "a diagnostic is published on the file its span names"
   verify unit "a diagnostic about no entity is published on the edited document"
   verify unit "a define block's W143 is published as unnecessary code"

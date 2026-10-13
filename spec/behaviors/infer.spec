@@ -305,13 +305,14 @@ behavior compute_inference_guide "Compute Inference Guide" {
     kind registry registered it for declares it), in declaration order:
     its keyword, extension and description; every field the registry
     build registered on it, sorted by name, with its type, whether it is
-    required and its description; its guide, the extension's
+    required, its description and, for an enum, its values and the value an
+    absent one counts as; its guide, the extension's
     inference_guide followed by a blank line, "**Project-specific:**" and
     the project's own guide for the kind (inference.<kind> in
     specforge.json), either alone when the other is absent, empty when
     neither is; an example entity writing its required fields and its
     first three optional ones, each the way its type is written ("..." for
-    a string, 0, true, the first enum value, ["item1", "item2"], ref_id,
+    a string, 0, true, an enum's declared default else its first value, ["item1", "item2"], ref_id,
     [ref_1, ref_2], { } for a block); and its entities, in id order. The
     project's guide adds the loaded extensions, the entity count of every
     written kind, the global conventions (inference.global) and the spec
@@ -322,6 +323,7 @@ behavior compute_inference_guide "Compute Inference Guide" {
   verify unit "a kind's guide is its extension's guide, then the project's guide for the kind under Project-specific"
   verify unit "a kind only the project guides has the project's guide alone, and one nobody guides an empty guide"
   verify unit "a kind guide lists every field registered on the kind, by name, with its type"
+  verify unit "a guide field lists an enum's values and what an absent value counts as"
   verify unit "the example entity writes its required fields and three optional ones, each the way its type is written"
   verify unit "a kind declared by two extensions is guided by the one that registered it"
   verify unit "the guide's spec directory is the project's spec root, relative to its root"

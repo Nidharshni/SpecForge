@@ -7,7 +7,7 @@ use specforge_mcp::McpServer;
 use specforge_test::prelude::*;
 
 use crate::fake_extension::{self, FakeExtension};
-use crate::support::{TestProject, call, call_tool, files_under};
+use crate::support::{TestProject, call, call_tool, files_under, z3_ready};
 use crate::tool_errors::mcp_error;
 
 const GREET: &str = "@sdk/greet";
@@ -28,7 +28,7 @@ fn server_over_text(config: &str) -> (McpServer, tempfile::TempDir) {
         .file("test.spec", "behavior alpha \"Alpha\" {\n}\n")
         .into_dir();
     std::fs::write(dir.path().join("specforge.json"), config).unwrap();
-    let mut server = McpServer::new();
+    let mut server = McpServer::new().with_solver(z3_ready());
     let reply = call(
         &mut server,
         "initialize",
@@ -92,15 +92,12 @@ fn add_extension_reads_a_relative_local_path_from_the_project_root() {
     );
 }
 
-/// Doctor's findings, without the z3 probe's (it depends on PATH).
+/// Doctor's findings.
 fn project_findings(report: &Value) -> Vec<Value> {
     report["findings"]
         .as_array()
         .unwrap_or_else(|| panic!("no findings: {report}"))
-        .iter()
-        .filter(|f| f["code"] != "z3_missing")
-        .cloned()
-        .collect()
+        .to_vec()
 }
 
 /// The codes of [`project_findings`].
@@ -141,7 +138,7 @@ fn extensions_lists_the_lock_entries_and_the_kinds_in_the_graph() {
         {"name": "@acme/alpha", "version": "1.0.0", "source": "registry", "wasm_hash": "h2"},
     ]});
     std::fs::write(dir.path().join("specforge.lock"), lock.to_string()).unwrap();
-    let mut server = McpServer::new();
+    let mut server = McpServer::new().with_solver(z3_ready());
     let req = json!({"jsonrpc": "2.0", "id": 1, "method": "initialize",
         "params": {"projectRoot": dir.path().to_str().unwrap()}});
     server.handle_message(&req.to_string());
@@ -311,7 +308,7 @@ fn add_and_remove_extension_refuse_an_unusable_config_alike() {
 /// (precondition_failed, no argument), as the operations under them refuse a
 /// view without a root.
 fn assert_no_project_refusal(tool: &str) {
-    let mut server = McpServer::new();
+    let mut server = McpServer::new().with_solver(z3_ready());
     server.handle_message(
         &json!({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}).to_string(),
     );
@@ -374,7 +371,6 @@ fn validate_and_doctor_report_an_unusable_config() {
         .as_array()
         .unwrap()
         .iter()
-        .filter(|f| f["code"] != "z3_missing")
         .map(|f| (f["code"].as_str().unwrap(), f["status"].as_str().unwrap()))
         .collect();
     assert_eq!(findings, [("E069", "error"), ("I002", "info")], "{report}");
@@ -461,7 +457,7 @@ fn doctor_names_a_wasm_file_entry_by_its_file() {
         "greeting hello \"Hello\" {\n  style warm\n}\n",
     )
     .unwrap();
-    let mut server = McpServer::new();
+    let mut server = McpServer::new().with_solver(z3_ready());
     let req = json!({"jsonrpc": "2.0", "id": 1, "method": "initialize",
         "params": {"projectRoot": dir.path().to_str().unwrap()}});
     server.handle_message(&req.to_string());

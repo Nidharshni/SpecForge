@@ -157,7 +157,7 @@ fn every_update_leaves_what_a_fresh_compile_builds() {
         }
         let update = session.update(SourceChange::Disk(&changed(&[path])));
         assert_eq!(update.verification, Some(Ok(())), "after {path}");
-        assert_eq!(update.diagnostics, session.project().diagnostics());
+        assert_eq!(update.diagnostics[..], session.project().diagnostics()[..]);
         assert_matches_a_fresh_compile(&session, root);
     }
 }
@@ -582,12 +582,14 @@ fn a_wasm_file_entry_loads_in_a_session_and_reloads_with_its_file() {
     for code in ["E024", "E028", "W019", "W112"] {
         assert!(!codes.iter().any(|c| c == code), "{code}: {codes:?}");
     }
-    assert_eq!(
-        session.inputs().classify(&root.join("ext/greet.wasm")),
-        specforge_project::InputRole::Environment
-    );
 
     fs::write(root.join("ext/greet.wasm"), b"\0asm not a component").unwrap();
+    assert!(
+        !session
+            .changes([root.join("ext/greet.wasm").as_path()])
+            .environment
+            .is_empty()
+    );
     let update = session.reload_environment();
     let e028: Vec<&Diagnostic> = update
         .diagnostics
@@ -1091,8 +1093,11 @@ fn diagnostics_from_changed_files_are_refreshed() {
 
     assert!(
         update
-            .changed_diagnostic_files
-            .contains(&"c.spec".to_string())
+            .diagnostics_delta()
+            .added
+            .0
+            .iter()
+            .any(|d| d.code == "E003" && d.span.as_ref().is_some_and(|s| s.file == "c.spec"))
     );
     assert!(
         in_file(&session.project().diagnostics(), "c.spec")
@@ -1128,10 +1133,15 @@ fn diagnostics_from_unchanged_files_are_preserved() {
         in_file(&session.project().diagnostics(), "main.spec"),
         before
     );
+    let delta = update.diagnostics_delta();
     assert!(
-        !update
-            .changed_diagnostic_files
-            .contains(&"main.spec".to_string())
+        delta
+            .added
+            .0
+            .iter()
+            .chain(&delta.removed.0)
+            .all(|d| d.span.as_ref().is_none_or(|s| s.file != "main.spec")),
+        "{delta:?}"
     );
 }
 
@@ -1184,12 +1194,22 @@ fn emit_incremental_diagnostics_contract() {
 
     // Refreshed for the changed file, preserved for the others, and the
     // whole set is a fresh compile's.
-    assert_eq!(update.changed_diagnostic_files, ["c.spec"]);
+    let delta = update.diagnostics_delta();
+    assert!(!delta.added.0.is_empty(), "{delta:?}");
+    assert!(
+        delta
+            .added
+            .0
+            .iter()
+            .chain(&delta.removed.0)
+            .all(|d| d.span.as_ref().is_some_and(|s| s.file == "c.spec")),
+        "{delta:?}"
+    );
     assert_eq!(
         in_file(&session.project().diagnostics(), "main.spec"),
         main_before
     );
-    assert_eq!(update.diagnostics, session.project().diagnostics());
+    assert_eq!(update.diagnostics[..], session.project().diagnostics()[..]);
     assert_matches_a_fresh_compile(&session, root);
 }
 
@@ -1450,6 +1470,119 @@ fn random_updates_leave_what_a_fresh_compile_builds() {
     }
 }
 
+#[specforge_test(
+    behavior = "emit_incremental_diagnostics",
+    verify = "an update reports the diagnostics it added and removed"
+)]
+fn an_update_reports_the_diagnostics_it_added_and_removed() {
+    let dir = three_files();
+    let root = dir.path();
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
+    let broken = behavior("delta", "  invariants [nowhere]\n");
+    let e003 = |delta: &[Diagnostic]| -> Vec<(String, usize)> {
+        delta
+            .iter()
+            .filter(|d| d.code == "E003")
+            .map(|d| {
+                let span = d.span.as_ref().unwrap();
+                (span.file.as_str().to_string(), span.start_line)
+            })
+            .collect()
+    };
+
+    write(root, "c.spec", &broken);
+    let update = session.update(SourceChange::Disk(&changed(&["c.spec"])));
+    let delta = update.diagnostics_delta();
+    let added = e003(&delta.added.0);
+    assert_eq!(added.len(), 1, "{:?}", delta.added);
+    assert_eq!(added[0].0, "c.spec");
+    assert!(e003(&delta.removed.0).is_empty(), "{:?}", delta.removed);
+
+    // The same error two lines lower: removed where it was, added where it is.
+    write(root, "c.spec", &format!("\n\n{broken}"));
+    let update = session.update(SourceChange::Disk(&changed(&["c.spec"])));
+    let delta = update.diagnostics_delta();
+    let (removed, added_now) = (e003(&delta.removed.0), e003(&delta.added.0));
+    assert_eq!(removed.len(), 1, "{delta:?}");
+    assert_eq!(added_now.len(), 1, "{delta:?}");
+    assert_eq!(added_now[0].1, removed[0].1 + 2);
+
+    // Written again unchanged: nothing is added or removed.
+    write(root, "c.spec", &format!("\n\n{broken}"));
+    let update = session.update(SourceChange::Disk(&changed(&["c.spec"])));
+    assert!(update.diagnostics_delta().is_empty());
+}
+
+#[test]
+fn a_reload_and_a_recheck_report_their_delta() {
+    let dir = three_files();
+    let root = dir.path();
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
+    let update = session.reload_environment();
+    assert_eq!(update.kind, UpdateKind::Environment);
+    assert!(update.diagnostics_delta().is_empty());
+    assert_eq!(update.previous_diagnostics[..], update.diagnostics[..]);
+
+    // A session with no project reloads nothing: one list, held twice.
+    let mut detached = ProjectSession::detached();
+    let update = detached.reload_environment();
+    assert!(update.diagnostics_delta().is_empty());
+    assert!(Arc::ptr_eq(
+        &update.previous_diagnostics,
+        &update.diagnostics
+    ));
+}
+
+const CYCLE: &str = "behavior alpha \"A\" {\n  depends_on [beta]\n}\nbehavior beta \"B\" {\n  depends_on [alpha]\n}\n";
+
+#[specforge_test(
+    behavior = "emit_incremental_diagnostics",
+    verify = "a diagnostic without a span is unchanged when only its entities move"
+)]
+fn a_diagnostic_without_a_span_is_unchanged_when_only_its_entities_move() {
+    let dir = project(
+        r#"{"name":"c","extensions":["@specforge/software"]}"#,
+        &[("cycle.spec", CYCLE)],
+    );
+    let root = dir.path();
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
+    let w061 = |diagnostics: &[Diagnostic]| diagnostics.iter().filter(|d| d.code == "W061").count();
+    assert_eq!(w061(&session.project().diagnostics()), 1);
+
+    write(root, "cycle.spec", &format!("\n\n{CYCLE}"));
+    let update = session.update(SourceChange::Disk(&changed(&["cycle.spec"])));
+    assert_eq!(w061(&update.diagnostics), 1, "still reported");
+    let delta = update.diagnostics_delta();
+    assert_eq!(w061(&delta.added.0), 0, "{delta:?}");
+    assert_eq!(w061(&delta.removed.0), 0, "{delta:?}");
+}
+
+/// `update`'s delta takes what the session reported before it (`previous`)
+/// to what it reports now: counting `previous` by diagnostic, taking away
+/// each removed and adding each added gives the count of the current report.
+fn assert_delta_takes(previous: &[Diagnostic], update: &specforge_project::Update, context: &str) {
+    let mut counts: std::collections::HashMap<&Diagnostic, i64> = std::collections::HashMap::new();
+    for d in previous {
+        *counts.entry(d).or_default() += 1;
+    }
+    let delta = update.diagnostics_delta();
+    for d in &delta.removed.0 {
+        *counts.entry(d).or_default() -= 1;
+    }
+    for d in &delta.added.0 {
+        *counts.entry(d).or_default() += 1;
+    }
+    let mut now: std::collections::HashMap<&Diagnostic, i64> = std::collections::HashMap::new();
+    for d in update.diagnostics.iter() {
+        *now.entry(d).or_default() += 1;
+    }
+    counts.retain(|_, n| *n != 0);
+    assert_eq!(
+        counts, now,
+        "{context}: the delta takes the report to the next"
+    );
+}
+
 /// Random sequences of every kind of update a surface applies: disk edits,
 /// creations, deletions and renames named by path; one editor buffer;
 /// several buffers as one update; disk writes caught up by `ensure_fresh`;
@@ -1509,6 +1642,7 @@ fn a_session_reports_what_a_fresh_compile_reports_in_order() {
         session.set_verify_incremental(true);
 
         for step in 0..30 {
+            let previous = session.project().diagnostics();
             let update = match rng.below(7) {
                 // A rename: one file moves to another path in one batch.
                 0 => {
@@ -1582,10 +1716,12 @@ fn a_session_reports_what_a_fresh_compile_reports_in_order() {
                 update.verification
             );
             assert_eq!(
-                update.diagnostics,
-                session.project().diagnostics(),
+                update.diagnostics[..],
+                session.project().diagnostics()[..],
                 "{context}"
             );
+            assert_eq!(update.previous_diagnostics[..], previous[..], "{context}");
+            assert_delta_takes(&previous, &update, &context);
             let fresh = CompiledProject::compile(
                 &specforge_common::ProjectRoot::of(root).unwrap(),
                 Some(runtime.clone()),
@@ -1788,7 +1924,7 @@ fn edits_creations_and_deletions_apply_as_one_update() {
 
     let stale = session.stale();
     assert_eq!(stale.sources, vec!["a.spec", "b.spec", "c.spec"]);
-    assert!(!stale.environment && !stale.check_inputs);
+    assert!(stale.environment.is_empty() && stale.check_inputs.is_empty());
     let update = session.ensure_fresh().expect("three files changed");
     assert_eq!(update.kind, specforge_project::UpdateKind::Sources);
     assert_eq!(update.rebuilt_files, vec!["a.spec", "b.spec", "c.spec"]);
@@ -1860,7 +1996,10 @@ fn a_lock_change_reloads_the_environment() {
     fs::write(root.join("specforge.lock"), lock.to_string()).unwrap();
 
     let stale = session.stale();
-    assert!(stale.environment && stale.sources.is_empty(), "{stale:?}");
+    assert!(
+        !stale.environment.is_empty() && stale.sources.is_empty(),
+        "{stale:?}"
+    );
     let update = session.ensure_fresh().expect("the lock changed");
     assert_eq!(update.kind, specforge_project::UpdateKind::Environment);
     let locked = e028(&session);
@@ -2178,7 +2317,7 @@ fn a_config_written_while_the_runtime_loads_is_seen_next_time() {
     };
     assert!(!e028(&session), "{:?}", session.project().diagnostics());
     // The write was after the config's stamp: the session is stale.
-    assert!(session.stale().environment);
+    assert!(!session.stale().environment.is_empty());
 
     let update = session.ensure_fresh().expect("the config changed");
     assert_eq!(update.kind, UpdateKind::Environment);
@@ -2186,7 +2325,7 @@ fn a_config_written_while_the_runtime_loads_is_seen_next_time() {
     assert!(!e028(&session), "{:?}", session.project().diagnostics());
     let kinds = session.project().environment().registries().kinds();
     assert!(kinds.contains("alpha") && kinds.contains("beta"));
-    assert!(!session.stale().environment);
+    assert!(session.stale().environment.is_empty());
 }
 
 #[specforge_test(
@@ -2205,10 +2344,10 @@ fn a_module_rewritten_while_the_runtime_loads_is_seen_next_time() {
     let mut session =
         ProjectSession::open_from(&specforge_common::ProjectRoot::of(root).unwrap(), source);
 
-    assert!(session.stale().environment);
+    assert!(!session.stale().environment.is_empty());
     let update = session.ensure_fresh().expect("the module changed");
     assert_eq!(update.kind, UpdateKind::Environment);
-    assert!(!session.stale().environment);
+    assert!(session.stale().environment.is_empty());
 }
 
 #[test]
@@ -2681,7 +2820,7 @@ fn an_update_naming_only_files_discovery_does_not_find_changes_nothing() {
     assert!(update.rebuilt_files.is_empty());
     assert_eq!(update.delta, specforge_project::GraphDelta::default());
     assert!(!update.inputs_changed);
-    assert_eq!(update.diagnostics, before);
+    assert_eq!(update.diagnostics[..], before[..]);
 }
 
 #[specforge_test(
@@ -2705,9 +2844,11 @@ fn a_glob_exclude_entry_leaves_its_files_out_of_the_compile() {
     assert_eq!(files, ["main.spec"]);
 
     let session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
-    assert_eq!(
-        session.inputs().classify(&root.join("sub/c.draft.spec")),
-        specforge_project::InputRole::Unrelated
+    write(root, "sub/c.draft.spec", "term c \"C\" {\n}\n");
+    assert!(
+        session
+            .changes([root.join("sub/c.draft.spec").as_path()])
+            .is_empty()
     );
 }
 
@@ -2736,4 +2877,136 @@ fn a_symlinked_directory_is_no_source() {
         e025(&compiled.diagnostics()),
         ["import target not found among the project's sources: escape/secret"]
     );
+}
+
+/// Whatever a watcher reports for a step (a file, both directories of a
+/// rename, a directory created or removed, a symlink target), the changes
+/// of that batch are what the session finds stale: the batch comparison is
+/// the full comparison narrowed to what the paths reach, so naming every
+/// changed path loses nothing.
+#[specforge_test(
+    behavior = "classify_project_changes",
+    verify = "the changes of a batch naming every changed path are what the session finds stale"
+)]
+fn a_batch_naming_every_changed_path_changes_what_is_stale() {
+    use std::path::PathBuf;
+
+    const PATHS: &[&str] = &[
+        "a.spec",
+        "b.spec",
+        "sub/c.spec",
+        "sub/deep/e.spec",
+        "drafts/d.spec",
+    ];
+    let config = |exclude: bool| {
+        let exclude = if exclude {
+            r#","exclude":["drafts/"]"#
+        } else {
+            ""
+        };
+        format!(
+            r#"{{"name":"s","version":"0.1.0","extensions":["@specforge/software","@specforge/testing"],"spec_root":"spec"{exclude}}}"#
+        )
+    };
+    for seed in [
+        0x9E37_79B9_7F4A_7C15_u64,
+        0xD1B5_4A32_D192_ED03,
+        0x2545_F491_4F6C_DD1D,
+        0x1F83_D9AB_FB41_BD6B,
+    ] {
+        let mut rng = Rng(seed);
+        let dir = project(&config(false), &[]);
+        let root = fs::canonicalize(dir.path()).unwrap();
+        let spec = root.join("spec");
+        let outside = TempDir::new().unwrap();
+        let outside_dir = fs::canonicalize(outside.path()).unwrap();
+        for path in &PATHS[..3] {
+            write(&spec, path, &random_spec(&mut rng));
+        }
+        let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(&root).unwrap());
+        let mut excluding = false;
+        #[cfg_attr(not(unix), allow(unused_mut, unused_variables))]
+        let mut links = 0;
+
+        for step in 0..30 {
+            let mut paths: Vec<PathBuf> = Vec::new();
+            match rng.below(8) {
+                0 => {
+                    let path = rng.pick(PATHS);
+                    write(&spec, path, &random_spec(&mut rng));
+                    paths.push(spec.join(path));
+                }
+                1 => {
+                    let path = rng.pick(PATHS);
+                    if spec.join(path).is_file() {
+                        fs::remove_file(spec.join(path)).unwrap();
+                        paths.push(spec.join(path));
+                    }
+                }
+                2 => {
+                    let (from, to) = if spec.join("sub").is_dir() {
+                        ("sub", "sub2")
+                    } else {
+                        ("sub2", "sub")
+                    };
+                    if spec.join(from).is_dir() && !spec.join(to).exists() {
+                        fs::rename(spec.join(from), spec.join(to)).unwrap();
+                        paths.extend([spec.join(from), spec.join(to)]);
+                    }
+                }
+                3 => {
+                    for file in ["made/x.spec", "made/y.spec"] {
+                        write(&spec, file, &random_spec(&mut rng));
+                    }
+                    paths.push(spec.join("made"));
+                }
+                4 => {
+                    if spec.join("made").is_dir() {
+                        fs::remove_dir_all(spec.join("made")).unwrap();
+                        paths.push(spec.join("made"));
+                    }
+                }
+                #[cfg(unix)]
+                5 => {
+                    links += 1;
+                    let target = outside_dir.join(format!("t{links}.spec"));
+                    fs::write(&target, random_spec(&mut rng)).unwrap();
+                    let link = spec.join(format!("l{links}.spec"));
+                    std::os::unix::fs::symlink(&target, &link).unwrap();
+                    paths.push(link);
+                }
+                #[cfg(unix)]
+                6 => {
+                    if links > 0 {
+                        let target = outside_dir.join(format!("t{}.spec", 1 + rng.below(links)));
+                        fs::write(&target, random_spec(&mut rng)).unwrap();
+                        paths.push(target);
+                    }
+                }
+                _ => {
+                    excluding = !excluding;
+                    fs::write(root.join("specforge.json"), config(excluding)).unwrap();
+                    paths.push(root.join("specforge.json"));
+                }
+            }
+            let context = format!("seed {seed:#x} step {step}");
+            let changes = session.changes(paths.iter().map(PathBuf::as_path));
+            let stale = session.stale();
+            assert_eq!(changes.sources, stale.sources, "{context}");
+            assert_eq!(
+                changes.environment.is_empty(),
+                stale.environment.is_empty(),
+                "{context}"
+            );
+            assert_eq!(
+                changes.check_inputs.is_empty(),
+                stale.check_inputs.is_empty(),
+                "{context}"
+            );
+
+            session.apply(&changes);
+            assert!(session.stale().is_empty(), "{context}");
+            assert_matches_a_fresh_compile(&session, &root);
+        }
+    }
 }

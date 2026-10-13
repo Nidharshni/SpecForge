@@ -450,6 +450,7 @@ type McpDoctorReport {
   /// "stale" when an installed binary is missing or its hash drifted.
   cache_status    "ok" | "stale"
   installed_count integer
+  /// Whether the SMT solver z3 runs here: false exactly when a toolchain finding (W098) says why not.
   z3_available    boolean
   extensions      McpDoctorExtension[]
   /// Entity enhancements keyed by the entity kind they target.
@@ -1137,10 +1138,12 @@ type McpInferKindGuide "Infer prompt, scope kind:<name>: one kind's guide" {
 }
 
 type McpInferGuideField {
-  name        string @readonly
+  name        string   @readonly
   type        string
   required    boolean
-  description string @optional
+  description string   @optional
+  values      string[] @optional
+  default     string   @optional
   verify unit "McpInferGuideField schema is valid"
 }
 

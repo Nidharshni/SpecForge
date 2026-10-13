@@ -1,8 +1,10 @@
 //! The files the LSP asks its client to watch (`workspace/
 //! didChangeWatchedFiles`), derived from the project session's inputs: every
-//! file the project is built from (`lsp_extension_reload_consistency`). What
-//! a reported change means is the session's to say
-//! (`SessionInputs::changes`); this only makes sure the client reports it.
+//! file the project is built from (`lsp_extension_reload_consistency`) and
+//! every directory created or deleted under its root (`Watched::Directories`),
+//! which a client does not report for a file glob when a parent folder moves.
+//! What a reported change means is the session's to say
+//! (`ProjectSession::changes`); this only makes sure the client reports it.
 
 use std::path::Path;
 
@@ -17,7 +19,7 @@ pub const REGISTRATION_ID: &str = "specforge-file-watcher";
 pub fn default_watchers() -> Vec<FileSystemWatcher> {
     ["**/*.spec", "**/specforge.json", "**/specforge.lock"]
         .into_iter()
-        .map(|glob| watcher(GlobPattern::String(glob.to_string())))
+        .map(|glob| watcher(GlobPattern::String(glob.to_string()), WatchKind::all()))
         .collect()
 }
 
@@ -32,7 +34,7 @@ pub fn file_watchers(inputs: &SessionInputs, relative_patterns: bool) -> Vec<Fil
     if inputs.root().is_none() {
         return default_watchers();
     }
-    let pattern = |base: &Path, glob: &str| -> Option<FileSystemWatcher> {
+    let pattern = |base: &Path, glob: &str, kind: WatchKind| -> Option<FileSystemWatcher> {
         let pattern = if relative_patterns {
             GlobPattern::Relative(RelativePattern {
                 base_uri: OneOf::Right(crate::uri::directory_uri(base)?),
@@ -41,22 +43,29 @@ pub fn file_watchers(inputs: &SessionInputs, relative_patterns: bool) -> Vec<Fil
         } else {
             GlobPattern::String(format!("{}/{glob}", base.to_string_lossy()))
         };
-        Some(watcher(pattern))
+        Some(watcher(pattern, kind))
     };
     inputs
         .watched()
         .iter()
         .filter_map(|watched| match watched {
-            Watched::Sources(dir) => pattern(dir, "**/*.spec"),
-            Watched::File(path) => pattern(path.parent()?, &path.file_name()?.to_string_lossy()),
-            Watched::Listing(dir) => pattern(dir, "*"),
+            Watched::Sources(dir) => pattern(dir, "**/*.spec", WatchKind::all()),
+            Watched::Directories(dir) => {
+                pattern(dir, "**/*", WatchKind::Create | WatchKind::Delete)
+            }
+            Watched::File(path) => pattern(
+                path.parent()?,
+                &path.file_name()?.to_string_lossy(),
+                WatchKind::all(),
+            ),
+            Watched::Listing(dir) => pattern(dir, "*", WatchKind::all()),
         })
         .collect()
 }
 
-fn watcher(glob_pattern: GlobPattern) -> FileSystemWatcher {
+fn watcher(glob_pattern: GlobPattern, kind: WatchKind) -> FileSystemWatcher {
     FileSystemWatcher {
         glob_pattern,
-        kind: Some(WatchKind::all()),
+        kind: Some(kind),
     }
 }

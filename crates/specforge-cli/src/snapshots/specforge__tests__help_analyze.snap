@@ -31,6 +31,11 @@ Options:
       --prove
           Verify declared bounds and claims with an SMT solver (z3)
 
+      --prove-timeout <SECONDS>
+          Seconds one solver call may take before it is stopped (with --prove)
+          
+          [default: 30]
+
       --min <MIN>
           Fail with a non-zero exit when proof coverage falls below this percentage (needs test results)
 

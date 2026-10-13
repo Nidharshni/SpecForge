@@ -291,7 +291,9 @@ this table. A rule missing what its check **requires** (or with an unknown
 check) is **W112** and is not registered. A property its check does **not read**
 is **W147**: the rule is registered without it. `field` is never W147: every
 check's message reads it as the default `{field}`, and its text as the default
-`{value}`.
+`{value}`. `{allowed}` is the values of a `one_of` constraint (on
+`field_value_constraint` or `verify_kind_allowlist`), joined by `, `; any other
+check leaves it as written.
 
 | Check | Fires when | Requires (W112 when missing) | Reads | W147 when set |
 |-------|------------|------------------------------|-------|---------------|

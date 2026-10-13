@@ -213,9 +213,13 @@ type EdgeChange {
   verify unit "EdgeChange schema is valid"
 }
 
-// The diagnostics one update added and removed, each as every surface
-// presents a diagnostic (present_diagnostics_as_json); MCP computes it and
-// sends it as specforge/diagnosticsChanged's params.
+// The diagnostics one update added and removed, each compared and
+// presented whole, as every surface presents a diagnostic
+// (present_diagnostics_as_json): one that moved or changed in any part is
+// removed and added. The project session states it with each update;
+// specforge watch --format json prints it, and MCP sends it, with the I017
+// its extension surfaces add and remove, as specforge/diagnosticsChanged's
+// params.
 type DiagnosticsDelta {
   added   Diagnostic[]
   removed Diagnostic[]

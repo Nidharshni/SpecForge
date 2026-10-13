@@ -98,3 +98,6 @@ with a dry-run default.
 
 D2's port also reads a version's published manifest without its binary (`Registry::published`), what a dry run judges
 (ADR 0065 D3).
+
+**Amended by ADR 0075 (architecture round 9, plan 05), D1:** a `registries` entry that can't be read refuses every
+registry operation (E067) instead of being skipped, so the scope it claims never falls to the default registry.

@@ -257,9 +257,7 @@ fn a_declared_default_value_reaches_the_field_registry() {
         k.incremental(true)
             .inference_guide("Look for issue trackers")
             .field("status", |f| {
-                f.field_type(FieldType::Enum)
-                    .enum_values(&["open", "closed"])
-                    .default_value("open")
+                f.vocabulary(&Vocabulary::new(&["open", "closed"]).absent_as("open"))
                     .description("Where the ticket stands");
             })
             .field("summary", |f| {

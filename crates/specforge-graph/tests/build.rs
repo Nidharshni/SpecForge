@@ -172,15 +172,19 @@ fn removing_a_file_takes_its_entities_and_their_edges() {
     assert_eq!(removed, ["alpha"]);
     // beta lost its edge, and the reference no longer resolves.
     assert_eq!(applied.delta.removed_edges.len(), 1);
-    assert_eq!(build.diagnostic_files(), ["b.spec"]);
-    assert_eq!(applied.changed_diagnostic_files, ["b.spec"]);
+    assert!(!build.file_diagnostics("b.spec").is_empty());
+    assert!(build.file_diagnostics("a.spec").is_empty());
 }
 
 #[specforge_test(behavior = "rebuild_affected_subgraph", verify = "new nodes are added")]
 fn a_new_file_adds_its_entities() {
     let mut build = GraphBuild::of([file("b.spec", BETA_ON_ALPHA)], GraphConfig::default());
     assert_eq!(build.graph().node_count(), 1);
-    assert_eq!(build.diagnostic_files(), ["b.spec"], "alpha is unresolved");
+    assert_eq!(
+        build.file_diagnostics("b.spec")[0].code,
+        "E003",
+        "alpha is unresolved"
+    );
 
     let applied = build.apply([parsed("a.spec", ALPHA)]);
 
@@ -193,7 +197,10 @@ fn a_new_file_adds_its_entities() {
         .collect();
     assert_eq!(added, ["alpha"]);
     assert!(build.diagnostics().is_empty());
-    assert_eq!(applied.changed_diagnostic_files, ["b.spec"]);
+    assert!(
+        build.file_diagnostics("b.spec").is_empty(),
+        "the reference resolves"
+    );
 }
 
 #[specforge_test(
@@ -242,7 +249,6 @@ fn removing_a_file_the_build_does_not_hold_changes_nothing() {
 
     assert!(applied.files.is_empty());
     assert!(applied.delta.is_empty());
-    assert!(applied.changed_diagnostic_files.is_empty());
     assert_eq!(applied.verification, Some(Ok(())));
     assert!(build.graph().node("alpha").is_some());
 }
@@ -276,7 +282,6 @@ fn a_format_version_header_is_a_diagnostic_of_its_file() {
     )]);
     assert_eq!(applied.verification, Some(Ok(())));
     assert_eq!(codes(&build), ["I007"]);
-    assert_eq!(applied.changed_diagnostic_files, ["a.spec"]);
     let diagnostic = &build.file_diagnostics("a.spec")[0];
     assert_eq!(diagnostic.span.as_ref().unwrap().start_line, 1);
 
@@ -287,7 +292,6 @@ fn a_format_version_header_is_a_diagnostic_of_its_file() {
     )]);
     assert_eq!(applied.verification, Some(Ok(())));
     assert!(codes(&build).is_empty());
-    assert_eq!(applied.changed_diagnostic_files, ["a.spec"]);
 
     // A newer one is E019; removing the file removes it.
     let applied = build.apply([parsed(
@@ -299,5 +303,5 @@ fn a_format_version_header_is_a_diagnostic_of_its_file() {
     let applied = build.apply([FileChange::Removed("a.spec".to_string())]);
     assert_eq!(applied.verification, Some(Ok(())));
     assert!(codes(&build).is_empty());
-    assert_eq!(applied.changed_diagnostic_files, ["a.spec"]);
+    assert!(build.file_diagnostics("a.spec").is_empty());
 }

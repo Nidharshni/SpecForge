@@ -2021,7 +2021,7 @@ fn migrate_reports_hooks_structure_and_rollback() {
 /// at their URL, so a registry install fails at once.
 fn project_with_duplicate_registry_alias() -> tempfile::TempDir {
     let dir = tempfile::TempDir::new().unwrap();
-    let url = "http://127.0.0.1:9/v1";
+    let url = "http://127.0.0.1:9";
     let config = json!({
         "name": "t", "version": "0.1.0", "extensions": [],
         "registries": [

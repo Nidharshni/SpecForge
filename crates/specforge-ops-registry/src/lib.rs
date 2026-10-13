@@ -81,11 +81,10 @@ impl User {
 /// The registries a project configures, and what reading them reported.
 #[derive(Debug, Clone)]
 pub struct Configured {
-    /// The entries that could be read, in declaration order.
+    /// The entries, in declaration order.
     pub registries: Vec<RegistryConfig>,
-    /// E067 for each entry that couldn't be read (it is skipped), W140 for
-    /// a duplicate alias, I003 when no entry is the default. The caller
-    /// shows them.
+    /// W140 for a duplicate alias, I003 when no entry is the default. The
+    /// caller shows them.
     pub diagnostics: Vec<Diagnostic>,
 }
 
@@ -179,8 +178,9 @@ const INVALID_CONFIG: Code = codes::E067;
 /// `operation` names the command for the message (`add`, `search`, ...).
 /// No `specforge.json`, or one without a `registries` entry, fails with E063;
 /// one that is there and unusable fails as `add` fails (`config_invalid`).
-/// When `registries` has entries but none can be read, it fails with E067
-/// naming them.
+/// An entry that can't be read refuses the configuration with E067 naming it
+/// (ADR 0075 D6): a scoped entry skipped would send its names to another
+/// registry.
 pub fn configured(
     root: &specforge_common::ProjectRoot,
     operation: &str,
@@ -193,23 +193,23 @@ pub fn configured(
         return Err(no_registry(operation));
     };
     let (registries, diagnostics) = parse_registries_from_config(&raw.to_string());
-    if registries.is_empty() {
-        let unreadable: Vec<&str> = diagnostics
-            .iter()
-            .filter(|d| d.is(INVALID_CONFIG))
-            .map(|d| d.message.as_str())
-            .collect();
-        if unreadable.is_empty() {
-            return Err(no_registry(operation));
-        }
+    let unreadable: Vec<&str> = diagnostics
+        .iter()
+        .filter(|d| d.is(INVALID_CONFIG))
+        .map(|d| d.message.as_str())
+        .collect();
+    if !unreadable.is_empty() {
         return Err(OpError::coded(
             OpErrorKind::SchemaMismatch,
             INVALID_CONFIG,
             unreadable.join("; "),
         )
         .with_suggestion(
-            "fix the \"registries\" entries in specforge.json: each needs an \"alias\" and a \"url\"",
+            "fix the \"registries\" entries in specforge.json: each needs an \"alias\" and a \"url\" naming the registry's root (an http or https URL such as https://registry.example); no registry is asked until every entry reads",
         ));
+    }
+    if registries.is_empty() {
+        return Err(no_registry(operation));
     }
     Ok(Configured {
         registries,
@@ -282,8 +282,8 @@ impl ConfiguredRegistry {
     }
 
     /// What this registry reported, once an operation has asked it anything: the registry
-    /// configuration's diagnostics (E067 for an entry it skipped, W140 for a duplicate alias, I003
-    /// when none is the default; nothing when reading failed outright, each call then failing with
+    /// configuration's diagnostics (W140 for a duplicate alias, I003 when none is the
+    /// default; nothing when reading failed outright, each call then failing with
     /// that error), then the fetch policy's W155 in fetch order, then a W156 for each re-pin a
     /// committed operation saved. A surface shows these after the operation, whatever its result.
     pub fn reported(&self) -> Vec<Diagnostic> {

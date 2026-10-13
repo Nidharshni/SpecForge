@@ -25,9 +25,10 @@ fn typed_fields() -> ExtensionDeclaration {
                 ("a_block", FieldType::Block),
             ] {
                 k.field(name, |f| {
-                    f.field_type(field_type);
                     if field_type == FieldType::Enum {
-                        f.enum_values(&["x", "y"]);
+                        f.vocabulary(&Vocabulary::new(&["x", "y"]));
+                    } else {
+                        f.field_type(field_type);
                     }
                 });
             }

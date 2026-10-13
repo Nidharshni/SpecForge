@@ -1,5 +1,5 @@
 use specforge_common::{SourceSpan, Sym};
-use specforge_extension_sdk::prelude::{ContributionsBuilder, FieldType};
+use specforge_extension_sdk::prelude::{ContributionsBuilder, FieldType, Vocabulary};
 use specforge_graph::{Graph, Node};
 use specforge_lsp::{Document, MOD_DECLARATION, MOD_REFERENCE, SemanticToken};
 use specforge_ops::view::ProjectView;
@@ -658,8 +658,7 @@ fn enum_and_bool_values_are_classified() {
         c.kind("task", |k| {
             k.testable(true).supports_verify(true);
             k.field("state", |f| {
-                f.field_type(FieldType::Enum)
-                    .enum_values(&["draft", "done"]);
+                f.vocabulary(&Vocabulary::new(&["draft", "done"]));
             });
             k.field("done", |f| {
                 f.field_type(FieldType::Bool);

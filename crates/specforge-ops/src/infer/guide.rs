@@ -38,8 +38,9 @@ pub struct KindGuide<'a> {
 impl KindGuide<'_> {
     /// An example entity of the kind: its required fields, then its first
     /// three optional ones, in name order, each written the way its type is
-    /// written (`"..."`, `0`, `true`, the first enum value, `["item1",
-    /// "item2"]`, `ref_id`, `[ref_1, ref_2]`, `{ }` for a block).
+    /// written (`"..."`, `0`, `true`, an enum's declared default else its
+    /// first value, `["item1", "item2"]`, `ref_id`, `[ref_1, ref_2]`, `{ }`
+    /// for a block).
     pub fn example(&self) -> String {
         let required = self.fields.iter().filter(|f| f.declared().required);
         let optional = self
@@ -74,6 +75,8 @@ impl KindGuide<'_> {
                     field_type: field.field_type().as_str().to_string(),
                     required: field.declared().required,
                     description: field.declared().description.clone(),
+                    values: field.enum_values().to_vec(),
+                    default: field.declared().default_value.clone(),
                 })
                 .collect(),
             inference_guide: self.guide.clone(),
@@ -105,6 +108,12 @@ pub struct GuideField {
     pub required: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    /// An enum's values, in order; absent for any other type.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub values: Vec<String>,
+    /// What an absent value counts as (the declared default), if any.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default: Option<String>,
 }
 
 /// How the example writes a value of `field`'s type.
@@ -114,9 +123,10 @@ fn example_value(field: &FieldRegistryEntry) -> String {
         FieldType::Integer => "0".into(),
         FieldType::Bool => "true".into(),
         FieldType::Enum => field
-            .enum_values()
-            .first()
-            .cloned()
+            .declared()
+            .default_value
+            .clone()
+            .or_else(|| field.enum_values().first().cloned())
             .unwrap_or_else(|| "\"...\"".into()),
         FieldType::StringList => "[\"item1\", \"item2\"]".into(),
         FieldType::Reference => "ref_id".into(),

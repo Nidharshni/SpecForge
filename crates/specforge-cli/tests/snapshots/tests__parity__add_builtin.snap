@@ -20,7 +20,7 @@ expression: snapshot
         {
           "alias": "offline",
           "default_registry": true,
-          "url": "http://127.0.0.1:9/v1"
+          "url": "http://127.0.0.1:9"
         }
       ],
       "spec_root": "spec",

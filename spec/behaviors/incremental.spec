@@ -29,8 +29,11 @@ behavior watch_file_system_for_changes "Watch File System for Changes" {
     When specforge watch is active, the system MUST monitor all .spec files
     under the spec root for changes using the OS file watching API.
     File creation, modification, and deletion MUST each trigger
-    recompilation of affected files. Changed paths are classified by the
-    project session (classify_project_changes). After any update that
+    recompilation of affected files. A directory created, moved or
+    deleted under the spec root changes every source under it, and an edit
+    to a symlinked source's target changes that source: the project
+    session turns each batch of changed paths into changes
+    (classify_project_changes). After any update that
     changes the session's inputs (an environment reload, an edit that names
     a file the checks read) the watcher follows the session's watch roots
     and brings the session up to date with what was written meanwhile
@@ -53,6 +56,9 @@ behavior watch_file_system_for_changes "Watch File System for Changes" {
   verify unit "after the watchers move, the session catches up on what changed while they did"
   verify unit "a failed move of the watchers is reported and the session still catches up"
   verify unit "what was written between the open and the watchers is applied before ready"
+  verify integration "a directory moved inside the spec root leaves watch reporting what check reports"
+  verify integration "an edit to a symlinked source's target is seen"
+  verify unit "a directory event reaches every source under it"
 }
 
 behavior classify_project_changes "Classify Project Changes" {
@@ -61,23 +67,38 @@ behavior classify_project_changes "Classify Project Changes" {
   category   command
   ports      [FileSystem]
   contract   """
-    A project session MUST classify a changed path by what the project is
-    built from: a .spec file that discovery finds under the spec root is a
-    source change, keyed relative to the spec root; specforge.json,
+    A project session MUST turn a batch of changed paths into changes by
+    comparing what the paths reach with what it last read: the comparison
+    bring_session_up_to_date makes, narrowed to the paths. A path under
+    the spec root reaches the sources at or under it: for a directory,
+    every source discovery finds in it now and every source the session
+    read from it; for a file, itself. The spec root, or a directory above
+    it, reaches every source. A source is keyed by its path relative to
+    the spec root, a symlink by its own name; a symlinked source's target,
+    or a directory above it, reaches that source. specforge.json,
     specforge.lock and every extension module the environment loaded (an
     installed extension's extension.wasm, a local .wasm entry) are
-    environment changes; specforge-cache.json, which check-phase passes
+    environment inputs; specforge-cache.json, which check-phase passes
     read, and every file a file_reference field or a file_exists rule
-    names, which the checks look for, are check-input changes; any other
-    path changes nothing. A detached session (no project) has no inputs:
-    a .spec path is a source keyed by itself and nothing else is an input.
-    Watch, the LSP and MCP MUST classify through the session. What a
-    changed path is, which directories watch watches, which files the LSP
+    names, which the checks look for, are check inputs. Each is reached
+    by its own path or by a directory above it, and a missing check
+    input's directory also by any file in it. A reached source or input
+    is a change when it differs from what the session read (size and
+    modification time, and the content when it was read within the
+    timestamp granularity); a directory created on the way to a missing
+    input's directory outside the root is that input's change, whatever
+    the stamps say. Any other path changes nothing. A detached session
+    (no project) takes no change from disk: its sources are the buffers
+    it holds.
+    Watch, the LSP and MCP MUST take changes through the session. What a
+    path reaches, which directories watch watches, which files the LSP
     asks its client to report and what the session stamps MUST all derive
-    from one set of session inputs, renewed when the environment loads and
-    each time the checks run. Watch's watch roots and the LSP's watchers
-    MUST cover every path the session classifies as an input (the LSP
-    spelling each under the project root as opened), and MUST follow every
+    from one set of session inputs, renewed when the environment loads,
+    when sources are read and each time the checks run. Watch's watch
+    roots and the LSP's watchers MUST cover every input and every
+    symlinked source's target (the LSP spelling each under the project
+    root as opened), the LSP MUST ask its client to report every entry
+    created or deleted under the project root, and both MUST follow every
     update that changes the inputs.
   """
   verify unit "a discovered .spec file is a source change keyed relative to the spec root"
@@ -87,12 +108,19 @@ behavior classify_project_changes "Classify Project Changes" {
   verify unit "a file a file_reference field names re-runs the checks"
   verify unit "a file a file_exists rule names re-runs the checks"
   verify unit "an excluded or undiscovered .spec file changes nothing"
-  verify unit "a detached session classifies a .spec buffer as a source and nothing else as an input"
   verify unit "a session's watch roots cover every input it classifies"
   verify unit "the LSP's watchers cover every input the session classifies"
   verify integration "the LSP watches a missing referenced file and its directory, spelled under the project root"
   verify unit "an update that names a new file the checks read changes the session's inputs"
   verify integration "the LSP's watchers follow an edit that names a new file the checks read"
+  verify unit "a directory created, moved or deleted under the spec root changes every source under it"
+  verify unit "a symlinked source is keyed by its link and changes when its target does"
+  verify unit "a path whose file is as the session last read it changes nothing"
+  verify unit "a detached session takes no change from disk"
+  verify unit "a directory moved above an environment or check input changes that input"
+  verify unit "a session's watch roots and the LSP's watchers cover every symlinked source's target"
+  verify integration "the LSP asks its client to report every directory created or deleted under the project root"
+  verify property "the changes of a batch naming every changed path are what the session finds stale"
 }
 
 behavior bring_session_up_to_date "Bring a Session Up to Date with Disk" {
@@ -105,7 +133,8 @@ behavior bring_session_up_to_date "Bring a Session Up to Date with Disk" {
     without a file watcher: it compares every discovered source and every
     environment and check input with what it last built from (size and
     modification time; a file modified within the timestamp granularity of
-    the last build counts as changed unless its content is unchanged) and
+    the last build counts as changed unless its content is unchanged, a
+    symlinked source compared through its link) and
     applies exactly those changes: sources by an update, environment
     inputs by an environment reload, check inputs by re-running the
     checks. Afterwards its graph and diagnostics MUST be those a fresh
@@ -302,10 +331,19 @@ behavior emit_incremental_diagnostics "Emit Incremental Diagnostics" {
     does not affect file B, B's diagnostics MUST remain unchanged. This
     behavior orchestrates the diagnostic collection, not the extension
     invocation directly.
+    Each update MUST also state the diagnostics it added and removed
+    (DiagnosticsDelta), each compared whole, as every surface presents it:
+    code, severity, message, span, suggestion, data and origin. A
+    diagnostic that moved or changed in any part is removed and added;
+    identical diagnostics count one by one; the same diagnostics in
+    another order are no change.
   """
   verify unit "diagnostics from changed files are refreshed"
   verify unit "diagnostics from unchanged files are preserved"
   verify unit "total diagnostic set matches full rebuild"
+  verify unit "a diagnostic is unchanged in a delta only when every presented part is"
+  verify unit "an update reports the diagnostics it added and removed"
+  verify unit "a diagnostic without a span is unchanged when only its entities move"
   verify performance "file change to diagnostics emitted within 100ms"
   verify contract "Emit Incremental Diagnostics: incremental diagnostics holds for the declared obligations"
 }
@@ -478,7 +516,7 @@ behavior notify_delta_subscribers "Notify Delta Subscribers" {
   features   [incremental_graph_deltas]
   invariants [incremental_correctness, diagnostic_determinism, graph_traversal_integrity]
   category   command
-  types      [GraphDelta]
+  types      [GraphDelta, DiagnosticsDelta]
   // MCP notification is handled by notify_graph_delta_via_mcp in behaviors/mcp-server.spec.
   // The LSP is not a delta subscriber: provide_semantic_tokens in behaviors/lsp.spec
   // owns its semantic token refresh.
@@ -492,20 +530,27 @@ behavior notify_delta_subscribers "Notify Delta Subscribers" {
     delta_subscribers_notified_emitted "delta_subscribers_notified event fires once the update is reported"
   }
   contract   """
-    After every update, the project session MUST report the GraphDelta
-    and the files it affects with the update, for whoever holds the
-    session to deliver: specforge watch prints it (whole, as each rebuilt
-    or rechecked line's delta under --format json; its counts in text),
-    and MCP notifies its subscribed clients (notify_graph_delta_via_mcp) and diffs
-    the diagnostics into a DiagnosticsDelta itself
-    (notify_diagnostics_delta_via_mcp). The session never waits on a
-    subscriber, so a slow one cannot delay the compilation pipeline. The
-    LSP does not use these deltas: it recompiles on its own document
-    changes and asks its client to refresh semantic tokens
-    (provide_semantic_tokens, behaviors/lsp.spec).
+    After every update, the project session MUST report with the update
+    the GraphDelta and the files it affects, and what it reported before
+    and reports after, from which it computes, when asked, the
+    DiagnosticsDelta: the diagnostics the update added and removed
+    (emit_incremental_diagnostics). Whoever holds the session delivers
+    them: specforge watch prints both (whole under --format json: each
+    rebuilt or rechecked line's delta and each rebuilt, rechecked or
+    extensions_reloaded line's diagnostics_delta; counts in text), and
+    MCP notifies its subscribed clients (notify_graph_delta_via_mcp,
+    notify_diagnostics_delta_via_mcp). A DiagnosticsDelta nobody asks for
+    is never computed. The session never waits on a subscriber, so a slow
+    one cannot delay the compilation pipeline. The LSP does not use these
+    deltas: it publishes every file's diagnostics as the editor shows
+    them, a spanless one placed at its entity's name
+    (emit_live_diagnostics), which a delta of the diagnostics as JSON
+    presents them does not describe, and asks its client to refresh
+    semantic tokens (provide_semantic_tokens, behaviors/lsp.spec).
   """
   verify unit "an update reports its delta and the files it affects"
   verify unit "watch --format json prints each rebuild's GraphDelta, the one MCP notifies"
+  verify unit "watch --format json prints the diagnostics each update added and removed"
   verify contract "Notify Delta Subscribers: delta reporting holds — graph_delta_computed_fired, affected_files_delivered, delta_subscribers_notified_emitted"
 }
 

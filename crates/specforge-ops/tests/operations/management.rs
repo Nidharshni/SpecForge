@@ -5,6 +5,7 @@
 use specforge_common::Diagnostic;
 use specforge_ops::collect::{Consent, Mode, Request};
 use specforge_ops::extension::{self, RemoveRequest, Status};
+use specforge_ops::testing::ScriptedSolver;
 use specforge_ops::view::ProjectView;
 use specforge_project::coverage::RecordedCoverage;
 use specforge_project::{EnabledExtension, Environment, ExtensionLoad, Loaded};
@@ -96,7 +97,7 @@ fn management_operations_read_the_project_from_their_view() {
     assert_eq!(providers.providers.len(), 1, "{providers:?}");
     assert_eq!(providers.providers[0].alias, "work");
 
-    let report = specforge_ops::doctor::diagnose_with(&view, true);
+    let report = specforge_ops::doctor::diagnose(&view, &ScriptedSolver::ready());
     let failures: Vec<&str> = report
         .about(specforge_ops::doctor::Part::Load)
         .map(|f| f.code.as_str())
@@ -115,7 +116,7 @@ fn management_operations_read_the_project_from_their_view() {
     assert!(listing.locked.is_empty());
     assert_eq!(listing.extensions.len(), 1);
     assert_eq!(
-        specforge_ops::doctor::diagnose_with(&rootless, true).installed_count,
+        specforge_ops::doctor::diagnose(&rootless, &ScriptedSolver::ready()).installed_count,
         0
     );
     let refused = |result: Result<(), specforge_ops::OpError>| {
