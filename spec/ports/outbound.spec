@@ -116,3 +116,16 @@ port Editor {
   method refreshTokens() -> Result<void, never>
   verify integration "Editor contract is satisfied"
 }
+
+port SmtSolver {
+  direction outbound
+  category  "analysis/solver"
+  // What the prove pass and doctor ask the SMT solver (ADR 0079):
+  // whether it runs here (its version banner, or the W098 that says why not,
+  // worded by the adapter) and its answer to one SMT-LIB2 script within the
+  // adapter's timeout. Its adapters are z3 from PATH (production) and a
+  // scripted solver (tests).
+  method availability() -> Result<string, Diagnostic>
+  method solve(script: string) -> Result<string, SolveFailure>
+  verify integration "SmtSolver contract is satisfied"
+}

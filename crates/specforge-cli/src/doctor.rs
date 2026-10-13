@@ -1,11 +1,11 @@
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use crate::terminal::{Terminal, out};
 use serde::Serialize;
-use specforge_common::codes;
 use specforge_ops::doctor::{
     About, BinaryIssue, DoctorDocument, DoctorReport, Finding, FindingStatus, Part, diagnose,
 };
 use specforge_ops::extension::Status;
+use specforge_ops::solver::Z3;
 use specforge_ops::view::ProjectView;
 use specforge_registry_client::credential_health::{
     CredentialHealth, CredentialLevel, CredentialLine, user_credential_health,
@@ -41,7 +41,7 @@ impl Args {
             Ok(project) => project,
             Err(error) => return Refusal::of(self.output.format).report(terminal, &error),
         };
-        let report = diagnose(&ProjectView::of(&project));
+        let report = diagnose(&ProjectView::of(&project), &Z3::default());
         let credentials = user_credential_health();
 
         match self.output.format {
@@ -214,6 +214,7 @@ fn render_human(report: &DoctorReport, credentials: &CredentialHealth) -> String
         ("Registries", Part::Registry),
         ("Rules", Part::Rule),
         ("Surfaces", Part::Surface),
+        ("Toolchain", Part::Toolchain),
     ] {
         let mut findings = report.about(part).peekable();
         if findings.peek().is_none() {
@@ -225,14 +226,6 @@ fn render_human(report: &DoctorReport, credentials: &CredentialHealth) -> String
             finding_lines(&mut out, finding);
         }
     }
-    if !report.z3_available {
-        line!();
-        line!(
-            "[WARN] z3 not on PATH — `specforge analyze --prove` skips SMT checks ({})",
-            codes::W098
-        );
-    }
-
     let errors = report
         .findings
         .iter()
@@ -321,7 +314,10 @@ mod tests {
         );
         let recorded = specforge_project::coverage::RecordedCoverage::over(&graph, &env);
         let view = ProjectView::new(&graph, &env, Some(dir.path()), &recorded);
-        let report = specforge_ops::doctor::diagnose_with(&view, true);
+        let report = specforge_ops::doctor::diagnose(
+            &view,
+            &specforge_ops::testing::ScriptedSolver::ready(),
+        );
 
         let conflicts: Vec<_> = report.about(Part::Conflict).collect();
         let codes: Vec<&str> = conflicts.iter().map(|c| c.code.as_str()).collect();
