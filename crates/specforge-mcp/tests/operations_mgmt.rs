@@ -457,8 +457,7 @@ const GREET: &str = "@sdk/greet";
 fn server_with_product() -> (Served, std::path::PathBuf) {
     let mut server = test_server();
     let root = server.root().to_path_buf();
-    let blob = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../fixtures/greet-extension/greet.wasm");
+    let blob = specforge_component::committed::GREET.path();
     let resp = call_tool(
         &mut server,
         "specforge.add_extension",

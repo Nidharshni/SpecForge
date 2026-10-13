@@ -7,9 +7,8 @@
 //! answer for `surfaces` is served raw, as a guest built before ADR 0037
 //! would give it, so each surface still carries the `sandbox` override the
 //! protocol no longer has (the host reports it as W153 and grants nothing).
-//! The component blob is vendored at `fixtures/sandbox-probe/probe.wasm` (refresh:
-//! `cd fixtures/sandbox-probe && cargo build --release --target wasm32-wasip2`,
-//! then copy `target/wasm32-wasip2/release/sandbox_probe.wasm` to `probe.wasm`).
+//! The component blob is vendored at `fixtures/sandbox-probe/wasm/sandbox_probe.wasm`
+//! (refresh: `cargo run -p xtask --bin revendor`).
 
 use serde_json::{json, Value};
 use specforge_extension_sdk::prelude::*;

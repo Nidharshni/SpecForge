@@ -1,0 +1,24 @@
+{
+  "category": "entities",
+  "items": [
+    {
+      "description": "Something to probe",
+      "dot_color": null,
+      "dot_fillcolor": null,
+      "dot_shape": null,
+      "fields": [],
+      "has_body_parser": false,
+      "incremental": null,
+      "inference_guide": null,
+      "keyword": null,
+      "lsp_icon": null,
+      "name": "probe_target",
+      "open_fields": false,
+      "semantic_token": null,
+      "singleton": false,
+      "supports_verify": false,
+      "testable": false,
+      "verify_kinds": []
+    }
+  ]
+}

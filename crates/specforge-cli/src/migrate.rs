@@ -81,10 +81,6 @@ impl Args {
         for failure in &outcome.hook_failures {
             errln!(terminal, "migration hook failure: {failure}");
         }
-        // Graph Protocol compatibility: breaking schema changes warn W053.
-        for warning in &outcome.schema_warnings {
-            errln!(terminal, "warning[{}]: {}", warning.code, warning.message);
-        }
         for d in outcome.structural_differences() {
             errln!(terminal, "warning[{}]: {}", d.code, d.message);
         }

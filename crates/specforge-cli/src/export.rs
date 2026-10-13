@@ -45,7 +45,7 @@ pub(crate) struct Args {
     #[arg(long, conflicts_with = "no_schema")]
     with_schema: bool,
 
-    /// Request a specific schema version for the export
+    /// Fail unless a reader of this schema version reads the export: the same major version, not newer than the project's schema
     #[arg(long)]
     schema_version: Option<String>,
 
@@ -99,7 +99,7 @@ impl Args {
         // snapshot too, so nothing here shows the project was exported
         // before.
         let recorded = export::export_recorded(&view, &self.request());
-        for diagnostic in &recorded.breaking {
+        for diagnostic in &recorded.diagnostics {
             errln!(terminal, "{}", specforge_common::render_plain(diagnostic));
         }
         let output = match recorded.export {

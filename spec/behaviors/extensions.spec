@@ -108,6 +108,7 @@ behavior load_extension_manifests "Load Extension Manifests" {
   verify integration "a .wasm file entry that is missing, is not a component, names another extension or repeats a loaded one produces E028 naming the entry"
   verify unit "missing extension produces diagnostic"
   verify unit "every builtin is listed once, by the directory its crate lives in"
+  verify unit "every fixture crate is listed once, by its directory under fixtures/"
   verify unit "a declaration declares entity types and validations"
   verify integration "two extensions loaded and registries populated without collision"
   verify unit "unloadable extension binary produces diagnostic instead of crash"
@@ -140,7 +141,10 @@ behavior load_extension_declaration "Load Extension Declaration" {
     handshake declares (sandbox_policy.max_execution_ms) to the
     extension's later calls.
   """
-  verify integration "every builtin's handshake and describe answers match their pinned snapshot byte for byte"
+  verify integration "every committed SDK blob's handshake and describe answers match their pinned snapshot byte for byte"
+  verify integration "the declaration snapshots are exactly the committed SDK blobs'"
+  verify integration "every committed SDK blob's declaration round-trips through the typed declaration byte for byte, but for the legacy keys it declares"
+  verify integration "every committed SDK blob answers the host's protocol version; a bridge component answers the version it declares"
   verify unit "a declaration round-trips through its wire answers unchanged"
   verify unit "a describe category that does not parse fails the load naming the category"
   verify unit "a describe item key the protocol does not define produces W138"

@@ -22,6 +22,8 @@ tokio = { workspace = true, optional = true, features = ["sync", "time"] }
 [dev-dependencies]
 # The tests of the tokio adapter.
 specforge-watch = { path = ".", features = ["tokio"] }
+# The committed blobs the tests load (`specforge_component::committed`).
+specforge-component = { path = "../specforge-component", features = ["testing"] }
 serde_json = { workspace = true }
 specforge-common = { workspace = true }
 specforge-test = { workspace = true }

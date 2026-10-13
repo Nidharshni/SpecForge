@@ -7,8 +7,7 @@ use specforge_wasm::runtime::WasmCallResult;
 use specforge_wasm::runtime::WasmRuntime;
 
 fn component_path() -> std::path::PathBuf {
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../fixtures/test-component/test_component.wasm")
+    specforge_component::committed::BRIDGE.path()
 }
 
 fn loaded() -> ComponentRuntime {
@@ -95,8 +94,7 @@ fn reload_swaps_and_unload_drops() {
 fn the_component_runtime_keeps_the_module_contract() {
     // An extension that declares its own name (the test component echoes
     // the name it is called as).
-    let greet = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../fixtures/greet-extension/greet.wasm");
+    let greet = specforge_component::committed::GREET.path();
     let bytes = std::fs::read(greet).expect("the greet fixture is vendored");
 
     specforge_wasm::testing::assert_module_contract(&ComponentRuntime::new(), &bytes, "@sdk/greet");

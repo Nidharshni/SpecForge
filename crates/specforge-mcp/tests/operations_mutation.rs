@@ -1067,19 +1067,7 @@ fn add_extension_returns_result() {
     let mut server = TestProject::new().serve_components();
     let dir = server.root().to_path_buf();
     assert!(dir.join("specforge.json").is_file());
-    let blob = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("fixtures/greet-extension/greet.wasm");
-    eprintln!("DEBUG blob exists: {}", blob.exists());
-    let blob = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("fixtures/greet-extension/greet.wasm");
+    let blob = specforge_component::committed::GREET.path();
     let resp = call_tool(
         &mut server,
         "specforge.add_extension",
@@ -1112,8 +1100,7 @@ fn listed_hint(server: &mut McpServer, tool: &str, key: &str) -> Value {
 fn add_extension_overwrites_a_changed_module() {
     let mut server = components_server();
     let root = server.root().to_path_buf();
-    let blob =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/greet-extension/greet.wasm");
+    let blob = specforge_component::committed::GREET.path();
     let add = |server: &mut McpServer| {
         let resp = call_tool(
             server,
@@ -1262,7 +1249,7 @@ fn add_extension_missing_specifier() {
 /// The product blob the build vendors; a local `.wasm` install names the
 /// extension after its file stem.
 fn greet_blob() -> std::path::PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/greet-extension/greet.wasm")
+    specforge_component::committed::GREET.path()
 }
 
 const GREET: &str = "@sdk/greet";
@@ -1507,12 +1494,7 @@ fn add_extension_already_installed_placeholder() {
     let mut server = TestProject::new().serve_components();
     let dir = server.root().to_path_buf();
     assert!(dir.join("specforge.json").is_file());
-    let blob = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("fixtures/greet-extension/greet.wasm");
+    let blob = specforge_component::committed::GREET.path();
     let first = call_tool(
         &mut server,
         "specforge.add_extension",
@@ -1684,12 +1666,7 @@ fn add_extension_dry_run() {
     let mut server = TestProject::new().serve_components();
     let dir = server.root().to_path_buf();
     assert!(dir.join("specforge.json").is_file());
-    let blob = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("fixtures/greet-extension/greet.wasm");
+    let blob = specforge_component::committed::GREET.path();
     let resp = call_tool(
         &mut server,
         "specforge.add_extension",
@@ -1707,12 +1684,7 @@ fn remove_extension_dry_run() {
     let mut server = TestProject::new().serve_components();
     let dir = server.root().to_path_buf();
     assert!(dir.join("specforge.json").is_file());
-    let blob = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("fixtures/greet-extension/greet.wasm");
+    let blob = specforge_component::committed::GREET.path();
     let _install = call_tool(
         &mut server,
         "specforge.add_extension",
@@ -1865,12 +1837,7 @@ fn remove_extension_contract() {
     let mut server = TestProject::new().serve_components();
     let dir = server.root().to_path_buf();
     assert!(dir.join("specforge.json").is_file());
-    let blob = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("fixtures/greet-extension/greet.wasm");
+    let blob = specforge_component::committed::GREET.path();
     let _install = call_tool(
         &mut server,
         "specforge.add_extension",

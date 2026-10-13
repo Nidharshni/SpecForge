@@ -1,5 +1,7 @@
-//! `extensions/<dir>/wasm/inputs.json`: what one builtin blob was built from. `build-builtins` writes and checks it
-//! through this module; a quick run asks it which blobs a change set feeds. The JSON is unchanged byte for byte.
+//! `<crate_dir>/wasm/inputs.json`: what one committed blob (a builtin under `extensions/` or a fixture under
+//! `fixtures/`) was built from. `build-builtins` writes and checks it through this module; a quick run asks it which
+//! blobs a change set feeds. A blob is named by its crate directory from the repository root. The JSON is unchanged
+//! byte for byte.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -25,18 +27,19 @@ pub struct BlobRecord {
 }
 
 impl BlobRecord {
-    pub fn read(repo_root: &Path, builtin: &str) -> Result<BlobRecord, String> {
-        let path = record_path(repo_root, builtin);
+    pub fn read(repo_root: &Path, crate_dir: &str) -> Result<BlobRecord, String> {
+        let path = record_path(repo_root, crate_dir);
         let bytes = std::fs::read(&path)
-            .map_err(|_| format!("{} is missing or unreadable", shown(builtin)))?;
-        serde_json::from_slice(&bytes).map_err(|e| format!("{} is malformed: {e}", shown(builtin)))
+            .map_err(|_| format!("{} is missing or unreadable", shown(crate_dir)))?;
+        serde_json::from_slice(&bytes)
+            .map_err(|e| format!("{} is malformed: {e}", shown(crate_dir)))
     }
 
     /// Pretty JSON and a final newline, as `build-builtins --install` wrote it at the base.
-    pub fn write(&self, repo_root: &Path, builtin: &str) -> Result<(), String> {
+    pub fn write(&self, repo_root: &Path, crate_dir: &str) -> Result<(), String> {
         let mut text = serde_json::to_string_pretty(self).map_err(|e| e.to_string())?;
         text.push('\n');
-        let path = record_path(repo_root, builtin);
+        let path = record_path(repo_root, crate_dir);
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
         }
@@ -44,12 +47,12 @@ impl BlobRecord {
     }
 }
 
-fn record_path(repo_root: &Path, builtin: &str) -> PathBuf {
-    repo_root.join(shown(builtin))
+fn record_path(repo_root: &Path, crate_dir: &str) -> PathBuf {
+    repo_root.join(shown(crate_dir))
 }
 
-fn shown(builtin: &str) -> String {
-    format!("extensions/{builtin}/wasm/{FILE}")
+fn shown(crate_dir: &str) -> String {
+    format!("{crate_dir}/wasm/{FILE}")
 }
 
 /// The repo path an input key names: `Cargo.toml` for [`WORKSPACE_INHERITED`], else the key.
@@ -78,29 +81,37 @@ pub fn inherited_tables(manifest: &str) -> String {
     out
 }
 
-/// Every builtin with a record: the directories `extensions/*/wasm/inputs.json` exists in (sorted).
-pub fn builtins(repo_root: &Path) -> Result<Vec<String>, String> {
-    let dir = repo_root.join("extensions");
-    let entries = std::fs::read_dir(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
-    let mut found: Vec<String> = entries
-        .flatten()
-        .filter(|entry| entry.path().join("wasm").join(FILE).is_file())
-        .map(|entry| entry.file_name().to_string_lossy().into_owned())
-        .collect();
+/// The parents of the crates that commit a blob: the builtins and the fixtures.
+pub const BLOB_PARENTS: &[&str] = &["extensions", "fixtures"];
+
+/// Every committed blob with a record: the crate directories (`extensions/<dir>`, `fixtures/<dir>`, sorted) whose
+/// `wasm/inputs.json` exists.
+pub fn blobs(repo_root: &Path) -> Result<Vec<String>, String> {
+    let mut found = Vec::new();
+    for parent in BLOB_PARENTS {
+        let dir = repo_root.join(parent);
+        let entries = std::fs::read_dir(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+        found.extend(
+            entries
+                .flatten()
+                .filter(|entry| entry.path().join("wasm").join(FILE).is_file())
+                .map(|entry| format!("{parent}/{}", entry.file_name().to_string_lossy())),
+        );
+    }
     found.sort();
     Ok(found)
 }
 
-/// The builtins (directory names under `extensions/`, sorted) whose recorded inputs hold a changed path.
+/// The blobs (crate directories, sorted) whose recorded inputs hold a changed path.
 pub fn fed_by(repo_root: &Path, changes: &ChangeSet) -> Result<Vec<String>, String> {
     let mut fed = Vec::new();
-    for builtin in builtins(repo_root)? {
-        let record = BlobRecord::read(repo_root, &builtin)?;
+    for crate_dir in blobs(repo_root)? {
+        let record = BlobRecord::read(repo_root, &crate_dir)?;
         if changes
             .paths()
             .any(|path| record.inputs.keys().any(|key| path_of(key) == path))
         {
-            fed.push(builtin);
+            fed.push(crate_dir);
         }
     }
     Ok(fed)

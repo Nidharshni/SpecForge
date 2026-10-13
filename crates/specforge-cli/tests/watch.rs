@@ -604,8 +604,7 @@ fn docref_project(spec: &str) -> TempDir {
     )
     .unwrap();
     fs::copy(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../fixtures/docref-extension/docref.wasm"),
+        specforge_component::committed::DOCREF.path(),
         root.join("ext/docref.wasm"),
     )
     .unwrap();

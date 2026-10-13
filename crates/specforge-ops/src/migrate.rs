@@ -15,9 +15,7 @@ pub use specforge_migrate::{
     MigrationBackup, MigrationDiff, MigrationRecord, MigrationResult, MigrationStatus,
     MigrationSummary, RecordChange, RollbackSummary,
 };
-use specforge_migrate::{
-    check_schema_compatibility, migrate_project, restore, run_rollback, structural_differences,
-};
+use specforge_migrate::{migrate_project, restore, run_rollback, structural_differences};
 use specforge_parser::{
     CURRENT_FORMAT_VERSION, FormatVersion, MAX_SUPPORTED_VERSION, MIN_SUPPORTED_VERSION,
 };
@@ -85,8 +83,6 @@ pub struct Outcome {
     pub hook_failures: Vec<String>,
     /// Whether the migrated project was compiled and compared.
     pub validated: bool,
-    /// Breaking Graph Protocol schema changes (W053).
-    pub schema_warnings: Vec<Diagnostic>,
     /// The graph delta from the graph before the migration to the graph after it, source positions ignored: the run
     /// keeps the migration only when it is empty. Empty when the run did not compare.
     pub graph_delta: GraphDelta,
@@ -193,8 +189,6 @@ pub struct MigrateDocument {
     pub hooks_invoked: Vec<String>,
     /// Why each failing hook failed.
     pub hook_failures: Vec<String>,
-    /// Breaking Graph Protocol schema changes (W053).
-    pub schema_warnings: DiagnosticList,
     /// How the migrated graph differs from the one before (W054).
     pub structural_differences: DiagnosticList,
     pub rolled_back: bool,
@@ -231,7 +225,6 @@ impl Outcome {
             backups: self.summary.backups.clone(),
             hooks_invoked: self.hooks_invoked.clone(),
             hook_failures: self.hook_failures.clone(),
-            schema_warnings: DiagnosticList(self.schema_warnings.clone()),
             structural_differences: DiagnosticList(self.structural_differences()),
             rolled_back: self.rollback.is_some(),
             rollback: self.rollback.clone(),
@@ -340,7 +333,6 @@ pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Result<Outcome,
         hooks_invoked: Vec::new(),
         hook_failures: Vec::new(),
         validated: false,
-        schema_warnings: Vec::new(),
         graph_delta: GraphDelta::default(),
         post_diagnostics: Vec::new(),
         diagnostics: read.diagnostics(),
@@ -351,9 +343,8 @@ pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Result<Outcome,
         return Ok(outcome);
     }
 
-    // The graph and schema before any file is touched.
+    // The graph before any file is touched.
     let pre = CompiledProject::compile(project, runtime.clone());
-    let pre_schema = schema_of(&pre);
 
     outcome.summary = migrate_project(project, &sources, target, false, request.no_backup);
     outcome.applied = true;
@@ -388,7 +379,6 @@ pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Result<Outcome,
     // The migrated project must have the graph it had before.
     let post = CompiledProject::compile(project, runtime);
     outcome.validated = true;
-    outcome.schema_warnings = check_schema_compatibility(&pre_schema, &schema_of(&post));
     outcome.graph_delta = compute_graph_delta(pre.graph(), post.graph());
     outcome.post_diagnostics = post.diagnostics();
     if !outcome.graph_delta.is_empty() {
@@ -480,10 +470,6 @@ pub fn rollback(root: &specforge_common::ProjectRoot) -> RollbackOutcome {
         writes.record(root.dir().join(MigrationRecord::PATH));
     }
     RollbackOutcome { summary, writes }
-}
-
-fn schema_of(project: &CompiledProject) -> specforge_emitter::GraphProtocolSchema {
-    specforge_emitter::generate_schema(project.environment().registries())
 }
 
 /// Run each extension's declared migration hook, in the registry build's load order (ADR 0041).

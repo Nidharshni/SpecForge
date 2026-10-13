@@ -27,6 +27,8 @@ wasmtime::component::bindgen!({
 });
 
 pub mod builtins;
+#[cfg(feature = "testing")]
+pub mod committed;
 
 /// Per-instance state: the WASI context (no capability) and the memory
 /// ceiling the limiter enforces. Builtins are pure-compute, but wasip2

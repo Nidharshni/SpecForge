@@ -44,8 +44,8 @@ const SUBDIR: &str = "spec/docs";
 
 /// A third-party extension (`@sdk/greet` 0.1.0).
 fn greet_blob() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../fixtures/greet-extension/greet.wasm")
+    specforge_component::committed::GREET
+        .path()
         .canonicalize()
         .expect("the greet fixture is vendored")
 }
