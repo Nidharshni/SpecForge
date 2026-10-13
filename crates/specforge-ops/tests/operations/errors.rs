@@ -107,7 +107,8 @@ fn a_missing_entity_is_one_refusal() {
                     ..Request::default()
                 },
             )
-            .unwrap_err(),
+            .unwrap_err()
+            .error,
         ),
         (
             "inspect",

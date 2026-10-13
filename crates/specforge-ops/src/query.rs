@@ -9,11 +9,11 @@ use serde_json::{Map, Value, json};
 use specforge_common::Diagnostic;
 use specforge_graph::Node;
 
-use crate::OpError;
 use crate::coverage::STATUS;
-use crate::export::{self, AGENT_FORMAT, FORMAT, Format, Schema};
+use crate::export::{self, AGENT_FORMAT, ExportField, FORMAT, Format, Schema};
 use crate::navigate::{EntityMatch, EntityQuery, MatchScope, MatchedOn, find_entities, snippet};
 use crate::view::ProjectView;
+use crate::{OpError, Refusal};
 
 /// Hops from the queried entity when a query names none: its direct
 /// neighbours. `specforge query --depth` and `specforge.query`'s `depth`
@@ -23,6 +23,15 @@ pub const DEFAULT_DEPTH: usize = 1;
 pub const DEFAULT_SEARCH_LIMIT: usize = 20;
 /// Characters of a matched field's text shown on each side of the match.
 pub const SNIPPET_WIDTH: usize = 40;
+
+/// The field of a query request a refusal can be about (ADR 0072).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QueryField {
+    /// `QueryRequest::entity_id`.
+    EntityId,
+    /// `QueryRequest::format`.
+    Format,
+}
 
 /// The subgraph around one entity.
 #[derive(Debug, Clone, Default)]
@@ -58,7 +67,10 @@ pub struct QueryOutcome {
 /// The query `request` over the view. An entity the graph lacks is
 /// [`crate::navigate::not_found`] (E003, did-you-mean); a recorded report
 /// that cannot be read, when coverage is asked for, is its E045 failure.
-pub fn query(view: &ProjectView, request: &QueryRequest) -> Result<QueryOutcome, OpError> {
+pub fn query(
+    view: &ProjectView,
+    request: &QueryRequest,
+) -> Result<QueryOutcome, Refusal<QueryField>> {
     let format = request
         .format
         .or(AGENT_FORMAT.default)
@@ -66,7 +78,8 @@ pub fn query(view: &ProjectView, request: &QueryRequest) -> Result<QueryOutcome,
     if !AGENT_FORMAT.admits(format) {
         return Err(AGENT_FORMAT
             .parse(FORMAT.name_of(format))
-            .expect_err("a format the agent table does not admit is refused"));
+            .expect_err("a format the agent table does not admit is refused")
+            .about(QueryField::Format));
     }
     let notices = view.kinds().unknown_in(&request.kinds);
     let document = export::export(
@@ -79,7 +92,14 @@ pub fn query(view: &ProjectView, request: &QueryRequest) -> Result<QueryOutcome,
             schema: Schema::Default,
             ..export::Request::default()
         },
-    )?;
+    )
+    .map_err(|refusal| {
+        refusal.map_subject(|field| match field {
+            ExportField::Scope => Some(QueryField::EntityId),
+            // A query always scopes and sends neither of these.
+            ExportField::Depth | ExportField::MaxTokens | ExportField::SchemaVersion => None,
+        })
+    })?;
     let document = if request.include_coverage {
         with_coverage(view, document)?
     } else {

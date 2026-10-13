@@ -1,8 +1,11 @@
 use crate::target::View;
-use crate::tool::{CoreTool, Effect, RefusalArgument, ToolGroup};
-use specforge_ops::model::{self, FieldLevel, GroupBy, ModelFormat, ModelOptions, ModelRoot};
+use crate::tool::{CoreTool, Effect, ToolGroup};
+use specforge_ops::model::{
+    self, FieldLevel, GroupBy, ModelField, ModelFormat, ModelOptions, ModelRoot,
+};
 
 use crate::args::Arguments;
+use crate::refusal::ArgumentOf;
 use crate::reply::{Answer, Answered, Text};
 use crate::tool::McpError;
 use specforge_ops::view::ProjectView;
@@ -35,6 +38,15 @@ pub struct Args {
 /// and so is a `depth` without a `root`.
 pub(crate) struct Tool;
 
+impl ArgumentOf<ModelField> for Tool {
+    fn argument(field: ModelField) -> Option<&'static str> {
+        match field {
+            ModelField::Extension => Some("extension"),
+            ModelField::Root => Some("root"),
+        }
+    }
+}
+
 impl CoreTool for Tool {
     const NAME: &'static str = "specforge.model";
     const DESCRIPTION: &'static str =
@@ -45,20 +57,10 @@ impl CoreTool for Tool {
     type Args = Args;
     type Input = View;
     type Returns = Answered<Text>;
-    const REFUSAL_ARGUMENTS: &'static [RefusalArgument] = &[
-        RefusalArgument {
-            code: specforge_ops::view::UNKNOWN_KIND,
-            argument: "root",
-        },
-        RefusalArgument {
-            code: specforge_ops::extension::NOT_FOUND,
-            argument: "extension",
-        },
-    ];
 
     fn call(view: ProjectView<'_>, args: Args) -> Answered<Text> {
         let options = options(args)?;
-        let outcome = model::model(&view, &options).map_err(McpError::from)?;
+        let outcome = model::model(&view, &options).map_err(Self::refused)?;
         Ok(Answer::new(Text(outcome.document)).with_diagnostics(outcome.notices))
     }
 }

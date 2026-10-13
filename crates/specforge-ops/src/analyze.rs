@@ -24,7 +24,7 @@ use specforge_project::coverage::TestReport;
 use specforge_project::passes::{self, AnalysisContext};
 use specforge_registry::DeclaredPass;
 
-use crate::{OpError, OpErrorKind, RunVerdict};
+use crate::{OpError, OpErrorKind, Refusal, RunVerdict};
 
 pub use crate::view::ProjectView;
 
@@ -329,6 +329,17 @@ pub enum GateDocument {
     Unjudged { min: f64, reason: String },
 }
 
+/// The field of an analysis request a refusal can be about (ADR 0072).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AnalyzeField {
+    /// `AnalyzeOptions::pass`.
+    Pass,
+    /// `AnalyzeOptions::min`.
+    Min,
+    /// `AnalyzeOptions::report`, when it names a file.
+    Report,
+}
+
 /// Why no analysis ran. Raised before any pass runs, in this order.
 #[derive(Debug, Clone, PartialEq)]
 pub enum AnalyzeError {
@@ -341,8 +352,10 @@ pub enum AnalyzeError {
     /// `min` was set and the coverage pass will not run (not selected, its
     /// extension not loaded, or no runtime): E068.
     MinWithoutCoveragePass,
-    /// The test report is there (or was named) but cannot be used.
+    /// The recorded test report is there but cannot be used.
     UnusableReport(OpError),
+    /// The test results file the request named cannot be used.
+    UnusableTestResults(OpError),
     /// `min` was set and there is no report to score.
     MinNeedsTestResults,
 }
@@ -365,7 +378,7 @@ impl std::fmt::Display for AnalyzeError {
             AnalyzeError::MinWithoutCoveragePass => f.write_str(
                 "a proof-coverage minimum needs the coverage pass of @specforge/testing (pass coverage or all)",
             ),
-            AnalyzeError::UnusableReport(e) => e.fmt(f),
+            AnalyzeError::UnusableReport(e) | AnalyzeError::UnusableTestResults(e) => e.fmt(f),
             AnalyzeError::MinNeedsTestResults => f.write_str(
                 "--min needs test results: run `specforge collect` or pass --test-results",
             ),
@@ -383,6 +396,15 @@ impl std::error::Error for AnalyzeError {}
 /// (`no_test_results`).
 impl From<AnalyzeError> for OpError {
     fn from(error: AnalyzeError) -> Self {
+        Refusal::<AnalyzeField>::from(error).into_error()
+    }
+}
+
+/// [`OpError::from`], with the field the variant is about: an unknown pass is about `pass`, a
+/// minimum out of range about `min`, and a named results file that is not there about the
+/// report (by the kind rule an unusable one is a refusal of the file, not of the argument).
+impl From<AnalyzeError> for Refusal<AnalyzeField> {
+    fn from(error: AnalyzeError) -> Self {
         let message = error.to_string();
         match error {
             AnalyzeError::UnknownPass {
@@ -398,17 +420,21 @@ impl From<AnalyzeError> for OpError {
                     Some(close) => error.with_suggestion(format!("did you mean '{close}'?")),
                     None => error,
                 }
+                .about(AnalyzeField::Pass)
             }
             AnalyzeError::MinOutOfRange(_) => {
                 OpError::new(OpErrorKind::InvalidInput, INVALID_MIN, message)
+                    .about(AnalyzeField::Min)
             }
             AnalyzeError::MinWithoutCoveragePass => {
                 OpError::coded(OpErrorKind::PreconditionFailed, codes::E068, message)
                     .with_suggestion("enable it with `specforge add @specforge/testing`")
+                    .into()
             }
-            AnalyzeError::UnusableReport(error) => error,
+            AnalyzeError::UnusableReport(error) => error.into(),
+            AnalyzeError::UnusableTestResults(error) => error.about(AnalyzeField::Report),
             AnalyzeError::MinNeedsTestResults => {
-                OpError::new(OpErrorKind::PreconditionFailed, "no_test_results", message)
+                OpError::new(OpErrorKind::PreconditionFailed, "no_test_results", message).into()
             }
         }
     }
@@ -633,10 +659,11 @@ fn read_report(
 ) -> Result<Option<Arc<TestReport>>, AnalyzeError> {
     match source {
         ReportSource::None => Ok(None),
-        ReportSource::File(path) => crate::report::named(path).map(Some),
-        ReportSource::Recorded => view.test_report(),
+        ReportSource::File(path) => crate::report::named(path)
+            .map(Some)
+            .map_err(AnalyzeError::UnusableTestResults),
+        ReportSource::Recorded => view.test_report().map_err(AnalyzeError::UnusableReport),
     }
-    .map_err(AnalyzeError::UnusableReport)
 }
 
 #[cfg(test)]
@@ -930,7 +957,7 @@ mod tests {
         };
         assert!(matches!(
             project.run(&missing).unwrap_err(),
-            AnalyzeError::UnusableReport(_)
+            AnalyzeError::UnusableTestResults(_)
         ));
     }
 
@@ -1397,5 +1424,47 @@ mod tests {
 
         let none = Project::new().run(&pass("contracts")).unwrap();
         assert!(json_of(&none).get("stray_records").is_none());
+    }
+
+    #[specforge_test(
+        invariant = "mcp_structured_error_responses",
+        verify = "an operation states the request field each refusal is about, and a refusal of the project or the environment is about none"
+    )]
+    fn analyze_states_which_field_a_refusal_is_about() {
+        let project = Project::new();
+        let subject = |options: AnalyzeOptions| {
+            Refusal::<AnalyzeField>::from(project.run(&options).unwrap_err()).subject
+        };
+        assert_eq!(subject(pass("nope")), Some(AnalyzeField::Pass));
+        let min = AnalyzeOptions {
+            min: Some(150.0),
+            ..Default::default()
+        };
+        assert_eq!(subject(min), Some(AnalyzeField::Min));
+        // A named results file that is not there is about the report; one that is unusable is a
+        // refusal of the file, and so is an unusable recorded report.
+        let report = |path: std::path::PathBuf| AnalyzeOptions {
+            report: ReportSource::File(path),
+            ..Default::default()
+        };
+        let missing = project.dir.path().join("missing.json");
+        assert_eq!(subject(report(missing)), Some(AnalyzeField::Report));
+        let unusable = project.dir.path().join("unusable.json");
+        std::fs::write(&unusable, "{not json").unwrap();
+        assert_eq!(subject(report(unusable)), None);
+        std::fs::write(
+            project.dir.path().join("specforge-report.json"),
+            "{not json",
+        )
+        .unwrap();
+        assert_eq!(subject(AnalyzeOptions::default()), None);
+        // A refusal of the project is about no field.
+        let no_report = AnalyzeOptions {
+            min: Some(50.0),
+            report: ReportSource::None,
+            ..Default::default()
+        };
+        let refusal = Refusal::<AnalyzeField>::from(project.run(&no_report).unwrap_err());
+        assert_eq!(refusal.subject, None, "{refusal:?}");
     }
 }

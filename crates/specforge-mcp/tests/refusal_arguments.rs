@@ -303,7 +303,6 @@ fn extension_refusals_name_their_argument() {
     behavior = "read_mcp_arguments_as_declared",
     verify = "a refusal a value the caller gave earns names that argument, whatever its kind"
 )]
-#[ignore = "fixed by T4"]
 fn read_view_refusals_name_their_argument() {
     assert_refused(
         &call_served("specforge.export", json!({"schema_version": "9.0.0"})),

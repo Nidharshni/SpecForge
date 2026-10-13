@@ -5,7 +5,7 @@ use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_diagnostics::{CodeEntry, docs_href, lookup, retired};
 
-use crate::{OpError, OpErrorKind};
+use crate::{OpError, OpErrorKind, Refusal};
 
 /// The refusal of a code the catalog neither has nor retired.
 pub const UNKNOWN_CODE: &str = "unknown_code";
@@ -74,7 +74,7 @@ impl Entry {
 /// The catalog's answer for `code`: any case, surrounding whitespace ignored. A code the catalog
 /// neither has nor retired is `unknown_code` (invalid input), with the code forms as its
 /// suggestion.
-pub fn explain(code: &str) -> Result<Explanation, OpError> {
+pub fn explain(code: &str) -> Result<Explanation, Refusal<ExplainField>> {
     let code = code.trim();
     if let Some(replacement) = retired(code) {
         return Ok(Explanation::Retired(Retired {
@@ -93,8 +93,16 @@ pub fn explain(code: &str) -> Result<Explanation, OpError> {
             UNKNOWN_CODE,
             format!("unknown diagnostic code: {code}"),
         )
-        .with_suggestion(CODE_FORMS)),
+        .with_suggestion(CODE_FORMS)
+        .about(ExplainField::Code)),
     }
+}
+
+/// The field of an explain request a refusal can be about (ADR 0072).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExplainField {
+    /// The diagnostic code asked about.
+    Code,
 }
 
 #[cfg(test)]
@@ -136,15 +144,16 @@ mod tests {
     fn an_uncatalogued_code_is_unknown_code() {
         for code in ["Z123", "E901"] {
             let error = explain(code).unwrap_err();
-            assert_eq!(error.kind, OpErrorKind::InvalidInput, "{code}");
-            assert_eq!(error.code, UNKNOWN_CODE, "{code}");
+            assert_eq!(error.error.kind, OpErrorKind::InvalidInput, "{code}");
+            assert_eq!(error.error.code, UNKNOWN_CODE, "{code}");
             assert_eq!(
-                error.message,
+                error.error.message,
                 format!("unknown diagnostic code: {code}"),
                 "{code}"
             );
             assert!(
                 error
+                    .error
                     .suggestion
                     .as_deref()
                     .unwrap()
@@ -152,5 +161,16 @@ mod tests {
                 "{code}"
             );
         }
+    }
+
+    #[specforge_test(
+        invariant = "mcp_structured_error_responses",
+        verify = "an operation states the request field each refusal is about, and a refusal of the project or the environment is about none"
+    )]
+    fn explain_states_which_field_a_refusal_is_about() {
+        assert_eq!(
+            explain("Z123").unwrap_err().subject,
+            Some(ExplainField::Code)
+        );
     }
 }

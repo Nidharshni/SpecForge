@@ -4,7 +4,7 @@
 //! function; the entity list and the diagnostics read what `specforge.list`
 //! and `specforge.validate` read. Nothing here reads the server's state.
 
-use specforge_ops::export::{Format, Request};
+use specforge_ops::export::{ExportField, Format, Request};
 
 use crate::resources::{ReadOutcome, ResourceText};
 use crate::tool::{ErrorCode, McpError};
@@ -22,6 +22,9 @@ const KEYS: &str = "scope (or root), depth, kinds and max_tokens";
 #[derive(Debug, Default, PartialEq)]
 pub(crate) struct ViewQuery {
     pub scope: Option<String>,
+    /// The key that sent the scope: the template's `entity_id`, or `scope` or `root` as the URI
+    /// spelled it.
+    pub scope_key: &'static str,
     pub depth: Option<usize>,
     pub kinds: Vec<String>,
     pub max_tokens: Option<usize>,
@@ -36,6 +39,7 @@ impl ViewQuery {
         if let Some(prefix) = template {
             let placeholder = path.strip_prefix(prefix).unwrap_or_default();
             parsed.scope = Some(decode("entity_id", placeholder)?);
+            parsed.scope_key = "entity_id";
         }
         let mut seen: Vec<String> = Vec::new();
         for pair in query.split('&').filter(|pair| !pair.is_empty()) {
@@ -73,6 +77,7 @@ impl ViewQuery {
                         return Err(refuse(&key, format!("'{key}' must name an entity")));
                     }
                     parsed.scope = Some(value);
+                    parsed.scope_key = if key == "scope" { "scope" } else { "root" };
                 }
                 // A count is read as a tool's count argument is (ADR 0033 D2:
                 // a non-negative integer, or a string holding one), with its
@@ -111,6 +116,17 @@ impl ViewQuery {
             seen.push(key);
         }
         Ok(parsed)
+    }
+
+    /// The query key the export's refusal about `field` is about: the scope's own key, or the key
+    /// a limit is read from; none for the schema version, which no resource sends.
+    pub fn argument(&self, field: ExportField) -> Option<&'static str> {
+        match field {
+            ExportField::Scope => Some(self.scope_key),
+            ExportField::Depth => Some("depth"),
+            ExportField::MaxTokens => Some("max_tokens"),
+            ExportField::SchemaVersion => None,
+        }
     }
 
     /// The export request for `format` under the export schema policy
@@ -221,16 +237,7 @@ fn check_entity_id(entity_id: &str) -> Result<(), Box<McpError>> {
 fn exported(view: ProjectView<'_>, query: &ViewQuery, format: Format) -> ReadOutcome {
     specforge_ops::export::export(&view, &query.request(format))
         .map(ResourceText::json)
-        .map_err(|error| {
-            // `depth` without a scope is the query's own mistake: name its key.
-            let names_depth = error.code == specforge_ops::export::DEPTH_WITHOUT_SCOPE;
-            let refusal = McpError::from(error);
-            Box::new(if names_depth {
-                refusal.with_argument("depth")
-            } else {
-                refusal
-            })
-        })
+        .map_err(|refusal| Box::new(McpError::refused(refusal, |field| query.argument(field))))
 }
 
 /// `specforge://entities/{kind}`: what `specforge.list {kind}` lists, the
@@ -273,4 +280,30 @@ pub(crate) fn diagnostics_view(view: ProjectView<'_>, uri: &str) -> ReadOutcome 
 pub(crate) fn schema_view(view: ProjectView<'_>, uri: &str) -> ReadOutcome {
     no_query(uri)?;
     crate::resources::schema::read(&view)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[specforge_test_macros::test(
+        behavior = "read_mcp_arguments_as_declared",
+        verify = "a prompt's or a resource read's refusal names the argument or query key it is about"
+    )]
+    fn a_graph_view_names_the_query_key_its_refusal_is_about() {
+        let key = |uri: &str, template: Option<&str>| {
+            let query = ViewQuery::parse(uri, template).unwrap();
+            query.argument(ExportField::Scope)
+        };
+        assert_eq!(key("specforge://graph?root=ghost", None), Some("root"));
+        assert_eq!(key("specforge://graph?scope=ghost", None), Some("scope"));
+        assert_eq!(
+            key("specforge://graph/ghost", Some("specforge://graph/")),
+            Some("entity_id")
+        );
+        let query = ViewQuery::parse("specforge://graph?max_tokens=5", None).unwrap();
+        assert_eq!(query.argument(ExportField::MaxTokens), Some("max_tokens"));
+        assert_eq!(query.argument(ExportField::Depth), Some("depth"));
+        assert_eq!(query.argument(ExportField::SchemaVersion), None);
+    }
 }

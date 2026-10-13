@@ -1,10 +1,10 @@
 use crate::target::View;
-use crate::tool::{CoreTool, Effect, RefusalArgument, ReplySpec, ToolGroup};
-use specforge_ops::schema::SchemaRequest;
+use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
+use specforge_ops::schema::{SchemaField, SchemaRequest};
 
 use crate::args::Arguments;
+use crate::refusal::ArgumentOf;
 use crate::reply::Answered;
-use crate::tool::McpError;
 
 /// `specforge.schema`'s reply: the document `specforge schema` prints.
 type Reply = specforge_ops::schema::SchemaDocument;
@@ -31,6 +31,14 @@ pub struct Args {
 /// `include_validation_rules` adds the rules the loaded extensions declare.
 pub(crate) struct Tool;
 
+impl ArgumentOf<SchemaField> for Tool {
+    fn argument(field: SchemaField) -> Option<&'static str> {
+        match field {
+            SchemaField::Kind => Some("kind"),
+        }
+    }
+}
+
 impl CoreTool for Tool {
     const NAME: &'static str = "specforge.schema";
     const DESCRIPTION: &'static str = "Get the GraphProtocolSchema: entity kinds with their typed fields, edge types and the loaded extensions";
@@ -42,10 +50,6 @@ impl CoreTool for Tool {
     type Args = Args;
     type Input = View;
     type Returns = Answered<Reply>;
-    const REFUSAL_ARGUMENTS: &'static [RefusalArgument] = &[RefusalArgument {
-        code: specforge_ops::view::UNKNOWN_KIND,
-        argument: "kind",
-    }];
 
     fn call(view: ProjectView<'_>, args: Args) -> Answered<Reply> {
         let request = SchemaRequest {
@@ -53,7 +57,7 @@ impl CoreTool for Tool {
             edges: args.include_edges,
             validation_rules: args.include_validation_rules,
         };
-        let outcome = specforge_ops::schema::schema(&view, &request).map_err(McpError::from)?;
+        let outcome = specforge_ops::schema::schema(&view, &request).map_err(Self::refused)?;
         Ok(outcome.document().into())
     }
 }

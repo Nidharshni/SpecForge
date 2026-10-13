@@ -11,9 +11,9 @@ use specforge_emitter::{
     GraphProtocolSchema, SchemaEdgeType, SchemaEntityKind, SchemaExtensionInfo, SchemaVersion,
 };
 
-use crate::OpError;
 use crate::export::{self, AGENT_FORMAT, FORMAT};
 use crate::view::ProjectView;
+use crate::{OpError, Refusal};
 
 /// What part of the schema to return.
 #[derive(Debug, Clone, Copy)]
@@ -102,13 +102,25 @@ pub fn json_schema(view: &ProjectView, format: export::Format) -> Result<Value, 
     )
 }
 
+/// The field of a schema request a refusal can be about (ADR 0072).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SchemaField {
+    /// `SchemaRequest::kind`.
+    Kind,
+}
+
 /// The view's versioned schema, as `request` selects it. A kind no loaded
 /// extension declares is `unknown_kind` ([`ProjectView::kinds`]), naming the
 /// closest one.
-pub fn schema(view: &ProjectView, request: &SchemaRequest) -> Result<SchemaOutcome, OpError> {
+pub fn schema(
+    view: &ProjectView,
+    request: &SchemaRequest,
+) -> Result<SchemaOutcome, Refusal<SchemaField>> {
     let mut schema = view.versioned_schema().into_schema();
     if let Some(kind) = request.kind {
-        view.kinds().declared(kind)?;
+        view.kinds()
+            .declared(kind)
+            .map_err(|error| error.about(SchemaField::Kind))?;
         schema.entity_kinds.retain(|entry| entry.name == kind);
         schema.edge_types.retain(|edge| touches(edge, kind));
     }

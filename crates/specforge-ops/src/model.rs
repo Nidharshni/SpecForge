@@ -15,7 +15,7 @@ use specforge_protocol_types::ExtensionDeclaration;
 
 use crate::options::{Choice, OptionTable};
 use crate::view::ProjectView;
-use crate::{OpError, OpErrorKind};
+use crate::{OpError, OpErrorKind, Refusal};
 
 /// What `specforge model` and `specforge.model` show.
 #[derive(Debug, Clone, PartialEq)]
@@ -27,6 +27,15 @@ pub struct ModelOutcome {
     pub notices: Vec<Diagnostic>,
 }
 
+/// The field of a model request a refusal can be about (ADR 0072).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModelField {
+    /// `ModelOptions::extension`.
+    Extension,
+    /// `ModelOptions::root`.
+    Root,
+}
+
 /// The logical data model of the view's extensions, as `options` asks.
 ///
 /// Err:
@@ -36,14 +45,19 @@ pub struct ModelOutcome {
 ///   loaded ones.
 /// - `unknown_kind` (`InvalidInput`) when `options.root` names a kind no
 ///   loaded extension declares, naming the closest declared kind.
-pub fn model(view: &ProjectView, options: &ModelOptions) -> Result<ModelOutcome, OpError> {
+pub fn model(
+    view: &ProjectView,
+    options: &ModelOptions,
+) -> Result<ModelOutcome, Refusal<ModelField>> {
     let declarations = view.registries().declarations();
     if let Some(extension) = &options.extension {
-        loaded(declarations, extension)?;
+        loaded(declarations, extension).map_err(|error| error.about(ModelField::Extension))?;
     }
     let kinds = view.kinds();
     if let Some(root) = &options.root {
-        kinds.declared(&root.kind)?;
+        kinds
+            .declared(&root.kind)
+            .map_err(|error| error.about(ModelField::Root))?;
     }
     let filter: Vec<&str> = options.kinds.iter().map(String::as_str).collect();
     Ok(ModelOutcome {

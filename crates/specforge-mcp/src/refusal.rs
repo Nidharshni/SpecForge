@@ -44,7 +44,6 @@ pub(crate) trait ArgumentOf<F> {
     fn argument(field: F) -> Option<&'static str>;
 
     /// `refusal` as the McpError a read answers.
-    #[allow(dead_code)] // first used by the read operations' tools
     fn refused(refusal: Refusal<F>) -> McpError {
         McpError::refused(refusal, Self::argument)
     }
