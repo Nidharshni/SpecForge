@@ -649,9 +649,6 @@ catalog! {
     W124: Warning formal,
         "Empty property description",
         "A `property` entity writes a `description` that is empty or only whitespace, which makes the temporal assertion opaque to readers and agents. Write the description, or remove the field. A property that writes no description is not reported.";
-    W125: Warning formal,
-        "Invalid property type",
-        "A `property` entity's `property_type` field is not one of the recognized values (`safety`, `liveness`, `fairness`). Set `property_type` to one of these values.";
     W126: Warning formal,
         "Unreferenced axiom",
         "An `axiom` entity is not referenced by any other entity, so it may be unused. Reference the axiom from a relevant entity, or remove it if it is no longer needed.";

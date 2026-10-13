@@ -171,7 +171,8 @@ feature fa_temporal_properties "Temporal Properties" {
     declare which properties they satisfy via the satisfies field,
     creating Satisfies edges. Properties can depend on conditions via
     PropertyDependsOn edges. Unreferenced properties (W123), empty
-    descriptions (W124), and missing kinds (W125) are detected.
+    descriptions (W124) are detected, and a property_type outside its
+    vocabulary is the core's E061.
   """
 }
 

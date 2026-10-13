@@ -2708,18 +2708,6 @@ Owner: @specforge/formal
 Level: warning
 ```
 
-## W125
-
-```
-W125: Invalid property type
-
-A `property` entity's `property_type` field is not one of the recognized values
-(`safety`, `liveness`, `fairness`). Set `property_type` to one of these values.
-
-Owner: @specforge/formal
-Level: warning
-```
-
 ## W126
 
 ```
@@ -3180,4 +3168,5 @@ These codes are no longer emitted, and are never reused for another meaning.
 | W120 | (nothing) |
 | W121 | [E061](#e061) |
 | W122 | (nothing) |
+| W125 | [E061](#e061) |
 | W146 | (nothing) |
