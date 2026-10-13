@@ -15,4 +15,4 @@ specforge-test = { workspace = true }
 specforge-test-macros = { workspace = true }
 
 [build-dependencies]
-cc = "1"
+cc = { workspace = true }

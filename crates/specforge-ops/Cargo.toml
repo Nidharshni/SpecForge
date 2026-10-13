@@ -37,7 +37,6 @@ specforge-extension-sdk = { path = "../specforge-extension-sdk", optional = true
 chrono = "0.4.41"
 getrandom = "0.3"
 sha2 = { workspace = true }
-semver = { workspace = true }
 strsim = { workspace = true }
 
 [dev-dependencies]

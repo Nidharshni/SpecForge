@@ -15,7 +15,6 @@ specforge-graph = { path = "../specforge-graph" }
 specforge-parser = { workspace = true }
 
 [dev-dependencies]
-specforge-protocol-types = { path = "../specforge-protocol-types" }
 specforge-test-macros = { workspace = true }
 specforge-test = { workspace = true }
 tempfile = { workspace = true }

@@ -23,7 +23,5 @@ regex = { workspace = true }
 insta = { workspace = true }
 specforge-test = { workspace = true }
 specforge-test-macros = { workspace = true }
-specforge-parser = { workspace = true }
-specforge-emitter = { path = "../specforge-emitter" }
 specforge-extension-sdk = { path = "../specforge-extension-sdk" }
 tempfile = { workspace = true }
