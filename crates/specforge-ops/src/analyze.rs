@@ -1178,6 +1178,50 @@ mod tests {
 
     #[specforge_test(
         behavior = "te_coverage_gate",
+        verify = "the analysis's ok is the run verdict, the gate included, and its JSON says where the gate landed"
+    )]
+    fn the_gate_document_is_byte_stable() {
+        let written = |gate: Gate| {
+            serde_json::to_string(
+                &AnalyzeOutcome {
+                    passes: Vec::new(),
+                    gate,
+                    stray_records: Vec::new(),
+                }
+                .document(),
+            )
+            .unwrap()
+        };
+        assert!(
+            written(Gate::Below {
+                pct: 25.0,
+                min: 75.0,
+                proven: 1,
+                total: 4
+            })
+            .contains(r#""gate":{"status":"below","min":75.0,"pct":25.0,"proven":1,"total":4}"#)
+        );
+        assert!(
+            written(Gate::Unjudged {
+                min: 50.0,
+                reason: "r".into()
+            })
+            .contains(r#""gate":{"status":"unjudged","min":50.0,"reason":"r"}"#)
+        );
+        assert!(
+            written(Gate::Met {
+                pct: 100.0,
+                min: 50.0,
+                proven: 2,
+                total: 2
+            })
+            .contains(r#""gate":{"status":"met","min":50.0,"pct":100.0,"proven":2,"total":2}"#)
+        );
+        assert!(!written(Gate::NotRequested).contains(r#""gate""#));
+    }
+
+    #[specforge_test(
+        behavior = "te_coverage_gate",
         verify = "a gate without the coverage pass exits 2 with E068"
     )]
     fn a_minimum_without_the_coverage_pass_is_refused_before_any_pass_runs() {
