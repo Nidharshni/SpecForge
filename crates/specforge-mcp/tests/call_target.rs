@@ -106,7 +106,7 @@ fn collect_project() -> TempDir {
 
 #[specforge_test(
     invariant = "mcp_served_project_consistency",
-    verify = "a path while no project is served serves that project, for every tool that takes a path"
+    verify = "in a handshake session, a path while no project is served serves that project, for every tool that takes a path"
 )]
 fn validate_with_a_path_while_nothing_is_served_serves_it() {
     let other = project(&[], "behavior adopted \"Adopted\" {\n}\n");
@@ -406,33 +406,9 @@ fn an_unchanged_project_is_not_rebuilt_by_a_call() {
     );
 }
 
-/// What each tool that takes a `path` is called with to act on a project
-/// with `behavior alpha` (its path added by the caller).
-fn path_tool_calls() -> Vec<(&'static str, Value)> {
-    vec![
-        ("specforge.validate", json!({})),
-        ("specforge.analyze", json!({"pass": "contracts"})),
-        ("specforge.collect", json!({})),
-        ("specforge.format", json!({"check": true})),
-        (
-            "specforge.rename",
-            json!({"entity_id": "alpha", "new_name": "gamma"}),
-        ),
-        (
-            "specforge.add_extension",
-            json!({"specifiers": ["@specforge/software"], "dry_run": true}),
-        ),
-        (
-            "specforge.remove_extension",
-            json!({"name": "@specforge/software", "dry_run": true}),
-        ),
-        ("specforge.migrate", json!({"dry_run": true})),
-    ]
-}
-
 #[specforge_test(
     invariant = "mcp_served_project_consistency",
-    verify = "a path while no project is served serves that project, for every tool that takes a path"
+    verify = "in a handshake session, a path while no project is served serves that project, for every tool that takes a path"
 )]
 fn a_path_while_nothing_is_served_serves_it_for_every_tool() {
     // Every core tool whose schema takes a project path is covered, init
@@ -1251,7 +1227,7 @@ fn loose_directory() -> TempDir {
 
 #[specforge_test(
     invariant = "mcp_served_project_consistency",
-    verify = "a server whose root lies in no project serves nothing, and init then serves the project it creates"
+    verify = "a server whose root lies in no project serves nothing, and a handshake init then serves the project it creates"
 )]
 fn a_root_in_no_project_serves_nothing_and_init_serves_what_it_creates() {
     let loose = loose_directory();

@@ -775,7 +775,12 @@ behavior serve_stateless_mcp_requests "Serve Stateless MCP Requests" {
     the stateless revision. A request whose _meta names a protocol version
     is served on its own: no initialize before it, and nothing a prior
     request said changes its answer; a request without that _meta follows
-    the revision initialize negotiated. server/discover MUST be answered
+    the revision initialize negotiated. A stateless request MUST NOT change
+    what the server serves: a path it names is read for that call only, and
+    a project init creates is not served; what it reads is the project at
+    or above the server's root as it is on disk when it arrives. A
+    connection that sent initialize is a handshake session: its stateless
+    requests read what that session serves. server/discover MUST be answered
     with or without initialize, listing the stateless revisions the server
     speaks and its capabilities. A stateless request missing the version or
     the client capabilities is malformed (-32602); one naming a version the
@@ -796,6 +801,9 @@ behavior serve_stateless_mcp_requests "Serve Stateless MCP Requests" {
   verify unit "a stateless request after initialize is served under its own revision"
   verify unit "a stateless request's revision ends with the request"
   verify unit "a stateless request after initialize reads the project the handshake session serves"
+  verify unit "a stateless call's path is read for that call only, whatever tool takes it, and what the server serves is unchanged"
+  verify unit "a stateless init serves nothing it creates"
+  verify unit "a stateless no-project refusal names no call that would serve a project"
 }
 
 behavior listen_for_mcp_resource_updates "Listen for MCP Resource Updates" {

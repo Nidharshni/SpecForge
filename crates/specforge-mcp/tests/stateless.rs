@@ -7,7 +7,7 @@ use specforge_mcp::McpServer;
 use specforge_test::prelude::*;
 use std::path::{Path, PathBuf};
 
-use crate::support::{Logged, events, logged, tool_json};
+use crate::support::{Logged, events, logged, path_tool_calls, tool_json};
 use crate::tool_errors::mcp_error;
 
 const REVISION: &str = "2026-07-28";
@@ -527,23 +527,90 @@ fn stateless_prompt_get_renders() {
     assert_eq!(payload["contract_text"], "MUST work");
 }
 
-#[test]
-fn pin_a_stateless_path_is_adopted() {
-    let dir = project();
+/// A project at the root of a fresh directory, `@specforge/software` installed,
+/// `main.spec` holding `behavior alpha` (and `extra`, when given, after it).
+fn installed_project(extra: &str) -> tempfile::TempDir {
+    let dir = tempfile::TempDir::new().unwrap();
+    std::fs::write(
+        dir.path().join("specforge.json"),
+        json!({"name": "other", "version": "0.1.0", "extensions": ["@specforge/software"]})
+            .to_string(),
+    )
+    .unwrap();
+    specforge_installed::testing::install_configured(dir.path(), &specforge_project::builtins());
+    std::fs::write(
+        dir.path().join("main.spec"),
+        format!("behavior alpha \"Alpha\" {{\n}}\n{extra}"),
+    )
+    .unwrap();
+    dir
+}
+
+#[specforge_test(
+    behavior = "serve_stateless_mcp_requests",
+    verify = "a stateless call's path is read for that call only, whatever tool takes it, and what the server serves is unchanged"
+)]
+fn a_stateless_path_is_read_for_its_call_only_for_every_tool() {
+    let mut covered: Vec<&str> = path_tool_calls().iter().map(|(name, _)| *name).collect();
+    covered.push("specforge.init");
+    covered.sort_unstable();
+    let mut with_path: Vec<&str> = specforge_mcp::tools::CORE_TOOLS
+        .iter()
+        .filter(|tool| tool.input_schema()["properties"].get("path").is_some())
+        .map(|tool| tool.name())
+        .collect();
+    with_path.sort_unstable();
+    assert_eq!(covered, with_path);
+
+    for (name, mut arguments) in path_tool_calls() {
+        let other = installed_project("");
+        arguments["path"] = Value::from(other.path().to_str().unwrap());
+        let mut server = rootless();
+        tool(&mut server, name, arguments);
+        assert_eq!(
+            served(&server),
+            None,
+            "{name} served the project its path names"
+        );
+        let stats = tool(&mut server, "specforge.stats", json!({}));
+        assert_eq!(tool_json(&stats)["entity_count"], 0, "{name}: {stats}");
+        if name == "specforge.rename" {
+            // The rename acted on the project the path names.
+            let text = std::fs::read_to_string(other.path().join("main.spec")).unwrap();
+            assert!(text.contains("behavior gamma"), "{text}");
+        }
+    }
+
+    // validate reports the named project's diagnostics, and the server's own
+    // (none: nothing is served) are untouched.
+    let other = installed_project("behavior beta \"Beta\" {\n  invariants [missing_one]\n}\n");
     let mut server = rootless();
     let reply = tool(
         &mut server,
         "specforge.validate",
-        json!({"path": dir.path().to_str().unwrap()}),
+        json!({"path": other.path().to_str().unwrap()}),
     );
-    assert_eq!(reply["result"]["isError"], false, "{reply}");
-    assert_eq!(served(&server), Some(canonical(dir.path())));
-    let stats = tool(&mut server, "specforge.stats", json!({}));
-    assert_eq!(tool_json(&stats)["entity_count"], 1, "{stats}");
+    assert!(codes(&reply).contains(&"E003".to_string()), "{reply}");
+    let diagnostics = stateless(
+        &mut server,
+        "resources/read",
+        json!({"uri": "specforge://diagnostics"}),
+    );
+    let text = diagnostics["result"]["contents"][0]["text"]
+        .as_str()
+        .unwrap();
+    assert_eq!(
+        serde_json::from_str::<Value>(text).unwrap(),
+        json!([]),
+        "{diagnostics}"
+    );
 }
 
-#[test]
-fn pin_a_stateless_init_serves_what_it_created() {
+#[specforge_test(
+    behavior = "serve_stateless_mcp_requests",
+    verify = "a stateless init serves nothing it creates"
+)]
+fn a_stateless_init_serves_nothing_it_creates() {
     let parent = tempfile::TempDir::new().unwrap();
     let created = parent.path().join("created");
     let mut server = rootless();
@@ -553,7 +620,13 @@ fn pin_a_stateless_init_serves_what_it_created() {
         json!({"path": created.to_str().unwrap(), "name": "created"}),
     );
     assert_eq!(reply["result"]["isError"], false, "{reply}");
-    assert_eq!(served(&server), Some(canonical(&created)));
+    assert!(created.join("specforge.json").exists());
+    assert_eq!(served(&server), None);
+
+    // A server whose root is the new project serves it from its first request.
+    let mut rooted = logged(McpServer::with_project_root(created.clone()));
+    tool(&mut rooted, "specforge.stats", json!({}));
+    assert_eq!(served(&rooted), Some(canonical(&created)));
 }
 
 #[specforge_test(
@@ -593,15 +666,30 @@ fn pin_a_stateless_use_cached_reads_an_earlier_compile() {
     assert!(control.contains(&"E001".to_string()), "{control:?}");
 }
 
-#[test]
-fn pin_a_stateless_no_project_refusal_says_to_call_a_tool_with_a_path() {
+#[specforge_test(
+    behavior = "serve_stateless_mcp_requests",
+    verify = "a stateless no-project refusal names no call that would serve a project"
+)]
+fn a_stateless_no_project_refusal_names_no_call_that_serves_one() {
     let mut server = rootless();
     let reply = tool(&mut server, "specforge.extensions", json!({}));
-    let message = mcp_error(&reply)["message"].as_str().unwrap().to_string();
-    assert!(
-        message.contains("call a tool that takes a `path` first"),
-        "{message}"
+    let error = mcp_error(&reply);
+    assert_eq!(
+        error["message"],
+        "no project is served: start the server in a project (`specforge mcp <root>`), or create one at its root",
+        "{error}"
     );
+    assert!(error.get("argument").is_none(), "{error}");
+
+    // An entry that takes a path still says to pass one.
+    let reply = tool(&mut server, "specforge.validate", json!({}));
+    let error = mcp_error(&reply);
+    assert_eq!(
+        error["message"],
+        "no project is served: pass {\"path\": ...} or start the server in a project",
+        "{error}"
+    );
+    assert_eq!(error["argument"], "path", "{error}");
 }
 
 #[specforge_test(

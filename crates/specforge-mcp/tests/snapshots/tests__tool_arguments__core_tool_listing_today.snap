@@ -597,7 +597,7 @@ expression: listing
           "type": "array"
         },
         "path": {
-          "description": "Project root path (uses initialized root if omitted)",
+          "description": "Project root path (the served project if omitted)",
           "type": "string"
         },
         "severity_filter": {
@@ -645,7 +645,7 @@ expression: listing
           "type": "string"
         },
         "path": {
-          "description": "Project root path (uses initialized root if omitted)",
+          "description": "Project root path (the served project if omitted)",
           "type": "string"
         },
         "strict": {
@@ -3024,7 +3024,7 @@ expression: listing
           "type": "boolean"
         },
         "path": {
-          "description": "Project root path (uses initialized root if omitted)",
+          "description": "Project root path (the served project if omitted)",
           "type": "string"
         },
         "paths": {
@@ -3454,7 +3454,7 @@ expression: listing
           "type": "string"
         },
         "path": {
-          "description": "Project root path (uses initialized root if omitted)",
+          "description": "Project root path (the served project if omitted)",
           "type": "string"
         }
       },
@@ -3915,7 +3915,7 @@ expression: listing
           "type": "boolean"
         },
         "path": {
-          "description": "Project root path (uses initialized root if omitted)",
+          "description": "Project root path (the served project if omitted)",
           "type": "string"
         },
         "specifiers": {
@@ -4174,7 +4174,7 @@ expression: listing
           "type": "string"
         },
         "path": {
-          "description": "Project root path (uses initialized root if omitted)",
+          "description": "Project root path (the served project if omitted)",
           "type": "string"
         }
       },
@@ -4262,7 +4262,7 @@ expression: listing
           "type": "boolean"
         },
         "path": {
-          "description": "Project root path (uses initialized root if omitted)",
+          "description": "Project root path (the served project if omitted)",
           "type": "string"
         },
         "target_version": {
@@ -5953,7 +5953,7 @@ expression: listing
       "additionalProperties": false,
       "properties": {
         "path": {
-          "description": "Project root path (uses initialized root if omitted)",
+          "description": "Project root path (the served project if omitted)",
           "type": "string"
         },
         "run": {

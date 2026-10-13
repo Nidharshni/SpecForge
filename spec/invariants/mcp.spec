@@ -89,9 +89,12 @@ invariant mcp_served_project_consistency "MCP Served Project Consistency" {
     client's projectRoot, else the path it was started with), and nothing
     when there is none; while none is served, every request looks there
     again first, so a project created there since is served by the next
-    request. A call whose path names a project while none is
-    served serves that project; a path to a directory that is no project is
-    read for that call only and never served.
+    request. In a handshake session, a call whose path names a project
+    while none is served serves that project, and init serves the project
+    it creates; a stateless request (MCP 2026-07-28) never changes what is
+    served: its path is read for that call only and init serves nothing. A
+    path to a directory that is no project is read for that call only and
+    never served.
     With no project served and none named, what a call gets is declared by
     the entry's target: an entry that reads only the project view (the read
     views, export and render, the navigation reads of the graph, every core
@@ -112,9 +115,9 @@ invariant mcp_served_project_consistency "MCP Served Project Consistency" {
   verify unit "a subscription to an extension resource enabled on disk since the last request is accepted"
   verify unit "a mutation on another project does not reload the served one"
   verify unit "a mutation on another project brings it up to date with what it wrote and reports what a fresh compile reports"
-  verify unit "a path while no project is served serves that project, for every tool that takes a path"
+  verify unit "in a handshake session, a path while no project is served serves that project, for every tool that takes a path"
   verify unit "a path inside the served project names the served project"
-  verify unit "a server whose root lies in no project serves nothing, and init then serves the project it creates"
+  verify unit "a server whose root lies in no project serves nothing, and a handshake init then serves the project it creates"
   verify unit "a server started inside a project serves that project"
   verify unit "while nothing is served, a project created at or above the server's root is served by the next request, in either revision"
   verify unit "a path to a directory that is no project is read for that call and never served"

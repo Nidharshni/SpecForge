@@ -852,7 +852,7 @@ fn target_argument_descriptions() {
     assert_eq!(others.len(), 8, "{paths:?}");
     for (name, text) in &others {
         assert_eq!(
-            text, "Project root path (uses initialized root if omitted)",
+            text, "Project root path (the served project if omitted)",
             "{name}"
         );
     }
