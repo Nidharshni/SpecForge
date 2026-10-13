@@ -184,7 +184,8 @@ fn format_writes_are_the_files_it_rewrote() {
         root: &specforge_common::ProjectRoot::of(root).unwrap(),
         paths: &[],
         mode: Mode::Write,
-    });
+    })
+    .unwrap();
     std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o644)).unwrap();
 
     // c.spec is already formatted; b.spec could not be written.
@@ -197,7 +198,8 @@ fn format_writes_are_the_files_it_rewrote() {
         root: &specforge_common::ProjectRoot::of(root).unwrap(),
         paths: &[],
         mode: Mode::Check,
-    });
+    })
+    .unwrap();
     assert!(outcome.writes().is_empty());
 }
 

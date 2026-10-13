@@ -252,7 +252,8 @@ fn format_verdict_inputs() {
         root: &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
         paths: &[],
         mode: Mode::Check,
-    });
+    })
+    .unwrap();
     assert!(checked.succeeded() && checked.complete() && !checked.clean());
     assert_eq!(checked.changes.len(), 1);
     assert!(!checked.ok(), "a check that finds a change fails the run");
@@ -261,7 +262,8 @@ fn format_verdict_inputs() {
         root: &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
         paths: &[],
         mode: Mode::Write,
-    });
+    })
+    .unwrap();
     assert!(written.succeeded() && written.complete() && !written.clean());
     assert!(written.changes.iter().all(|c| c.written));
     assert!(written.ok(), "a write that changed a file passes the run");

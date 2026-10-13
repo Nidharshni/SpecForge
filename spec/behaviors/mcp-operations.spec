@@ -67,7 +67,9 @@ behavior provide_mcp_format_tool "Provide MCP Format Tool" {
     for one that does not exist, internal_error for another cause or for
     failures of different kinds). ok MUST be the verdict specforge format
     exits by: false when a file could not be read or written or has a region
-    left unformatted, and in check mode when a file would change; true
+    left unformatted, or specforge.json has a problem the call went around
+    (its E069 is among the diagnostics), and in check mode when a file would
+    change; true
     otherwise, also after a write or a diff that found changes. A path naming a
     directory that is no project MUST be formatted as specforge format
     formats it, with the default configuration. all_clean MUST be true
@@ -75,6 +77,9 @@ behavior provide_mcp_format_tool "Provide MCP Format Tool" {
     unformatted (W142) MUST be returned among the diagnostics, with its file
     and line. Diagnostics from loading the format configuration
     (.specforgefmt.toml) MUST be returned in the result.
+    A specforge.json that does not say which files are the project's
+    sources MUST fail the call as config_invalid (schema_mismatch) before
+    any file is read, writing nothing.
   """
   verify unit "specforge.format formats spec files"
   verify unit "check mode reports without modifying files"

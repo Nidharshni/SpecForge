@@ -2293,7 +2293,6 @@ fn files_under(root: &Path) -> std::collections::BTreeMap<std::path::PathBuf, Ve
     files
 }
 
-#[ignore = "fixed by T2"]
 #[specforge_test(
     behavior = "provide_mcp_format_tool",
     verify = "a specforge.json that does not say which files are the project's sources fails the call as config_invalid and writes nothing"
@@ -2318,7 +2317,6 @@ fn format_refuses_a_config_that_does_not_say_which_files_are_its_sources() {
     assert_eq!(files_under(&root), before, "nothing is written");
 }
 
-#[ignore = "fixed by T2"]
 #[specforge_test(
     behavior = "provide_mcp_format_tool",
     verify = "a problem in specforge.json the call goes around is an E069 among the diagnostics and makes ok false"

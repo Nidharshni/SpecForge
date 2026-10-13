@@ -990,7 +990,6 @@ pub(crate) fn json_of(root: &std::path::Path, args: &[&str]) -> (Option<i32>, se
     (output.status.code(), json)
 }
 
-#[ignore = "fixed by T2"]
 #[specforge_test(
     behavior = "discover_format_targets",
     verify = "a specforge.json that does not say which files are the project's sources refuses the run, and nothing is written"
@@ -1001,17 +1000,26 @@ fn format_refuses_a_config_that_does_not_say_which_files_are_its_sources() {
         let root = tmp.path();
         project_with_config(root, config);
         let before = crate::written::files_under(root);
-        let (_, add) = json_of(root, &["add", "@specforge/product"]);
-        assert_eq!(add["code"], "config_invalid", "{config}: {add}");
+        // `add` refuses what it cannot edit (a subset of these) with the
+        // very same document: one refusal. It runs on a copy, since it
+        // writes where it does not refuse.
+        let copy = TempDir::new().unwrap();
+        project_with_config(copy.path(), config);
+        let (_, add) = json_of(copy.path(), &["add", "@specforge/product"]);
 
         for args in [&["format"][..], &["format", "--check"][..]] {
             let (code, json) = json_of(root, args);
             assert_eq!(code, Some(1), "{config} {args:?}: {json}");
             assert_eq!(json["code"], "config_invalid", "{config} {args:?}: {json}");
-            assert_eq!(
-                json["error"], add["error"],
-                "{config} {args:?}: one refusal"
-            );
+            if add["code"] == "config_invalid" {
+                let at_copy = add["error"].as_str().unwrap();
+                let there = at_copy.replace(copy.path().to_str().unwrap(), root.to_str().unwrap());
+                assert_eq!(
+                    json["error"].as_str().unwrap(),
+                    there,
+                    "{config} {args:?}: one refusal"
+                );
+            }
             assert_eq!(
                 crate::written::files_under(root),
                 before,
@@ -1021,7 +1029,6 @@ fn format_refuses_a_config_that_does_not_say_which_files_are_its_sources() {
     }
 }
 
-#[ignore = "fixed by T2"]
 #[specforge_test(
     behavior = "check_formatting",
     verify = "a problem in specforge.json the run goes around is an E069 that fails the check"
@@ -1051,7 +1058,6 @@ fn format_check_fails_on_a_config_problem_it_goes_around() {
     );
 }
 
-#[ignore = "fixed by T2"]
 #[specforge_test(
     behavior = "format_spec_files",
     verify = "a problem in specforge.json the run goes around is reported as E069 and makes the run exit 1, the files still formatted"
