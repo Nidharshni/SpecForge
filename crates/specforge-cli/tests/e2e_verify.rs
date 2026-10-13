@@ -20,6 +20,7 @@ behavior parse_input "Parse Input" {
 
     let output = specforge_cmd()
         .args(["export", "--format=graph"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -54,6 +55,7 @@ behavior emit_output "Emit Output" {
 
     let output = specforge_cmd()
         .args(["export", "--format=graph"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -87,6 +89,7 @@ behavior graph_build "Graph Build" {
 
     let output = specforge_cmd()
         .args(["export", "--format=graph"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -117,6 +120,7 @@ behavior parse_input "Parse Input" {
 
     let output = specforge_cmd()
         .args(["export", "--format=graph"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -151,6 +155,7 @@ behavior parse_input "Parse Input" {
 
     let output = specforge_cmd()
         .args(["export", "--format=context"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -186,6 +191,7 @@ feature gamma "G" { behaviors [alpha, beta] }
 
     let output = specforge_cmd()
         .args(["stats", "--format=json"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -221,6 +227,7 @@ invariant graph_acyclic "Graph Acyclicity" {
 
     let output = specforge_cmd()
         .args(["export", "--format=graph"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -258,6 +265,7 @@ feature fast_parsing "Fast Parsing" {
 
     let output = specforge_cmd()
         .args(["export", "--format=graph"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();

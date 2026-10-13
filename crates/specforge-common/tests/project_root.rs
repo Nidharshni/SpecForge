@@ -252,7 +252,7 @@ fn performance() {
 /// Every clause of the `locate_project_root` contract, on one directory tree.
 #[specforge_test(
     behavior = "locate_project_root",
-    verify = "Locate the Project a Path Is In: project root location holds — filesystem_available, closest_wins_enforced, one_marker, loose_root, missing_path_refused, symlinks_resolved, every_surface_agrees"
+    verify = "Locate the Project a Path Is In: project root location holds — filesystem_available, closest_wins_enforced, one_marker, loose_root, missing_path_refused, symlinks_resolved, every_surface_agrees, one_option"
 )]
 fn contract() {
     // filesystem_available: a real directory tree to walk.
@@ -314,4 +314,7 @@ fn contract() {
         ProjectRoot::of(&inner.join("a")).unwrap(),
         ProjectRoot::of(&deep).unwrap()
     );
+
+    // one_option: a clause of the command line, held by the CLI tests
+    // (`project_from_path`, `main.rs`'s command-tree test), not by this crate.
 }

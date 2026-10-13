@@ -46,6 +46,7 @@ fn add_local_greet(root: &Path) {
 fn check(root: &Path) -> (bool, Vec<(String, String, String)>) {
     let out = specforge()
         .args(["check", "--format", "json"])
+        .arg("--path")
         .arg(root)
         .output()
         .unwrap();

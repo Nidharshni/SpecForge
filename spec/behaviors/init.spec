@@ -447,6 +447,7 @@ behavior locate_project_root "Locate the Project a Path Is In" {
     missing_path_refused  "A path that does not exist is refused as file_not_found, never read as an empty project"
     symlinks_resolved     "The walk follows the path's resolved directories, and the root is spelled as the path spells it where that spelling reaches it"
     every_surface_agrees  "Every command, watch, the LSP and MCP open the project a path is in by this rule; only init takes its directory as given"
+    one_option            "On the command line a project is named by --path on every command that reads one, never by a positional argument"
   }
   contract   """
     Any path inside a project (the directory itself, a subdirectory, a
@@ -467,8 +468,14 @@ behavior locate_project_root "Locate the Project a Path Is In" {
     workspace root and MCP (its root and a call's path) MUST open the
     project their path is in by this one rule; the project's spec root
     is then read from its specforge.json (spec_root), and is never the
-    path given. A command's path help says it is a path inside the
-    project. Only init takes its directory as given: it creates the
+    path given. On the command line every command that reads a project
+    (every core command but init, new, explain, mcp and extension
+    init|build|validate, and every extension command) names it with
+    --path PATH, default ., whose help says it is a path inside the
+    project; no command takes a project path as a positional argument,
+    and no other argument is called --path (an extension crate's
+    directory is --dir; specforge mcp's served root is its positional
+    ROOT). Only init takes its directory as given: it creates the
     project there. A session keeps the root it was opened at; an
     environment reload does not locate it again.
   """
@@ -487,9 +494,11 @@ behavior locate_project_root "Locate the Project a Path Is In" {
   verify integration "a command given a path that does not exist refuses it as file_not_found"
   verify integration "an extension command run from a subdirectory is routed over the project it is in"
   verify integration "watch run from a subdirectory watches the project it is in"
-  verify unit "every command's project path argument says it is a path inside the project"
+  verify integration "every command given --path acts on the project the path is in, from any directory"
+  verify integration "a project path given as a positional argument is refused as a usage error"
+  verify unit "every command that reads a project takes the one --path option, and none takes a project path as a positional argument"
   verify unit "a server started in a spec root holding specforge.spec serves the project around it"
   verify unit "a workspace root in a spec root holding specforge.spec opens the project around it"
   verify unit "a loose root's I002 says no project was found and suggests init"
-  verify contract "Locate the Project a Path Is In: project root location holds — filesystem_available, closest_wins_enforced, one_marker, loose_root, missing_path_refused, symlinks_resolved, every_surface_agrees"
+  verify contract "Locate the Project a Path Is In: project root location holds — filesystem_available, closest_wins_enforced, one_marker, loose_root, missing_path_refused, symlinks_resolved, every_surface_agrees, one_option"
 }

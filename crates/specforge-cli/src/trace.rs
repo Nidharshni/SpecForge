@@ -2,7 +2,6 @@ use crate::outcome::{Exit, OutputFormat, Refusal};
 use crate::terminal::{Terminal, out};
 use specforge_ops::trace::Target;
 use specforge_ops::view::ProjectView;
-use std::path::PathBuf;
 
 // `specforge trace`'s command line.
 #[derive(clap::Args)]
@@ -10,8 +9,8 @@ pub(crate) struct Args {
     /// Entity ID to trace (omit to trace every entity)
     entity: Option<String>,
 
-    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
-    path: PathBuf,
+    #[command(flatten)]
+    project: crate::project::ProjectArg,
 
     /// Output format: json or human
     #[arg(long, default_value = "json")]
@@ -24,7 +23,7 @@ impl Args {
     /// is named. Expected edges come from the loaded extensions'
     /// registries; the ones a chain lacks are reported as missing.
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
-        let project = match crate::project::compile(&self.path) {
+        let project = match self.project.compile() {
             Ok(project) => project,
             Err(error) => return Refusal::of(self.format).report(terminal, &error),
         };

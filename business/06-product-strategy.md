@@ -129,7 +129,7 @@ Team has 150+ entities across 30 .spec files. They need:
   - Cross-file references validated at compile time
   - CI gate: `specforge check --strict` fails on any warning
   - Coverage dashboard in PR comments via `specforge report --format github`
-  - Selective compilation: `specforge check spec/payments/` for fast iteration
+  - Selective compilation: `specforge check --path spec/payments/` for fast iteration
 
 The team has not purchased anything. SpecForge is still a free CLI tool.
 The value scales with the project's complexity.

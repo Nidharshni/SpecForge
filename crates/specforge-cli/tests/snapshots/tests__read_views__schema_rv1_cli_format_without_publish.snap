@@ -7,6 +7,6 @@ stderr:
 error: the following required arguments were not provided:
   --publish
 
-Usage: specforge schema --publish --format <FORMAT> <PATH>
+Usage: specforge schema --publish --path <PATH> --format <FORMAT>
 
 For more information, try '--help'.

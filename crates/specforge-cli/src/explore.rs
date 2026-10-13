@@ -2,7 +2,6 @@ use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use crate::terminal::{Terminal, errln, outln};
 use specforge_ops::explore::{Exploration, ExplorationRequest, explore};
 use specforge_ops::view::ProjectView;
-use std::path::PathBuf;
 
 // `specforge explore`'s command line.
 #[derive(clap::Args)]
@@ -10,8 +9,8 @@ pub(crate) struct Args {
     /// Entity ID to explore from (omit to explore the whole project)
     entity: Option<String>,
 
-    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
-    path: PathBuf,
+    #[command(flatten)]
+    project: crate::project::ProjectArg,
 
     /// Only entities of this kind
     #[arg(long)]
@@ -42,7 +41,7 @@ impl Args {
     /// the closest entity as its hint (exit 1).
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         let format = self.output.format;
-        let project = match crate::project::compile(&self.path) {
+        let project = match self.project.compile() {
             Ok(project) => project,
             Err(error) => return Refusal::of(format).report(terminal, &error),
         };

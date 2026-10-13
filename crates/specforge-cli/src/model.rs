@@ -3,13 +3,12 @@ use crate::outcome::{Exit, OutputFormat, Refusal};
 use crate::terminal::{Terminal, errln, out};
 use specforge_ops::model::{FieldLevel, GroupBy, ModelFormat, ModelOptions, ModelRoot};
 use specforge_ops::view::ProjectView;
-use std::path::PathBuf;
 
 // `specforge model`'s command line.
 #[derive(clap::Args)]
 pub(crate) struct Args {
-    #[arg(default_value = ".", help = crate::project::PATH_HELP)]
-    path: PathBuf,
+    #[command(flatten)]
+    project: crate::project::ProjectArg,
 
     /// Output format
     #[arg(
@@ -72,7 +71,7 @@ impl Args {
     /// `path`. The model on stdout, the notices (I020) on stderr, a refusal
     /// as `error[CODE]` with its hint (exit 1).
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
-        let project = match crate::project::compile(&self.path) {
+        let project = match self.project.compile() {
             Ok(project) => project,
             Err(error) => return Refusal::of(OutputFormat::Human).report(terminal, &error),
         };

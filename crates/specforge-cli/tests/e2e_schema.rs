@@ -16,7 +16,12 @@ fn software_project() -> tempfile::TempDir {
 const SOFTWARE_KINDS: [&str; 5] = ["behavior", "event", "invariant", "port", "type"];
 
 fn run_json(args: &[&str], dir: &std::path::Path) -> serde_json::Value {
-    let output = specforge_cmd().args(args).arg(dir).output().unwrap();
+    let output = specforge_cmd()
+        .args(args)
+        .arg("--path")
+        .arg(dir)
+        .output()
+        .unwrap();
     assert!(
         output.status.success(),
         "{}",
@@ -99,7 +104,14 @@ fn schema_command_outputs_valid_json() {
 )]
 fn publish_refuses_kind_and_format_needs_publish() {
     let dir = software_project();
-    let run = |args: &[&str]| specforge_cmd().args(args).arg(dir.path()).output().unwrap();
+    let run = |args: &[&str]| {
+        specforge_cmd()
+            .args(args)
+            .arg("--path")
+            .arg(dir.path())
+            .output()
+            .unwrap()
+    };
 
     let kind = run(&["schema", "--publish", "--kind", "behavior"]);
     assert_eq!(kind.status.code(), Some(2));
@@ -128,6 +140,7 @@ fn schema_kind_filter_returns_single_kind() {
     // Any kind filter on empty schema exits 1 (kind not found)
     specforge_cmd()
         .args(["schema", "--kind=behavior"])
+        .arg("--path")
         .arg(dir.path())
         .assert()
         .code(1);
@@ -139,6 +152,7 @@ fn schema_kind_filter_unknown_exits_one() {
 
     specforge_cmd()
         .args(["schema", "--kind=nonexistent_kind"])
+        .arg("--path")
         .arg(dir.path())
         .assert()
         .code(1);
@@ -481,6 +495,7 @@ fn export_v2_schema_has_entity_kinds() {
 
     let output = specforge_cmd()
         .args(["export", "--format=graph"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -531,6 +546,7 @@ fn export_schema_version_negotiation() {
     // Valid version (1.0.0 matches the current schema version)
     let output = specforge_cmd()
         .args(["export", "--format=graph", "--schema-version=1.0.0"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -539,6 +555,7 @@ fn export_schema_version_negotiation() {
     // Another major version
     let refused = specforge_cmd()
         .args(["export", "--format=graph", "--schema-version=99.0.0"])
+        .arg("--path")
         .arg(dir.path())
         .assert()
         .code(1);
@@ -564,6 +581,7 @@ feature gamma "G" { behaviors [alpha] }
 
     let output = specforge_cmd()
         .args(["export", "--format=graph", "--scope=alpha"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -602,6 +620,7 @@ fn schema_publish_describes_the_requested_format() {
         let out = Command::new(env!("CARGO_BIN_EXE_specforge"))
             .args([
                 "schema",
+                "--path",
                 root.to_str().unwrap(),
                 "--publish",
                 "--format",
@@ -891,6 +910,7 @@ fn an_export_of_a_project_check_admits_validates_against_its_published_schema() 
     );
     specforge_cmd()
         .args(["check"])
+        .arg("--path")
         .arg(dir.path())
         .assert()
         .success();
@@ -911,6 +931,7 @@ fn this_repository_and_its_example_projects_export_what_they_publish() {
         let dir = copy_project(rel);
         specforge_cmd()
             .args(["check"])
+            .arg("--path")
             .arg(dir.path())
             .assert()
             .success();

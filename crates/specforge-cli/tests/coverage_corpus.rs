@@ -104,7 +104,13 @@ fn findings(pass: &Value) -> Vec<(String, String)> {
 
 pub(crate) fn stats(root: &Path) -> Value {
     let out = specforge()
-        .args(["stats", "--format", "json", root.to_str().unwrap()])
+        .args([
+            "stats",
+            "--format",
+            "json",
+            "--path",
+            root.to_str().unwrap(),
+        ])
         .output()
         .unwrap();
     serde_json::from_slice(&out.stdout).unwrap_or_else(|e| {
@@ -451,7 +457,7 @@ fn stats_reports_declared_and_proof_percentages() {
     assert_eq!(stats["proof_pct"], 50.0, "{stats}");
 
     let out = specforge()
-        .args(["stats", tmp.path().to_str().unwrap()])
+        .args(["stats", "--path", tmp.path().to_str().unwrap()])
         .output()
         .unwrap();
     let human = String::from_utf8_lossy(&out.stdout);

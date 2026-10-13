@@ -5,7 +5,6 @@ use serde_json::json;
 use specforge_ops::registry::{Found, Registry};
 use specforge_ops_registry::ConfiguredRegistry;
 use specforge_protocol_types::DeclaredCategory;
-use std::path::PathBuf;
 
 // `specforge search`'s command line.
 #[derive(clap::Args)]
@@ -17,8 +16,8 @@ pub(crate) struct Args {
     #[arg(long, value_parser = options::choice(&specforge_ops::registry::CONTRIBUTES))]
     contributes: Option<DeclaredCategory>,
 
-    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
-    path: PathBuf,
+    #[command(flatten)]
+    project: crate::project::ProjectArg,
 
     #[command(flatten)]
     output: OutputArg,
@@ -26,14 +25,10 @@ pub(crate) struct Args {
 
 impl Args {
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
-        let (query, contributes, path, format) = (
-            self.query.as_str(),
-            self.contributes,
-            self.path.as_path(),
-            self.output.format,
-        );
+        let (query, contributes, format) =
+            (self.query.as_str(), self.contributes, self.output.format);
         // No registry configured: fail before any network call (ADR 0004 N1).
-        let root = match crate::project::root(path) {
+        let root = match self.project.root() {
             Ok(root) => root,
             Err(error) => return Refusal::of(format).report(terminal, &error),
         };

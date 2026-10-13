@@ -2,6 +2,7 @@
 //! under the alias of the registry it is for (ADR 0045).
 
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
+use crate::project::ProjectArg;
 use crate::terminal::{Terminal, outln};
 use serde_json::json;
 use specforge_common::codes;
@@ -33,8 +34,8 @@ pub(crate) struct Args {
     #[arg(long)]
     token_file: Option<PathBuf>,
 
-    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
-    path: PathBuf,
+    #[command(flatten)]
+    project: crate::project::ProjectArg,
 
     #[command(flatten)]
     output: OutputArg,
@@ -47,8 +48,8 @@ pub(crate) struct LogoutArgs {
     #[arg(long)]
     registry: Option<String>,
 
-    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
-    path: PathBuf,
+    #[command(flatten)]
+    project: crate::project::ProjectArg,
 
     #[command(flatten)]
     output: OutputArg,
@@ -63,7 +64,7 @@ impl Args {
                 token_env: self.token_env.as_deref(),
                 token_file: self.token_file.as_deref(),
             },
-            &self.path,
+            &self.project,
             self.output.format,
             terminal,
         )
@@ -74,7 +75,7 @@ impl LogoutArgs {
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         logout(
             self.registry.as_deref(),
-            &self.path,
+            &self.project,
             self.output.format,
             terminal,
         )
@@ -94,7 +95,7 @@ struct TokenSource<'a> {
 fn login(
     registry_alias: Option<&str>,
     source: &TokenSource<'_>,
-    path: &Path,
+    project: &ProjectArg,
     format: OutputFormat,
     terminal: &Terminal,
 ) -> Exit {
@@ -114,7 +115,7 @@ fn login(
 
     // The token is validated against a configured registry; with none,
     // fail before any network call (ADR 0004 N1).
-    let root = match crate::project::root(path) {
+    let root = match project.root() {
         Ok(root) => root,
         Err(error) => return refuse(&error),
     };
@@ -211,17 +212,18 @@ fn login(
 
 /// Forget the credential of the registry `registry_alias` names, without
 /// reading any project; with none given, of the default registry of the
-/// project at `path`.
+/// project `project` names.
 fn logout(
     registry_alias: Option<&str>,
-    path: &Path,
+    project: &ProjectArg,
     format: OutputFormat,
     terminal: &Terminal,
 ) -> Exit {
     let refuse = |error: &OpError| Refusal::of(format).report(terminal, error);
     let alias = match registry_alias {
         Some(alias) => alias.to_string(),
-        None => match crate::project::root(path)
+        None => match project
+            .root()
             .and_then(|root| specforge_ops_registry::configured(&root, "logout"))
         {
             Ok(configured) => {
