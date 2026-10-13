@@ -1,16 +1,15 @@
 //! `specforge.rename`: rename an entity across the project (`specforge_ops::rename`).
 
 use crate::target::{AnyProject, Project};
-use crate::tool::{CoreTool, Effect, RefusalArgument, ReplySpec, WriteHints};
+use crate::tool::{CoreTool, Effect, ReplySpec, WriteHints};
 use serde::Serialize;
 use specforge_common::shape::Shape;
 
 use crate::args::Arguments;
-use crate::mutation::{
-    Failed, FreshDiagnostics, Mutated, Mutation, MutationArgs, MutationReply, Written,
-};
+use crate::mutation::{FreshDiagnostics, Mutated, Mutation, MutationArgs, MutationReply, Written};
+use crate::refusal::ArgumentOf;
 use crate::target::ProjectRef;
-use crate::tool::McpError;
+use specforge_ops::rename::RenameField;
 
 /// `specforge.rename`'s arguments.
 #[derive(Debug, Arguments)]
@@ -57,6 +56,15 @@ pub struct Edit {
 
 pub(crate) struct Tool;
 
+impl ArgumentOf<RenameField> for Tool {
+    fn argument(field: RenameField) -> Option<&'static str> {
+        match field {
+            RenameField::OldId => Some("entity_id"),
+            RenameField::NewId => Some("new_name"),
+        }
+    }
+}
+
 impl CoreTool for Tool {
     const NAME: &'static str = "specforge.rename";
     const DESCRIPTION: &'static str = "Rename an entity across all files";
@@ -71,10 +79,6 @@ impl CoreTool for Tool {
     type Args = Args;
     type Input = Project<AnyProject>;
     type Returns = Mutation<Reply>;
-    const REFUSAL_ARGUMENTS: &'static [RefusalArgument] = &[RefusalArgument {
-        code: specforge_ops::rename::INVALID_ID,
-        argument: "new_name",
-    }];
 
     fn call(project: ProjectRef<'_>, args: Args) -> Mutation<Reply> {
         use specforge_ops::rename;
@@ -91,7 +95,7 @@ impl CoreTool for Tool {
             &args.entity_id,
             &args.new_name,
         )
-        .map_err(|error| Failed::from(McpError::from(error)))?;
+        .map_err(Self::failed)?;
 
         let mut reply = Reply {
             old_name: args.entity_id,

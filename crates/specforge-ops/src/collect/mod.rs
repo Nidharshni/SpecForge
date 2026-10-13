@@ -15,7 +15,7 @@
 mod convention;
 
 use crate::view::ProjectView;
-use crate::{OpError, OpErrorKind};
+use crate::{OpError, OpErrorKind, Refusal};
 use serde::{Deserialize, Serialize};
 use specforge_common::shape::Shape;
 use specforge_common::{Code, Diagnostic, DiagnosticList, codes};
@@ -696,13 +696,14 @@ pub enum CollectStatus {
 /// `consent` decides whether a collector's command may run; its `announce`
 /// is told just before it runs. Without a root, or at a root that holds no
 /// project: `no_project`.
-pub fn collect(view: &ProjectView, request: Request) -> Result<Outcome, OpError> {
+pub fn collect(view: &ProjectView, request: Request) -> Result<Outcome, Refusal<CollectField>> {
     let root = view.project_root()?;
     if !view.env().config_found() {
         return Err(OpError::no_project(format!(
             "no specforge project at {} (no specforge.json at or above it)",
             root.display()
-        )));
+        ))
+        .into());
     }
     let Request {
         runner,
@@ -725,7 +726,8 @@ pub fn collect(view: &ProjectView, request: Request) -> Result<Outcome, OpError>
                 "--report needs one collector, but {} apply here; pick one with --runner",
                 names.join(", ")
             ),
-        ));
+        )
+        .into());
     }
 
     let mut report = load_report(root);
@@ -752,7 +754,8 @@ pub fn collect(view: &ProjectView, request: Request) -> Result<Outcome, OpError>
                          terminal, pass --yes, or parse an existing report with --no-run",
                         argv.join(" ")
                     ),
-                ));
+                )
+                .into());
             }
             announce(collector, &argv);
             let ran = run(collector, root, &report_at, output)
@@ -789,7 +792,7 @@ pub fn collect(view: &ProjectView, request: Request) -> Result<Outcome, OpError>
                 ),
                 Mode::Reports(_) => "the --report files don't exist".to_string(),
             };
-            return Err(fail(OpErrorKind::SchemaMismatch, codes::E045, message));
+            return Err(fail(OpErrorKind::SchemaMismatch, codes::E045, message).into());
         }
 
         let mut collected = dispatch(
@@ -825,20 +828,29 @@ pub fn collect(view: &ProjectView, request: Request) -> Result<Outcome, OpError>
     })
 }
 
+/// The field of a collect request a refusal can be about (ADR 0072).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CollectField {
+    /// `Request::runner`: the collector asked for.
+    Runner,
+}
+
 /// The collectors to use: the one `runner` names, else every collector
-/// whose detection files are present.
+/// whose detection files are present. A runner no collector answers to is
+/// invalid input about the runner (E058).
 fn select<'a>(
     available: &'a [Collector],
     runner: Option<&str>,
     root: &Path,
-) -> Result<Vec<&'a Collector>, OpError> {
+) -> Result<Vec<&'a Collector>, Refusal<CollectField>> {
     if available.is_empty() {
         return Err(fail(
             OpErrorKind::PreconditionFailed,
             codes::E058,
             "no enabled extension provides a test collector; enable a runner extension \
              (e.g. `specforge add @specforge/cargo-test`)",
-        ));
+        )
+        .into());
     }
     let names = || {
         available
@@ -854,10 +866,11 @@ fn select<'a>(
             .map(|c| vec![c])
             .ok_or_else(|| {
                 fail(
-                    OpErrorKind::PreconditionFailed,
+                    OpErrorKind::InvalidInput,
                     codes::E058,
                     format!("unknown runner '{runner}' (available: {})", names()),
                 )
+                .about(CollectField::Runner)
             });
     }
     let detected = detect(available, root);
@@ -876,7 +889,8 @@ fn select<'a>(
                 root.display(),
                 names()
             ),
-        ));
+        )
+        .into());
     }
     Ok(detected)
 }
@@ -1335,10 +1349,35 @@ mod tests {
         )
         .unwrap_err();
 
-        assert_eq!(error.code, "no_project");
+        assert_eq!(error.error.code, "no_project");
         assert!(
             !fixture.dir.path().join("specforge-report.json").exists(),
             "nothing is written"
         );
+    }
+
+    #[specforge_test(
+        invariant = "mcp_structured_error_responses",
+        verify = "an operation states the request field each refusal is about, and a refusal of the project or the environment is about none"
+    )]
+    fn an_unknown_runner_is_invalid_input_about_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let available = vec![collector("r.json")];
+
+        let refusal = select(&available, Some("nope"), dir.path()).unwrap_err();
+        assert_eq!(refusal.error.kind, OpErrorKind::InvalidInput);
+        assert_eq!(refusal.error.code, "E058");
+        assert_eq!(refusal.subject, Some(CollectField::Runner));
+        // The collector's own name and its extension's both answer.
+        assert!(select(&available, Some("acme"), dir.path()).is_ok());
+        assert!(select(&available, Some("@acme/runner"), dir.path()).is_ok());
+
+        // No collector at all, or none detected: a refusal of the project.
+        let refusal = select(&[], Some("nope"), dir.path()).unwrap_err();
+        assert_eq!(refusal.error.kind, OpErrorKind::PreconditionFailed);
+        assert_eq!(refusal.subject, None);
+        let several = [collector("a.json"), collector("b.json")];
+        let refusal = select(&several, None, dir.path());
+        assert_eq!(refusal.unwrap_err().subject, None);
     }
 }

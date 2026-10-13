@@ -391,7 +391,6 @@ fn entity_refusals_name_their_argument() {
     behavior = "read_mcp_arguments_as_declared",
     verify = "a refusal a value the caller gave earns names that argument, whatever its kind"
 )]
-#[ignore = "fixed by T6"]
 fn mutation_refusals_name_their_argument() {
     assert_refused(
         &call_served(

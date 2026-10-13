@@ -145,7 +145,8 @@ fn management_operations_read_the_project_from_their_view() {
                 announce: &mut |_, _| {},
             },
         )
-        .map(drop),
+        .map(drop)
+        .map_err(specforge_ops::Refusal::into_error),
     );
     assert!(
         !project.dir.path().join("specforge-report.json").exists(),
@@ -263,9 +264,9 @@ fn collect_at_a_root_that_is_no_project_is_no_project() {
     .map(drop)
     .unwrap_err();
 
-    assert_eq!(error.code, "no_project", "{error:?}");
+    assert_eq!(error.error.code, "no_project", "{error:?}");
     assert!(
-        error.message.contains("no specforge project at"),
+        error.error.message.contains("no specforge project at"),
         "{error:?}"
     );
     assert_eq!(

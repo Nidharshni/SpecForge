@@ -866,7 +866,10 @@ fn rename_entity_id_contract() {
         (file != "/p/auth.spec").then(|| "type auth_token \"auth_token\" {\n}\n".to_string())
     });
     let refused = specforge_ops::rename::plan(&blind, "auth_token", "session_token");
-    assert_eq!(refused.unwrap_err().code, specforge_ops::rename::UNREADABLE);
+    assert_eq!(
+        refused.unwrap_err().error.code,
+        specforge_ops::rename::UNREADABLE
+    );
 }
 
 // B:outline_view — verify contract "requires/ensures consistency for outline view"

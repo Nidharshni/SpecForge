@@ -143,7 +143,9 @@ fn a_missing_entity_is_one_refusal() {
         ("navigator", navigator.definition("logn").unwrap_err().error),
         (
             "rename",
-            specforge_ops::rename::plan(&navigator, "logn", "fine_name").unwrap_err(),
+            specforge_ops::rename::plan(&navigator, "logn", "fine_name")
+                .unwrap_err()
+                .error,
         ),
         (
             "trace",

@@ -5,9 +5,10 @@ use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup, WriteHints};
 use specforge_common::codes;
 
 use crate::args::Arguments;
+use crate::refusal::ArgumentOf;
 use crate::reply::Answered;
 use crate::target::ProjectRef;
-use crate::tool::McpError;
+use specforge_ops::collect::CollectField;
 
 /// `specforge.collect`'s reply: the document `specforge collect --format
 /// json` prints (`McpCollectResult`).
@@ -23,6 +24,14 @@ pub struct Args {
 }
 
 pub(crate) struct Tool;
+
+impl ArgumentOf<CollectField> for Tool {
+    fn argument(field: CollectField) -> Option<&'static str> {
+        match field {
+            CollectField::Runner => Some("runner"),
+        }
+    }
+}
 
 impl CoreTool for Tool {
     const NAME: &'static str = "specforge.collect";
@@ -64,15 +73,15 @@ impl CoreTool for Tool {
         };
         match collect::collect(&project.view(), request) {
             Ok(outcome) => Ok(outcome.document().into()),
-            Err(mut e) => {
-                if e.is(codes::E059) {
-                    e.message = format!(
+            Err(mut refusal) => {
+                if refusal.error.is(codes::E059) {
+                    refusal.error.message = format!(
                         "the test command isn't approved for this project; run `specforge collect` \
                      in a terminal once to approve it ({})",
-                        e.message
+                        refusal.error.message
                     );
                 }
-                Err(Box::new(McpError::from(e)))
+                Err(Box::new(Self::refused(refusal)))
             }
         }
     }
