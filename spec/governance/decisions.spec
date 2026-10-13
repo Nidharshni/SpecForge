@@ -928,16 +928,17 @@ decision wasm_component_runtime "All Extensions Execute as wasip2 Components" {
     specforge:bridge world (call: name, export-name, input -> result).
     Every call gets a deterministic fuel budget and a wall-clock
     deadline, and every instance a memory limit (ADR 0037).
-    The builtin blobs are vendored under extensions/<name>/wasm/ and
-    embedded at compile time, each with an inputs.json fingerprint of the
-    sources it was built from; `cargo run -p xtask --bin build-builtins
-    -- --install` rebuilds and re-vendors them (wasm32-wasip2 target) in a
-    staged workspace that holds each extension and its path crates at
-    their repo-relative paths, with the cargo home remapped, so a blob's
-    bytes depend only on its sources and the toolchain, never on the
-    checkout path. CI's `--check` fails when a vendored blob drifts from
-    its sources, and `--verify` rebuilds every blob and fails when one
-    differs.
+    The committed blobs (specforge_component::committed: the builtins
+    under extensions/<name>/wasm/, embedded at compile time, and the test
+    fixtures under fixtures/<name>/wasm/) each carry an inputs.json
+    fingerprint of the sources they were built from; `cargo run -p xtask
+    --bin revendor` rebuilds and re-vendors every one of them
+    (wasm32-wasip2 target) in a staged workspace that holds each crate and
+    its path crates at their repo-relative paths, with the cargo home
+    remapped, so a blob's bytes depend only on its sources and the
+    toolchain, never on the checkout path. `build-builtins --check` fails
+    when a committed blob drifts from its sources, and `--verify` rebuilds
+    every blob and fails when one differs.
   """
   consequences """
     Positive: one execution path, typed entry point, warm single engine
