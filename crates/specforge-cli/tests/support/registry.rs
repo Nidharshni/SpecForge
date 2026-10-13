@@ -5,6 +5,8 @@ use specforge_registry_client::SigningKey;
 use specforge_registry_server::testing::LocalRegistry;
 use specforge_wasm::WasmRuntime as _;
 
+use super::TestProject;
+
 /// A published package.
 #[derive(Clone)]
 pub struct Package {
@@ -114,4 +116,14 @@ pub(crate) fn greet_named(name: &str) -> Vec<u8> {
         }
     }
     wasm
+}
+
+/// A project whose only registry is `registry`.
+pub(crate) fn project_on(registry: &LocalRegistry) -> TestProject {
+    TestProject::new()
+        .enabling(&["@specforge/software"])
+        .config(|c| {
+            c["name"] = "p".into();
+            c["registries"] = registry.config_entry();
+        })
 }

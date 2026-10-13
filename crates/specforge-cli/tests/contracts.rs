@@ -1,10 +1,10 @@
-use assert_cmd::Command;
+use crate::support::{Cli, TestProject};
 use specforge_test_macros::test as specforge_test;
 use std::fs;
-use tempfile::TempDir;
 
-fn specforge_cmd() -> Command {
-    assert_cmd::cargo_bin_cmd!("specforge")
+/// An empty directory: no `specforge.json` yet, so `init` can scaffold one.
+fn empty_directory() -> TestProject {
+    TestProject::new().without_config()
 }
 
 // B:scaffold_new_project — verify contract "requires/ensures consistency for new project scaffolding"
@@ -15,24 +15,24 @@ fn specforge_cmd() -> Command {
 fn scaffold_new_project_contract() {
     // Requires: empty directory + project name
     // Ensures: specforge.json + spec/ directory created with valid content
-    let dir = TempDir::new().unwrap();
+    let dir = empty_directory();
 
     // filesystem_available; project_initialized_emitted: init reports it.
-    specforge_cmd()
-        .args(["init", "--name", "contract-test"])
-        .current_dir(dir.path())
+    Cli::on(&dir)
+        .bare_command(&["init", "--name", "contract-test"])
         .assert()
         .success()
         .stdout(predicates::str::contains(
             "Initialized project 'contract-test'",
         ));
 
-    assert_scaffold_contract(dir.path(), "contract-test");
+    assert_scaffold_contract(&dir, "contract-test");
 }
 
 /// The scaffold_new_project clauses after `init --name <name>` ran
 /// successfully in `dir`, then a second init there.
-pub(crate) fn assert_scaffold_contract(dir: &std::path::Path, name: &str) {
+pub(crate) fn assert_scaffold_contract(project: &TestProject, name: &str) {
+    let dir = project.root();
     // valid_config_created
     let config_path = dir.join("specforge.json");
     let content = fs::read_to_string(&config_path).unwrap();
@@ -54,9 +54,8 @@ pub(crate) fn assert_scaffold_contract(dir: &std::path::Path, name: &str) {
     // leaves the existing configuration alone.
     let edited = content.replace("0.1.0", "9.9.9");
     fs::write(&config_path, &edited).unwrap();
-    specforge_cmd()
-        .args(["init", "--name", "second"])
-        .current_dir(dir)
+    Cli::on(project)
+        .bare_command(&["init", "--name", "second"])
         .assert()
         .failure()
         .stderr(predicates::str::contains("already"));
@@ -71,11 +70,10 @@ pub(crate) fn assert_scaffold_contract(dir: &std::path::Path, name: &str) {
 fn non_interactive_init_contract() {
     // Requires: --name flag provided (no interactive prompts)
     // Ensures: project created without requiring stdin input
-    let dir = TempDir::new().unwrap();
+    let dir = empty_directory();
 
-    let output = specforge_cmd()
-        .args(["init", "--name", "ci-contract"])
-        .current_dir(dir.path())
+    let output = Cli::on(&dir)
+        .bare_command(&["init", "--name", "ci-contract"])
         .write_stdin("") // empty stdin — must not hang
         .output()
         .unwrap();
@@ -85,11 +83,11 @@ fn non_interactive_init_contract() {
         "must succeed without interactive input"
     );
     assert!(
-        dir.path().join("specforge.json").exists(),
+        dir.root().join("specforge.json").exists(),
         "config must be created"
     );
 
-    let content = fs::read_to_string(dir.path().join("specforge.json")).unwrap();
+    let content = fs::read_to_string(dir.root().join("specforge.json")).unwrap();
     let json: serde_json::Value = serde_json::from_str(&content).unwrap();
     assert_eq!(json["name"], "ci-contract");
 }
@@ -102,15 +100,14 @@ fn non_interactive_init_contract() {
 fn graceful_zero_extension_init_contract() {
     // Requires: init with no --extensions flag
     // Ensures: specforge.json has empty extensions array, project still functional
-    let dir = TempDir::new().unwrap();
+    let dir = empty_directory();
 
-    specforge_cmd()
-        .args(["init", "--name", "zero-ext-contract"])
-        .current_dir(dir.path())
+    Cli::on(&dir)
+        .bare_command(&["init", "--name", "zero-ext-contract"])
         .assert()
         .success();
 
-    let content = fs::read_to_string(dir.path().join("specforge.json")).unwrap();
+    let content = fs::read_to_string(dir.root().join("specforge.json")).unwrap();
     let json: serde_json::Value = serde_json::from_str(&content).unwrap();
     assert_eq!(
         json["extensions"],
@@ -119,17 +116,15 @@ fn graceful_zero_extension_init_contract() {
     );
 
     // Project must still be functional: check + export succeed
-    specforge_cmd()
-        .args(["check", "--format", "json"])
-        .arg("--path")
-        .arg(dir.path().join("spec"))
+    Cli::on(&dir)
+        .bare_command(&["check", "--format", "json", "--path"])
+        .arg(dir.root().join("spec"))
         .assert()
         .success();
 
-    let export_output = specforge_cmd()
-        .args(["export", "--format", "graph"])
-        .arg("--path")
-        .arg(dir.path().join("spec"))
+    let export_output = Cli::on(&dir)
+        .bare_command(&["export", "--format", "graph", "--path"])
+        .arg(dir.root().join("spec"))
         .output()
         .unwrap();
     assert!(

@@ -66,6 +66,18 @@ impl<'p> Cli<'p> {
         self
     }
 
+    /// Keep the caller's cargo and rustup homes (`CARGO_HOME`, `RUSTUP_HOME`): the run gets a HOME of its own, and a
+    /// build or a `cargo test` needs the caller's package cache and installed toolchains.
+    pub fn with_toolchain(self) -> Self {
+        let home = |var: &str, default: &str| {
+            std::env::var_os(var).map(PathBuf::from).unwrap_or_else(|| {
+                PathBuf::from(std::env::var_os("HOME").expect("HOME is set")).join(default)
+            })
+        };
+        let (cargo, rustup) = (home("CARGO_HOME", ".cargo"), home("RUSTUP_HOME", ".rustup"));
+        self.env("CARGO_HOME", cargo).env("RUSTUP_HOME", rustup)
+    }
+
     /// Feed `bytes` on stdin.
     pub fn stdin(mut self, bytes: impl Into<Vec<u8>>) -> Self {
         self.stdin = bytes.into();
@@ -114,7 +126,10 @@ impl<'p> Cli<'p> {
     /// [`Self::run`]'s command started as a long-running child (`watch`), its stdout and stderr piped, stopped
     /// on drop.
     pub fn spawn(&self, args: &[&str]) -> ChildGuard {
-        let process = self.process(args, true, &[]);
+        self.guard(self.process(args, true, &[]))
+    }
+
+    fn guard(&self, process: Command) -> ChildGuard {
         let mut wrapper = guarded_command(&process);
         self.environment(&mut wrapper);
         wrapper
@@ -122,6 +137,11 @@ impl<'p> Cli<'p> {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
         ChildGuard::spawn(&mut wrapper).expect("spawn specforge")
+    }
+
+    /// [`Self::bare`]'s command started as a long-running child: `watch` from a subdirectory, with no `--path`.
+    pub fn bare_spawn(&self, args: &[&str]) -> ChildGuard {
+        self.guard(self.process(args, false, &[]))
     }
 
     /// The command line: `args`, then `--path <root>` when `path` is set, then `after`.

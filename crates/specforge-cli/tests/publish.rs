@@ -2,11 +2,11 @@
 //! reads from it, against the real registry server running in process.
 
 use crate::support::registry::{greet_named, greet_wasm};
+use crate::support::{Cli, Run, TestProject};
 use specforge_registry_client::{HttpRegistryClient, RegistryClient, RegistryConfig};
 use specforge_registry_server::testing::LocalRegistry;
 use specforge_test::prelude::*;
 use specforge_wasm::WasmRuntime as _;
-use tempfile::TempDir;
 
 /// How `specforge.json` names `registry`.
 fn config(registry: &LocalRegistry) -> RegistryConfig {
@@ -24,37 +24,12 @@ fn config(registry: &LocalRegistry) -> RegistryConfig {
 )]
 fn publish_stores_the_declaration_the_binary_declares() {
     let registry = LocalRegistry::start();
-    let project = TempDir::new().unwrap();
-    std::fs::write(
-        project.path().join("specforge.json"),
-        serde_json::json!({
-            "name": "p", "version": "0.1.0",
-            "registries": [{ "alias": "local", "url": registry.root().as_str(), "default_registry": true }]
-        })
-        .to_string(),
-    )
-    .unwrap();
-    std::fs::write(project.path().join("greet.wasm"), greet_wasm()).unwrap();
-    let home = TempDir::new().unwrap();
+    let project = project_publishing_to(&registry);
 
     // Only the binary: it is all publish reads.
-    let output = std::process::Command::new(assert_cmd::cargo_bin!("specforge"))
-        .arg("publish")
-        .arg(project.path().join("greet.wasm"))
-        .arg("--path")
-        .arg(project.path())
-        .args(["--format", "json"])
-        .env("HOME", home.path())
-        .env("SPECFORGE_REGISTRY_TOKEN", registry.token())
-        .output()
-        .unwrap();
-    assert!(
-        output.status.success(),
-        "{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let published: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let output = publish_greet(&project, Some(registry.token()));
+    assert_eq!(output.code, 0, "{}{}", output.stdout, output.stderr);
+    let published = output.json();
     assert_eq!(published["name"], "@sdk/greet");
     assert_eq!(published["version"], "0.1.0");
 
@@ -86,18 +61,14 @@ fn publish_stores_the_declaration_the_binary_declares() {
     verify = "publish refuses a declaration whose name or version is not publishable before it uploads"
 )]
 fn publish_refuses_an_unscoped_or_unversioned_declaration_offline() {
-    let project = TempDir::new().unwrap();
     // A registry nothing listens on: any request would fail differently.
-    std::fs::write(
-        project.path().join("specforge.json"),
-        serde_json::json!({
-            "name": "p", "version": "0.1.0",
-            "registries": [{ "alias": "local", "url": "http://127.0.0.1:1", "default_registry": true }]
-        })
-        .to_string(),
-    )
-    .unwrap();
-    let home = TempDir::new().unwrap();
+    let project = TestProject::new().config(|c| {
+        c["name"] = "p".into();
+        c["registries"] = serde_json::json!([
+            { "alias": "local", "url": "http://127.0.0.1:1", "default_registry": true }
+        ]);
+        c.as_object_mut().unwrap().remove("extensions");
+    });
 
     // `greet-ext1` is a package name, but not a scoped one; `Greet-ext1`
     // is none.
@@ -105,61 +76,40 @@ fn publish_refuses_an_unscoped_or_unversioned_declaration_offline() {
         ("greet-ext1", "registry packages are named @scope/name"),
         ("Greet-ext1", "starts with a lowercase letter or digit"),
     ] {
-        let wasm = project.path().join("ext.wasm");
-        std::fs::write(&wasm, greet_named(name)).unwrap();
-        let output = std::process::Command::new(assert_cmd::cargo_bin!("specforge"))
-            .arg("publish")
-            .arg(&wasm)
-            .arg("--path")
-            .arg(project.path())
-            .args(["--format", "json"])
-            .env("HOME", home.path())
+        project.write("ext.wasm", greet_named(name));
+        let wasm = project.root().join("ext.wasm");
+        let output = Cli::on(&project)
             .env("SPECFORGE_REGISTRY_TOKEN", "t")
-            .output()
-            .unwrap();
-        assert_eq!(output.status.code(), Some(1), "{name}: {output:?}");
-        let text = format!(
-            "{}{}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        );
+            .run(&["publish", wasm.to_str().unwrap(), "--format", "json"]);
+        assert_eq!(output.code, 1, "{name}: {}{}", output.stdout, output.stderr);
+        let text = format!("{}{}", output.stdout, output.stderr);
         assert!(text.contains("E072"), "{name}: {text}");
         assert!(text.contains(why), "{name}: {text}");
     }
 }
 
 /// A project whose default registry is `registry`, with the greet binary.
-fn project_publishing_to(registry: &LocalRegistry) -> TempDir {
-    let project = TempDir::new().unwrap();
-    std::fs::write(
-        project.path().join("specforge.json"),
-        serde_json::json!({
-            "name": "p", "version": "0.1.0",
-            "registries": [{ "alias": "local", "url": registry.root().as_str(), "default_registry": true }]
+fn project_publishing_to(registry: &LocalRegistry) -> TestProject {
+    TestProject::new()
+        .config(|c| {
+            c["name"] = "p".into();
+            c["registries"] = serde_json::json!([
+                { "alias": "local", "url": registry.root().as_str(), "default_registry": true }
+            ]);
+            c.as_object_mut().unwrap().remove("extensions");
         })
-        .to_string(),
-    )
-    .unwrap();
-    std::fs::write(project.path().join("greet.wasm"), greet_wasm()).unwrap();
-    project
+        .file("greet.wasm", greet_wasm())
 }
 
 /// `specforge publish greet.wasm --format json` in `project`; `token` is
 /// `SPECFORGE_REGISTRY_TOKEN` (removed when `None`).
-fn publish_greet(project: &TempDir, home: &TempDir, token: Option<&str>) -> std::process::Output {
-    let mut command = std::process::Command::new(assert_cmd::cargo_bin!("specforge"));
-    command
-        .arg("publish")
-        .arg(project.path().join("greet.wasm"))
-        .arg("--path")
-        .arg(project.path())
-        .args(["--format", "json"])
-        .env("HOME", home.path());
-    match token {
-        Some(token) => command.env("SPECFORGE_REGISTRY_TOKEN", token),
-        None => command.env_remove("SPECFORGE_REGISTRY_TOKEN"),
+fn publish_greet(project: &TestProject, token: Option<&str>) -> Run {
+    let wasm = project.root().join("greet.wasm");
+    let cli = match token {
+        Some(token) => Cli::on(project).env("SPECFORGE_REGISTRY_TOKEN", token),
+        None => Cli::on(project),
     };
-    command.output().unwrap()
+    cli.run(&["publish", wasm.to_str().unwrap(), "--format", "json"])
 }
 
 fn greet_is_published(registry: &LocalRegistry) -> bool {
@@ -180,12 +130,11 @@ fn greet_is_published(registry: &LocalRegistry) -> bool {
 fn a_publish_with_no_credential_is_refused_before_any_request() {
     let registry = LocalRegistry::start();
     let project = project_publishing_to(&registry);
-    let home = TempDir::new().unwrap();
 
-    let output = publish_greet(&project, &home, None);
+    let output = publish_greet(&project, None);
 
-    assert_eq!(output.status.code(), Some(1), "{output:?}");
-    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(output.code, 1, "{}{}", output.stdout, output.stderr);
+    let json = output.json();
     assert_eq!(json["code"], "R001", "{json}");
     assert!(
         json["error"]
@@ -201,7 +150,7 @@ fn a_publish_with_no_credential_is_refused_before_any_request() {
             .contains("specforge login --registry local"),
         "{json}"
     );
-    assert!(!home.path().join(".specforge/signing-key.json").exists());
+    assert!(!project.home().join(".specforge/signing-key.json").exists());
     assert!(!greet_is_published(&registry));
 }
 
@@ -212,11 +161,10 @@ fn a_publish_with_no_credential_is_refused_before_any_request() {
 fn publishing_a_version_twice_is_refused_with_r007() {
     let registry = LocalRegistry::start();
     let project = project_publishing_to(&registry);
-    let home = TempDir::new().unwrap();
 
-    let first = publish_greet(&project, &home, Some(registry.token()));
-    assert!(first.status.success(), "{first:?}");
-    let published: serde_json::Value = serde_json::from_slice(&first.stdout).unwrap();
+    let first = publish_greet(&project, Some(registry.token()));
+    assert_eq!(first.code, 0, "{}{}", first.stdout, first.stderr);
+    let published = first.json();
     let mut keys: Vec<&str> = published
         .as_object()
         .unwrap()
@@ -241,8 +189,8 @@ fn publishing_a_version_twice_is_refused_with_r007() {
     assert_eq!(published["key_created"], true);
     assert_eq!(published["registry"], "local");
 
-    let second = publish_greet(&project, &home, Some(registry.token()));
-    assert_eq!(second.status.code(), Some(1), "{second:?}");
-    let refused: serde_json::Value = serde_json::from_slice(&second.stdout).unwrap();
+    let second = publish_greet(&project, Some(registry.token()));
+    assert_eq!(second.code, 1, "{}{}", second.stdout, second.stderr);
+    let refused = second.json();
     assert_eq!(refused["code"], "R007", "{refused}");
 }

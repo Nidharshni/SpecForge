@@ -1,10 +1,11 @@
-use assert_cmd::Command;
+use crate::support::{Cli, TestProject};
 use specforge_test_macros::test as specforge_test;
 use std::fs;
 use tempfile::TempDir;
 
-fn specforge_cmd() -> Command {
-    assert_cmd::cargo_bin_cmd!("specforge")
+/// An empty directory: no `specforge.json` yet.
+fn scratch() -> TestProject {
+    TestProject::new().without_config()
 }
 
 /// Helper: create a specforge.lock file with test entries.
@@ -60,14 +61,13 @@ fn write_config_with_providers(dir: &std::path::Path, providers: &[serde_json::V
     verify = "delegates to uninstall_wasm_extension for lifecycle cleanup"
 )]
 fn remove_delegates_to_uninstall() {
-    let dir = TempDir::new().unwrap();
-
+    let dir = TestProject::new().without_config();
     // Create a lock file with one extension
-    write_lock_file(dir.path(), &[("@acme/software", "1.0.0", "registry")]);
+    write_lock_file(dir.root(), &[("@acme/software", "1.0.0", "registry")]);
 
     // Create the extension directory so uninstall can remove it
     let ext_dir = dir
-        .path()
+        .root()
         .join(".specforge")
         .join("extensions")
         .join("@acme/software");
@@ -75,16 +75,15 @@ fn remove_delegates_to_uninstall() {
     fs::write(ext_dir.join("extension.wasm"), b"fake wasm").unwrap();
     // Another extension's files must survive.
     let other_dir = dir
-        .path()
+        .root()
         .join(".specforge")
         .join("extensions")
         .join("@acme/other");
     fs::create_dir_all(&other_dir).unwrap();
     fs::write(other_dir.join("extension.wasm"), b"other wasm").unwrap();
 
-    specforge_cmd()
-        .args(["remove", "@acme/software", "--path"])
-        .arg(dir.path())
+    Cli::on(&dir)
+        .command(&["remove", "@acme/software"])
         .assert()
         .success()
         .stdout(predicates::str::contains(
@@ -92,7 +91,7 @@ fn remove_delegates_to_uninstall() {
         ));
 
     // Lock file should now have empty entries
-    let lock_content = fs::read_to_string(dir.path().join("specforge.lock")).unwrap();
+    let lock_content = fs::read_to_string(dir.root().join("specforge.lock")).unwrap();
     let lock: serde_json::Value = serde_json::from_str(&lock_content).unwrap();
     assert_eq!(lock["entries"].as_array().unwrap().len(), 0);
 
@@ -109,10 +108,9 @@ fn remove_delegates_to_uninstall() {
     verify = "extension is removed from extensions list"
 )]
 fn remove_updates_lock_file() {
-    let dir = TempDir::new().unwrap();
-
+    let dir = TestProject::new().without_config();
     write_lock_file(
-        dir.path(),
+        dir.root(),
         &[
             ("@specforge/software", "1.0.0", "registry"),
             ("@specforge/governance", "1.0.0", "registry"),
@@ -121,20 +119,19 @@ fn remove_updates_lock_file() {
 
     // Create extension directories
     for name in &["@specforge/software", "@specforge/governance"] {
-        let ext_dir = dir.path().join(".specforge").join("extensions").join(name);
+        let ext_dir = dir.root().join(".specforge").join("extensions").join(name);
         fs::create_dir_all(&ext_dir).unwrap();
         fs::write(ext_dir.join("extension.wasm"), b"fake").unwrap();
     }
 
     // Remove software
-    specforge_cmd()
-        .args(["remove", "@specforge/software", "--path"])
-        .arg(dir.path())
+    Cli::on(&dir)
+        .command(&["remove", "@specforge/software"])
         .assert()
         .success();
 
     // Lock file should only have governance remaining
-    let lock_content = fs::read_to_string(dir.path().join("specforge.lock")).unwrap();
+    let lock_content = fs::read_to_string(dir.root().join("specforge.lock")).unwrap();
     let lock: serde_json::Value = serde_json::from_str(&lock_content).unwrap();
     let entries = lock["entries"].as_array().unwrap();
     assert_eq!(entries.len(), 1);
@@ -146,27 +143,25 @@ fn remove_updates_lock_file() {
     verify = ".spec files are not modified by removal"
 )]
 fn remove_does_not_modify_spec_files() {
-    let dir = TempDir::new().unwrap();
-
+    let dir = TestProject::new().without_config();
     // Create a spec file
-    let spec_dir = dir.path().join("spec");
+    let spec_dir = dir.root().join("spec");
     fs::create_dir_all(&spec_dir).unwrap();
     let spec_content = "behavior my_behavior \"test\" {\n  description \"hello\"\n}\n";
     fs::write(spec_dir.join("test.spec"), spec_content).unwrap();
 
-    write_lock_file(dir.path(), &[("@specforge/software", "1.0.0", "registry")]);
+    write_lock_file(dir.root(), &[("@specforge/software", "1.0.0", "registry")]);
 
     let ext_dir = dir
-        .path()
+        .root()
         .join(".specforge")
         .join("extensions")
         .join("@specforge/software");
     fs::create_dir_all(&ext_dir).unwrap();
     fs::write(ext_dir.join("extension.wasm"), b"fake").unwrap();
 
-    specforge_cmd()
-        .args(["remove", "@specforge/software", "--path"])
-        .arg(dir.path())
+    Cli::on(&dir)
+        .command(&["remove", "@specforge/software"])
         .assert()
         .success();
 
@@ -187,11 +182,10 @@ fn remove_does_not_modify_spec_files() {
     verify = "output order is deterministic"
 )]
 fn extensions_lists_alphabetically() {
-    let dir = TempDir::new().unwrap();
-
+    let dir = TestProject::new().without_config();
     // Write entries in reverse alphabetical order
     write_lock_file(
-        dir.path(),
+        dir.root(),
         &[
             ("@specforge/software", "1.0.0", "registry"),
             ("@specforge/governance", "1.0.0", "registry"),
@@ -199,11 +193,7 @@ fn extensions_lists_alphabetically() {
         ],
     );
 
-    let output = specforge_cmd()
-        .args(["extensions", "--path"])
-        .arg(dir.path())
-        .output()
-        .unwrap();
+    let output = Cli::on(&dir).command(&["extensions"]).output().unwrap();
 
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -225,20 +215,17 @@ fn extensions_lists_alphabetically() {
 
 #[test]
 fn extensions_json_format() {
-    let dir = TempDir::new().unwrap();
-
+    let dir = TestProject::new().without_config();
     write_lock_file(
-        dir.path(),
+        dir.root(),
         &[
             ("@acme/software", "1.2.0", "registry"),
             ("@acme/governance", "1.0.0", "local"),
         ],
     );
 
-    let output = specforge_cmd()
-        .args(["extensions", "--path"])
-        .arg(dir.path())
-        .args(["--format", "json"])
+    let output = Cli::on(&dir)
+        .command(&["extensions", "--format", "json"])
         .output()
         .unwrap();
 
@@ -266,11 +253,9 @@ fn extensions_json_format() {
     verify = "list shows all installed extensions"
 )]
 fn extensions_no_lock_file() {
-    let list = |dir: &std::path::Path| {
-        let output = specforge_cmd()
-            .args(["extensions", "--path"])
-            .arg(dir)
-            .args(["--format", "json"])
+    let list = |dir: &TestProject| {
+        let output = Cli::on(dir)
+            .command(&["extensions", "--format", "json"])
             .output()
             .unwrap();
         assert!(output.status.success());
@@ -278,19 +263,19 @@ fn extensions_no_lock_file() {
     };
 
     // Nothing installed: an empty listing.
-    let empty = TempDir::new().unwrap();
-    let json = list(empty.path());
+    let empty = scratch();
+    let json = list(&empty);
     assert_eq!(json["count"], 0);
     assert_eq!(json["extensions"], serde_json::json!([]));
 
     // No lock file, but three builtins enabled: every one is listed.
-    let dir = TempDir::new().unwrap();
+    let dir = TestProject::new().without_config();
     fs::write(
-        dir.path().join("specforge.json"),
+        dir.root().join("specforge.json"),
         r#"{"name":"p","version":"0.1.0","extensions":["@specforge/software","@specforge/product","@specforge/governance"]}"#,
     )
     .unwrap();
-    let json = list(dir.path());
+    let json = list(&dir);
     assert_eq!(json["count"], 3, "{json}");
     let names: Vec<&str> = json["extensions"]
         .as_array()
@@ -313,21 +298,18 @@ fn extensions_no_lock_file() {
     verify = "List Installed Extensions: extension listing holds — kind_registry_ready, all_extensions_listed, entity_counts_included, output_deterministic"
 )]
 fn extensions_contract() {
-    let dir = TempDir::new().unwrap();
-
+    let dir = TestProject::new().without_config();
     // Precondition: lock file with known extensions
     write_lock_file(
-        dir.path(),
+        dir.root(),
         &[
             ("@specforge/governance", "1.0.0", "registry"),
             ("@specforge/software", "2.0.0", "local"),
         ],
     );
 
-    let output = specforge_cmd()
-        .args(["extensions", "--path"])
-        .arg(dir.path())
-        .args(["--format", "json"])
+    let output = Cli::on(&dir)
+        .command(&["extensions", "--format", "json"])
         .output()
         .unwrap();
 
@@ -362,21 +344,16 @@ fn extensions_contract() {
     verify = "list shows all configured providers"
 )]
 fn providers_lists_alias_extension_schemes() {
-    let dir = TempDir::new().unwrap();
-
+    let dir = TestProject::new().without_config();
     write_config_with_providers(
-        dir.path(),
+        dir.root(),
         &[
             serde_json::json!({"scheme": "gh", "alias": "work", "extension": "@acme/github"}),
             serde_json::json!({"scheme": "file", "alias": "junit", "extension": "@specforge/rust"}),
         ],
     );
 
-    let output = specforge_cmd()
-        .args(["providers", "--path"])
-        .arg(dir.path())
-        .output()
-        .unwrap();
+    let output = Cli::on(&dir).command(&["providers"]).output().unwrap();
 
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -398,11 +375,10 @@ fn providers_lists_alias_extension_schemes() {
     verify = "multiple aliases shown separately"
 )]
 fn providers_multiple_aliases() {
-    let dir = TempDir::new().unwrap();
-
+    let dir = TestProject::new().without_config();
     // Two instances of one provider, each with its own scheme (D3-c).
     write_config_with_providers(
-        dir.path(),
+        dir.root(),
         &[
             serde_json::json!({"scheme": "gh", "alias": "work", "extension": "@acme/github"}),
             serde_json::json!({
@@ -412,7 +388,7 @@ fn providers_multiple_aliases() {
         ],
     );
 
-    let (_, json) = providers_json(dir.path());
+    let (_, json) = providers_json(&dir);
 
     assert_eq!(json["count"], 2);
     assert_eq!(
@@ -428,13 +404,13 @@ fn providers_multiple_aliases() {
 fn providers_includes_scheme_and_kind() {
     // Not linked to "list includes scheme and kind registrations": no
     // extension contributes providers yet, so no scheme registers kinds.
-    let dir = TempDir::new().unwrap();
+    let dir = TestProject::new().without_config();
     write_config_with_providers(
-        dir.path(),
+        dir.root(),
         &[serde_json::json!({"scheme": "file", "alias": "junit", "extension": "@specforge/rust"})],
     );
 
-    let (_, json) = providers_json(dir.path());
+    let (_, json) = providers_json(&dir);
 
     let p = &json["providers"][0];
     assert_eq!(p["scheme"], "file");
@@ -454,11 +430,9 @@ fn write_two_providers(dir: &std::path::Path) {
 }
 
 /// `specforge providers --format json` for `dir`, asserting success.
-fn providers_json(dir: &std::path::Path) -> (String, serde_json::Value) {
-    let output = specforge_cmd()
-        .args(["providers", "--path"])
-        .arg(dir)
-        .args(["--format", "json"])
+fn providers_json(dir: &TestProject) -> (String, serde_json::Value) {
+    let output = Cli::on(dir)
+        .command(&["providers", "--format", "json"])
         .output()
         .unwrap();
     assert!(output.status.success());
@@ -472,12 +446,12 @@ fn providers_json(dir: &std::path::Path) -> (String, serde_json::Value) {
     verify = "output order is deterministic"
 )]
 fn providers_output_order_deterministic() {
-    let dir = TempDir::new().unwrap();
-    write_two_providers(dir.path());
+    let dir = TestProject::new().without_config();
+    write_two_providers(dir.root());
 
     // The order is the configuration's (the first to declare a scheme wins
     // it), and the same on every run.
-    let (first, json) = providers_json(dir.path());
+    let (first, json) = providers_json(&dir);
     let aliases: Vec<&str> = json["providers"]
         .as_array()
         .unwrap()
@@ -487,7 +461,7 @@ fn providers_output_order_deterministic() {
     assert_eq!(aliases, ["beta", "alpha"]);
     for _ in 0..3 {
         assert_eq!(
-            providers_json(dir.path()).0,
+            providers_json(&dir).0,
             first,
             "output must be deterministic across runs"
         );
@@ -498,9 +472,9 @@ fn providers_output_order_deterministic() {
 fn providers_contract() {
     // Not linked to the listing's contract: schemes_and_kinds_included
     // needs an extension that contributes providers.
-    let dir = TempDir::new().unwrap();
-    write_two_providers(dir.path());
-    let (first, json) = providers_json(dir.path());
+    let dir = TestProject::new().without_config();
+    write_two_providers(dir.root());
+    let (first, json) = providers_json(&dir);
 
     assert_eq!(json["count"], 2);
     assert_eq!(
@@ -510,7 +484,7 @@ fn providers_contract() {
             {"scheme": "file", "alias": "alpha", "extension": "@specforge/rust", "status": "not_a_provider"},
         ])
     );
-    assert_eq!(providers_json(dir.path()).0, first);
+    assert_eq!(providers_json(&dir).0, first);
 }
 
 // ===============================================================
@@ -519,25 +493,22 @@ fn providers_contract() {
 
 #[test]
 fn doctor_reports_health_check() {
-    let dir = TempDir::new().unwrap();
-
+    let dir = TestProject::new().without_config();
     // Create lock file with one extension
-    write_lock_file(dir.path(), &[("test-ext", "1.0.0", "registry")]);
+    write_lock_file(dir.root(), &[("test-ext", "1.0.0", "registry")]);
 
     // Create the extension directory with a wasm file
     let ext_dir = dir
-        .path()
+        .root()
         .join(".specforge")
         .join("extensions")
         .join("test-ext");
     fs::create_dir_all(&ext_dir).unwrap();
     fs::write(ext_dir.join("extension.wasm"), b"wasm content").unwrap();
 
-    let output = specforge_cmd()
-        .args(["doctor", "--path"])
+    let output = Cli::on(&dir)
+        .command(&["doctor", "--format", "json"])
         .env("PATH", crate::toolchain::z3_ready())
-        .arg(dir.path())
-        .args(["--format", "json"])
         .output()
         .unwrap();
 
@@ -553,19 +524,16 @@ fn doctor_reports_health_check() {
 
 #[test]
 fn doctor_missing_binary() {
-    let dir = TempDir::new().unwrap();
-
+    let dir = TestProject::new().without_config();
     // Create lock file referencing an extension, but no .wasm file
-    write_lock_file(dir.path(), &[("missing-ext", "1.0.0", "registry")]);
+    write_lock_file(dir.root(), &[("missing-ext", "1.0.0", "registry")]);
 
     // Create extensions dir but NOT the extension subdirectory
-    fs::create_dir_all(dir.path().join(".specforge").join("extensions")).unwrap();
+    fs::create_dir_all(dir.root().join(".specforge").join("extensions")).unwrap();
 
-    let output = specforge_cmd()
-        .args(["doctor", "--path"])
+    let output = Cli::on(&dir)
+        .command(&["doctor", "--format", "json"])
         .env("PATH", crate::toolchain::z3_ready())
-        .arg(dir.path())
-        .args(["--format", "json"])
         .output()
         .unwrap();
 
@@ -586,13 +554,10 @@ fn doctor_missing_binary() {
 
 #[test]
 fn doctor_no_lock_file() {
-    let dir = TempDir::new().unwrap();
-
-    let output = specforge_cmd()
-        .args(["doctor", "--path"])
+    let dir = TestProject::new().without_config();
+    let output = Cli::on(&dir)
+        .command(&["doctor", "--format", "json"])
         .env("PATH", crate::toolchain::z3_ready())
-        .arg(dir.path())
-        .args(["--format", "json"])
         .output()
         .unwrap();
 
@@ -606,11 +571,10 @@ fn doctor_no_lock_file() {
 
 #[test]
 fn doctor_lists_enhancements() {
-    let dir = TempDir::new().unwrap();
-
+    let dir = TestProject::new().without_config();
     // Two extensions with valid wasm files
     for name in &["ext-a", "ext-b"] {
-        let ext_dir = dir.path().join(".specforge").join("extensions").join(name);
+        let ext_dir = dir.root().join(".specforge").join("extensions").join(name);
         fs::create_dir_all(&ext_dir).unwrap();
         fs::write(
             ext_dir.join("extension.wasm"),
@@ -639,16 +603,14 @@ fn doctor_lists_enhancements() {
     });
 
     fs::write(
-        dir.path().join("specforge.lock"),
+        dir.root().join("specforge.lock"),
         serde_json::to_string_pretty(&lock).unwrap(),
     )
     .unwrap();
 
-    let output = specforge_cmd()
-        .args(["doctor", "--path"])
+    let output = Cli::on(&dir)
+        .command(&["doctor", "--format", "json"])
         .env("PATH", crate::toolchain::z3_ready())
-        .arg(dir.path())
-        .args(["--format", "json"])
         .output()
         .unwrap();
 
@@ -660,24 +622,21 @@ fn doctor_lists_enhancements() {
 
 #[test]
 fn doctor_detects_stale_hash() {
-    let dir = TempDir::new().unwrap();
-
+    let dir = TestProject::new().without_config();
     // Extension with wrong hash in lock file (simulates tampered/updated binary)
     let ext_dir = dir
-        .path()
+        .root()
         .join(".specforge")
         .join("extensions")
         .join("stale-ext");
     fs::create_dir_all(&ext_dir).unwrap();
     fs::write(ext_dir.join("extension.wasm"), b"updated content").unwrap();
 
-    write_lock_file(dir.path(), &[("stale-ext", "1.0.0", "registry")]);
+    write_lock_file(dir.root(), &[("stale-ext", "1.0.0", "registry")]);
 
-    let output = specforge_cmd()
-        .args(["doctor", "--path"])
+    let output = Cli::on(&dir)
+        .command(&["doctor", "--format", "json"])
         .env("PATH", crate::toolchain::z3_ready())
-        .arg(dir.path())
-        .args(["--format", "json"])
         .output()
         .unwrap();
 
@@ -694,11 +653,10 @@ fn doctor_detects_stale_hash() {
 
 #[test]
 fn doctor_healthy_lock_entry() {
-    let dir = TempDir::new().unwrap();
-
+    let dir = TestProject::new().without_config();
     // Precondition: lock file + extension with matching hash
     let ext_dir = dir
-        .path()
+        .root()
         .join(".specforge")
         .join("extensions")
         .join("ok-ext");
@@ -715,16 +673,14 @@ fn doctor_healthy_lock_entry() {
         }],
     });
     fs::write(
-        dir.path().join("specforge.lock"),
+        dir.root().join("specforge.lock"),
         serde_json::to_string_pretty(&lock).unwrap(),
     )
     .unwrap();
 
-    let output = specforge_cmd()
-        .args(["doctor", "--path"])
+    let output = Cli::on(&dir)
+        .command(&["doctor", "--format", "json"])
         .env("PATH", crate::toolchain::z3_ready())
-        .arg(dir.path())
-        .args(["--format", "json"])
         .output()
         .unwrap();
 
@@ -746,10 +702,10 @@ fn doctor_healthy_lock_entry() {
 
 /// A project with the software and product builtins enabled (no lock
 /// entries: builtins ship inside the binary), plus optional spec sources.
-fn builtin_project(spec: Option<&str>) -> TempDir {
-    let dir = TempDir::new().unwrap();
-    write_config_with_extensions(dir.path(), &["@specforge/software", "@specforge/product"]);
-    let spec_dir = dir.path().join("spec");
+fn builtin_project(spec: Option<&str>) -> TestProject {
+    let dir = scratch();
+    write_config_with_extensions(dir.root(), &["@specforge/software", "@specforge/product"]);
+    let spec_dir = dir.root().join("spec");
     fs::create_dir_all(&spec_dir).unwrap();
     if let Some(spec) = spec {
         fs::write(spec_dir.join("project.spec"), spec).unwrap();
@@ -761,12 +717,10 @@ fn builtin_project(spec: Option<&str>) -> TempDir {
 /// the compiler reports the shadowing as E013.
 const SHADOWING_ID: &str = "type behavior \"Shadow\" {\n}\n";
 
-fn doctor_json(dir: &std::path::Path) -> (serde_json::Value, i32) {
-    let output = specforge_cmd()
-        .args(["doctor", "--path"])
+fn doctor_json(dir: &TestProject) -> (serde_json::Value, i32) {
+    let output = Cli::on(dir)
         .env("PATH", crate::toolchain::z3_ready())
-        .arg(dir)
-        .args(["--format", "json"])
+        .command(&["doctor", "--format", "json"])
         .output()
         .unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -775,11 +729,10 @@ fn doctor_json(dir: &std::path::Path) -> (serde_json::Value, i32) {
     (json, output.status.code().unwrap_or(-1))
 }
 
-fn doctor_human(dir: &std::path::Path) -> (String, i32) {
-    let output = specforge_cmd()
-        .args(["doctor", "--path"])
+fn doctor_human(dir: &TestProject) -> (String, i32) {
+    let output = Cli::on(dir)
         .env("PATH", crate::toolchain::z3_ready())
-        .arg(dir)
+        .command(&["doctor"])
         .output()
         .unwrap();
     (
@@ -804,9 +757,9 @@ fn extension<'a>(report: &'a serde_json::Value, name: &str) -> &'a serde_json::V
 fn doctor_lists_enabled_builtins_and_lock_entries_with_enhancement_counts() {
     let dir = builtin_project(None);
     // One installed extension alongside the builtins.
-    write_lock_file(dir.path(), &[("test-ext", "1.2.3", "registry")]);
+    write_lock_file(dir.root(), &[("test-ext", "1.2.3", "registry")]);
 
-    let (report, code) = doctor_json(dir.path());
+    let (report, code) = doctor_json(&dir);
 
     // software enhances module (ports, ports_defined) and milestone
     // (behaviors); product enhances nothing.
@@ -827,7 +780,7 @@ fn doctor_lists_enabled_builtins_and_lock_entries_with_enhancement_counts() {
     // test-ext's binary is missing, so doctor still fails on it.
     assert_eq!(code, 1, "{report}");
 
-    let (human, _) = doctor_human(dir.path());
+    let (human, _) = doctor_human(&dir);
     let line = |name: &str| {
         human
             .lines()
@@ -853,7 +806,7 @@ fn doctor_lists_enabled_builtins_and_lock_entries_with_enhancement_counts() {
 fn doctor_groups_enhancements_by_target_entity_kind() {
     let dir = builtin_project(None);
 
-    let (report, code) = doctor_json(dir.path());
+    let (report, code) = doctor_json(&dir);
     assert_eq!(code, 0, "{report}");
 
     let by_kind = report["enhancements"]
@@ -876,7 +829,7 @@ fn doctor_groups_enhancements_by_target_entity_kind() {
         "{report}"
     );
 
-    let (human, _) = doctor_human(dir.path());
+    let (human, _) = doctor_human(&dir);
     let module_at = human.find("  module:").unwrap_or_else(|| panic!("{human}"));
     let milestone_at = human
         .find("  milestone:")
@@ -894,12 +847,12 @@ fn doctor_groups_enhancements_by_target_entity_kind() {
 fn doctor_fails_on_a_shadowed_keyword_without_calling_it_a_conflict() {
     let dir = builtin_project(Some(SHADOWING_ID));
 
-    let (report, code) = doctor_json(dir.path());
+    let (report, code) = doctor_json(&dir);
 
     assert_eq!(report["conflicts"], serde_json::json!([]), "{report}");
     assert_eq!(report["ok"], false, "{report}");
     assert_eq!(code, 1, "{report}");
-    let (human, human_code) = doctor_human(dir.path());
+    let (human, human_code) = doctor_human(&dir);
     assert_eq!(human_code, 1, "{human}");
     assert!(human.contains("Conflicts:\n  none"), "{human}");
 }
@@ -911,7 +864,7 @@ fn doctor_fails_on_a_shadowed_keyword_without_calling_it_a_conflict() {
 fn doctor_reports_a_keyword_shadowing_an_extension_entity_kind() {
     let dir = builtin_project(Some(SHADOWING_ID));
 
-    let (report, _) = doctor_json(dir.path());
+    let (report, _) = doctor_json(&dir);
 
     let shadowed = findings_about(&report, "shadowing");
     assert_eq!(shadowed.len(), 1, "{report}");
@@ -927,10 +880,10 @@ fn doctor_reports_a_keyword_shadowing_an_extension_entity_kind() {
 
     // A project without the clash shadows nothing.
     let clean_dir = builtin_project(None);
-    let (clean, _) = doctor_json(clean_dir.path());
+    let (clean, _) = doctor_json(&clean_dir);
     assert!(findings_about(&clean, "shadowing").is_empty(), "{clean}");
 
-    let (human, _) = doctor_human(dir.path());
+    let (human, _) = doctor_human(&dir);
     let section = human
         .find("Shadowed constructs")
         .unwrap_or_else(|| panic!("{human}"));
@@ -944,7 +897,7 @@ fn doctor_reports_a_keyword_shadowing_an_extension_entity_kind() {
 fn doctor_json_carries_every_report_section() {
     let dir = builtin_project(Some(SHADOWING_ID));
 
-    let (report, _) = doctor_json(dir.path());
+    let (report, _) = doctor_json(&dir);
 
     for key in ["extensions", "conflicts", "findings"] {
         assert!(report[key].is_array(), "{key} is not an array: {report}");
@@ -970,7 +923,7 @@ fn doctor_contract() {
     // and the filesystem holds the lock file and an installed binary.
     let dir = builtin_project(None);
     let ext_dir = dir
-        .path()
+        .root()
         .join(".specforge")
         .join("extensions")
         .join("ok-ext");
@@ -986,12 +939,12 @@ fn doctor_contract() {
         }],
     });
     fs::write(
-        dir.path().join("specforge.lock"),
+        dir.root().join("specforge.lock"),
         serde_json::to_string_pretty(&lock).unwrap(),
     )
     .unwrap();
 
-    let (report, code) = doctor_json(dir.path());
+    let (report, code) = doctor_json(&dir);
 
     assert_eq!(code, 0, "{report}");
     assert_eq!(
@@ -1016,7 +969,7 @@ fn doctor_contract() {
         "ensures: json_output_supported: {report}"
     );
 
-    let (human, human_code) = doctor_human(dir.path());
+    let (human, human_code) = doctor_human(&dir);
     assert_eq!(human_code, 0, "{human}");
     for section in [
         "Extensions",
@@ -1040,20 +993,18 @@ fn doctor_contract() {
     verify = "add unresolvable extension rejects with diagnostic"
 )]
 fn add_validates_registry_specifier() {
-    let dir = TempDir::new().unwrap();
+    let dir = TestProject::new().without_config();
     // A registry nothing listens on (port 9, discard): the connection is
     // refused at once, so the test never reaches the network or waits on a
     // timeout. The specifier must parse and the failure be structured.
     fs::write(
-        dir.path().join("specforge.json"),
+        dir.root().join("specforge.json"),
         r#"{"name":"t","version":"0.1.0","extensions":[],
             "registries":[{"alias":"local","url":"http://127.0.0.1:9","default_registry":true}]}"#,
     )
     .unwrap();
-    let output = specforge_cmd()
-        .args(["add", "@acme/widget@1.0.0", "--path"])
-        .arg(dir.path())
-        .args(["--format", "json"])
+    let output = Cli::on(&dir)
+        .command(&["add", "@acme/widget@1.0.0", "--format", "json"])
         .output()
         .unwrap();
 
@@ -1070,19 +1021,20 @@ fn add_validates_registry_specifier() {
     verify = "invalid specifier produces ExtensionError"
 )]
 fn add_rejects_invalid_specifier() {
-    let dir = TempDir::new().unwrap();
+    let dir = TestProject::new().without_config();
     let config = r#"{"name":"t","version":"0.1.0","extensions":[]}"#;
-    fs::write(dir.path().join("specforge.json"), config).unwrap();
+    fs::write(dir.root().join("specforge.json"), config).unwrap();
 
     // A package reference that is not one; a bare word that is no `@scope/name` is a path.
     for (specifier, prefix) in [
         ("@scope", "invalid extension specifier: "),
         ("not-valid", "file not found: "),
     ] {
-        let output = specforge_cmd()
-            .args(["add", specifier, "--path"])
-            .arg(dir.path())
-            .args(["--format", "json"])
+        let output = Cli::on(&dir)
+            .command(&["add"])
+            .arg(specifier)
+            .arg("--format")
+            .arg("json")
             .output()
             .unwrap();
         assert_eq!(output.status.code(), Some(1));
@@ -1096,9 +1048,7 @@ fn add_rejects_invalid_specifier() {
     }
 
     // The human diagnostic states the expected format.
-    specforge_cmd()
-        .args(["add", "not-valid", "--path"])
-        .arg(dir.path())
+    Cli::on(&dir).command(&["add", "not-valid"])
         .assert()
         .code(1)
         .stderr(predicates::str::contains(
@@ -1110,10 +1060,10 @@ fn add_rejects_invalid_specifier() {
 
     // Nothing was installed.
     assert_eq!(
-        fs::read_to_string(dir.path().join("specforge.json")).unwrap(),
+        fs::read_to_string(dir.root().join("specforge.json")).unwrap(),
         config
     );
-    assert!(!dir.path().join("specforge.lock").exists());
+    assert!(!dir.root().join("specforge.lock").exists());
 }
 
 /// Which inputs `specforge add` takes for a registry package (plan 12 §2.2):
@@ -1124,9 +1074,9 @@ fn add_rejects_invalid_specifier() {
     verify = "each add argument reads as one extension source"
 )]
 fn add_refuses_what_is_not_a_package_before_the_registry() {
-    let dir = TempDir::new().unwrap();
+    let dir = TestProject::new().without_config();
     let config = r#"{"name":"t","version":"0.1.0","extensions":[]}"#;
-    fs::write(dir.path().join("specforge.json"), config).unwrap();
+    fs::write(dir.root().join("specforge.json"), config).unwrap();
 
     let cases: &[(&str, &str)] = &[
         ("@acme/tool", "E063"),                // I1
@@ -1154,10 +1104,11 @@ fn add_refuses_what_is_not_a_package_before_the_registry() {
         ("@scope", "E054"),                    // I22
     ];
     for (input, code) in cases {
-        let output = specforge_cmd()
-            .args(["add", input, "--path"])
-            .arg(dir.path())
-            .args(["--format", "json"])
+        let output = Cli::on(&dir)
+            .command(&["add"])
+            .arg(input)
+            .arg("--format")
+            .arg("json")
             .output()
             .unwrap();
         assert_eq!(output.status.code(), Some(1), "{input}: {output:?}");
@@ -1165,7 +1116,7 @@ fn add_refuses_what_is_not_a_package_before_the_registry() {
         assert_eq!(json["code"], *code, "{input}: {json}");
     }
     assert_eq!(
-        fs::read_to_string(dir.path().join("specforge.json")).unwrap(),
+        fs::read_to_string(dir.root().join("specforge.json")).unwrap(),
         config
     );
 }
@@ -1180,8 +1131,8 @@ fn add_refuses_what_is_not_a_package_before_the_registry() {
     verify = "an extension is installed under the extensions directory of its project, by its package name"
 )]
 fn a_module_whose_declared_name_is_not_a_package_name_is_refused() {
-    let root = TempDir::new().unwrap();
-    let project = root.path().join("a/b/proj");
+    let root = scratch();
+    let project = root.root().join("a/b/proj");
     fs::create_dir_all(&project).unwrap();
     fs::write(
         project.join("specforge.json"),
@@ -1203,17 +1154,17 @@ fn a_module_whose_declared_name_is_not_a_package_name_is_refused() {
         }
     }
     assert!(replaced > 0, "the blob names itself");
-    let module = root.path().join("evil.wasm");
+    let module = root.root().join("evil.wasm");
     fs::write(&module, wasm).unwrap();
 
-    let outside = root.path().join("a/b/x");
+    let outside = root.root().join("a/b/x");
     fs::create_dir_all(&outside).unwrap();
     fs::write(outside.join("other.txt"), "keep").unwrap();
-    let before = crate::support::written::files_under(root.path());
+    let before = crate::support::written::files_under(root.root());
     let config_before = fs::read_to_string(project.join("specforge.json")).unwrap();
 
-    let output = specforge_cmd()
-        .arg("add")
+    let output = Cli::on(&root)
+        .bare_command(&["add"])
         .arg(&module)
         .arg("--path")
         .arg(&project)
@@ -1228,7 +1179,7 @@ fn a_module_whose_declared_name_is_not_a_package_name_is_refused() {
         "{json}"
     );
     // Nothing was written: not the module, not the lock, not the config.
-    assert_eq!(crate::support::written::files_under(root.path()), before);
+    assert_eq!(crate::support::written::files_under(root.root()), before);
     assert_eq!(
         fs::read_to_string(project.join("specforge.json")).unwrap(),
         config_before
@@ -1239,8 +1190,8 @@ fn a_module_whose_declared_name_is_not_a_package_name_is_refused() {
         if lock {
             write_lock_file(&project, &[("../../../x", "1.0.0", "registry")]);
         }
-        let output = specforge_cmd()
-            .args(["remove", "../../../x", "--path"])
+        let output = Cli::on(&root)
+            .bare_command(&["remove", "../../../x", "--path"])
             .arg(&project)
             .args(["--format", "json"])
             .output()
@@ -1261,21 +1212,21 @@ fn a_module_whose_declared_name_is_not_a_package_name_is_refused() {
     verify = "./path parsed as local source"
 )]
 fn add_validates_local_specifier() {
-    let dir = TempDir::new().unwrap();
-
+    let dir = TestProject::new().without_config();
     fs::write(
-        dir.path().join("specforge.json"),
+        dir.root().join("specforge.json"),
         r#"{"name":"t","version":"0.1.0","extensions":[]}"#,
     )
     .unwrap();
     // A real extension at the local path.
-    let wasm_path = dir.path().join("my-extension.wasm");
+    let wasm_path = dir.root().join("my-extension.wasm");
     std::fs::write(&wasm_path, crate::support::registry::greet_wasm()).unwrap();
 
-    let output = specforge_cmd()
-        .args(["add", wasm_path.to_str().unwrap(), "--path"])
-        .arg(dir.path())
-        .args(["--format", "json"])
+    let output = Cli::on(&dir)
+        .command(&["add"])
+        .arg(wasm_path.to_str().unwrap())
+        .arg("--format")
+        .arg("json")
         .output()
         .unwrap();
 
@@ -1297,13 +1248,12 @@ fn add_validates_local_specifier() {
 
 #[test]
 fn remove_extension_keywords_produce_e024() {
-    let dir = TempDir::new().unwrap();
-
+    let dir = TestProject::new().without_config();
     // Set up a project with an extension
-    write_lock_file(dir.path(), &[("@specforge/software", "1.0.0", "registry")]);
+    write_lock_file(dir.root(), &[("@specforge/software", "1.0.0", "registry")]);
 
     let ext_dir = dir
-        .path()
+        .root()
         .join(".specforge")
         .join("extensions")
         .join("@specforge/software");
@@ -1311,7 +1261,7 @@ fn remove_extension_keywords_produce_e024() {
     fs::write(ext_dir.join("extension.wasm"), b"fake").unwrap();
 
     // Create a spec file using an entity keyword that would be from that extension
-    let spec_dir = dir.path().join("spec");
+    let spec_dir = dir.root().join("spec");
     fs::create_dir_all(&spec_dir).unwrap();
     fs::write(
         spec_dir.join("test.spec"),
@@ -1320,14 +1270,13 @@ fn remove_extension_keywords_produce_e024() {
     .unwrap();
 
     // Remove the extension
-    specforge_cmd()
-        .args(["remove", "@specforge/software", "--path"])
-        .arg(dir.path())
+    Cli::on(&dir)
+        .command(&["remove", "@specforge/software"])
         .assert()
         .success();
 
     // Lock file should no longer contain that extension
-    let lock_content = fs::read_to_string(dir.path().join("specforge.lock")).unwrap();
+    let lock_content = fs::read_to_string(dir.root().join("specforge.lock")).unwrap();
     assert!(
         !lock_content.contains("@specforge/software"),
         "extension should be removed from lock file"
@@ -1339,13 +1288,12 @@ fn remove_extension_keywords_produce_e024() {
     verify = "Remove Extension: extension removal holds — extension_installed, filesystem_available, extension_entry_removed, spec_files_unchanged, extension_removed_emitted"
 )]
 fn remove_extension_contract() {
-    let dir = TempDir::new().unwrap();
-
+    let dir = TestProject::new().without_config();
     // Precondition: extension is installed
-    write_lock_file(dir.path(), &[("@specforge/software", "1.0.0", "registry")]);
+    write_lock_file(dir.root(), &[("@specforge/software", "1.0.0", "registry")]);
 
     let ext_dir = dir
-        .path()
+        .root()
         .join(".specforge")
         .join("extensions")
         .join("@specforge/software");
@@ -1353,15 +1301,14 @@ fn remove_extension_contract() {
     fs::write(ext_dir.join("extension.wasm"), b"fake").unwrap();
 
     // Act
-    specforge_cmd()
-        .args(["remove", "@specforge/software", "--path"])
-        .arg(dir.path())
+    Cli::on(&dir)
+        .command(&["remove", "@specforge/software"])
         .assert()
         .success();
 
     // Postcondition: entry removed from lock file
     let lock: serde_json::Value =
-        serde_json::from_str(&fs::read_to_string(dir.path().join("specforge.lock")).unwrap())
+        serde_json::from_str(&fs::read_to_string(dir.root().join("specforge.lock")).unwrap())
             .unwrap();
     assert_eq!(
         lock["entries"].as_array().unwrap().len(),
@@ -1423,17 +1370,16 @@ fn enabled_extensions(dir: &std::path::Path) -> Vec<String> {
     verify = "removing an installed extension drops its specforge.json entry"
 )]
 fn remove_installed_extension_drops_its_config_entry() {
-    let dir = TempDir::new().unwrap();
-    project_with_installed(dir.path(), &[("@acme/base", &[])]);
+    let dir = TestProject::new().without_config();
+    project_with_installed(dir.root(), &[("@acme/base", &[])]);
 
-    specforge_cmd()
-        .args(["remove", "@acme/base", "--path"])
-        .arg(dir.path())
+    Cli::on(&dir)
+        .command(&["remove", "@acme/base"])
         .assert()
         .success();
 
-    assert_eq!(enabled_extensions(dir.path()), ["@specforge/software"]);
-    assert!(!dir.path().join(".specforge/extensions/@acme/base").exists());
+    assert_eq!(enabled_extensions(dir.root()), ["@specforge/software"]);
+    assert!(!dir.root().join(".specforge/extensions/@acme/base").exists());
 }
 
 #[specforge_test(
@@ -1441,16 +1387,15 @@ fn remove_installed_extension_drops_its_config_entry() {
     verify = "removing an extension another installed extension requires fails with E027 unless --force"
 )]
 fn remove_refuses_an_extension_another_requires() {
-    let dir = TempDir::new().unwrap();
+    let dir = TestProject::new().without_config();
     project_with_installed(
-        dir.path(),
+        dir.root(),
         &[("@acme/base", &[]), ("@acme/app", &["@acme/base"])],
     );
-    let lock_before = fs::read(dir.path().join("specforge.lock")).unwrap();
+    let lock_before = fs::read(dir.root().join("specforge.lock")).unwrap();
 
-    let out = specforge_cmd()
-        .args(["remove", "@acme/base", "--format", "json", "--path"])
-        .arg(dir.path())
+    let out = Cli::on(&dir)
+        .command(&["remove", "@acme/base", "--format", "json"])
         .output()
         .unwrap();
     assert!(!out.status.success());
@@ -1462,18 +1407,17 @@ fn remove_refuses_an_extension_another_requires() {
     );
     // Nothing changed.
     assert_eq!(
-        fs::read(dir.path().join("specforge.lock")).unwrap(),
+        fs::read(dir.root().join("specforge.lock")).unwrap(),
         lock_before
     );
-    assert!(enabled_extensions(dir.path()).contains(&"@acme/base".to_string()));
+    assert!(enabled_extensions(dir.root()).contains(&"@acme/base".to_string()));
 
-    specforge_cmd()
-        .args(["remove", "@acme/base", "--force", "--path"])
-        .arg(dir.path())
+    Cli::on(&dir)
+        .command(&["remove", "@acme/base", "--force"])
         .assert()
         .success();
     assert_eq!(
-        enabled_extensions(dir.path()),
+        enabled_extensions(dir.root()),
         ["@specforge/software", "@acme/app"]
     );
 }
@@ -1483,11 +1427,9 @@ fn remove_refuses_an_extension_another_requires() {
     verify = "specforge remove with no lock file reports error"
 )]
 fn remove_no_lock_file() {
-    let dir = TempDir::new().unwrap();
-
-    specforge_cmd()
-        .args(["remove", "@specforge/software", "--path"])
-        .arg(dir.path())
+    let dir = TestProject::new().without_config();
+    Cli::on(&dir)
+        .command(&["remove", "@specforge/software"])
         .assert()
         .failure()
         .stderr(predicates::str::contains("not installed"));
@@ -1498,13 +1440,11 @@ fn remove_no_lock_file() {
     verify = "specforge remove for non-existent extension reports error"
 )]
 fn remove_nonexistent_extension() {
-    let dir = TempDir::new().unwrap();
+    let dir = TestProject::new().without_config();
+    write_lock_file(dir.root(), &[("@specforge/software", "1.0.0", "registry")]);
 
-    write_lock_file(dir.path(), &[("@specforge/software", "1.0.0", "registry")]);
-
-    specforge_cmd()
-        .args(["remove", "@specforge/other", "--path"])
-        .arg(dir.path())
+    Cli::on(&dir)
+        .command(&["remove", "@specforge/other"])
         .assert()
         .failure()
         .stderr(predicates::str::contains("not installed"));
@@ -1516,11 +1456,11 @@ fn remove_nonexistent_extension() {
 
 #[test]
 fn new_extension_scaffolds_sdk_project() {
-    let dir = TempDir::new().unwrap();
-    let out = dir.path().join("out");
+    let dir = TestProject::new().without_config();
+    let out = dir.root().join("out");
 
-    let assert = specforge_cmd()
-        .args([
+    let assert = Cli::on(&dir)
+        .bare_command(&[
             "new",
             "--extension",
             "@you/my-ext",
@@ -1550,13 +1490,13 @@ fn new_extension_scaffolds_sdk_project() {
 
 #[test]
 fn new_extension_refuses_existing_directory() {
-    let dir = TempDir::new().unwrap();
-    let out = dir.path().join("out");
+    let dir = TestProject::new().without_config();
+    let out = dir.root().join("out");
     let project = out.join("dup");
     fs::create_dir_all(&project).unwrap();
 
-    let assert = specforge_cmd()
-        .args(["new", "--extension", "dup", "--dir", out.to_str().unwrap()])
+    let assert = Cli::on(&dir)
+        .bare_command(&["new", "--extension", "dup", "--dir", out.to_str().unwrap()])
         .output()
         .unwrap();
     assert!(!assert.status.success());
@@ -1592,26 +1532,25 @@ fn read_config(dir: &std::path::Path) -> serde_json::Value {
     verify = "add extension appends to extensions list"
 )]
 fn add_builtin_enables_it_in_specforge_json() {
-    let dir = TempDir::new().unwrap();
-    write_config_with_extensions(dir.path(), &["@specforge/software"]);
+    let dir = TestProject::new().without_config();
+    write_config_with_extensions(dir.root(), &["@specforge/software"]);
 
-    specforge_cmd()
-        .args(["add", "@specforge/product", "--path"])
-        .arg(dir.path())
+    Cli::on(&dir)
+        .command(&["add", "@specforge/product"])
         .assert()
         .success()
         .stdout(predicates::str::contains(
             "enabled builtin @specforge/product",
         ));
 
-    let config = read_config(dir.path());
+    let config = read_config(dir.root());
     assert_eq!(
         config["extensions"],
         serde_json::json!(["@specforge/software", "@specforge/product"])
     );
     assert_eq!(config["name"], "test-project", "other fields preserved");
     assert!(
-        !dir.path().join("specforge.lock").exists(),
+        !dir.root().join("specforge.lock").exists(),
         "builtins need no lock entry"
     );
 }
@@ -1622,31 +1561,29 @@ fn add_builtin_enables_it_in_specforge_json() {
 )]
 fn add_enables_required_peers_only() {
     // software's peer on product is optional: software alone is enabled.
-    let dir = TempDir::new().unwrap();
-    write_config_with_extensions(dir.path(), &[]);
-    specforge_cmd()
-        .args(["add", "@specforge/software", "--path"])
-        .arg(dir.path())
+    let dir = TestProject::new().without_config();
+    write_config_with_extensions(dir.root(), &[]);
+    Cli::on(&dir)
+        .command(&["add", "@specforge/software"])
         .assert()
         .success();
     assert_eq!(
-        read_config(dir.path())["extensions"],
+        read_config(dir.root())["extensions"],
         serde_json::json!(["@specforge/software"])
     );
 
     // cargo-test requires @specforge/testing: it is enabled first.
-    let dir = TempDir::new().unwrap();
-    write_config_with_extensions(dir.path(), &["@specforge/software"]);
-    specforge_cmd()
-        .args(["add", "@specforge/cargo-test", "--path"])
-        .arg(dir.path())
+    let dir = TestProject::new().without_config();
+    write_config_with_extensions(dir.root(), &["@specforge/software"]);
+    Cli::on(&dir)
+        .command(&["add", "@specforge/cargo-test"])
         .assert()
         .success()
         .stdout(predicates::str::contains(
             "enabled builtin @specforge/testing (required by @specforge/cargo-test)",
         ));
     assert_eq!(
-        read_config(dir.path())["extensions"],
+        read_config(dir.root())["extensions"],
         serde_json::json!([
             "@specforge/software",
             "@specforge/testing",
@@ -1660,18 +1597,17 @@ fn add_enables_required_peers_only() {
     verify = "add duplicate extension is a no-op with info message"
 )]
 fn add_enabled_builtin_is_a_no_op() {
-    let dir = TempDir::new().unwrap();
-    write_config_with_extensions(dir.path(), &["@specforge/software"]);
+    let dir = TestProject::new().without_config();
+    write_config_with_extensions(dir.root(), &["@specforge/software"]);
 
-    specforge_cmd()
-        .args(["add", "@specforge/software@latest", "--path"])
-        .arg(dir.path())
+    Cli::on(&dir)
+        .command(&["add", "@specforge/software@latest"])
         .assert()
         .success()
         .stdout(predicates::str::contains("already enabled"));
 
     assert_eq!(
-        read_config(dir.path())["extensions"],
+        read_config(dir.root())["extensions"],
         serde_json::json!(["@specforge/software"])
     );
 }
@@ -1681,11 +1617,9 @@ fn add_enabled_builtin_is_a_no_op() {
     verify = "add extension with no specforge.json rejects with error and exit code 1"
 )]
 fn add_builtin_without_project_fails() {
-    let dir = TempDir::new().unwrap();
-
-    specforge_cmd()
-        .args(["add", "@specforge/product", "--path"])
-        .arg(dir.path())
+    let dir = TestProject::new().without_config();
+    Cli::on(&dir)
+        .command(&["add", "@specforge/product"])
         .assert()
         .code(1)
         .stderr(predicates::str::contains("specforge init"));
@@ -1696,14 +1630,12 @@ fn add_builtin_without_project_fails() {
     verify = "list shows all installed extensions"
 )]
 fn extensions_lists_enabled_builtins() {
-    let dir = TempDir::new().unwrap();
-    write_config_with_extensions(dir.path(), &["@specforge/software", "@specforge/formal"]);
-    write_lock_file(dir.path(), &[("@acme/widget", "1.0.0", "registry")]);
+    let dir = TestProject::new().without_config();
+    write_config_with_extensions(dir.root(), &["@specforge/software", "@specforge/formal"]);
+    write_lock_file(dir.root(), &[("@acme/widget", "1.0.0", "registry")]);
 
-    let output = specforge_cmd()
-        .args(["extensions", "--path"])
-        .arg(dir.path())
-        .args(["--format", "json"])
+    let output = Cli::on(&dir)
+        .command(&["extensions", "--format", "json"])
         .output()
         .unwrap();
     assert!(output.status.success());
@@ -1732,22 +1664,20 @@ fn extensions_lists_enabled_builtins() {
     verify = "extension is removed from extensions list"
 )]
 fn remove_builtin_disables_it() {
-    let dir = TempDir::new().unwrap();
-    write_config_with_extensions(dir.path(), &["@specforge/software", "@specforge/product"]);
+    let dir = TestProject::new().without_config();
+    write_config_with_extensions(dir.root(), &["@specforge/software", "@specforge/product"]);
 
-    specforge_cmd()
-        .args(["remove", "@specforge/product", "--path"])
-        .arg(dir.path())
+    Cli::on(&dir)
+        .command(&["remove", "@specforge/product"])
         .assert()
         .success();
     assert_eq!(
-        read_config(dir.path())["extensions"],
+        read_config(dir.root())["extensions"],
         serde_json::json!(["@specforge/software"])
     );
 
-    specforge_cmd()
-        .args(["remove", "@specforge/product", "--path"])
-        .arg(dir.path())
+    Cli::on(&dir)
+        .command(&["remove", "@specforge/product"])
         .assert()
         .code(1)
         .stderr(predicates::str::contains("not installed"));
@@ -1758,23 +1688,21 @@ fn remove_builtin_disables_it() {
     verify = "list includes entity counts and entity types"
 )]
 fn extensions_list_each_extensions_kinds_and_entities() {
-    let dir = TempDir::new().unwrap();
+    let dir = TestProject::new().without_config();
     fs::write(
-        dir.path().join("specforge.json"),
+        dir.root().join("specforge.json"),
         r#"{"name":"p","version":"0.1.0","extensions":["@specforge/software","@specforge/product"]}"#,
     )
     .unwrap();
-    fs::create_dir_all(dir.path().join("spec")).unwrap();
+    fs::create_dir_all(dir.root().join("spec")).unwrap();
     fs::write(
-        dir.path().join("spec/app.spec"),
+        dir.root().join("spec/app.spec"),
         "behavior login \"L\" {\n  contract \"c\"\n}\n\nbehavior logout \"O\" {\n  contract \"c\"\n}\n\nfeature auth \"A\" {\n  behaviors [login, logout]\n}\n",
     )
     .unwrap();
 
-    let output = specforge_cmd()
-        .args(["extensions", "--path"])
-        .arg(dir.path())
-        .args(["--format", "json"])
+    let output = Cli::on(&dir)
+        .command(&["extensions", "--format", "json"])
         .output()
         .unwrap();
 
@@ -1811,11 +1739,7 @@ fn extensions_list_each_extensions_kinds_and_entities() {
     );
     assert_eq!(product["entity_count"], 1, "{product}");
 
-    let human = specforge_cmd()
-        .args(["extensions", "--path"])
-        .arg(dir.path())
-        .output()
-        .unwrap();
+    let human = Cli::on(&dir).command(&["extensions"]).output().unwrap();
     let text = String::from_utf8_lossy(&human.stdout);
     assert!(
         text.contains("@specforge/software v1.0.0 (builtin): 2 entities"),
@@ -1833,13 +1757,12 @@ fn extensions_list_each_extensions_kinds_and_entities() {
     verify = "a removal with an unreadable specforge.json is config_invalid and changes nothing"
 )]
 fn removing_a_builtin_with_an_unreadable_config_is_config_invalid() {
-    let dir = TempDir::new().unwrap();
+    let dir = TestProject::new().without_config();
     let config = r#"{ "extensions": ["@specforge/product",  }"#;
-    fs::write(dir.path().join("specforge.json"), config).unwrap();
+    fs::write(dir.root().join("specforge.json"), config).unwrap();
 
-    let output = specforge_cmd()
-        .args(["remove", "@specforge/product", "--format", "json", "--path"])
-        .arg(dir.path())
+    let output = Cli::on(&dir)
+        .command(&["remove", "@specforge/product", "--format", "json"])
         .output()
         .unwrap();
 
@@ -1847,7 +1770,7 @@ fn removing_a_builtin_with_an_unreadable_config_is_config_invalid() {
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(json["code"], "config_invalid", "{json}");
     assert_eq!(
-        fs::read_to_string(dir.path().join("specforge.json")).unwrap(),
+        fs::read_to_string(dir.root().join("specforge.json")).unwrap(),
         config
     );
 }
@@ -1860,20 +1783,18 @@ fn removing_a_builtin_with_an_unreadable_config_is_config_invalid() {
 )]
 fn add_update_and_remove_refuse_an_unusable_config_alike() {
     for config in UNUSABLE_CONFIGS {
-        let dir = TempDir::new().unwrap();
-        fs::write(dir.path().join("specforge.json"), config).unwrap();
+        let dir = TestProject::new().without_config();
+        fs::write(dir.root().join("specforge.json"), config).unwrap();
         // A lock, so `update` has something it could touch.
         fs::write(
-            dir.path().join("specforge.lock"),
+            dir.root().join("specforge.lock"),
             r#"{"lockfile_version":1,"entries":[{"name":"@acme/x","version":"1.0.0","source":"registry","wasm_hash":"h"}]}"#,
         )
         .unwrap();
-        let before = crate::support::written::files_under(dir.path());
+        let before = crate::support::written::files_under(dir.root());
         // What the compile reports as E069 for it.
-        let check = specforge_cmd()
-            .args(["check", "--format", "json"])
-            .arg("--path")
-            .arg(dir.path())
+        let check = Cli::on(&dir)
+            .command(&["check", "--format", "json"])
             .output()
             .unwrap();
         let found: Vec<serde_json::Value> = serde_json::from_slice(&check.stdout).unwrap();
@@ -1885,12 +1806,9 @@ fn add_update_and_remove_refuse_an_unusable_config_alike() {
             vec!["update"],
             vec!["remove", "@acme/x"],
         ] {
-            let output = specforge_cmd()
-                .args(&args)
-                .args(["--format", "json", "--path"])
-                .arg(dir.path())
-                .output()
-                .unwrap();
+            let mut argv = args.clone();
+            argv.extend(["--format", "json"]);
+            let output = Cli::on(&dir).command(&argv).output().unwrap();
 
             assert_eq!(
                 output.status.code(),
@@ -1905,7 +1823,7 @@ fn add_update_and_remove_refuse_an_unusable_config_alike() {
                 "{config}: {args:?}: E069 says `{reason}`, the refusal `{json}`"
             );
             assert_eq!(
-                crate::support::written::files_under(dir.path()),
+                crate::support::written::files_under(dir.root()),
                 before,
                 "{config}: {args:?} wrote"
             );
@@ -1923,12 +1841,11 @@ fn add_update_and_remove_refuse_an_unusable_config_alike() {
     verify = "list includes entity counts and entity types"
 )]
 fn a_legacy_entry_that_did_not_load_is_listed_with_its_written_version() {
-    let dir = TempDir::new().unwrap();
-    write_config_with_extensions(dir.path(), &["@specforge/product", "@acme/missing@1.2.0"]);
+    let dir = TestProject::new().without_config();
+    write_config_with_extensions(dir.root(), &["@specforge/product", "@acme/missing@1.2.0"]);
 
-    let output = specforge_cmd()
-        .args(["extensions", "--format", "json", "--path"])
-        .arg(dir.path())
+    let output = Cli::on(&dir)
+        .command(&["extensions", "--format", "json"])
         .output()
         .unwrap();
 
@@ -1951,9 +1868,8 @@ fn a_legacy_entry_that_did_not_load_is_listed_with_its_written_version() {
     verify = "doctor in a directory without specforge.json reports config_missing as a warning"
 )]
 fn doctor_without_specforge_json_says_so() {
-    let dir = TempDir::new().unwrap();
-
-    let (report, code) = doctor_json(dir.path());
+    let dir = TestProject::new().without_config();
+    let (report, code) = doctor_json(&dir);
 
     assert_eq!(code, 0, "{report}");
     assert_eq!(report["ok"], true, "{report}");
@@ -1970,7 +1886,7 @@ fn doctor_without_specforge_json_says_so() {
         "{report}"
     );
 
-    let (human, code) = doctor_human(dir.path());
+    let (human, code) = doctor_human(&dir);
     assert_eq!(code, 0, "{human}");
     assert!(
         human.contains("[WARN] [config_missing] specforge.json at "),
@@ -1986,15 +1902,15 @@ fn doctor_without_specforge_json_says_so() {
     verify = "a lock file that cannot be read is an error finding naming E033"
 )]
 fn doctor_reports_a_corrupt_lock_as_an_error_finding() {
-    let dir = TempDir::new().unwrap();
+    let dir = TestProject::new().without_config();
     fs::write(
-        dir.path().join("specforge.json"),
+        dir.root().join("specforge.json"),
         r#"{"name":"t","version":"0.1.0","extensions":[]}"#,
     )
     .unwrap();
-    fs::write(dir.path().join("specforge.lock"), "not valid json {{{").unwrap();
+    fs::write(dir.root().join("specforge.lock"), "not valid json {{{").unwrap();
 
-    let (report, code) = doctor_json(dir.path());
+    let (report, code) = doctor_json(&dir);
 
     assert_eq!(code, 1, "{report}");
     let findings = report["findings"].as_array().unwrap();
@@ -2013,7 +1929,7 @@ fn doctor_reports_a_corrupt_lock_as_an_error_finding() {
     assert_eq!(report["installed_count"], 0, "{report}");
     assert_eq!(findings[0]["about"], "lock", "{report}");
 
-    let (human, code) = doctor_human(dir.path());
+    let (human, code) = doctor_human(&dir);
     assert_eq!(code, 1, "{human}");
     assert!(
         human.contains("[ERROR] [lock_unreadable] corrupt lock file at"),
@@ -2039,16 +1955,12 @@ const UNUSABLE_CONFIGS: [&str; 3] = [
 )]
 fn an_unusable_config_fails_check_with_e069() {
     for config in UNUSABLE_CONFIGS {
-        let dir = TempDir::new().unwrap();
-        fs::write(dir.path().join("specforge.json"), config).unwrap();
-        fs::write(dir.path().join("main.spec"), "feature f \"F\" {\n}\n").unwrap();
+        let dir = TestProject::new().without_config();
+        fs::write(dir.root().join("specforge.json"), config).unwrap();
+        fs::write(dir.root().join("main.spec"), "feature f \"F\" {\n}\n").unwrap();
 
         for strict in [false, true] {
-            let mut command = specforge_cmd();
-            command
-                .args(["check", "--format", "json"])
-                .arg("--path")
-                .arg(dir.path());
+            let mut command = Cli::on(&dir).command(&["check", "--format", "json"]);
             if strict {
                 command.arg("--strict");
             }
@@ -2074,12 +1986,10 @@ fn an_unusable_config_fails_check_with_e069() {
     }
 
     // The JSON error names its line and column.
-    let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("specforge.json"), UNUSABLE_CONFIGS[0]).unwrap();
-    let output = specforge_cmd()
-        .args(["check", "--format", "json"])
-        .arg("--path")
-        .arg(dir.path())
+    let dir = TestProject::new().without_config();
+    fs::write(dir.root().join("specforge.json"), UNUSABLE_CONFIGS[0]).unwrap();
+    let output = Cli::on(&dir)
+        .command(&["check", "--format", "json"])
         .output()
         .unwrap();
     let found: Vec<serde_json::Value> = serde_json::from_slice(&output.stdout).unwrap();
@@ -2095,26 +2005,17 @@ fn an_unusable_config_fails_check_with_e069() {
 use crate::support::written::{changed_since, files_under, files_written};
 
 /// `specforge <args> --path <dir> --format json`: its JSON output.
-fn json_of(args: &[&str], dir: &std::path::Path) -> serde_json::Value {
-    let output = specforge_cmd()
-        .args(args)
-        .arg("--path")
-        .arg(dir)
-        .args(["--format", "json"])
-        .output()
-        .unwrap();
+fn json_of(args: &[&str], dir: &TestProject) -> serde_json::Value {
+    let mut argv = args.to_vec();
+    argv.extend(["--format", "json"]);
+    let output = Cli::on(dir).command(&argv).output().unwrap();
     assert!(output.status.success(), "{args:?}: {output:?}");
     serde_json::from_slice(&output.stdout).unwrap()
 }
 
 /// A project enabling nothing, and the greet blob beside it (outside it).
-fn empty_project() -> (TempDir, TempDir, String) {
-    let dir = TempDir::new().unwrap();
-    fs::write(
-        dir.path().join("specforge.json"),
-        r#"{"name":"t","version":"0.1.0","extensions":[]}"#,
-    )
-    .unwrap();
+fn empty_project() -> (TestProject, TempDir, String) {
+    let dir = TestProject::new();
     let blobs = TempDir::new().unwrap();
     let wasm = blobs.path().join("greet.wasm");
     fs::write(&wasm, crate::support::registry::greet_wasm()).unwrap();
@@ -2128,15 +2029,15 @@ fn empty_project() -> (TempDir, TempDir, String) {
 )]
 fn add_json_lists_the_files_it_wrote() {
     let (dir, _blobs, wasm) = empty_project();
-    let root = dir.path();
+    let root = dir.root();
 
     let before = files_under(root);
-    let builtin = json_of(&["add", "@specforge/product"], root);
+    let builtin = json_of(&["add", "@specforge/product"], &dir);
     assert_eq!(files_written(&builtin), ["specforge.json"]);
     assert_eq!(changed_since(root, &before), files_written(&builtin));
 
     let before = files_under(root);
-    let installed = json_of(&["add", &wasm], root);
+    let installed = json_of(&["add", &wasm], &dir);
     assert_eq!(
         files_written(&installed),
         [
@@ -2149,11 +2050,11 @@ fn add_json_lists_the_files_it_wrote() {
 
     // Already there: nothing written.
     let before = files_under(root);
-    let again = json_of(&["add", &wasm], root);
+    let again = json_of(&["add", &wasm], &dir);
     assert_eq!(again["added"][0]["action"], "already_present", "{again}");
     assert_eq!(files_written(&again), Vec::<String>::new());
     assert_eq!(changed_since(root, &before), Vec::<String>::new());
-    let enabled = json_of(&["add", "@specforge/product"], root);
+    let enabled = json_of(&["add", "@specforge/product"], &dir);
     assert_eq!(files_written(&enabled), Vec::<String>::new());
 }
 
@@ -2163,17 +2064,15 @@ fn add_json_lists_the_files_it_wrote() {
 )]
 fn add_with_several_specifiers_is_one_change() {
     let (dir, _blobs, wasm) = empty_project();
-    let root = dir.path();
+    let root = dir.root();
 
     // One refused: nothing written, the refusal naming it, in both formats.
     let before = files_under(root);
     let missing = root.join("missing.wasm");
     let missing = missing.to_str().unwrap();
     for format in ["human", "json"] {
-        let output = specforge_cmd()
-            .args(["add", "@specforge/product", missing, "--path"])
-            .arg(root)
-            .args(["--format", format])
+        let output = Cli::on(&dir)
+            .command(&["add", "@specforge/product", missing, "--format", format])
             .output()
             .unwrap();
         assert!(!output.status.success(), "{format}: {output:?}");
@@ -2192,7 +2091,7 @@ fn add_with_several_specifiers_is_one_change() {
     // All accepted: one entry per specifier, the files of the whole set.
     let added = json_of(
         &["add", "@specforge/product", &wasm, "@specforge/product"],
-        root,
+        &dir,
     );
     let actions: Vec<&str> = added["added"]
         .as_array()
@@ -2213,9 +2112,8 @@ fn add_with_several_specifiers_is_one_change() {
     assert_eq!(changed_since(root, &before), files_written(&added));
 
     // The human surface tells each specifier on its own line.
-    let output = specforge_cmd()
-        .args(["add", "@specforge/product", &wasm, "--path"])
-        .arg(root)
+    let output = Cli::on(&dir)
+        .command(&["add", "@specforge/product", &wasm])
         .output()
         .unwrap();
     assert!(output.status.success(), "{output:?}");
@@ -2227,11 +2125,7 @@ fn add_with_several_specifiers_is_one_change() {
     );
 
     // `add` without a specifier is a usage error.
-    let output = specforge_cmd()
-        .args(["add", "--path"])
-        .arg(root)
-        .output()
-        .unwrap();
+    let output = Cli::on(&dir).command(&["add"]).output().unwrap();
     assert!(!output.status.success(), "{output:?}");
 }
 
@@ -2241,12 +2135,12 @@ fn add_with_several_specifiers_is_one_change() {
 )]
 fn remove_json_lists_the_files_it_wrote() {
     let (dir, _blobs, wasm) = empty_project();
-    let root = dir.path();
-    json_of(&["add", "@specforge/product"], root);
-    json_of(&["add", &wasm], root);
+    let root = dir.root();
+    json_of(&["add", "@specforge/product"], &dir);
+    json_of(&["add", &wasm], &dir);
 
     let before = files_under(root);
-    let installed = json_of(&["remove", "@sdk/greet"], root);
+    let installed = json_of(&["remove", "@sdk/greet"], &dir);
     assert_eq!(
         files_written(&installed),
         [
@@ -2258,28 +2152,14 @@ fn remove_json_lists_the_files_it_wrote() {
     assert_eq!(changed_since(root, &before), files_written(&installed));
 
     let before = files_under(root);
-    let builtin = json_of(&["remove", "@specforge/product"], root);
+    let builtin = json_of(&["remove", "@specforge/product"], &dir);
     assert_eq!(files_written(&builtin), ["specforge.json"]);
     assert_eq!(changed_since(root, &before), files_written(&builtin));
 }
 
 /// `specforge.doctor`'s reply over an in-process MCP server serving `root`.
-fn mcp_doctor_json(root: &std::path::Path) -> serde_json::Value {
-    let mut server = specforge_mcp::McpServer::with_project_root(root.to_path_buf()).with_solver(
-        std::sync::Arc::new(specforge_ops::testing::ScriptedSolver::ready()),
-    );
-    let init = serde_json::json!({"jsonrpc": "2.0", "id": 0, "method": "initialize", "params": {}});
-    server.handle_message(&init.to_string());
-    let call = serde_json::json!({
-        "jsonrpc": "2.0", "id": 1, "method": "tools/call",
-        "params": {"name": "specforge.doctor", "arguments": {}}
-    });
-    let reply: serde_json::Value =
-        serde_json::from_str(&server.handle_message(&call.to_string()).unwrap()).unwrap();
-    let text = reply["result"]["content"][0]["text"]
-        .as_str()
-        .unwrap_or_else(|| panic!("{reply}"));
-    serde_json::from_str(text).unwrap_or_else(|e| panic!("{e}: {text}"))
+fn mcp_doctor_json(project: TestProject) -> serde_json::Value {
+    specforge_mcp::testing::Served::rooted(project).tool("specforge.doctor", serde_json::json!({}))
 }
 
 /// The sorted keys of a JSON object.
@@ -2310,12 +2190,12 @@ fn findings_about<'a>(report: &'a serde_json::Value, about: &str) -> Vec<&'a ser
     verify = "doctor states each finding once, saying what it is about, and its verdict; the CLI and MCP return one report"
 )]
 fn doctor_json_is_one_report_on_both_surfaces() {
-    let dir = TempDir::new().unwrap();
-    write_config_with_extensions(dir.path(), &["@specforge/software", "@acme/missing"]);
+    let dir = TestProject::new().without_config();
+    write_config_with_extensions(dir.root(), &["@specforge/software", "@acme/missing"]);
 
-    let (cli, code) = doctor_json(dir.path());
+    let (cli, code) = doctor_json(&dir);
     assert_eq!(code, 1, "{cli}");
-    let mcp = mcp_doctor_json(dir.path());
+    let mcp = mcp_doctor_json(dir);
 
     // The CLI adds the user's credentials; nothing else differs in shape.
     let mut expected = keys_of(&mcp);
@@ -2355,25 +2235,23 @@ fn doctor_json_is_one_report_on_both_surfaces() {
     verify = "a local crate directory installs the component its crate builds"
 )]
 fn add_of_a_crate_directory_installs_its_component() {
-    let dir = TempDir::new().unwrap();
-    specforge_cmd()
-        .args(["init", "--name", "demo"])
-        .current_dir(dir.path())
+    let dir = TestProject::new().without_config();
+    Cli::on(&dir)
+        .bare_command(&["init", "--name", "demo"])
         .assert()
         .success();
-    let release = dir.path().join("myext/target/wasm32-wasip2/release");
+    let release = dir.root().join("myext/target/wasm32-wasip2/release");
     fs::create_dir_all(&release).unwrap();
     fs::write(
-        dir.path().join("myext/Cargo.toml"),
+        dir.root().join("myext/Cargo.toml"),
         "[package]\nname = \"my-ext\"\nversion = \"0.1.0\"\n",
     )
     .unwrap();
     let greet = specforge_component::committed::GREET.path();
     fs::copy(greet, release.join("my_ext.wasm")).unwrap();
 
-    let out = specforge_cmd()
-        .args(["add", "./myext", "--format", "json"])
-        .current_dir(dir.path())
+    let out = Cli::on(&dir)
+        .bare_command(&["add", "./myext", "--format", "json"])
         .output()
         .unwrap();
 

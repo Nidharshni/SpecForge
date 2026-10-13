@@ -3,27 +3,16 @@
 use std::fs;
 use std::path::Path;
 
-use assert_cmd::Command;
+use crate::support::{Cli, TestProject};
 use serde_json::Value;
 use specforge_test_macros::test as specforge_test;
-use tempfile::TempDir;
-
-#[allow(deprecated)]
-fn specforge_cmd() -> Command {
-    Command::cargo_bin("specforge").unwrap()
-}
 
 /// Scaffold a minimal project with the formal and testing extensions
 /// installed and the given main.spec content.
-fn project(spec: &str) -> TempDir {
-    let dir = TempDir::new().unwrap();
-    fs::write(
-        dir.path().join("specforge.json"),
-        r#"{"extensions": ["@specforge/formal", "@specforge/testing"]}"#,
-    )
-    .unwrap();
-    fs::write(dir.path().join("main.spec"), spec).unwrap();
-    dir
+fn project(spec: &str) -> TestProject {
+    TestProject::new()
+        .raw_config(r#"{"extensions": ["@specforge/formal", "@specforge/testing"]}"#)
+        .file("main.spec", spec)
 }
 
 /// The coverage pass report (owned by @specforge/testing, ADR 0002).
@@ -36,18 +25,10 @@ fn coverage(doc: &serde_json::Value) -> &serde_json::Value {
         .unwrap_or_else(|| panic!("no coverage pass in {doc}"))
 }
 
-fn json_body(dir: &TempDir, extra_args: &[&str]) -> (serde_json::Value, i32) {
-    let output = specforge_cmd()
-        .args([
-            "analyze",
-            "--path",
-            dir.path().to_str().unwrap(),
-            "--format",
-            "json",
-        ])
-        .args(extra_args)
-        .output()
-        .unwrap();
+fn json_body(dir: &TestProject, extra_args: &[&str]) -> (serde_json::Value, i32) {
+    let mut args = vec!["analyze", "--format", "json"];
+    args.extend(extra_args);
+    let output = Cli::on(dir).command(&args).output().unwrap();
     let doc: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     (doc, output.status.code().unwrap_or(-1))
 }
@@ -96,18 +77,14 @@ fn analyze_colours_findings_only_when_asked() {
     let dir =
         project("invariant bad \"Never verified\" {\n  guarantee \"nothing\"\n  risk high\n}\n");
     let stdout = |no_color: Option<&str>, force: Option<&str>| {
-        let mut cmd = specforge_cmd();
-        cmd.env_remove("NO_COLOR").env_remove("CLICOLOR_FORCE");
+        let mut cli = Cli::on(&dir);
         if let Some(v) = no_color {
-            cmd.env("NO_COLOR", v);
+            cli = cli.env("NO_COLOR", v);
         }
         if let Some(v) = force {
-            cmd.env("CLICOLOR_FORCE", v);
+            cli = cli.env("CLICOLOR_FORCE", v);
         }
-        let output = cmd
-            .args(["analyze", "--path", dir.path().to_str().unwrap()])
-            .output()
-            .unwrap();
+        let output = cli.command(&["analyze"]).output().unwrap();
         assert_eq!(output.status.code(), Some(1));
         String::from_utf8(output.stdout).unwrap()
     };
@@ -141,13 +118,8 @@ fn analyze_low_risk_warning_promoted_by_strict() {
 #[test]
 fn analyze_unknown_pass_exits_two() {
     let dir = project("");
-    let output = specforge_cmd()
-        .args([
-            "analyze",
-            "nonsense",
-            "--path",
-            dir.path().to_str().unwrap(),
-        ])
+    let output = Cli::on(&dir)
+        .command(&["analyze", "nonsense"])
         .output()
         .unwrap();
     assert_eq!(output.status.code(), Some(2));
@@ -158,15 +130,8 @@ fn analyze_single_pass_selection() {
     let dir = project(
         "invariant only \"Only coverage\" {\n  guarantee \"g\"\n  risk low\n  verify unit \"u1\"\n}\n",
     );
-    let output = specforge_cmd()
-        .args([
-            "analyze",
-            "coverage",
-            "--path",
-            dir.path().to_str().unwrap(),
-            "--format",
-            "json",
-        ])
+    let output = Cli::on(&dir)
+        .command(&["analyze", "coverage", "--format", "json"])
         .output()
         .unwrap();
     assert_eq!(output.status.code(), Some(0));
@@ -230,25 +195,17 @@ behavior keeper "Keeper" {
     verify = "invariant with incoming reference edge passes"
 )]
 fn check_reports_an_unreferenced_invariant_as_w003() {
-    let dir = TempDir::new().unwrap();
-    fs::write(
-        dir.path().join("specforge.json"),
-        r#"{"extensions": ["@specforge/software"]}"#,
-    )
-    .unwrap();
-    fs::write(
-        dir.path().join("main.spec"),
+    let dir = TestProject::new().raw_config(r#"{"extensions": ["@specforge/software"]}"#);
+    dir.write(
+        "main.spec",
         concat!(
             "invariant held \"Held\" {\n  guarantee \"g\"\n}\n",
             "invariant orphan \"Orphan\" {\n  guarantee \"g\"\n}\n",
             "behavior keeper \"Keeper\" {\n  contract \"c\"\n  invariants [held]\n}\n",
         ),
-    )
-    .unwrap();
-    let output = specforge_cmd()
-        .args(["check", "--format=json"])
-        .arg("--path")
-        .arg(dir.path())
+    );
+    let output = Cli::on(&dir)
+        .command(&["check", "--format=json"])
         .output()
         .unwrap();
     let diagnostics: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
@@ -291,17 +248,16 @@ fn analyze_discharge_intent_and_proof() {
 
     // Proof: a failing test in the recorded results is an error.
     let analyze_with = |report: serde_json::Value| {
-        fs::write(dir.path().join("report.json"), report.to_string()).unwrap();
-        let output = specforge_cmd()
-            .args([
+        dir.write("report.json", report.to_string());
+        let report_path = dir.root().join("report.json");
+        let output = Cli::on(&dir)
+            .command(&[
                 "analyze",
                 "coverage",
-                "--path",
-                dir.path().to_str().unwrap(),
                 "--format",
                 "json",
                 "--test-results",
-                dir.path().join("report.json").to_str().unwrap(),
+                report_path.to_str().unwrap(),
             ])
             .output()
             .unwrap();
@@ -353,7 +309,7 @@ fn analyze_reports_unproven_and_undeclared_obligations() {
             {"name": "hash", "status": "passed", "verify": "stores a hashed pasword"}
         ]}}
     });
-    fs::write(dir.path().join("specforge-report.json"), report.to_string()).unwrap();
+    dir.write("specforge-report.json", report.to_string());
     let (doc, code) = json_body(&dir, &[]);
     assert_eq!(code, 0, "warnings only: {doc}");
     let findings = coverage(&doc)["findings"].as_array().unwrap().clone();
@@ -375,14 +331,9 @@ fn analyze_reports_unproven_and_undeclared_obligations() {
 
 #[test]
 fn analyze_dispatches_extension_compiler_pass() {
-    let dir = TempDir::new().unwrap();
-    fs::write(
-        dir.path().join("specforge.json"),
-        r#"{"extensions": ["@specforge/formal"]}"#,
-    )
-    .unwrap();
-    fs::write(
-        dir.path().join("main.spec"),
+    let dir = TestProject::new().raw_config(r#"{"extensions": ["@specforge/formal"]}"#);
+    dir.write(
+        "main.spec",
         concat!(
             "behavior obligated \"Obligated\" {\n",
             "  title \"Obligated\"\n",
@@ -392,17 +343,10 @@ fn analyze_dispatches_extension_compiler_pass() {
             "  verify unit \"runs\"\n",
             "}\n",
         ),
-    )
-    .unwrap();
+    );
 
-    let output = specforge_cmd()
-        .args([
-            "analyze",
-            "--path",
-            dir.path().to_str().unwrap(),
-            "--format",
-            "json",
-        ])
+    let output = Cli::on(&dir)
+        .command(&["analyze", "--format", "json"])
         .output()
         .unwrap();
     let doc: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
@@ -426,14 +370,10 @@ fn analyze_dispatches_extension_compiler_pass() {
 
 #[test]
 fn analyze_event_graph_flags_unconsumed_events() {
-    let dir = TempDir::new().unwrap();
-    fs::write(
-        dir.path().join("specforge.json"),
-        r#"{"extensions": ["@specforge/formal", "@specforge/software"]}"#,
-    )
-    .unwrap();
-    fs::write(
-        dir.path().join("main.spec"),
+    let dir = TestProject::new()
+        .raw_config(r#"{"extensions": ["@specforge/formal", "@specforge/software"]}"#);
+    dir.write(
+        "main.spec",
         concat!(
             "event tick \"Tick\" {\n",
             "  title \"Tick\"\n",
@@ -446,17 +386,10 @@ fn analyze_event_graph_flags_unconsumed_events() {
             "  verify unit \"emits tick\"\n",
             "}\n",
         ),
-    )
-    .unwrap();
+    );
 
-    let output = specforge_cmd()
-        .args([
-            "analyze",
-            "--path",
-            dir.path().to_str().unwrap(),
-            "--format",
-            "json",
-        ])
+    let output = Cli::on(&dir)
+        .command(&["analyze", "--format", "json"])
         .output()
         .unwrap();
     let doc: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
@@ -558,14 +491,11 @@ fn analyze_refinement_that_drops_an_ensures_condition_is_e031() {
 /// declared by @specforge/formal on @specforge/software behaviors.
 #[test]
 fn refines_and_abstract_fields_drive_layering_end_to_end() {
-    let dir = TempDir::new().unwrap();
-    fs::write(
-        dir.path().join("specforge.json"),
+    let dir = TestProject::new().raw_config(
         r#"{"extensions": ["@specforge/formal", "@specforge/software", "@specforge/testing"]}"#,
-    )
-    .unwrap();
-    fs::write(
-        dir.path().join("main.spec"),
+    );
+    dir.write(
+        "main.spec",
         concat!(
             "behavior provision \"Provision\" {\n",
             "  title \"Provision\"\n",
@@ -594,16 +524,10 @@ fn refines_and_abstract_fields_drive_layering_end_to_end() {
             "  abstract true\n",
             "}\n",
         ),
-    )
-    .unwrap();
+    );
 
-    let check = specforge_cmd()
-        .args([
-            "check",
-            "--path",
-            dir.path().to_str().unwrap(),
-            "--format=json",
-        ])
+    let check = Cli::on(&dir)
+        .command(&["check", "--format=json"])
         .output()
         .unwrap();
     let diagnostics: Vec<serde_json::Value> = serde_json::from_slice(&check.stdout).unwrap();
@@ -662,22 +586,11 @@ fn analyze_orders_extension_passes_by_constraints() {
     // The formal extension declares its passes shuffled (event_graph_analyze
     // first); the host must order them by the after-constraints:
     // condition_check -> layering_verify -> event_graph_analyze.
-    let dir = TempDir::new().unwrap();
-    fs::write(
-        dir.path().join("specforge.json"),
-        r#"{"extensions": ["@specforge/formal"]}"#,
-    )
-    .unwrap();
-    fs::write(dir.path().join("main.spec"), "").unwrap();
+    let dir = TestProject::new().raw_config(r#"{"extensions": ["@specforge/formal"]}"#);
+    dir.write("main.spec", "");
 
-    let output = specforge_cmd()
-        .args([
-            "analyze",
-            "--path",
-            dir.path().to_str().unwrap(),
-            "--format",
-            "json",
-        ])
+    let output = Cli::on(&dir)
+        .command(&["analyze", "--format", "json"])
         .output()
         .unwrap();
     let doc: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
@@ -705,14 +618,9 @@ fn analyze_orders_extension_passes_by_constraints() {
 fn analyze_prove_flags_unsatisfiable_constraint() {
     crate::toolchain::require_z3();
 
-    let dir = TempDir::new().unwrap();
-    fs::write(
-        dir.path().join("specforge.json"),
-        r#"{"extensions": ["@specforge/governance"]}"#,
-    )
-    .unwrap();
-    fs::write(
-        dir.path().join("main.spec"),
+    let dir = TestProject::new().raw_config(r#"{"extensions": ["@specforge/governance"]}"#);
+    dir.write(
+        "main.spec",
         concat!(
             "constraint impossible \"Impossible Bounds\" {\n",
             "  description \"Bounds that can never both hold\"\n",
@@ -724,18 +632,10 @@ fn analyze_prove_flags_unsatisfiable_constraint() {
             "  \"\"\"\n",
             "}\n",
         ),
-    )
-    .unwrap();
+    );
 
-    let output = specforge_cmd()
-        .args([
-            "analyze",
-            "--prove",
-            "--path",
-            dir.path().to_str().unwrap(),
-            "--format",
-            "json",
-        ])
+    let output = Cli::on(&dir)
+        .command(&["analyze", "--prove", "--format", "json"])
         .output()
         .unwrap();
     assert_eq!(output.status.code(), Some(1), "unsatisfiable must exit 1");
@@ -761,14 +661,9 @@ fn analyze_prove_flags_unsatisfiable_constraint() {
 #[test]
 fn analyze_prove_satisfiable_constraint_exits_zero() {
     crate::toolchain::require_z3();
-    let dir = TempDir::new().unwrap();
-    fs::write(
-        dir.path().join("specforge.json"),
-        r#"{"extensions": ["@specforge/governance"]}"#,
-    )
-    .unwrap();
-    fs::write(
-        dir.path().join("main.spec"),
+    let dir = TestProject::new().raw_config(r#"{"extensions": ["@specforge/governance"]}"#);
+    dir.write(
+        "main.spec",
         concat!(
             "constraint tight \"Tight But Possible\" {\n",
             "  description \"Bounds that can both hold\"\n",
@@ -780,18 +675,10 @@ fn analyze_prove_satisfiable_constraint_exits_zero() {
             "  \"\"\"\n",
             "}\n",
         ),
-    )
-    .unwrap();
+    );
 
-    let output = specforge_cmd()
-        .args([
-            "analyze",
-            "--prove",
-            "--path",
-            dir.path().to_str().unwrap(),
-            "--format",
-            "json",
-        ])
+    let output = Cli::on(&dir)
+        .command(&["analyze", "--prove", "--format", "json"])
         .output()
         .unwrap();
     assert_eq!(output.status.code(), Some(0));
@@ -818,15 +705,10 @@ fn analyze_proved_claims_discharge_verify_property_obligations() {
 
     // A constraint's metric is a bound (governance), an invariant's
     // expression a claim (formal's enhancement of software's invariant).
-    let dir = TempDir::new().unwrap();
-    fs::write(
-        dir.path().join("specforge.json"),
-        r#"{"extensions": ["@specforge/software", "@specforge/governance", "@specforge/formal", "@specforge/testing"]}"#,
-    )
-    .unwrap();
-    fs::create_dir(dir.path().join("spec")).unwrap();
-    fs::write(
-        dir.path().join("spec/main.spec"),
+    let dir = TestProject::new().raw_config(r#"{"extensions": ["@specforge/software", "@specforge/governance", "@specforge/formal", "@specforge/testing"]}"#);
+    fs::create_dir(dir.root().join("spec")).unwrap();
+    dir.write(
+        "spec/main.spec",
         r#"
 constraint budget "Latency Budget" {
     description "Budget"
@@ -843,18 +725,10 @@ invariant responsive "System Stays Responsive" {
     verify property "latency bound entails responsiveness"
 }
 "#,
-    )
-    .unwrap();
+    );
 
-    let output = specforge_cmd()
-        .args([
-            "analyze",
-            "--prove",
-            "--path",
-            dir.path().to_str().unwrap(),
-            "--format",
-            "json",
-        ])
+    let output = Cli::on(&dir)
+        .command(&["analyze", "--prove", "--format", "json"])
         .output()
         .unwrap();
     assert_eq!(output.status.code(), Some(0));
@@ -883,15 +757,11 @@ invariant responsive "System Stays Responsive" {
 fn analyze_reads_no_claim_from_an_expression_no_extension_declares() {
     // Without @specforge/formal nothing declares an invariant's
     // `expression`: check reports W020 and the prove pass reads no claim.
-    let dir = TempDir::new().unwrap();
-    fs::write(
-        dir.path().join("specforge.json"),
-        r#"{"extensions": ["@specforge/software", "@specforge/governance"]}"#,
-    )
-    .unwrap();
-    fs::create_dir(dir.path().join("spec")).unwrap();
-    fs::write(
-        dir.path().join("spec/main.spec"),
+    let dir = TestProject::new()
+        .raw_config(r#"{"extensions": ["@specforge/software", "@specforge/governance"]}"#);
+    fs::create_dir(dir.root().join("spec")).unwrap();
+    dir.write(
+        "spec/main.spec",
         r#"
 constraint budget "Latency Budget" {
     description "Budget"
@@ -907,17 +777,10 @@ invariant responsive "System Stays Responsive" {
     }
 }
 "#,
-    )
-    .unwrap();
+    );
 
-    let output = specforge_cmd()
-        .args([
-            "check",
-            "--path",
-            dir.path().to_str().unwrap(),
-            "--format",
-            "json",
-        ])
+    let output = Cli::on(&dir)
+        .command(&["check", "--format", "json"])
         .output()
         .unwrap();
     let diagnostics: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
@@ -940,15 +803,8 @@ invariant responsive "System Stays Responsive" {
         "{diagnostics}"
     );
 
-    let output = specforge_cmd()
-        .args([
-            "analyze",
-            "--prove",
-            "--path",
-            dir.path().to_str().unwrap(),
-            "--format",
-            "json",
-        ])
+    let output = Cli::on(&dir)
+        .command(&["analyze", "--prove", "--format", "json"])
         .output()
         .unwrap();
     let doc: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
@@ -976,11 +832,10 @@ fn analyze_coverage_leaves_out_kinds_not_declared_testable() {
         "property p1 \"Nothing is lost\" {\n  property_type safety\n",
         "  expression \"nothing is ever lost\"\n}\n",
     ));
-    fs::write(
-        dir.path().join("specforge.json"),
+    dir.write(
+        "specforge.json",
         r#"{"extensions": ["@specforge/software", "@specforge/formal", "@specforge/testing"]}"#,
-    )
-    .unwrap();
+    );
     let (doc, _) = json_body(&dir, &["coverage"]);
     let coverage = coverage(&doc);
     assert_eq!(coverage["summary"]["testable_total"], 1, "{coverage}");
@@ -1009,22 +864,12 @@ fn available_passes(message: &str) -> &str {
     verify = "the analysis passes the CLI accepts are the project's"
 )]
 fn the_cli_runs_a_pass_an_extension_declares() {
-    let tmp = TempDir::new().unwrap();
-    crate::coverage_corpus::copy_tree(
-        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/read_views/rv1"),
-        tmp.path(),
+    let tmp = TestProject::copy_of(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/read_views/rv1"),
     );
-    let root = tmp.path().to_str().unwrap();
 
-    let ran = specforge_cmd()
-        .args([
-            "analyze",
-            "@specforge/testing:coverage",
-            "--path",
-            root,
-            "--format",
-            "json",
-        ])
+    let ran = Cli::on(&tmp)
+        .command(&["analyze", "@specforge/testing:coverage", "--format", "json"])
         .output()
         .unwrap();
     assert_eq!(
@@ -1042,8 +887,8 @@ fn the_cli_runs_a_pass_an_extension_declares() {
         .collect();
     assert_eq!(passes, ["@specforge/testing:coverage"], "{doc}");
 
-    let refused = specforge_cmd()
-        .args(["analyze", "nosuch", "--path", root])
+    let refused = Cli::on(&tmp)
+        .command(&["analyze", "nosuch"])
         .output()
         .unwrap();
     assert_eq!(refused.status.code(), Some(2));
@@ -1056,7 +901,7 @@ fn the_cli_runs_a_pass_an_extension_declares() {
 
     // MCP lists the same passes for the same project.
     let mcp = crate::coverage_corpus::mcp_calls(
-        tmp.path(),
+        tmp.root(),
         &[serde_json::json!({"name": "specforge.analyze", "arguments": {"pass": "nosuch"}})],
     );
     let message = mcp[0]["isError"]["message"].as_str().unwrap();
@@ -1068,14 +913,10 @@ fn the_cli_runs_a_pass_an_extension_declares() {
     verify = "an event participating in a process counts as used and produces no W029"
 )]
 fn an_event_in_a_process_is_used_and_not_w029() {
-    let dir = TempDir::new().unwrap();
-    fs::write(
-        dir.path().join("specforge.json"),
-        r#"{"extensions": ["@specforge/formal", "@specforge/software"]}"#,
-    )
-    .unwrap();
-    fs::write(
-        dir.path().join("main.spec"),
+    let dir = TestProject::new()
+        .raw_config(r#"{"extensions": ["@specforge/formal", "@specforge/software"]}"#);
+    dir.write(
+        "main.spec",
         concat!(
             "event tick \"Tick\" {\n",
             "  title \"Tick\"\n",
@@ -1095,16 +936,9 @@ fn an_event_in_a_process_is_used_and_not_w029() {
             "  verify unit \"emits tick\"\n",
             "}\n",
         ),
-    )
-    .unwrap();
-    let output = specforge_cmd()
-        .args([
-            "analyze",
-            "--path",
-            dir.path().to_str().unwrap(),
-            "--format",
-            "json",
-        ])
+    );
+    let output = Cli::on(&dir)
+        .command(&["analyze", "--format", "json"])
         .output()
         .unwrap();
     let doc: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
@@ -1124,38 +958,32 @@ fn an_event_in_a_process_is_used_and_not_w029() {
 }
 
 /// A project whose two bounds contradict each other (governance's metric is a bound).
-fn impossible_bounds() -> TempDir {
-    let dir = TempDir::new().unwrap();
-    fs::write(
-        dir.path().join("specforge.json"),
-        r#"{"extensions": ["@specforge/governance"]}"#,
-    )
-    .unwrap();
-    fs::write(
-        dir.path().join("main.spec"),
-        concat!(
-            "constraint impossible \"Impossible Bounds\" {\n",
-            "  description \"Bounds that can never both hold\"\n",
-            "  category performance\n",
-            "  priority critical\n",
-            "  metric \"\"\"\n",
-            "    latency < 100ms\n",
-            "    latency > 500ms\n",
-            "  \"\"\"\n",
-            "}\n",
-        ),
-    )
-    .unwrap();
-    dir
+fn impossible_bounds() -> TestProject {
+    TestProject::new()
+        .raw_config(r#"{"extensions": ["@specforge/governance"]}"#)
+        .file(
+            "main.spec",
+            concat!(
+                "constraint impossible \"Impossible Bounds\" {\n",
+                "  description \"Bounds that can never both hold\"\n",
+                "  category performance\n",
+                "  priority critical\n",
+                "  metric \"\"\"\n",
+                "    latency < 100ms\n",
+                "    latency > 500ms\n",
+                "  \"\"\"\n",
+                "}\n",
+            ),
+        )
 }
 
 /// The prove pass's report from `analyze --prove --format json` with `path` as PATH.
-fn prove_report(dir: &Path, path: &Path, extra: &[&str]) -> (Value, Option<i32>) {
-    let output = specforge_cmd()
-        .args(["analyze", "--prove", "--format", "json", "--path"])
-        .arg(dir)
-        .args(extra)
+fn prove_report(dir: &TestProject, path: &Path, extra: &[&str]) -> (Value, Option<i32>) {
+    let mut args = vec!["analyze", "--prove", "--format", "json"];
+    args.extend(extra);
+    let output = Cli::on(dir)
         .env("PATH", path)
+        .command(&args)
         .output()
         .unwrap();
     let doc: Value = serde_json::from_slice(&output.stdout).unwrap();
@@ -1173,7 +1001,7 @@ fn prove_report(dir: &Path, path: &Path, extra: &[&str]) -> (Value, Option<i32>)
 #[test]
 fn a_z3_that_does_not_run_says_why() {
     let dir = impossible_bounds();
-    let (prove, code) = prove_report(dir.path(), &crate::toolchain::z3_broken(), &[]);
+    let (prove, code) = prove_report(&dir, &crate::toolchain::z3_broken(), &[]);
     assert_eq!(code, Some(0));
     assert_eq!(
         prove["findings"][0]["message"],
@@ -1189,7 +1017,7 @@ fn a_z3_that_does_not_run_says_why() {
 )]
 fn analyze_prove_without_z3_is_one_w098_and_strict_fails() {
     let dir = impossible_bounds();
-    let (prove, code) = prove_report(dir.path(), &crate::toolchain::z3_absent(), &[]);
+    let (prove, code) = prove_report(&dir, &crate::toolchain::z3_absent(), &[]);
     assert_eq!(code, Some(0));
     let findings = prove["findings"].as_array().unwrap();
     assert_eq!(findings.len(), 1, "{prove}");
@@ -1200,7 +1028,7 @@ fn analyze_prove_without_z3_is_one_w098_and_strict_fails() {
     );
     assert_eq!(prove["summary"]["solver_available"], false);
 
-    let (_, strict) = prove_report(dir.path(), &crate::toolchain::z3_absent(), &["--strict"]);
+    let (_, strict) = prove_report(&dir, &crate::toolchain::z3_absent(), &["--strict"]);
     assert_eq!(strict, Some(1));
 }
 
@@ -1212,9 +1040,8 @@ fn analyze_prove_without_z3_is_one_w098_and_strict_fails() {
 fn doctor_answers_within_the_probe_timeout_when_z3_hangs() {
     let dir = impossible_bounds();
     let started = std::time::Instant::now();
-    let out = specforge_cmd()
-        .args(["doctor", "--format", "json", "--path"])
-        .arg(dir.path())
+    let out = Cli::on(&dir)
+        .command(&["doctor", "--format", "json"])
         .env("PATH", crate::toolchain::z3_hung())
         .output()
         .unwrap();
@@ -1248,12 +1075,11 @@ fn doctor_answers_within_the_probe_timeout_when_z3_hangs() {
 fn doctor_states_the_w098_analyze_prints_when_z3_is_missing() {
     let dir = impossible_bounds();
     let absent = crate::toolchain::z3_absent();
-    let (prove, _) = prove_report(dir.path(), &absent, &[]);
+    let (prove, _) = prove_report(&dir, &absent, &[]);
     let w098 = &prove["findings"][0];
 
-    let out = specforge_cmd()
-        .args(["doctor", "--format", "json", "--path"])
-        .arg(dir.path())
+    let out = Cli::on(&dir)
+        .command(&["doctor", "--format", "json"])
         .env("PATH", &absent)
         .output()
         .unwrap();
@@ -1271,9 +1097,8 @@ fn doctor_states_the_w098_analyze_prints_when_z3_is_missing() {
     assert_eq!(toolchain["remediation"], w098["suggestion"]);
     assert_eq!(report["z3_available"], false);
 
-    let human = specforge_cmd()
-        .args(["doctor", "--path"])
-        .arg(dir.path())
+    let human = Cli::on(&dir)
+        .command(&["doctor"])
         .env("PATH", &absent)
         .output()
         .unwrap();
@@ -1294,7 +1119,7 @@ fn prove_timeout_stops_a_slow_solve() {
     let dir = impossible_bounds();
     let started = std::time::Instant::now();
     let (prove, code) = prove_report(
-        dir.path(),
+        &dir,
         &crate::toolchain::z3_slow(),
         &["--prove-timeout", "1"],
     );
@@ -1322,9 +1147,8 @@ fn prove_timeout_stops_a_slow_solve() {
         "{prove}"
     );
 
-    let refused = specforge_cmd()
-        .args(["analyze", "--prove-timeout", "1", "--path"])
-        .arg(dir.path())
+    let refused = Cli::on(&dir)
+        .command(&["analyze", "--prove-timeout", "1"])
         .env("PATH", crate::toolchain::z3_slow())
         .output()
         .unwrap();

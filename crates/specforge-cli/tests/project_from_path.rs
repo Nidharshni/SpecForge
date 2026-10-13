@@ -11,14 +11,13 @@
 use std::collections::BTreeMap;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
 use std::sync::mpsc;
 use std::time::Duration;
 
 use specforge_test_macros::test as specforge_test;
 use tempfile::TempDir;
 
-use crate::support::child::{ChildGuard, guarded_command};
+use crate::support::{Cli, TestProject};
 
 /// The project every row runs in: software and product enabled, a provider
 /// configured, an offline registry (nothing listens on port 9), and a spec
@@ -50,31 +49,26 @@ fn greet_blob() -> PathBuf {
         .expect("the greet fixture is vendored")
 }
 
-fn specforge() -> Command {
-    Command::new(env!("CARGO_BIN_EXE_specforge"))
-}
-
 /// A fresh copy of the project.
-fn project() -> TempDir {
-    let dir = TempDir::new().unwrap();
-    std::fs::create_dir_all(dir.path().join(SUBDIR)).unwrap();
-    std::fs::write(dir.path().join("specforge.json"), CONFIG).unwrap();
-    std::fs::write(dir.path().join("spec/a.spec"), SPEC).unwrap();
-    dir
+fn project() -> TestProject {
+    let project = TestProject::new()
+        .raw_config(CONFIG)
+        .file("spec/a.spec", SPEC);
+    std::fs::create_dir_all(project.root().join(SUBDIR)).unwrap();
+    project
 }
 
 /// The project with `@sdk/greet` installed and locked, as `update` needs.
-fn with_greet_locked(root: &Path) {
-    let out = specforge()
-        .args(["add", greet_blob().to_str().unwrap(), "--path"])
-        .arg(root)
-        .args(["--format", "json"])
-        .output()
-        .unwrap();
-    assert!(out.status.success(), "setup install failed: {out:?}");
+fn with_greet_locked(project: &TestProject) {
+    let out = Cli::on(project).run(&["add", greet_blob().to_str().unwrap(), "--format", "json"]);
+    assert_eq!(
+        out.code, 0,
+        "setup install failed: {}{}",
+        out.stdout, out.stderr
+    );
 }
 
-fn nothing(_: &Path) {}
+fn nothing(_: &TestProject) {}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Kind {
@@ -93,7 +87,7 @@ struct Row {
     /// The arguments after `specforge`; `{BLOB}` is the greet blob.
     args: &'static [&'static str],
     kind: Kind,
-    setup: fn(&Path),
+    setup: fn(&TestProject),
 }
 
 const fn row(name: &'static str, args: &'static [&'static str], kind: Kind) -> Row {
@@ -278,31 +272,33 @@ fn args_of(row: &Row) -> Vec<String> {
 }
 
 /// `row` run from `cwd` with `extra` arguments after its own.
-fn observe(row: &Row, root: &Path, cwd: &Path, extra: &[String]) -> Observed {
+fn observe(row: &Row, project: &TestProject, cwd: &Path, extra: &[String]) -> Observed {
     let mut args = args_of(row);
     args.extend(extra.iter().cloned());
-    observe_args(row, root, cwd, &args)
+    observe_args(row, project, cwd, &args)
 }
 
 /// `row`'s setup, then `args` (its arguments, however arranged) from `cwd`.
-fn observe_args(row: &Row, root: &Path, cwd: &Path, args: &[String]) -> Observed {
-    (row.setup)(root);
+fn observe_args(row: &Row, project: &TestProject, cwd: &Path, args: &[String]) -> Observed {
+    let root = project.root();
+    (row.setup)(project);
     if row.kind == Kind::Watch {
         return Observed {
             exit: None,
-            stdout: normalized(&first_watch_event(args, cwd), root),
+            stdout: normalized(&first_watch_event(project, args, cwd), root),
             stderr: String::new(),
             files: BTreeMap::new(),
         };
     }
-    let out = specforge().args(args).current_dir(cwd).output().unwrap();
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    let out = Cli::on(project).in_dir(cwd).bare(&args);
     Observed {
-        exit: out.status.code(),
-        stdout: normalized(&String::from_utf8_lossy(&out.stdout), root),
+        exit: Some(out.code),
+        stdout: normalized(&out.stdout, root),
         stderr: match row.kind {
             // A usage error (exit 2) is always kept: it names the argument.
-            Kind::Writes if out.status.code() != Some(2) => String::new(),
-            _ => normalized(&String::from_utf8_lossy(&out.stderr), root),
+            Kind::Writes if out.code != 2 => String::new(),
+            _ => normalized(&out.stderr, root),
         },
         files: match row.kind {
             Kind::Writes => files_under(root),
@@ -313,15 +309,9 @@ fn observe_args(row: &Row, root: &Path, cwd: &Path, args: &[String]) -> Observed
 
 /// The first line `specforge watch` prints from `cwd`, or what it printed
 /// before exiting when it stops first.
-fn first_watch_event(args: &[String], cwd: &Path) -> String {
-    let mut watch = specforge();
-    watch.args(args);
-    let mut command = guarded_command(&watch);
-    command
-        .current_dir(cwd)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null());
-    let mut child = ChildGuard::spawn(&mut command).expect("spawn specforge watch");
+fn first_watch_event(project: &TestProject, args: &[String], cwd: &Path) -> String {
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    let mut child = Cli::on(project).in_dir(cwd).bare_spawn(&args);
     let stdout = child.take_stdout().expect("stdout piped");
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {
@@ -337,8 +327,8 @@ fn first_watch_event(args: &[String], cwd: &Path) -> String {
 fn compare(row: &Row) -> (bool, Observed, Observed) {
     let at_root = project();
     let at_subdir = project();
-    let root = observe(row, at_root.path(), at_root.path(), &[]);
-    let subdir = observe(row, at_subdir.path(), &at_subdir.path().join(SUBDIR), &[]);
+    let root = observe(row, &at_root, at_root.root(), &[]);
+    let subdir = observe(row, &at_subdir, &at_subdir.root().join(SUBDIR), &[]);
     (root != subdir, root, subdir)
 }
 
@@ -397,7 +387,7 @@ fn watch_from_a_subdirectory_watches_its_project() {
     verify = "a command given a path that does not exist refuses it as file_not_found"
 )]
 fn a_command_given_a_missing_path_refuses_it_as_file_not_found() {
-    let dir = TempDir::new().unwrap();
+    let dir = TestProject::new().without_config();
     for (args, code) in [
         (&["check", "--path", "nope"][..], 1),
         (&["stats", "--path", "nope", "--format", "json"][..], 2),
@@ -405,16 +395,9 @@ fn a_command_given_a_missing_path_refuses_it_as_file_not_found() {
         (&["watch", "--path", "nope", "--format", "json"][..], 1),
         (&["product", "features", "--path", "nope"][..], 1),
     ] {
-        let out = specforge()
-            .args(args)
-            .current_dir(dir.path())
-            .output()
-            .unwrap();
-        let (stdout, stderr) = (
-            String::from_utf8_lossy(&out.stdout),
-            String::from_utf8_lossy(&out.stderr),
-        );
-        assert_eq!(out.status.code(), Some(code), "{args:?}: {stdout}{stderr}");
+        let out = Cli::on(&dir).bare(args);
+        let (stdout, stderr) = (&out.stdout, &out.stderr);
+        assert_eq!(out.code, code, "{args:?}: {stdout}{stderr}");
         let shown = format!("{stdout}{stderr}");
         assert!(shown.contains("file_not_found"), "{args:?}: {shown}");
         assert!(shown.contains("path not found: nope"), "{args:?}: {shown}");
@@ -427,29 +410,17 @@ fn a_command_given_a_missing_path_refuses_it_as_file_not_found() {
 )]
 fn a_file_path_names_the_project_it_is_in() {
     let p = project();
+    let file = p.root().join("spec/a.spec");
     let check = |args: &[&str]| {
-        let out = specforge()
-            .args(args)
-            .arg("--path")
-            .arg(p.path().join("spec/a.spec"))
-            .output()
-            .unwrap();
-        (
-            out.status.code(),
-            String::from_utf8_lossy(&out.stderr).to_string(),
-        )
+        let mut args = args.to_vec();
+        args.extend(["--path", file.to_str().unwrap()]);
+        let out = Cli::on(&p).bare(&args);
+        (Some(out.code), out.stderr)
     };
     let (code, stderr) = check(&["check", "--format", "human"]);
     let (project_code, project_stderr) = {
-        let out = specforge()
-            .args(["check", "--path"])
-            .arg(p.path())
-            .output()
-            .unwrap();
-        (
-            out.status.code(),
-            String::from_utf8_lossy(&out.stderr).to_string(),
-        )
+        let out = Cli::on(&p).run(&["check"]);
+        (Some(out.code), out.stderr)
     };
     assert!(!stderr.contains("E069"), "{stderr}");
     assert_eq!(code, project_code, "{stderr}");
@@ -461,38 +432,24 @@ fn a_file_path_names_the_project_it_is_in() {
     verify = "a file in a nested project is checked by its own project and by no project above it"
 )]
 fn a_file_in_a_nested_project_is_checked_by_its_own_project_alone() {
-    let tmp = TempDir::new().unwrap();
-    let root = tmp.path();
-    std::fs::create_dir_all(root.join("sub")).unwrap();
-    std::fs::write(
-        root.join("specforge.json"),
-        r#"{"extensions":["@specforge/product"]}"#,
-    )
-    .unwrap();
-    std::fs::write(
-        root.join("a.spec"),
-        "feature f \"F\" {\n  problem \"p\"\n}\n",
-    )
-    .unwrap();
-    std::fs::write(
-        root.join("sub/specforge.json"),
-        r#"{"extensions":["@specforge/software"]}"#,
-    )
-    .unwrap();
-    std::fs::write(
-        root.join("sub/b.spec"),
-        "behavior bb_x \"B\" {\n  contract \"MUST b\"\n}\n",
-    )
-    .unwrap();
+    let tmp = TestProject::new()
+        .raw_config(r#"{"extensions":["@specforge/product"]}"#)
+        .file("a.spec", "feature f \"F\" {\n  problem \"p\"\n}\n")
+        .file(
+            "sub/specforge.json",
+            r#"{"extensions":["@specforge/software"]}"#,
+        )
+        .file(
+            "sub/b.spec",
+            "behavior bb_x \"B\" {\n  contract \"MUST b\"\n}\n",
+        );
+    let root = tmp.root();
     let check = |cwd: &Path, args: &[&str]| {
-        let out = specforge()
-            .current_dir(cwd)
-            .args(["check", "--format", "json"])
-            .args(args)
-            .output()
-            .unwrap();
-        let json: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap_or_default();
-        (out.status.code(), json)
+        let mut argv = vec!["check", "--format", "json"];
+        argv.extend(args);
+        let out = Cli::on(&tmp).in_dir(cwd).bare(&argv);
+        let json: serde_json::Value = serde_json::from_str(&out.stdout).unwrap_or_default();
+        (Some(out.code), json)
     };
     let entries = |json: &serde_json::Value| -> Vec<(String, String)> {
         json.as_array()
@@ -533,9 +490,9 @@ const WERE_POSITIONAL: [&str; 6] = ["check", "stats", "export", "schema", "model
 
 /// `row` run from `outside` (a directory in no project) with
 /// `--path <root>/spec/docs`.
-fn observe_with_path(row: &Row, root: &Path, outside: &Path) -> Observed {
-    let path = root.join(SUBDIR).to_string_lossy().to_string();
-    observe(row, root, outside, &["--path".to_string(), path])
+fn observe_with_path(row: &Row, project: &TestProject, outside: &Path) -> Observed {
+    let path = project.root().join(SUBDIR).to_string_lossy().to_string();
+    observe(row, project, outside, &["--path".to_string(), path])
 }
 
 #[specforge_test(
@@ -551,8 +508,8 @@ fn every_command_names_its_project_with_path() {
                     let at_root = project();
                     let given = project();
                     let outside = TempDir::new().unwrap();
-                    let baseline = observe(row, at_root.path(), at_root.path(), &[]);
-                    let with_path = observe_with_path(row, given.path(), outside.path());
+                    let baseline = observe(row, &at_root, at_root.root(), &[]);
+                    let with_path = observe_with_path(row, &given, outside.path());
                     (row.name, baseline, with_path)
                 })
             })
@@ -585,11 +542,8 @@ fn no_command_takes_its_project_as_a_positional_argument() {
                     let outside = TempDir::new().unwrap();
                     // The path goes right after the command name.
                     let mut args = args_of(row);
-                    args.insert(1, given.path().join(SUBDIR).to_string_lossy().to_string());
-                    (
-                        *name,
-                        observe_args(row, given.path(), outside.path(), &args),
-                    )
+                    args.insert(1, given.root().join(SUBDIR).to_string_lossy().to_string());
+                    (*name, observe_args(row, &given, outside.path(), &args))
                 })
             })
             .collect();

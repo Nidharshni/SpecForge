@@ -37,7 +37,6 @@ fn compile_cache() -> PathBuf {
 }
 
 #[test]
-#[ignore = "fixed by T4"]
 fn the_doctor_tests_pass_under_a_home_holding_an_expired_login() {
     let home = home_with_an_expired_login();
     let output = std::process::Command::new(std::env::current_exe().unwrap())
