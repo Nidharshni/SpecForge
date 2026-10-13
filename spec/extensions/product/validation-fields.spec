@@ -59,149 +59,6 @@ behavior validate_product_vocabularies "Validate Product Field Vocabularies" {
   verify unit "check admits every value the list filters take, and the lists find it"
 }
 
-behavior validate_feature_status_field "Validate Feature Status Field" {
-  category validation
-  types    [ProductFeature, FeatureStatus, Diagnostic]
-  contract """
-    The @specforge/product extension MUST validate that when a feature's
-    status field is present, its value is a valid FeatureStatus enum value
-    (proposed, accepted, in_progress, done, deferred, deprecated). Invalid status
-    values MUST produce a W077 warning.
-  """
-  ensures {
-    valid_status  "feature with invalid status value produces W077"
-    absent_passes "feature without status field produces no W077"
-  }
-  features [pe_validation_suite]
-  verify unit "feature with valid status passes"
-  verify unit "feature with invalid status produces diagnostic"
-}
-
-behavior validate_feature_priority_field "Validate Feature Priority Field" {
-  category validation
-  types    [ProductFeature, Priority, Diagnostic]
-  contract """
-    The @specforge/product extension MUST validate that when a feature's
-    priority field is present, its value is a valid Priority enum value
-    (critical, high, medium, low). Invalid priority values MUST produce
-    a W078 warning. W078 is shared across all entity kinds that use Priority.
-  """
-  ensures {
-    valid_priority "feature with invalid priority value produces W078"
-    absent_passes  "feature without priority field produces no W078"
-  }
-  features [pe_validation_suite]
-  verify unit "feature with valid priority passes"
-  verify unit "feature with invalid priority produces diagnostic"
-}
-
-behavior validate_journey_priority_field "Validate Journey Priority Field" {
-  category validation
-  types    [ProductJourney, Priority, Diagnostic]
-  contract """
-    The @specforge/product extension MUST validate that when a journey's
-    priority field is present, its value is a valid Priority enum value
-    (critical, high, medium, low). Invalid priority values MUST produce
-    a W078 warning. W078 is shared across all entity kinds that use Priority.
-  """
-  ensures {
-    valid_priority "journey with invalid priority value produces W078"
-    absent_passes  "journey without priority field produces no W078"
-  }
-  features [pe_validation_suite]
-  verify unit "journey with valid priority passes"
-  verify unit "journey with invalid priority produces diagnostic"
-}
-
-behavior validate_milestone_priority_field "Validate Milestone Priority Field" {
-  category validation
-  types    [ProductMilestone, Priority, Diagnostic]
-  contract """
-    The @specforge/product extension MUST validate that when a milestone's
-    priority field is present, its value is a valid Priority enum value
-    (critical, high, medium, low). Invalid priority values MUST produce
-    a W078 warning. W078 is shared across all entity kinds that use Priority.
-  """
-  ensures {
-    valid_priority "milestone with invalid priority value produces W078"
-    absent_passes  "milestone without priority field produces no W078"
-  }
-  features [pe_validation_suite]
-  verify unit "milestone with valid priority passes"
-  verify unit "milestone with invalid priority produces diagnostic"
-}
-
-behavior validate_deliverable_artifact_type_field "Validate Deliverable Artifact Type Field" {
-  category validation
-  types    [ProductDeliverable, ArtifactType, Diagnostic]
-  contract """
-    The @specforge/product extension MUST validate that when a deliverable's
-    artifact_type field is present, its value is a valid ArtifactType enum
-    value (cli, service, library, web_app, mobile_app, api, extension,
-    documentation, package). Invalid artifact_type values MUST produce
-    a W080 warning.
-  """
-  ensures {
-    valid_artifact_type "deliverable with invalid artifact_type value produces W080"
-    absent_passes       "deliverable without artifact_type field produces no W080"
-  }
-  features [pe_validation_suite]
-  verify unit "deliverable with valid artifact_type passes"
-  verify unit "deliverable with invalid artifact_type produces diagnostic"
-}
-
-behavior validate_persona_status_field "Validate Persona Status Field" {
-  category validation
-  types    [ProductPersona, PersonaStatus, Diagnostic]
-  contract """
-    The @specforge/product extension MUST validate that when a persona's
-    status field is present, its value is a valid PersonaStatus enum value
-    (active, deprecated). Invalid status values MUST produce a W083 warning.
-  """
-  ensures {
-    valid_status  "persona with invalid status value produces W083"
-    absent_passes "persona without status field produces no W083"
-  }
-  features [pe_validation_suite]
-  verify unit "persona with valid status passes"
-  verify unit "persona with invalid status produces diagnostic"
-}
-
-behavior validate_channel_status_field "Validate Channel Status Field" {
-  category validation
-  types    [ProductChannel, ChannelStatus, Diagnostic]
-  contract """
-    The @specforge/product extension MUST validate that when a channel's
-    status field is present, its value is a valid ChannelStatus enum value
-    (active, deprecated). Invalid status values MUST produce a W084 warning.
-  """
-  ensures {
-    valid_status  "channel with invalid status value produces W084"
-    absent_passes "channel without status field produces no W084"
-  }
-  features [pe_validation_suite]
-  verify unit "channel with valid status passes"
-  verify unit "channel with invalid status produces diagnostic"
-}
-
-behavior validate_deliverable_status_field "Validate Deliverable Status Field" {
-  category validation
-  types    [ProductDeliverable, DeliverableStatus, Diagnostic]
-  contract """
-    The @specforge/product extension MUST validate that when a deliverable's
-    status field is present, its value is a valid DeliverableStatus enum value
-    (draft, in_progress, shipped, deprecated). Invalid status values MUST
-    produce a W085 warning.
-  """
-  ensures {
-    valid_status  "deliverable with invalid status value produces W085"
-    absent_passes "deliverable without status field produces no W085"
-  }
-  features [pe_validation_suite]
-  verify unit "deliverable with valid status passes"
-  verify unit "deliverable with invalid status produces diagnostic"
-}
-
 behavior validate_module_family_field "Validate Module Family Field" {
   category validation
   types    [Diagnostic, ProductModule, ModuleFamily]
@@ -211,7 +68,7 @@ behavior validate_module_family_field "Validate Module Family Field" {
     core, platform, extension, integration, advisory. A module whose family
     is present and not one of them MUST produce an I062 info diagnostic:
     "module '{id}' has non-standard family '{value}' — standard families:
-    core, platform, extension, integration, advisory". Info-level allows
+    {allowed}", {allowed} being the ModuleFamily members. Info-level allows
     custom family values while suggesting standardization: the ModuleFamily
     enum is an open set. A module with no family field produces nothing.
 
@@ -462,44 +319,6 @@ behavior detect_journey_deprecated_channels "Detect Journey Referencing Deprecat
   verify unit "journey with no channels suppresses W076"
   verify unit "channel without status field treated as active"
   verify unit "journey with two deprecated channels produces two W076"
-}
-
-behavior validate_milestone_status_field "Validate Milestone Status Field" {
-  category validation
-  types    [ProductMilestone, MilestoneStatus, Diagnostic]
-  contract """
-    The @specforge/product extension MUST validate that when a milestone's
-    status field is present, its value is a valid MilestoneStatus enum value
-    (planned, in_progress, completed, blocked). Invalid status values MUST
-    produce a W079 warning.
-  """
-  ensures {
-    valid_status  "milestone with invalid status value produces W079"
-    absent_passes "milestone without status field produces no W079"
-  }
-  features [pe_validation_suite]
-  verify unit "milestone with valid status passes"
-  verify unit "milestone with invalid status produces diagnostic"
-}
-
-behavior validate_effort_field "Validate Feature Effort Field" {
-  category validation
-  types    [ProductFeature, Effort, Diagnostic]
-  contract """
-    The @specforge/product extension MUST validate that when a feature's
-    effort field is present, its value is a valid Effort enum value
-    (xs, s, m, l, xl). Invalid effort values MUST produce a W095 warning.
-    This ensures weighted milestone completion queries use valid effort
-    weights (xs=1, s=2, m=3, l=5, xl=8).
-  """
-  ensures {
-    valid_effort  "feature with invalid effort value produces W095"
-    absent_passes "feature without effort field produces no W095"
-  }
-  features [pe_validation_suite]
-  verify unit "feature with effort=xl passes"
-  verify unit "feature with effort=huge produces W095"
-  verify unit "feature without effort produces no W095"
 }
 
 behavior detect_priority_effort_mismatch "Detect Priority-Effort Mismatch" {

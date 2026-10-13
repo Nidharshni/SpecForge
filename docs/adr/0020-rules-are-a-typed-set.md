@@ -94,3 +94,8 @@ a guarantee validate already gives).
 - A non-Rust SDK or a second protocol major: type the descriptor per check on the wire then.
 - A check kind that needs more than one entity's facts and the labelled edges (e.g. reachability):
   `RuleInput` grows a field (ADR 0019's record).
+
+## Amendment (round 9, plan 01)
+
+D5's example (`@specforge/product`'s W078 on governance's `constraint`) is gone: no builtin rule declares a
+`target_extension` (ADR 0071). The mechanism is unchanged.

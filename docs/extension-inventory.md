@@ -173,7 +173,7 @@ Load order: `product` first (no dependencies), then `software` (optionally depen
 ### Notes
 
 - All cross-extension edges use soft references. If `@specforge/software` or `@specforge/product` is not installed, references to their entity kinds produce `I004` diagnostics.
-- The `failure_mode` kind validates `severity` (W051), `occurrence` (W052) and `detection` (W121); it doesn't check a declared RPN against their product.
+- The `failure_mode` kind declares `severity`, `occurrence` and `detection` (and their `post_` forms) as vocabularies (E061); it doesn't check a declared RPN against their product.
 
 ## @specforge/formal
 

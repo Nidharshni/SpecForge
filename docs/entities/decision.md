@@ -97,7 +97,7 @@ decision use_postgresql "PostgreSQL over MongoDB" {
 |------|------|
 | E003 | Every ID in `invariants` must resolve to a declared entity. |
 | E002 | No two decisions may share the same ID. |
-| W050 | `status` must be one of the recognized decision statuses. |
+| E061 | `status` must be one of the recognized decision statuses. |
 
 ## Design Guidance
 

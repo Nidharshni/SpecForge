@@ -1,14 +1,27 @@
-//! What @specforge/governance declares: its kinds, edges, shared fields, enhancements, validation rules, passes, feature flags, with the SDK builders.
+//! What @specforge/governance declares: its kinds, edges and field vocabularies, with the SDK builders.
 //! The host loads exactly this (`ContributionsBuilder::declaration`);
 //! `crates/specforge-component/tests/declarations/` pins its wire form.
 
 use specforge_extension_sdk::prelude::*;
 
+/// `DecisionStatus`.
+const DECISION_STATUS: Vocabulary =
+    Vocabulary::new(&["proposed", "accepted", "deprecated", "superseded"]);
+/// `ConstraintPriority`, most important first.
+const PRIORITY: Vocabulary = Vocabulary::new(&["critical", "high", "medium", "low"]);
+/// `FailureSeverity`, before or after mitigation, worst first.
+const SEVERITY: Vocabulary = Vocabulary::new(&["critical", "high", "medium", "low"]);
+/// `FailureOccurrence`, most likely first.
+const OCCURRENCE: Vocabulary =
+    Vocabulary::new(&["certain", "likely", "occasional", "unlikely", "rare"]);
+/// `FailureDetection`, most detectable first.
+const DETECTION: Vocabulary =
+    Vocabulary::new(&["certain", "likely", "moderate", "unlikely", "undetectable"]);
+
 /// Declare everything this module holds on `c`.
 pub(crate) fn declare(c: &mut ContributionsBuilder) {
     kinds(c);
     edges(c);
-    rules(c);
 }
 
 fn kinds(c: &mut ContributionsBuilder) {
@@ -20,11 +33,11 @@ fn kinds(c: &mut ContributionsBuilder) {
             .dot_shape("note")
             .dot_color("#6A1B9A")
             .dot_fillcolor("#F3E5F5")
-            .inference_guide("Look for Architecture Decision Records (ADRs), design documents, RFC files, and significant comments explaining WHY something was built a certain way. Signals: docs/adr/ or docs/decisions/ directories; files named ADR-*, DECISION-*, RFC-*; PR descriptions with 'decided to', 'chosen approach', 'trade-off'; comments starting with 'Decision:', 'Rationale:', 'Why:'. Extract status (proposed/accepted/deprecated), context (what prompted it), decision (what was chosen), and consequences (trade-offs). Link to invariants the decision protects and constraints it imposes. Skip: trivial implementation choices, style preferences, auto-generated config.");
+            .inference_guide("Look for Architecture Decision Records (ADRs), design documents, RFC files, and significant comments explaining WHY something was built a certain way. Signals: docs/adr/ or docs/decisions/ directories; files named ADR-*, DECISION-*, RFC-*; PR descriptions with 'decided to', 'chosen approach', 'trade-off'; comments starting with 'Decision:', 'Rationale:', 'Why:'. Extract status, context (what prompted it), decision (what was chosen), and consequences (trade-offs). Link to invariants the decision protects and constraints it imposes. Skip: trivial implementation choices, style preferences, auto-generated config.");
         k.field("status", |f| {
-            f.field_type(FieldType::String)
+            f.vocabulary(&DECISION_STATUS)
                 .required()
-                .description("Current lifecycle status of the decision (e.g. proposed, accepted, deprecated)")
+                .description("Current lifecycle status of the decision")
                 .headline();
         });
         k.field("context", |f| {
@@ -113,7 +126,7 @@ fn kinds(c: &mut ContributionsBuilder) {
                 .description("Classification of the constraint (e.g. performance, security, regulatory)");
         });
         k.field("priority", |f| {
-            f.field_type(FieldType::String)
+            f.vocabulary(&PRIORITY)
                 .description("Relative importance of this constraint");
         });
         k.field("metric", |f| {
@@ -176,16 +189,16 @@ fn kinds(c: &mut ContributionsBuilder) {
             .dot_fillcolor("#FFCDD2")
             .inference_guide("Look for error handling paths, retry logic, circuit breakers, fallback mechanisms, and comments describing what can go wrong. Signals: catch/rescue blocks handling specific failure scenarios; circuit breaker configurations; retry policies with backoff; fallback implementations; chaos engineering tests; error types/classes representing failure categories; timeout handling; dead letter queues. Extract cause (what triggers it), effect (what breaks), and mitigation (how the system recovers). Rate severity/occurrence/detection. Link to the invariant that gets violated and behaviors affected. Skip: generic error handling, validation errors for user input, expected business rule rejections.");
         k.field("severity", |f| {
-            f.field_type(FieldType::String)
+            f.vocabulary(&SEVERITY)
                 .required()
-                .description("Impact severity rating before mitigation (e.g. critical, high, medium, low)");
+                .description("Impact severity rating before mitigation");
         });
         k.field("occurrence", |f| {
-            f.field_type(FieldType::String)
+            f.vocabulary(&OCCURRENCE)
                 .description("Likelihood of this failure occurring before mitigation");
         });
         k.field("detection", |f| {
-            f.field_type(FieldType::String)
+            f.vocabulary(&DETECTION)
                 .description("Likelihood of detecting this failure before it causes harm");
         });
         k.field("cause", |f| {
@@ -204,15 +217,15 @@ fn kinds(c: &mut ContributionsBuilder) {
                 .normative();
         });
         k.field("post_severity", |f| {
-            f.field_type(FieldType::String)
+            f.vocabulary(&SEVERITY)
                 .description("Impact severity rating after mitigation is applied");
         });
         k.field("post_occurrence", |f| {
-            f.field_type(FieldType::String)
+            f.vocabulary(&OCCURRENCE)
                 .description("Likelihood of occurrence after mitigation is applied");
         });
         k.field("post_detection", |f| {
-            f.field_type(FieldType::String)
+            f.vocabulary(&DETECTION)
                 .description("Likelihood of detection after mitigation is applied");
         });
         k.field("invariant", |f| {
@@ -333,85 +346,5 @@ fn edges(c: &mut ContributionsBuilder) {
             .target_kind("behavior")
             .edge_style("dashed")
             .edge_color("#D32F2F");
-    });
-}
-
-fn rules(c: &mut ContributionsBuilder) {
-    c.rule("W050", |r| {
-        r.check(CheckKind::FieldValueConstraint)
-            .severity(ValidationSeverity::Warning)
-            .message_template("decision '{id}' has invalid status '{value}' — expected one of: proposed, accepted, deprecated, superseded")
-            .target_kind("decision")
-            .field("status");
-        r.constraint(|fc| {
-            fc.kind(ConstraintKind::OneOf)
-                .values(&["proposed", "accepted", "deprecated", "superseded"]);
-        });
-    });
-    c.rule("W051", |r| {
-        r.check(CheckKind::FieldValueConstraint)
-            .severity(ValidationSeverity::Warning)
-            .message_template("failure_mode '{id}' has invalid severity '{value}' — expected one of: critical, high, medium, low")
-            .target_kind("failure_mode")
-            .field("severity");
-        r.constraint(|fc| {
-            fc.kind(ConstraintKind::OneOf)
-                .values(&["critical", "high", "medium", "low"]);
-        });
-    });
-    c.rule("W051", |r| {
-        r.check(CheckKind::FieldValueConstraint)
-            .severity(ValidationSeverity::Warning)
-            .message_template("failure_mode '{id}' has invalid post_severity '{value}' — expected one of: critical, high, medium, low")
-            .target_kind("failure_mode")
-            .field("post_severity");
-        r.constraint(|fc| {
-            fc.kind(ConstraintKind::OneOf)
-                .values(&["critical", "high", "medium", "low"]);
-        });
-    });
-    c.rule("W052", |r| {
-        r.check(CheckKind::FieldValueConstraint)
-            .severity(ValidationSeverity::Warning)
-            .message_template("failure_mode '{id}' has invalid occurrence '{value}' — expected one of: certain, likely, occasional, unlikely, rare")
-            .target_kind("failure_mode")
-            .field("occurrence");
-        r.constraint(|fc| {
-            fc.kind(ConstraintKind::OneOf)
-                .values(&["certain", "likely", "occasional", "unlikely", "rare"]);
-        });
-    });
-    c.rule("W052", |r| {
-        r.check(CheckKind::FieldValueConstraint)
-            .severity(ValidationSeverity::Warning)
-            .message_template("failure_mode '{id}' has invalid post_occurrence '{value}' — expected one of: certain, likely, occasional, unlikely, rare")
-            .target_kind("failure_mode")
-            .field("post_occurrence");
-        r.constraint(|fc| {
-            fc.kind(ConstraintKind::OneOf)
-                .values(&["certain", "likely", "occasional", "unlikely", "rare"]);
-        });
-    });
-    c.rule("W121", |r| {
-        r.check(CheckKind::FieldValueConstraint)
-            .severity(ValidationSeverity::Warning)
-            .message_template("failure_mode '{id}' has invalid detection '{value}' — expected one of: certain, likely, moderate, unlikely, undetectable")
-            .target_kind("failure_mode")
-            .field("detection");
-        r.constraint(|fc| {
-            fc.kind(ConstraintKind::OneOf)
-                .values(&["certain", "likely", "moderate", "unlikely", "undetectable"]);
-        });
-    });
-    c.rule("W121", |r| {
-        r.check(CheckKind::FieldValueConstraint)
-            .severity(ValidationSeverity::Warning)
-            .message_template("failure_mode '{id}' has invalid post_detection '{value}' — expected one of: certain, likely, moderate, unlikely, undetectable")
-            .target_kind("failure_mode")
-            .field("post_detection");
-        r.constraint(|fc| {
-            fc.kind(ConstraintKind::OneOf)
-                .values(&["certain", "likely", "moderate", "unlikely", "undetectable"]);
-        });
     });
 }

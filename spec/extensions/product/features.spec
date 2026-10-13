@@ -166,7 +166,7 @@ feature pe_validation_suite "Product Validation Suite" {
   """
   solution """
     Declarative validation rules (E007, E015, E052, W041-W046, W049, W057,
-    W077-W080, W083-W085, W092, W093, W095, I010, I046-I048, I050,
+    W092, W093, I010, I046-I048, I050,
     I053-I055, I057, I059-I062, I066-I070, I080-I083, I086, I087, I089)
     detect common product
     specification quality issues. The core's declarative engine runs
@@ -177,11 +177,8 @@ feature pe_validation_suite "Product Validation Suite" {
     references (W041, W042, W044); deliverables without journeys or
     modules (W043, W046); feature and release dependency
     cycles (W045, W092); milestones without features (W049); completed
-    milestones without exit criteria (W057); invalid values for feature
-    status (W077), priority on feature, journey, milestone and
-    constraint (W078), milestone status (W079), deliverable
-    artifact_type (W080), persona status (W083), channel status (W084),
-    deliverable status (W085) and feature effort (W095); release
+    milestones without exit criteria (W057); a value outside a field's
+    vocabulary (the core's E061; validate_product_vocabularies); release
     versions that are not semver (W093); terms with no edges (I010);
     personas and channels no journey references (I046, I047); features
     without acceptance criteria (I048); journeys with an empty flow

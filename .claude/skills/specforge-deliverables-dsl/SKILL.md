@@ -48,8 +48,8 @@ deliverable user_management_mvp "User Management MVP" {
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `artifact_type` | ArtifactType @optional | Artifact kind: `cli`, `service`, `library`, `web_app`, `mobile_app`, `api`, `extension`, `documentation`, `package`. Validated by W081. |
-| `status` | DeliverableStatus @optional | Lifecycle state: `draft`, `in_progress`, `shipped`, `deprecated`. Validated by W085. |
+| `artifact_type` | ArtifactType @optional | Artifact kind: `cli`, `service`, `library`, `web_app`, `mobile_app`, `api`, `extension`, `documentation`, `package`. Another value is E061. |
+| `status` | DeliverableStatus @optional | Lifecycle state: `draft`, `in_progress`, `shipped`, `deprecated`. Absent: `draft`. Another value is E061. |
 | `modules` | reference list | Libraries this deliverable is built from. Omission emits W046. |
 | `milestones` | EntityId[] @optional | Milestones this deliverable is tracked against. Creates `DeliverableMilestone` edges. |
 | `depends_on` | EntityId[] @optional | Other deliverables this one depends on. Creates `DeliverableDependsOn` edges. Cycles detected by E016. |
@@ -93,7 +93,7 @@ deliverable user_management_mvp "User Management MVP" {
 | E016 | error | Circular deliverable dependency -- `depends_on` edges form a cycle. |
 | W043 | warning | Deliverable with no journeys. |
 | W046 | warning | Deliverable with no modules. |
-| W085 | warning | Invalid `status` value (not in DeliverableStatus enum). |
+| E061 | error | A value outside the field's vocabulary (`artifact_type`, `status`). |
 | I049 | info | Journey features not a subset of module features (traceability gap). |
 | I061 | info | Invalid `version` format (not Semantic Versioning 2.0.0). |
 | I065 | info | Shipped deliverable has incomplete milestones. |

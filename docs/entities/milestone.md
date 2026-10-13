@@ -44,7 +44,7 @@ All fields are optional at the type level. The compiler emits warnings and info 
 | Field | Type | Description |
 |-------|------|-------------|
 | `title` | string | Human-readable name (the string after the entity ID). |
-| `status` | MilestoneStatus | Current phase status: `planned`, `in_progress`, `completed`, `blocked`. Validated by W079. |
+| `status` | MilestoneStatus | Current phase status: `planned`, `in_progress`, `completed`, `blocked`. Absent: `planned`. Another value is E061. |
 | `features` | EntityId[] | Features scheduled for this phase. Creates `MilestoneDeliversFeature` edges. |
 | `modules` | EntityId[] | Modules included in this phase. Creates `MilestoneScopesModule` edges. |
 | `depends_on` | EntityId[] | Other milestones that must complete before this phase can start. Creates `MilestoneDependsOn` edges. Cycles detected by E015. |
@@ -83,7 +83,7 @@ All fields are optional at the type level. The compiler emits warnings and info 
 | W049 | warning | Milestone with no `features` field (modules don't count). |
 | W057 | warning | Completed milestone without exit criteria. |
 | E015 | error | Circular milestone dependency — `depends_on` edges form a cycle. |
-| W079 | warning | Invalid `status` value (not in MilestoneStatus enum). |
+| E061 | error | A value outside the field's vocabulary. |
 | I053 | info | `target_date` present but not YYYY-MM-DD. |
 | I057 | info | Blocked milestone without `depends_on`. |
 | I060 | info | Blocked milestone without `blockers`. |

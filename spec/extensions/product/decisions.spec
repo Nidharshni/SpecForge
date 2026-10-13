@@ -181,8 +181,8 @@ decision pe_interaction_model_metadata "Interaction Model as Metadata" {
   """
   decision     """
     The interaction_model field is metadata for tooling and AI agents, not
-    a flow-step validation constraint. The compiler does not check
-    interaction_model values against the InteractionModel enum, and does
+    a flow-step validation constraint. interaction_model is an enum of
+    InteractionModel (a value outside it is E061), and the compiler does
     NOT enforce that journey flow steps are compatible with the
     referenced channel's interaction model. Flow-step compatibility is
     domain-specific and belongs to domain extensions or agent reasoning.
@@ -191,7 +191,7 @@ decision pe_interaction_model_metadata "Interaction Model as Metadata" {
     "Interaction model is queryable metadata for agents and tooling",
     "No coupling between journey flow steps and channel interaction model",
     "Domain extensions can add flow-step validation if needed",
-    "Simpler base validation — the value is not checked",
+    "The value is one of InteractionModel; nothing else is checked about it",
     "Agents can use interaction_model to reason about UX patterns",
   ]
 }
@@ -353,10 +353,10 @@ decision pe_diagnostic_code_gaps "Intentional Diagnostic Code Gaps" {
   status       accepted
   date         2026-03-10
   context      """
-    Product's warning codes are W041-W046, W049, W057, W077-W080,
-    W083-W085, W092, W093 and W095; its info codes are I010, I046-I048,
+    Product's warning codes are W041-W046, W049, W057, W092 and W093
+    (W077-W080, W083-W085 and W095 are retired to E061); its info codes are I010, I046-I048,
     I050, I053-I055, I057, I059-I062, I066-I070, I080-I083, I086, I087 and
-    I089. Of the warning codes between them, W050-W052 are governance's,
+    I089. Of the warning codes between them, W050-W052 are retired,
     W053, W054 and W060-W062 are core's, and W063 is retired; W047, W048,
     W055, W056, W058, W064-W076, W081, W082 and W086-W091 are
     unassigned. These gaps
@@ -508,14 +508,14 @@ decision pe_deliverable_lifecycle "Deliverable Lifecycle via Status Field" {
   """
   decision     """
     Add DeliverableStatus (draft, in_progress, shipped, deprecated) and
-    a reason field to ProductDeliverable. W085 validates the enum. I066 detects
+    a reason field to ProductDeliverable. The core refuses another value (E061). I066 detects
     deprecated deliverables without a documented reason. Status defaults
     to absent (treated as draft) for incremental adoption.
   """
   consequences [
     "Deliverables have observable lifecycle state like features and milestones",
     "Deprecated deliverables require justification via reason field",
-    "Two new diagnostic codes: W085, I066",
+    "One new diagnostic code: I066 (W085, its first value check, is retired to E061)",
     "Absent status treated as draft — no breaking change for existing specs",
   ]
   invariants   [deliverable_lifecycle_consistency]
@@ -1034,7 +1034,7 @@ decision pe_priority_asymmetry "Priority Field Asymmetry" {
     "Priority on 3 of 9 kinds — feature, journey, milestone",
     "Deliverable priority is derived from constituent milestones/journeys",
     "Module, term, persona, channel have no priority field",
-    "W078 validates priority only on kinds that declare it",
+    "Priority is an enum only on kinds that declare it",
     "No false validation warnings on kinds without priority",
   ]
 }
@@ -1867,8 +1867,8 @@ decision pe_status_transition_via_cache "Status Transitions via Explicit Build C
     of each kind that declares one, naming no field itself (ADR 0009).
     When present,
     W087-W091/W094 compare current status against cached status. When
-    absent, transition rules are suppressed and only enum validity
-    (W077-W085) is checked.
+    absent, transition rules are suppressed and only vocabulary validity
+    (E061) is checked.
 
     The cache file is a deterministic, reproducible artifact: same spec
     files always produce the same cache contents. It is NOT hidden compiler
@@ -2133,4 +2133,29 @@ decision pe_enable_product_verify "Enable Verify Annotations on Product Entities
   ]
   invariants   [pe_product_verify_support, pe_feature_non_testable]
   tags         ["traceability", "verify", "product-entities", "vision-alignment"]
+}
+
+decision pe_vocabularies_are_enum_fields "Product Vocabularies Are Enum Fields" {
+  status       accepted
+  date         2026-10-13
+  context      """
+    Each closed product vocabulary was copied by hand into the field
+    description, a one_of warning rule and its message, the list filter,
+    the filter's help and the lifecycle pass, and the copies drifted:
+    technical_level, interaction_model and release status had closed list
+    filters and no rule, so check admitted values the lists refused.
+  """
+  decision     """
+    Each vocabulary is one constant (ADR 0071). Its field is declared an
+    enum of it, with the value an absent status counts as as its default;
+    a value outside it is the core's E061. The list filters, their help,
+    the sorts, the lifecycle pass and the rollups read the same constant.
+    W077-W080, W083-W085 and W095 are retired to E061.
+  """
+  consequences [
+    "An off-vocabulary value is an error, as the list filters already treated it",
+    "The editor completes the values and the schema lists them",
+    "technical_level, interaction_model and release status are closed",
+    "A status field's absent value is its declared default",
+  ]
 }

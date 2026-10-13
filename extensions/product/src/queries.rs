@@ -6,8 +6,11 @@
 //! `commands.rs`, which render these results.
 
 use crate::evidence::{self, EvidenceState, FeatureEvidence};
+use crate::vocabulary::{self, *};
 use serde::Serialize;
-use specforge_extension_sdk::prelude::{CommandError, CommandEvidence, CommandGraph, GraphNode};
+use specforge_extension_sdk::prelude::{
+    CommandError, CommandEvidence, CommandGraph, GraphNode, Vocabulary,
+};
 use specforge_extension_sdk::EntityKindDescriptor;
 use std::collections::BTreeMap;
 
@@ -24,61 +27,7 @@ pub const PRODUCT_KINDS: &[&str] = &[
     "release",
 ];
 
-/// The kinds with a lifecycle `status`, in the order `bulk-status` reports
-/// them.
-const STATUS_KINDS: &[&str] = &[
-    "feature",
-    "milestone",
-    "deliverable",
-    "persona",
-    "channel",
-    "release",
-];
-
 // ── Listing ────────────────────────────────────────────────────────────────
-
-/// `Priority`, most important first.
-pub const PRIORITY: &[&str] = &["critical", "high", "medium", "low"];
-const FEATURE_STATUS: &[&str] = &[
-    "proposed",
-    "accepted",
-    "in_progress",
-    "done",
-    "deferred",
-    "deprecated",
-];
-const DELIVERABLE_STATUS: &[&str] = &["draft", "in_progress", "shipped", "deprecated"];
-const MILESTONE_STATUS: &[&str] = &["planned", "in_progress", "completed", "blocked"];
-const RELEASE_STATUS: &[&str] = &["planned", "in_progress", "released", "recalled"];
-const ACTIVE_STATUS: &[&str] = &["active", "deprecated"];
-/// `Effort`, smallest first.
-const EFFORT: &[&str] = &["xs", "s", "m", "l", "xl"];
-const ARTIFACT_TYPE: &[&str] = &[
-    "cli",
-    "service",
-    "library",
-    "web_app",
-    "mobile_app",
-    "api",
-    "extension",
-    "documentation",
-    "package",
-];
-const TECHNICAL_LEVEL: &[&str] = &[
-    "expert",
-    "advanced",
-    "intermediate",
-    "beginner",
-    "non_technical",
-];
-const INTERACTION_MODEL: &[&str] = &[
-    "request_response",
-    "event_driven",
-    "batch",
-    "streaming",
-    "bidirectional",
-    "manual",
-];
 
 /// `ProductListSortOrder`.
 pub const SORT_ORDER: &[&str] = &["asc", "desc"];
@@ -88,40 +37,50 @@ pub const SORT_ORDER: &[&str] = &["asc", "desc"];
 pub const DEFAULT_LIMIT: usize = 100;
 pub const MAX_LIMIT: usize = 1000;
 
-/// An arg a list command filters by: the entities whose `arg` field equals
-/// its value (a reference field matches the id it names).
+/// An arg a list command filters by.
 #[derive(Debug)]
-pub struct FilterArg {
-    pub arg: &'static str,
-    /// The values a closed enum takes, in its order (which a sort follows);
-    /// `None` for an open value (an id, an open enum like `family`).
-    pub values: Option<&'static [&'static str]>,
-    /// What an entity without the field counts as (`FeatureStatus`: absent
-    /// is `proposed`).
-    pub absent_as: Option<&'static str>,
+pub enum FilterArg {
+    /// A field with a vocabulary ([`vocabulary::of`]): its arg is `one_of`
+    /// the values, it matches the entities whose field reads as the value
+    /// (one without the field reads as the absent value), and its help is
+    /// derived ([`FilterArg::help`]).
+    Closed(&'static str),
+    /// A field matched as written, or a reference field matched by the id it
+    /// names (on the field or on an edge it wrote); `help` says what it takes.
+    Open {
+        field: &'static str,
+        help: &'static str,
+    },
 }
 
-const fn closed(arg: &'static str, values: &'static [&'static str]) -> FilterArg {
-    FilterArg {
-        arg,
-        values: Some(values),
-        absent_as: None,
+impl FilterArg {
+    /// The field (and arg) it filters by.
+    pub fn field(&self) -> &'static str {
+        match self {
+            FilterArg::Closed(field) => field,
+            FilterArg::Open { field, .. } => field,
+        }
     }
-}
 
-const fn lifecycle(values: &'static [&'static str]) -> FilterArg {
-    FilterArg {
-        arg: "status",
-        values: Some(values),
-        absent_as: Some(values[0]),
-    }
-}
-
-const fn open(arg: &'static str) -> FilterArg {
-    FilterArg {
-        arg,
-        values: None,
-        absent_as: None,
+    /// Its arg's help: an open filter's own; a closed one's "Only <plural>
+    /// with this <field, `_` as spaces>", followed by "; a <kind> without
+    /// one counts as <absent>" when the vocabulary has an absent value.
+    /// Panics on a closed filter whose field has no vocabulary.
+    pub fn help(&self, kind: &ListKind) -> String {
+        match self {
+            FilterArg::Open { help, .. } => (*help).to_string(),
+            FilterArg::Closed(field) => {
+                let vocabulary = kind
+                    .vocabulary(field)
+                    .unwrap_or_else(|| panic!("{} declares no vocabulary for {field}", kind.kind));
+                let mut help =
+                    format!("Only {} with this {}", kind.plural, field.replace('_', " "));
+                if let Some(absent) = vocabulary.absent() {
+                    help.push_str(&format!("; a {} without one counts as {absent}", kind.kind));
+                }
+                help
+            }
+        }
     }
 }
 
@@ -135,41 +94,49 @@ pub struct ListKind {
 }
 
 impl ListKind {
-    /// The filter on `field`, if the kind has one.
-    pub(crate) fn filter(&self, field: &str) -> Option<&FilterArg> {
-        self.filters.iter().find(|f| f.arg == field)
+    /// The vocabulary of this kind's `field`, if it has one.
+    pub fn vocabulary(&self, field: &str) -> Option<&'static Vocabulary> {
+        vocabulary::of(self.kind, field)
     }
 }
+
+use FilterArg::{Closed, Open};
 
 pub const FEATURES: ListKind = ListKind {
     kind: "feature",
     plural: "features",
-    filters: &[lifecycle(FEATURE_STATUS), closed("priority", PRIORITY)],
+    filters: &[Closed("status"), Closed("priority")],
 };
 pub const JOURNEYS: ListKind = ListKind {
     kind: "journey",
     plural: "journeys",
-    filters: &[closed("priority", PRIORITY), open("persona")],
+    filters: &[
+        Closed("priority"),
+        Open {
+            field: "persona",
+            help: "Only journeys of this persona (its id)",
+        },
+    ],
 };
 pub const DELIVERABLES: ListKind = ListKind {
     kind: "deliverable",
     plural: "deliverables",
-    filters: &[
-        lifecycle(DELIVERABLE_STATUS),
-        closed("artifact_type", ARTIFACT_TYPE),
-    ],
+    filters: &[Closed("status"), Closed("artifact_type")],
 };
 pub const MILESTONES: ListKind = ListKind {
     kind: "milestone",
     plural: "milestones",
-    filters: &[lifecycle(MILESTONE_STATUS), closed("priority", PRIORITY)],
+    filters: &[Closed("status"), Closed("priority")],
 };
 pub const MODULES: ListKind = ListKind {
     kind: "module",
     plural: "modules",
     // `ModuleFamily` is open: a family outside the standard set is I062,
     // not an error, so it is a value to match, not one to refuse.
-    filters: &[open("family")],
+    filters: &[Open {
+        field: "family",
+        help: "Only modules of this family, standard or not",
+    }],
 };
 pub const TERMS: ListKind = ListKind {
     kind: "term",
@@ -179,25 +146,17 @@ pub const TERMS: ListKind = ListKind {
 pub const PERSONAS: ListKind = ListKind {
     kind: "persona",
     plural: "personas",
-    // `PersonaStatus`: absent is `active`.
-    filters: &[
-        lifecycle(ACTIVE_STATUS),
-        closed("technical_level", TECHNICAL_LEVEL),
-    ],
+    filters: &[Closed("status"), Closed("technical_level")],
 };
 pub const CHANNELS: ListKind = ListKind {
     kind: "channel",
     plural: "channels",
-    // `ChannelStatus`: absent is `active`.
-    filters: &[
-        lifecycle(ACTIVE_STATUS),
-        closed("interaction_model", INTERACTION_MODEL),
-    ],
+    filters: &[Closed("status"), Closed("interaction_model")],
 };
 pub const RELEASES: ListKind = ListKind {
     kind: "release",
     plural: "releases",
-    filters: &[lifecycle(RELEASE_STATUS)],
+    filters: &[Closed("status")],
 };
 
 /// Which entities a list command returns (`ProductListFilter`, validated):
@@ -230,17 +189,6 @@ impl<'a> ListFilter<'a> {
     }
 }
 
-/// The values `field` of a `kind` entity takes when it is a closed enum,
-/// in the enum's order (which a sort follows): a filter's, or `priority`'s
-/// or `effort`'s, which no list filters `effort` by.
-pub fn closed_values(kind: &ListKind, field: &str) -> Option<&'static [&'static str]> {
-    kind.filter(field).and_then(|f| f.values).or(match field {
-        "priority" => Some(PRIORITY),
-        "effort" => Some(EFFORT),
-        _ => None,
-    })
-}
-
 /// Whether `kind` entities have `field` to sort by: `id`, `title`, the
 /// shared `tags`, or a field the kind declares.
 pub fn sortable(kind: &str, field: &str) -> bool {
@@ -265,7 +213,7 @@ fn declared_fields(kind: &str) -> Vec<&'static str> {
 pub fn list_nodes<'g>(graph: &'g CommandGraph, filter: &ListFilter) -> Vec<&'g GraphNode> {
     let kind = filter.kind;
     let value = |node: &GraphNode, field: &str| -> Option<String> {
-        let absent_as = kind.filter(field).and_then(|f| f.absent_as);
+        let absent_as = kind.vocabulary(field).and_then(Vocabulary::absent);
         match node.fields.get(field) {
             Some(serde_json::Value::String(s)) => Some(s.clone()),
             Some(serde_json::Value::Array(items)) => Some(
@@ -306,9 +254,9 @@ pub fn list_nodes<'g>(graph: &'g CommandGraph, filter: &ListFilter) -> Vec<&'g G
             "title" => node.title.clone().map(Key::Text),
             field => {
                 let v = value(node, field)?;
-                Some(match closed_values(kind, field) {
+                Some(match kind.vocabulary(field) {
                     Some(order) => {
-                        Key::Rank(order.iter().position(|o| *o == v).unwrap_or(order.len()))
+                        Key::Rank(order.position(&v).unwrap_or_else(|| order.values().len()))
                     }
                     None => Key::Text(v),
                 })
@@ -852,7 +800,7 @@ pub fn milestone_completion(
         .collect();
     let done_features: Vec<String> = features
         .iter()
-        .filter(|f| f.status.as_deref() == Some("done"))
+        .filter(|f| f.status.as_deref() == Some(FEATURE_DONE))
         .map(|f| f.id.clone())
         .collect();
     Some(MilestoneCompletion {
@@ -892,7 +840,7 @@ pub fn journey_coverage(graph: &CommandGraph, journey_id: &str) -> Option<Journe
     let features = sorted_dedup(targets(graph, journey_id, "features"));
     let (covered, uncovered): (Vec<String>, Vec<String>) = features
         .into_iter()
-        .partition(|f| graph.node(f).and_then(|n| n.text("status")) == Some("done"));
+        .partition(|f| graph.node(f).and_then(|n| n.text("status")) == Some(FEATURE_DONE));
     Some(JourneyCoverage {
         journey_id: journey_id.to_string(),
         total_features: covered.len() + uncovered.len(),
@@ -1223,7 +1171,7 @@ pub fn deliverable_completion(
     let milestones = out(graph, deliverable_id, "milestones", "milestone");
     let completed_count = milestones
         .iter()
-        .filter(|m| status_is(graph, m, "completed"))
+        .filter(|m| status_is(graph, m, MILESTONE_COMPLETED))
         .count();
     Some(DeliverableCompletion {
         deliverable_id: deliverable_id.to_string(),
@@ -1257,7 +1205,7 @@ pub fn release_completion(graph: &CommandGraph, release_id: &str) -> Option<Rele
     let deliverables = out(graph, release_id, "deliverables", "deliverable");
     let shipped = deliverables
         .iter()
-        .filter(|d| status_is(graph, d, "shipped"))
+        .filter(|d| status_is(graph, d, DELIVERABLE_SHIPPED))
         .count();
     Some(ReleaseCompletion {
         release_id: release_id.to_string(),
@@ -1293,7 +1241,10 @@ pub fn deliverable_priority(
         .collect();
     Some(DeliverablePriority {
         deliverable_id: deliverable_id.to_string(),
-        priority: ranks.iter().min().map(|&r| PRIORITY[r].to_string()),
+        priority: ranks
+            .iter()
+            .min()
+            .map(|&r| PRIORITY.values()[r].to_string()),
         source_count: ranks.len(),
     })
 }
@@ -1601,13 +1552,12 @@ pub struct FeatureOrdering {
 pub fn feature_ordering(graph: &CommandGraph) -> FeatureOrdering {
     let deps = DepGraph::of(graph, "feature", |_| true);
     let levels = deps.levels();
-    let medium = priority_rank("medium").unwrap_or(0);
     let rank = |i: usize| {
         graph
             .node(&deps.ids[i])
             .and_then(|n| n.text("priority"))
             .and_then(priority_rank)
-            .unwrap_or(medium)
+            .unwrap_or(MEDIUM)
     };
     let mut order: Vec<usize> = (0..deps.ids.len()).collect();
     order.sort_by_key(|&i| (levels[i].unwrap_or(usize::MAX), rank(i), i));
@@ -1668,7 +1618,9 @@ pub fn critical_path(graph: &CommandGraph) -> CriticalPath {
             cycle.join(", ")
         )));
     }
-    let open = DepGraph::of(graph, "milestone", |n| status(n) != Some("completed"));
+    let open = DepGraph::of(graph, "milestone", |n| {
+        status(n) != Some(MILESTONE_COMPLETED)
+    });
     let levels = open.levels();
     let Some(start) = (0..open.ids.len()).max_by_key(|&i| (levels[i], std::cmp::Reverse(i))) else {
         return empty(None);
@@ -1695,7 +1647,7 @@ pub fn critical_path(graph: &CommandGraph) -> CriticalPath {
         latest_completion: nodes.last().and_then(|n| n.target_date.clone()),
         bottleneck_ids: nodes
             .iter()
-            .filter(|n| matches!(n.status.as_deref(), Some("blocked" | "in_progress")))
+            .filter(|n| matches!(n.status.as_deref(), Some(s) if s == MILESTONE_BLOCKED || s == MILESTONE_IN_PROGRESS))
             .map(|n| n.entity_id.clone())
             .collect(),
         critical_path: nodes,
@@ -2267,7 +2219,8 @@ pub fn milestone_timeline(graph: &CommandGraph, as_of: i64) -> MilestoneTimeline
                 milestone_id: m.id.clone(),
                 target_date: text(m, "target_date"),
                 status: text(m, "status"),
-                is_overdue: date.is_some_and(|d| d < as_of) && status(m) != Some("completed"),
+                is_overdue: date.is_some_and(|d| d < as_of)
+                    && status(m) != Some(MILESTONE_COMPLETED),
                 priority: text(m, "priority"),
             };
             (date, entry)
@@ -2318,7 +2271,11 @@ pub fn milestone_velocity(
             .filter(|f| status_is(graph, f, wanted))
             .count()
     };
-    let (total, done, in_progress) = (features.len(), count("done"), count("in_progress"));
+    let (total, done, in_progress) = (
+        features.len(),
+        count(FEATURE_DONE),
+        count(FEATURE_IN_PROGRESS),
+    );
     let start = node
         .text("start_date")
         .and_then(parse_ymd)
@@ -2355,11 +2312,11 @@ pub fn milestone_velocity(
 
 /// Each `Effort` level's weight, in [`EFFORT`]'s order (xs=1, s=2, m=3,
 /// l=5, xl=8): the scale's definition, not a setting (ADR 0011).
-pub const EFFORT_WEIGHTS: [u64; 5] = [1, 2, 3, 5, 8];
+pub const EFFORT_WEIGHTS: [u64; EFFORT.values().len()] = [1, 2, 3, 5, 8];
 
 /// The level (`m`, in [`EFFORT`]) a feature without an effort on the
 /// scale weighs as.
-const DEFAULT_EFFORT: usize = 2;
+const DEFAULT_EFFORT: usize = EFFORT.index("m");
 
 /// `EffortBreakdownEntry`: how many of the milestone's features have the
 /// effort level, and how many of those are done.
@@ -2390,15 +2347,15 @@ pub fn weighted_milestone_completion(
     milestone_id: &str,
 ) -> Option<WeightedMilestoneCompletion> {
     of_kind(graph, milestone_id, "milestone")?;
-    let mut levels = [(0, 0); EFFORT.len()];
+    let mut levels = [(0, 0); EFFORT.values().len()];
     for f in out(graph, milestone_id, "features", "feature") {
         let level = graph
             .node(&f)
             .and_then(|n| n.text("effort"))
-            .and_then(|e| EFFORT.iter().position(|level| *level == e))
+            .and_then(|e| EFFORT.position(e))
             .unwrap_or(DEFAULT_EFFORT);
         levels[level].0 += 1;
-        if status_is(graph, &f, "done") {
+        if status_is(graph, &f, FEATURE_DONE) {
             levels[level].1 += 1;
         }
     }
@@ -2417,10 +2374,10 @@ pub fn weighted_milestone_completion(
         completion_ratio: (total_effort > 0).then(|| done_effort as f64 / total_effort as f64),
         effort_breakdown: levels
             .iter()
-            .zip(EFFORT)
+            .zip(EFFORT.values())
             .filter(|((total, _), _)| *total > 0)
             .map(|(&(total, done), level)| EffortBreakdownEntry {
-                effort_level: level.to_string(),
+                effort_level: (*level).to_string(),
                 total,
                 done,
             })
@@ -2431,10 +2388,7 @@ pub fn weighted_milestone_completion(
 /// The weight of the effort level `level` names; an unknown one weighs
 /// as m.
 pub fn effort_weight(level: &str) -> u64 {
-    EFFORT_WEIGHTS[EFFORT
-        .iter()
-        .position(|l| *l == level)
-        .unwrap_or(DEFAULT_EFFORT)]
+    EFFORT_WEIGHTS[EFFORT.position(level).unwrap_or(DEFAULT_EFFORT)]
 }
 
 // ── Project-wide ───────────────────────────────────────────────────────────
@@ -2461,9 +2415,9 @@ pub struct StatusCount {
 /// Per lifecycle kind present in the graph, how many entities have each
 /// status (`(none)` for those without one).
 pub fn bulk_status(graph: &CommandGraph) -> BulkStatus {
-    let kinds = STATUS_KINDS
+    let kinds = vocabulary::LIFECYCLES
         .iter()
-        .filter_map(|&kind| {
+        .filter_map(|&(kind, _)| {
             let mut counts: BTreeMap<String, usize> = BTreeMap::new();
             let mut total = 0;
             for node in graph.nodes_of_kind(kind) {
@@ -2685,28 +2639,12 @@ fn share(part: usize, whole: usize) -> Option<f64> {
     (whole > 0).then(|| part as f64 / whole as f64)
 }
 
-/// The lifecycle kinds' lists, whose `status` filter knows the status an
-/// entity without one has.
-const LIFECYCLE_KINDS: &[&ListKind] = &[
-    &FEATURES,
-    &DELIVERABLES,
-    &MILESTONES,
-    &PERSONAS,
-    &CHANNELS,
-    &RELEASES,
-];
-
-/// `node`'s lifecycle status: as written, or its kind's default (feature
-/// `proposed`, deliverable `draft`, milestone and release `planned`,
+/// `node`'s lifecycle status: as written, or its kind's absent status
+/// (feature `proposed`, deliverable `draft`, milestone and release `planned`,
 /// persona and channel `active`); `None` for a kind without one.
 fn status(node: &GraphNode) -> Option<&str> {
-    node.text("status").or_else(|| {
-        LIFECYCLE_KINDS
-            .iter()
-            .find(|k| k.kind == node.kind)?
-            .filter("status")?
-            .absent_as
-    })
+    node.text("status")
+        .or_else(|| vocabulary::lifecycle(&node.kind)?.absent())
 }
 
 /// Whether the entity `id` has the lifecycle status `wanted`.
@@ -2714,9 +2652,12 @@ fn status_is(graph: &CommandGraph, id: &str, wanted: &str) -> bool {
     graph.node(id).and_then(status) == Some(wanted)
 }
 
+/// `medium`'s place in `Priority`: a feature without a priority ranks there.
+const MEDIUM: usize = PRIORITY.index("medium");
+
 /// `priority`'s place in `Priority`, 0 for critical; `None` outside it.
 fn priority_rank(priority: &str) -> Option<usize> {
-    PRIORITY.iter().position(|p| *p == priority)
+    PRIORITY.position(priority)
 }
 
 // ── Errors ─────────────────────────────────────────────────────────────────
