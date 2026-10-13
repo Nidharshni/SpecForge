@@ -15,7 +15,7 @@ zero-entity       hook       crates/*/src/**, scripts/check-zero-entity-core.sh
                              the core crates name no entity kind of an extension
 links             hook       computed: a .spec file; a test file or one with a `verify =` attribute
                              every test's verify text and entity is declared by the spec (A016, static)
-builtins          quick      extensions/**, crates/specforge-extension-sdk/**, crates/specforge-extension-sdk-macros/**
+builtins          quick      computed: a file some blob's inputs.json records
                              every builtin blob was built from the sources it recorded
 guests            quick      extensions/**, crates/**, integrations/rust/**, Cargo.toml
                              each guest's tests pass and it is clippy-clean for wasm and native

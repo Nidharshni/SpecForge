@@ -338,6 +338,39 @@ fn doctests_run_for_the_changed_members_that_hold_one() {
 }
 
 #[test]
+fn quick_runs_the_builtins_check_when_a_recorded_input_changes() {
+    // §3.1: quick passed all four of these edits while `build-builtins --check` failed on them.
+    for path in [
+        "crates/specforge-coverage/src/lib.rs",
+        "crates/specforge-protocol-types/src/lib.rs",
+        "Cargo.toml",
+        "crates/specforge-extension-sdk/src/lib.rs",
+    ] {
+        assert_ne!(
+            selection("builtins", Mode::Quick, &[path]),
+            Selection::Skip,
+            "{path}"
+        );
+    }
+    assert_eq!(
+        selection(
+            "builtins",
+            Mode::Quick,
+            &["crates/specforge-lsp/src/lib.rs"]
+        ),
+        Selection::Skip
+    );
+    assert_eq!(
+        selection(
+            "builtins",
+            Mode::Quick,
+            &["crates/specforge-coverage/src/lib.rs"]
+        ),
+        only(&["formal", "product", "testing"])
+    );
+}
+
+#[test]
 fn the_list_is_pinned() {
     insta::assert_snapshot!(render_list());
 }

@@ -1,6 +1,7 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
+use crate::blob_inputs;
 use crate::change_set::{ChangeSet, Pattern};
 use crate::judge;
 use crate::repo::Repo;
@@ -167,12 +168,7 @@ pub static CHECKS: &[Check] = &[
         name: "builtins",
         proves: "every builtin blob was built from the sources it recorded",
         reach: Reach::Quick,
-        // Until the blobs' own records answer this (`gate::blob_inputs`).
-        trigger: Trigger::Paths(&[
-            "extensions/**",
-            "crates/specforge-extension-sdk/**",
-            "crates/specforge-extension-sdk-macros/**",
-        ]),
+        trigger: Trigger::Computed("a file some blob's inputs.json records", blobs_fed),
         compiles: false,
         after: &[],
         fix: "cargo run -p xtask --bin revendor (docs/agents/revendor.md)",
@@ -381,6 +377,15 @@ fn holds_verify(file: &Path) -> bool {
             .trim_start_matches(' ')
             .starts_with('=')
     })
+}
+
+/// The builtins whose recorded inputs hold a changed path (each blob recorded what it was built from).
+fn blobs_fed(repo: &Repo, changes: &ChangeSet) -> Result<Selection, String> {
+    Ok(only(
+        blob_inputs::fed_by(&repo.root, changes)?
+            .into_iter()
+            .collect(),
+    ))
 }
 
 /// The members holding a changed path; a change to the root manifest, the lockfile or nextest's config reaches every
