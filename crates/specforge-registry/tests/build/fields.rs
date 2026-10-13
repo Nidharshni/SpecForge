@@ -3,6 +3,7 @@
 //! the protocol's field types.
 
 use specforge_common::Severity;
+use specforge_extension_sdk::Vocabulary;
 use specforge_protocol_types::ExtensionDeclaration;
 use specforge_registry::{
     FieldDescriptor, FieldRegistryEntry, FieldType, ProofRole, UnknownFieldType,
@@ -70,9 +71,10 @@ fn each_field_type_and_its_alias_registers_as_that_type() {
                     format!("{}_alias", field_type.as_str()),
                 ] {
                     k.field(&name, |f| {
-                        f.field_type(*field_type);
                         if *field_type == FieldType::Enum {
-                            f.enum_values(&["draft", "done"]);
+                            f.vocabulary(&Vocabulary::new(&["draft", "done"]));
+                        } else {
+                            f.field_type(*field_type);
                         }
                     });
                 }

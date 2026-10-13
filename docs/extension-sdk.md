@@ -105,14 +105,15 @@ use specforge_extension_sdk::prelude::*;
 )]
 pub struct Greet;
 
+/// The greeting styles.
+const STYLES: Vocabulary = Vocabulary::new(&["warm", "formal"]);
+
 impl Contributions for Greet {
     fn contribute(c: &mut ContributionsBuilder) {
         c.kind("greeting", |k| {
             k.description("A friendly greeting").testable(false);
             k.field("style", |f| {
-                f.field_type(FieldType::Enum);
-                f.enum_values(&["warm", "formal"]);
-                f.required();
+                f.vocabulary(&STYLES).required();
             });
         });
         c.rule("E901", |r| {
@@ -279,18 +280,35 @@ Every contribution is a builder call. The SDK adds the matching Wasm exports and
 
 ### Fields
 
-`FieldBuilder` declares a field: `field_type(FieldType::..)`, then `required()`, `description(..)`, `edge(label)`, `target_kind(..)`, `inverse_of(..)`, `normative()`, `exempts_obligations()`, `headline()`, `proof_role(..)`, `default_value(..)`, `derived_from(..)`, `file_reference()` (string values are file paths) and `enum_values(&[..])`. A field's type is declared, not inferred:
+`FieldBuilder` declares a field: `field_type(FieldType::..)`, then `required()`, `description(..)`, `edge(label)`, `target_kind(..)`, `inverse_of(..)`, `normative()`, `exempts_obligations()`, `headline()`, `proof_role(..)`, `derived_from(..)` and `file_reference()` (string values are file paths). `vocabulary(&V)` declares the field an `enum` of a `Vocabulary` (`const V: Vocabulary = Vocabulary::new(&[..]).absent_as(..)`): its values, in order, and the value an absent field counts as; the host refuses another value (E061). It is the only way to declare an enum. A field's type is declared, not inferred:
 
 | `FieldType` | Holds |
 |---|---|
 | `String` | a quoted string |
 | `Integer` | a whole number |
 | `Bool` | `true` or `false` |
-| `Enum` | one of the field's `enum_values` |
+| `Enum` | one of its vocabulary's values (declared with `vocabulary`) |
 | `StringList` | a list of quoted strings |
 | `Reference` | one entity id; creates an edge |
 | `ReferenceList` | a list of entity ids; creates one edge per id |
 | `Block` | a triple-quoted text block |
+
+### Vocabularies
+
+A closed set of values a field takes is declared once, as a `const`:
+
+```rust
+const STATUS: Vocabulary = Vocabulary::new(&["draft", "live", "retired"]).absent_as("draft");
+const LIVE: &str = STATUS.member("live");
+```
+
+- `Vocabulary::new(values)`: the values in order; empty, an empty value or a repeat is a compile error in a `const`.
+- `absent_as(value)`: what an absent field counts as; it becomes the field's `default_value`. A non-member is a compile error.
+- `values()` and `absent()`: read both; `values()` is what an arg's `one_of(..)` takes.
+- `member(value)` and `index(value)`: name a value (a misspelt one does not compile) and its place in the order.
+- `position(value)`, `contains(value)` and `read(written)`: a sort's rank, membership, and a field read as its written value or else its absent one.
+
+One `const` per vocabulary; the field declaration, the list filters, the passes and the rules that name a value all read it. `field_type(FieldType::Enum)` panics: an enum is declared with `vocabulary`.
 
 ### Edges
 

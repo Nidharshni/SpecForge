@@ -17,7 +17,7 @@ use tower_lsp::lsp_types::Position;
 
 use crate::registries::{kind, obligating, registries};
 use crate::served::Served;
-use specforge_extension_sdk::prelude::{ContributionsBuilder, FieldType};
+use specforge_extension_sdk::prelude::{ContributionsBuilder, FieldType, Vocabulary};
 
 /// A graph node for the tests of the renderer, which hand it facts.
 fn node(id: &str, kind: &str, title: Option<&str>) -> Node {
@@ -234,7 +234,7 @@ fn hover_shows_field_values() {
     .extension("@t/fields", |c| {
         c.kind("behavior", |k| {
             k.field("status", |f| {
-                f.field_type(FieldType::Enum).enum_values(&["draft", "final"]);
+                f.vocabulary(&Vocabulary::new(&["draft", "final"]));
             });
             references(k, "invariants");
             k.field("contract", |f| {
@@ -613,10 +613,10 @@ fn field_hover_unknown_kind_returns_none() {
 )]
 #[ignore = "fixed by 01-T4"]
 fn field_hover_says_what_an_absent_value_counts_as() {
-    let mut declaration = crate::registries::declaration("@t/x", |c| {
+    let declaration = crate::registries::declaration("@t/x", |c| {
         c.kind("ticket", |k| {
             k.field("status", |f| {
-                f.field_type(FieldType::String)
+                f.vocabulary(&Vocabulary::new(&["draft", "final"]).absent_as("draft"))
                     .description("Where it stands");
             });
             k.field("owner", |f| {
@@ -624,11 +624,6 @@ fn field_hover_says_what_an_absent_value_counts_as() {
             });
         });
     });
-    // The declared descriptor says what the builder of the day cannot.
-    let status = &mut declaration.entities[0].fields[0];
-    status.field_type = "enum".to_string();
-    status.enum_values = vec!["draft".to_string(), "final".to_string()];
-    status.default_value = Some("draft".to_string());
     let build = crate::registries::registries_of(vec![declaration]);
     let reg = build.fields();
 
@@ -652,7 +647,7 @@ fn field_hover_names_a_type_as_e061_does() {
                 f.field_type(FieldType::Bool);
             });
             k.field("priority", |f| {
-                f.field_type(FieldType::Enum).enum_values(&["low", "high"]);
+                f.vocabulary(&Vocabulary::new(&["low", "high"]));
             });
         });
     });

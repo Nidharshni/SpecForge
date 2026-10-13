@@ -167,7 +167,7 @@ fn the_example_writes_each_field_by_its_type() {
     let mut c = ContributionsBuilder::new(ExtensionMeta::new("@t/soft", "1.0.0"));
     c.kind("gadget", |k| {
         k.field("level", |f| {
-            f.field_type(FieldType::Enum).enum_values(&["low", "high"]);
+            f.vocabulary(&Vocabulary::new(&["low", "high"]));
         });
         k.field("note", |f| {
             f.field_type(FieldType::String);
@@ -270,19 +270,13 @@ fn a_guide_field_lists_an_enums_values_and_its_default() {
     let mut c = ContributionsBuilder::new(ExtensionMeta::new("@t/soft", "1.0.0"));
     c.kind("gadget", |k| {
         k.field("level", |f| {
-            f.field_type(FieldType::String);
+            f.vocabulary(&Vocabulary::new(&["low", "high"]).absent_as("high"));
         });
         k.field("note", |f| {
             f.field_type(FieldType::String);
         });
     });
-    let mut declaration = c.declaration();
-    // The declared descriptor says what the builder of the day cannot.
-    let level = &mut declaration.entities[0].fields[0];
-    level.field_type = "enum".to_string();
-    level.enum_values = vec!["low".to_string(), "high".to_string()];
-    level.default_value = Some("high".to_string());
-    let project = project_of("", vec![declaration]);
+    let project = project_of("", vec![c.declaration()]);
     let guide = kind_guide(&project.view(), "gadget").unwrap();
 
     let document = serde_json::to_value(guide.document()).unwrap();
