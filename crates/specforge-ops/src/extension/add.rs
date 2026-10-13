@@ -2855,4 +2855,142 @@ mod tests {
         assert!(error.message.starts_with("adding '"), "{error:?}");
         assert_eq!(files_under(dir.path()), before);
     }
+
+    #[specforge_test(
+        behavior = "add_extension_to_existing_project",
+        verify = "a dry run of several specifiers previews each and writes nothing"
+    )]
+    #[ignore = "fixed by T4"]
+    fn a_dry_run_reports_the_builtins_it_would_enable() {
+        let dir = project_with(EMPTY_PROJECT);
+        let chain = serving_builtin(
+            serving_builtin(
+                runtime_with_product(),
+                "@specforge/formal",
+                declaring(
+                    "@specforge/formal",
+                    "1.0.0",
+                    &[("@specforge/software", "^1.0", false)],
+                ),
+            ),
+            "@specforge/software",
+            declaring("@specforge/software", "1.0.0", &[]),
+        );
+
+        let added = add(
+            &several(
+                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                vec![Source::Builtin("@specforge/formal").into()],
+                true,
+            ),
+            &crate::registry::Unconfigured("add"),
+            &chain,
+        )
+        .unwrap();
+
+        let document = serde_json::to_value(added.document()).unwrap();
+        assert_eq!(document["added"][0]["action"], "planned");
+        assert_eq!(
+            document["added"][0]["peers_enabled"],
+            serde_json::json!(["@specforge/software"]),
+            "{document}"
+        );
+    }
+
+    #[specforge_test(
+        behavior = "add_extension_to_existing_project",
+        verify = "a dry run judges a registry package by the declaration it was published with, downloading nothing"
+    )]
+    #[ignore = "fixed by T4"]
+    fn a_dry_run_judges_a_registry_package_by_its_published_declaration() {
+        let published = || {
+            MemoryRegistry::new()
+                .serving(Published::new(
+                    b"\0asm base1".to_vec(),
+                    declaration("@acme/base", "1.0.0", &[]),
+                ))
+                .serving(Published::new(
+                    b"\0asm base2".to_vec(),
+                    declaration("@acme/base", "2.0.0", &[]),
+                ))
+                .serving(Published::new(
+                    b"\0asm app".to_vec(),
+                    declaration("@acme/app", "1.0.0", &[("@acme/base", "^2.0")]),
+                ))
+        };
+        let dir = add_project(vec![entry("@acme/base", "1.0.0", "registry", &[])]);
+        let root = specforge_common::ProjectRoot::of(dir.path()).unwrap();
+        let request = |dry_run| AddRequest {
+            root: &root,
+            extensions: vec![
+                Source::Registry(PackageRef::parse("@acme/app@1.0.0").unwrap()).into(),
+            ],
+            allow_unsigned: true,
+            trust: Trust::Refuse,
+            dry_run,
+        };
+
+        let real = add(&request(false), &published(), &runtime()).unwrap_err();
+        assert_eq!(real.code, "R-RES-006", "{real:?}");
+        assert!(real.message.contains("2.0.0"), "{real:?}");
+
+        let registry = published();
+        let dry = add(&request(true), &registry, &runtime()).unwrap_err();
+        assert_eq!((dry.code, dry.message), (real.code, real.message));
+        assert!(
+            !registry
+                .asked()
+                .iter()
+                .any(|asked| matches!(asked, crate::registry::testing::Asked::Fetch(..))),
+            "a dry run downloads nothing: {:?}",
+            registry.asked()
+        );
+    }
+
+    #[specforge_test(
+        behavior = "parse_extension_specifier",
+        verify = "a specifier that is no builtin's name, git+ URL or @scope/name reference is a local path, a bare crate directory included"
+    )]
+    #[ignore = "fixed by T9"]
+    fn a_bare_path_is_a_local_source() {
+        assert_eq!(parse("ext").unwrap(), Source::Local("ext".into()));
+        assert_eq!(
+            parse("tools/greet").unwrap(),
+            Source::Local("tools/greet".into())
+        );
+        assert!(matches!(parse("@acme/x").unwrap(), Source::Registry(_)));
+        assert_eq!(
+            parse("@acme/x.wasm").unwrap(),
+            Source::Local("@acme/x.wasm".into())
+        );
+
+        let dir = project_with(EMPTY_PROJECT);
+        let krate = dir.path().join("ext");
+        let release = krate.join("target/wasm32-wasip2/release");
+        std::fs::create_dir_all(&release).unwrap();
+        std::fs::write(krate.join("Cargo.toml"), "[package]\nname = \"greet\"\n").unwrap();
+        std::fs::write(release.join("greet.wasm"), GREET).unwrap();
+        let root = specforge_common::ProjectRoot::of(dir.path()).unwrap();
+        let specified = Specified {
+            specifier: "ext".into(),
+            source: parse("ext").unwrap(),
+        }
+        .relative_to(dir.path());
+
+        let added = add(
+            &several(&root, vec![specified], false),
+            &crate::registry::Unconfigured("add"),
+            &runtime(),
+        )
+        .unwrap();
+
+        let AddOutcome::Installed { name, origin, .. } = &added.added[0].outcome else {
+            panic!("{:?}", added.added[0].outcome);
+        };
+        assert_eq!(name, "@sdk/greet");
+        assert_eq!(
+            origin.source(),
+            "local:ext/target/wasm32-wasip2/release/greet.wasm"
+        );
+    }
 }

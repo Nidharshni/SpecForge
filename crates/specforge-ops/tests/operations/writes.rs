@@ -449,6 +449,107 @@ fn a_failed_init_puts_back_what_was_there() {
     }
 }
 
+#[specforge_test_macros::test(
+    behavior = "scaffold_new_project",
+    verify = "a failed init leaves the directory as it was, files that were there included"
+)]
+fn a_failed_init_leaves_an_empty_directory_empty() {
+    use specforge_ops::init;
+    let blobs = Blobs::new();
+    let scratch = TempDir::new().unwrap();
+    let dir = scratch.path().join("victim");
+    std::fs::create_dir_all(&dir).unwrap();
+    // `.specforge` is a file: no module can be placed under it.
+    std::fs::write(dir.join(".specforge"), "not a directory\n").unwrap();
+    let extensions = [blobs.greet().display().to_string()];
+    let request = init::Request {
+        dir: &dir,
+        name: Some("demo"),
+        version: init::DEFAULT_VERSION,
+        extensions: &extensions,
+    };
+
+    let plan = init::plan(&request, &candidates()).unwrap();
+    let error = init::apply(&dir, plan, &candidates()).unwrap_err();
+
+    assert_eq!(error.code, "E032", "{error:?}");
+    assert!(error.writes.is_empty(), "{:?}", error.writes);
+    let left: Vec<_> = std::fs::read_dir(&dir)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect();
+    assert_eq!(left, [std::ffi::OsString::from(".specforge")]);
+    assert_eq!(
+        std::fs::read_to_string(dir.join(".specforge")).unwrap(),
+        "not a directory\n"
+    );
+}
+
+#[specforge_test_macros::test(
+    behavior = "non_interactive_init",
+    verify = "init reads its extension specifiers as add reads them, with add's codes"
+)]
+#[ignore = "fixed by T6"]
+fn init_reads_its_specifiers_as_add_reads_them() {
+    use specforge_ops::init;
+    let scratch = TempDir::new().unwrap();
+    let missing = scratch.path().join("missing.wasm").display().to_string();
+    let cases = [
+        ("Bad Name", "E054"),
+        ("@acme/x@>>1", "R-RES-003"),
+        (missing.as_str(), "E054"),
+        ("git+https://x/y", "E064"),
+        ("@acme/x", "E063"),
+    ];
+    for (specifier, code) in cases {
+        let existing = project(&[], &[]);
+        let before = files_under(existing.path());
+        let by_add = extension::specified(&[specifier]).and_then(|extensions| {
+            extension::add(
+                &AddRequest {
+                    root: &specforge_common::ProjectRoot::of(existing.path()).unwrap(),
+                    extensions,
+                    allow_unsigned: false,
+                    trust: Trust::Refuse,
+                    dry_run: false,
+                },
+                &specforge_ops::registry::Unconfigured("add"),
+                &candidates(),
+            )
+            .map(|_| ())
+        });
+        let by_add = by_add.unwrap_err();
+        assert_eq!(by_add.code, code, "{specifier}: add: {by_add:?}");
+        assert_eq!(files_under(existing.path()), before);
+
+        let dir = scratch.path().join("fresh");
+        let extensions = [specifier.to_string()];
+        let request = init::Request {
+            dir: &dir,
+            name: Some("demo"),
+            version: init::DEFAULT_VERSION,
+            extensions: &extensions,
+        };
+        let by_init = init::plan(&request, &candidates())
+            .and_then(|plan| init::apply(&dir, plan, &candidates()))
+            .unwrap_err();
+        assert_eq!(by_init.code, code, "{specifier}: init: {by_init:?}");
+        if code != "E063" {
+            assert_eq!(by_init.message, by_add.message, "{specifier}");
+            assert_eq!(by_init.suggestion, by_add.suggestion, "{specifier}");
+        } else {
+            assert!(
+                by_init
+                    .suggestion
+                    .as_deref()
+                    .is_some_and(|s| s.contains("specforge add @acme/x")),
+                "{by_init:?}"
+            );
+        }
+        assert!(!dir.exists(), "{specifier}: nothing written");
+    }
+}
+
 #[test]
 fn enabling_a_builtin_writes_the_config_only() {
     let dir = project(&[], &[]);

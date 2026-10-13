@@ -442,6 +442,8 @@ behavior remove_extension "Remove Extension" {
   verify integration "a .wasm file entry is removed by the name it declares or by its entry as written, leaving its file in place"
   verify integration "a name more than one specforge.json entry enables is refused as ambiguous, naming the entries"
   verify integration "removing a .wasm file entry another extension requires fails with E027 unless --force"
+  verify unit "remove and check agree: a removal check would report E027 for is refused, and a removal that passes leaves none"
+  verify integration "a locked extension no specforge.json entry enables does not keep its peer from being removed"
   verify integration "a removal with an unreadable specforge.json is config_invalid and changes nothing"
 }
 
