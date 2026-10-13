@@ -115,10 +115,14 @@ fn a_collector_receives_a_collect_input_and_answers_a_collect_output() {
     let missing_name = json!({"entity_results": [{"entity_id": "a", "test_results": [
         {"status": "passed"}
     ]}]});
+    let unknown_status = json!({"entity_results": [{"entity_id": "a", "test_results": [
+        {"name": "t", "status": "ok"}
+    ]}]});
     for raw in [
         b"[]".to_vec(),
         b"{}".to_vec(),
         missing_name.to_string().into_bytes(),
+        unknown_status.to_string().into_bytes(),
         b"not json".to_vec(),
     ] {
         let runtime = answering("collect__x", WasmCallResult::Ok(raw.clone()));
@@ -150,22 +154,44 @@ fn a_collector_receives_a_collect_input_and_answers_a_collect_output() {
     );
 }
 
-// Plan 08, T0 pin: a status outside passed, failed and skipped is a valid
-// CollectOutput today. T3 flips it to an E028 refusal.
-#[test]
-fn a_status_outside_the_vocabulary_is_a_collect_output_today() {
-    let answer = json!({"entity_results": [{"entity_id": "a", "test_results": [
-        {"name": "t", "status": "ok"}
-    ]}]});
-    let runtime = answering(
-        "collect__x",
-        WasmCallResult::Ok(answer.to_string().into_bytes()),
-    );
-    let read = dispatch(Some(&runtime), &collector(), &reports(), None).unwrap();
-    assert_eq!(
-        serde_json::to_value(&read).unwrap()["entity_results"][0]["test_results"][0]["status"],
-        "ok"
-    );
+#[specforge_test(
+    invariant = "collector_output_conformance",
+    verify = "a test status outside passed, failed and skipped is an error naming the collector, never a skipped test"
+)]
+fn a_status_outside_the_vocabulary_is_not_a_collect_output() {
+    let answers = [
+        json!({"entity_results": [{"entity_id": "a", "test_results": [
+            {"name": "t", "status": "ok"}]}]}),
+        json!({"entity_results": [{"entity_id": "a", "test_results": [
+            {"name": "t", "status": "pass"}]}]}),
+        json!({"entity_results": [], "unlinked": [
+            {"name": "m::t", "path": ["m", "t"], "status": "ignored"}]}),
+    ];
+    for answer in answers {
+        let runtime = answering(
+            "collect__x",
+            WasmCallResult::Ok(answer.to_string().into_bytes()),
+        );
+        let err = dispatch(Some(&runtime), &collector(), &reports(), None).unwrap_err();
+        assert!(
+            matches!(
+                err.failure,
+                CallFailure::Malformed {
+                    expected: "CollectOutput",
+                    ..
+                }
+            ),
+            "{answer}: {err}"
+        );
+        let shown = err.to_string();
+        assert!(
+            shown.starts_with(&format!(
+                "collector collect__x() of '{EXT}' answered output that is not a CollectOutput: "
+            )),
+            "{shown}"
+        );
+        assert!(shown.contains("unknown variant"), "{shown}");
+    }
 }
 
 // ── C8 · migration hook ──

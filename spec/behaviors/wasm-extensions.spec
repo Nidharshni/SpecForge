@@ -534,10 +534,12 @@ behavior dispatch_collector "Dispatch Collector" {
     The export answers with test results grouped by entity:
     `{"entity_results": [{"entity_id", "test_results": [{"name", "status",
     "verify"?, "duration_ms"?}]}], "unlinked"?: [{"name", "path",
-    "status"}]}`, where status is passed, failed or skipped and `unlinked`
-    lists tests the report doesn't link to an entity. A trap or an answer
-    that is not a CollectOutput (a test without a name, an empty object) is
-    E028 naming the collector, never empty results. `--no-run`
+    "status"}]}`, where status is the protocol's TestStatus, passed, failed
+    or skipped, read strictly, and `unlinked` lists tests the report doesn't
+    link to an entity. A trap or an answer that is not a CollectOutput (a
+    test without a name, a status outside passed, failed and skipped, an
+    empty object) is E028 naming the collector, never empty results or a
+    skipped test. `--no-run`
     and `--report` skip running and dispatch an existing report.
   """
   produces   [collector_dispatched]

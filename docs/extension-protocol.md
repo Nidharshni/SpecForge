@@ -440,9 +440,12 @@ The host calls the export with a `CollectInput`, `{"reports": [{"path",
 "content"}], "stdout"?}` (`stdout` only when the collector captures it), and
 reads a `CollectOutput`, `{"entity_results": [{"entity_id", "test_results":
 [{"name", "status", "verify"?, "duration_ms"?}]}], "unlinked"?: [{"name",
-"path", "status"}]}`, with `status` one of `passed`, `failed` or `skipped`.
-`entity_results` and each test's `name` are required: an answer without them
-is E028 naming the collector, never empty results.
+"path", "status"}]}` (each test a `TestResult`), with `status` a `TestStatus`:
+`passed`, `failed` or `skipped`, the one vocabulary of the collect wire, the
+recorded test report and a pass's test results. `entity_results`, each test's
+`name` and its `status` are required, and a status outside the three is not a
+`CollectOutput`: an answer without them is E028 naming the collector, never
+empty results or a skipped test.
 `unlinked` lists tests the report doesn't link to an entity (`path` is the
 test's name split into segments, its own name last); the host links them by
 naming convention when it can (`entity_id__obligation_slug`, or a module

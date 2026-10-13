@@ -30,7 +30,7 @@ fn groups_entries_by_entity_across_binaries() {
         ],
         ..CollectInput::default()
     };
-    let out = collect(&input);
+    let out = collect(&input).unwrap();
     let ids: Vec<&str> = out
         .entity_results
         .iter()
@@ -39,10 +39,13 @@ fn groups_entries_by_entity_across_binaries() {
     assert_eq!(ids, vec!["login", "user"]);
     let login = &out.entity_results[0].test_results;
     assert_eq!(login.len(), 2);
-    assert_eq!(login[0].status, "passed");
+    assert_eq!(login[0].status, TestStatus::Passed);
     assert_eq!(login[0].verify.as_deref(), Some("accepts"));
-    assert_eq!(login[1].status, "failed");
-    assert_eq!(out.entity_results[1].test_results[0].status, "skipped");
+    assert_eq!(login[1].status, TestStatus::Failed);
+    assert_eq!(
+        out.entity_results[1].test_results[0].status,
+        TestStatus::Skipped
+    );
     assert!(out.unlinked.is_empty());
 }
 
@@ -52,24 +55,27 @@ fn parses_libtest_output() {
     assert_eq!(
         parsed,
         vec![
-            ("tests::plain_ignored".to_string(), "skipped"),
-            ("tests::slow_one".to_string(), "skipped"),
+            ("tests::plain_ignored".to_string(), TestStatus::Skipped),
+            ("tests::slow_one".to_string(), TestStatus::Skipped),
             (
                 "tests::add_item::rejects_a_duplicate_item".to_string(),
-                "passed"
+                TestStatus::Passed
             ),
             (
                 "tests::add_item__rejects_an_empty_name".to_string(),
-                "passed"
+                TestStatus::Passed
             ),
-            ("tests::panics".to_string(), "passed"),
-            ("tests::fails".to_string(), "failed"),
-            ("cart__is_empty_at_first".to_string(), "passed"),
+            ("tests::panics".to_string(), TestStatus::Passed),
+            ("tests::fails".to_string(), TestStatus::Failed),
+            ("cart__is_empty_at_first".to_string(), TestStatus::Passed),
         ],
         "doc tests and a failing test's replayed output are skipped"
     );
     let coloured = "test \u{1b}[32ma\u{1b}[0m ... \u{1b}[32mok\u{1b}[0m\r\n";
-    assert_eq!(parse_libtest(coloured), vec![("a".to_string(), "passed")]);
+    assert_eq!(
+        parse_libtest(coloured),
+        vec![("a".to_string(), TestStatus::Passed)]
+    );
     assert!(parse_libtest("test b ... bench:  10 ns/iter (+/- 1)").is_empty());
 }
 
@@ -81,7 +87,8 @@ fn reports_tests_the_attribute_did_not_record_as_unlinked() {
     let out = collect(&CollectInput {
         reports: vec![file("target/specforge/shop_lib.json", report)],
         stdout: Some(LIBTEST.to_string()),
-    });
+    })
+    .unwrap();
     let names: Vec<&str> = out.unlinked.iter().map(|t| t.name.as_str()).collect();
     assert_eq!(
         names,
@@ -98,7 +105,7 @@ fn reports_tests_the_attribute_did_not_record_as_unlinked() {
         out.unlinked[2].path,
         vec!["tests", "add_item__rejects_an_empty_name"]
     );
-    assert_eq!(out.unlinked[3].status, "failed");
+    assert_eq!(out.unlinked[3].status, TestStatus::Failed);
 }
 
 #[test]
@@ -106,6 +113,29 @@ fn reads_libtest_output_passed_as_a_report_file() {
     let out = collect(&CollectInput {
         reports: vec![file("out.txt", LIBTEST)],
         ..CollectInput::default()
-    });
+    })
+    .unwrap();
     assert_eq!(out.unlinked.len(), 7);
+}
+
+#[test]
+fn an_entry_whose_status_is_not_written_by_specforge_test_is_an_error() {
+    let report = r#"{"entries":[{"entity_id":"login","test_name":"flaky","status":"flaky"}]}"#;
+    let err = collect(&CollectInput {
+        reports: vec![file("target/specforge/a.json", report)],
+        ..CollectInput::default()
+    })
+    .unwrap_err();
+    assert_eq!(
+        err,
+        "target/specforge/a.json: entry for 'flaky' has status 'flaky', which specforge-test does not write"
+    );
+    // An entries array that does not decode is the collector's error too.
+    let undecodable = r#"{"entries":[{"test_name":"nameless_entity"}]}"#;
+    let err = collect(&CollectInput {
+        reports: vec![file("target/specforge/b.json", undecodable)],
+        ..CollectInput::default()
+    })
+    .unwrap_err();
+    assert!(err.starts_with("target/specforge/b.json: "), "{err}");
 }

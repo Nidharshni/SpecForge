@@ -1122,8 +1122,8 @@ pub mod prelude {
         McpResourceBuilder, McpToolBuilder,
     };
     pub use crate::{
-        CollectEntityResult, CollectInput, CollectOutput, CollectReportFile, CollectTestResult,
-        CollectUnlinkedTest, CollectorBuilder,
+        CollectEntityResult, CollectInput, CollectOutput, CollectReportFile, CollectUnlinkedTest,
+        CollectorBuilder,
     };
     pub use specforge_extension_sdk_macros::extension;
     pub use specforge_protocol_types::{
@@ -1164,12 +1164,12 @@ mod raw_category_tests;
 // ([`CommandOutput::error`]).
 
 pub use specforge_protocol_types::{
-    CollectEntityResult, CollectInput, CollectOutput, CollectReportFile, CollectTestResult,
-    CollectUnlinkedTest, CommandError, CommandEvidence, CommandFormat, CommandOutput,
-    EntityEvidence, EntityTests, GraphEdge, GraphNode, GraphWire, McpResourceContent,
-    McpResourceRequest, MigrationInput, PassAnswer, PassBuildCache, PassCachedStatus,
-    PassDiagnostic, PassEdge, PassEntity, PassInput, PassOutput, PassSeverity, PassSpan,
-    ScanRequest, ScanResponse, ScannedItem, TestResult, TestResults, TestStatus,
+    CollectEntityResult, CollectInput, CollectOutput, CollectReportFile, CollectUnlinkedTest,
+    CommandError, CommandEvidence, CommandFormat, CommandOutput, EntityEvidence, EntityTests,
+    GraphEdge, GraphNode, GraphWire, McpResourceContent, McpResourceRequest, MigrationInput,
+    PassAnswer, PassBuildCache, PassCachedStatus, PassDiagnostic, PassEdge, PassEntity, PassInput,
+    PassOutput, PassSeverity, PassSpan, ScanRequest, ScanResponse, ScannedItem, TestResult,
+    TestResults, TestStatus,
 };
 
 /// What a `cmd__<name>` export receives, its graph indexed for lookups

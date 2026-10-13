@@ -132,6 +132,7 @@ invariant collector_output_conformance "Collector Output Conformance" {
   verify unit "unknown entity ID in collector entry produces W115"
   verify unit "skipped tests are not recorded as proof"
   verify unit "a test status is passed, failed or skipped, and no other value decodes"
+  verify unit "a test status outside passed, failed and skipped is an error naming the collector, never a skipped test"
 }
 
 // -- Registry Invariants ----------------------------------------------------

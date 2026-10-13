@@ -2,8 +2,9 @@
 //! their real Wasm blobs and dispatched by the host's collect flow.
 
 use specforge_ops::collect::{collectors, dispatch};
-use specforge_protocol_types::CollectReportFile;
 use specforge_protocol_types::ExtensionDeclaration;
+use specforge_protocol_types::{CollectReportFile, TestStatus};
+use specforge_wasm::CallFailure;
 use specforge_wasm::protocol::load_declaration;
 
 /// A Wasm runtime for a temp project enabling `ext_names`.
@@ -89,20 +90,23 @@ fn cargo_test_reports_plain_tests_as_unlinked() {
     };
     let out = dispatch(Some(&runtime), collector, &[report], Some(stdout)).unwrap();
     assert_eq!(out.entity_results.len(), 1, "the attribute's own result");
-    let unlinked: Vec<(&str, &str)> = out
+    let unlinked: Vec<(&str, TestStatus)> = out
         .unlinked
         .iter()
-        .map(|t| (t.name.as_str(), t.status.as_str()))
+        .map(|t| (t.name.as_str(), t.status))
         .collect();
     assert_eq!(
         unlinked,
         [
-            ("tests::plain_ignored", "skipped"),
-            ("tests::slow_one", "skipped"),
-            ("tests::add_item::rejects_a_duplicate_item", "passed"),
-            ("tests::add_item__rejects_an_empty_name", "passed"),
-            ("tests::fails", "failed"),
-            ("cart__is_empty_at_first", "passed"),
+            ("tests::plain_ignored", TestStatus::Skipped),
+            ("tests::slow_one", TestStatus::Skipped),
+            (
+                "tests::add_item::rejects_a_duplicate_item",
+                TestStatus::Passed
+            ),
+            ("tests::add_item__rejects_an_empty_name", TestStatus::Passed),
+            ("tests::fails", TestStatus::Failed),
+            ("cart__is_empty_at_first", TestStatus::Passed),
         ],
         "doc tests, the attribute's test and replayed failure output are left out"
     );
@@ -187,4 +191,48 @@ fn collect_maps_results_to_the_views_entities() {
         .collect();
     assert_eq!(w115.len(), 1, "{:?}", outcome.diagnostics);
     assert!(w115[0].contains("'zz'"), "{}", w115[0]);
+}
+
+#[specforge_test_macros::test(
+    behavior = "ct_map_binary_reports",
+    verify = "a report entry whose status is not passed, failed or skipped is the collector's error"
+)]
+fn cargo_test_refuses_an_entry_with_an_unknown_status() {
+    let runtime = wasm_runtime_for(&["@specforge/cargo-test"]);
+    let manifest = load_via_protocol("@specforge/cargo-test");
+    let collector = &collectors(std::slice::from_ref(&manifest))[0];
+    let report = CollectReportFile {
+        path: "target/specforge/shop_lib.json".into(),
+        content: r#"{"entries":[{"entity_id":"cart","test_name":"flaky","status":"flaky"}]}"#
+            .into(),
+    };
+    let err = dispatch(Some(&runtime), collector, &[report], None).unwrap_err();
+    assert!(matches!(err.failure, CallFailure::Trapped { .. }), "{err}");
+    assert!(
+        err.to_string().contains("target/specforge/shop_lib.json"),
+        "{err}"
+    );
+}
+
+#[specforge_test_macros::test(
+    behavior = "vt_map_vitest_report",
+    verify = "a linked test whose status vitest's JSON reporter does not write is the collector's error"
+)]
+fn vitest_refuses_a_linked_test_with_an_unknown_status() {
+    let runtime = wasm_runtime_for(&["@specforge/vitest"]);
+    let manifest = load_via_protocol("@specforge/vitest");
+    let collector = &collectors(std::slice::from_ref(&manifest))[0];
+    let report = CollectReportFile {
+        path: ".specforge/reports/vitest.json".into(),
+        content: r#"{"testResults":[{"assertionResults":[{"fullName":"t","status":"flaky",
+            "meta":{"specforge":{"behavior":"a"}}}]}]}"#
+            .into(),
+    };
+    let err = dispatch(Some(&runtime), collector, &[report], None).unwrap_err();
+    assert!(matches!(err.failure, CallFailure::Trapped { .. }), "{err}");
+    let shown = err.to_string();
+    assert!(
+        shown.contains("test 't'") && shown.contains("'flaky'"),
+        "{shown}"
+    );
 }

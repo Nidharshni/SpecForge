@@ -21,9 +21,7 @@ use specforge_common::shape::Shape;
 use specforge_common::{Code, Diagnostic, DiagnosticList, codes};
 use specforge_project::coverage::{ReportedEntity, ReportedTest, TestReport};
 use specforge_protocol_types::ExtensionDeclaration;
-use specforge_protocol_types::{
-    CollectInput, CollectOutput, CollectReportFile, TestResult, TestStatus,
-};
+use specforge_protocol_types::{CollectInput, CollectOutput, CollectReportFile, TestStatus};
 use specforge_wasm::{CallError, CallFailure, ExtensionCalls, Operation};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Component, Path, PathBuf};
@@ -519,26 +517,16 @@ pub fn merge(
         }
         let mut recorded = Vec::new();
         for test in &entity.test_results {
-            let status = match test.status.as_str() {
-                "passed" | "pass" => TestStatus::Passed,
-                "failed" | "fail" => TestStatus::Failed,
-                _ => {
+            match test.status {
+                TestStatus::Passed => stats.passed += 1,
+                TestStatus::Failed => stats.failed += 1,
+                TestStatus::Skipped => {
                     stats.skipped += 1;
                     continue;
                 }
-            };
-            if status == TestStatus::Passed {
-                stats.passed += 1;
-            } else {
-                stats.failed += 1;
             }
             recorded.push(ReportedTest {
-                result: TestResult {
-                    name: test.name.clone(),
-                    status,
-                    verify: test.verify.clone(),
-                    duration_ms: test.duration_ms,
-                },
+                result: test.clone(),
                 runner: Some(runner.to_string()),
             });
         }
@@ -925,7 +913,7 @@ pub fn save_report(root: &Path, report: &TestReport) -> Result<PathBuf, OpError>
 mod tests {
     use super::*;
     use specforge_common::Severity;
-    use specforge_protocol_types::{CollectEntityResult, CollectTestResult};
+    use specforge_protocol_types::{CollectEntityResult, TestResult};
     use specforge_test_macros::test as specforge_test;
 
     fn collector(report: &str) -> Collector {
@@ -1145,12 +1133,12 @@ mod tests {
         );
     }
 
-    fn collected(entries: &[(&str, &str, &str)]) -> CollectOutput {
-        let mut by_entity: BTreeMap<&str, Vec<CollectTestResult>> = BTreeMap::new();
+    fn collected(entries: &[(&str, &str, TestStatus)]) -> CollectOutput {
+        let mut by_entity: BTreeMap<&str, Vec<TestResult>> = BTreeMap::new();
         for (id, name, status) in entries {
-            by_entity.entry(id).or_default().push(CollectTestResult {
+            by_entity.entry(id).or_default().push(TestResult {
                 name: name.to_string(),
-                status: status.to_string(),
+                status: *status,
                 verify: None,
                 duration_ms: None,
             });
@@ -1230,16 +1218,16 @@ mod tests {
         merge(
             &mut report,
             "vitest",
-            &collected(&[("a", "t1", "passed")]),
+            &collected(&[("a", "t1", TestStatus::Passed)]),
             &known,
         );
         let (stats, diags) = merge(
             &mut report,
             "cargo-test",
             &collected(&[
-                ("a", "t2", "failed"),
-                ("b", "t3", "skipped"),
-                ("zz", "t4", "passed"),
+                ("a", "t2", TestStatus::Failed),
+                ("b", "t3", TestStatus::Skipped),
+                ("zz", "t4", TestStatus::Passed),
             ]),
             &known,
         );
@@ -1275,18 +1263,6 @@ mod tests {
         }
     }
 
-    // Plan 08, T0 pin: an unknown status is counted skipped, silently.
-    // T3 deletes it (a `TestStatus` cannot hold `ok`).
-    #[test]
-    fn an_unknown_status_is_counted_skipped_without_a_diagnostic_today() {
-        let known = KnownEntities::from_iter([("a".to_string(), Vec::new())]);
-        let mut report = empty_report();
-        let (stats, diags) = merge(&mut report, "r", &collected(&[("a", "t", "ok")]), &known);
-        assert_eq!(stats.skipped, 1);
-        assert!(diags.is_empty());
-        assert!(!report.results.contains_key("a"));
-    }
-
     #[specforge_test(
         behavior = "ingest_collector_report",
         verify = "the recorded test report speaks the collect vocabulary, and a status outside it is a report that cannot be used"
@@ -1297,7 +1273,7 @@ mod tests {
         merge(
             &mut report,
             "vitest",
-            &collected(&[("a", "t1", "passed")]),
+            &collected(&[("a", "t1", TestStatus::Passed)]),
             &known,
         );
         assert_eq!(
@@ -1318,7 +1294,7 @@ mod tests {
         let (_, diags) = merge(
             &mut report,
             "r",
-            &collected(&[("zz", "t", "passed")]),
+            &collected(&[("zz", "t", TestStatus::Passed)]),
             &known,
         );
         assert_eq!(diags.len(), 1);
@@ -1337,7 +1313,7 @@ mod tests {
         let (stats, _) = merge(
             &mut report,
             "r",
-            &collected(&[("a", "t", "skipped")]),
+            &collected(&[("a", "t", TestStatus::Skipped)]),
             &known,
         );
         assert_eq!(stats.skipped, 1);

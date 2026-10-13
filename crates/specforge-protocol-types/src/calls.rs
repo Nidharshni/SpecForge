@@ -659,31 +659,19 @@ pub struct CollectOutput {
 
 /// A test the report doesn't link to an entity: its name, the name split
 /// into its path segments (`["tests", "add_item", "rejects_a_duplicate"]`,
-/// the test's own name last), and `passed`, `failed` or `skipped`.
+/// the test's own name last), and its [`TestStatus`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CollectUnlinkedTest {
     pub name: String,
     pub path: Vec<String>,
-    pub status: String,
+    pub status: TestStatus,
 }
 
 /// The tests a report links to one entity.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CollectEntityResult {
     pub entity_id: String,
-    pub test_results: Vec<CollectTestResult>,
-}
-
-/// One test. `status` is `passed`, `failed` or `skipped`; `verify` names
-/// the obligation the test proves, when the test says so.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct CollectTestResult {
-    pub name: String,
-    pub status: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub verify: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub duration_ms: Option<f64>,
+    pub test_results: Vec<TestResult>,
 }
 
 // ── Migration hook (the handshake's `migration_hook`) ──────────────────────

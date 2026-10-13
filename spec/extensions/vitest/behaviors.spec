@@ -39,8 +39,10 @@ behavior vt_map_vitest_report "Map vitest Reports to Entities" {
     options, at run time on `task.meta`, or on a `describe` block, whose
     tests inherit it. `collect__vitest` MUST map every linked test to a
     result of each entity it names, with its full name, duration and
-    `verify` text: `passed` and `failed` keep their status, anything else
-    (skipped, todo, pending) is skipped. Tests without `specforge`
+    `verify` text: `passed` and `failed` keep their status; `skipped`,
+    `pending`, `todo` and `disabled` are skipped; a linked test with any
+    other status is the collector's error, naming the file, the test and
+    the status. Tests without `specforge`
     metadata prove nothing and are left out. It runs nothing and reads no
     files: the host passes the report text in.
   """
@@ -52,4 +54,5 @@ behavior vt_map_vitest_report "Map vitest Reports to Entities" {
   verify unit "linked tests map to their entities with status and verify"
   verify unit "a list links one test to several entities"
   verify unit "unlinked tests and unreadable reports prove nothing"
+  verify unit "a linked test whose status vitest's JSON reporter does not write is the collector's error"
 }
