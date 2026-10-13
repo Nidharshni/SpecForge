@@ -4,6 +4,13 @@ use specforge_emitter::{EmitFormat, EmitOptions, EmitterError};
 use specforge_graph::Graph;
 use specforge_registry::{FieldRegistry, FieldRegistryEntry};
 
+/// The graph as a plain (format 1.0) export against the empty schema:
+/// `emit` with the default options.
+pub fn emit_json(graph: &Graph) -> String {
+    specforge_emitter::emit(graph, &EmitOptions::default())
+        .expect("graph serialization cannot fail")
+}
+
 /// `graph` scoped to `scope` in the graph format, as `specforge export
 /// --scope` asks `emit` for it.
 pub fn scoped_json(graph: &Graph, scope: &str) -> Result<String, EmitterError> {

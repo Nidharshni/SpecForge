@@ -37,10 +37,11 @@ Deliverables have individual versions and statuses, but multiple deliverables of
 
 ### Outgoing edges
 
-| Edge type | Target | Field | Description |
-|-----------|--------|-------|-------------|
-| `ReleaseDeliverable` | deliverable | `deliverables` | Ships this deliverable |
-| `ReleaseMilestone` | milestone | `milestones` | Targets this milestone |
+| To | Edge Type | Meaning |
+|----|-----------|---------|
+| `milestone` | `ReleaseCompletesMilestone` | "This release targets these milestones" (via `milestones` field) |
+| `release` | `ReleaseDependsOn` | "This release depends on these releases" (via `depends_on` field) |
+| `deliverable` | `ReleaseIncludesDeliverable` | "This release ships these deliverables" (via `deliverables` field) |
 
 ### Incoming edges
 

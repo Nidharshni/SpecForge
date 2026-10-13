@@ -271,7 +271,6 @@ name = "specforge-ext-formal"
 version = "1.0.0"
 dependencies = [
  "regex",
- "serde",
  "serde_json",
  "specforge-coverage",
  "specforge-extension-sdk",
@@ -323,7 +322,6 @@ dependencies = [
 name = "specforge-test-macros"
 version = "0.1.0"
 dependencies = [
- "proc-macro2",
  "quote",
  "syn",
 ]

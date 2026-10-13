@@ -224,8 +224,6 @@ dependencies = [
 name = "specforge-ext-governance"
 version = "1.0.0"
 dependencies = [
- "serde",
- "serde_json",
  "specforge-extension-sdk",
  "specforge-test",
 ]
@@ -275,7 +273,6 @@ dependencies = [
 name = "specforge-test-macros"
 version = "0.1.0"
 dependencies = [
- "proc-macro2",
  "quote",
  "syn",
 ]

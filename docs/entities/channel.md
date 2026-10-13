@@ -58,7 +58,7 @@ None. Channels are leaf nodes in the product graph.
 
 | From | Edge Type | Meaning |
 |------|-----------|---------|
-| `journey` | `JourneyChannel` | "This journey uses this channel" |
+| `journey` | `JourneyUsesChannel` | "Journeys that use this channel" (via `channels` field) |
 
 ## Validation Rules
 
@@ -101,7 +101,7 @@ Declare a channel when:
 
 | Direction | Entity | Edge | Meaning |
 |-----------|--------|------|---------|
-| incoming | [journey](journey.md) | `JourneyChannel` | Journeys that use this channel |
+| incoming | [journey](journey.md) | `JourneyUsesChannel` | Journeys that use this channel |
 
 ## Examples
 

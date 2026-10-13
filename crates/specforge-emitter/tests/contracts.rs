@@ -141,7 +141,7 @@ fn json_graph_contract_finalized_graph_produces_valid_output() {
     // Requires: graph is finalized (built with nodes + edges)
     // Ensures: valid JSON with schema_version, all nodes, all edges, source locations
     let graph = build_graph();
-    let json = specforge_emitter::json::emit_json(&graph);
+    let json = crate::support::emit_json(&graph);
     let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
 
     assert!(
@@ -286,7 +286,7 @@ fn graph_format_contract_finalized_graph_produces_full_output() {
     // Requires: finalized graph
     let mut graph = build_graph();
     graph.add_node(described_node("d")); // disconnected from a -> b -> c
-    let json = specforge_emitter::json::emit_json(&graph);
+    let json = crate::support::emit_json(&graph);
     let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
 
     // schema_version_present
@@ -400,8 +400,8 @@ fn deterministic_contract_same_input_identical_output() {
     // Ensures: identical output across all formats
     let graph = build_graph();
 
-    let json1 = specforge_emitter::json::emit_json(&graph);
-    let json2 = specforge_emitter::json::emit_json(&graph);
+    let json1 = crate::support::emit_json(&graph);
+    let json2 = crate::support::emit_json(&graph);
     assert_eq!(json1, json2, "JSON must be deterministic");
 
     let dot1 = specforge_emitter::dot::emit_dot(&graph, &specforge_emitter::DotOptions::default());
@@ -539,7 +539,7 @@ fn diagnostic_suggestion_included() {
 )]
 fn json_graph_all_nodes() {
     let graph = build_graph();
-    let json = specforge_emitter::json::emit_json(&graph);
+    let json = crate::support::emit_json(&graph);
     let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
     assert_eq!(parsed["nodes"].as_array().unwrap().len(), 3);
 }
@@ -550,7 +550,7 @@ fn json_graph_all_nodes() {
 )]
 fn json_graph_all_edges() {
     let graph = build_graph();
-    let json = specforge_emitter::json::emit_json(&graph);
+    let json = crate::support::emit_json(&graph);
     let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
     assert_eq!(parsed["edges"].as_array().unwrap().len(), 2);
 }
@@ -558,7 +558,7 @@ fn json_graph_all_edges() {
 #[specforge_test(behavior = "serialize_json_graph", verify = "output is valid JSON")]
 fn json_graph_valid_json() {
     let graph = build_graph();
-    let json = specforge_emitter::json::emit_json(&graph);
+    let json = crate::support::emit_json(&graph);
     let result: Result<serde_json::Value, _> = serde_json::from_str(&json);
     assert!(result.is_ok(), "output must be valid JSON");
 }
@@ -569,7 +569,7 @@ fn json_graph_valid_json() {
 )]
 fn json_graph_schema_version() {
     let graph = build_graph();
-    let json = specforge_emitter::json::emit_json(&graph);
+    let json = crate::support::emit_json(&graph);
     let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
     assert!(parsed["schema_version"].is_string());
 }
@@ -580,7 +580,7 @@ fn json_graph_schema_version() {
 )]
 fn json_graph_empty() {
     let graph = Graph::new();
-    let json = specforge_emitter::json::emit_json(&graph);
+    let json = crate::support::emit_json(&graph);
     let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
     assert_eq!(parsed["nodes"].as_array().unwrap().len(), 0);
     assert_eq!(parsed["edges"].as_array().unwrap().len(), 0);
@@ -592,7 +592,7 @@ fn json_graph_empty() {
 )]
 fn json_graph_empty_has_schema() {
     let graph = Graph::new();
-    let json = specforge_emitter::json::emit_json(&graph);
+    let json = crate::support::emit_json(&graph);
     let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
     assert!(
         parsed["schema_version"].is_string(),
@@ -607,7 +607,7 @@ fn json_graph_empty_has_schema() {
 fn json_graph_structural_only() {
     let mut graph = Graph::new();
     graph.add_node(node_with_fields("x", "custom_kind", "c", "active"));
-    let json = specforge_emitter::json::emit_json(&graph);
+    let json = crate::support::emit_json(&graph);
     let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
     let node = &parsed["nodes"].as_array().unwrap()[0];
     assert_eq!(

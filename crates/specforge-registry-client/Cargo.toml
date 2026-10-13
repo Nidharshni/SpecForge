@@ -17,7 +17,6 @@ specforge-protocol-types = { path = "../specforge-protocol-types" }
 specforge-registry-wire = { path = "../specforge-registry-wire" }
 serde = { workspace = true }
 serde_json = { workspace = true }
-sha2 = { workspace = true }
 reqwest = { workspace = true }
 httpdate = "1"
 keyring = "3"
@@ -33,7 +32,6 @@ testing = []
 [dev-dependencies]
 specforge-registry-client = { path = ".", features = ["testing"] }
 specforge-registry-server = { path = "../specforge-registry-server", features = ["testing"] }
-parking_lot = "0.12"
 specforge-test = { workspace = true }
 specforge-test-macros = { workspace = true }
 tempfile = { workspace = true }

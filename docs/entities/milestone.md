@@ -45,8 +45,8 @@ All fields are optional at the type level. The compiler emits warnings and info 
 |-------|------|-------------|
 | `title` | string | Human-readable name (the string after the entity ID). |
 | `status` | MilestoneStatus | Current phase status: `planned`, `in_progress`, `completed`, `blocked`. Validated by W079. |
-| `features` | EntityId[] | Features scheduled for this phase. Creates `MilestoneFeature` edges. |
-| `modules` | EntityId[] | Modules included in this phase. Creates `MilestoneModule` edges. |
+| `features` | EntityId[] | Features scheduled for this phase. Creates `MilestoneDeliversFeature` edges. |
+| `modules` | EntityId[] | Modules included in this phase. Creates `MilestoneScopesModule` edges. |
 | `depends_on` | EntityId[] | Other milestones that must complete before this phase can start. Creates `MilestoneDependsOn` edges. Cycles detected by E015. |
 | `exit_criteria` | string[] | Exit criteria that must be satisfied before the phase is considered complete. Completed milestones without criteria emit W057. |
 | `target_date` | string | Target completion date in ISO 8601 format (`YYYY-MM-DD`, e.g., `2026-06-30`). Not validated by the compiler. |
@@ -55,7 +55,7 @@ All fields are optional at the type level. The compiler emits warnings and info 
 | `tags` | string[] | Free-form tags for categorization. |
 | `refs` | reference list | External references (issues, tickets, diagrams) linked to this milestone. |
 
-> **Note:** To schedule individual behaviors within a milestone, install `@specforge/software`. The `MilestoneBehavior` edge type is provided by that extension via entity_enhancement, not by `@specforge/product`.
+> **Note:** To schedule individual behaviors within a milestone, install `@specforge/software`. The `MilestoneIncludesBehavior` edge type is provided by that extension via entity_enhancement, not by `@specforge/product`.
 
 ## Relationships
 
@@ -63,17 +63,18 @@ All fields are optional at the type level. The compiler emits warnings and info 
 
 | To | Edge Type | Meaning |
 |----|-----------|---------|
-| `feature` | `MilestoneFeature` | "This phase schedules these features" |
-| `module` | `MilestoneModule` | "This phase includes these modules" |
-| `milestone` | `MilestoneDependsOn` | "This phase depends on that phase completing first" |
-| `ref` | `links_to` | "This milestone links to these external references" |
+| `feature` | `MilestoneDeliversFeature` | "This milestone schedules these features" (via `features` field) |
+| `milestone` | `MilestoneDependsOn` | "This milestone depends on these milestones" (via `depends_on` field) |
+| `behavior` | `MilestoneIncludesBehavior` | "This milestone delivers these behaviors" (via `behaviors` field) |
+| `module` | `MilestoneScopesModule` | "This milestone includes these modules" (via `modules` field) |
 
 ### Incoming edges
 
 | From | Edge Type | Meaning |
 |------|-----------|---------|
-| `milestone` | `MilestoneDependsOn` | "Another phase depends on this phase" |
-| `deliverable` | `DeliverableMilestone` | "A deliverable tracks against this milestone" |
+| `deliverable` | `DeliverableTrackedByMilestone` | "Deliverables that are tracked by this milestone" (via `milestones` field) |
+| `milestone` | `MilestoneDependsOn` | "Milestones that depend on this milestone" (via `depends_on` field) |
+| `release` | `ReleaseCompletesMilestone` | "Releases that target this milestone" (via `milestones` field) |
 
 ## Validation Rules
 
@@ -127,12 +128,13 @@ Exit criteria should be:
 
 | Direction | Entity | Edge | Meaning |
 |-----------|--------|------|---------|
-| outgoing | [feature](feature.md) | `MilestoneFeature` | Features scheduled in this phase |
-| outgoing | [module](module.md) | `MilestoneModule` | Modules included in this phase |
-| outgoing | [milestone](milestone.md) | `MilestoneDependsOn` | Phases this phase depends on |
-| outgoing | [ref](ref.md) | `links_to` | External references linked to this milestone |
-| incoming | [milestone](milestone.md) | `MilestoneDependsOn` | Phases that depend on this phase |
-| incoming | [deliverable](deliverable.md) | `DeliverableMilestone` | Deliverables tracking against this milestone |
+| outgoing | [feature](feature.md) | `MilestoneDeliversFeature` | Features this milestone schedules |
+| outgoing | [milestone](milestone.md) | `MilestoneDependsOn` | Milestones this milestone depends on |
+| outgoing | [behavior](behavior.md) | `MilestoneIncludesBehavior` | Behaviors this milestone delivers |
+| outgoing | [module](module.md) | `MilestoneScopesModule` | Modules this milestone includes |
+| incoming | [deliverable](deliverable.md) | `DeliverableTrackedByMilestone` | Deliverables that are tracked by this milestone |
+| incoming | [milestone](milestone.md) | `MilestoneDependsOn` | Milestones that depend on this milestone |
+| incoming | [release](release.md) | `ReleaseCompletesMilestone` | Releases that target this milestone |
 
 ## Examples
 

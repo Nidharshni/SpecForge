@@ -2,6 +2,8 @@
 //! their handshake/describe wire output in plain unit tests without building
 //! wasm or loading a host.
 
+use std::borrow::Cow;
+
 use crate::{CommandFormat, CommandGraph, CommandInput, CommandOutput, ContributionsBuilder};
 use specforge_protocol_types::CommandArgType;
 
@@ -18,14 +20,17 @@ impl MockHost {
         self.0.declaration()
     }
 
-    /// The handshake wire JSON this extension will report.
+    /// The handshake wire JSON this extension reports (pretty, every field
+    /// written: what `Served` answers `__handshake` with).
     pub fn handshake_json(&self) -> String {
-        self.0.handshake_json()
+        self.0.declaration().handshake_json()
     }
 
-    /// The describe wire JSON for `category` (None for unsupported categories).
+    /// The `__describe` wire JSON for `category`, as `Served` answers it: a
+    /// raw category as given, else the declaration's items; `None` for a
+    /// category the protocol does not define.
     pub fn describe_json(&self, category: &str) -> Option<String> {
-        self.0.describe_response_json(category)
+        crate::describe_answer(&self.0.raw, || Cow::Owned(self.0.declaration()), category)
     }
 
     /// Assert the describe output for `category` equals `expected` as JSON

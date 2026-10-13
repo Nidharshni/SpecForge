@@ -48,9 +48,9 @@ All fields are optional at the type level.
 | `title` | string | Human-readable name (the string after the entity ID). |
 | `artifact_type` | ArtifactType | The artifact kind: `cli`, `service`, `library`, `web_app`, `mobile_app`, `api`, `extension`, `documentation`, `package`. Validated by W080. |
 | `status` | DeliverableStatus | Lifecycle state: `draft`, `in_progress`, `shipped`, `deprecated`. Validated by W085. |
-| `journeys` | EntityId[] | The UX journeys this deliverable ships. Creates `DeliverableJourney` edges. |
-| `modules` | EntityId[] | The modules this deliverable is built from. Creates `DeliverableModule` edges. |
-| `milestones` | EntityId[] | Milestones this deliverable is tracked against. Creates `DeliverableMilestone` edges. |
+| `journeys` | EntityId[] | The UX journeys this deliverable ships. Creates `DeliverableSupportsJourney` edges. |
+| `modules` | EntityId[] | The modules this deliverable is built from. Creates `DeliverableContainsModule` edges. |
+| `milestones` | EntityId[] | Milestones this deliverable is tracked against. Creates `DeliverableTrackedByMilestone` edges. |
 | `depends_on` | EntityId[] | Other deliverables this one depends on. Creates `DeliverableDependsOn` edges. Cycles detected by E052. |
 | `version` | string | Semantic Versioning 2.0.0 string (e.g., `1.0.0`, `1.0.0-alpha.1`, `1.0.0+build.42`). |
 | `reason` | string | Rationale for current status (required context for `deprecated` status, checked by I066). |
@@ -63,17 +63,17 @@ All fields are optional at the type level.
 
 | To | Edge Type | Meaning |
 |----|-----------|---------|
-| `journey` | `DeliverableJourney` | "This deliverable ships these journeys" |
-| `module` | `DeliverableModule` | "This deliverable uses these modules" |
-| `milestone` | `DeliverableMilestone` | "This deliverable is tracked against these milestones" |
-| `deliverable` | `DeliverableDependsOn` | "This deliverable depends on that deliverable" |
-| `ref` | `links_to` | "This deliverable links to these external references" |
+| `module` | `DeliverableContainsModule` | "This deliverable contains these modules" (via `modules` field) |
+| `deliverable` | `DeliverableDependsOn` | "This deliverable depends on these deliverables" (via `depends_on` field) |
+| `journey` | `DeliverableSupportsJourney` | "This deliverable ships these journeys" (via `journeys` field) |
+| `milestone` | `DeliverableTrackedByMilestone` | "This deliverable is tracked by these milestones" (via `milestones` field) |
 
 ### Incoming edges
 
 | From | Edge Type | Meaning |
 |------|-----------|---------|
-| `deliverable` | `DeliverableDependsOn` | "Another deliverable depends on this one" |
+| `deliverable` | `DeliverableDependsOn` | "Deliverables that depend on this deliverable" (via `depends_on` field) |
+| `release` | `ReleaseIncludesDeliverable` | "Releases that ship this deliverable" (via `deliverables` field) |
 
 ## Validation Rules
 
@@ -139,12 +139,12 @@ When `status` is `deprecated`, omitting `reason` emits I066.
 
 | Direction | Entity | Edge | Meaning |
 |-----------|--------|------|---------|
-| outgoing | [journey](journey.md) | `DeliverableJourney` | Journeys this deliverable ships |
-| outgoing | [module](module.md) | `DeliverableModule` | Modules this deliverable uses |
-| outgoing | [milestone](milestone.md) | `DeliverableMilestone` | Milestones this deliverable tracks |
-| outgoing | [deliverable](deliverable.md) | `DeliverableDependsOn` | Deliverables this one depends on |
-| outgoing | [ref](ref.md) | `links_to` | External references linked to this deliverable |
-| incoming | [deliverable](deliverable.md) | `DeliverableDependsOn` | Deliverables that depend on this one |
+| outgoing | [module](module.md) | `DeliverableContainsModule` | Modules this deliverable contains |
+| outgoing | [deliverable](deliverable.md) | `DeliverableDependsOn` | Deliverables this deliverable depends on |
+| outgoing | [journey](journey.md) | `DeliverableSupportsJourney` | Journeys this deliverable ships |
+| outgoing | [milestone](milestone.md) | `DeliverableTrackedByMilestone` | Milestones this deliverable is tracked by |
+| incoming | [deliverable](deliverable.md) | `DeliverableDependsOn` | Deliverables that depend on this deliverable |
+| incoming | [release](release.md) | `ReleaseIncludesDeliverable` | Releases that ship this deliverable |
 
 ## Examples
 

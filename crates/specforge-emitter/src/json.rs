@@ -109,10 +109,3 @@ pub(crate) fn sorted_edges(graph: &Graph) -> Vec<JsonEdge> {
     edges.sort_by(|a, b| (&a.source, &a.target, &a.label).cmp(&(&b.source, &b.target, &b.label)));
     edges
 }
-
-/// The graph as a plain (format 1.0) export against the empty schema: the
-/// test helper for [`emit`] with the default options.
-pub fn emit_json(graph: &Graph) -> String {
-    crate::emit::emit(graph, &crate::emit::EmitOptions::default())
-        .expect("graph serialization cannot fail")
-}
