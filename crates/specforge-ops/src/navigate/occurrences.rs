@@ -10,8 +10,8 @@ use specforge_parser::FieldValue;
 
 use super::references::reference_edges;
 use super::text::SourceText;
-use super::{Navigator, contains};
-use crate::OpError;
+use super::{EntityField, Navigator, contains};
+use crate::Refusal;
 use crate::options::{Choice, OptionTable};
 use specforge_parser::lex::Lexeme;
 
@@ -131,8 +131,10 @@ fn sorted(mut occurrences: Vec<Occurrence>) -> Vec<Occurrence> {
 
 impl<F: Fn(&str) -> Option<String>> Navigator<'_, F> {
     /// The entity's block and its name token.
-    pub fn definition(&self, id: &str) -> Result<Definition, OpError> {
-        let node = self.node(id)?;
+    pub fn definition(&self, id: &str) -> Result<Definition, Refusal<EntityField>> {
+        let node = self
+            .node(id)
+            .map_err(|error| error.about(EntityField::EntityId))?;
         Ok(self.definition_of(node))
     }
 
@@ -155,8 +157,14 @@ impl<F: Fn(&str) -> Option<String>> Navigator<'_, F> {
     }
 
     /// The occurrences of `id`, sorted by (file, line, column).
-    pub fn references(&self, id: &str, query: ReferenceQuery) -> Result<Vec<Occurrence>, OpError> {
-        let node = self.node(id)?;
+    pub fn references(
+        &self,
+        id: &str,
+        query: ReferenceQuery,
+    ) -> Result<Vec<Occurrence>, Refusal<EntityField>> {
+        let node = self
+            .node(id)
+            .map_err(|error| error.about(EntityField::EntityId))?;
         let mut occurrences: Vec<Occurrence> =
             reference_edges(self.view.graph(), id, query.direction)
                 .flat_map(|(holder, edge)| self.edge_occurrences(holder, edge))

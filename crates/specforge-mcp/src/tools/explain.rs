@@ -1,9 +1,10 @@
 use crate::target::Unscoped;
-use crate::tool::{CoreTool, Effect, RefusalArgument, ReplySpec, ToolGroup};
+use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
 
 use crate::args::Arguments;
+use crate::refusal::ArgumentOf;
 use crate::reply::Answered;
-use crate::tool::McpError;
+use specforge_ops::explain::ExplainField;
 
 /// `specforge.explain`'s arguments.
 #[derive(Debug, Arguments)]
@@ -20,6 +21,14 @@ pub use specforge_ops::explain::Explanation as Reply;
 /// catalogue neither has nor retired is invalid input naming the `code` argument.
 pub(crate) struct Tool;
 
+impl ArgumentOf<ExplainField> for Tool {
+    fn argument(field: ExplainField) -> Option<&'static str> {
+        match field {
+            ExplainField::Code => Some("code"),
+        }
+    }
+}
+
 impl CoreTool for Tool {
     const NAME: &'static str = "specforge.explain";
     const DESCRIPTION: &'static str = "Explain a diagnostic code: its title, owner, level, what triggers it and how to fix it, and its docs link";
@@ -30,14 +39,10 @@ impl CoreTool for Tool {
     type Args = Args;
     type Input = Unscoped;
     type Returns = Answered<Reply>;
-    const REFUSAL_ARGUMENTS: &'static [RefusalArgument] = &[RefusalArgument {
-        code: specforge_ops::explain::UNKNOWN_CODE,
-        argument: "code",
-    }];
 
     fn call(_: (), args: Args) -> Answered<Reply> {
         specforge_ops::explain::explain(&args.code)
             .map(Into::into)
-            .map_err(|error| Box::new(McpError::from(error)))
+            .map_err(|refusal| Box::new(Self::refused(refusal)))
     }
 }

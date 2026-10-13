@@ -1,7 +1,9 @@
 //! `specforge.render`: render the graph in an export format (`specforge_ops::export`).
 
+use crate::refusal::ArgumentOf;
 use crate::target::View;
 use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup, WriteHints};
+use specforge_ops::export::ExportField;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
@@ -41,6 +43,16 @@ pub struct Reply {
 }
 
 pub(crate) struct Tool;
+
+impl ArgumentOf<ExportField> for Tool {
+    fn argument(field: ExportField) -> Option<&'static str> {
+        match field {
+            ExportField::Scope => Some("scope"),
+            // Render sends none of the others.
+            ExportField::Depth | ExportField::MaxTokens | ExportField::SchemaVersion => None,
+        }
+    }
+}
 
 impl CoreTool for Tool {
     const NAME: &'static str = "specforge.render";
@@ -90,7 +102,7 @@ impl CoreTool for Tool {
             scope: args.scope.as_deref(),
             ..specforge_ops::export::Request::default()
         };
-        let output = specforge_ops::export::export(&view, &request).map_err(McpError::from)?;
+        let output = specforge_ops::export::export(&view, &request).map_err(Self::refused)?;
 
         // With out_dir the rendering lands on disk; without it, inline.
         let Some(out_dir) = args.out_dir.as_deref() else {

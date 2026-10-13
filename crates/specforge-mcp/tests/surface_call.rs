@@ -298,9 +298,9 @@ fn export_takes_a_schema_version() {
     let error = tool_error(&reply);
     // An operation's own code (a slug) does not ride in the tool error: the
     // kind picks `code`, the message names the refusal.
-    assert_eq!(expected.code.as_ref(), "incompatible_schema_version");
+    assert_eq!(expected.error.code.as_ref(), "incompatible_schema_version");
     assert_eq!(error["code"], "conflict", "{error}");
-    assert_eq!(error["message"], expected.message.as_str(), "{error}");
+    assert_eq!(error["message"], expected.error.message.as_str(), "{error}");
 
     // A version of this major is served at that version.
     let reply = call_tool(

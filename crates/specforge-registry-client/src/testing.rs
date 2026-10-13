@@ -9,7 +9,7 @@ use specforge_package::{Version, VersionRequirement};
 use specforge_protocol_types::{DeclaredCategory, ExtensionDeclaration};
 use specforge_registry_wire::{
     DEFAULT_SEARCH_LIMIT, ErrorCode, PackageMetadata, PackageSignature, PublishReceipt, SearchHit,
-    SearchQuery, SignedContent, path, sha256_hex,
+    SearchQuery, SignedContent, address, sha256_hex,
 };
 
 use crate::registry_client::{RegistryClient, RegistryError};
@@ -79,7 +79,7 @@ pub struct MemoryClient {
 }
 
 fn key_of(registry: &RegistryConfig) -> String {
-    registry.url.trim_end_matches('/').to_string()
+    registry.url.as_str().to_string()
 }
 
 /// Where a stored version's binary downloads from unless a test says otherwise.
@@ -447,7 +447,11 @@ impl RegistryClient for MemoryClient {
         self.begin(
             Call {
                 credential: Some(credential.clone()),
-                ..Self::call(CallKind::Authenticate, Some(registry), registry.url.clone())
+                ..Self::call(
+                    CallKind::Authenticate,
+                    Some(registry),
+                    registry.url.as_str().to_string(),
+                )
             },
             Some(registry),
         )?;
@@ -526,7 +530,6 @@ pub fn assert_client_contract(
 ) {
     let tool = PackageName::parse("@contract/tool").unwrap();
     let key = SigningKey::generate();
-    let base = registry.url.trim_end_matches('/');
 
     // K1
     let error = client.versions(&tool, registry, None).unwrap_err();
@@ -549,10 +552,10 @@ pub fn assert_client_contract(
             &key,
         )
         .unwrap_or_else(|d| panic!("K2: publishing {version} fails: {d:?}"));
-        let expected = format!(
-            "{base}{}",
-            path::version(&tool, &Version::parse(version).unwrap())
-        );
+        let expected = registry.url.address(&address::Call::Version(
+            &tool,
+            &Version::parse(version).unwrap(),
+        ));
         assert_eq!(url, expected, "K2: publish answers the version's URL");
         declarations.push((declaration, wasm));
     }
@@ -586,6 +589,10 @@ pub fn assert_client_contract(
         "K4: the signature is the publisher key's"
     );
     assert!(!metadata.wasm_url.is_empty(), "K4: wasm_url");
+    assert!(
+        reqwest::Url::parse(&metadata.wasm_url).is_ok(),
+        "K4: wasm_url is absolute"
+    );
 
     // K5
     let bytes = client
@@ -780,11 +787,9 @@ pub fn assert_private_client_contract(
         "download",
         client
             .download(
-                &format!(
-                    "{}{}",
-                    registry.url.trim_end_matches('/'),
-                    path::download(&tool, &Version::new(1, 0, 0))
-                ),
+                &registry
+                    .url
+                    .address(&address::Call::Download(&tool, &Version::new(1, 0, 0))),
                 registry,
                 None,
             )

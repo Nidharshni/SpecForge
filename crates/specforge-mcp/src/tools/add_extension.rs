@@ -1,18 +1,19 @@
 //! `specforge.add_extension`: install extensions (`specforge_ops::extension::add`).
 
+use crate::refusal::ArgumentOf;
 use crate::target::{AnyProject, Project};
-use crate::tool::{CoreTool, Effect, RefusalArgument, ReplySpec, WriteHints};
+use crate::tool::{CoreTool, Effect, ReplySpec, WriteHints};
 use serde::Serialize;
 use specforge_common::shape::Shape;
 
 use crate::args::{Arguments, NonEmpty};
 use crate::events::ExtensionAdded;
 use crate::mutation::{
-    Failed, Mutated, Mutation, MutationArgs, MutationEvent, MutationReply, NoDiagnostics, Written,
+    Mutated, Mutation, MutationArgs, MutationEvent, MutationReply, NoDiagnostics, Written,
 };
 use crate::reply::Answer;
 use crate::target::ProjectRef;
-use specforge_ops::extension::AddDocument;
+use specforge_ops::extension::{AddDocument, AddField};
 
 /// `specforge.add_extension`'s arguments.
 #[derive(Debug, Arguments)]
@@ -57,6 +58,14 @@ const ELSEWHERE: &str = "installed in the project the path names; the server kee
 /// there, or a specifier repeating an earlier one, `wasDuplicate`).
 pub(crate) struct Tool;
 
+impl ArgumentOf<AddField> for Tool {
+    fn argument(field: AddField) -> Option<&'static str> {
+        match field {
+            AddField::Extensions => Some("specifiers"),
+        }
+    }
+}
+
 impl CoreTool for Tool {
     const NAME: &'static str = "specforge.add_extension";
     const DESCRIPTION: &'static str = "Install extensions, as one change";
@@ -71,16 +80,6 @@ impl CoreTool for Tool {
     type Args = Args;
     type Input = Project<AnyProject>;
     type Returns = Mutation<Reply>;
-    const REFUSAL_ARGUMENTS: &'static [RefusalArgument] = &[
-        RefusalArgument {
-            code: specforge_common::codes::E054.id(),
-            argument: "specifiers",
-        },
-        RefusalArgument {
-            code: specforge_common::codes::R_RES_003.id(),
-            argument: "specifiers",
-        },
-    ];
 
     fn call(project: ProjectRef<'_>, args: Args) -> Mutation<Reply> {
         use specforge_ops::extension::{self, AddRequest, Trust};
@@ -90,7 +89,8 @@ impl CoreTool for Tool {
         let root = project.root;
         // A relative local path is read from the project's root: the server has no working
         // directory of its own to mean it.
-        let extensions = extension::specified(&args.specifiers.0)?
+        let extensions = extension::specified(&args.specifiers.0)
+            .map_err(Self::failed)?
             .into_iter()
             .map(|specified| specified.relative_to(root.dir()))
             .collect();
@@ -107,13 +107,13 @@ impl CoreTool for Tool {
             dry_run: args.dry_run,
         };
         let added = extension::add(&request, &registry, project.runtime.as_ref());
-        // What reading the registry configuration reported (E067, W140, I003), once the add asked a
+        // What reading the registry configuration reported (W140, I003), once the add asked a
         // registry, as `specforge add` shows it.
         let reported = registry.reported();
         // An install that failed after placing its module reports it.
         let added = match added {
             Ok(added) => added,
-            Err(error) => return Err(Failed::from(error).with_diagnostics(reported)),
+            Err(refusal) => return Err(Self::failed(refusal).with_diagnostics(reported)),
         };
         // Once they are enabled, the server serves them (the next request brings the
         // project up to date); another project only has them on disk.

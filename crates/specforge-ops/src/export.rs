@@ -13,7 +13,7 @@ use crate::navigate;
 use crate::options::{Choice, OptionTable};
 use crate::schema_version::{NotAdmitted, VersionedSchema};
 use crate::view::ProjectView;
-use crate::{OpError, OpErrorKind};
+use crate::{OpError, OpErrorKind, Refusal};
 use specforge_common::Diagnostic;
 use specforge_emitter::{EmitFormat, EmitOptions, EmitterError, SchemaVersion, emit};
 use std::path::PathBuf;
@@ -142,10 +142,23 @@ impl Request<'_> {
     }
 }
 
+/// The field of an export request a refusal can be about (ADR 0072).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExportField {
+    /// `Request::scope`: the entity the export is about.
+    Scope,
+    /// `Request::depth`.
+    Depth,
+    /// `Request::max_tokens`.
+    MaxTokens,
+    /// `Request::schema_version`.
+    SchemaVersion,
+}
+
 /// The export text of the view's project for `request`. A schema it
 /// carries is the view's versioned schema (`specforge export`'s version,
 /// computed against the root's schema cache, which this only reads).
-pub fn export(view: &ProjectView, request: &Request) -> Result<String, OpError> {
+pub fn export(view: &ProjectView, request: &Request) -> Result<String, Refusal<ExportField>> {
     export_versioned(view, &view.versioned_schema(), request)
 }
 
@@ -153,13 +166,14 @@ fn export_versioned(
     view: &ProjectView,
     versioned: &VersionedSchema,
     request: &Request,
-) -> Result<String, OpError> {
+) -> Result<String, Refusal<ExportField>> {
     if request.depth.is_some() && request.scope.is_none() {
         return Err(OpError::new(
             OpErrorKind::InvalidInput,
             DEPTH_WITHOUT_SCOPE,
             "depth limits a scoped export: give a scope too",
-        ));
+        )
+        .about(ExportField::Depth));
     }
     // A requested version is checked whatever the format, and never applied:
     // the export carries the schema at its own version.
@@ -170,6 +184,7 @@ fn export_versioned(
                 INVALID_SCHEMA_VERSION,
                 format!("invalid schema version: {e}"),
             )
+            .about(ExportField::SchemaVersion)
         })?;
         versioned.admits(&requested).map_err(|refusal| {
             OpError::new(
@@ -177,6 +192,7 @@ fn export_versioned(
                 NotAdmitted::CODE,
                 refusal.to_string(),
             )
+            .about(ExportField::SchemaVersion)
         })?;
     }
     let options = EmitOptions {
@@ -198,7 +214,7 @@ fn export_versioned(
 /// became of the record.
 #[derive(Debug)]
 pub struct RecordedExport {
-    pub export: Result<String, OpError>,
+    pub export: Result<String, Refusal<ExportField>>,
     pub diagnostics: Vec<Diagnostic>,
     pub cache: CacheWrite,
 }
@@ -243,19 +259,23 @@ pub fn export_recorded(view: &ProjectView, request: &Request) -> RecordedExport 
 
 /// The emitter's failure as the operation's: the kind by variant, the code
 /// the variant's ([`EmitterError::code`]); nothing is read from the message.
-/// A missing scope entity is the one not-found refusal.
-fn failure(view: &ProjectView, error: EmitterError) -> OpError {
-    let kind = match &error {
+/// A missing scope entity is the one not-found refusal, about the scope; a budget too small is
+/// about `max_tokens`; a serialization failure is about no field.
+fn failure(view: &ProjectView, error: EmitterError) -> Refusal<ExportField> {
+    let (kind, field) = match &error {
         EmitterError::ScopeNotFound { entity_id } => {
-            return navigate::not_found(view.graph(), entity_id);
+            return navigate::not_found(view.graph(), entity_id).about(ExportField::Scope);
         }
-        EmitterError::BudgetTooSmall { .. } => OpErrorKind::InvalidInput,
-        EmitterError::Serialization(_) => OpErrorKind::Internal,
+        EmitterError::BudgetTooSmall { .. } => (OpErrorKind::InvalidInput, ExportField::MaxTokens),
+        EmitterError::Serialization(_) => {
+            return OpError::new(OpErrorKind::Internal, "export_failed", error.to_string()).into();
+        }
     };
     match error.code() {
         Some(code) => OpError::coded(kind, code, error.to_string()),
         None => OpError::new(kind, "export_failed", error.to_string()),
     }
+    .about(field)
 }
 
 #[cfg(test)]
@@ -288,7 +308,7 @@ mod tests {
 
     fn failed(request: &Request) -> OpError {
         let fixture = crate::view::testing::Fixture::new();
-        export(&fixture.view(), request).unwrap_err()
+        export(&fixture.view(), request).unwrap_err().error
     }
 
     #[specforge_test_macros::test(
@@ -315,7 +335,7 @@ mod tests {
         )
         .unwrap_err();
         assert_eq!(
-            scoped.code, "E003",
+            scoped.error.code, "E003",
             "the scope is looked up, not the depth refused"
         );
     }
@@ -373,5 +393,46 @@ mod tests {
             ..request(Format::Graph)
         };
         assert!(!without.attaches_schema());
+    }
+
+    #[specforge_test_macros::test(
+        invariant = "mcp_structured_error_responses",
+        verify = "an operation states the request field each refusal is about, and a refusal of the project or the environment is about none"
+    )]
+    fn export_states_which_field_a_refusal_is_about() {
+        let fixture = crate::view::testing::Fixture::new();
+        let subject = |request: Request| export(&fixture.view(), &request).unwrap_err().subject;
+        let graph = || request(Format::Graph);
+        assert_eq!(
+            subject(Request {
+                depth: Some(2),
+                ..graph()
+            }),
+            Some(ExportField::Depth)
+        );
+        for version in ["x.y", "9.0.0"] {
+            assert_eq!(
+                subject(Request {
+                    schema_version: Some(version),
+                    ..graph()
+                }),
+                Some(ExportField::SchemaVersion),
+                "{version}"
+            );
+        }
+        assert_eq!(
+            subject(Request {
+                max_tokens: Some(5),
+                ..graph()
+            }),
+            Some(ExportField::MaxTokens)
+        );
+        assert_eq!(
+            subject(Request {
+                scope: Some("ghost"),
+                ..graph()
+            }),
+            Some(ExportField::Scope)
+        );
     }
 }

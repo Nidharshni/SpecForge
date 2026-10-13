@@ -8,11 +8,21 @@ use specforge_common::shape::Shape;
 
 use crate::args::{Arguments, EntityIds};
 use crate::prompt::{CorePrompt, Prompted};
+use crate::refusal::ArgumentOf;
 use crate::tool::{ErrorCode, McpError};
+use specforge_ops::navigate::EntityField;
 use specforge_ops::view::ProjectView;
 
 /// The context prompt (`McpContextPromptResult`).
 pub struct Prompt;
+
+impl ArgumentOf<EntityField> for Prompt {
+    fn argument(field: EntityField) -> Option<&'static str> {
+        match field {
+            EntityField::EntityId => Some("entity_id"),
+        }
+    }
+}
 
 impl CorePrompt for Prompt {
     const NAME: &'static str = "specforge://prompts/context";
@@ -73,8 +83,8 @@ fn render(view: ProjectView<'_>, args: Args) -> Result<Prompted<Payload>, Box<Mc
     // The inspect read view, without the reported diagnostics (the prompt
     // shows none) and whatever its coverage (a report that cannot be read
     // does not fail the prompt).
-    let facts =
-        specforge_ops::inspect::inspect(&view.reporting(&[]), entity_id).map_err(McpError::from)?;
+    let facts = specforge_ops::inspect::inspect(&view.reporting(&[]), entity_id)
+        .map_err(|refusal| Box::new(Prompt::refused(refusal)))?;
     let node = facts.node;
 
     // The statement the extension declares (headline and normative), e.g.

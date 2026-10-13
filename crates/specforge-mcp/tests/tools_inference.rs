@@ -816,7 +816,7 @@ fn session_refusals_keep_their_codes_arguments_and_wording() {
     check(
         &refuse(&mut server, json!({"action": "end", "session_id": id})),
         "conflict",
-        None,
+        Some("session_id"),
         &format!("Session '{id}' is not active"),
     );
 }

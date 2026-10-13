@@ -3,9 +3,11 @@ use std::time::SystemTime;
 use reqwest::StatusCode;
 use reqwest::blocking::{Client, RequestBuilder, Response};
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, RETRY_AFTER};
+use serde::de::DeserializeOwned;
+use specforge_registry_wire::reply::{self, Failure};
 use specforge_registry_wire::{
-    ErrorBody, ErrorCode, PackageMetadata, PackageSignature, PublishReceipt, SearchHit,
-    SearchQuery, SearchResults, TokenVerified, VersionList, form, path,
+    ErrorCode, PackageMetadata, PackageSignature, PublishReceipt, SearchHit, SearchQuery,
+    SearchResults, TokenVerified, VersionList, address::Call, form,
 };
 
 use super::registry_client::{RegistryClient, RegistryError};
@@ -39,8 +41,15 @@ impl HttpRegistryClient {
         self
     }
 
-    fn base_url(registry: &RegistryConfig) -> String {
-        registry.url.trim_end_matches('/').to_string()
+    /// `GET address` with `credential`, its answer read as `T`.
+    fn get<T: DeserializeOwned>(
+        &self,
+        address: &str,
+        credential: Option<&RegistryCredential>,
+        subject: &str,
+    ) -> Result<T, RegistryError> {
+        let resp = self.send(authorized(self.client.get(address), credential), address)?;
+        answer(resp, address, subject)
     }
 
     /// Send `request` to `url`: a timeout is `Timeout { url }`, any other transport failure `NetworkError`.
@@ -72,15 +81,9 @@ impl RegistryClient for HttpRegistryClient {
         registry: &RegistryConfig,
         credential: Option<&RegistryCredential>,
     ) -> Result<Vec<String>, RegistryError> {
-        let url = format!("{}{}", Self::base_url(registry), path::package(name));
-        let resp = self.send(authorized(self.client.get(&url), credential), &url)?;
-        match resp.status() {
-            StatusCode::OK => {
-                let body: VersionList = read_reply(&bytes_of(resp)?, name.as_str())?;
-                Ok(body.versions)
-            }
-            _ => Err(failure_of(resp, name.as_str())),
-        }
+        let address = registry.url.address(&Call::Package(name));
+        let body: VersionList = self.get(&address, credential, name.as_str())?;
+        Ok(body.versions)
     }
 
     fn metadata(
@@ -90,22 +93,17 @@ impl RegistryClient for HttpRegistryClient {
         registry: &RegistryConfig,
         credential: Option<&RegistryCredential>,
     ) -> Result<PackageMetadata, RegistryError> {
-        let base = Self::base_url(registry);
-        let url = format!("{base}{}", path::version(name, version));
-        let resp = self.send(authorized(self.client.get(&url), credential), &url)?;
-        match resp.status() {
-            StatusCode::OK => {
-                let mut body: PackageMetadata =
-                    read_reply(&bytes_of(resp)?, &format!("{name}@{version}"))?;
-                if body.wasm_url.starts_with('/') {
-                    // the server may return a root-relative download path;
-                    // resolve it against the configured registry base
-                    body.wasm_url = format!("{base}{}", body.wasm_url);
-                }
-                Ok(body)
-            }
-            _ => Err(failure_of(resp, &format!("{name}@{version}"))),
-        }
+        let subject = format!("{name}@{version}");
+        let address = registry.url.address(&Call::Version(name, version));
+        let mut body: PackageMetadata = self.get(&address, credential, &subject)?;
+        body.wasm_url = registry
+            .url
+            .download_address(&body.wasm_url)
+            .map_err(|why| RegistryError::InvalidReply {
+                subject,
+                message: format!("{address}: {why}"),
+            })?;
+        Ok(body)
     }
 
     fn download(
@@ -115,7 +113,7 @@ impl RegistryClient for HttpRegistryClient {
         credential: Option<&RegistryCredential>,
     ) -> Result<Vec<u8>, RegistryError> {
         // The registry's token goes to the registry, not to wherever it points a download.
-        let credential = credential.filter(|_| same_origin(wasm_url, &Self::base_url(registry)));
+        let credential = credential.filter(|_| registry.url.same_origin(wasm_url));
         let resp = self.send(authorized(self.client.get(wasm_url), credential), wasm_url)?;
         match resp.status() {
             StatusCode::OK => {
@@ -125,7 +123,7 @@ impl RegistryClient for HttpRegistryClient {
                         message: format!("failed to read response bytes: {}", e),
                     })
             }
-            _ => Err(failure_of(resp, wasm_url)),
+            _ => Err(failure_of(resp, wasm_url, wasm_url)),
         }
     }
 
@@ -135,20 +133,9 @@ impl RegistryClient for HttpRegistryClient {
         registry: &RegistryConfig,
         credential: Option<&RegistryCredential>,
     ) -> Result<Vec<SearchHit>, RegistryError> {
-        let url = format!(
-            "{}{}?{}",
-            Self::base_url(registry),
-            path::SEARCH,
-            query.to_query_string()
-        );
-        let resp = self.send(authorized(self.client.get(&url), credential), &url)?;
-        match resp.status() {
-            StatusCode::OK => {
-                let body: SearchResults = read_reply(&bytes_of(resp)?, &query.q)?;
-                Ok(body.results)
-            }
-            _ => Err(failure_of(resp, &query.q)),
-        }
+        let address = registry.url.address(&Call::Search(query));
+        let body: SearchResults = self.get(&address, credential, &query.q)?;
+        Ok(body.results)
     }
 
     fn publish(
@@ -168,11 +155,7 @@ impl RegistryClient for HttpRegistryClient {
             Version::parse(declaration.version()).map_err(|why| RegistryError::InvalidPackage {
                 message: format!("'{}' is not a SemVer version: {why}", declaration.version()),
             })?;
-        let url = format!(
-            "{}{}",
-            Self::base_url(registry),
-            path::version(&name, &version)
-        );
+        let url = registry.url.address(&Call::Version(&name, &version));
 
         // Build the multipart body explicitly: reqwest's blocking multipart
         // wrapper can fail with a body error on large wasm parts, while an
@@ -201,16 +184,13 @@ impl RegistryClient for HttpRegistryClient {
         }
 
         let resp = self.send(request, &url)?;
-        match resp.status() {
-            StatusCode::OK | StatusCode::CREATED => {
-                read_reply(&bytes_of(resp)?, &format!("{name}@{version}"))
-            }
-            StatusCode::CONFLICT => Err(RegistryError::DuplicateVersion {
+        if resp.status() == StatusCode::CONFLICT {
+            return Err(RegistryError::DuplicateVersion {
                 name: declaration.name().to_string(),
                 version: declaration.version().to_string(),
-            }),
-            _ => Err(failure_of(resp, &format!("{name}@{version}"))),
+            });
         }
+        answer(resp, &url, &format!("{name}@{version}"))
     }
 
     fn authenticate(
@@ -218,7 +198,7 @@ impl RegistryClient for HttpRegistryClient {
         registry: &RegistryConfig,
         credential: &RegistryCredential,
     ) -> Result<Option<String>, RegistryError> {
-        let url = format!("{}{}", Self::base_url(registry), path::AUTH_VERIFY);
+        let url = registry.url.address(&Call::AuthVerify);
         let request = self
             .client
             .post(&url)
@@ -226,13 +206,8 @@ impl RegistryClient for HttpRegistryClient {
             .header(CONTENT_TYPE, "application/json")
             .body("{}");
         let resp = self.send(request, &url)?;
-        match resp.status() {
-            StatusCode::OK => {
-                let body: TokenVerified = read_reply(&bytes_of(resp)?, &registry.url)?;
-                Ok(body.expires_at)
-            }
-            _ => Err(failure_of(resp, &registry.url)),
-        }
+        let body: TokenVerified = answer(resp, &url, registry.url.as_str())?;
+        Ok(body.expires_at)
     }
 }
 
@@ -245,14 +220,24 @@ fn bytes_of(resp: Response) -> Result<Vec<u8>, RegistryError> {
         })
 }
 
-/// `body` read as `T`, the wire type a call answers with; a body that isn't one is `InvalidReply` naming `subject`.
-fn read_reply<T: serde::de::DeserializeOwned>(
-    body: &[u8],
+/// `resp`, the answer to the call sent to `address`, read the one way every call reads (ADR 0044 D2 as amended
+/// by ADR 0075).
+fn answer<T: DeserializeOwned>(
+    resp: Response,
+    address: &str,
     subject: &str,
 ) -> Result<T, RegistryError> {
-    serde_json::from_slice(body).map_err(|e| RegistryError::InvalidReply {
-        subject: subject.to_string(),
-        message: e.to_string(),
+    let status = resp.status().as_u16();
+    let retry_after = retry_after_of(&resp);
+    let body = bytes_of(resp)?;
+    reply::read(status, &body).map_err(|failure| {
+        error_of(
+            failure,
+            retry_after.as_deref(),
+            address,
+            subject,
+            SystemTime::now(),
+        )
     })
 }
 
@@ -264,80 +249,74 @@ fn authorized(request: RequestBuilder, credential: Option<&RegistryCredential>) 
     }
 }
 
-/// Whether `url` has `base`'s origin: the same scheme, host and port.
-fn same_origin(url: &str, base: &str) -> bool {
-    match (reqwest::Url::parse(url), reqwest::Url::parse(base)) {
-        (Ok(a), Ok(b)) => {
-            a.scheme() == b.scheme()
-                && a.host_str() == b.host_str()
-                && a.port_or_known_default() == b.port_or_known_default()
-        }
-        _ => false,
-    }
-}
-
-/// Read a failure answer: its status, `Retry-After` and body, as [`failure`] sees them.
-fn failure_of(resp: Response, subject: &str) -> RegistryError {
-    let status = resp.status();
-    let retry_after = resp
-        .headers()
+/// The `Retry-After` header of `resp`, when it has a readable one.
+fn retry_after_of(resp: &Response) -> Option<String> {
+    resp.headers()
         .get(RETRY_AFTER)
         .and_then(|v| v.to_str().ok())
-        .map(str::to_string);
-    let body = resp.text().unwrap_or_default();
-    failure(
-        status,
+        .map(str::to_string)
+}
+
+/// Read a failure answer to the call sent to `address`: its status, `Retry-After` and body, as [`error_of`] sees
+/// them.
+fn failure_of(resp: Response, address: &str, subject: &str) -> RegistryError {
+    let status = resp.status().as_u16();
+    let retry_after = retry_after_of(&resp);
+    let body = resp.bytes().map(|b| b.to_vec()).unwrap_or_default();
+    error_of(
+        reply::failure(status, &body),
         retry_after.as_deref(),
-        &body,
+        address,
         subject,
         SystemTime::now(),
     )
 }
 
-/// What an answer other than success means, the same for every call (ADR 0044): 400 `Refused` (the
-/// registry's code and message, else `Unknown` and "registry answered 400 Bad Request"), 401
-/// `Unauthorized` and 403 `Forbidden` (both carrying the registry's message as guidance, else a default),
-/// 404 `NotFound` naming `subject`, 429 `RateLimited` (its `Retry-After`, read as `now` sees it), anything
-/// else `NetworkError` with the registry's message, else "registry answered {status}". Publish reads 409 as
-/// `DuplicateVersion` before asking this.
-fn failure(
-    status: StatusCode,
+/// What a failure means to a client, the same for every call (ADR 0044): 400 `Refused` (the registry's code and
+/// message, else `Unknown` and "registry answered 400 Bad Request"); 401 `Unauthorized` and 403 `Forbidden` (the
+/// registry's message as guidance, else a default); a 404 with the protocol's `NOT_FOUND` `NotFound` naming
+/// `subject`; 429 `RateLimited` (its `Retry-After` as `now` sees it); not a registry's answer `InvalidReply` naming
+/// `subject`, its message `"{address}: {why}"` (R009); anything else `NetworkError` with the registry's message,
+/// else "registry answered {status}". Publish reads 409 as `DuplicateVersion` before asking this.
+fn error_of(
+    failure: Failure,
     retry_after: Option<&str>,
-    body: &str,
+    address: &str,
     subject: &str,
     now: SystemTime,
 ) -> RegistryError {
-    let error = serde_json::from_str::<ErrorBody>(body)
-        .ok()
-        .map(|e| e.error);
-    if status == StatusCode::BAD_REQUEST {
-        return match error {
-            Some(error) => RegistryError::Refused {
-                code: error.code,
-                message: error.message,
-            },
-            None => RegistryError::Refused {
-                code: ErrorCode::Unknown,
-                message: format!("registry answered {status}"),
-            },
-        };
-    }
-    let message = error.map(|e| e.message);
+    let (status, message, code) = match failure {
+        Failure::NotRegistry { why, .. } => {
+            return RegistryError::InvalidReply {
+                subject: subject.to_string(),
+                message: format!("{address}: {why}"),
+            };
+        }
+        Failure::Error { status, error } => (status, Some(error.message), error.code),
+        Failure::Status { status } => (status, None, ErrorCode::Unknown),
+    };
+    let named = StatusCode::from_u16(status)
+        .map(|s| s.to_string())
+        .unwrap_or_else(|_| status.to_string());
     match status {
-        StatusCode::UNAUTHORIZED => RegistryError::Unauthorized {
+        400 => RegistryError::Refused {
+            code,
+            message: message.unwrap_or_else(|| format!("registry answered {named}")),
+        },
+        401 => RegistryError::Unauthorized {
             guidance: message.unwrap_or_else(|| "token expired or invalid".to_string()),
         },
-        StatusCode::FORBIDDEN => RegistryError::Forbidden {
+        403 => RegistryError::Forbidden {
             guidance: message.unwrap_or_else(|| "insufficient permissions".to_string()),
         },
-        StatusCode::NOT_FOUND => RegistryError::NotFound {
+        404 => RegistryError::NotFound {
             specifier: subject.to_string(),
         },
-        StatusCode::TOO_MANY_REQUESTS => RegistryError::RateLimited {
+        429 => RegistryError::RateLimited {
             retry_after_ms: parse_retry_after_ms(retry_after, now),
         },
         _ => RegistryError::NetworkError {
-            message: message.unwrap_or_else(|| format!("registry answered {status}")),
+            message: message.unwrap_or_else(|| format!("registry answered {named}")),
         },
     }
 }
@@ -371,20 +350,25 @@ fn parse_retry_after_ms(header: Option<&str>, now: SystemTime) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use specforge_registry_wire::ErrorBody;
 
     const NOW: SystemTime = SystemTime::UNIX_EPOCH;
 
-    #[specforge_test_macros::test(
-        behavior = "support_private_registries",
-        verify = "a download from another origin carries no credential"
-    )]
-    fn a_download_elsewhere_carries_no_credential() {
-        let base = "http://a:1/v1";
-        assert!(same_origin("http://a:1/v1/packages/x/download", base));
-        assert!(!same_origin("http://b:1/v1/packages/x/download", base));
-        assert!(!same_origin("https://a:1/v1/packages/x/download", base));
-        assert!(!same_origin("http://a:2/v1/packages/x/download", base));
-        assert!(!same_origin("not a url", base));
+    /// What a client makes of `status` and `body`, for a call to `http://r/v1/x`.
+    fn failed(status: u16, retry_after: Option<&str>, body: &str, subject: &str) -> RegistryError {
+        error_of(
+            reply::failure(status, body.as_bytes()),
+            retry_after,
+            "http://r/v1/x",
+            subject,
+            NOW,
+        )
+    }
+
+    /// `body` as the answer (200) to a call for `subject`, read the way every call reads one.
+    fn read<T: DeserializeOwned>(body: &[u8], subject: &str) -> Result<T, RegistryError> {
+        reply::read(200, body)
+            .map_err(|failure| error_of(failure, None, "http://r/x", subject, NOW))
     }
 
     fn error_body(message: &str) -> String {
@@ -397,13 +381,7 @@ mod tests {
     )]
     fn every_call_reads_a_status_alike() {
         let read = |status: u16, retry_after: Option<&str>, body: &str| {
-            failure(
-                StatusCode::from_u16(status).unwrap(),
-                retry_after,
-                body,
-                "@acme/tool@1.0.0",
-                NOW,
-            )
+            failed(status, retry_after, body, "@acme/tool@1.0.0")
         };
         assert_eq!(
             read(401, None, &error_body("token revoked")),
@@ -429,6 +407,13 @@ mod tests {
                 specifier: "@acme/tool@1.0.0".into()
             }
         );
+        // A 404 is the registry's only with its NOT_FOUND error; a bare one says no registry serves the address.
+        let not_a_registry = RegistryError::InvalidReply {
+            subject: "@acme/tool@1.0.0".into(),
+            message: "http://r/v1/x: a 404 without the registry protocol's NOT_FOUND error: no registry serves this address".into(),
+        };
+        assert_eq!(read(404, None, ""), not_a_registry);
+        assert_eq!(read(404, None, "<html>not found</html>"), not_a_registry);
         assert_eq!(
             read(429, Some("60"), &error_body("slow down")),
             RegistryError::RateLimited {
@@ -475,7 +460,7 @@ mod tests {
             "http://r/v1/x/download",
             "q",
         ] {
-            let error = failure(StatusCode::FORBIDDEN, None, &body, subject, NOW);
+            let error = failed(403, None, &body, subject);
             assert_eq!(
                 error,
                 RegistryError::Forbidden {
@@ -498,13 +483,7 @@ mod tests {
             "packages must be signed",
         ))
         .unwrap();
-        let error = failure(
-            StatusCode::BAD_REQUEST,
-            None,
-            &body,
-            "@acme/tool@1.0.0",
-            NOW,
-        );
+        let error = failed(400, None, &body, "@acme/tool@1.0.0");
         assert_eq!(
             error,
             RegistryError::Refused {
@@ -519,7 +498,7 @@ mod tests {
         assert!(!diagnostic.suggestion.unwrap().contains("network"));
 
         assert_eq!(
-            failure(StatusCode::BAD_REQUEST, None, "", "x", NOW),
+            failed(400, None, "", "x"),
             RegistryError::Refused {
                 code: ErrorCode::Unknown,
                 message: "registry answered 400 Bad Request".into()
@@ -532,9 +511,8 @@ mod tests {
         verify = "a reply that is not the protocol's JSON is refused with R009, even with --allow-unsigned"
     )]
     fn a_reply_that_is_not_the_protocols_json_is_refused() {
-        let error =
-            read_reply::<PackageMetadata>(br#"{"name":"@a/b","version":"1.0.0"}"#, "@a/b@1.0.0")
-                .unwrap_err();
+        let error = read::<PackageMetadata>(br#"{"name":"@a/b","version":"1.0.0"}"#, "@a/b@1.0.0")
+            .unwrap_err();
         assert!(
             matches!(&error, RegistryError::InvalidReply { subject, message }
                 if subject == "@a/b@1.0.0" && message.contains("sha256")),
@@ -542,7 +520,7 @@ mod tests {
         );
         assert_eq!(error.to_diagnostic().code, "R009");
         assert!(matches!(
-            read_reply::<VersionList>(b"<html>", "@a/b").unwrap_err(),
+            read::<VersionList>(b"<html>", "@a/b").unwrap_err(),
             RegistryError::InvalidReply { .. }
         ));
     }
@@ -553,13 +531,32 @@ mod tests {
     )]
     fn a_malformed_signature_in_a_reply_is_refused_with_r009() {
         let body = br#"{"name":"@a/b","version":"1.0.0","sha256":"ab","wasm_url":"/x","signature":{"sig":"x","public_key":"z","signed_at":"now"}}"#;
-        let error = read_reply::<PackageMetadata>(body, "@a/b@1.0.0").unwrap_err();
+        let error = read::<PackageMetadata>(body, "@a/b@1.0.0").unwrap_err();
         assert!(
             matches!(&error, RegistryError::InvalidReply { message, .. }
                 if message.contains("`sig` is not 128 hex")),
             "{error:?}"
         );
         assert_eq!(error.to_diagnostic().code, "R009");
+    }
+
+    #[specforge_test_macros::test(
+        behavior = "check_registry_reply",
+        verify = "a 404 without the protocol's NOT_FOUND error is R009, not package not found"
+    )]
+    fn a_bare_404_is_r009_naming_the_address() {
+        let diagnostic = failed(404, None, "", "@acme/tool").to_diagnostic();
+
+        assert_eq!(diagnostic.code, "R009");
+        assert!(diagnostic.message.contains("http://r/v1/x"));
+        assert!(
+            diagnostic
+                .message
+                .contains("no registry serves this address")
+        );
+        let suggestion = diagnostic.suggestion.unwrap();
+        assert!(suggestion.contains("the registry's root"), "{suggestion}");
+        assert!(suggestion.contains("without /v1"), "{suggestion}");
     }
 
     #[test]

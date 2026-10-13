@@ -110,7 +110,7 @@ impl RegistryError {
                 ),
             )
             .with_suggestion(
-                "install nothing from this registry until it is fixed, and check that its URL is a SpecForge registry"
+                "install nothing from this registry until it is fixed; check that its \"url\" in specforge.json is the registry's root (such as https://registry.example, without /v1) and that a SpecForge registry serves it"
                     .to_string(),
             ),
         }
@@ -128,8 +128,9 @@ impl From<RegistryError> for Diagnostic {
 /// [`crate::HttpRegistryClient`] and, in tests, `crate::testing::MemoryClient`; both are held to
 /// `crate::testing::assert_client_contract`.
 pub trait RegistryClient: Send + Sync {
-    /// Every version `registry` publishes of `name`, as served (not parsed). `NotFound` when it has no
-    /// such package. A read carries `credential` as `Authorization: Bearer` when given; a registry that
+    /// Every version `registry` publishes of `name`, as served (not parsed). `NotFound` when the registry
+    /// answers that it has no such package (its 404 with `NOT_FOUND`); an answer no registry gives is
+    /// `InvalidReply`. A read carries `credential` as `Authorization: Bearer` when given; a registry that
     /// requires one answers `Unauthorized` without it.
     fn versions(
         &self,
@@ -138,7 +139,8 @@ pub trait RegistryClient: Send + Sync {
         credential: Option<&RegistryCredential>,
     ) -> Result<Vec<String>, RegistryError>;
 
-    /// What `registry` stores for `name@version`, its `wasm_url` absolute. `NotFound` when it has none.
+    /// What `registry` stores for `name@version`, its `wasm_url` absolute. `NotFound` when the registry
+    /// answers that it has none (its 404 with `NOT_FOUND`); an answer no registry gives is `InvalidReply`.
     fn metadata(
         &self,
         name: &PackageName,

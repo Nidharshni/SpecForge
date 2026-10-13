@@ -227,7 +227,11 @@
         },
         "url": {
           "type": "string",
-          "description": "Registry endpoint URL"
+          "description": "The registry's root: an http or https URL without the protocol's /v1, such as https://registry.example",
+          "pattern": "^https?://[^?#]+$",
+          "not": {
+            "pattern": "/v1/?$"
+          }
         },
         "scope_filter": {
           "type": "string",

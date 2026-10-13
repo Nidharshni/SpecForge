@@ -20,7 +20,9 @@ invariant mcp_structured_error_responses "MCP Structured Error Responses" {
     An operation's failure kind decides the McpError code. An operation
     states the kind where it raises the failure; no table maps a code to a
     kind, and a package the registry or its trust check refuses is never
-    internal_error.
+    internal_error. An operation states which field of its request a
+    refusal is about; a refusal of the project or the environment is about
+    none.
   """
   risk      medium
   verify unit "error response includes error code and message fields"
@@ -36,6 +38,7 @@ invariant mcp_structured_error_responses "MCP Structured Error Responses" {
   verify unit "a no-project refusal names path only for an entry that takes one"
   verify unit "a path that does not exist is a file_not_found error on path"
   verify unit "an operation's failure kind decides its McpError code, never its code text"
+  verify unit "an operation states the request field each refusal is about, and a refusal of the project or the environment is about none"
 }
 
 invariant mcp_subscription_cleanup "MCP Subscription Cleanup" {

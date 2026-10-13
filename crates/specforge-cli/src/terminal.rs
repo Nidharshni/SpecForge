@@ -228,7 +228,7 @@ impl Terminal {
 
     /// Each diagnostic as `severity[CODE]: message` on stderr, whatever the
     /// output format, so JSON stdout stays one document (registry
-    /// configuration E067/W140/I003, fetch policy W155/W156, publish's
+    /// configuration W140/I003, fetch policy W155/W156, publish's
     /// declaration warnings).
     pub(crate) fn diagnostics(&self, diagnostics: &[Diagnostic]) {
         for diagnostic in diagnostics {

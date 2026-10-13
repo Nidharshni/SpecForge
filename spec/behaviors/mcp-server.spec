@@ -260,7 +260,7 @@ behavior read_mcp_arguments_as_declared "Read MCP Arguments as Declared" {
     absent_is_the_default  "An absent or null argument reads as the default its listing states; a missing required one is refused naming it"
     value_read_by_type     "A value is read by its declared type, a boolean or count also from a string holding one, as extension command tools read them; any other value is invalid input naming the argument"
     undeclared_refused     "An argument neither the entry nor its call target declares is invalid input naming it, with the declared argument it is close to"
-    refusal_names_argument "A core tool's refusal that is about an argument names it: the tool states which argument each of its operation's refusal codes is about"
+    refusal_names_argument "A refusal about a value the caller sent names its argument, whatever its kind: the operation states which field of its request the refusal is about, and the entry maps each field to the argument that sends it"
   }
   contract   """
     Every core MCP tool and prompt MUST read its call's arguments into one
@@ -281,8 +281,14 @@ behavior read_mcp_arguments_as_declared "Read MCP Arguments as Declared" {
     with the closest declared name as a suggestion. An argument whose
     default depends on others (specforge.format's write) MUST state no
     default; its description states the rule. An operation's refusal of a
-    core tool's call that is about an argument the caller sent MUST name
-    that argument; every invalid-input refusal names one.
+    core tool's, prompt's or resource's call that rejects a value the caller
+    sent (an invalid value, a name that finds no entity, file or extension,
+    a value that conflicts with what is there) MUST name the argument, or
+    the resource's query key, that sent it; the operation states which field
+    of its request a refusal is about, and no table maps a refusal's code to
+    an argument. A refusal of the project or the environment names none, and
+    neither does a refusal of the arguments as a whole (arguments that are
+    not an object).
   """
   verify unit "a listing is derived from the typed arguments: each argument's type, description, default, enumerated values and whether it is required"
   verify unit "an absent or null argument reads as the default the listing advertises, and a missing required one is refused naming it"
@@ -290,6 +296,8 @@ behavior read_mcp_arguments_as_declared "Read MCP Arguments as Declared" {
   verify unit "an argument neither the tool nor its target declares is refused naming it, with the declared one it is close to"
   verify unit "a prompt reads its arguments by the same rule its listing states"
   verify unit "an operation's refusal of a core tool's call names the argument it is about"
+  verify unit "a refusal a value the caller gave earns names that argument, whatever its kind"
+  verify unit "a prompt's or a resource read's refusal names the argument or query key it is about"
 }
 
 behavior list_mcp_prompts "List MCP Prompts" {
@@ -607,15 +615,24 @@ behavior notify_diagnostics_delta_via_mcp "Notify Diagnostics Delta via MCP" {
     notifications/resources/updated for it and then a
     specforge/diagnosticsChanged notification.
     The notification's params MUST be the DiagnosticsDelta since the
-    previous compilation: the diagnostics added and removed, each presented
-    as every surface presents a diagnostic (present_diagnostics_as_json), so
-    a client can locate it. Clients MUST be able to subscribe and unsubscribe. If
-    no clients are subscribed or the diagnostics are unchanged, the notification
-    MUST be suppressed.
+    previous compilation: the diagnostics the update added and removed, as
+    the project session states them (emit_incremental_diagnostics), then
+    the I017 the server's extension surfaces added and removed, each
+    presented as every surface presents a diagnostic
+    (present_diagnostics_as_json), so a client can locate it: a diagnostic
+    that moved, or changed in any presented part, is removed and added.
+    Clients MUST be able to subscribe and unsubscribe. If no clients are
+    subscribed or the diagnostics are unchanged, the notification MUST be
+    suppressed; while no client hears the diagnostics, no delta is
+    computed.
   """
   verify unit "diagnostics_changed notification sent after validation"
   verify unit "payload includes added and removed diagnostics"
   verify unit "each added or removed diagnostic is presented as every surface presents diagnostics"
+  verify unit "a diagnostic that moved is removed where it was and added where it is"
+  verify unit "a diagnostic whose span changed is removed and added"
+  verify unit "removing one of two identical diagnostics is notified"
+  verify unit "the I017 the extension surfaces add and remove is notified with the update's delta"
   verify unit "unsubscribed clients do not receive notifications"
   verify unit "no notification when diagnostics are unchanged"
   verify contract "Notify Diagnostics Delta via MCP: diagnostics delta MCP notification holds — validation_complete_fired, subscribers_notified, unchanged_suppressed, delta_notified_emitted"

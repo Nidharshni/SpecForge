@@ -179,6 +179,7 @@ impl SchemaArgs {
         } else {
             specforge_ops::schema::schema(&view, &self.request())
                 .map(|outcome| serde_json::to_string_pretty(&outcome).expect("a schema serializes"))
+                .map_err(specforge_ops::Refusal::into_error)
         };
         match output {
             Ok(text) => {

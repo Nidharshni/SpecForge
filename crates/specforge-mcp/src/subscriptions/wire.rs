@@ -3,9 +3,7 @@
 
 use serde::Serialize;
 use serde_json::Value;
-use specforge_project::GraphDelta;
-
-use super::DiagnosticsDelta;
+use specforge_project::{DiagnosticsDelta, GraphDelta};
 
 /// One notification queued for the client.
 #[derive(Debug, Clone, PartialEq, Serialize)]

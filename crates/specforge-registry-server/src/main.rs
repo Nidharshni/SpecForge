@@ -123,7 +123,9 @@ async fn main() {
                 .await
                 .unwrap_or_else(|e| panic!("failed to bind to {}: {}", addr, e));
 
-            tracing::info!("registry server listening on http://{}", addr);
+            tracing::info!(
+                "registry server listening on http://{addr} (a registries entry's \"url\": \"http://{addr}\")"
+            );
 
             axum::serve(listener, app).await.expect("server error");
         }

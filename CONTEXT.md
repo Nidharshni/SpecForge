@@ -108,7 +108,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   formatter's (a W142 per region formatting kept verbatim, while the document is the text it formatted). A publish
   sends the file's whole list, the compile layer plus the formatter layer of the same version, under the one URI
   the client names the file by. Hover and code actions read the layers; one module writes them (ADR 0056).
-- **Call target**: the project one MCP call acts on, resolved from the call's optional `path` and its
+- **Call target**: the project one MCP call acts on, resolved from the call's optional `path` (the target's arguments are
+  `TargetArgument`: `path`, `use_cached`, each spelled once) and its
   entry's target before the handler runs: the served session (brought up to date unless `use_cached`),
   another project opened as a session for that call only and brought up to date after the call writes, as the served one is, the directory `init` creates, or, with nothing served and
   no project named, the empty session for an entry that reads only the project view
@@ -122,8 +123,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Update**: one change applied to a project session. It re-reads and re-parses exactly the changed files (an
   importer parses the same, since references resolve without `use`), applies them to the session's graph
   build, resolves every file's imports again and re-runs the checks (`specforge_project::Update`, ADR 0006,
-  ADR 0032). An update says whether the session's inputs changed (`inputs_changed`) and, when it was
-  verified, how it differs from a cold rebuild (`divergence`). An update that changes no file (a held buffer
+  ADR 0032). An update says whether the session's inputs changed (`inputs_changed`), what the session
+  reported before it and reports after (its diagnostics delta), and, when it was verified, how it differs
+  from a cold rebuild (`divergence`). An update that changes no file (a held buffer
   whose text is already its file's) runs no check.
 - **Graph delta**: what an update or a reload changed in the graph: added and removed nodes (each with its
   kind, file and line), modified nodes (the fields whose values differ, and apart from them which of its
@@ -132,6 +134,14 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   build computes it. `specforge watch --format json` prints it and MCP sends it whole as
   `specforge/graphChanged` (ADR 0058). `specforge migrate` keeps a migration only when the delta from the graph
   before it to the graph after is empty, and reports each change as W054.
+- **Diagnostics delta**: what an update or a reload changed in what a session reports: the diagnostics added and
+  removed, each compared and presented whole, as every JSON surface presents one (code, severity, message, span,
+  suggestion, data, origin). A diagnostic that moved or changed in any part is removed and added; identical ones
+  count one by one; order is not part of it (`specforge_project::DiagnosticsDelta`). An update holds what the
+  session reported before and reports after, shared with its compiled project, and compares them only when asked
+  (`Update::diagnostics_delta`). `specforge watch --format json` prints it; MCP sends it, with the I017 its
+  extension surfaces add and remove, as `specforge/diagnosticsChanged` (ADR 0074). The LSP does not read it: it
+  publishes every file's diagnostics as the editor shows them.
 - **Debounce rule**: changes that arrive less than 50 ms apart are one batch, due 50 ms after the last
   of them, each change once. Watch batches the file changes under every directory it watches as one
   stream, and the LSP batches edited documents, by the same rule (`specforge_watch::Coalescer`,
@@ -372,18 +382,25 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   registry refuses an upload whose signature isn't one or doesn't verify over it (INVALID_SIGNATURE), before storing
   anything, so the version stays publishable; `add` verifies what it downloads again, because the registry is not the
   trust anchor: which keys to trust is the user's pins (ADR 0061).
-- **Package registry contract**: what a package registry and its client exchange over HTTP: the paths, the JSON
-  bodies (the package signature among them), the publish form and the error codes, each defined once in
+- **Package registry contract**: what a package registry and its client exchange over HTTP: each call's address under a registry
+  root, the JSON bodies (the package signature among them), the publish form and the error codes, each defined once in
   `specforge-registry-wire`, which `specforge-registry-server` and `specforge-registry-client` both compile against
   (ADR 0044, ADR 0061). A registry's refusal (HTTP 400) carries a typed code and reaches the user as R008; an
-  answer that isn't the call's wire type is R009. A test reaches a registry through the real server in process or
+  answer that isn't the call's wire type is R009. So is a 404 without the protocol's NOT_FOUND error: an address
+  no registry serves, not a missing package. A test reaches a registry through the real server in process or
   an in-memory client, never through JSON written by hand. A search matches by one rule, an ASCII
   case-insensitive substring of a package's name, description or one keyword
   (`specforge_package::search::matches`), on the server and in both in-memory registries.
+- **Registry root**: the URL a `registries` entry names: where a package registry is, an `http` or `https` URL
+  without the protocol's version prefix (`https://registry.example`, or `https://example.com/registry` for one served
+  under a path) (`specforge_registry_wire::RegistryRoot`). Every call goes to the root, then `/v1`, then the call's
+  path (`RegistryRoot::address`); the server mounts the same routes (`Endpoint::route`). A url ending in `/v1`, or
+  one that isn't an http(s) URL, is E067 (ADR 0075).
 - **Registry for a package**: the one configured registry that serves a package name: the first
   `registries` entry whose `scope_filter` is the name's scope, else the first marked
   `default_registry`; with neither, none does, and the operation refuses with R-OPS-001 before any
-  request (`specforge_ops_registry::Configured::registry_for`, ADR 0045). `add`, `update` and
+  request (`specforge_ops_registry::Configured::registry_for`, ADR 0045); a `registries` entry that can't be
+  read refuses every registry operation with E067 first, so a scope it claims never falls to the default. `add`, `update` and
   `publish` ask that one registry; `search` asks every entry. A registry credential is kept under
   the registry's alias (`login --registry`, else the default registry's).
 - **Package name**: what an extension package is called, `@scope/name` (a registry holds only
@@ -558,11 +575,19 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`OpErrorKind`: invalid input, not found, conflict, schema mismatch, compilation failed, …) is
   stated where it is raised — at the operation's own raise site (`OpError::coded`), or where a lower
   crate's diagnostic crosses into ops (`OpError::of`), a recorded test report that cannot be used included
-  (`specforge_ops::report`) — never by a table of codes and never by a surface; its code is what the CLI prints. Its outcome prints as one outcome document on
+  (`specforge_ops::report`) — never by a table of codes and never by a surface; a refusal that rejects a value
+  the caller gave also says which field of the request it is about (its **subject**: a `specforge_ops::Refusal<F>`,
+  `F` the operation's field enum), stated where the operation reads the field and never by a table of codes; its
+  code is what the CLI prints. Its outcome prints as one outcome document on
   every surface (ADR 0052). The CLI and MCP
   are adapters over it (`specforge-ops`); the CLI ends every core command through one renderer
   (`specforge_cli::outcome`: the refusal, the exit code) and writes it through its **Terminal**
   (ADR 0029).
+- **Refusal subject**: the field of an operation's request a refusal is about, typed by the operation
+  (`Refusal<F>`, `F` one variant per field a refusal of it can be about: `AddField::Extensions`,
+  `InitField::Dir`). Only a refusal that rejects a value the caller gave has one (invalid input, an entity, file or
+  extension not there, a conflict); a refusal of the project or the environment has none. Each surface spells it:
+  MCP names the argument (`specifiers`, `path`), the CLI and the LSP print the error (ADR 0072).
 - **Mutation outcome**: what one MCP mutation call produced, typed: a run (`specforge_mcp::mutation::Mutated`:
   its reply and what it wrote — the files its operation changed, the entities it changed and the domain
   event it produces, `Written`) or a failure (`mutation::Failed`: its McpError and the files it left
@@ -699,8 +724,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   implementing `CoreTool` once: its name, description and effect, the spec type its reply is, the tool
   arguments it reads, what its handler is given (nothing, the project view, the project, or the
   directory init creates, with how it reaches its project), the tool reply it answers (typed, text,
-  or a mutation's) and which argument each of its operation's refusal codes is about
-  (`REFUSAL_ARGUMENTS`; the dispatcher names it on the refusal, ADR 0033). Its category, annotations, call target, descriptor (input and output schemas
+  or a mutation's) and, for each operation it calls that can refuse about a field of its request, the argument
+  that sends each field (`ArgumentOf<F>`, one exhaustive map, ADR 0072). Its category, annotations, call target, descriptor (input and output schemas
   included) and dispatch derive from it; the core tool table lists each once (`CORE_TOOLS`, each seen
   as a `ToolSpec`), and a declaration that contradicts its handler does not build. A prompt names a
   tool by its typed name (ADR 0024, ADR 0049).
@@ -778,7 +803,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`specforge://diagnostics`). After an update that changed it, each subscription hears
   `notifications/resources/updated` once, and a handshake subscriber of a graph view or of the
   diagnostics then hears the delta, whole (`specforge/graphChanged`: the graph delta;
-  `specforge/diagnosticsChanged`: the diagnostics added and removed, each as every surface presents one).
+  `specforge/diagnosticsChanged`: the update's diagnostics delta, then the I017 the server's extension
+  surfaces added and removed).
   Subscriptions belong to the connection and end with it or at shutdown
   (`specforge_mcp::subscriptions::Subscriptions`, ADR 0024 D6).
 - **MCP event**: what an MCP server records it did — a tool, prompt or listing invoked, a resource

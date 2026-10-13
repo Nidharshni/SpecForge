@@ -10,7 +10,8 @@ use specforge_common::shape::Shape;
 use specforge_common::{Diagnostic, DiagnosticList};
 use specforge_graph::Graph;
 
-use crate::OpError;
+use crate::Refusal;
+use crate::navigate::EntityField;
 use crate::view::ProjectView;
 
 /// How many starting points an exploration names.
@@ -114,7 +115,10 @@ pub struct PathDocument {
 
 /// The exploration `request` asks for. An `entity_id` the graph lacks is
 /// `navigate::not_found` (E003, did-you-mean).
-pub fn explore(view: &ProjectView, request: &ExplorationRequest) -> Result<Exploration, OpError> {
+pub fn explore(
+    view: &ProjectView,
+    request: &ExplorationRequest,
+) -> Result<Exploration, Refusal<EntityField>> {
     let graph = view.graph();
     let notices = request
         .kind

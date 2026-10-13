@@ -48,7 +48,7 @@ pub fn documents() -> Vec<SentDocument> {
         sent::<crate::registry::ResourceTemplateDescriptor>(),
         sent::<crate::registry::PromptDescriptor>(),
         sent::<specforge_project::GraphDelta>(),
-        sent::<crate::subscriptions::DiagnosticsDelta>(),
+        sent::<specforge_project::DiagnosticsDelta>(),
         sent::<crate::tool::McpError>(),
     ]
 }
@@ -82,7 +82,7 @@ impl Message for specforge_project::GraphDelta {
     const SPEC: &'static str = "GraphDelta";
 }
 
-impl Message for crate::subscriptions::DiagnosticsDelta {
+impl Message for specforge_project::DiagnosticsDelta {
     const SPEC: &'static str = "DiagnosticsDelta";
 }
 

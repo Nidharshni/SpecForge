@@ -721,6 +721,61 @@ fn explicit_mcp_tool_wins_over_auto_promoted() {
 }
 
 #[specforge_test(
+    behavior = "notify_diagnostics_delta_via_mcp",
+    verify = "the I017 the extension surfaces add and remove is notified with the update's delta"
+)]
+fn the_i017_the_surfaces_drop_is_notified() {
+    let (mut server, _ext, dir) = fake_extension::initialized(
+        FakeExtension::new().with_output("mcp__check", json!({"checked": true})),
+    );
+    let resp = call(
+        &mut server,
+        "resources/subscribe",
+        json!({"uri": "specforge://diagnostics"}),
+    );
+    assert_eq!(resp["result"], json!({}), "{resp}");
+    server.take_notifications();
+
+    // Without the extension the explicit tool no longer shadows the command:
+    // the surface table drops its I017 and the project reports I002.
+    fs::write(
+        dir.path().join("specforge.json"),
+        r#"{"name":"cmds","version":"0.1.0","extensions":[]}"#,
+    )
+    .unwrap();
+    let resp = call_tool(&mut server, "specforge.stats", json!({}));
+    assert!(resp["error"].is_null(), "{resp}");
+
+    let notifications = server.take_notifications();
+    let changed: Vec<&Value> = notifications
+        .iter()
+        .filter(|n| n["method"] == "specforge/diagnosticsChanged")
+        .collect();
+    assert_eq!(changed.len(), 1, "{notifications:?}");
+    let codes = |side: &str| -> Vec<(String, String)> {
+        changed[0]["params"][side]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|d| {
+                (
+                    d["code"].as_str().unwrap().to_string(),
+                    d["message"].as_str().unwrap().to_string(),
+                )
+            })
+            .collect()
+    };
+    let removed = codes("removed");
+    assert!(
+        removed
+            .iter()
+            .any(|(code, message)| code == "I017" && message.starts_with("command 'check'")),
+        "{removed:?}"
+    );
+    assert!(codes("added").iter().any(|(code, _)| code == "I002"));
+}
+
+#[specforge_test(
     behavior = "commands_auto_promoted",
     verify = "emits commands_auto_promoted with correct promoted and conflict counts"
 )]

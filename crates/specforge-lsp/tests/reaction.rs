@@ -378,6 +378,50 @@ fn a_spanless_diagnostic_about_entities_is_published_at_its_name() {
     );
 }
 
+/// The session's W061 has no span and does not change when only its entities move (ADR 0074 D6),
+/// yet the editor sees it on another line: what the LSP publishes is not a function of the
+/// diagnostics delta, so it publishes every file each time.
+#[spec(
+    behavior = "emit_live_diagnostics",
+    verify = "a spanless diagnostic is published at its entity's new name when only the entity moved"
+)]
+fn a_spanless_diagnostic_follows_its_entity() {
+    let dir = tempfile::TempDir::new().unwrap();
+    std::fs::write(
+        dir.path().join("specforge.json"),
+        r#"{"name":"c","extensions":["@specforge/software"]}"#,
+    )
+    .unwrap();
+    let cycle_text = "behavior alpha \"A\" {\n  depends_on [beta]\n}\nbehavior beta \"B\" {\n  depends_on [alpha]\n}\n";
+    std::fs::write(dir.path().join("cycle.spec"), cycle_text).unwrap();
+    std::fs::write(dir.path().join("other.spec"), "behavior gamma \"G\" {\n}\n").unwrap();
+    let mut served = Served::at(dir).open(&[]);
+    let cycle = served.uri("cycle.spec");
+    served.open_document(&cycle, cycle_text);
+    served.edit("cycle.spec", &format!("\n\n{cycle_text}"));
+
+    let sent = served.sent();
+    let diagnostics = last_diagnostics(&sent, &cycle);
+    let w061 = diagnostics
+        .iter()
+        .find(|d| d.code == Some(NumberOrString::String("W061".into())))
+        .unwrap_or_else(|| panic!("W061 is published on the cycle's file: {diagnostics:?}"));
+    let range = |r: &tower_lsp::lsp_types::Range| {
+        (r.start.line, r.start.character, r.end.line, r.end.character)
+    };
+    assert_eq!(
+        range(&w061.range),
+        (2, 9, 2, 14),
+        "alpha's new name: {w061:?}"
+    );
+    let related = w061.related_information.as_ref().expect("the others");
+    assert_eq!(
+        range(&related[0].location.range),
+        (5, 9, 5, 13),
+        "beta's new name"
+    );
+}
+
 /// `types/`, `invariants/`, `features/` and the behavior `behaviors/error-reporting.spec`
 /// referencing entities of the others, as the repository's own specs do.
 fn cross_file_tree(uses: &[&str]) -> Vec<(&'static str, String)> {

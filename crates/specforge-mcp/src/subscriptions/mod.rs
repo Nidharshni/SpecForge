@@ -3,8 +3,10 @@
 //! opened with `subscriptions/listen` (MCP 2026-07-28), and the
 //! notifications queued for it until the host sends them. One rule says what
 //! a resource's content changes with ([`Watched::of`]); one update's changes
-//! are computed once ([`Changes`]), in `McpState::applied`, the one place
-//! every update of the served project passes (ADR 0035 D3), and every
+//! are computed once ([`Changes`]: the graph delta, and, for a listener, the
+//! diagnostics delta, the session update's plus the I017 of the extension
+//! surfaces), in `McpState::applied`, the one place every update of the
+//! served project passes (ADR 0035 D3, ADR 0074), and every
 //! subscription they touched hears about them ([`Subscriptions::updated`]).
 //! Subscriptions belong to the connection: they end with it, or at shutdown.
 //! The requests that change them are in [`requests`]; the notifications,
@@ -13,13 +15,8 @@
 pub(crate) mod requests;
 mod wire;
 
-use std::collections::HashSet;
-
-use serde::Serialize;
 use serde_json::Value;
-use specforge_common::shape::Shape;
-use specforge_common::{Diagnostic, DiagnosticList};
-use specforge_project::{GraphDelta, Update, UpdateKind};
+use specforge_project::{DiagnosticsDelta, GraphDelta, Update, UpdateKind};
 
 pub use wire::{Acknowledged, Honoured, Notification, ResourceUpdated, StreamMeta};
 
@@ -51,54 +48,6 @@ impl Watched {
     }
 }
 
-/// The diagnostics added and removed by one update, each presented as every
-/// surface presents a diagnostic (`DiagnosticsDelta` in
-/// spec/types/graph.spec).
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Shape)]
-pub struct DiagnosticsDelta {
-    pub added: DiagnosticList,
-    pub removed: DiagnosticList,
-}
-
-impl DiagnosticsDelta {
-    /// What names a diagnostic in a delta: its code, its message and its
-    /// file.
-    fn identity(diagnostic: &Diagnostic) -> (&str, &str, &str) {
-        (
-            diagnostic.code.as_str(),
-            diagnostic.message.as_str(),
-            diagnostic
-                .span
-                .as_ref()
-                .map_or("", |span| span.file.as_str()),
-        )
-    }
-
-    /// The diagnostics in `after` and not in `before`, and the reverse.
-    fn between(before: &[Diagnostic], after: &[Diagnostic]) -> Self {
-        let before_keys: HashSet<_> = before.iter().map(Self::identity).collect();
-        let after_keys: HashSet<_> = after.iter().map(Self::identity).collect();
-        DiagnosticsDelta {
-            added: after
-                .iter()
-                .filter(|d| !before_keys.contains(&Self::identity(d)))
-                .cloned()
-                .collect::<Vec<_>>()
-                .into(),
-            removed: before
-                .iter()
-                .filter(|d| !after_keys.contains(&Self::identity(d)))
-                .cloned()
-                .collect::<Vec<_>>()
-                .into(),
-        }
-    }
-
-    fn is_empty(&self) -> bool {
-        self.added.0.is_empty() && self.removed.0.is_empty()
-    }
-}
-
 /// What one update of the served project changed, computed once and read by
 /// both eras.
 pub struct Changes<'u> {
@@ -108,11 +57,11 @@ pub struct Changes<'u> {
 }
 
 impl<'u> Changes<'u> {
-    /// What `update` changed. `diagnostics` is what the server reported
-    /// before the update and reports after it, read only when someone hears
-    /// about the diagnostics ([`Subscriptions::hears_diagnostics`]); `None`
-    /// reads as "unchanged".
-    pub fn of(update: &'u Update, diagnostics: Option<(&[Diagnostic], &[Diagnostic])>) -> Self {
+    /// What `update` changed. `diagnostics` is the delta of what the server
+    /// reports (the update's, then the I017 its extension surfaces added and
+    /// removed), computed only when someone hears about the diagnostics
+    /// ([`Subscriptions::hears_diagnostics`]); `None` reads as "unchanged".
+    pub fn of(update: &'u Update, diagnostics: Option<DiagnosticsDelta>) -> Self {
         Self::new(
             &update.delta,
             update.kind == UpdateKind::Environment,
@@ -122,24 +71,23 @@ impl<'u> Changes<'u> {
 
     /// The same from its parts: the graph delta, whether the environment
     /// loaded again (or another project was served), and the diagnostics
-    /// before and after.
+    /// delta.
     pub fn new(
         graph: &'u GraphDelta,
         environment: bool,
-        diagnostics: Option<(&[Diagnostic], &[Diagnostic])>,
+        diagnostics: Option<DiagnosticsDelta>,
     ) -> Self {
         Changes {
             graph,
             environment,
-            diagnostics: diagnostics
-                .map(|(before, after)| DiagnosticsDelta::between(before, after)),
+            diagnostics,
         }
     }
 
     /// Whether what `watched` names changed: the graph delta is not empty
     /// or the environment loaded again (`Graph`); the environment loaded
-    /// again (`Schema`); a diagnostic was added or removed, named by its
-    /// code, message and file (`Diagnostics`).
+    /// again (`Schema`); a diagnostic was added or removed, compared
+    /// whole (`Diagnostics`, [`DiagnosticsDelta`]).
     pub fn touched(&self, watched: Watched) -> bool {
         match watched {
             Watched::Graph => !self.graph.is_empty() || self.environment,
@@ -255,8 +203,8 @@ impl Subscriptions {
         ended
     }
 
-    /// Whether anyone hears about the diagnostics: only then does an update
-    /// read them before and after it applies.
+    /// Whether anyone hears about the diagnostics: only then is an update's
+    /// diagnostics delta computed.
     pub fn hears_diagnostics(&self) -> bool {
         self.resources
             .iter()

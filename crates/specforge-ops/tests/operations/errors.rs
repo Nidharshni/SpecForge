@@ -107,11 +107,14 @@ fn a_missing_entity_is_one_refusal() {
                     ..Request::default()
                 },
             )
-            .unwrap_err(),
+            .unwrap_err()
+            .error,
         ),
         (
             "inspect",
-            specforge_ops::inspect::inspect(&view, "logn").unwrap_err(),
+            specforge_ops::inspect::inspect(&view, "logn")
+                .unwrap_err()
+                .error,
         ),
         (
             "explore",
@@ -122,7 +125,8 @@ fn a_missing_entity_is_one_refusal() {
                     ..Default::default()
                 },
             )
-            .unwrap_err(),
+            .unwrap_err()
+            .error,
         ),
         (
             "review",
@@ -133,12 +137,15 @@ fn a_missing_entity_is_one_refusal() {
                     ..Default::default()
                 },
             )
-            .unwrap_err(),
+            .unwrap_err()
+            .error,
         ),
-        ("navigator", navigator.definition("logn").unwrap_err()),
+        ("navigator", navigator.definition("logn").unwrap_err().error),
         (
             "rename",
-            specforge_ops::rename::plan(&navigator, "logn", "fine_name").unwrap_err(),
+            specforge_ops::rename::plan(&navigator, "logn", "fine_name")
+                .unwrap_err()
+                .error,
         ),
         (
             "trace",
@@ -179,7 +186,7 @@ fn add_package(
     dir: &std::path::Path,
     registry: &specforge_ops::registry::testing::MemoryRegistry,
     specifier: &str,
-) -> specforge_ops::OpError {
+) -> specforge_ops::Refusal<specforge_ops::extension::AddField> {
     use specforge_ops::extension::{self, AddRequest, Trust};
     extension::add(
         &AddRequest {
@@ -215,12 +222,12 @@ fn a_registry_refusal_is_never_an_internal_error() {
     let dir = empty_project();
 
     let unsigned = add_package(dir.path(), &registry, "@acme/unsigned");
-    assert_eq!(unsigned.code, "R-TRUST-001", "{unsigned:?}");
-    assert_eq!(unsigned.kind, OpErrorKind::PermissionDenied);
+    assert_eq!(unsigned.error.code, "R-TRUST-001", "{unsigned:?}");
+    assert_eq!(unsigned.error.kind, OpErrorKind::PermissionDenied);
 
     let empty = add_package(dir.path(), &registry, "@acme/empty");
-    assert_eq!(empty.code, "R-RES-002", "{empty:?}");
-    assert_eq!(empty.kind, OpErrorKind::ExtensionNotFound);
+    assert_eq!(empty.error.code, "R-RES-002", "{empty:?}");
+    assert_eq!(empty.error.kind, OpErrorKind::ExtensionNotFound);
 
     let missing = registry
         .fetch(

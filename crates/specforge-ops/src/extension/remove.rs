@@ -3,7 +3,7 @@
 use super::lock_plan::{Ask, Disabled, LockPlan, Purpose};
 use super::{NOT_FOUND, Origin, ProjectExtension, Selection, not_installed};
 use crate::view::ProjectView;
-use crate::{OpError, OpErrorKind, Writes};
+use crate::{OpError, OpErrorKind, Refusal, Writes};
 use serde::Serialize;
 use specforge_common::ExtensionEntry;
 use specforge_common::shape::Shape;
@@ -114,6 +114,13 @@ pub enum RemoveAction {
     Planned,
 }
 
+/// The field of a removal's request a refusal can be about (ADR 0072).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoveField {
+    /// `RemoveRequest::name`: the extension to remove.
+    Name,
+}
+
 /// Remove `name` from the project the view was compiled from: a locked
 /// install is uninstalled (binary, lock entry and `specforge.json` entry);
 /// a builtin is disabled (its `specforge.json` entry); a `.wasm` file
@@ -136,7 +143,10 @@ pub enum RemoveAction {
 /// nothing). Without a root: `no_project`. The removal is one lock-plan change
 /// ([`LockPlan::removing`]): a dry run is the same plan checked and not
 /// committed.
-pub fn remove(view: &ProjectView, req: &RemoveRequest) -> Result<RemoveOutcome, OpError> {
+pub fn remove(
+    view: &ProjectView,
+    req: &RemoveRequest,
+) -> Result<RemoveOutcome, Refusal<RemoveField>> {
     let root = view.project_root()?;
     if let Some(problem) = view
         .env()
@@ -144,7 +154,7 @@ pub fn remove(view: &ProjectView, req: &RemoveRequest) -> Result<RemoveOutcome, 
         .iter()
         .find(|problem| problem.blocks_edits())
     {
-        return Err(crate::config::refusal(problem));
+        return Err(crate::config::refusal(problem).into());
     }
     let inventory = super::inventory(view);
     let removing = &Removing {
@@ -159,8 +169,12 @@ pub fn remove(view: &ProjectView, req: &RemoveRequest) -> Result<RemoveOutcome, 
     match inventory.select(req.name) {
         Selection::File { entry, extension } => remove_file(removing, entry, extension),
         Selection::Named(extension) => remove_named(removing, extension),
-        Selection::Ambiguous(entries) => Err(ambiguous(req.name, &entries)),
-        Selection::Nothing => Err(nothing_named(req.name, view.installed().lock())),
+        Selection::Ambiguous(entries) => {
+            Err(ambiguous(req.name, &entries).about(RemoveField::Name))
+        }
+        Selection::Nothing => {
+            Err(nothing_named(req.name, view.installed().lock()).about(RemoveField::Name))
+        }
     }
 }
 
@@ -215,20 +229,22 @@ fn nothing_named(name: &str, lock: &LockState) -> OpError {
 /// Remove the extension `extension` names: its lock entry, binary and
 /// `specforge.json` entries as one change when it is locked; else its
 /// `specforge.json` entries (a builtin, or an entry that does not load).
-fn remove_named(req: &Removing, extension: &ProjectExtension) -> Result<RemoveOutcome, OpError> {
+fn remove_named(
+    req: &Removing,
+    extension: &ProjectExtension,
+) -> Result<RemoveOutcome, Refusal<RemoveField>> {
     // Neither builtin nor locked while the lock can't be read: whether it
     // is installed is not known, so nothing is removed.
     if extension.origin == Origin::Unknown
         && let Some(problem) = req.installed.lock().problem()
     {
-        return Err(not_installed(
-            extension.name,
-            Some(problem.message.as_str()),
-        ));
+        return Err(
+            not_installed(extension.name, Some(problem.message.as_str())).about(RemoveField::Name),
+        );
     }
     // Loaded, but neither enabled nor locked (a view assembled in a test).
     if !extension.enabled() && extension.lock.is_none() {
-        return Err(not_installed(extension.name, None));
+        return Err(not_installed(extension.name, None).about(RemoveField::Name));
     }
     let writes = change(
         req,
@@ -253,7 +269,7 @@ fn change(
     req: &Removing,
     locked: Option<&LockFileEntry>,
     disabled: Disabled,
-) -> Result<Writes, OpError> {
+) -> Result<Writes, Refusal<RemoveField>> {
     let purpose = if req.dry_run {
         Purpose::Preview
     } else {
@@ -268,7 +284,7 @@ fn change(
     plan.disable(Ask(0), disabled);
     let done = plan
         .check()
-        .map_err(|refused| refused.decisive().1)?
+        .map_err(|refused| refused.decisive().1.about(RemoveField::Name))?
         .finish(req.root, Vec::new())?;
     Ok(done.writes)
 }
@@ -280,7 +296,7 @@ fn remove_file(
     req: &Removing,
     file: &EnabledExtension,
     extension: &ProjectExtension,
-) -> Result<RemoveOutcome, OpError> {
+) -> Result<RemoveOutcome, Refusal<RemoveField>> {
     let writes = change(req, None, Disabled::Entry(file.entry.clone()))?;
     Ok(RemoveOutcome {
         name: file.name.clone(),
@@ -377,7 +393,7 @@ mod tests {
 
         let error = remove(&fixture.rootless_view(), &removing("@specforge/product")).unwrap_err();
 
-        assert_eq!(error.code, "no_project");
+        assert_eq!(error.error.code, "no_project");
         assert_eq!(
             text(fixture.dir.path().join("specforge.json")),
             r#"{"extensions": ["@specforge/product"]}"#
@@ -404,7 +420,7 @@ mod tests {
         let other = Fixture::new();
         write_config(&other, r#"{"extensions": ["@specforge/product"]}"#);
         let error = remove(&other.view(), &removing("@specforge/product")).unwrap_err();
-        assert_eq!(error.code, NOT_FOUND);
+        assert_eq!(error.error.code, NOT_FOUND);
     }
 
     #[specforge_test(
@@ -427,9 +443,9 @@ mod tests {
 
         let error = remove(&fixture.view(), &removing("@sdk/greet")).unwrap_err();
 
-        assert_eq!(error.code, "extension_conflict");
+        assert_eq!(error.error.code, "extension_conflict");
         assert_eq!(
-            error.data.unwrap()["entries"],
+            error.error.data.unwrap()["entries"],
             serde_json::json!(["@sdk/greet", "greet.wasm"])
         );
         assert_eq!(files_under(fixture.dir.path()), before);
@@ -456,8 +472,11 @@ mod tests {
             };
             let error = remove(&fixture.view(), &request).unwrap_err();
 
-            assert_eq!(error.code, "config_invalid");
-            assert_eq!(error.message, "./specforge.json must be a JSON object");
+            assert_eq!(error.error.code, "config_invalid");
+            assert_eq!(
+                error.error.message,
+                "./specforge.json must be a JSON object"
+            );
             assert_eq!(files_under(fixture.dir.path()), before);
         }
     }
@@ -505,11 +524,15 @@ mod tests {
             )
             .unwrap_err();
 
-            assert_eq!(removed.code, "config_invalid", "{config}");
-            assert_eq!(removed.kind, OpErrorKind::SchemaMismatch, "{config}");
-            assert_eq!(removed.message, read.problems[0].to_string(), "{config}");
-            assert_eq!(added, removed, "{config}");
-            assert_eq!(updated, removed, "{config}");
+            assert_eq!(removed.error.code, "config_invalid", "{config}");
+            assert_eq!(removed.error.kind, OpErrorKind::SchemaMismatch, "{config}");
+            assert_eq!(
+                removed.error.message,
+                read.problems[0].to_string(),
+                "{config}"
+            );
+            assert_eq!(added.error, removed.error, "{config}");
+            assert_eq!(updated, removed.error, "{config}");
             assert_eq!(files_under(fixture.dir.path()), before, "{config}");
         }
     }
@@ -561,7 +584,7 @@ mod tests {
             // order cannot be observed this way.
             return;
         }
-        assert_eq!(refused.unwrap_err().code, "config_write_failed");
+        assert_eq!(refused.unwrap_err().error.code, "config_write_failed");
         assert_eq!(files_under(fixture.dir.path()), before);
 
         // Writable: all three go.
@@ -668,8 +691,11 @@ mod tests {
 
         let refused = remove(&fixture.view(), &removing("@acme/x")).unwrap_err();
 
-        assert_eq!(refused.code, NOT_FOUND);
-        assert!(refused.message.contains("corrupt lock file"), "{refused:?}");
+        assert_eq!(refused.error.code, NOT_FOUND);
+        assert!(
+            refused.error.message.contains("corrupt lock file"),
+            "{refused:?}"
+        );
         assert_eq!(files_under(fixture.dir.path()), before);
     }
 
@@ -741,8 +767,11 @@ mod tests {
 
         let refused = remove(&fixture.view(), &removing("@acme/x")).unwrap_err();
 
-        assert_eq!(refused.code, NOT_FOUND);
-        assert!(refused.message.contains("corrupt lock file"), "{refused:?}");
+        assert_eq!(refused.error.code, NOT_FOUND);
+        assert!(
+            refused.error.message.contains("corrupt lock file"),
+            "{refused:?}"
+        );
         // Nothing was written: the corrupt file is as it was.
         assert_eq!(
             text(specforge_installed::lock_path(fixture.dir.path())),
@@ -801,6 +830,56 @@ mod tests {
         assert_eq!(
             document(outcome(Origin::Unknown, None, true))["action"],
             "planned"
+        );
+    }
+
+    #[specforge_test(
+        invariant = "mcp_structured_error_responses",
+        verify = "an operation states the request field each refusal is about, and a refusal of the project or the environment is about none"
+    )]
+    fn every_refusal_of_a_name_is_about_it() {
+        let about = Some(RemoveField::Name);
+        let subject = |fixture: &Fixture, name: &str| {
+            let refusal = remove(&fixture.view(), &removing(name)).unwrap_err();
+            (refusal.error.code.to_string(), refusal.subject)
+        };
+
+        // A name that could never be installed, and one the project has nothing under.
+        let fixture = Fixture::new();
+        assert_eq!(subject(&fixture, "@@bad"), ("E072".to_string(), about));
+        assert_eq!(subject(&fixture, "@nope/x"), (NOT_FOUND.to_string(), about));
+
+        // A name two entries enable.
+        let fixture = Fixture::new().enabled(vec![
+            EnabledExtension::unloaded("@sdk/greet"),
+            EnabledExtension {
+                entry: "greet.wasm".into(),
+                name: "@sdk/greet".into(),
+                file: Some("greet.wasm".into()),
+                failure: None,
+                warnings: Vec::new(),
+            },
+        ]);
+        assert_eq!(
+            subject(&fixture, "@sdk/greet"),
+            ("extension_conflict".to_string(), about)
+        );
+
+        // A refusal of the project is about no field: an unusable config, no project.
+        let fixture = installed(Fixture::new(), "@acme/x").config_problems(vec![
+            ConfigProblem::NotAnObject {
+                path: PathBuf::from("./specforge.json"),
+            },
+        ]);
+        assert_eq!(
+            subject(&fixture, "@acme/x"),
+            ("config_invalid".to_string(), None)
+        );
+        let fixture = Fixture::new();
+        let refusal = remove(&fixture.rootless_view(), &removing("@acme/x")).unwrap_err();
+        assert_eq!(
+            (refusal.error.code.as_ref(), refusal.subject),
+            ("no_project", None)
         );
     }
 }

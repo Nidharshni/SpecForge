@@ -30,8 +30,8 @@ pub use gaps::{
     DirectoryGaps, GapItem, Gaps, GapsDocument, ScanFailureRow, SourceItem, directory_of, gaps,
 };
 pub use guide::{
-    GuideDocument, GuideField, GuideKind, InferenceGuide, KindGuide, KindGuideDocument, guide,
-    kind_guide,
+    GuideDocument, GuideField, GuideKind, InferenceGuide, KindGuide, KindGuideDocument,
+    KindGuideField, guide, kind_guide,
 };
 pub use lint::lint;
 pub(crate) use manifest::read_manifest;
@@ -48,6 +48,6 @@ pub use progress::{
 };
 pub use session::{
     END_STATUS, EndStatus, Recorded, SESSION_ACTION, SESSION_ACTIVE, SESSION_NOT_ACTIVE,
-    SOURCE_OUTSIDE_ROOT, SOURCE_ROOT_OUTSIDE_ROOT, SOURCE_UNREADABLE, SessionAction,
+    SOURCE_OUTSIDE_ROOT, SOURCE_ROOT_OUTSIDE_ROOT, SOURCE_UNREADABLE, SessionAction, SessionField,
     SessionOutcome, SessionStep, UNKNOWN_SESSION, session,
 };

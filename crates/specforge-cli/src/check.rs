@@ -97,7 +97,7 @@ fn run_in(
     };
     let outcome = match check(&ProjectView::of(&compiled), options) {
         Ok(outcome) => outcome,
-        Err(error) => return Refusal::of(format).report(terminal, &error.into()),
+        Err(error) => return Refusal::of(format).report(terminal, &OpError::from(error)),
     };
     let shown: Vec<Diagnostic> = outcome.shown().into_iter().cloned().collect();
 

@@ -291,9 +291,11 @@ fn single_kind(cell: &str) -> Option<String> {
         .then(|| word.to_string())
 }
 
-/// The markdown tables of `text`: (line of the header, header cells, rows as
-/// (line, cells)).
-fn tables(text: &str) -> Vec<(usize, Vec<String>, Vec<(usize, Vec<String>)>)> {
+/// A markdown table row: its line number and cells.
+type Row = (usize, Vec<String>);
+
+/// The markdown tables of `text`: (line of the header, header cells, rows).
+fn tables(text: &str) -> Vec<(usize, Vec<String>, Vec<Row>)> {
     let cells = |line: &str| -> Vec<String> {
         line.trim()
             .trim_matches('|')

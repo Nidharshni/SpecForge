@@ -8,12 +8,12 @@ use specforge_registry_client::Retrying;
 use specforge_registry_client::registry_client::{RegistryClient, RegistryError};
 use specforge_registry_client::registry_config::RegistryConfig;
 use specforge_registry_client::testing::{CallKind, MemoryClient, package};
-use specforge_registry_wire::SearchQuery;
+use specforge_registry_wire::{RegistryRoot, SearchQuery};
 
 fn registry() -> RegistryConfig {
     RegistryConfig {
         alias: "local".to_string(),
-        url: "memory://local".to_string(),
+        url: RegistryRoot::parse("https://local.invalid").unwrap(),
         scope_filter: None,
         default_registry: true,
     }
@@ -155,7 +155,7 @@ fn a_timeout_is_not_retried() {
         CallKind::Versions,
         None,
         RegistryError::Timeout {
-            url: "memory://local".to_string(),
+            url: "https://local.invalid".to_string(),
         },
     );
 

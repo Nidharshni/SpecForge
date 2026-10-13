@@ -8,8 +8,10 @@ use specforge_ops::trace::{ChainDocument, Target, TraceChain};
 use specforge_ops::view::ProjectView;
 
 use crate::args::{AgentPlan, Arguments};
+use crate::refusal::ArgumentOf;
 use crate::reply::Answered;
 use crate::tool::{ErrorCode, McpError};
+use specforge_ops::navigate::EntityField;
 
 /// `specforge.trace`'s arguments.
 #[derive(Debug, Arguments)]
@@ -63,6 +65,14 @@ impl Gap {
 /// json` writes; a plan's is an `McpTracePlanResult`.
 pub(crate) struct Tool;
 
+impl ArgumentOf<EntityField> for Tool {
+    fn argument(field: EntityField) -> Option<&'static str> {
+        match field {
+            EntityField::EntityId => Some("entity_id"),
+        }
+    }
+}
+
 impl CoreTool for Tool {
     const NAME: &'static str = "specforge.trace";
     const DESCRIPTION: &'static str = "Show traceability chain for an entity, or check an agent plan for gaps (entity_id or plan)";
@@ -86,7 +96,7 @@ impl CoreTool for Tool {
         };
         let outcome =
             specforge_ops::trace::trace(&view, Target::Entity(entity_id)).map_err(|error| {
-                McpError::from(specforge_ops::OpError::from(error)).with_entity(entity_id)
+                Self::refused(specforge_ops::Refusal::from(error)).with_entity(entity_id)
             })?;
         match outcome.into_chain() {
             Some(chain) => Ok(Reply::Chain(chain).into()),

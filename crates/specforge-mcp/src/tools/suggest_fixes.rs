@@ -90,7 +90,9 @@ impl CoreTool for Tool {
         if let Some(entity_id) = args.entity_id.as_deref()
             && view.graph().node(entity_id).is_none()
         {
-            return Err(crate::tool::entity_not_found(view.graph(), entity_id).into());
+            return Err(crate::tool::entity_not_found(view.graph(), entity_id)
+                .with_argument("entity_id")
+                .into());
         }
         let diagnostics = view.reported();
         let query = FixQuery {

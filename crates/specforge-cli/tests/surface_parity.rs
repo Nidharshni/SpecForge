@@ -45,7 +45,9 @@ use tempfile::TempDir;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Then {
     Nothing,
-    /// Report `specforge.json` as changed (an extension-environment reload).
+    /// Rewrite `specforge.json` (a trailing newline) and report it changed (an
+    /// extension-environment reload). The file must really change: an event
+    /// for an unchanged file is no change to the session (ADR 0073).
     ReloadConfig,
     /// Delete this file (relative to the project root) and report it.
     Delete(&'static str),
@@ -572,11 +574,14 @@ fn lsp(project: &Project, then: Then) -> LspRun {
         let opened = client.open(&project.entry).await;
         let then = match then {
             Then::Nothing => None,
-            Then::ReloadConfig => Some(
+            Then::ReloadConfig => Some({
+                let config = project.root.join("specforge.json");
+                let text = fs::read_to_string(&config).unwrap();
+                fs::write(&config, format!("{text}\n")).unwrap();
                 client
                     .watched_file(&project.root.join("specforge.json"), 2)
-                    .await,
-            ),
+                    .await
+            }),
             Then::Delete(file) => {
                 let path = project.root.join(file);
                 fs::remove_file(&path).unwrap();

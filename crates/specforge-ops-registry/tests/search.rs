@@ -6,13 +6,14 @@ use specforge_ops_registry::{ConfiguredRegistry, User};
 use specforge_protocol_types::DeclaredCategory;
 use specforge_registry_client::testing::{CallKind, MemoryClient, package};
 use specforge_registry_client::{RegistryConfig, RegistryError};
+use specforge_registry_wire::RegistryRoot;
 use specforge_test_macros::test as specforge_test;
 use tempfile::TempDir;
 
 fn registry_named(alias: &str) -> RegistryConfig {
     RegistryConfig {
         alias: alias.to_string(),
-        url: format!("memory://{alias}"),
+        url: RegistryRoot::parse(&format!("https://{alias}.invalid")).unwrap(),
         scope_filter: None,
         default_registry: false,
     }
@@ -34,7 +35,7 @@ impl World {
             .map(|(i, alias)| {
                 serde_json::json!({
                     "alias": alias,
-                    "url": format!("memory://{alias}"),
+                    "url": format!("https://{alias}.invalid"),
                     "default_registry": i == 0,
                 })
             })
@@ -136,7 +137,7 @@ fn a_failed_registry_is_reported_and_the_others_asked() {
         CallKind::Search,
         Some(&registry_named("failing")),
         RegistryError::Timeout {
-            url: "memory://failing".into(),
+            url: "https://failing.invalid".into(),
         },
     );
     world.store("working", "@work/ext", "1.0.0", "Works", false);

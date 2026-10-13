@@ -526,7 +526,7 @@ fn mcp_add_extension_without_registry_makes_no_network_call() {
 // show them on stderr; an entry that can't be read is skipped, and when
 // none can be read the command fails with E067 instead of E063.
 
-const UNREACHABLE: &str = "http://registry.invalid/v1";
+const UNREACHABLE: &str = "http://registry.invalid";
 
 /// A project whose specforge.json has `registries` set to `registries`.
 fn project_with_registries(registries: serde_json::Value) -> TempDir {
@@ -605,18 +605,34 @@ fn search_shows_that_no_registry_is_the_default() {
     assert!(stderr.contains("info[I003]"), "{stderr}");
 }
 
-#[test]
-fn login_shows_an_unreadable_registry_entry_and_skips_it() {
+#[specforge_test(
+    behavior = "configure_registries",
+    verify = "a registries entry that can't be read refuses every registry operation with E067 before any request"
+)]
+fn login_refuses_a_configuration_with_an_unreadable_entry_before_any_request() {
+    let spy = NetSpy::start();
     let dir = project_with_registries(serde_json::json!([
         {"alias": "main", "url": UNREACHABLE, "default_registry": true},
         {"alias": "broken"},
     ]));
-    let output = run_spied(&["login", "--token", "t"], &dir);
-    let stderr = stderr_of(&output);
+    let output = spy
+        .command(&["login", "--token", "t", "--format", "json", "--path"])
+        .arg(dir.path())
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let json: serde_json::Value =
+        serde_json::from_str(&stdout).unwrap_or_else(|e| panic!("not JSON ({e}): {stdout}"));
+    assert_eq!(json["code"], "E067", "{json}");
     assert!(
-        stderr.contains("error[E067]: Failed to parse registry entry at index 1"),
-        "{stderr}"
+        json["error"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("index 1"),
+        "{json}"
     );
+    assert_eq!(spy.hits(), 0, "login reached the network");
 }
 
 #[test]
@@ -838,8 +854,8 @@ fn adding_an_installed_registry_package_shows_no_registry_configuration() {
         "version": "0.1.0",
         "extensions": ["@specforge/software"],
         "registries": [
-            {"alias": "local", "url": registry.url(), "default_registry": true},
-            {"alias": "local", "url": "http://registry.invalid/v1"},
+            {"alias": "local", "url": registry.root().as_str(), "default_registry": true},
+            {"alias": "local", "url": "http://registry.invalid"},
         ],
     });
     std::fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
@@ -1114,7 +1130,7 @@ fn login_with_an_unknown_registry_is_refused_before_any_request() {
 )]
 fn a_failed_registry_is_reported_once_and_search_fails_when_all_did() {
     let dir = project_with_registries(serde_json::json!([
-        {"alias": "down", "url": "http://127.0.0.1:9/v1", "default_registry": true}
+        {"alias": "down", "url": "http://127.0.0.1:9", "default_registry": true}
     ]));
     let home = TempDir::new().unwrap();
 
@@ -1708,4 +1724,90 @@ fn a_refused_add_of_several_specifiers_pins_no_key() {
         stderr_of(&output)
     );
     assert_eq!(t.pinned("@sdk/greet"), Some(t.k1.key_id()));
+}
+
+/// `specforge <args> --format json --path <dir>` with `home` as `$HOME`; its exit status and JSON.
+fn json_run(
+    args: &[&str],
+    dir: &TempDir,
+    home: &TempDir,
+) -> (bool, serde_json::Value, std::process::Output) {
+    let output = specforge_cmd()
+        .args(args)
+        .args(["--format", "json", "--path"])
+        .arg(dir.path())
+        .env("HOME", home.path())
+        .env_remove("SPECFORGE_REGISTRY_TOKEN")
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+    let json = serde_json::from_str(&stdout).unwrap_or_else(|e| panic!("not JSON ({e}): {stdout}"));
+    (output.status.success(), json, output)
+}
+
+#[specforge_test(
+    behavior = "search_registry",
+    verify = "queries all configured registries"
+)]
+fn a_registry_named_by_its_root_is_searched() {
+    use crate::published::{Package, serve};
+    let registry = serve(vec![Package::new("@sdk/greet", "0.1.0", greet_wasm())]);
+    let dir = project_with_registries(
+        serde_json::json!([{"alias": "local", "url": registry.root().as_str(), "default_registry": true}]),
+    );
+    let home = TempDir::new().unwrap();
+
+    let (ok, json, _) = json_run(&["search", "greet"], &dir, &home);
+
+    assert!(ok, "{json}");
+    assert!(json.to_string().contains("@sdk/greet"), "{json}");
+    assert!(json.to_string().contains("0.1.0"), "{json}");
+}
+
+#[specforge_test(
+    behavior = "authenticate_registry_request",
+    verify = "every registry call reads an answer's status as one error"
+)]
+fn login_at_an_address_no_registry_serves_is_r009() {
+    use crate::published::{Package, serve};
+    let registry = serve(vec![Package::new("@sdk/greet", "0.1.0", greet_wasm())]);
+    let root = registry.root().as_str();
+    let dir = project_with_registries(serde_json::json!([
+        {"alias": "local", "url": format!("{root}/elsewhere"), "default_registry": true}
+    ]));
+    let home = TempDir::new().unwrap();
+
+    let (ok, json, _) = json_run(&["login", "--token", "t"], &dir, &home);
+
+    assert!(!ok, "{json}");
+    assert_eq!(json["code"], "R009", "{json}");
+}
+
+#[specforge_test(
+    behavior = "configure_registries",
+    verify = "a registry url is the registry's root, and one ending in the protocol's version prefix is refused with E067 naming the root"
+)]
+fn a_registry_url_with_the_version_prefix_is_refused_before_any_request() {
+    let spy = NetSpy::start();
+    let dir = project_with_registries(serde_json::json!([
+        {"alias": "main", "url": "http://registry.invalid/v1", "default_registry": true}
+    ]));
+    let output = spy
+        .command(&["search", "greet", "--format", "json", "--path"])
+        .arg(dir.path())
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let json: serde_json::Value =
+        serde_json::from_str(&stdout).unwrap_or_else(|e| panic!("not JSON ({e}): {stdout}"));
+    assert_eq!(json["code"], "E067", "{json}");
+    assert!(
+        json["error"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("name the registry's root: 'http://registry.invalid'"),
+        "{json}"
+    );
+    assert_eq!(spy.hits(), 0, "search reached the network");
 }
