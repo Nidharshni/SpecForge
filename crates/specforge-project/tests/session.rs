@@ -2754,7 +2754,6 @@ fn a_symlinked_directory_is_no_source() {
     behavior = "classify_project_changes",
     verify = "the changes of a batch naming every changed path are what the session finds stale"
 )]
-#[ignore = "fixed by T4"]
 fn a_batch_naming_every_changed_path_changes_what_is_stale() {
     use std::path::PathBuf;
 

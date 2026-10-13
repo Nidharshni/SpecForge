@@ -413,7 +413,6 @@ fn a_directory_event_reaches_every_source_under_it() {
     behavior = "classify_project_changes",
     verify = "a session's watch roots and the LSP's watchers cover every symlinked source's target"
 )]
-#[ignore = "fixed by T4"]
 fn a_symlinked_sources_target_is_watched() {
     let fixture = Fixture::new(PLAIN);
     let outside = fixture.parent.join("outside");

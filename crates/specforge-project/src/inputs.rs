@@ -64,7 +64,8 @@ pub enum UpdateKind {
 /// last checks read (the build cache its check-phase passes read, each
 /// file a `file_reference` field or a `file_exists` rule names, and the
 /// directory of each such file that was missing, whose listing the E016
-/// suggestion reads). Behavior `classify_project_changes`, ADR 0030.
+/// suggestion reads), and the target of each symlinked source (where its text
+/// lies). Behavior `classify_project_changes`, ADR 0030.
 ///
 /// One value per environment load, renewed each time the checks run;
 /// `Update::inputs_changed` says when it changed. Every answer to "what
@@ -105,10 +106,21 @@ struct OnDisk {
     named: Vec<PathBuf>,
     /// The directories of `named` that were missing when the checks ran.
     listings: Vec<PathBuf>,
+    /// The symlinked sources, by key (sorted): where each one's text lies.
+    links: Vec<Link>,
     /// Directories on the way to an input's missing directory outside the
     /// root, from their nearest existing ancestor.
     pending: Vec<Pending>,
     canonical: Canonical,
+}
+
+/// A source that is a symlink to a file: keyed by its own name, read through
+/// the link.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Link {
+    key: String,
+    /// Where the text lies (canonical).
+    target: PathBuf,
 }
 
 /// An input whose directory does not exist yet, outside the root: what
@@ -142,9 +154,32 @@ pub(crate) struct Reach {
     /// Each batch path that is a directory created on the way to a missing
     /// input's directory.
     pub(crate) pending: Vec<(PathBuf, Kind)>,
+    /// Symlinked sources a path reached through their target, by key.
+    pub(crate) linked: std::collections::BTreeSet<String>,
 }
 
 impl OnDisk {
+    /// The link `path` (a source under the spec root) is: it is a symlink
+    /// that resolves to a file.
+    fn link_at(&self, path: &Path) -> Option<Link> {
+        if !std::fs::symlink_metadata(path)
+            .ok()?
+            .file_type()
+            .is_symlink()
+        {
+            return None;
+        }
+        let target = std::fs::canonicalize(path).ok()?;
+        if !target.is_file() {
+            return None;
+        }
+        let key = path.strip_prefix(&self.spec_root).ok()?;
+        Some(Link {
+            key: key.to_string_lossy().into_owned(),
+            target,
+        })
+    }
+
     /// `path` canonical, re-spelled from the root as it was opened when it
     /// lies under it.
     fn respell(&self, path: &Path) -> PathBuf {
@@ -227,7 +262,12 @@ impl SessionInputs {
                     .iter()
                     .chain(&disk.build_cache)
                     .chain(&disk.named)
-                    .filter_map(|path| path.parent().map(canonical)),
+                    .filter_map(|path| path.parent().map(canonical))
+                    .chain(
+                        disk.links
+                            .iter()
+                            .filter_map(|link| link.target.parent().map(Path::to_path_buf)),
+                    ),
             )
             .filter(|dir| dir.is_dir());
         let mut roots: Vec<PathBuf> = Vec::new();
@@ -283,6 +323,18 @@ impl SessionInputs {
                     .map(|path| Watched::File(spelled(path))),
             )
             .chain(
+                disk.links
+                    .iter()
+                    .filter(|link| {
+                        link.target
+                            .strip_prefix(&disk.canonical.spec_root)
+                            .map_or(true, |relative| {
+                                !is_discovered(&relative.to_string_lossy(), &disk.exclude)
+                            })
+                    })
+                    .map(|link| Watched::File(spelled(&link.target))),
+            )
+            .chain(
                 disk.listings
                     .iter()
                     .map(|dir| Watched::Listing(spelled(dir))),
@@ -318,6 +370,7 @@ impl SessionInputs {
             build_cache: None,
             named: Vec::new(),
             listings: Vec::new(),
+            links: Vec::new(),
             pending: Vec::new(),
             canonical: Canonical::empty(),
         })
@@ -385,6 +438,41 @@ impl SessionInputs {
             .unwrap_or_default()
     }
 
+    /// With the symlinked sources among `discovered` (every source found).
+    pub(crate) fn linked(&self, discovered: &[PathBuf]) -> Self {
+        match &self.place {
+            Place::Detached => self.clone(),
+            Place::Disk(disk) => {
+                let mut disk = (**disk).clone();
+                disk.links = discovered
+                    .iter()
+                    .filter_map(|path| disk.link_at(path))
+                    .collect();
+                disk.links.sort_by(|a, b| a.key.cmp(&b.key));
+                Self::on_disk(disk)
+            }
+        }
+    }
+
+    /// With the links of `keys` read again, the others kept.
+    pub(crate) fn relinked(&self, keys: &[String]) -> Self {
+        match &self.place {
+            Place::Detached => self.clone(),
+            Place::Disk(disk) => {
+                let mut disk = (**disk).clone();
+                disk.links.retain(|link| !keys.contains(&link.key));
+                let again: Vec<Link> = keys
+                    .iter()
+                    .filter_map(|key| disk.link_at(&disk.spec_root.join(key)))
+                    .collect();
+                disk.links.extend(again);
+                disk.links.sort_by(|a, b| a.key.cmp(&b.key));
+                disk.links.dedup();
+                Self::on_disk(disk)
+            }
+        }
+    }
+
     /// What `paths` (absolute, spelled as a watcher or an editor reports
     /// them) reach of what the session read: the sources at or under each
     /// (a region), and the environment and check inputs each is or lies
@@ -431,6 +519,12 @@ impl SessionInputs {
             }
             if !reached.is_empty() {
                 reach.inputs.push((path.to_path_buf(), reached));
+            }
+            // A symlinked source whose target is this path, or under it.
+            for link in &disk.links {
+                if link.target.starts_with(&canonical_path) {
+                    reach.linked.insert(link.key.clone());
+                }
             }
             // A directory created on the way to an input's missing directory.
             for pending in &disk.pending {

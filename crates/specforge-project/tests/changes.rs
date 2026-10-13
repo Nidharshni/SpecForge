@@ -145,7 +145,6 @@ fn a_symlink_inside_the_spec_root_is_keyed_by_its_own_name() {
     behavior = "classify_project_changes",
     verify = "a symlinked source is keyed by its link and changes when its target does"
 )]
-#[ignore = "fixed by T4"]
 fn an_edit_to_a_symlinked_sources_target_changes_that_source() {
     let (_dir, session, outside) = linked_project();
     fs::write(
@@ -216,7 +215,6 @@ fn a_detached_session_takes_no_change_from_disk() {
     behavior = "classify_project_changes",
     verify = "a session's watch roots and the LSP's watchers cover every symlinked source's target"
 )]
-#[ignore = "fixed by T4"]
 fn a_symlinked_sources_target_directory_is_watched() {
     let (_dir, session, outside) = linked_project();
 
@@ -896,4 +894,38 @@ fn every_input_lies_under_a_watch_root() {
         }),
         "{roots:?}"
     );
+}
+
+/// A source that becomes a symlink, or stops being one, moves what a
+/// session watches: its update says the inputs changed.
+#[cfg(unix)]
+#[specforge_test(
+    behavior = "classify_project_changes",
+    verify = "a session's watch roots and the LSP's watchers cover every symlinked source's target"
+)]
+fn relinking_a_source_changes_the_inputs() {
+    let (dir, mut session) = open(plain(), &[("a.spec", TERM)]);
+    let outside = TempDir::new().unwrap();
+    let outside_dir = fs::canonicalize(outside.path()).unwrap();
+    fs::write(outside_dir.join("real.spec"), "term real_one \"R\" {}\n").unwrap();
+    let keys = ["a.spec".to_string()];
+
+    fs::remove_file(dir.path().join("a.spec")).unwrap();
+    std::os::unix::fs::symlink(outside_dir.join("real.spec"), dir.path().join("a.spec")).unwrap();
+    let update = session.update(SourceChange::Disk(&keys));
+    assert!(update.inputs_changed);
+    let outside_root = WatchRoot {
+        dir: outside_dir.clone(),
+        recursive: true,
+    };
+    assert!(session.inputs().watch_roots().contains(&outside_root));
+
+    // The same update again moves nothing.
+    assert!(!session.update(SourceChange::Disk(&keys)).inputs_changed);
+
+    fs::remove_file(dir.path().join("a.spec")).unwrap();
+    fs::write(dir.path().join("a.spec"), TERM).unwrap();
+    let update = session.update(SourceChange::Disk(&keys));
+    assert!(update.inputs_changed);
+    assert!(!session.inputs().watch_roots().contains(&outside_root));
 }

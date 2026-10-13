@@ -81,7 +81,8 @@ pub struct Update {
     /// What was applied: sources, the checks alone, or the environment.
     pub kind: UpdateKind,
     /// The session's inputs changed: a file the checks read was named or
-    /// dropped, or the environment loaded again with other inputs. What an
+    /// dropped, a source became or stopped being a symlink or points
+    /// elsewhere, or the environment loaded again with other inputs. What an
     /// adapter watches must follow [`ProjectSession::inputs`] (ADR 0030).
     pub inputs_changed: bool,
     pub delta: GraphDelta,
@@ -201,6 +202,7 @@ impl OpeningProject {
         let mut snapshot = self.snapshot;
         let discovered = self.inputs.discover();
         snapshot.stamp_all_sources(&self.inputs, &discovered);
+        let inputs = self.inputs.linked(&discovered);
         // Keys as this environment gives them: the spec root may have moved.
         let held = Held::keyed(buffers, |path| self.env.source_key(path));
         // What was stamped is what is read, except a held file: its buffer
@@ -211,7 +213,7 @@ impl OpeningProject {
         let mut session = ProjectSession {
             project,
             source: self.source,
-            inputs: self.inputs,
+            inputs,
             snapshot,
             held,
             checks_skipped: false,
@@ -297,6 +299,7 @@ impl ProjectSession {
 
     /// [`Self::update`], running the checks `mode` asks for.
     pub fn update_with(&mut self, change: SourceChange<'_>, mode: CheckMode) -> Update {
+        let mut moved = false;
         let reads: Vec<(String, Read)> = match change {
             SourceChange::Disk(paths) => {
                 let mut keys: Vec<String> = paths
@@ -307,6 +310,7 @@ impl ProjectSession {
                 self.held.leave_out(&mut keys);
                 // Stamped before they are read again (crate::freshness).
                 self.snapshot.stamp_sources(&self.inputs, &keys);
+                moved = self.relink(&keys);
                 keys.into_iter()
                     .map(|key| {
                         let read = self.project.read_source(&key);
@@ -327,7 +331,16 @@ impl ProjectSession {
                 reads
             }
         };
-        self.applied(reads, mode)
+        self.applied(reads, mode, moved)
+    }
+
+    /// Read the links of `keys` again: whether the session's inputs moved
+    /// (a source became or stopped being a symlink, or points elsewhere).
+    fn relink(&mut self, keys: &[String]) -> bool {
+        let relinked = self.inputs.relinked(keys);
+        let moved = relinked != self.inputs;
+        self.inputs = relinked;
+        moved
     }
 
     /// The editor no longer holds the buffers of `paths` (absolute): each
@@ -341,6 +354,7 @@ impl ProjectSession {
     /// typing fast path skipped them runs them.
     pub fn release(&mut self, paths: &[PathBuf]) -> Option<Update> {
         let mut reads = Vec::new();
+        let mut moved = false;
         for path in paths {
             let key = self.source_key(path);
             self.held.release(&key);
@@ -355,16 +369,17 @@ impl ProjectSession {
                 // buffer leaves nothing stale.
                 self.snapshot
                     .stamp_sources(&self.inputs, std::slice::from_ref(&key));
+                moved |= self.relink(std::slice::from_ref(&key));
                 self.project.read_source(&key)
             };
             if !self.project.is_current(&key, &read) {
                 reads.push((key, read));
             }
         }
-        if reads.is_empty() && !self.checks_skipped {
+        if reads.is_empty() && !self.checks_skipped && !moved {
             return None;
         }
-        Some(self.applied(reads, CheckMode::Full))
+        Some(self.applied(reads, CheckMode::Full, moved))
     }
 
     /// The buffer the editor holds for source `key`, as the session last
@@ -417,14 +432,16 @@ impl ProjectSession {
     /// imports, then run or skip the checks. With nothing to apply it runs
     /// the checks only if they were skipped, else it changes nothing:
     /// nothing an update reads besides its sources can have moved (ADR 0055).
-    fn applied(&mut self, reads: Vec<(String, Read)>, mode: CheckMode) -> Update {
+    fn applied(&mut self, reads: Vec<(String, Read)>, mode: CheckMode, moved: bool) -> Update {
         if reads.is_empty() {
             return if self.checks_skipped {
-                self.recheck()
+                let mut update = self.recheck();
+                update.inputs_changed |= moved;
+                update
             } else {
                 Update::of(
                     UpdateKind::Sources,
-                    false,
+                    moved,
                     Applied::default(),
                     self.project.diagnostics(),
                 )
@@ -439,7 +456,7 @@ impl ProjectSession {
             false
         } else {
             self.check()
-        };
+        } || moved;
         Update::of(
             UpdateKind::Sources,
             inputs_changed,

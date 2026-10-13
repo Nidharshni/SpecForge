@@ -561,7 +561,6 @@ fn a_debug_build_of_the_lsp_verifies_each_rebuild() {
     behavior = "classify_project_changes",
     verify = "a session's watch roots and the LSP's watchers cover every symlinked source's target"
 )]
-#[ignore = "fixed by T4"]
 fn the_watchers_cover_a_symlinked_sources_target() {
     use tower_lsp::lsp_types::GlobPattern;
 

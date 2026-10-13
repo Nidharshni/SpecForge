@@ -953,7 +953,6 @@ fn watch_reports_what_check_reports_after_a_directory_move() {
     behavior = "watch_file_system_for_changes",
     verify = "an edit to a symlinked source's target is seen"
 )]
-#[ignore = "fixed by T4"]
 fn watch_sees_an_edit_to_a_symlinked_sources_target() {
     let outside = TempDir::new().unwrap();
     let target = fs::canonicalize(outside.path()).unwrap().join("real.spec");

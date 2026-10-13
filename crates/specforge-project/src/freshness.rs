@@ -196,6 +196,16 @@ impl DiskSnapshot {
                 }
             }
         }
+        // A symlinked source a path reached through its target.
+        if let Scope::Reached(reach) = scope {
+            for key in &reach.linked {
+                if seen.insert(key.clone())
+                    && !unchanged(&spec_root.join(key), self.sources.get(key))
+                {
+                    changes.sources.push(key.clone());
+                }
+            }
+        }
         changes.sources.sort();
         changes.sources.dedup();
         match scope {
