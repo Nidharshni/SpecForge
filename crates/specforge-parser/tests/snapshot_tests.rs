@@ -20,7 +20,7 @@ behavior parse_spec_file "Parse Spec File" {
     verify integration "parses all .spec files in project"
 }
 "#;
-    insta::assert_json_snapshot!(parse_ok(source, "test.spec").entities);
+    insta::assert_debug_snapshot!(parse_ok(source, "test.spec").entities);
 }
 
 #[test]
@@ -43,7 +43,7 @@ behavior test_values "Test Values" {
     verify property "always valid"
 }
 "#;
-    insta::assert_json_snapshot!(parse_ok(source, "test.spec").entities);
+    insta::assert_debug_snapshot!(parse_ok(source, "test.spec").entities);
 }
 
 #[test]
@@ -62,8 +62,8 @@ behavior good_after "After" {
 }
 "#;
     let result = parse(source, "test.spec");
-    insta::assert_json_snapshot!("multi_error_entities", result.entities);
-    insta::assert_json_snapshot!("multi_error_diagnostics", result.errors);
+    insta::assert_debug_snapshot!("multi_error_entities", result.entities);
+    insta::assert_debug_snapshot!("multi_error_diagnostics", result.errors);
 }
 
 #[test]
@@ -104,8 +104,8 @@ behavior recover_from_syntax_errors "Recover from Syntax Errors" {
 }
 "#;
     let result = parse_ok(source, "behaviors/parsing.spec");
-    insta::assert_json_snapshot!("real_world_imports", result.imports);
-    insta::assert_json_snapshot!("real_world_entities", result.entities);
+    insta::assert_debug_snapshot!("real_world_imports", result.imports);
+    insta::assert_debug_snapshot!("real_world_entities", result.entities);
 }
 
 #[test]
@@ -117,7 +117,7 @@ type McpErrorCode = "invalid_input" | "compilation_failed" | "entity_not_found"
 
 type JsonRpcErrorCode = -32700 | -32600 | -32601
 "#;
-    insta::assert_json_snapshot!(parse_ok(source, "test.spec").entities);
+    insta::assert_debug_snapshot!(parse_ok(source, "test.spec").entities);
 }
 
 #[test]
@@ -140,5 +140,5 @@ define my_custom_kind {
     verify unit "custom kind registers"
 }
 "#;
-    insta::assert_json_snapshot!(parse_ok(source, "test.spec").entities);
+    insta::assert_debug_snapshot!(parse_ok(source, "test.spec").entities);
 }

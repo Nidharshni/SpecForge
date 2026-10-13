@@ -4,7 +4,7 @@ use specforge_common::{Diagnostic, SourceSpan, Sym, codes};
 use crate::expr::SpannedExpr;
 use crate::format_version::FormatVersion;
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct SpecFile {
     pub path: Sym,
     pub imports: Vec<ImportDeclaration>,
@@ -42,7 +42,7 @@ pub struct ImportDeclaration {
     pub span: SourceSpan,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct Entity {
     pub kind: EntityKind,
     pub id: EntityId,
@@ -87,7 +87,7 @@ pub struct EntityId {
     pub raw: Sym,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct FieldMap {
     entries: Vec<FieldEntry>,
 }
@@ -156,22 +156,20 @@ pub struct Annotation {
     pub value: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct FieldEntry {
     pub key: Sym,
     pub value: FieldValue,
     pub annotations: Vec<Annotation>,
     /// Where the value is written, so diagnostics about the value (E061)
-    /// point at it rather than at the whole entity. Compiler-internal:
-    /// not serialized.
-    #[serde(skip)]
+    /// point at it rather than at the whole entity.
     pub value_span: Option<SourceSpan>,
 }
 
 /// One item of a reference list: the target ID plus the exact source span
 /// of its identifier token, so diagnostics (E003) can point at the token
 /// instead of the whole entity block.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SpannedRef {
     pub id: String,
     pub span: SourceSpan,
@@ -180,14 +178,6 @@ pub struct SpannedRef {
 impl SpannedRef {
     pub fn as_str(&self) -> &str {
         &self.id
-    }
-}
-
-// Serialize as the bare ID string: the span is compiler-internal data and
-// serialized field values must remain plain reference names.
-impl Serialize for SpannedRef {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.id)
     }
 }
 
@@ -202,7 +192,7 @@ pub const UNION_VARIANTS_FIELD: &str = "variants";
 /// name is the parser's own: no extension declares it.
 pub const REF_SCHEME_FIELD: &str = "scheme";
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum FieldValue {
     String(String),
     ReferenceList(Vec<SpannedRef>),
@@ -225,7 +215,7 @@ pub enum FieldValue {
     Identifier(String),
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct VerifyStatement {
     pub kind: String,
     pub description: String,

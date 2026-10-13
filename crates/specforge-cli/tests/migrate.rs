@@ -1626,10 +1626,11 @@ fn migrate_json_lists_each_file_and_its_backup() {
 // Plan 14, T0 pins: what migrate prints today
 // ===================================================================
 
-/// `MigrationSummary` carries no `diagnostics`: nothing ever filled it (plan
-/// 14 D4), so the JSON does not claim an empty list.
+/// The migration document's `diagnostics` are the problems of `specforge.json`
+/// the run went around (plan 03): none for a usable config, but the key is
+/// there (the summary's own list stays gone, plan 14 D4).
 #[test]
-fn migrate_json_has_no_diagnostics_key() {
+fn migrate_json_diagnostics_are_the_configs_problems() {
     let tmp = TempDir::new().unwrap();
     let root = tmp.path();
     setup_project(root);
@@ -1651,7 +1652,7 @@ fn migrate_json_has_no_diagnostics_key() {
         .output()
         .unwrap();
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert!(json.get("diagnostics").is_none(), "{json}");
+    assert_eq!(json["diagnostics"], serde_json::json!([]), "{json}");
 }
 
 /// A dry-run diff labels each file with its path from the project root, so
@@ -1766,4 +1767,52 @@ fn a_format_only_migration_passes_graph_protocol_compatibility_silently() {
             .starts_with("// specforge-format: 1.0\n"),
         "the file was migrated"
     );
+}
+
+// --- plan 03: a specforge.json that hides the project's sources ---
+
+/// The `0.9`-header text of a spec file, to migrate.
+const OLD: &str = "// specforge-format: 0.9\nbehavior alpha \"Alpha\" {\n}\n";
+
+#[specforge_test(
+    behavior = "migrate_spec_files_in_place",
+    verify = "a specforge.json that does not say which files are the project's sources refuses the migration, dry run included, and nothing is written"
+)]
+fn migrate_refuses_a_config_that_does_not_say_which_files_are_its_sources() {
+    for config in crate::format::HIDES_SOURCES {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        crate::format::project_with_config(root, config);
+        fs::write(root.join("spec/a.spec"), OLD).unwrap();
+        fs::write(root.join("vendor/v.spec"), OLD.replace("alpha", "vend")).unwrap();
+        let before = crate::written::files_under(root);
+
+        for args in [&["migrate"][..], &["migrate", "--dry-run"][..]] {
+            let (code, json) = crate::format::json_of(root, args);
+            assert_eq!(code, Some(1), "{config} {args:?}: {json}");
+            assert_eq!(json["code"], "config_invalid", "{config} {args:?}: {json}");
+            assert_eq!(
+                crate::written::files_under(root),
+                before,
+                "{config} {args:?}: no rewrite, no .bak, no migration record"
+            );
+        }
+    }
+}
+
+#[specforge_test(
+    behavior = "migrate_spec_files_in_place",
+    verify = "a problem in specforge.json the migration goes around is an E069 in its document and fails it"
+)]
+fn migrate_reports_a_config_problem_it_goes_around() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    crate::format::project_with_config(root, r#"{"spec_root":"spec","exclude":["["]}"#);
+    fs::write(root.join("spec/a.spec"), "behavior alpha \"Alpha\" {\n}\n").unwrap();
+
+    let (code, json) = crate::format::json_of(root, &["migrate", "--dry-run"]);
+    assert_eq!(code, Some(1), "{json}");
+    assert_eq!(json["ok"], false, "{json}");
+    assert_eq!(json["pending"], false, "{json}");
+    assert_eq!(json["diagnostics"][0]["code"], "E069", "{json}");
 }

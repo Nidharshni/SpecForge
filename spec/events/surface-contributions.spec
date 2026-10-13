@@ -8,46 +8,58 @@ use "types/surface"
 
 event commands_auto_promoted "Commands Auto-Promoted" {
   channel "surface.commands_auto_promoted"
-  payload {
-    promotedCount integer
-    conflictCount integer
-    timestamp     timestamp
-  }
+  payload CommandsAutoPromotedPayload
   verify integration "emits commands_auto_promoted with correct promoted and conflict counts"
+}
+
+type CommandsAutoPromotedPayload {
+  promotedCount integer
+  conflictCount integer
+  timestamp     timestamp
+  verify unit "CommandsAutoPromotedPayload schema is valid"
 }
 
 event surface_command_dispatched "Surface Command Dispatched" {
   channel "surface.command_dispatched"
-  payload {
-    extensionName string
-    commandId     string
-    exitCode      integer
-    durationMs    integer
-    timestamp     timestamp
-  }
+  payload SurfaceCommandDispatchedPayload
   verify integration "emits surface_command_dispatched with correct commandId and exitCode"
+}
+
+type SurfaceCommandDispatchedPayload {
+  extensionName string
+  commandId     string
+  exitCode      integer
+  durationMs    integer
+  timestamp     timestamp
+  verify unit "SurfaceCommandDispatchedPayload schema is valid"
 }
 
 event surface_mcp_tool_dispatched "Surface MCP Tool Dispatched" {
   channel "surface.mcp_tool_dispatched"
-  payload {
-    extensionName string
-    toolName      string
-    durationMs    integer
-    success       boolean
-    timestamp     timestamp
-  }
+  payload SurfaceMcpToolDispatchedPayload
   verify integration "emits surface_mcp_tool_dispatched with correct toolName and success"
+}
+
+type SurfaceMcpToolDispatchedPayload {
+  extensionName string
+  toolName      string
+  durationMs    integer
+  success       boolean
+  timestamp     timestamp
+  verify unit "SurfaceMcpToolDispatchedPayload schema is valid"
 }
 
 event surface_mcp_resource_dispatched "Surface MCP Resource Dispatched" {
   channel "surface.mcp_resource_dispatched"
-  payload {
-    extensionName string
-    uriTemplate   string
-    mimeType      string
-    durationMs    integer
-    timestamp     timestamp
-  }
+  payload SurfaceMcpResourceDispatchedPayload
   verify integration "emits surface_mcp_resource_dispatched with correct uriTemplate"
+}
+
+type SurfaceMcpResourceDispatchedPayload {
+  extensionName string
+  uriTemplate   string
+  mimeType      string
+  durationMs    integer
+  timestamp     timestamp
+  verify unit "SurfaceMcpResourceDispatchedPayload schema is valid"
 }

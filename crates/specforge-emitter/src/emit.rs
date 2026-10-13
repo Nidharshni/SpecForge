@@ -5,7 +5,7 @@ use specforge_registry::{FieldRegistry, KindRegistry};
 
 use crate::budget::TokenBudget;
 use crate::error::EmitterError;
-use crate::json::Export;
+use crate::json::{Export, ExportVersion};
 use crate::schema::{GraphProtocolSchema, SchemaAttachment, SchemaRefBlock};
 
 /// Output format for graph emission.
@@ -183,7 +183,7 @@ impl Shape<'_> {
     fn render(&self, graph: &Graph, budget: Option<&TokenBudget>) -> Result<String, EmitterError> {
         match self.format {
             EmitFormat::Json => self
-                .envelope(graph, Some("1.0"), graph_nodes(graph), budget)
+                .envelope(graph, Some(ExportVersion::V1), graph_nodes(graph), budget)
                 .to_json(),
             EmitFormat::Context => self
                 .envelope(graph, None, context_nodes(graph, self.fields), budget)
@@ -200,13 +200,13 @@ impl Shape<'_> {
     fn envelope<'e, N: serde::Serialize>(
         &'e self,
         graph: &Graph,
-        plain_version: Option<&'static str>,
+        plain_version: Option<ExportVersion>,
         nodes: Vec<N>,
         budget: Option<&'e TokenBudget>,
     ) -> Export<'e, N> {
         let mut export = Export::plain(plain_version, graph, nodes);
         if let Some((schema, attach)) = self.schema {
-            export.format_version = Some("2.0");
+            export.format_version = Some(ExportVersion::V2);
             export.schema_version = Cow::Owned(schema.schema_version.to_string());
             match attach {
                 SchemaAttachment::Embedded => export.schema = Some(schema),

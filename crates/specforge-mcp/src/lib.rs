@@ -184,7 +184,7 @@ impl McpServer {
         self.state.events.record(McpEvent::McpProtocolErrorHandled {
             error_code: error.code,
             error_message: error.message.clone(),
-            method: method.map(str::to_string),
+            request_method: method.map(str::to_string),
         });
     }
 

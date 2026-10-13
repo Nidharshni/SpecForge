@@ -450,7 +450,11 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   they run before or instead of a compile (ADR 0015), in the runtime their surface passes (ADR 0028
   D7); `add` and `update` read `specforge.json`
   through the compile's own reader and the installed extensions through `Installed::at`, and refuse
-  an unusable `specforge.json` with the refusal `remove` gives.
+  an unusable `specforge.json` with the refusal `remove` gives. `format` and
+  `migrate` read it through the same reader (`specforge_ops::config::rewritable`), and `rename` from the
+  compile's problems. All three refuse with that refusal a file that does not say which files are the
+  project's sources or which extensions it loads (`ConfigProblem::blocks_rewrites`), and report every
+  other problem as its E069, which fails their verdict.
 - **Stranded entity**: an entity whose kind only the extension being removed declares: `remove` lists it
   (`specforge_ops::extension::StrandedEntity`), still removes, and the next compile reports it E024.
 - **Recorded test report**: `<root>/specforge-report.json`, what `specforge collect` last wrote. The
@@ -534,7 +538,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   key. It carries no `null`. Its spec type is the tool's `Mcp*` reply type (ADR 0052).
 - **Project sources**: the `.spec` files under the spec root (`spec_root`, else the project root) that
   discovery keeps — no skipped directory, no `exclude` entry. What a compile reads, what format and migrate
-  rewrite (`specforge_common::ProjectConfig::spec_files`), and the only files a `use` import names: a
+  rewrite (`specforge_common::ProjectConfig::spec_files`, read through `config::rewritable`, never past a
+  problem that hides them), and the only files a `use` import names: a
   compile holds each by its **key**, its path relative to the spec root, and resolves imports against the
   keys alone (`specforge_resolver`, ADR 0055). An editor buffer the session holds for such a path is a
   source, saved or not.

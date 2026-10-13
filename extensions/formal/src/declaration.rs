@@ -209,27 +209,6 @@ fn kinds(c: &mut ContributionsBuilder) {
 }
 
 fn edges(c: &mut ContributionsBuilder) {
-    c.edge("BehaviorRequiresInvariant", |e| {
-        e.description("Behavior requires an invariant as precondition")
-            .source_kind("behavior")
-            .target_kind("invariant")
-            .edge_style("solid")
-            .edge_color("#1A237E");
-    });
-    c.edge("BehaviorEnsuresInvariant", |e| {
-        e.description("Behavior ensures an invariant as postcondition")
-            .source_kind("behavior")
-            .target_kind("invariant")
-            .edge_style("solid")
-            .edge_color("#1A237E");
-    });
-    c.edge("BehaviorMaintainsInvariant", |e| {
-        e.description("Behavior maintains an invariant as frame invariant throughout execution")
-            .source_kind("behavior")
-            .target_kind("invariant")
-            .edge_style("dashed")
-            .edge_color("#1A237E");
-    });
     c.edge("AxiomAssumesInvariant", |e| {
         e.description("Axiom assumes an invariant as foundational truth")
             .source_kind("axiom")
@@ -305,22 +284,16 @@ fn edges(c: &mut ContributionsBuilder) {
 fn enhancements(c: &mut ContributionsBuilder) {
     c.enhance("behavior", "@specforge/formal", |e| {
         e.field("requires", |f| {
-            f.field_type(FieldType::ReferenceList)
-                .description("Invariants that must hold as preconditions before execution")
-                .edge("BehaviorRequiresInvariant")
-                .target_kind("invariant");
+            f.field_type(FieldType::Block)
+                .description("Named preconditions: each condition's name and what it requires");
         });
         e.field("ensures", |f| {
-            f.field_type(FieldType::ReferenceList)
-                .description("Invariants guaranteed as postconditions after successful execution")
-                .edge("BehaviorEnsuresInvariant")
-                .target_kind("invariant");
+            f.field_type(FieldType::Block)
+                .description("Named postconditions: each condition's name and what it guarantees");
         });
         e.field("maintains", |f| {
-            f.field_type(FieldType::ReferenceList)
-                .description("Invariants preserved throughout execution")
-                .edge("BehaviorMaintainsInvariant")
-                .target_kind("invariant");
+            f.field_type(FieldType::Block)
+                .description("Named frame conditions that hold throughout execution");
         });
         e.field("satisfies", |f| {
             f.field_type(FieldType::ReferenceList)
@@ -329,8 +302,8 @@ fn enhancements(c: &mut ContributionsBuilder) {
                 .target_kind("property");
         });
         e.field("sync", |f| {
-            f.field_type(FieldType::StringList)
-                .description("Synchronization constraints for execution");
+            f.field_type(FieldType::Block)
+                .description("Synchronization bound: barrier, timeout or delivery");
         });
         e.field("abstract", |f| {
             f.field_type(FieldType::Bool)
@@ -358,8 +331,8 @@ fn enhancements(c: &mut ContributionsBuilder) {
                 .target_kind("process");
         });
         e.field("sync", |f| {
-            f.field_type(FieldType::StringList)
-                .description("Synchronization constraints for event processing");
+            f.field_type(FieldType::Block)
+                .description("Synchronization bound: barrier, timeout or delivery");
         });
     });
     c.enhance("invariant", "@specforge/formal", |e| {

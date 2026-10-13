@@ -22,7 +22,7 @@ use specforge_common::{SourceSpan, Sym};
 // ── AST ─────────────────────────────────────────────────────────────────────
 
 /// A 1-based line/column source range relative to the parsed input.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ExprSpan {
     pub start_line: usize,
     pub start_col: usize,
@@ -30,7 +30,7 @@ pub struct ExprSpan {
     pub end_col: usize,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CmpOp {
     Le,
     Ge,
@@ -64,7 +64,7 @@ impl CmpOp {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     /// Numeric literal with an optional unit suffix (`100`, `100ms`).
     /// Units are carried, not interpreted — unit normalization is future work.
@@ -79,7 +79,7 @@ pub enum Expr {
     Not(Box<SpannedExpr>),
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SpannedExpr {
     pub expr: Expr,
     pub span: ExprSpan,

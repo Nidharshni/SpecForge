@@ -1778,7 +1778,7 @@ fn contract_guard_reinit() {
     assert!(
         handled
             .iter()
-            .any(|p| p["method"] == "initialize" && p["errorCode"] == -32600),
+            .any(|p| p["requestMethod"] == "initialize" && p["errorCode"] == -32600),
         "{handled:?}"
     );
 }

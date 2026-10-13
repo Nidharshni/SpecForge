@@ -1796,9 +1796,15 @@ mod tests {
                     orig.id.raw
                 );
 
-                // Compare field values via JSON serialization
-                let orig_json = serde_json::to_string(&orig.fields).unwrap();
-                let fmt_json = serde_json::to_string(&fmt_ent.fields).unwrap();
+                // Compare field values as every output writes them (no
+                // positions: formatting moves values).
+                let orig_json =
+                    serde_json::to_string(&specforge_graph::field_form::write_fields(&orig.fields))
+                        .unwrap();
+                let fmt_json = serde_json::to_string(&specforge_graph::field_form::write_fields(
+                    &fmt_ent.fields,
+                ))
+                .unwrap();
                 assert_eq!(
                     orig_json, fmt_json,
                     "input #{i}: field values should be preserved for entity '{}':\norig: {orig_json}\nfmt:  {fmt_json}",

@@ -79,7 +79,6 @@ behavior se_register_field_definitions "Register Software Field Definitions" {
     EntityKindDescriptor,
     BehaviorCategory,
     PortDirection,
-    TypeDefKind,
     TypeFieldDef,
     RiskLevel,
   ]
@@ -95,7 +94,7 @@ behavior se_register_field_definitions "Register Software Field Definitions" {
     invariant_fields "invariant has: guarantee(string), enforced_by(reference[]->behavior, Enforces), risk(string)"
     feature_fields   "feature has: behaviors(reference[]->behavior, Implements), problem(string), solution(string)"
     event_fields     "event has: trigger(reference->behavior, Produces), channel(string), payload(reference->type, UsesType), consumers(reference[]->behavior, Consumes), sync(block)"
-    type_fields      "type has: kind(string), fields(block), composed_types(reference[]->type, TypeComposesType, derived from the type names in its field types), extends(reference->type, TypeExtendsType)"
+    type_fields      "type has: composed_types(reference[]->type, TypeComposesType, derived from the type names in its members), extends(reference->type, TypeExtendsType), description(string), refs(string[]); its members are written in its body as open fields (name Type), so a member may take any name"
     port_fields      "port has: direction(string), category(string), methods(block), types(reference[]->type, PortReferencesType, derived from the type names in its method signatures)"
   }
   verify unit "behavior contract field registered as string type"

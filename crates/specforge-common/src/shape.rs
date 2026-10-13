@@ -114,6 +114,16 @@ impl Definitions {
             .unwrap_or(schema)
     }
 
+    /// `root` with this document's definitions under `$defs` (no `$defs`
+    /// when there are none): what [`build`] returns, for a document whose
+    /// root is narrowed after it is derived.
+    pub fn finish(self, mut root: Value) -> Value {
+        if let (Some(object), Some(defined)) = (root.as_object_mut(), self.into_value()) {
+            object.insert("$defs".into(), defined);
+        }
+        root
+    }
+
     /// The definitions as the `$defs` object; `None` when there are none.
     fn into_value(self) -> Option<Value> {
         if self.defined.is_empty() {
@@ -138,11 +148,8 @@ impl Definitions {
 /// fresh build each call; [`document`] keeps one per type.
 pub fn build<T: Shape + ?Sized>() -> Value {
     let mut defs = Definitions::default();
-    let mut root = T::body(&mut defs);
-    if let (Some(object), Some(defined)) = (root.as_object_mut(), defs.into_value()) {
-        object.insert("$defs".into(), defined);
-    }
-    root
+    let root = T::body(&mut defs);
+    defs.finish(root)
 }
 
 /// `T`'s document ([`build`]), built on first use and kept for the life of
@@ -554,6 +561,62 @@ fn check(
     if let (Value::Array(items), Some(item)) = (value, schema.get("items")) {
         for (i, element) in items.iter().enumerate() {
             check(item, element, &format!("{path}[{i}]"), root, 0, found);
+        }
+    }
+}
+
+/// The keywords [`violations`] checks, and the annotations it ignores by
+/// design (they describe, never constrain).
+const CHECKED_KEYWORDS: [&str; 11] = [
+    "type",
+    "enum",
+    "properties",
+    "required",
+    "additionalProperties",
+    "items",
+    "oneOf",
+    "anyOf",
+    "minimum",
+    "$ref",
+    "$defs",
+];
+const ANNOTATIONS: [&str; 5] = ["$schema", "$id", "title", "description", "examples"];
+
+/// Every keyword of `document`, with its JSON Pointer, that [`violations`]
+/// neither checks nor treats as an annotation: what a document held to this
+/// checker must not use. Walks `properties` and `$defs` as maps of schemas,
+/// `items` and `additionalProperties` as schemas, `oneOf`/`anyOf` as arrays
+/// of schemas; `enum`, `required` and `examples` hold values. Checked:
+/// `type`, `enum`, `properties`, `required`, `additionalProperties`,
+/// `items`, `oneOf`, `anyOf`, `minimum`, `$ref`, `$defs`; annotations:
+/// `$schema`, `$id`, `title`, `description`, `examples`.
+pub fn unchecked_keywords(document: &Value) -> Vec<String> {
+    let mut found = Vec::new();
+    walk_keywords(document, "", &mut found);
+    found
+}
+
+fn walk_keywords(schema: &Value, pointer: &str, found: &mut Vec<String>) {
+    let Value::Object(object) = schema else {
+        return;
+    };
+    let escape = |name: &str| name.replace('~', "~0").replace('/', "~1");
+    for (keyword, value) in object {
+        let at = format!("{pointer}/{}", escape(keyword));
+        match keyword.as_str() {
+            "properties" | "$defs" => {
+                for (name, sub) in value.as_object().into_iter().flatten() {
+                    walk_keywords(sub, &format!("{at}/{}", escape(name)), found);
+                }
+            }
+            "items" | "additionalProperties" => walk_keywords(value, &at, found),
+            "oneOf" | "anyOf" => {
+                for (i, sub) in value.as_array().into_iter().flatten().enumerate() {
+                    walk_keywords(sub, &format!("{at}/{i}"), found);
+                }
+            }
+            keyword if CHECKED_KEYWORDS.contains(&keyword) || ANNOTATIONS.contains(&keyword) => {}
+            _ => found.push(at),
         }
     }
 }

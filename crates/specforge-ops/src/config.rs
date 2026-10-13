@@ -10,6 +10,11 @@
 //! function the compile reads it with, and refuse an unusable one with
 //! [`refusal`], the refusal `remove` builds from the compile's problems:
 //! before anything is written, whatever the operation.
+//!
+//! `format`, `migrate` and `rename` rewrite the project's sources: they
+//! read the config through [`rewritable`], which refuses with [`refusal`]
+//! when a problem [`blocks_rewrites`](ConfigProblem::blocks_rewrites), and
+//! they report every other problem as its E069.
 
 use crate::{OpError, OpErrorKind};
 use serde_json::Value;
@@ -43,8 +48,26 @@ pub fn refusal(problem: &ConfigProblem) -> OpError {
 /// when it cannot be used. A missing file is not refused (it is the
 /// default config; [`ConfigRead::found`] says so).
 pub fn usable(root: &Path) -> Result<ConfigRead, OpError> {
-    let read = read_project_config(root);
-    match read.problems.iter().find(|problem| problem.blocks_edits()) {
+    first_blocking(read_project_config(root), ConfigProblem::blocks_edits)
+}
+
+/// What a project's `specforge.json` is, for a run that rewrites the
+/// project's sources (format, migrate): [`read_project_config`], refusing
+/// with [`refusal`] the first problem that
+/// [`blocks_rewrites`](ConfigProblem::blocks_rewrites), before the run reads
+/// any source. The problems it goes around stay in the read
+/// ([`ConfigRead::diagnostics`] gives their E069s). A missing file is not
+/// refused: the default config, the root's sources.
+pub fn rewritable(root: &Path) -> Result<ConfigRead, OpError> {
+    first_blocking(read_project_config(root), ConfigProblem::blocks_rewrites)
+}
+
+/// `read`, or the refusal of its first problem that `blocks`.
+fn first_blocking(
+    read: ConfigRead,
+    blocks: fn(&ConfigProblem) -> bool,
+) -> Result<ConfigRead, OpError> {
+    match read.problems.iter().find(|problem| blocks(problem)) {
         Some(problem) => Err(refusal(problem)),
         None => Ok(read),
     }
@@ -353,6 +376,38 @@ mod tests {
         }
     }
 
+    #[specforge_test(
+        behavior = "management_operations_over_the_project_view",
+        verify = "a config problem that leaves the sources or the extensions unknown blocks a rewrite"
+    )]
+    fn rewritable_refuses_what_hides_the_sources_and_keeps_the_rest() {
+        for config in testing::HIDES_SOURCES {
+            let dir = project(config);
+            let read = specforge_common::read_project_config(dir.path());
+            let first = read
+                .problems
+                .iter()
+                .find(|p| p.blocks_rewrites())
+                .unwrap_or_else(|| panic!("{config}: {:?}", read.problems));
+            assert_eq!(
+                rewritable(dir.path()).unwrap_err(),
+                refusal(first),
+                "{config}"
+            );
+        }
+
+        // A problem the run goes around: Ok, with its problem in the read.
+        let dir = project(r#"{"name": 5}"#);
+        let read = rewritable(dir.path()).unwrap();
+        assert_eq!(read.problems.len(), 1);
+        assert_eq!(read.diagnostics().len(), 1);
+
+        // No file: the default config, the root's sources.
+        let dir = tempfile::tempdir().unwrap();
+        let read = rewritable(dir.path()).unwrap();
+        assert!(!read.found && read.problems.is_empty());
+    }
+
     #[test]
     fn a_missing_config_is_usable_but_not_required() {
         let dir = tempfile::tempdir().unwrap();
@@ -379,6 +434,16 @@ pub(crate) mod testing {
         r#"{ "extensions": ["@specforge/product",  }"#,
         "[1,2]",
         r#"{"extensions": "@specforge/product"}"#,
+    ];
+
+    /// `specforge.json` texts that do not say which files are the project's
+    /// sources (or which extensions it loads): every one refuses a rewrite.
+    pub const HIDES_SOURCES: [&str; 5] = [
+        r#"{"spec_root": "spec", "extensions": ["#, // not JSON
+        "[1,2]",                                    // not an object
+        r#"{"exclude": "vendor"}"#,                 // exclude not an array
+        r#"{"spec_root": ["spec"]}"#,               // spec_root not a string
+        r#"{"spec_root": "spec", "extensions": "@specforge/product"}"#, // extensions not an array
     ];
 
     /// Every file under `root` with its bytes: what a refused operation

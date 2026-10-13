@@ -208,3 +208,37 @@ fn a_list_on_a_string_field_is_an_error() {
     );
     assert_eq!(e061[0]["span"]["start_line"], 3);
 }
+
+#[specforge_test(
+    behavior = "check_field_value_types",
+    verify = "a single integer, boolean or date, or a mixed list, on a list field becomes a list of strings"
+)]
+fn a_single_integer_or_a_mixed_list_on_a_list_field_is_exported_as_a_list() {
+    let dir = governance_project(
+        r#"decision d1 "D" {
+  status accepted
+  context "c"
+  decision "x"
+  consequences 5
+}
+decision d2 "E" {
+  status accepted
+  context "c"
+  decision "x"
+  consequences ["a", 7]
+}
+"#,
+    );
+
+    let (code, diags) = check(&dir);
+    assert_eq!(diags, Vec::<serde_json::Value>::new());
+    assert_eq!(code, Some(0));
+    assert_eq!(
+        exported_fields(&dir, "d1")["consequences"],
+        serde_json::json!(["5"])
+    );
+    assert_eq!(
+        exported_fields(&dir, "d2")["consequences"],
+        serde_json::json!(["a", "7"])
+    );
+}

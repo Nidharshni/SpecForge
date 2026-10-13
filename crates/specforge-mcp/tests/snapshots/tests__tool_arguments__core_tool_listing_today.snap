@@ -70,6 +70,44 @@ expression: listing
           ],
           "type": "object"
         },
+        "FieldJson": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "$ref": "#/$defs/VerifyStatement"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/FieldJson"
+              },
+              "type": "object"
+            }
+          ]
+        },
         "GraphProtocolSchema": {
           "additionalProperties": false,
           "properties": {
@@ -284,6 +322,22 @@ expression: listing
             "truncated_entities"
           ],
           "type": "object"
+        },
+        "VerifyStatement": {
+          "additionalProperties": false,
+          "properties": {
+            "description": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "description"
+          ],
+          "type": "object"
         }
       },
       "anyOf": [
@@ -297,6 +351,10 @@ expression: listing
               "type": "array"
             },
             "format_version": {
+              "enum": [
+                "1.0",
+                "2.0"
+              ],
               "type": "string"
             },
             "nodes": {
@@ -312,6 +370,9 @@ expression: listing
                     "type": "string"
                   },
                   "fields": {
+                    "additionalProperties": {
+                      "$ref": "#/$defs/FieldJson"
+                    },
                     "type": "object"
                   },
                   "file": {
@@ -372,10 +433,17 @@ expression: listing
               "type": "array"
             },
             "format_version": {
+              "enum": [
+                "1.0",
+                "2.0"
+              ],
               "type": "string"
             },
             "nodes": {
               "items": {
+                "additionalProperties": {
+                  "type": "string"
+                },
                 "properties": {
                   "coverage_status": {
                     "enum": [
@@ -386,6 +454,9 @@ expression: listing
                     "type": "string"
                   },
                   "fields": {
+                    "additionalProperties": {
+                      "$ref": "#/$defs/FieldJson"
+                    },
                     "type": "object"
                   },
                   "id": {
@@ -397,7 +468,12 @@ expression: listing
                   "title": {
                     "type": "string"
                   },
-                  "verify": {}
+                  "verify": {
+                    "items": {
+                      "$ref": "#/$defs/VerifyStatement"
+                    },
+                    "type": "array"
+                  }
                 },
                 "required": [
                   "id",
@@ -437,6 +513,10 @@ expression: listing
               "type": "array"
             },
             "format_version": {
+              "enum": [
+                "1.0",
+                "2.0"
+              ],
               "type": "string"
             },
             "nodes": {
@@ -4594,6 +4674,12 @@ expression: listing
           },
           "type": "array"
         },
+        "diagnostics": {
+          "items": {
+            "$ref": "#/$defs/Diagnostic"
+          },
+          "type": "array"
+        },
         "diffs": {
           "items": {
             "$ref": "#/$defs/MigrationDiff"
@@ -4687,6 +4773,7 @@ expression: listing
         "pending",
         "from_version",
         "to_version",
+        "diagnostics",
         "migrated",
         "dry_run",
         "files_migrated",

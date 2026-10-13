@@ -5,8 +5,10 @@ use std::path::Path;
 
 use specforge_common::{Diagnostic, codes, find_close_match};
 
+use specforge_graph::ValueShape;
+
 use crate::FieldRegistry;
-use crate::entity::{EntityRecord, ValueShape};
+use crate::entity::EntityRecord;
 
 /// The paths `record` names in the `file_reference` fields its kind
 /// declares, in field-name order, each field's last occurrence: the items of

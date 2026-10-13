@@ -118,7 +118,7 @@ pub enum McpEvent {
         error_code: i64,
         error_message: String,
         #[serde(skip_serializing_if = "Option::is_none")]
-        method: Option<String>,
+        request_method: Option<String>,
     },
     /// A cancel acknowledged (requests run one at a time: never in
     /// progress).

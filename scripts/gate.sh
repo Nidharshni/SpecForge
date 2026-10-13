@@ -4,7 +4,7 @@
 #
 #   scripts/gate.sh          quick: only what the working tree changed
 #   scripts/gate.sh full     everything, once per phase
-#   scripts/gate.sh baseline lower scripts/gate-baseline.json to today's
+#   scripts/gate.sh baseline lower gate/baseline.json to today's
 #                            warning counts (it never raises one)
 #
 # Full gate: nextest (not `cargo test`) for the workspace, doctests only for
@@ -21,7 +21,7 @@
 # `specforge check` runs on each corpus's project, so its extensions load
 # (`.` is this repository's own project; `check` run anywhere inside a project
 # checks that project). Any error fails. Warnings are ratcheted per code against
-# scripts/gate-baseline.json: a count above its baseline fails, and so does
+# gate/baseline.json: a count above its baseline fails, and so does
 # one below it until the baseline is lowered in the same commit.
 set -uo pipefail
 
@@ -35,7 +35,7 @@ SPECFORGE=target/debug/specforge
 # directories; `check` takes the projects (their specforge.json).
 CORPORA=(spec integrations/rust/spec examples/todo-app examples/shop)
 PROJECTS=(. integrations/rust/spec examples/todo-app examples/shop)
-BASELINE=scripts/gate-baseline.json
+BASELINE=gate/baseline.json
 mkdir -p "$LOGS"
 rm -f "$LOGS"/*.status
 
@@ -254,7 +254,7 @@ run_quick() {
         # the crates that depend on them.
         local filter
         filter=$(printf 'rdeps(=%s) | ' "${pkgs[@]}")
-        step nextest cargo nextest run --workspace --profile quick -E "${filter% | }"
+        step nextest cargo nextest run --workspace --profile gate -E "${filter% | }"
         step clippy cargo clippy -q --workspace --all-targets -- -D warnings
         if printf '%s\n' "${pkgs[@]}" | grep -qxF -f <(doctest_packages); then
             # shellcheck disable=SC2046

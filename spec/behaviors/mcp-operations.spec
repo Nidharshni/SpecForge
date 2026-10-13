@@ -67,7 +67,9 @@ behavior provide_mcp_format_tool "Provide MCP Format Tool" {
     for one that does not exist, internal_error for another cause or for
     failures of different kinds). ok MUST be the verdict specforge format
     exits by: false when a file could not be read or written or has a region
-    left unformatted, and in check mode when a file would change; true
+    left unformatted, or specforge.json has a problem the call went around
+    (its E069 is among the diagnostics), and in check mode when a file would
+    change; true
     otherwise, also after a write or a diff that found changes. A path naming a
     directory that is no project MUST be formatted as specforge format
     formats it, with the default configuration. all_clean MUST be true
@@ -75,6 +77,9 @@ behavior provide_mcp_format_tool "Provide MCP Format Tool" {
     unformatted (W142) MUST be returned among the diagnostics, with its file
     and line. Diagnostics from loading the format configuration
     (.specforgefmt.toml) MUST be returned in the result.
+    A specforge.json that does not say which files are the project's
+    sources MUST fail the call as config_invalid (schema_mismatch) before
+    any file is read, writing nothing.
   """
   verify unit "specforge.format formats spec files"
   verify unit "check mode reports without modifying files"
@@ -89,6 +94,8 @@ behavior provide_mcp_format_tool "Provide MCP Format Tool" {
   verify unit "ok is the verdict specforge format exits by, in every mode"
   verify unit "a directory that is no project is formatted with the defaults, as specforge format formats it"
   verify contract "Provide MCP Format Tool: MCP format tool holds — filesystem_available, files_formatted, check_mode_readonly, mutation_completed_emitted, tool_invoked_emitted"
+  verify unit "a specforge.json that does not say which files are the project's sources fails the call as config_invalid and writes nothing"
+  verify unit "a problem in specforge.json the call goes around is an E069 among the diagnostics and makes ok false"
 }
 
 behavior provide_mcp_rename_tool "Provide MCP Rename Tool" {
@@ -134,6 +141,10 @@ behavior provide_mcp_rename_tool "Provide MCP Rename Tool" {
     return a validation error. After a successful rename, the tool MUST trigger
     recompilation and return updated diagnostics in the response; a preview
     and a failed rename return none.
+    A specforge.json that does not say which files are the project's
+    sources (the compile reported it as E069: it can't be used, or
+    spec_root, exclude or extensions has the wrong type) MUST fail the
+    rename as config_invalid before anything is planned or written.
   """
   verify unit "specforge.rename renames entity and all references"
   verify unit "non-existent entity returns error response"
@@ -143,6 +154,7 @@ behavior provide_mcp_rename_tool "Provide MCP Rename Tool" {
   verify unit "rename plans on the project as it is on disk, references added since the last call included"
   verify unit "rename edits exactly the declaration and the references find_references returns"
   verify unit "rename's updated diagnostics follow a successful write only: a preview and a failure carry none"
+  verify unit "a specforge.json that does not say which files are the project's sources fails the rename as config_invalid and writes nothing"
 }
 
 // MCP init creates a project at a specified path, not the current project.
@@ -368,15 +380,21 @@ behavior provide_mcp_migrate_tool "Provide MCP Migrate Tool" {
     MUST report the hooks run, the structural differences found, and
     whether the migration was rolled back. The result (and a failed call's
     data) MUST carry ok, the verdict specforge migrate exits by: false when
-    a file failed to migrate or the migration was rolled back. A failed
+    a file failed to migrate, the migration was rolled back, or
+    specforge.json has a problem the run went around (E069, in
+    diagnostics). A failed
     migration's error names its cause: a migration hook that failed
     (internal_error), a migrated project whose graph changed (W054) or that
     does not compile (compilation_failed), or files that could not be
-    migrated (schema_mismatch); its data is the migration document. A path
+    migrated or a specforge.json not used as written (config_invalid,
+    schema_mismatch); its data is the migration document. A path
     naming a directory that is no project
     MUST be migrated as specforge migrate migrates it. A project with nothing to
     migrate MUST be reported as already at the target version, without
     running hooks or validation.
+    A specforge.json that does not say which files are the project's
+    sources or which extensions it loads MUST fail the call as
+    config_invalid before any file is read, writing nothing.
   """
   verify unit "specforge.migrate applies pending migrations"
   verify unit "dry_run returns diff without modifying files"
@@ -388,6 +406,7 @@ behavior provide_mcp_migrate_tool "Provide MCP Migrate Tool" {
   verify unit "a failed migration's error names its cause: a hook, a changed graph, a project that does not compile, or files that could not be migrated"
   verify unit "a directory that is no project is migrated as specforge migrate migrates it"
   verify contract "Provide MCP Migrate Tool: MCP migrate tool holds — filesystem_available, migrations_applied, post_migration_validated, dry_run_safe, mutation_completed_emitted, tool_invoked_emitted"
+  verify unit "a specforge.json that does not say which files are the project's sources fails the call as config_invalid and writes nothing"
 }
 
 // ---------------------------------------------------------------------------

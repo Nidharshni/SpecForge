@@ -6,17 +6,39 @@ use std::path::Path;
 use std::sync::Arc;
 
 use specforge_extension_sdk::{ContributionsBuilder, ExtensionMeta};
-use specforge_migrate::migrate_project;
 use specforge_ops::migrate::{
-    Failure, MigrationInput, Request, invoke_hooks, parse_target, rollback, run,
+    Failure, MigrationInput, Outcome, Request, invoke_hooks, parse_target, rollback,
 };
 use specforge_ops::{OpError, OpErrorKind};
+
+/// Every file under `root` with its bytes: what a refused run must leave as it was.
+fn files_under(root: &Path) -> std::collections::BTreeMap<std::path::PathBuf, Vec<u8>> {
+    let mut files = std::collections::BTreeMap::new();
+    let mut dirs = vec![root.to_path_buf()];
+    while let Some(dir) = dirs.pop() {
+        for entry in std::fs::read_dir(&dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                dirs.push(path);
+            } else {
+                files.insert(path.clone(), std::fs::read(&path).unwrap());
+            }
+        }
+    }
+    files
+}
 use specforge_parser::CURRENT_FORMAT_VERSION;
 use specforge_protocol_types::{ExtensionDeclaration, FieldType, PeerDependency, SandboxPolicy};
 use specforge_registry::build_registries;
 use specforge_test_macros::test as specforge_test;
 use specforge_wasm::runtime::{WasmCallResult, WasmTrapInfo};
 use specforge_wasm::testing::InProcessRuntime;
+
+/// A migration that is not refused: the tests that expect a refusal call
+/// `specforge_ops::migrate::run`.
+fn run(request: &Request, runtime: Option<specforge_project::SharedRuntime>) -> Outcome {
+    specforge_ops::migrate::run(request, runtime).unwrap()
+}
 
 const OLD: &str = "// specforge-format: 0.9\nbehavior alpha \"Alpha\" {\n}\n";
 
@@ -384,6 +406,80 @@ fn nothing_pending_runs_nothing() {
     );
 }
 
+#[specforge_test(
+    behavior = "migrate_spec_files_in_place",
+    verify = "a specforge.json that does not say which files are the project's sources refuses the migration, dry run included, and nothing is written"
+)]
+fn a_config_that_hides_the_sources_refuses_the_migration() {
+    let configs = [
+        r#"{"spec_root": "spec", "extensions": ["#,
+        "[1,2]",
+        r#"{"exclude": "vendor"}"#,
+        r#"{"spec_root": ["spec"]}"#,
+        r#"{"spec_root": "spec", "extensions": "@specforge/product"}"#,
+    ];
+    for config in configs {
+        for dry_run in [true, false] {
+            let dir = project();
+            std::fs::create_dir_all(dir.path().join("vendor")).unwrap();
+            std::fs::write(dir.path().join("vendor/v.spec"), OLD).unwrap();
+            std::fs::write(dir.path().join("specforge.json"), config).unwrap();
+            let before = files_under(dir.path());
+            let runtime = Arc::new(hooked(|_| Ok(())));
+
+            let refused = specforge_ops::migrate::run(
+                &Request {
+                    dry_run,
+                    ..request(&specforge_common::ProjectRoot::of(dir.path()).unwrap())
+                },
+                Some(runtime.clone()),
+            )
+            .unwrap_err();
+
+            assert_eq!(refused.code, "config_invalid", "{config}");
+            assert_eq!(
+                files_under(dir.path()),
+                before,
+                "{config}: no .bak, no record"
+            );
+            assert!(runtime.calls().is_empty(), "{config}: no compile, no hook");
+        }
+    }
+}
+
+#[specforge_test(
+    behavior = "migrate_spec_files_in_place",
+    verify = "a problem in specforge.json the migration goes around is an E069 in its document and fails it"
+)]
+fn a_problem_the_migration_goes_around_fails_it_after_it_ran() {
+    let dir = project();
+    std::fs::write(dir.path().join("specforge.json"), r#"{"exclude": ["["]}"#).unwrap();
+
+    let outcome = run(
+        &request(&specforge_common::ProjectRoot::of(dir.path()).unwrap()),
+        None,
+    );
+
+    // The migration ran and is kept.
+    assert!(
+        std::fs::read_to_string(dir.path().join("old.spec"))
+            .unwrap()
+            .starts_with("// specforge-format: 1.0"),
+    );
+    assert!(dir.path().join("old.spec.bak").exists());
+    assert!(dir.path().join(".specforge/migration.json").exists());
+    // And it fails, with the problem the compile reports.
+    assert_eq!(outcome.diagnostics.len(), 1, "{:?}", outcome.diagnostics);
+    assert!(outcome.diagnostics[0].is(specforge_common::codes::E069));
+    assert!(!outcome.ok());
+    let failure = outcome.failure().expect("a failed run");
+    assert!(matches!(failure, Failure::ConfigNotUsedAsWritten { .. }));
+    let error = OpError::from(failure);
+    assert_eq!(error.code, "config_invalid");
+    assert_eq!(error.kind, OpErrorKind::SchemaMismatch);
+    assert!(outcome.document().diagnostics.0.len() == 1);
+}
+
 #[test]
 fn a_target_newer_than_supported_or_malformed_is_e019() {
     assert_eq!(parse_target(Some("99.0")).unwrap_err().code, "E019");
@@ -413,14 +509,17 @@ fn migrate_reads_the_project_sources() {
         std::fs::write(root.join(file), OLD).unwrap();
     }
 
-    let summary = migrate_project(
-        &specforge_common::ProjectRoot::of(root).unwrap(),
-        &CURRENT_FORMAT_VERSION,
-        true,
-        true,
+    let outcome = run(
+        &Request {
+            dry_run: true,
+            no_backup: true,
+            ..request(&specforge_common::ProjectRoot::of(root).unwrap())
+        },
+        None,
     );
 
-    let visited: Vec<&str> = summary
+    let visited: Vec<&str> = outcome
+        .summary
         .results
         .iter()
         .map(|r| r.file_path.as_str())

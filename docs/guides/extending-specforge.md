@@ -237,9 +237,8 @@ behavior publish "Publish" {
 }
 ```
 
-These are not comments. Each clause item becomes a typed edge
-(`BehaviorRequiresInvariant`, `BehaviorEnsuresInvariant`) in the graph, which
-is what makes contract analysis possible.
+These are not comments: each block holds named conditions, which
+`specforge analyze`'s formal passes read by name (W096, W039, I011, E031, I014).
 
 ## Your first compiler pass
 

@@ -116,3 +116,12 @@ rules live in ops and `specforge-common`.
 The engine reads a source through the parser's recovery (`specforge_parser::cst`): every form the parser
 reads whole is formatted, and a form it could not is kept with one W142 spanning its lines, as D5 already
 required (the code spanned the error node's lines). See ADR 0063 D5.
+
+## Amendment: format and migrate read the config that keeps its problems (2026-10-13, architecture round 8, plan 03)
+
+D3's `ProjectConfig::spec_files` is read through `specforge_ops::config::rewritable` (ADR 0015 M15): a project
+whose `specforge.json` does not say which files are its sources refuses the run (`config_invalid`) before any
+file is read, in every mode; every other problem is an E069 first among the outcome's diagnostics. D4's verdict
+gains one condition: `Outcome::ok()` also requires every config the run read to be used as written (no E069), so
+`format --check` fails on a config `check` fails on; `all_clean` stays a fact about formatting. Migrate's sources
+are selected in `specforge_ops::migrate` and handed to `specforge_migrate::migrate_project`.

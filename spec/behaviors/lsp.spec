@@ -442,6 +442,9 @@ behavior rename_entity_id "Rename Entity ID" {
     open buffer, else the file on disk) is no longer that text MUST be
     refused as ContentModified (-32801), never applied from stale positions;
     so is a rename asked from a document typed since the compile.
+    A rename over a project whose specforge.json does not say which files
+    are its sources MUST be refused with config_invalid's reason, as the
+    MCP rename tool refuses it.
   """
   verify unit "rename updates declaration and all references"
   verify unit "rename leaves strings, comments and verify texts alone"
@@ -451,6 +454,7 @@ behavior rename_entity_id "Rename Entity ID" {
   verify unit "rename across multiple files"
   verify unit "rename rejects new name that duplicates existing entity ID"
   verify unit "rename to an illegal entity ID is refused with why"
+  verify unit "a rename is refused when specforge.json does not say which files are the project's sources"
   verify contract "Rename Entity ID: entity rename holds — graph_available, prepare_rename_ready, all_references_updated, rename_atomic, entity_renamed_emitted"
 }
 
