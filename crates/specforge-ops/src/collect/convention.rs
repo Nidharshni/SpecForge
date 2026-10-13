@@ -17,7 +17,7 @@
 
 use super::KnownEntities;
 use specforge_common::{Diagnostic, codes, slug};
-use specforge_protocol_types::{CollectEntityResult, CollectTestResult, CollectUnlinkedTest};
+use specforge_protocol_types::{CollectEntityResult, CollectUnlinkedTest, TestResult};
 use std::collections::BTreeMap;
 
 /// Link `unlinked` tests to entities by naming convention. A name that
@@ -26,7 +26,7 @@ pub fn resolve(
     unlinked: &[CollectUnlinkedTest],
     known: &KnownEntities,
 ) -> (Vec<CollectEntityResult>, Vec<Diagnostic>) {
-    let mut by_entity: BTreeMap<&str, Vec<CollectTestResult>> = BTreeMap::new();
+    let mut by_entity: BTreeMap<&str, Vec<TestResult>> = BTreeMap::new();
     let mut diagnostics = Vec::new();
     for test in unlinked {
         let Some((name, modules)) = test.path.split_last() else {
@@ -61,15 +61,12 @@ pub fn resolve(
                 continue;
             }
         };
-        by_entity
-            .entry(entity)
-            .or_default()
-            .push(CollectTestResult {
-                name: test.name.clone(),
-                status: test.status.clone(),
-                verify: obligation(known.obligations(entity), rest),
-                duration_ms: None,
-            });
+        by_entity.entry(entity).or_default().push(TestResult {
+            name: test.name.clone(),
+            status: test.status,
+            verify: obligation(known.obligations(entity), rest),
+            duration_ms: None,
+        });
     }
     let results = by_entity
         .into_iter()
@@ -93,6 +90,7 @@ fn obligation(texts: &[String], name: &str) -> Option<String> {
 mod tests {
     use super::*;
     use specforge_common::Severity;
+    use specforge_protocol_types::TestStatus;
     use specforge_test_macros::test as specforge_test;
 
     fn known() -> KnownEntities {
@@ -113,17 +111,18 @@ mod tests {
         ])
     }
 
-    fn test(name: &str, status: &str) -> CollectUnlinkedTest {
+    fn test(name: &str, status: TestStatus) -> CollectUnlinkedTest {
         CollectUnlinkedTest {
             name: name.to_string(),
             path: name.split("::").map(str::to_string).collect(),
-            status: status.to_string(),
+            status,
         }
     }
 
     /// `(entity, test name, verify)` for every linked test.
     fn linked(names: &[&str], known: &KnownEntities) -> Vec<(String, String, Option<String>)> {
-        let unlinked: Vec<CollectUnlinkedTest> = names.iter().map(|n| test(n, "passed")).collect();
+        let unlinked: Vec<CollectUnlinkedTest> =
+            names.iter().map(|n| test(n, TestStatus::Passed)).collect();
         let (results, diagnostics) = resolve(&unlinked, known);
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
         results
@@ -241,7 +240,7 @@ mod tests {
     fn a_name_that_splits_into_several_entities_is_w137() {
         let known =
             KnownEntities::from_iter([("a".to_string(), vec![]), ("a__b".to_string(), vec![])]);
-        let (results, diagnostics) = resolve(&[test("a__b__c", "passed")], &known);
+        let (results, diagnostics) = resolve(&[test("a__b__c", TestStatus::Passed)], &known);
         assert!(results.is_empty());
         assert_eq!(diagnostics.len(), 1);
         assert_eq!(diagnostics[0].code, "W137");
@@ -256,8 +255,8 @@ mod tests {
     fn a_test_no_convention_links_is_left_out_silently() {
         let (results, diagnostics) = resolve(
             &[
-                test("tests::unrelated", "failed"),
-                test("nobody__x", "passed"),
+                test("tests::unrelated", TestStatus::Failed),
+                test("nobody__x", TestStatus::Passed),
             ],
             &known(),
         );

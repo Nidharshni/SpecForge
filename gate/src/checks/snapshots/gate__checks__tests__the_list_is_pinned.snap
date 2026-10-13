@@ -1,0 +1,39 @@
+---
+source: gate/src/checks/tests.rs
+expression: render_list()
+---
+CHECK             REACH      TRIGGER (hook, quick)
+pending-snapshots hook       always
+                             no insta `.snap.new` is staged (hook) or tracked
+rustfmt           hook       **/*.rs
+                             the workspace, the nine guests and the four fixtures (the bridge component included) are rustfmt-clean
+spec-format       hook       computed: a .spec file in a project's spec dir; the formatter, parser or grammar
+                             the .spec files of every project are formatted
+grammar           hook       crates/tree-sitter-specforge/grammar.js, crates/tree-sitter-specforge/src/**
+                             the committed tree-sitter artifacts are what grammar.js generates
+zero-entity       hook       crates/*/src/**, scripts/check-zero-entity-core.sh
+                             the core crates name no entity kind of an extension
+links             hook       computed: a .spec file; a test file or one with a `verify =` attribute
+                             every test's verify text and entity is declared by the spec (A016, static)
+builtins          quick      computed: a file some blob's inputs.json records
+                             every committed blob was built from the sources it recorded
+guests            quick      extensions/**, crates/**, integrations/rust/**, Cargo.toml
+                             each guest's tests pass and it is clippy-clean for wasm and native
+audit             quick      **/Cargo.lock
+                             no lockfile holds an unsound or yanked dependency
+build             quick      computed: a workspace member; the root manifest, lockfile or nextest config [compiles]
+                             every workspace test binary and the CLI build
+tests             quick      computed: a workspace member; the root manifest, lockfile or nextest config (after build)
+                             the workspace tests pass (quick: the changed crates and their dependents)
+clippy            quick      crates/**, integrations/rust/**, xtask/**, gate/**, Cargo.toml, Cargo.lock, clippy.toml [compiles]
+                             the workspace is clippy-clean with warnings denied
+doctests          quick      computed: a workspace member that holds a runnable doctest (after build)
+                             the doctests of the crates that have one pass
+published-schemas quick      **/*.spec, **/specforge.json, extensions/**, crates/specforge-emitter/**, crates/specforge-graph/**, crates/specforge-registry/**, crates/specforge-cli/tests/e2e_schema.rs (after build)
+                             every project's exports validate against the schema `specforge schema --publish` prints for their format
+specs             quick      **/*.spec, **/specforge.json, gate/baseline.json, extensions/**, crates/*/src/**, crates/*/Cargo.toml
+                             every project checks with no error and no warning above the baseline
+dogfood           full       always (after tests, guests)
+                             the tests' reports leave no unknown entity (W115), failing proof (A014) or undeclared obligation (A016)
+builtins-verify   bootstrap  always
+                             a cold clone rebuilds every committed blob to the vendored bytes

@@ -38,9 +38,9 @@ fn extension() -> ContributionsBuilder {
             Ok(CollectOutput {
                 entity_results: vec![CollectEntityResult {
                     entity_id: input.reports[0].content.trim().to_string(),
-                    test_results: vec![CollectTestResult {
+                    test_results: vec![TestResult {
                         name: "t".into(),
-                        status: "passed".into(),
+                        status: TestStatus::Passed,
                         verify: None,
                         duration_ms: None,
                     }],

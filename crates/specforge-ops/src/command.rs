@@ -432,8 +432,8 @@ impl RunError {
 ///    reports; ADR 0039 D3);
 /// 4. the date is the host's, UTC, `YYYY-MM-DD` (ADR 0011 C);
 /// 5. the view's graph is rendered as the graph export
-///    (`specforge_emitter::json::emit_json`) and the `cmd__` export called
-///    with that `CommandInput`.
+///    (`specforge_emitter::emit`, at the project's versioned schema version)
+///    and the `cmd__` export called with that `CommandInput`.
 ///
 /// A command the host refuses ([`ExtensionCommand::refusal`]) is not routed
 /// on either surface; `run` does not check it again (ADR 0011, "One
@@ -445,6 +445,20 @@ pub fn run(
     format: CommandFormat,
 ) -> Result<CommandOutput, RunError> {
     run_on(view, command, given, format, &today())
+}
+
+/// The view's graph as the plain graph export, naming the version of the
+/// project's schema.
+fn graph_export(view: &ProjectView<'_>) -> String {
+    let versioned = view.versioned_schema();
+    specforge_emitter::emit(
+        view.graph(),
+        &specforge_emitter::EmitOptions {
+            schema: versioned.schema(),
+            ..specforge_emitter::EmitOptions::default()
+        },
+    )
+    .expect("a graph export cannot fail")
 }
 
 /// [`run`], on the date `today` (unit tests pin it here; `run` passes the
@@ -463,8 +477,7 @@ fn run_on(
         cwd: canonical(root).display().to_string(),
         format,
         today: today.to_string(),
-        graph: RawGraph::new(specforge_emitter::json::emit_json(view.graph()))
-            .expect("the graph export is one JSON value"),
+        graph: RawGraph::new(graph_export(view)).expect("the graph export is one JSON value"),
         evidence: evidence(view),
     };
     let Some(runtime) = view.runtime() else {

@@ -46,9 +46,10 @@ type SoftwareEvent {
   verify unit "SoftwareEvent schema is valid"
 }
 
+// A type's members are written in its body, one `name Type` each (open
+// fields, one TypeFieldDef each); the kind declares no field for them.
 type SoftwareTypeDef {
-  kind   TypeDefKind    @optional
-  fields TypeFieldDef[] @optional
+  extends EntityId @optional
   verify unit "SoftwareTypeDef schema is valid"
 }
 
@@ -113,8 +114,6 @@ type PortDirection = inbound | outbound
 type FieldAnnotation = readonly | unique | optional | literal
 
 type BehaviorCategory = command | query | handler | saga | projection
-
-type TypeDefKind = struct | union | enum
 
 type TypeFieldDef {
   name        string            @readonly

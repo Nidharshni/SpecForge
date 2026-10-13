@@ -280,6 +280,7 @@ fn check_output_with(project: &Project, flags: &[&str]) -> String {
     let out = Command::new(binary())
         .args(["check", "--format", "json"])
         .args(flags)
+        .arg("--path")
         .arg(&project.root)
         .output()
         .unwrap();

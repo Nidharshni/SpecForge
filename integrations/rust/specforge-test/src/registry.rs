@@ -1,5 +1,6 @@
 use crossbeam_queue::SegQueue;
 use serde::Serialize;
+use specforge_protocol_types::TestStatus;
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct TestRecordEntry {
@@ -14,25 +15,12 @@ pub struct TestRecordEntry {
     pub file: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub verify: Option<String>,
-    /// Kind-level traceability (C11-07): `unit` vs `e2e` — stamped at
-    /// finalize time from the exported graph, since the spec (not the test)
-    /// declares the kind.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub verify_kind: Option<String>,
     /// Wall-clock duration in milliseconds (C11-04).
     pub duration_ms: u64,
-    #[serde(rename = "status")]
-    pub outcome: TestOutcome,
-}
-
-#[derive(Debug, Clone, Copy, Serialize, PartialEq)]
-#[serde(rename_all = "lowercase")]
-pub enum TestOutcome {
-    Pass,
-    Fail,
-    /// `#[ignore]`d test: the guard records the intent without running the
-    /// body (C11-04).
-    Skipped,
+    /// What the run said of the test: the protocol's [`TestStatus`]
+    /// (ADR 0069). The guard records `Passed` or `Failed`; an `#[ignore]`d
+    /// test records nothing.
+    pub status: TestStatus,
 }
 
 static REGISTRY: SegQueue<TestRecordEntry> = SegQueue::new();

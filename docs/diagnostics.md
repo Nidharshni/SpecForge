@@ -364,7 +364,8 @@ a command, an MCP tool, an MCP resource, a compiler pass, a collector, a custom
 validator, a scanner and the migration hook. Each call fails when the export
 traps (a limit of its sandbox included: its time, its fuel or its memory, the
 trap naming which), when the extension does not route it, or when it answers
-output that is not the protocol type the operation owes; the message names the
+output that is not the protocol type the operation owes (a collector's test
+whose status is not `passed`, `failed` or `skipped`, say); the message names the
 operation, the export and the extension (`command cmd__x() of '@acme/x' trapped:
 ...`). What the failure costs is the operation's: a check pass's is the
 compile's error, an analyze pass's a finding of that pass, a scanner's makes
@@ -518,11 +519,13 @@ location (often because the tests didn't build), `--no-run` found no existing
 report, or a report file couldn't be read. Check the runner's output above the
 error and the report path. `specforge stats`, `specforge analyze` and every MCP
 tool that reads coverage report the same code when `specforge-report.json`
-exists but can't be read or parsed, or when a `--test-results` (`test_results`)
-file can't be read or doesn't exist (over MCP: `schema_mismatch`,
-`permission_denied`, `file_not_found` or `internal_error`), rather than scoring
-the project as if no test ran: run `specforge collect` again to rewrite it, or
-fix or remove the file.
+exists but can't be read or parsed (a recorded test's status is `passed`,
+`failed` or `skipped`, and every test has a name: a report in another
+vocabulary, such as one written before 1.4, is not usable), or when a
+`--test-results` (`test_results`) file can't be read or doesn't exist (over MCP:
+`schema_mismatch`, `permission_denied`, `file_not_found` or `internal_error`),
+rather than scoring the project as if no test ran: run `specforge collect` again
+to rewrite it, or fix or remove the file.
 
 Owner: core
 Level: error
@@ -676,14 +679,15 @@ Level: error
 E061: Field value is not the declared type
 
 The extension that registers a field declares its type, and the value given
-can't be that type: an integer field got something other than an integer, a bool
-field something other than true or false, an enum field a value outside its
-declared values (the suggestion names the closest one), or a field declared as a
-single value got a list. Values that can be read as the declared type are
-converted without a diagnostic: a single string or reference on a list field
-becomes a one-item list, and a quoted integer or boolean becomes the number or
-boolean. Fix the value, or check the field's type with `specforge schema --kind
-<kind>`.
+can't be that type. A string field takes text, a bare word, a date, a type union
+or an `expr { }` group; an enum one of its declared values (the suggestion names
+the closest one); an integer field an integer; a bool field true or false; a
+reference field one id; a string_list or reference_list field a list; a block
+field a block. Values that can be read as the declared type are converted
+without a diagnostic: a single string, id, integer, boolean or date on a list
+field becomes a one-item list, a mixed list the list of its items' text, a
+quoted integer or boolean the number or boolean. Fix the value, or check the
+field's type with `specforge schema --kind <kind>`.
 
 Owner: core
 Level: error
@@ -807,16 +811,19 @@ The project root has a `specforge.json` that isn't used as written. When it
 can't be read, isn't valid JSON, isn't a JSON object, or its `extensions` value
 isn't an array, the compile uses the default config: no extension loads and only
 structure is checked (I002 says so), and `specforge add`, `specforge update` and
-`specforge remove` refuse (config_invalid) without changing anything. When a key
-has the wrong type (`name`, `version` or `spec_root` not a string, `exclude` not
-an array), that key's default is used; when an item of `extensions` or `exclude`
-isn't a string, or an `exclude` item can match no source (empty, starting with
-`!`, with a `.` or `..` name, or not a glob pattern), that item is ignored; the
-rest of the file is used. Each problem is one E069, and `check` fails on it, so
-a broken config can't pass a CI that checks nothing. Fix the file: the message
-names the JSON error's line and column, or the key and the item. A missing
-`specforge.json` is not this: it is a project with the default config
-(`specforge doctor` says so).
+`specforge remove` refuse (config_invalid) without changing anything. `specforge
+format`, `specforge migrate` and the rename tools refuse the same way when the
+file can't be used or `spec_root`, `exclude` or `extensions` has the wrong type,
+since they could not tell which files are the project's sources; on any other
+problem they still run, report the E069 and fail. When a key has the wrong type
+(`name`, `version` or `spec_root` not a string, `exclude` not an array), that
+key's default is used; when an item of `extensions` or `exclude` isn't a string,
+or an `exclude` item can match no source (empty, starting with `!`, with a `.`
+or `..` name, or not a glob pattern), that item is ignored; the rest of the file
+is used. Each problem is one E069, and `check` fails on it, so a broken config
+can't pass a CI that checks nothing. Fix the file: the message names the JSON
+error's line and column, or the key and the item. A missing `specforge.json` is
+not this: it is a project with the default config (`specforge doctor` says so).
 
 Owner: core
 Level: error
@@ -898,8 +905,8 @@ as `1.2.0`, which means `^1.2.0`), so no version of the peer can satisfy it,
 whether the peer is installed or not. `specforge check` (and the LSP and MCP)
 and `doctor` report it, `specforge add` and `update` refuse to install or update
 around it, and `specforge publish` refuses to upload it. Fix the range in the
-extension's declaration (its SDK `peer_dependencies`) and rebuild, or install a
-version of the extension that declares one.
+extension's declaration (its SDK `peer` or `optional_peer` call) and rebuild, or
+install a version of the extension that declares one.
 
 Owner: core
 Level: error
@@ -1089,11 +1096,13 @@ Level: info
 ## I016
 
 ```
-I016: Schema cache missing
+I016: Schema cache unreadable
 
-Prior exports exist but `.specforge/schema-cache.json` is missing, so
-breaking-change detection was skipped for this compilation. Run a full
-compilation to regenerate the schema cache.
+`.specforge/schema-cache.json` exists but cannot be read: it is not JSON, not a
+recorded schema, or names a field type this host does not read. The schema is
+versioned as if no export had been made, at 1.0.0, and the export records a new
+cache. Agents that read earlier exports must not take the version as continuing
+theirs.
 
 Owner: core
 Level: info
@@ -2494,15 +2503,16 @@ Level: warning
 ```
 W053: Breaking schema change
 
-A graph protocol schema change classified as breaking: a removed entity kind,
-edge type or field, a new required field, or a field whose type changed.
-`specforge export` compares the schema against the one the previous export
-cached in `.specforge/schema-cache.json`, so an extension upgrade or removal
-that breaks the schema warns on the next export; the export is still written and
-the cache updated. `specforge migrate` compares the schema before and after a
-migration. Update the agents and tools that read the export, keep the extension
-versions that produced the old schema, or review the migration to preserve
-backward compatibility.
+A graph protocol schema change classified as breaking since the last export:
+something a reader of the recorded schema relies on was removed or reshaped —
+a removed entity kind, edge type or field, a field added as required, a field
+whose type, required flag, edge type or target kind changed, an enum value lost,
+or an edge type that lost a source or target kind. `specforge export` compares
+every attribute of the schema against the one the previous export recorded in
+`.specforge/schema-cache.json`, bumps the major version, and names the versions
+in the warning; the export is still written and the cache updated. Update the
+agents and tools that read the export, or keep the extension versions that
+produced the old schema.
 
 Owner: core
 Level: warning
@@ -2775,9 +2785,8 @@ Level: warning
 W115: Invalid collector report
 
 A collector reported tests for an entity ID that no spec declares (usually a
-renamed entity or a typo in the test's annotation), or its
-`total`/`passed`/`failed`/`skipped` stats are inconsistent. `specforge collect`
-drops those results; fix the test annotation so it names a declared entity.
+renamed entity or a typo in the test's annotation). `specforge collect` drops
+those results; fix the test annotation so it names a declared entity.
 
 Owner: core
 Level: warning

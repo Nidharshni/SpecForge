@@ -4,13 +4,12 @@ use crate::terminal::{Terminal, errln, outln};
 use specforge_ops::export;
 use specforge_ops::schema::SchemaRequest;
 use specforge_ops::view::ProjectView;
-use std::path::PathBuf;
 
 // `specforge export`'s command line.
 #[derive(clap::Args)]
 pub(crate) struct Args {
-    #[arg(default_value = ".", help = crate::project::PATH_HELP)]
-    path: PathBuf,
+    #[command(flatten)]
+    project: crate::project::ProjectArg,
 
     /// Output format
     #[arg(
@@ -45,7 +44,7 @@ pub(crate) struct Args {
     #[arg(long, conflicts_with = "no_schema")]
     with_schema: bool,
 
-    /// Request a specific schema version for the export
+    /// Fail unless a reader of this schema version reads the export: the same major version, not newer than the project's schema
     #[arg(long)]
     schema_version: Option<String>,
 
@@ -88,7 +87,7 @@ impl Args {
     /// export that schema replaces the cache, so the next export compares
     /// against it. The export is written whatever the comparison finds.
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
-        let project = match crate::project::compile(&self.path) {
+        let project = match self.project.compile() {
             Ok(project) => project,
             Err(error) => return Refusal::of(OutputFormat::Human).report(terminal, &error),
         };
@@ -99,7 +98,7 @@ impl Args {
         // snapshot too, so nothing here shows the project was exported
         // before.
         let recorded = export::export_recorded(&view, &self.request());
-        for diagnostic in &recorded.breaking {
+        for diagnostic in &recorded.diagnostics {
             errln!(terminal, "{}", specforge_common::render_plain(diagnostic));
         }
         let output = match recorded.export {
@@ -122,8 +121,8 @@ impl Args {
 // `specforge schema`'s command line.
 #[derive(clap::Args)]
 pub(crate) struct SchemaArgs {
-    #[arg(default_value = ".", help = crate::project::PATH_HELP)]
-    path: PathBuf,
+    #[command(flatten)]
+    project: crate::project::ProjectArg,
 
     /// That entity kind and the edge types that can start or end at it
     #[arg(long, conflicts_with = "publish")]
@@ -168,13 +167,15 @@ impl SchemaArgs {
     /// format conforms to. An unknown kind is refused with the closest one
     /// (exit 1).
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
-        let project = match crate::project::compile(&self.path) {
+        let project = match self.project.compile() {
             Ok(project) => project,
             Err(error) => return Refusal::of(OutputFormat::Human).report(terminal, &error),
         };
         let view = ProjectView::of(&project);
         let output = if self.publish {
-            specforge_ops::schema::json_schema(&view, self.format)
+            specforge_ops::schema::json_schema(&view, self.format).map(|schema| {
+                serde_json::to_string_pretty(&schema).expect("a published schema serializes")
+            })
         } else {
             specforge_ops::schema::schema(&view, &self.request())
                 .map(|outcome| serde_json::to_string_pretty(&outcome).expect("a schema serializes"))

@@ -188,3 +188,9 @@ failed to load would add E027s beside their E028).
 
 **What would reopen it:** a dependency resolver for `add`; an operation that must change a builtin's
 version; a peer whose installed module may declare other peers than its lock entry records.
+
+## Amendment (round 8): remove and the dry runs are lock-plan changes
+
+`remove` judges the project peer set through the plan (B1 for removals; a locked extension no entry enables keeps
+nothing from being removed), the dry runs of `add` and `remove` are the plan checked and not committed (a registry
+package judged by its published manifest), and A5's init is one plan, committed once (ADR 0065).

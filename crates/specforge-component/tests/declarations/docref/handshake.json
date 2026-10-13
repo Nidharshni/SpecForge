@@ -1,0 +1,9 @@
+{
+  "protocol_version": "1.4.0",
+  "name": "@sdk/docref",
+  "version": "0.1.0",
+  "peer_dependencies": [],
+  "sandbox_policy": null,
+  "ext_short": "docref",
+  "description": "A kind whose docs field names files"
+}

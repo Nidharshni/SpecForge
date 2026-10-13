@@ -91,17 +91,13 @@ behavior migrate_spec_files_in_place "Migrate Spec Files In Place" {
   }
   // Temporal distinction between migration events:
   //   migration_starting — fires before any file I/O begins (intent signal).
-  //     Consumers use this to capture pre-migration snapshots while the
-  //     filesystem is still untouched.
   //   migration_started — fires after the backup is created but before
   //     transforms run (point of no return). At this point, backups exist
   //     and the system is committed to attempting the migration.
   contract   """
     When specforge migrate is invoked, the system MUST first capture the
-    compiled graph and its schema before any transforms are applied. The system
-    MUST then emit migration_starting (consumed by
-    capture_pre_migration_schema_snapshot for schema snapshot)
-    before beginning transforms.
+    compiled graph before any transforms are applied, then emit
+    migration_starting before beginning transforms.
 
     The system MUST transform .spec files from the detected source version
     to the target version. Before modifying any file, the system MUST
@@ -132,6 +128,14 @@ behavior migrate_spec_files_in_place "Migrate Spec Files In Place" {
     .specforge/migration.json, replacing any earlier record, and lists
     that file as written. A kept migration made with --no-backup removes
     the record.
+    The project's specforge.json is read once, through the read the compile
+    uses, before any file: one that does not say which files are the
+    project's sources or which extensions it loads (it can't be used, or
+    spec_root, exclude or extensions has the wrong type) MUST refuse the
+    migration with config_invalid, dry run included, and nothing is written.
+    Each other problem is one E069 in the migration document's diagnostics
+    and makes ok false; the migration still runs. The preview and the
+    migration rewrite the same sources.
   """
   verify integration "migrate --format json lists each migrated file and its backup in files_written"
   verify integration "migrate --format json prints the migration document specforge.migrate answers, with files_written"
@@ -142,11 +146,14 @@ behavior migrate_spec_files_in_place "Migrate Spec Files In Place" {
   verify unit "failure in one file does not block others"
   verify unit "summary reports migrated, failed, and skipped counts"
   verify unit "interrupted migration leaves no partially written files"
-  verify unit "pre-migration snapshot captured before migration_starting event"
+  verify unit "the graph is captured before any file is transformed"
   verify unit "files already at target version are skipped with skippedCount incremented"
   verify unit "only the project's sources are migrated: under spec_root, without excluded files"
   verify unit "a kept migration records its files in .specforge/migration.json"
   verify unit "each file is read once: its backup, its diff and what a rollback restores are that text"
+  verify unit "a specforge.json that does not say which files are the project's sources refuses the migration, dry run included, and nothing is written"
+  verify unit "a problem in specforge.json the migration goes around is an E069 in its document and fails it"
+  verify unit "the preview and the migration rewrite the same sources, read once"
 }
 
 behavior generate_migration_diff "Generate Migration Diff" {
@@ -220,8 +227,10 @@ behavior validate_post_migration_integrity "Validate Post-Migration Integrity" {
   }
   contract   """
     This behavior validates instance-level integrity after migration.
-    Schema-level backward compatibility is handled separately by
-    verify_graph_protocol_compatibility_after_migration.
+    A migration never changes the Graph Protocol schema: the schema is the
+    registry build's (ADR 0060), the registry build is the environment's,
+    and a migration changes only the project's sources (its hooks run with
+    no file system), so no schema is compared.
 
     After all migration transforms and extension hooks have completed,
     the system MUST compile the migrated project and compute the
@@ -244,118 +253,6 @@ behavior validate_post_migration_integrity "Validate Post-Migration Integrity" {
   verify unit "a migration step that changes an entity's title or kind is reported and rolled back"
   verify unit "each change the graph delta names is one W054 warning, and an empty delta none"
   verify contract "Validate Post-Migration Integrity: post-migration integrity validation holds — extension_hooks_complete_fired, structural_equivalence_checked, differences_reported, migration_validation_complete_emitted"
-}
-
-behavior capture_pre_migration_schema_snapshot "Capture Pre-Migration Schema Snapshot" {
-  features   [spec_file_migration]
-  invariants [migration_event_ordering, graph_schema_completeness, zero_domain_knowledge_core]
-  category   command
-  types      [Graph, SchemaEntityKind, SchemaEdgeType, PreMigrationSnapshot]
-  ports      [CompilerApi]
-  consumes   [migration_starting]
-  produces   [pre_migration_snapshot_captured]
-  requires {
-    migration_starting_fired "migration_starting event has fired, signaling that migration intent is declared but no file I/O has begun"
-  }
-  ensures {
-    snapshot_captured                       "PreMigrationSnapshot contains node kinds, edge types, and field definitions from the current graph schema"
-    pre_migration_snapshot_captured_emitted "pre_migration_snapshot_captured event fires with the captured snapshot"
-  }
-  contract   """
-    Before migration begins, the system MUST capture the current graph
-    schema (node kinds, edge types, field definitions) into a
-    PreMigrationSnapshot structure to enable before/after comparison.
-    This snapshot MUST be taken after parsing but before any migration
-    transforms are applied. The migration_starting event is the single
-    trigger. No comparison happens at this stage — the snapshot is
-    stored for later use by
-    verify_graph_protocol_compatibility_after_migration.
-  """
-  verify unit "pre-migration schema snapshot captured on migration_starting event"
-  verify unit "snapshot includes node kinds, edge types, and field definitions"
-  verify unit "snapshot persists in memory across migration_starting to extension_migration_hooks_complete"
-  verify contract "Capture Pre-Migration Schema Snapshot: pre-migration schema capture holds — migration_starting_fired, snapshot_captured, pre_migration_snapshot_captured_emitted"
-}
-
-behavior verify_graph_protocol_compatibility_after_migration "Verify Graph Protocol Compatibility After Migration" {
-  features   [spec_file_migration, graph_protocol_versioning]
-  invariants [
-    graph_traversal_integrity,
-    graph_schema_completeness,
-    migration_event_ordering,
-    migration_cross_extension_stability,
-    zero_domain_knowledge_core,
-  ]
-  category   validation
-  types      [
-    Graph,
-    FormatVersion,
-    MigrationResult,
-    SchemaVersion,
-    SchemaEntityKind,
-    SchemaEdgeType,
-    PreMigrationSnapshot,
-  ]
-  ports      [CompilerApi]
-  // Single-phase comparison: waits for the pre-migration snapshot and
-  // the terminal migration event (extension_migration_hooks_complete).
-  // Runs exactly once after both are available — no multi-phase logic.
-  consumes   [pre_migration_snapshot_captured, extension_migration_hooks_complete]
-  produces   [graph_protocol_compatibility_verified]
-  requires {
-    pre_migration_snapshot_available "pre_migration_snapshot_captured event has fired, providing the before-state schema snapshot"
-    extension_hooks_complete         "extension_migration_hooks_complete event has fired, confirming the fully-migrated state is ready"
-  }
-  ensures {
-    compatibility_verified               "Schema-level backward compatibility check completed against pre-migration snapshot"
-    breaking_changes_warned              "W053 warning emitted for any breaking schema changes detected"
-    graph_protocol_compatibility_emitted "graph_protocol_compatibility_verified event fires after comparison"
-  }
-  contract   """
-    This behavior validates schema-level backward compatibility of the
-    Graph Protocol after migration. Instance-level integrity (entity IDs,
-    edges, field values) is handled separately by
-    validate_post_migration_integrity.
-
-    After all migration transforms and extension hooks have completed,
-    the system MUST verify Graph Protocol backward compatibility by
-    retrieving the pre-migration schema snapshot (captured by
-    capture_pre_migration_schema_snapshot) and comparing it against the
-    current post-migration graph schema. If the migration introduces a
-    breaking change to the graph output, the system MUST emit W053
-    (migration_breaking_graph_change) warning identifying the affected
-    schema version fields. Migrations
-    that only change formatting or whitespace (no entity structural
-    changes) MUST skip this check.
-
-    A breaking change is defined as any of the following: removed node kinds,
-    removed edge types, removed required fields, or changed field types.
-    Adding new node kinds, new edge types, or new optional fields is NOT
-    a breaking change. Renaming a node kind or edge type counts as a removal
-    of the old name plus addition of a new name, and therefore IS breaking.
-
-    Cross-extension reference stability: during migration, references
-    between entities owned by different extensions MUST remain valid.
-    If a migration transform renames or removes an entity that is
-    referenced by an entity from another extension, the system MUST
-    emit a diagnostic identifying the broken cross-extension reference.
-
-    This links .spec format versioning (FormatVersion) to Graph Protocol
-    versioning (SchemaVersion) per Principle 6: breaking changes require
-    migration paths. See also: graph_protocol_versioning in features/output.spec.
-  """
-  verify unit "migration that changes entity structure triggers schema check"
-  verify unit "migration that only changes formatting skips schema check"
-  verify unit "breaking graph change emits W053 warning"
-  verify unit "non-breaking graph change passes silently"
-  verify unit "removed node kind detected as breaking"
-  verify unit "removed edge type detected as breaking"
-  verify unit "removed required field detected as breaking"
-  verify unit "changed field type detected as breaking"
-  verify unit "added optional field is not breaking"
-  verify unit "comparison runs once after extension_migration_hooks_complete"
-  verify unit "cross-extension reference broken by migration produces diagnostic"
-  verify contract "Verify Graph Protocol Compatibility After Migration: graph protocol compatibility verification holds — pre_migration_snapshot_available, extension_hooks_complete, compatibility_verified, breaking_changes_warned, graph_protocol_compatibility_emitted"
 }
 
 behavior rollback_failed_migration "Rollback Failed Migration" {

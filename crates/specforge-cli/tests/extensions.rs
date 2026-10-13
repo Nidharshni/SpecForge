@@ -1066,7 +1066,11 @@ fn add_rejects_invalid_specifier() {
     let config = r#"{"name":"t","version":"0.1.0","extensions":[]}"#;
     fs::write(dir.path().join("specforge.json"), config).unwrap();
 
-    for specifier in ["not-valid", "@scope"] {
+    // A package reference that is not one; a bare word that is no `@scope/name` is a path.
+    for (specifier, prefix) in [
+        ("@scope", "invalid extension specifier: "),
+        ("not-valid", "file not found: "),
+    ] {
         let output = specforge_cmd()
             .args(["add", specifier, "--path"])
             .arg(dir.path())
@@ -1078,8 +1082,7 @@ fn add_rejects_invalid_specifier() {
         assert_eq!(json["code"], "E054", "{json}");
         let message = json["error"].as_str().unwrap();
         assert!(
-            message.starts_with("invalid extension specifier: ")
-                && message.contains(&format!("'{specifier}'")),
+            message.starts_with(prefix) && message.contains(specifier),
             "{message}"
         );
     }
@@ -1091,7 +1094,7 @@ fn add_rejects_invalid_specifier() {
         .assert()
         .code(1)
         .stderr(predicates::str::contains(
-            "error[E054]: invalid extension specifier: 'not-valid' is not a registry package name",
+            "error[E054]: file not found: not-valid",
         ))
         .stderr(predicates::str::contains(
             "use a builtin's name, './local/path.wasm', 'git+https://...', or '@scope/name[@version]'",
@@ -1513,7 +1516,7 @@ fn new_extension_scaffolds_sdk_project() {
             "new",
             "--extension",
             "@you/my-ext",
-            "--path",
+            "--dir",
             out.to_str().unwrap(),
         ])
         .output()
@@ -1545,7 +1548,7 @@ fn new_extension_refuses_existing_directory() {
     fs::create_dir_all(&project).unwrap();
 
     let assert = specforge_cmd()
-        .args(["new", "--extension", "dup", "--path", out.to_str().unwrap()])
+        .args(["new", "--extension", "dup", "--dir", out.to_str().unwrap()])
         .output()
         .unwrap();
     assert!(!assert.status.success());
@@ -1861,6 +1864,7 @@ fn add_update_and_remove_refuse_an_unusable_config_alike() {
         // What the compile reports as E069 for it.
         let check = specforge_cmd()
             .args(["check", "--format", "json"])
+            .arg("--path")
             .arg(dir.path())
             .output()
             .unwrap();
@@ -2044,7 +2048,10 @@ fn an_unusable_config_fails_check_with_e069() {
 
         for strict in [false, true] {
             let mut command = specforge_cmd();
-            command.args(["check", "--format", "json"]).arg(dir.path());
+            command
+                .args(["check", "--format", "json"])
+                .arg("--path")
+                .arg(dir.path());
             if strict {
                 command.arg("--strict");
             }
@@ -2074,6 +2081,7 @@ fn an_unusable_config_fails_check_with_e069() {
     fs::write(dir.path().join("specforge.json"), UNUSABLE_CONFIGS[0]).unwrap();
     let output = specforge_cmd()
         .args(["check", "--format", "json"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -2361,8 +2369,7 @@ fn add_of_a_crate_directory_installs_its_component() {
         "[package]\nname = \"my-ext\"\nversion = \"0.1.0\"\n",
     )
     .unwrap();
-    let greet = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../fixtures/greet-extension/greet.wasm");
+    let greet = specforge_component::committed::GREET.path();
     fs::copy(greet, release.join("my_ext.wasm")).unwrap();
 
     let out = specforge_cmd()

@@ -36,7 +36,7 @@ Commands:
   doctor        Run health checks on installed extensions
   mcp           Start MCP server (JSON-RPC over stdio)
   migrate       Migrate .spec files between format versions
-  completions   Generate shell completions: the built-in commands, and the commands of the extensions the project in the current directory enables
+  completions   Generate shell completions: the built-in commands, and the commands of the extensions the project at --path enables
   explain       Explain a diagnostic code
   infer-status  Show inference progress (analyzed files, gaps, stale entries)
   extension     Extension authoring commands

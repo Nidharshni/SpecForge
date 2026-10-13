@@ -339,6 +339,7 @@ fn query_nodes_have_required_fields() {
     // node and an edge (`specforge schema --publish`).
     let published = specforge_cmd()
         .args(["schema", "--publish"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -354,32 +355,15 @@ fn query_nodes_have_required_fields() {
             "top-level '{key}' is not in the Graph Protocol"
         );
     }
-    let conforms = |item: &serde_json::Value, schema: &serde_json::Value, what: &str| {
-        for required in schema["required"].as_array().unwrap() {
-            let key = required.as_str().unwrap();
-            assert!(item.get(key).is_some(), "{what} lacks '{key}': {item}");
-        }
-        for (key, value) in item.as_object().unwrap() {
-            let expected = schema["properties"][key]["type"].as_str();
-            let actual = match value {
-                serde_json::Value::String(_) => "string",
-                serde_json::Value::Number(n) if n.is_i64() || n.is_u64() => "integer",
-                serde_json::Value::Object(_) => "object",
-                other => panic!("{what}.{key}: unexpected {other}"),
-            };
-            assert_eq!(expected, Some(actual), "{what}.{key} in {item}");
-        }
-    };
+    // The reply is a document the published schema admits.
+    assert_eq!(
+        specforge_common::shape::violations(&published, &parsed),
+        Vec::<String>::new()
+    );
     let nodes = parsed["nodes"].as_array().unwrap();
     let edges = parsed["edges"].as_array().unwrap();
     assert_eq!(nodes.len(), 3, "{parsed}");
     assert_eq!(edges.len(), 3, "{parsed}");
-    for node in nodes {
-        conforms(node, &props["nodes"]["items"], "node");
-    }
-    for edge in edges {
-        conforms(edge, &props["edges"]["items"], "edge");
-    }
     let beh = nodes.iter().find(|n| n["id"] == "beh_middle").unwrap();
     assert_eq!(beh["kind"], "behavior");
     assert_eq!(beh["title"], "Behavior Middle");

@@ -2,13 +2,12 @@ use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use crate::terminal::{Terminal, outln};
 use specforge_ops::stats::Stats;
 use specforge_ops::view::ProjectView;
-use std::path::PathBuf;
 
 // `specforge stats`'s command line.
 #[derive(clap::Args)]
 pub(crate) struct Args {
-    #[arg(default_value = ".", help = crate::project::PATH_HELP)]
-    path: PathBuf,
+    #[command(flatten)]
+    project: crate::project::ProjectArg,
 
     #[command(flatten)]
     output: OutputArg,
@@ -21,7 +20,7 @@ impl Args {
     /// (exit 2), as in `analyze`.
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         let format = self.output.format;
-        let project = match crate::project::compile(&self.path) {
+        let project = match self.project.compile() {
             Ok(project) => project,
             Err(error) => return Refusal::measuring(self.output.format).report(terminal, &error),
         };
@@ -94,7 +93,7 @@ mod tests {
         let (terminal, capture) = Terminal::captured("", Facts::PIPED);
 
         let exit = Args {
-            path: dir.path().to_path_buf(),
+            project: crate::project::ProjectArg::at(dir.path()),
             output: OutputArg {
                 format: OutputFormat::Human,
             },

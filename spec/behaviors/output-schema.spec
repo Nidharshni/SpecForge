@@ -120,11 +120,15 @@ behavior embed_schema_in_export "Embed Schema in Export" {
     published schema's url and content_hash, so agents retain access to the
     broader context (the full-project schema is retrievable by that
     reference) without taping the whole schema into every scoped letter.
+    Every JSON export, the schema attached or not, MUST carry the
+    schema_version of the project's versioned schema; no export carries a
+    version the project's schema is not at.
   """
   verify unit "schema embedded as top-level key in full JSON export"
   verify unit "format_version set to 2.0 with schema"
   verify unit "--no-schema suppresses schema and keeps format_version 1.0"
   verify unit "scoped exports carry schema_ref (url and content_hash) instead of embedded schema"
+  verify unit "every JSON export carries the project's schema version, whether the schema is attached or not"
   verify contract "Embed Schema in Export: schema embedding in export holds — schema_version_computed_fired, validation_complete_fired, schema_embedded, format_version_set, schema_ref_names_full_schema"
 }
 
@@ -137,7 +141,7 @@ behavior persist_schema_cache "Persist Schema Cache" {
     zero_domain_knowledge_core,
   ]
   category   command
-  types      [GraphProtocolSchema, SchemaCacheEntry]
+  types      [GraphProtocolSchema, SchemaCacheEntry, VersionedSchema]
   ports      [FileSystem]
   consumes   [schema_generated]
   produces   [schema_cache_persisted]
@@ -149,11 +153,14 @@ behavior persist_schema_cache "Persist Schema Cache" {
     schema_cache_persisted_emitted "schema_cache_persisted event is emitted after successful cache write"
   }
   contract   """
-    After the GraphProtocolSchema is generated, the system MUST persist it
-    to `.specforge/schema-cache.json` for use by detect_breaking_schema_changes
-    in subsequent compilations. The cache file MUST be overwritten atomically
-    (write to temp, then rename). `specforge check` writes no files, so the
-    cache is not updated by a check.
+    After a successful `specforge export` (every format), the system MUST
+    record the versioned schema it exported against, with its content hash,
+    in `.specforge/schema-cache.json`, for detect_breaking_schema_changes
+    and compute_schema_version on the next read. The cache file MUST be
+    overwritten atomically (write to temp, then rename). Only `specforge
+    export` records: `specforge check`, `watch`, `schema` and every MCP
+    tool and resource only read the cache. A failed export leaves it as it
+    was.
   """
   verify unit "schema-cache.json written after schema generation"
   verify unit "cache file overwritten atomically via temp+rename"
@@ -289,7 +296,7 @@ behavior negotiate_schema_version "Negotiate Schema Version" {
     zero_domain_knowledge_core,
   ]
   category   command
-  types      [SchemaVersion, SchemaCompatibility, GraphProtocolSchema, ExportResult]
+  types      [SchemaVersion, SchemaCompatibility, GraphProtocolSchema, ExportResult, VersionedSchema]
   ports      [CompilerApi]
   consumes   [validation_complete, schema_breaking_change_detected]
   produces   [schema_version_negotiated]
@@ -298,27 +305,29 @@ behavior negotiate_schema_version "Negotiate Schema Version" {
     schema_breaking_change_detected_fired "schema_breaking_change_detected event has fired, confirming breaking change classification is complete"
   }
   ensures {
-    compatible_version_resolved       "Requested version within supported range is resolved to nearest compatible version"
-    incompatible_version_rejected     "Incompatible version request produces E027 diagnostic with supported range"
-    default_to_latest                 "When no version is requested, the latest supported version is used"
+    compatible_version_resolved       "A requested version whose readers read the current schema (the same major version, not newer) is admitted, and the export carries the current schema at its own version"
+    incompatible_version_rejected     "A requested version of another major, or newer than the current schema, is refused as incompatible_schema_version naming the range of versions whose readers read the current schema"
+    default_to_latest                 "When no version is requested, the export carries the current schema version"
     schema_version_negotiated_emitted "schema_version_negotiated event is emitted after negotiation completes"
   }
   contract   """
-    When an agent requests a specific Graph Protocol schema version, the
-    system MUST check the requested version against the supported compatibility
-    range (supported_min to supported_max). If compatible, the system MUST
-    resolve the nearest compatible version and use it for the export. If
-    incompatible, the system MUST emit an E027 diagnostic with the supported
-    range and reject the request. The default behavior when no version is
-    requested MUST use the latest supported version. Consumers MAY request
-    a specific schema version via the --schema-version CLI flag or the
-    schema_version query parameter in MCP resource URIs.
+    A consumer MAY name the schema version it reads, with --schema-version
+    on specforge export or schema_version on the specforge.export tool. The
+    system MUST admit it when a reader of that version reads the current
+    schema's documents: the same major version and not newer than the
+    current version. An admitted request changes nothing in the export: it
+    carries the current schema at its own version, never relabelled, so a
+    schema version names one document. A request of another major version
+    or a newer one MUST be refused as incompatible_schema_version, naming
+    the current version and the readable range (MAJOR.0.0 to the current
+    version); a version that does not parse is invalid_schema_version. The
+    request is checked whatever the format, including formats that carry no
+    schema.
   """
-  verify unit "compatible version within range is resolved"
-  verify unit "incompatible version produces E027 with supported range"
+  verify unit "a requested version of the same major, not newer, is admitted and the export carries the current version"
+  verify unit "a requested version of another major, or a newer one, is refused as incompatible_schema_version naming the readable range"
   verify unit "no version requested defaults to latest"
-  verify unit "--schema-version CLI flag selects requested version"
-  verify unit "schema_version MCP query parameter selects requested version"
+  verify unit "--schema-version and the export tool's schema_version are checked whatever the format"
   verify contract "Negotiate Schema Version: schema version negotiation holds — validation_complete_fired, schema_breaking_change_detected_fired, compatible_version_resolved, incompatible_version_rejected, default_to_latest, schema_version_negotiated_emitted"
 }
 
@@ -331,13 +340,7 @@ behavior detect_breaking_schema_changes "Detect Breaking Schema Changes" {
     zero_domain_knowledge_core,
   ]
   category   validation
-  types      [
-    SchemaVersion,
-    SchemaMigration,
-    GraphProtocolSchema,
-    SchemaCacheEntry,
-    SchemaMigrationChange,
-  ]
+  types      [SchemaVersion, VersionedSchema, GraphProtocolSchema, SchemaCacheEntry, SchemaChange]
   ports      [CompilerApi, FileSystem]
   // Reads the previous schema from .specforge/schema-cache.json written by the
   // PRIOR compilation. Does NOT depend on persist_schema_cache in the current
@@ -349,44 +352,54 @@ behavior detect_breaking_schema_changes "Detect Breaking Schema Changes" {
     filesystem_available   "FileSystem port is available for reading .specforge/schema-cache.json from prior compilation"
   }
   ensures {
-    breaking_changes_classified             "Removed entity kinds, changed edge semantics, and new required fields are classified as breaking"
-    nonbreaking_changes_classified          "Added optional fields and new entity kinds are classified as non-breaking"
-    migration_record_emitted                "SchemaMigration record is emitted describing the changes"
+    breaking_changes_classified             "Every change that removes something a reader of the recorded schema relies on is classified as breaking (major): a removed kind, edge type or field, a field added as required, a field's type, required flag, edge type or target kind changing, an enum value lost, an edge type's source or target kind lost"
+    nonbreaking_changes_classified          "Additions are minor (a kind, an edge type, an optional field, an enum value, an edge type's source or target kind) and documentation and provenance are patch (descriptions, defaults, colours, the testable flag, source extensions, extension versions, load order)"
+    migration_record_emitted                "The versioned schema lists each change since the recorded schema, in schema order"
     schema_breaking_change_detected_emitted "schema_breaking_change_detected event is emitted after classification completes"
   }
   contract   """
-    When the Graph Protocol schema version changes between compilations, the
-    system MUST detect breaking changes by comparing the previous and current
-    schemas. Removed entity kinds, changed edge type semantics, and new
-    required fields MUST be classified as breaking. Added optional fields and
-    new entity kinds MUST be classified as non-breaking. The system MUST emit
-    a SchemaMigration record describing the changes. Breaking changes MUST
-    only occur on major version increments. The previous schema version MUST be
-    read from `.specforge/schema-cache.json` (maintained by persist_schema_cache),
-    or from the most recent Graph Protocol export file in the output directory
-    as a fallback. If no previous schema exists, all changes are treated as
-    non-breaking (initial export). The `.specforge/schema-cache.json` file is
-    authoritative. The output directory export is a fallback source used only
-    when the cache file does not exist. When no previous schema is found and
-    the project has been exported before (output directory contains prior
-    exports), the system SHOULD emit an I016 info diagnostic indicating the
-    schema cache was not found and breaking change detection was skipped.
-    A field type is compared as the type, not its spelling: a cache an
-    older host wrote with an accepted older name (`boolean`) reads as the
-    same type, so it is no change.
+    The system MUST compare the schema the loaded extensions produce with
+    the one recorded in `.specforge/schema-cache.json`, attribute by
+    attribute: every attribute of the schema, its extensions, kinds, fields
+    and edge types, so that any difference is a change. Kinds, fields and
+    edge types are matched by name; the order the record holds them in is
+    no change. Within a major version a reader of an earlier version reads
+    every later document, so a set the schema publishes (kinds, edge types,
+    a kind's fields, an enum field's values, an edge type's source and
+    target kinds) may grow in a minor version and shrinks only in a major
+    one, and a single-valued attribute that shapes a document (a field's
+    type, required flag, edge type and target kind) changes only in a major
+    version. A field added as required is breaking. Descriptions, default
+    values, DOT colours, the testable flag, the extension that contributed
+    a kind, field or edge type, extension versions and their load order are
+    patch changes. When a field's type changes, its enum values are not
+    compared as well. Each breaking change is reported as one W053 warning
+    naming the change and the version the schema goes from and to; the
+    export is still written. With no cache there is no previous schema and
+    nothing is reported. A cache that exists but cannot be read (not JSON,
+    not a schema, a field type this host does not read) MUST be reported as
+    I016: the version starts again at 1.0.0. A field type is compared as the
+    type, not its spelling: a cache an older host wrote with an accepted
+    older name (`boolean`) reads as the same type, so it is no change.
   """
   verify unit "removed entity kind detected as breaking"
   verify unit "added optional field detected as non-breaking"
   verify unit "new required field detected as breaking"
-  verify unit "SchemaMigration record emitted on version change"
+  verify unit "the versioned schema lists each change since the recorded schema"
   verify unit "no previous schema treats all changes as non-breaking"
-  verify unit "missing cache with prior exports emits I016 info diagnostic"
-  verify unit "missing cache without prior exports emits no diagnostic"
+  verify unit "a missing schema cache emits no diagnostic"
   verify unit "new entity kind detected as non-breaking"
   verify unit "new edge type detected as non-breaking"
   verify unit "removed edge type detected as breaking"
   verify unit "previous schema is read from .specforge/schema-cache.json"
   verify unit "missing schema cache yields no previous schema"
+  verify unit "a field's required flag changing either way is breaking"
+  verify unit "an edge type losing a source or target kind is breaking; gaining one is an addition"
+  verify unit "an unreadable schema cache restarts the version at 1.0.0 with I016"
+  verify unit "every attribute of the schema is compared: a change to any one moves the version"
+  verify unit "an enum field losing a value is breaking; gaining one is an addition"
+  verify unit "a field's edge type or target kind changing is breaking"
+  verify unit "the W053 message names the change and the versions"
   verify contract "Detect Breaking Schema Changes: breaking schema change detection holds — schema_generated_fired, filesystem_available, breaking_changes_classified, nonbreaking_changes_classified, migration_record_emitted, schema_breaking_change_detected_emitted"
   verify unit "identical schemas no changes"
   verify unit "removed field is breaking"
@@ -402,7 +415,7 @@ behavior compute_schema_version "Compute Schema Version" {
     zero_domain_knowledge_core,
   ]
   category   query
-  types      [SchemaVersion, SchemaMigration, GraphProtocolSchema, SchemaCacheEntry]
+  types      [SchemaVersion, VersionedSchema, GraphProtocolSchema, SchemaCacheEntry]
   ports      [CompilerApi]
   // compute_schema_version depends on breaking change classification from
   // detect_breaking_schema_changes, not the raw schema_generated event.
@@ -412,19 +425,24 @@ behavior compute_schema_version "Compute Schema Version" {
     schema_breaking_change_detected_fired "schema_breaking_change_detected event has fired, confirming breaking change classification is available for version computation"
   }
   ensures {
-    version_auto_computed           "Version bump is computed automatically: major for breaking, minor for new kinds/edges, patch for metadata"
+    version_auto_computed           "The version is the recorded one bumped by the largest change since: major for a breaking change, minor for an addition, patch for documentation and provenance"
     first_compilation_baseline      "First compilation without a cache produces version 1.0.0"
     version_attached                "Computed version is attached to the GraphProtocolSchema before export"
     schema_version_computed_emitted "schema_version_computed event is emitted after version computation completes"
   }
   contract   """
-    After the schema is generated, the system MUST compare the current schema
-    against the previous schema from .specforge/schema-cache.json. The version
-    bump MUST be computed automatically: major for breaking changes (as
-    classified by detect_breaking_schema_changes), minor for new entity kinds
-    or edge types, patch for non-structural metadata changes. First compilation
-    without a cache MUST produce version 1.0.0. The computed version MUST be
-    attached to the GraphProtocolSchema before export.
+    The system MUST version the generated schema against the schema the
+    last export recorded in .specforge/schema-cache.json: the recorded
+    version bumped by the largest change since, as detect_breaking_schema_changes
+    classifies each one (major resets minor and patch, minor resets patch).
+    With no change the version is the recorded one. Without a cache, or
+    with one that cannot be read, the version MUST be 1.0.0. The computed
+    version MUST be attached to the GraphProtocolSchema before export, and
+    every reader of the project's schema (specforge schema, specforge
+    schema --publish, specforge.schema, specforge://schema, every export)
+    MUST report the same version for the same record. One schema version
+    names one document: two schemas versioned against one record with the
+    same version have the same content hash.
   """
   verify unit "first compilation without cache produces version 1.0.0"
   verify unit "new entity kind triggers minor version bump"
@@ -437,6 +455,8 @@ behavior compute_schema_version "Compute Schema Version" {
   verify unit "added optional field bumps minor"
   verify unit "no changes returns previous"
   verify unit "removed field bumps major"
+  verify unit "an extension's version changing is a patch"
+  verify unit "one schema version names one document: equal versions have equal content hashes"
 }
 
 behavior publish_schema_specification "Publish Schema Specification" {
@@ -459,18 +479,28 @@ behavior publish_schema_specification "Publish Schema Specification" {
   ensures {
     valid_json_schema_produced "Output is a valid JSON Schema document (draft 2020-12 or later)"
     all_kinds_described        "Published schema describes all registered entity kinds and edge types"
-    third_party_usable         "Published schema is usable by any JSON Schema validator to validate Graph Protocol exports"
+    third_party_usable         "Published schema is usable by any JSON Schema validator to validate Graph Protocol exports: an export of a project with no errors validates against the published schema of its format"
     render_complete_emitted    "render_complete event is emitted after schema publication"
   }
   contract   """
-    When specforge schema --publish is invoked, the system MUST export the
-    current GraphProtocolSchema as a standalone JSON Schema document suitable
-    for third-party consumers. The output MUST be a valid JSON Schema
-    (draft 2020-12 or later) that describes the Graph Protocol format
-    including all registered entity kinds, edge types, and field definitions.
-    The published schema MUST be usable by any JSON Schema validator to
-    validate Graph Protocol exports. The schema MUST include a $schema
-    meta-reference identifying the JSON Schema draft version used.
+    When specforge schema --publish is invoked, the system MUST export a
+    standalone JSON Schema document (draft 2020-12 or later) suitable for
+    third-party consumers, with a $schema meta-reference identifying the
+    draft.
+
+    The published schema MUST be the JSON Schema of the export document
+    itself, derived from the types that write it, narrowed by the
+    project: each kind an export can hold (every declared kind, and the
+    structural ref and spec) is one node branch whose fields are its
+    declared fields' wire forms, any other field a field value, and the
+    embedded schema's edge type labels are the registered ones. It MUST
+    use only keywords the in-repo checker reads (type, enum, properties,
+    required, additionalProperties, items, oneOf, anyOf, minimum, $ref,
+    $defs) and the annotations $schema, $id, title, description and
+    examples, so it is usable by any JSON Schema validator and checked
+    exactly by SpecForge's own. An export of a project whose check reports
+    no error MUST validate against the published schema of its format.
+    Each format's document has its own $id.
     The published schema describes the export format --format names
     (graph, context or brief; json is graph). --format applies only with
     --publish, and --kind cannot be combined with --publish: either is
@@ -485,6 +515,11 @@ behavior publish_schema_specification "Publish Schema Specification" {
   verify unit "published schema requires the Graph Protocol top-level properties"
   verify unit "published context schema admits declared headline and normative fields"
   verify unit "--kind with --publish, and --format without it, are refused"
+  verify unit "a context or brief export validates against the published schema of its format"
+  verify unit "an export of a project with no errors validates against the published schema"
+  verify integration "this repository's and its example projects' exports validate against their published schemas"
+  verify unit "the published schema is the export document's schema narrowed by the project"
+  verify unit "the published schema uses only keywords the in-repo checker reads"
   verify contract "Publish Schema Specification: schema specification publication holds — schema_version_computed_fired, validation_complete_fired, valid_json_schema_produced, all_kinds_described, third_party_usable, render_complete_emitted"
   verify unit "description includes version"
 }

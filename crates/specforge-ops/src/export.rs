@@ -11,12 +11,11 @@
 
 use crate::navigate;
 use crate::options::{Choice, OptionTable};
+use crate::schema_version::{NotAdmitted, VersionedSchema};
 use crate::view::ProjectView;
 use crate::{OpError, OpErrorKind};
 use specforge_common::Diagnostic;
-use specforge_emitter::{
-    EmitFormat, EmitOptions, EmitterError, GraphProtocolSchema, SchemaVersion, emit,
-};
+use specforge_emitter::{EmitFormat, EmitOptions, EmitterError, SchemaVersion, emit};
 use std::path::PathBuf;
 
 /// An export format.
@@ -96,6 +95,8 @@ pub enum Schema {
     Without,
 }
 
+/// A requested schema version that does not parse (`InvalidInput`).
+pub const INVALID_SCHEMA_VERSION: &str = "invalid_schema_version";
 /// The code of the refusal of `depth` without a `scope`: depth limits a
 /// scoped export.
 pub const DEPTH_WITHOUT_SCOPE: &str = "depth_without_scope";
@@ -114,7 +115,9 @@ pub struct Request<'a> {
     /// Token budget: keep the most central entities that fit.
     pub max_tokens: Option<usize>,
     pub schema: Schema,
-    /// A schema version to negotiate (same major as the produced schema).
+    /// A schema version whose readers must read the export: the same major
+    /// version as the project's schema, not newer. Checked whatever the
+    /// format; never applied (the export carries the schema's own version).
     pub schema_version: Option<&'a str>,
 }
 
@@ -143,6 +146,14 @@ impl Request<'_> {
 /// carries is the view's versioned schema (`specforge export`'s version,
 /// computed against the root's schema cache, which this only reads).
 pub fn export(view: &ProjectView, request: &Request) -> Result<String, OpError> {
+    export_versioned(view, &view.versioned_schema(), request)
+}
+
+fn export_versioned(
+    view: &ProjectView,
+    versioned: &VersionedSchema,
+    request: &Request,
+) -> Result<String, OpError> {
     if request.depth.is_some() && request.scope.is_none() {
         return Err(OpError::new(
             OpErrorKind::InvalidInput,
@@ -150,17 +161,31 @@ pub fn export(view: &ProjectView, request: &Request) -> Result<String, OpError> 
             "depth limits a scoped export: give a scope too",
         ));
     }
-    let schema = if request.attaches_schema() {
-        Some(negotiated(view.versioned_schema(), request.schema_version)?)
-    } else {
-        None
-    };
+    // A requested version is checked whatever the format, and never applied:
+    // the export carries the schema at its own version.
+    if let Some(requested) = request.schema_version {
+        let requested = requested.parse::<SchemaVersion>().map_err(|e| {
+            OpError::new(
+                OpErrorKind::InvalidInput,
+                INVALID_SCHEMA_VERSION,
+                format!("invalid schema version: {e}"),
+            )
+        })?;
+        versioned.admits(&requested).map_err(|refusal| {
+            OpError::new(
+                OpErrorKind::Conflict,
+                NotAdmitted::CODE,
+                refusal.to_string(),
+            )
+        })?;
+    }
     let options = EmitOptions {
         format: request.format().emit_format(),
         scope: request.scope,
         depth: request.depth,
         kind_filter: request.kinds.clone(),
-        schema: schema.as_ref(),
+        schema: versioned.schema(),
+        attach_schema: request.attaches_schema(),
         token_budget: request.max_tokens,
         kind_registry: Some(view.registries().kinds()),
         field_registry: Some(view.registries().fields()),
@@ -168,13 +193,13 @@ pub fn export(view: &ProjectView, request: &Request) -> Result<String, OpError> 
     emit(view.graph(), &options).map_err(|error| failure(view, error))
 }
 
-/// What `specforge export` did: the export, the schema's breaking changes
-/// against the view root's cache (W053, found before the export ran), and
-/// what became of the cache.
+/// What `specforge export` did: the export, what versioning reports against
+/// the view root's record (W053, found before the export ran), and what
+/// became of the record.
 #[derive(Debug)]
 pub struct RecordedExport {
     pub export: Result<String, OpError>,
-    pub breaking: Vec<Diagnostic>,
+    pub diagnostics: Vec<Diagnostic>,
     pub cache: CacheWrite,
 }
 
@@ -196,15 +221,11 @@ pub enum CacheWrite {
 /// carrying the cached version bumped by what changed, and record it after
 /// a successful export. MCP never calls it.
 pub fn export_recorded(view: &ProjectView, request: &Request) -> RecordedExport {
-    let cache = view.schema_cache();
-    let generated = view.versioned_schema();
-    let breaking = cache
-        .as_ref()
-        .map(|cache| cache.breaking_changes(&generated))
-        .unwrap_or_default();
-    let export = export(view, request);
-    let cache = match (&export, cache) {
-        (Ok(_), Some(cache)) => match cache.record(&generated) {
+    let versioned = view.versioned_schema();
+    let diagnostics = versioned.diagnostics();
+    let export = export_versioned(view, &versioned, request);
+    let cache = match (&export, view.schema_cache()) {
+        (Ok(_), Some(cache)) => match cache.record(&versioned) {
             Ok(()) => CacheWrite::Written,
             Err(error) => CacheWrite::WriteFailed {
                 dir: cache.dir().to_path_buf(),
@@ -215,7 +236,7 @@ pub fn export_recorded(view: &ProjectView, request: &Request) -> RecordedExport 
     };
     RecordedExport {
         export,
-        breaking,
+        diagnostics,
         cache,
     }
 }
@@ -235,30 +256,6 @@ fn failure(view: &ProjectView, error: EmitterError) -> OpError {
         Some(code) => OpError::coded(kind, code, error.to_string()),
         None => OpError::new(kind, "export_failed", error.to_string()),
     }
-}
-
-/// `schema`, at `requested` when one is asked for: the same major as the
-/// produced schema, minor and patch from 0 up to the produced version.
-fn negotiated(
-    mut schema: GraphProtocolSchema,
-    requested: Option<&str>,
-) -> Result<GraphProtocolSchema, OpError> {
-    let Some(requested) = requested else {
-        return Ok(schema);
-    };
-    let requested = requested.parse::<SchemaVersion>().map_err(|e| {
-        OpError::new(
-            OpErrorKind::SchemaMismatch,
-            "invalid_schema_version",
-            format!("invalid schema version: {e}"),
-        )
-    })?;
-    let max = schema.schema_version.clone();
-    let min = SchemaVersion::new(max.major, 0, 0);
-    specforge_emitter::negotiate_version(&requested, &min, &max)
-        .map_err(|e| OpError::coded(OpErrorKind::Conflict, e.code(), e.reason))?;
-    schema.schema_version = requested;
-    Ok(schema)
 }
 
 #[cfg(test)]

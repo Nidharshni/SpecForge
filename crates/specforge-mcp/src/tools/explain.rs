@@ -1,5 +1,5 @@
 use crate::target::Unscoped;
-use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
+use crate::tool::{CoreTool, Effect, RefusalArgument, ReplySpec, ToolGroup};
 
 use crate::args::Arguments;
 use crate::reply::Answered;
@@ -30,10 +30,14 @@ impl CoreTool for Tool {
     type Args = Args;
     type Input = Unscoped;
     type Returns = Answered<Reply>;
+    const REFUSAL_ARGUMENTS: &'static [RefusalArgument] = &[RefusalArgument {
+        code: specforge_ops::explain::UNKNOWN_CODE,
+        argument: "code",
+    }];
 
     fn call(_: (), args: Args) -> Answered<Reply> {
         specforge_ops::explain::explain(&args.code)
             .map(Into::into)
-            .map_err(|error| Box::new(McpError::from(error).with_argument("code")))
+            .map_err(|error| Box::new(McpError::from(error)))
     }
 }

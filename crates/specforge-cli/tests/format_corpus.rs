@@ -286,8 +286,8 @@ fn formatting_the_corpus_changes_nothing_but_layout() {
         assert!(problems.is_empty(), "{problems:#?}");
 
         for args in [
-            &["export", "--format", "graph", corpus][..],
-            &["check", "--format", "json", corpus][..],
+            &["export", "--format", "graph", "--path", corpus][..],
+            &["check", "--format", "json", "--path", corpus][..],
         ] {
             let mut original: serde_json::Value =
                 serde_json::from_str(&specforge(pristine.path(), args)).unwrap();

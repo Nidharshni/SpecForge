@@ -19,6 +19,9 @@ Options:
       --force
           Force removal even if other extensions depend on it
 
+      --dry-run
+          Report what the removal would do; write nothing
+
       --format <FORMAT>
           Output format: human or json
           

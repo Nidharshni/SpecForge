@@ -87,7 +87,7 @@ fn empty_schema_produces_empty_model() {
     let schema = GraphProtocolSchema::empty();
     let model = built(&schema);
 
-    assert_eq!(model["model_version"], "1.0.0");
+    assert_eq!(model["schema_version"], "1.0.0");
     for list in ["extensions", "entities", "relationships"] {
         assert!(model[list].as_array().unwrap().is_empty(), "{list}");
     }
@@ -979,7 +979,10 @@ fn render_dot_empty() {
 
 // --- JSON ---
 
-#[test]
+#[specforge_test_macros::test(
+    behavior = "render_model_json",
+    verify = "output carries the schema_version specforge schema prints for the project"
+)]
 fn render_json_keys() {
     let output = exported(
         &multi_extension_schema(),
@@ -987,7 +990,7 @@ fn render_json_keys() {
     );
     // Verify it's valid JSON
     let parsed: serde_json::Value = serde_json::from_str(&output).expect("valid JSON");
-    assert_eq!(parsed["model_version"], "1.0.0");
+    assert_eq!(parsed["schema_version"], "1.0.0");
     assert!(parsed["entities"].is_array());
     assert!(parsed["relationships"].is_array());
     assert_snapshot!(output);

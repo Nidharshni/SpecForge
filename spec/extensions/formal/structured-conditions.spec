@@ -4,9 +4,9 @@
 // Terminology: "Design by Contract" -> "Structured Conditions"
 // All behavior IDs renamed se_ -> fa_
 //
-// Conditions are inline blocks on behaviors that reference invariants.
+// Conditions are block fields on behaviors: each entry a named condition
+// (ConditionEntry). They are not graph entities and write no edge.
 // Inline:    requires { name "description" }
-// Inline conditions produce ConditionEntry nodes in the AST.
 
 use "extensions/formal/invariants"
 use "extensions/formal/types"

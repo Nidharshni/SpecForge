@@ -1,11 +1,11 @@
 ---
 source: crates/specforge-cli/tests/read_views.rs
-expression: text
+expression: without_hashes(&text)
 ---
 {
   "content": [
     {
-      "text": "{\"edges\":[{\"label\":\"features\",\"source\":\"login\",\"target\":\"signin\"}],\"nodes\":[{\"coverage_status\":\"covered\",\"id\":\"login\",\"kind\":\"behavior\",\"title\":\"Log in\"},{\"coverage_status\":\"uncovered\",\"id\":\"signin\",\"kind\":\"feature\",\"title\":\"Sign in\"}],\"schema_version\":\"0.1.0\"}",
+      "text": "{\"edges\":[{\"label\":\"features\",\"source\":\"login\",\"target\":\"signin\"}],\"nodes\":[{\"coverage_status\":\"covered\",\"id\":\"login\",\"kind\":\"behavior\",\"title\":\"Log in\"},{\"coverage_status\":\"uncovered\",\"id\":\"signin\",\"kind\":\"feature\",\"title\":\"Sign in\"}],\"schema_version\":\"1.0.0\"}",
       "type": "text"
     }
   ],

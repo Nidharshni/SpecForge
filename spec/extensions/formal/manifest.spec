@@ -1,11 +1,11 @@
 // @specforge/formal extension manifest declaration
 //
 // @specforge/formal contributes 5 entity kinds (property, axiom, protocol,
-// refinement, process) and 8 edge types. It enhances @specforge/software
+// refinement, process) and 10 edge types. It enhances @specforge/software
 // entity kinds via entity_enhancements and contributes 5 compiler passes,
-// 3 feature flags, and 4 verify kinds. Conditions are inline fields
-// (requires/ensures/maintains) that reference invariants, not standalone
-// entities. Formal analysis warnings require warning_level=strict.
+// 3 feature flags, and 4 verify kinds. Conditions are block fields
+// (requires/ensures/maintains) of named conditions, not standalone
+// entities and not edges. Formal analysis warnings require warning_level=strict.
 
 use "extensions/formal/features"
 use "extensions/formal/types"
@@ -26,7 +26,7 @@ behavior fa_declare_manifest "Declare @specforge/formal Manifest" {
   contract """
     The @specforge/formal extension MUST declare itself with name
     "@specforge/formal". Its declaration MUST declare
-    5 entity kinds and 8 edge types.
+    5 entity kinds and 10 edge types.
 
     Entity kind declarations (all testable=false, supports_verify=false):
     - property: temporal/behavioral assertion (safety/liveness/fairness)
@@ -41,18 +41,15 @@ behavior fa_declare_manifest "Declare @specforge/formal Manifest" {
     - process: CSP-style communicating process with alphabet and composition
       Shape: { description string, alphabet EntityId[] @optional, states ProcessState[] @optional, composition CompositionOperator @optional, references EntityId[] @optional }
 
-    Conditions are inline fields (requires/ensures/maintains) on behaviors
-    that reference invariants, not standalone entities:
+    Conditions are block fields (requires/ensures/maintains) on behaviors,
+    not standalone entities and not edges:
     - Inline:    requires { name "description" }
-    Inline conditions produce ConditionEntry nodes in the AST but are not
-    graph entities.
+    Each entry is a named condition (ConditionEntry); the passes read the
+    conditions by name.
 
-    Edge types (13 total; graph edges carry the declaring field's name as
+    Edge types (10 total; graph edges carry the declaring field's name as
     their label, e.g. a refinement's abstract_entity edge is labelled
     "abstract_entity"):
-    - BehaviorRequiresInvariant:     behavior -> invariant (precondition)
-    - BehaviorEnsuresInvariant:      behavior -> invariant (postcondition)
-    - BehaviorMaintainsInvariant:    behavior -> invariant (frame invariant)
     - BehaviorSatisfiesProperty:     behavior -> property (temporal property satisfaction)
     - BehaviorRefinesBehavior:       behavior -> behavior (field-form layering: `refines`)
     - EventFollowsProtocol:          event -> protocol (sync contract reference)
@@ -70,9 +67,11 @@ behavior fa_declare_manifest "Declare @specforge/formal Manifest" {
     - event: sync, follows_protocol, process
     - port.methods: requires, ensures
 
-    The requires/ensures/maintains fields accept inline blocks that
-    produce ConditionEntry nodes in the AST. These are not standalone
-    graph entities but structured annotations on behaviors.
+    The requires/ensures/maintains fields are block fields: each entry a
+    named condition (ConditionEntry). They are not standalone graph
+    entities and write no edge. The sync fields are block fields too
+    (barrier, timeout, delivery), and expression is a string field, written
+    as text or as an `expr { }` group.
 
     Proof roles (ADR 0009): a property's expression declares the claim
     role (it must follow from the declared bounds); an axiom's expression
@@ -117,7 +116,7 @@ behavior fa_declare_manifest "Declare @specforge/formal Manifest" {
   }
   ensures {
     five_entity_kinds        "entityKinds contains property, axiom, protocol, refinement, process (all testable=false, supports_verify=false)"
-    thirteen_edge_types      "edgeTypes contains BehaviorRequiresInvariant, BehaviorEnsuresInvariant, BehaviorMaintainsInvariant, BehaviorSatisfiesProperty, BehaviorRefinesBehavior, EventFollowsProtocol, EventParticipatesInProcess, PropertyDependsOnInvariant, AxiomAssumesInvariant, RefinementRefinesAbstract, RefinementRefinesConcrete, RefinementChainsToRefinement, ProcessComposesProcess"
+    ten_edge_types           "edgeTypes contains BehaviorSatisfiesProperty, BehaviorRefinesBehavior, EventFollowsProtocol, EventParticipatesInProcess, PropertyDependsOnInvariant, AxiomAssumesInvariant, RefinementRefinesAbstract, RefinementRefinesConcrete, RefinementChainsToRefinement, ProcessComposesProcess"
     assumes_edge             "AxiomAssumesInvariant: source=axiom, target=invariant"
     satisfies_edge           "BehaviorSatisfiesProperty: source=behavior, target=property"
     refines_behavior_edge    "BehaviorRefinesBehavior: source=behavior, target=behavior"
@@ -133,7 +132,7 @@ behavior fa_declare_manifest "Declare @specforge/formal Manifest" {
     validation_rules         "validation_rules contains W123, W124, W125, W126, W127, W128, W129, W131, W132, W133, W134, W135, W136"
     three_feature_flags      "feature_flags contains conditions, layering, concurrency"
     flag_dependencies        "layering requires conditions"
-    inline_condition_fields  "requires/ensures/maintains fields accept inline blocks producing ConditionEntry nodes"
+    inline_condition_fields  "requires/ensures/maintains are block fields of named conditions (ConditionEntry)"
     enhancements_declared    "entity_enhancements add requires/ensures/maintains/satisfies/sync/abstract/refines to behavior, follows_protocol/participates_in/sync to event, and expression to invariant"
     proof_roles_declared     "property.expression is a claim, axiom.expression a bound, invariant.expression a claim"
     verify_kinds_declared    "verify_kinds contains contract, refinement, deadlock_free, liveness"
@@ -144,7 +143,7 @@ behavior fa_declare_manifest "Declare @specforge/formal Manifest" {
   features [fa_progressive_warnings]
   verify unit "manifest name is @specforge/formal"
   verify unit "manifest declares 5 entity kinds (property, axiom, protocol, refinement, process)"
-  verify unit "manifest declares 13 edge types"
+  verify unit "manifest declares 10 edge types"
   verify unit "all entity kinds have testable=false"
   verify unit "AxiomAssumesInvariant edge: axiom -> invariant"
   verify unit "BehaviorSatisfiesProperty edge: behavior -> property"
@@ -159,7 +158,7 @@ behavior fa_declare_manifest "Declare @specforge/formal Manifest" {
   verify unit "manifest declares the 13 formal validation rules"
   verify unit "manifest declares 3 feature flags"
   verify unit "layering flag requires conditions flag"
-  verify unit "inline requires/ensures/maintains fields produce ConditionEntry nodes"
+  verify unit "requires/ensures/maintains are block fields of named conditions"
   verify unit "entity_enhancements add formal fields to software entities"
   verify unit "entity_enhancements add refinement field to behavior"
   verify unit "entity_enhancements add process field to event"

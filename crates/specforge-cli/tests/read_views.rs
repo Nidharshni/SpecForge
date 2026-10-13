@@ -133,9 +133,9 @@ fn schema_digest(value: &Value) -> Value {
 /// What `specforge stats` prints for `root`, and what `specforge.stats`
 /// answers, pinned under `stats_<name>_*`.
 fn pin_stats(name: &str, root: &Path) {
-    let json = cli_json(&["stats", "--format", "json", s(root)]);
+    let json = cli_json(&["stats", "--format", "json", "--path", s(root)]);
     insta::assert_snapshot!(format!("stats_{name}_cli"), normalized(&json, root));
-    let human = cli(&["stats", s(root)]);
+    let human = cli(&["stats", "--path", s(root)]);
     insta::assert_snapshot!(
         format!("stats_{name}_cli_human"),
         normalized_text(&human.stdout, root)
@@ -153,7 +153,7 @@ fn stats_today() {
 /// `specforge stats --format json` and `specforge.stats` on `root` answer one
 /// document (`McpStatsResult`, ADR 0052).
 fn assert_stats_agree(root: &Path) {
-    let cli = cli_json(&["stats", "--format", "json", s(root)]);
+    let cli = cli_json(&["stats", "--format", "json", "--path", s(root)]);
     let mcp = &mcp_calls(root, &[json!({"name": "specforge.stats", "arguments": {}})])[0];
     assert_eq!(cli, *mcp, "{root:?}");
 }
@@ -308,23 +308,38 @@ fn schema_today() {
         );
     };
 
-    snap("cli", &cli_json(&["schema", s(root)]));
+    snap("cli", &cli_json(&["schema", "--path", s(root)]));
     snap(
         "cli_kind_behavior",
-        &cli_json(&["schema", s(root), "--kind", "behavior"]),
+        &cli_json(&["schema", "--path", s(root), "--kind", "behavior"]),
     );
     snap(
         "cli_publish_context",
-        &cli_json(&["schema", s(root), "--publish", "--format", "context"]),
+        &cli_json(&[
+            "schema",
+            "--path",
+            s(root),
+            "--publish",
+            "--format",
+            "context",
+        ]),
     );
     for (name, args) in [
         (
             "cli_publish_kind_behavior",
-            ["schema", s(root), "--publish", "--kind", "behavior"].as_slice(),
+            [
+                "schema",
+                "--path",
+                s(root),
+                "--publish",
+                "--kind",
+                "behavior",
+            ]
+            .as_slice(),
         ),
         (
             "cli_format_without_publish",
-            ["schema", s(root), "--format", "brief"].as_slice(),
+            ["schema", "--path", s(root), "--format", "brief"].as_slice(),
         ),
     ] {
         let refused = cli(args);
@@ -337,7 +352,7 @@ fn schema_today() {
             )
         );
     }
-    let nosuch = cli(&["schema", s(root), "--kind", "nosuch"]);
+    let nosuch = cli(&["schema", "--path", s(root), "--kind", "nosuch"]);
     insta::assert_snapshot!(
         "schema_rv1_cli_kind_nosuch",
         format!("exit: {:?}\nstderr:\n{}", nosuch.code, nosuch.stderr)
@@ -381,12 +396,12 @@ fn model_and_outline_today() {
         .collect();
     let mcp = mcp_texts(root, &calls);
     for (format, text) in MODEL_FORMATS.iter().zip(&mcp) {
-        let run = cli(&["model", s(root), "--format", format]);
+        let run = cli(&["model", "--path", s(root), "--format", format]);
         assert_eq!(run.code, Some(0), "{}", run.stderr);
         assert!(!run.stdout.is_empty(), "model --format {format}");
         assert_eq!(&run.stdout, text, "model --format {format}");
     }
-    let outline = cli(&["outline", s(root), "--format", "json"]);
+    let outline = cli(&["outline", "--path", s(root), "--format", "json"]);
     assert_eq!(outline.code, Some(0), "{}", outline.stderr);
     assert_eq!(&outline.stdout, &mcp[5]);
 }
@@ -427,7 +442,7 @@ fn cli_and_mcp_model_render_the_same_text() {
         .map(|(_, arguments)| json!({"name": "specforge.model", "arguments": arguments}))
         .collect();
     for ((flags, arguments), text) in cases.iter().zip(mcp_texts(root, &calls)) {
-        let mut args = vec!["model", s(root)];
+        let mut args = vec!["model", "--path", s(root)];
         args.extend(flags);
         let run = cli(&args);
         assert_eq!(run.code, Some(0), "{args:?}: {}", run.stderr);
@@ -441,7 +456,7 @@ fn a_model_refuses_what_the_project_does_not_have() {
     let tmp = project("fx1");
     let root = s(tmp.path());
 
-    let run = cli(&["model", root, "--root", "behaviour"]);
+    let run = cli(&["model", "--path", root, "--root", "behaviour"]);
     assert_eq!(run.code, Some(1), "{}", run.stderr);
     assert_eq!(run.stdout, "");
     assert_eq!(
@@ -449,7 +464,7 @@ fn a_model_refuses_what_the_project_does_not_have() {
         "error[unknown_kind]: unknown entity kind 'behaviour'\n  hint: did you mean 'behavior'?\n"
     );
 
-    let run = cli(&["model", root, "--extension", "software"]);
+    let run = cli(&["model", "--path", root, "--extension", "software"]);
     assert_eq!(run.code, Some(1), "{}", run.stderr);
     assert_eq!(run.stdout, "");
     assert_eq!(
@@ -458,7 +473,15 @@ fn a_model_refuses_what_the_project_does_not_have() {
     );
 
     // A kind the project does not know is reported, and selects nothing.
-    let run = cli(&["model", root, "--kinds", "behaviour", "--format", "json"]);
+    let run = cli(&[
+        "model",
+        "--path",
+        root,
+        "--kinds",
+        "behaviour",
+        "--format",
+        "json",
+    ]);
     assert_eq!(run.code, Some(0), "{}", run.stderr);
     let model: Value = serde_json::from_str(&run.stdout).unwrap();
     assert!(model["entities"].as_array().unwrap().is_empty());
@@ -501,6 +524,7 @@ fn cli_and_mcp_outline_render_the_same_text() {
     for ((format, fields, deps), text) in cases.iter().zip(mcp_texts(root, &calls)) {
         let args = [
             "outline",
+            "--path",
             s(root),
             "--format",
             format,
@@ -519,7 +543,7 @@ fn cli_and_mcp_outline_render_the_same_text() {
         root,
         &[json!({"name": "specforge.outline_extensions", "arguments": {}})],
     );
-    let run = cli(&["outline", s(root)]);
+    let run = cli(&["outline", "--path", s(root)]);
     assert_eq!(run.code, Some(0), "{}", run.stderr);
     assert_eq!(run.stdout, defaults[0], "outline with no arguments");
 }
@@ -535,7 +559,7 @@ fn cli_and_mcp_schema_kind_are_one_document() {
         root,
         &[json!({"name": "specforge.schema", "arguments": {"kind": "behavior"}})],
     );
-    let answered = cli_json(&["schema", s(root), "--kind", "behavior"]);
+    let answered = cli_json(&["schema", "--path", s(root), "--kind", "behavior"]);
     assert_eq!(answered, mcp[0]);
     assert_eq!(
         answered["entity_kinds"][0]["name"], "behavior",
@@ -549,7 +573,7 @@ fn cli_and_mcp_schema_kind_are_one_document() {
     );
 
     // Unfiltered, the CLI prints the schema itself, in its own key order.
-    let printed = cli(&["schema", s(root)]);
+    let printed = cli(&["schema", "--path", s(root)]);
     assert_eq!(printed.code, Some(0), "{}", printed.stderr);
     let schema: specforge_emitter::GraphProtocolSchema =
         serde_json::from_str(&printed.stdout).unwrap();
@@ -582,7 +606,7 @@ fn cli_and_mcp_schema_requests_agree() {
         .map(|(_, arguments)| json!({"name": "specforge.schema", "arguments": arguments}))
         .collect();
     for ((flags, arguments), answered) in cases.iter().zip(mcp_calls(root, &calls)) {
-        let mut args = vec!["schema", s(root)];
+        let mut args = vec!["schema", "--path", s(root)];
         args.extend(*flags);
         let printed = cli_json(&args);
         assert_eq!(printed, answered, "{flags:?} vs {arguments}");
@@ -618,9 +642,9 @@ fn analyze_and_stats_read_the_report_at_the_compiled_root() {
     // both refuse the report: exit 2, and under JSON output the error
     // document on stdout and nothing on stderr.
     for args in [
-        vec!["stats", s(tmp.path()), "--format", "json"],
+        vec!["stats", "--path", s(tmp.path()), "--format", "json"],
         vec!["analyze", "--path", s(tmp.path()), "--format", "json"],
-        vec!["stats", s(&sub), "--format", "json"],
+        vec!["stats", "--path", s(&sub), "--format", "json"],
         vec!["analyze", "--path", s(&sub), "--format", "json"],
     ] {
         let run = cli(&args);
@@ -652,14 +676,14 @@ fn cached_kinds(dir: &Path) -> usize {
 fn export_of_a_sub_path_leaves_the_project_cache_alone() {
     let tmp = rv1();
     let root = tmp.path();
-    let first = cli(&["export", s(root), "--format", "graph"]);
+    let first = cli(&["export", "--path", s(root), "--format", "graph"]);
     assert_eq!(first.code, Some(0), "{}", first.stderr);
     assert_eq!(cached_kinds(root), 5);
 
     // The sub-path is the project it is in: it versions against, and records
     // in, the project's cache, and writes none of its own.
     let sub = root.join("spec");
-    let run = cli(&["export", s(&sub), "--format", "graph"]);
+    let run = cli(&["export", "--path", s(&sub), "--format", "graph"]);
     assert_eq!(run.code, Some(0), "{}", run.stderr);
     assert!(!run.stderr.contains("W053"), "{}", run.stderr);
     assert_eq!(cached_kinds(root), 5);
@@ -678,7 +702,7 @@ fn cli_and_mcp_schema_carry_the_same_version() {
     let root = tmp.path();
     // A CLI export caches its schema. Make the cache an older 1.2.3 that
     // also had a kind the project no longer has: a breaking change since.
-    let export = cli(&["export", s(root), "--format", "graph"]);
+    let export = cli(&["export", "--path", s(root), "--format", "graph"]);
     assert_eq!(export.code, Some(0), "{}", export.stderr);
     let cache_path = root.join(".specforge/schema-cache.json");
     let mut cache: Value =
@@ -691,7 +715,7 @@ fn cli_and_mcp_schema_carry_the_same_version() {
     std::fs::write(&cache_path, cache.to_string()).unwrap();
 
     let expected = json!({"major": 2, "minor": 0, "patch": 0});
-    let cli_schema = cli_json(&["schema", s(root)]);
+    let cli_schema = cli_json(&["schema", "--path", s(root)]);
     assert_eq!(cli_schema["schema_version"], expected);
     let mcp = &mcp_calls(
         root,
@@ -737,7 +761,7 @@ fn contract_read_views() {
 
     // project_compiled: the CLI's compiled project and MCP's session each
     // supply a view, and answer.
-    let stats = cli_json(&["stats", "--format", "json", s(root)]);
+    let stats = cli_json(&["stats", "--format", "json", "--path", s(root)]);
     assert_eq!(stats["entity_count"], 6, "{stats}");
 
     // surfaces_agree: the same numbers, chains, schema version and rows.
@@ -750,7 +774,7 @@ fn contract_read_views() {
             json!({"name": "specforge.coverage", "arguments": {}}),
         ],
     );
-    assert_eq!(cli_json(&["schema", s(root)]), mcp[0]);
+    assert_eq!(cli_json(&["schema", "--path", s(root)]), mcp[0]);
     assert_eq!(
         json!(mcp[1]["entities"].as_array().unwrap().len()),
         stats["testable_count"],
@@ -774,20 +798,20 @@ fn contract_read_views() {
         rows["entities"][0]["status"].as_str().unwrap().to_string()
     };
     assert_eq!(alpha_status(), "uncovered");
-    record_alpha(root, "fail");
+    record_alpha(root, "failed");
     assert_eq!(alpha_status(), "partial");
     assert_eq!(alpha_status(), "partial");
-    record_alpha(root, "pass");
+    record_alpha(root, "passed");
     assert_eq!(alpha_status(), "covered");
     assert_eq!(
-        cli_json(&["stats", "--format", "json", s(root)])["proof_pct"],
+        cli_json(&["stats", "--format", "json", "--path", s(root)])["proof_pct"],
         20.0
     );
 
     // one_report_rule: a report at the root that cannot be read is an
     // error on every view of the project, from its root or from a sub-path.
     std::fs::write(root.join("specforge-report.json"), "{not json").unwrap();
-    assert_eq!(cli(&["stats", s(root)]).code, Some(2));
+    assert_eq!(cli(&["stats", "--path", s(root)]).code, Some(2));
     let refused = mcp_calls(
         root,
         &[
@@ -799,15 +823,15 @@ fn contract_read_views() {
         assert_eq!(result["isError"]["diagnostic"]["code"], "E045", "{result}");
     }
     let sub = root.join("spec");
-    assert_eq!(cli(&["stats", s(&sub)]).code, Some(2));
+    assert_eq!(cli(&["stats", "--path", s(&sub)]).code, Some(2));
     assert_eq!(
         cli(&["analyze", "--path", s(&sub), "--format", "json"]).code,
         Some(2)
     );
     // ...and the schema cache likewise: the sub-path's export is the
     // project's, and keeps the root's cache.
-    assert_eq!(cli(&["export", s(root)]).code, Some(0));
-    assert_eq!(cli(&["export", s(&sub)]).code, Some(0));
+    assert_eq!(cli(&["export", "--path", s(root)]).code, Some(0));
+    assert_eq!(cli(&["export", "--path", s(&sub)]).code, Some(0));
     assert_eq!(cached_kinds(root), 5);
 }
 
@@ -1249,7 +1273,7 @@ fn builtin_examples_are_well_typed() {
         .collect();
     std::fs::write(root.join("spec/examples.spec"), examples.join("\n\n")).unwrap();
 
-    let check = cli(&["check", s(root), "--format", "json"]);
+    let check = cli(&["check", "--path", s(root), "--format", "json"]);
     let report: Value = serde_json::from_str(&check.stdout)
         .unwrap_or_else(|e| panic!("check is not JSON ({e}): {}{}", check.stdout, check.stderr));
     let codes: Vec<&str> = report

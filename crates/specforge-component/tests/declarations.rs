@@ -1,86 +1,45 @@
-//! The wire declaration of every builtin and of the SDK greet fixture,
-//! pinned byte for byte: each blob's `__handshake` answer and its
-//! `__describe` answer for every category the protocol supports equal the
-//! generated files under `tests/declarations/<dir>/`.
+//! The wire declaration of every committed SDK blob
+//! (`specforge_component::committed::COMMITTED`), pinned byte for byte: each
+//! blob's `__handshake` answer and its `__describe` answer for every category
+//! the protocol supports equal the generated files under
+//! `tests/declarations/<dir>/`.
 //!
 //! A change that is meant to change a declaration re-vendors the blobs,
-//! then regenerates the files (`cargo run -p xtask --bin snapshot-builtins`)
+//! and rewrites the files (`cargo run -p xtask --bin revendor` does both)
 //! and shows the diff for review. Byte identity also guards against a
 //! dependency enabling `serde_json/preserve_order` in a guest, which would
 //! reorder every key.
 
-use std::path::{Path, PathBuf};
+use std::collections::BTreeSet;
 
 use specforge_component::ComponentRuntime;
-use specforge_component::builtins::BUILTIN_EXTENSIONS;
-use specforge_protocol_types::{DECLARED_CATEGORIES, PROTOCOL_VERSION};
+use specforge_component::committed::{COMMITTED, CommittedBlob, Guest, snapshots, wire_answers};
+use specforge_protocol_types::{
+    DeclaredCategory, DescribeResponse, ExtensionDeclaration, HandshakeRequest, HandshakeResponse,
+    PROTOCOL_VERSION,
+};
 use specforge_wasm::runtime::{WasmCallResult, WasmRuntime};
 
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(Path::parent)
-        .expect("the crate lives in <root>/crates/")
-        .to_path_buf()
-}
-
-fn answer(runtime: &ComponentRuntime, extension: &str, export: &str, request: &[u8]) -> Vec<u8> {
-    match runtime.call_export(extension, export, request) {
-        WasmCallResult::Ok(bytes) => bytes,
-        WasmCallResult::Trap(trap) => panic!(
-            "{extension} {export} {}: {}: {}",
-            String::from_utf8_lossy(request),
-            trap.kind,
-            trap.message
-        ),
-    }
+fn sdk_blobs() -> impl Iterator<Item = &'static CommittedBlob> {
+    COMMITTED.iter().filter(|blob| blob.is_sdk())
 }
 
 #[specforge_test_macros::test(
     behavior = "load_extension_declaration",
-    verify = "every builtin's handshake and describe answers match their pinned snapshot byte for byte"
+    verify = "every committed SDK blob's handshake and describe answers match their pinned snapshot byte for byte"
 )]
-fn builtin_declarations_match_their_snapshots() {
-    let root = repo_root();
+fn sdk_declarations_match_their_snapshots() {
     let runtime = ComponentRuntime::new();
-    let mut extensions: Vec<(String, String)> = Vec::new();
-    for (name, bytes) in BUILTIN_EXTENSIONS {
-        runtime.load(name, bytes).expect("builtin loads");
-        let dir = name.rsplit('/').next().unwrap_or(name).to_string();
-        extensions.push((name.to_string(), dir));
-    }
-    let greet = std::fs::read(root.join("fixtures/greet-extension/greet.wasm"))
-        .expect("vendored greet component blob");
-    runtime.load("@sdk/greet", &greet).expect("greet loads");
-    extensions.push(("@sdk/greet".to_string(), "greet".to_string()));
-
-    let handshake_request = serde_json::to_vec(&serde_json::json!({
-        "host_version": PROTOCOL_VERSION,
-    }))
-    .unwrap();
-    let snapshots = root.join("crates/specforge-component/tests/declarations");
-    let mut compared = 0;
     let mut stale = Vec::new();
-    for (name, dir) in &extensions {
-        let mut answers = vec![(
-            "handshake.json".to_string(),
-            answer(&runtime, name, "__handshake", &handshake_request),
-        )];
-        for category in DECLARED_CATEGORIES {
-            let request = serde_json::to_vec(&serde_json::json!({ "category": category })).unwrap();
-            answers.push((
-                format!("describe_{category}.json"),
-                answer(&runtime, name, "__describe", &request),
-            ));
-        }
-        for (file, bytes) in answers {
-            let path = snapshots.join(dir).join(&file);
-            let pinned = std::fs::read(&path)
-                .unwrap_or_else(|e| panic!("missing snapshot {}: {e}", path.display()));
-            if pinned != bytes {
-                stale.push(format!("{dir}/{file}"));
+    for blob in sdk_blobs() {
+        runtime
+            .load(blob.name, &blob.read())
+            .unwrap_or_else(|e| panic!("{}: {e}", blob.name));
+        for answer in wire_answers(&runtime, blob).unwrap() {
+            let path = snapshots().join(blob.snapshot_dir()).join(&answer.file);
+            if std::fs::read(&path).ok() != Some(answer.bytes) {
+                stale.push(format!("{}/{}", blob.snapshot_dir(), answer.file));
             }
-            compared += 1;
         }
     }
     assert!(
@@ -89,5 +48,179 @@ fn builtin_declarations_match_their_snapshots() {
          If the change is intended, re-vendor with \
          `cargo run -p xtask --bin revendor` and review the diff"
     );
-    assert_eq!(compared, 10 * (1 + DECLARED_CATEGORIES.len()));
+}
+
+#[specforge_test_macros::test(
+    behavior = "load_extension_declaration",
+    verify = "the declaration snapshots are exactly the committed SDK blobs'"
+)]
+fn the_snapshots_are_the_sdk_blobs() {
+    // The list is consistent with itself.
+    let mut names = BTreeSet::new();
+    let mut dirs = BTreeSet::new();
+    let mut crate_dirs = BTreeSet::new();
+    for blob in COMMITTED {
+        assert!(names.insert(blob.name), "{}: listed twice", blob.name);
+        let last = blob.crate_dir.rsplit('/').next().unwrap();
+        assert!(
+            crate_dirs.insert(last),
+            "{}: crate directory name {last} is not unique",
+            blob.name
+        );
+        assert!(
+            blob.path().is_file(),
+            "{}: no file at {}",
+            blob.name,
+            blob.repo_path()
+        );
+    }
+    for blob in sdk_blobs() {
+        assert!(
+            dirs.insert(blob.snapshot_dir()),
+            "{}: snapshot directory {} is not unique",
+            blob.name,
+            blob.snapshot_dir()
+        );
+    }
+
+    // The snapshots hold exactly the SDK blobs, each with exactly its files.
+    let on_disk: BTreeSet<String> = std::fs::read_dir(snapshots())
+        .expect("the snapshots directory")
+        .map(|entry| entry.unwrap())
+        .filter(|entry| entry.path().is_dir())
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect();
+    let expected: BTreeSet<String> = dirs.iter().map(|d| d.to_string()).collect();
+    assert_eq!(on_disk, expected, "snapshot directories vs SDK blobs");
+
+    let files: BTreeSet<String> = std::iter::once("handshake.json".to_string())
+        .chain(
+            DeclaredCategory::ALL
+                .iter()
+                .map(|category| format!("describe_{}.json", category.name())),
+        )
+        .collect();
+    for dir in &expected {
+        let held: BTreeSet<String> = std::fs::read_dir(snapshots().join(dir))
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(held, files, "{dir}: snapshot files");
+    }
+}
+
+#[specforge_test_macros::test(
+    behavior = "load_extension_declaration",
+    verify = "every committed SDK blob's declaration round-trips through the typed declaration byte for byte, but for the legacy keys it declares"
+)]
+fn every_sdk_declaration_round_trips_through_the_typed_declaration() {
+    let runtime = ComponentRuntime::new();
+    for blob in sdk_blobs() {
+        let Guest::Sdk { legacy_keys } = blob.guest else {
+            unreachable!("sdk_blobs lists SDK blobs");
+        };
+        runtime
+            .load(blob.name, &blob.read())
+            .unwrap_or_else(|e| panic!("{}: {e}", blob.name));
+        let answers = wire_answers(&runtime, blob).unwrap();
+        let text = |file: &str| -> String {
+            let answer = answers.iter().find(|a| a.file == file).unwrap();
+            String::from_utf8(answer.bytes.clone()).unwrap()
+        };
+        let handshake: HandshakeResponse = serde_json::from_str(&text("handshake.json")).unwrap();
+        let mut unknown = BTreeSet::new();
+        let declaration = ExtensionDeclaration::from_wire(
+            handshake,
+            |category| {
+                let file = format!("describe_{}.json", category.name());
+                Ok(serde_json::from_str::<DescribeResponse>(&text(&file)).unwrap())
+            },
+            |key| {
+                unknown.insert((key.category.to_string(), key.key));
+            },
+        )
+        .unwrap_or_else(|e| panic!("{}: {e}", blob.name));
+
+        let declared: BTreeSet<(String, String)> = legacy_keys
+            .iter()
+            .map(|(category, key)| (category.to_string(), key.to_string()))
+            .collect();
+        assert_eq!(unknown, declared, "{}: unknown keys", blob.name);
+        assert_eq!(
+            declaration.handshake_json(),
+            text("handshake.json"),
+            "{}: handshake",
+            blob.name
+        );
+        for category in DeclaredCategory::ALL {
+            let name = category.name();
+            if legacy_keys.iter().any(|(held, _)| *held == name) {
+                continue;
+            }
+            assert_eq!(
+                declaration.describe_json(category),
+                text(&format!("describe_{name}.json")),
+                "{}: describe {name}",
+                blob.name
+            );
+        }
+    }
+}
+
+fn handshake_protocol(runtime: &ComponentRuntime, name: &str) -> String {
+    let request = serde_json::to_vec(&HandshakeRequest {
+        host_version: PROTOCOL_VERSION.to_string(),
+    })
+    .unwrap();
+    let handshake = match runtime.call_export(name, "__handshake", &request) {
+        WasmCallResult::Ok(bytes) => bytes,
+        WasmCallResult::Trap(trap) => panic!("{name} __handshake: {}: {}", trap.kind, trap.message),
+    };
+    let value: serde_json::Value = serde_json::from_slice(&handshake).expect("a JSON handshake");
+    value["protocol_version"]
+        .as_str()
+        .unwrap_or_else(|| panic!("{name}: the handshake has no protocol_version"))
+        .to_string()
+}
+
+#[specforge_test_macros::test(
+    behavior = "load_extension_declaration",
+    verify = "every committed SDK blob answers the host's protocol version; a bridge component answers the version it declares"
+)]
+fn every_sdk_blob_answers_the_host_protocol() {
+    let runtime = ComponentRuntime::new();
+    let mut stale = Vec::new();
+    for blob in sdk_blobs() {
+        runtime
+            .load(blob.name, &blob.read())
+            .unwrap_or_else(|e| panic!("{}: {e}", blob.name));
+        let found = handshake_protocol(&runtime, blob.name);
+        if found != PROTOCOL_VERSION {
+            stale.push(format!("{}: {found}", blob.name));
+        }
+    }
+    assert!(
+        stale.is_empty(),
+        "these blobs answer a protocol other than the host's {PROTOCOL_VERSION}: {stale:?}"
+    );
+}
+
+#[specforge_test_macros::test(
+    behavior = "load_extension_declaration",
+    verify = "every committed SDK blob answers the host's protocol version; a bridge component answers the version it declares"
+)]
+fn the_bridge_component_answers_its_canned_protocol() {
+    let runtime = ComponentRuntime::new();
+    let mut checked = 0;
+    for blob in COMMITTED {
+        let Guest::Bridge { canned_protocol } = blob.guest else {
+            continue;
+        };
+        runtime
+            .load(blob.name, &blob.read())
+            .unwrap_or_else(|e| panic!("{}: {e}", blob.name));
+        assert_eq!(handshake_protocol(&runtime, blob.name), canned_protocol);
+        checked += 1;
+    }
+    assert!(checked > 0, "no bridge component is listed");
 }

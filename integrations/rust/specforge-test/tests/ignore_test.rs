@@ -3,45 +3,14 @@
 //! runs the body and records the result. Runs the `ignore_fixture` test
 //! binary, which `cargo test` builds next to this one.
 
+mod support;
 use specforge_test_macros::test as specforge_test;
-use std::path::PathBuf;
-use std::process::Command;
-
-/// The newest `ignore_fixture-<hash>` binary in this binary's directory.
-fn fixture() -> PathBuf {
-    let dir = std::env::current_exe()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .to_path_buf();
-    std::fs::read_dir(&dir)
-        .unwrap()
-        .filter_map(Result::ok)
-        .map(|e| e.path())
-        .filter(|p| {
-            let name = p.file_name().unwrap().to_string_lossy();
-            name.starts_with("ignore_fixture-")
-                && matches!(p.extension().and_then(|e| e.to_str()), None | Some("exe"))
-        })
-        .max_by_key(|p| p.metadata().and_then(|m| m.modified()).ok())
-        .unwrap_or_else(|| {
-            panic!(
-                "no ignore_fixture binary in {}: run the whole suite (cargo test), not --test ignore_test",
-                dir.display()
-            )
-        })
-}
 
 /// Run the fixture with `args`, reports going to a fresh directory.
 /// Returns its stdout and the recorded entries.
 fn run(args: &[&str]) -> (String, Vec<serde_json::Value>) {
     let reports = tempfile::tempdir().unwrap();
-    let out = Command::new(fixture())
-        .args(args)
-        .env("SPECFORGE_REPORT", reports.path())
-        .output()
-        .unwrap();
-    assert!(out.status.success(), "{out:?}");
+    let out = support::run_fixture(args, reports.path());
     let mut entries = Vec::new();
     for file in std::fs::read_dir(reports.path()).unwrap() {
         let path = file.unwrap().path();
@@ -99,8 +68,8 @@ fn an_ignored_test_is_recorded_only_when_it_runs() {
     assert_eq!(
         recorded,
         vec![
-            ("ignored_by_default".to_string(), "pass".to_string()),
-            ("ignored_should_panic".to_string(), "pass".to_string()),
+            ("ignored_by_default".to_string(), "passed".to_string()),
+            ("ignored_should_panic".to_string(), "passed".to_string()),
         ]
     );
 }

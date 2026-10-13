@@ -5,7 +5,7 @@
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 
-use specforge_graph::{DerivedFrom, DerivedReference, FieldCoercion, GraphInputs};
+use specforge_graph::{DerivedFrom, DerivedReference, FieldForm, GraphInputs};
 
 use crate::{FieldRegistry, FieldType, KindRegistry};
 
@@ -14,7 +14,7 @@ pub(super) fn derive(kinds: &KindRegistry, fields: &FieldRegistry) -> GraphInput
         bidirectional_pairs: bidirectional_pairs(fields),
         single_reference_fields: single_reference_fields(kinds, fields),
         absent_reference_targets: absent_reference_targets(kinds, fields),
-        field_coercions: field_coercions(fields),
+        field_forms: field_forms(fields),
         derived_references: derived_references(fields),
     }
 }
@@ -75,24 +75,13 @@ fn bidirectional_pairs(fields: &FieldRegistry) -> Vec<(String, String)> {
     pairs.into_iter().collect()
 }
 
-/// How each registered field's value is coerced: a list type to a list,
-/// integer, bool, string or enum to that type; a single reference or a
-/// block is read as written. The values that still can't be the declared
-/// type are `RegistryBuild::check`'s E061.
-fn field_coercions(fields: &FieldRegistry) -> HashMap<(String, String), FieldCoercion> {
+/// Every registered field's form: how the graph build stores a written
+/// value as the field's declared type. The values that still can't be the
+/// declared type are `RegistryBuild::check`'s E061.
+fn field_forms(fields: &FieldRegistry) -> HashMap<(String, String), FieldForm> {
     fields
         .iter()
-        .filter_map(|(kind, field, entry)| {
-            let coercion = match entry.field_type() {
-                t if t.is_list() => FieldCoercion::List,
-                FieldType::Integer => FieldCoercion::Integer,
-                FieldType::Bool => FieldCoercion::Bool,
-                FieldType::String | FieldType::Enum => FieldCoercion::Text,
-                // A single reference or a block is read as written.
-                _ => return None,
-            };
-            Some(((kind.to_string(), field.to_string()), coercion))
-        })
+        .map(|(kind, field, entry)| ((kind.to_string(), field.to_string()), entry.form().clone()))
         .collect()
 }
 

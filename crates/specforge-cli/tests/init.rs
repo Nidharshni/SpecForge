@@ -306,6 +306,7 @@ fn init_starter_passes_check() {
     // Run specforge check on the newly created project
     specforge_cmd()
         .args(["check", "--format", "json"])
+        .arg("--path")
         .arg(dir.path().join("spec"))
         .assert()
         .success();
@@ -434,6 +435,7 @@ fn zero_ext_starter_passes_check() {
 
     specforge_cmd()
         .args(["check", "--format", "json"])
+        .arg("--path")
         .arg(dir.path().join("spec"))
         .assert()
         .success();
@@ -454,6 +456,7 @@ fn zero_ext_export_produces_valid_graph() {
 
     let output = specforge_cmd()
         .args(["export", "--format", "graph"])
+        .arg("--path")
         .arg(dir.path().join("spec"))
         .output()
         .unwrap();
@@ -716,6 +719,7 @@ fn init_check_export_cycle() {
     // check
     specforge_cmd()
         .args(["check", "--format", "json"])
+        .arg("--path")
         .arg(dir.path().join("spec"))
         .assert()
         .success();
@@ -723,6 +727,7 @@ fn init_check_export_cycle() {
     // export
     let output = specforge_cmd()
         .args(["export", "--format", "graph"])
+        .arg("--path")
         .arg(dir.path().join("spec"))
         .output()
         .unwrap();
@@ -749,12 +754,14 @@ fn init_check_export_performance() {
 
     specforge_cmd()
         .args(["check"])
+        .arg("--path")
         .arg(dir.path().join("spec"))
         .assert()
         .success();
 
     specforge_cmd()
         .args(["export", "--format", "graph"])
+        .arg("--path")
         .arg(dir.path().join("spec"))
         .assert()
         .success();
@@ -835,6 +842,7 @@ fn zero_ext_full_cycle_performance() {
     // check
     specforge_cmd()
         .args(["check"])
+        .arg("--path")
         .arg(dir.path().join("spec"))
         .assert()
         .success();
@@ -842,6 +850,7 @@ fn zero_ext_full_cycle_performance() {
     // export
     specforge_cmd()
         .args(["export", "--format", "graph"])
+        .arg("--path")
         .arg(dir.path().join("spec"))
         .assert()
         .success();
@@ -914,12 +923,14 @@ fn non_interactive_full_cycle_performance() {
 
     specforge_cmd()
         .args(["check"])
+        .arg("--path")
         .arg(dir.path().join("spec"))
         .assert()
         .success();
 
     specforge_cmd()
         .args(["export", "--format", "graph"])
+        .arg("--path")
         .arg(dir.path().join("spec"))
         .assert()
         .success();
@@ -941,15 +952,15 @@ fn non_interactive_unknown_extension_rejected() {
 
     // A well-formed name nothing can install: it used to pass the syntax
     // check, exit 0 and report the extension installed, and `check` then
-    // failed E028.
+    // failed E028. A new project has no registry: E063, as `add` answers it
+    // with none configured, saying how to add it once there is one.
     specforge_cmd()
         .args(["init", "--name", "bad-ext", "--extensions", "@acme/unknown"])
         .current_dir(dir.path())
         .assert()
         .code(1)
-        .stderr(predicates::str::contains(
-            "unresolvable extension '@acme/unknown'",
-        ));
+        .stderr(predicates::str::contains("error[E063]"))
+        .stderr(predicates::str::contains("specforge add @acme/unknown"));
 
     // Nothing is written on failure.
     assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
@@ -966,7 +977,7 @@ fn non_interactive_unknown_extension_rejected() {
         .current_dir(dir.path())
         .assert()
         .failure()
-        .stderr(predicates::str::contains("unresolvable extension"));
+        .stderr(predicates::str::contains("error[E054]"));
     assert!(!dir.path().join("specforge.json").exists());
 
     // Empty extension
@@ -976,7 +987,8 @@ fn non_interactive_unknown_extension_rejected() {
         .current_dir(dir2.path())
         .assert()
         .failure()
-        .stderr(predicates::str::contains("unresolvable extension"));
+        .stderr(predicates::str::contains("error[E054]"))
+        .stderr(predicates::str::contains("empty extension specifier"));
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1171,6 +1183,7 @@ fn scaffold_starter_spec_file_contract() {
     // Must pass check with zero diagnostics
     specforge_cmd()
         .args(["check", "--format", "json"])
+        .arg("--path")
         .arg(dir.path().join("spec"))
         .assert()
         .success();
@@ -1287,6 +1300,7 @@ fn graceful_zero_extension_init_contract_in_init() {
     // Check passes
     specforge_cmd()
         .args(["check", "--format", "json"])
+        .arg("--path")
         .arg(dir.path().join("spec"))
         .assert()
         .success();
@@ -1294,6 +1308,7 @@ fn graceful_zero_extension_init_contract_in_init() {
     // Export produces valid graph
     let export_output = specforge_cmd()
         .args(["export", "--format", "graph"])
+        .arg("--path")
         .arg(dir.path().join("spec"))
         .output()
         .unwrap();
@@ -1385,6 +1400,7 @@ fn extensions_flag_splits_a_comma_separated_list() {
     );
     specforge_cmd()
         .args(["check"])
+        .arg("--path")
         .arg(dir.path())
         .assert()
         .success();
@@ -1413,6 +1429,7 @@ fn one_character_name_is_rejected() {
         .success();
     specforge_cmd()
         .args(["check"])
+        .arg("--path")
         .arg(dir.path())
         .assert()
         .success();

@@ -17,22 +17,9 @@ port FileSystem {
   direction outbound
   category  "io/filesystem"
   method write_report(path: string, report: BinaryReport) -> Result<(), string>
-  method read_graph_export(path: string) -> Result<GraphExport, string>
   method file_exists(path: string) -> Result<boolean, string>
   requires {
     target_dir_writable "target/specforge/ directory is writable"
-  }
-}
-
-port SpecforgeCli {
-  direction outbound
-  category  "tool/specforge"
-  method export_graph(output_path: string) -> Result<(), string>
-  requires {
-    specforge_on_path "specforge binary is discoverable on PATH"
-  }
-  ensures {
-    graph_json_written "output_path contains valid GraphExport JSON"
   }
 }
 
@@ -44,10 +31,4 @@ port TestRegistry {
   requires {
     thread_safe "registry operations are safe under concurrent test execution"
   }
-}
-
-port Stderr {
-  direction outbound
-  category  "io/output"
-  method print_summary(diffs: CoverageDiff[]) -> Result<(), string>
 }

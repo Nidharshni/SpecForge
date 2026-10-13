@@ -422,6 +422,31 @@ impl ContributionsBuilder {
         self
     }
 
+    /// Declare a peer this extension needs (a peer requirement): `name`,
+    /// installed at a version `range` accepts. `range` is a SemVer
+    /// requirement read as Cargo reads one (`^1.0`); one that does not
+    /// parse satisfies nothing (E073). `specforge add` and `init` enable a
+    /// required builtin peer along with the extension, and refuse the
+    /// install when the peer is missing or out of range (E027).
+    pub fn peer(&mut self, name: &str, range: &str) -> &mut Self {
+        self.push_peer(name, range, false)
+    }
+
+    /// Declare a peer this extension works without: when it is installed,
+    /// its version must be one `range` accepts (E027 otherwise).
+    pub fn optional_peer(&mut self, name: &str, range: &str) -> &mut Self {
+        self.push_peer(name, range, true)
+    }
+
+    fn push_peer(&mut self, name: &str, range: &str, optional: bool) -> &mut Self {
+        self.meta.peer_dependencies.push(PeerDependency {
+            name: name.to_string(),
+            version: range.to_string(),
+            optional,
+        });
+        self
+    }
+
     /// Everything this extension declares, as the guest serves it and the
     /// host loads it: the handshake (from [`ExtensionMeta`]),
     /// every category the builders contributed, the declared surfaces, and
@@ -1112,9 +1137,9 @@ pub mod prelude {
         AnalyzerBuilder, CheckKind, ConstraintKind, Contributions, ContributionsBuilder,
         EdgeBuilder, EnhancementBuilder, ExtensionMeta, FieldBuilder, FieldConstraintBuilder,
         FieldType, KindBuilder, MigrationInput, PassAnswer, PassBuildCache, PassBuilder,
-        PassCachedStatus, PassDiagnostic, PassEdge, PassEntity, PassEntityResults, PassInput,
-        PassOutput, PassSeverity, PassSpan, PassTestResult, PassTestResults, RuleBuilder,
-        ScanRequest, ScanResponse, ScannedItem,
+        PassCachedStatus, PassDiagnostic, PassEdge, PassEntity, PassInput, PassOutput,
+        PassSeverity, PassSpan, RuleBuilder, ScanRequest, ScanResponse, ScannedItem, TestResult,
+        TestResults, TestStatus,
     };
     pub use crate::{
         ArgBuilder, CommandBuilder, CommandCall, CommandError, CommandEvidence, CommandFormat,
@@ -1122,12 +1147,12 @@ pub mod prelude {
         McpResourceBuilder, McpToolBuilder,
     };
     pub use crate::{
-        CollectEntityResult, CollectInput, CollectOutput, CollectReportFile, CollectTestResult,
-        CollectUnlinkedTest, CollectorBuilder,
+        CollectEntityResult, CollectInput, CollectOutput, CollectReportFile, CollectUnlinkedTest,
+        CollectorBuilder,
     };
     pub use specforge_extension_sdk_macros::extension;
     pub use specforge_protocol_types::{
-        PeerDependency, SandboxPolicy, ValidationSeverity, ValidatorContext, ValidatorVerdict,
+        SandboxPolicy, ValidationSeverity, ValidatorContext, ValidatorVerdict,
     };
 }
 
@@ -1164,12 +1189,12 @@ mod raw_category_tests;
 // ([`CommandOutput::error`]).
 
 pub use specforge_protocol_types::{
-    CollectEntityResult, CollectInput, CollectOutput, CollectReportFile, CollectTestResult,
-    CollectUnlinkedTest, CommandError, CommandEvidence, CommandFormat, CommandOutput,
-    EntityEvidence, GraphEdge, GraphNode, GraphWire, McpResourceContent, McpResourceRequest,
-    MigrationInput, PassAnswer, PassBuildCache, PassCachedStatus, PassDiagnostic, PassEdge,
-    PassEntity, PassEntityResults, PassInput, PassOutput, PassSeverity, PassSpan, PassTestResult,
-    PassTestResults, ScanRequest, ScanResponse, ScannedItem,
+    CollectEntityResult, CollectInput, CollectOutput, CollectReportFile, CollectUnlinkedTest,
+    CommandError, CommandEvidence, CommandFormat, CommandOutput, EntityEvidence, EntityTests,
+    GraphEdge, GraphNode, GraphWire, McpResourceContent, McpResourceRequest, MigrationInput,
+    PassAnswer, PassBuildCache, PassCachedStatus, PassDiagnostic, PassEdge, PassEntity, PassInput,
+    PassOutput, PassSeverity, PassSpan, ScanRequest, ScanResponse, ScannedItem, TestResult,
+    TestResults, TestStatus,
 };
 
 /// What a `cmd__<name>` export receives, its graph indexed for lookups

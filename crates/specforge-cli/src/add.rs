@@ -2,7 +2,6 @@ use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal, Written};
 use crate::terminal::{Terminal, outln};
 use specforge_ops::extension::{self, AddOutcome, AddRequest, Added, AddedExtension, Origin};
 use specforge_ops_registry::ConfiguredRegistry;
-use std::path::PathBuf;
 
 // `specforge add`'s command line.
 #[derive(clap::Args)]
@@ -11,8 +10,8 @@ pub(crate) struct Args {
     #[arg(required = true, num_args = 1..)]
     specifiers: Vec<String>,
 
-    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
-    path: PathBuf,
+    #[command(flatten)]
+    project: crate::project::ProjectArg,
 
     #[command(flatten)]
     output: OutputArg,
@@ -24,13 +23,17 @@ pub(crate) struct Args {
     /// Accept key changes non-interactively (for CI)
     #[arg(long, default_value_t = false)]
     yes: bool,
+
+    /// Report what the add would do; write, pin and download nothing
+    #[arg(long)]
+    dry_run: bool,
 }
 
 impl Args {
     /// `specforge add`: the shared add operation, presented.
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         let format = self.output.format;
-        let root = match crate::project::root(&self.path) {
+        let root = match self.project.root() {
             Ok(root) => root,
             Err(error) => return Refusal::of(format).report(terminal, &error),
         };
@@ -49,7 +52,7 @@ impl Args {
             extensions,
             allow_unsigned: self.allow_unsigned,
             trust: format.trust(self.yes),
-            dry_run: false,
+            dry_run: self.dry_run,
         };
         let added = extension::add(&request, &registry, &runtime);
         // What reading the registry configuration reported, once the add
@@ -128,8 +131,25 @@ fn print_human(added: &AddedExtension, terminal: &Terminal) {
                 added.specifier
             );
         }
-        // `specforge add` has no dry run.
-        AddOutcome::Planned { .. } => {}
+        // A dry run: what the add would do.
+        AddOutcome::Planned {
+            name,
+            version,
+            origin,
+            peers_enabled,
+        } => {
+            for peer in peers_enabled {
+                outln!(terminal, "would enable builtin {peer} (required by {name})");
+            }
+            match version {
+                None => outln!(terminal, "would enable builtin {name}"),
+                Some(version) => outln!(
+                    terminal,
+                    "would install {name} v{version} ({})",
+                    origin.source()
+                ),
+            }
+        }
     }
 }
 

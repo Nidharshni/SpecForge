@@ -260,6 +260,7 @@ behavior read_mcp_arguments_as_declared "Read MCP Arguments as Declared" {
     absent_is_the_default  "An absent or null argument reads as the default its listing states; a missing required one is refused naming it"
     value_read_by_type     "A value is read by its declared type, a boolean or count also from a string holding one, as extension command tools read them; any other value is invalid input naming the argument"
     undeclared_refused     "An argument neither the entry nor its call target declares is invalid input naming it, with the declared argument it is close to"
+    refusal_names_argument "A core tool's refusal that is about an argument names it: the tool states which argument each of its operation's refusal codes is about"
   }
   contract   """
     Every core MCP tool and prompt MUST read its call's arguments into one
@@ -279,13 +280,16 @@ behavior read_mcp_arguments_as_declared "Read MCP Arguments as Declared" {
     nor its call target declares MUST be refused as invalid input naming it,
     with the closest declared name as a suggestion. An argument whose
     default depends on others (specforge.format's write) MUST state no
-    default; its description states the rule.
+    default; its description states the rule. An operation's refusal of a
+    core tool's call that is about an argument the caller sent MUST name
+    that argument; every invalid-input refusal names one.
   """
   verify unit "a listing is derived from the typed arguments: each argument's type, description, default, enumerated values and whether it is required"
   verify unit "an absent or null argument reads as the default the listing advertises, and a missing required one is refused naming it"
   verify unit "a boolean or count sent as a string is read as one, as an extension command reads it; any other value of the wrong type is refused naming the argument"
   verify unit "an argument neither the tool nor its target declares is refused naming it, with the declared one it is close to"
   verify unit "a prompt reads its arguments by the same rule its listing states"
+  verify unit "an operation's refusal of a core tool's call names the argument it is about"
 }
 
 behavior list_mcp_prompts "List MCP Prompts" {

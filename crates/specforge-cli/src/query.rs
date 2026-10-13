@@ -4,7 +4,6 @@ use crate::terminal::{Terminal, errln, outln};
 use specforge_ops::export::Format;
 use specforge_ops::query::{QueryRequest, query};
 use specforge_ops::view::ProjectView;
-use std::path::PathBuf;
 
 // `specforge query`'s command line.
 #[derive(clap::Args)]
@@ -12,8 +11,8 @@ pub(crate) struct Args {
     /// Entity ID to query
     entity: String,
 
-    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
-    path: PathBuf,
+    #[command(flatten)]
+    project: crate::project::ProjectArg,
 
     /// Number of hops from the entity (0 = entity only)
     #[arg(long, default_value_t = specforge_ops::query::DEFAULT_DEPTH)]
@@ -53,7 +52,7 @@ impl Args {
     /// stderr; a refusal as `error[CODE]` with the closest entity as its
     /// hint (exit 1).
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
-        let project = match crate::project::compile(&self.path) {
+        let project = match self.project.compile() {
             Ok(project) => project,
             Err(error) => return Refusal::of(OutputFormat::Human).report(terminal, &error),
         };

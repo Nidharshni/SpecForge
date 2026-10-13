@@ -40,7 +40,6 @@ mod watch;
 use clap::{CommandFactory, Parser, Subcommand};
 use clap_complete::Shell;
 use outcome::Exit;
-use std::path::Path;
 use terminal::{Stream, Terminal};
 
 #[derive(Parser)]
@@ -117,11 +116,14 @@ enum Commands {
     /// Migrate .spec files between format versions
     Migrate(migrate::Args),
     /// Generate shell completions: the built-in commands, and the commands
-    /// of the extensions the project in the current directory enables
+    /// of the extensions the project at --path enables
     Completions {
         /// Target shell
         #[arg(value_enum)]
         shell: Shell,
+
+        #[command(flatten)]
+        project: project::ProjectArg,
     },
     /// Explain a diagnostic code
     Explain(explain::Args),
@@ -158,14 +160,16 @@ fn main() {
 }
 
 /// `specforge completions`: the built-ins, and the commands the extensions
-/// of the project in the current directory contribute (`specforge product
-/// ...`).
-fn completions(shell: Shell, terminal: &Terminal) -> Exit {
-    // A working directory that can't be resolved (deleted) lists the built-ins only.
-    let mut cmd = Cli::command();
-    if let Ok(root) = specforge_common::ProjectRoot::of(Path::new(".")) {
-        cmd = extension_command::with_extension_commands(cmd, &root);
-    }
+/// of the project at `--path` contribute (`specforge product ...`). A path
+/// that does not exist is refused like on every command.
+fn completions(shell: Shell, project: &project::ProjectArg, terminal: &Terminal) -> Exit {
+    let root = match project.root() {
+        Ok(root) => root,
+        Err(error) => {
+            return outcome::Refusal::of(outcome::OutputFormat::Human).report(terminal, &error);
+        }
+    };
+    let mut cmd = extension_command::with_extension_commands(Cli::command(), &root);
     clap_complete::generate(
         shell,
         &mut cmd,
@@ -206,7 +210,7 @@ fn run(command: Commands, terminal: &Terminal) -> Exit {
         Commands::Collect(args) => args.run(terminal),
         Commands::Doctor(args) => args.run(terminal),
         Commands::Mcp(args) => args.run(terminal),
-        Commands::Completions { shell } => completions(shell, terminal),
+        Commands::Completions { shell, project } => completions(shell, &project, terminal),
         Commands::Explain(args) => args.run(terminal),
         Commands::Migrate(args) => args.run(terminal),
         Commands::InferStatus(args) => args.run(terminal),
@@ -249,57 +253,98 @@ mod tests {
         pin_help(&root, &[]);
     }
 
-    /// The commands whose `path` is not a project path: a directory taken as
-    /// given (`new`, an extension crate) or `mcp`'s own sentence.
-    const AS_GIVEN: [&str; 5] = [
+    /// The commands that read no project: they take no `--path`.
+    const NO_PROJECT: [&str; 8] = [
+        "init",
         "new",
+        "explain",
+        "mcp",
+        "extension",
         "extension init",
         "extension build",
         "extension validate",
-        "mcp",
     ];
 
-    /// Every `path` argument of `command` and of each subcommand under it,
-    /// by the command's path from the root.
-    fn path_arguments(command: &clap::Command, at: &str, found: &mut Vec<(String, clap::Arg)>) {
-        for argument in command.get_arguments() {
-            if argument.get_id() == "path" {
-                found.push((at.to_string(), argument.clone()));
-            }
-        }
+    /// Every command of the tree under `command` (not the generated `help`
+    /// nor the external-subcommand placeholder), by its path from the root.
+    fn commands<'a>(
+        command: &'a clap::Command,
+        at: &str,
+        found: &mut Vec<(String, &'a clap::Command)>,
+    ) {
         for sub in command.get_subcommands() {
+            if sub.get_name() == "help" || sub.is_allow_external_subcommands_set() {
+                continue;
+            }
             let name = if at.is_empty() {
                 sub.get_name().to_string()
             } else {
                 format!("{at} {}", sub.get_name())
             };
-            path_arguments(sub, &name, found);
+            found.push((name.clone(), sub));
+            commands(sub, &name, found);
         }
     }
 
     #[specforge_test_macros::test(
         behavior = "locate_project_root",
-        verify = "every command's project path argument says it is a path inside the project"
+        verify = "every command that reads a project takes the one --path option, and none takes a project path as a positional argument"
     )]
-    fn every_project_path_argument_has_the_one_help() {
+    fn every_command_that_reads_a_project_takes_the_project_arg() {
         let mut root = Cli::command();
         root.build();
         let mut found = Vec::new();
-        path_arguments(&root, "", &mut found);
-        for name in AS_GIVEN {
+        commands(&root, "", &mut found);
+        for name in NO_PROJECT {
             assert!(
                 found.iter().any(|(command, _)| command == name),
-                "AS_GIVEN names `{name}`, which takes no path"
+                "NO_PROJECT names `{name}`, which is no command"
             );
         }
-        for (command, argument) in &found {
-            if AS_GIVEN.contains(&command.as_str()) {
+        let project = crate::project::ProjectArg::arg();
+        let shown = |value: Option<&clap::builder::StyledStr>| value.map(ToString::to_string);
+        for (name, command) in &found {
+            let paths: Vec<&clap::Arg> = command
+                .get_arguments()
+                .filter(|argument| {
+                    argument.get_id() == crate::project::ProjectArg::NAME
+                        || argument.get_long() == Some(crate::project::ProjectArg::NAME)
+                })
+                .collect();
+            if NO_PROJECT.contains(&name.as_str()) {
+                assert!(
+                    paths.is_empty(),
+                    "`specforge {name}` reads no project but takes --path"
+                );
                 continue;
             }
+            // A command with subcommands only dispatches; its leaves read.
+            if command.has_subcommands() {
+                assert!(
+                    paths.is_empty(),
+                    "`specforge {name}` dispatches but takes --path"
+                );
+                continue;
+            }
+            let [path] = paths.as_slice() else {
+                panic!(
+                    "`specforge {name}` reads a project and takes no --path (flatten ProjectArg, or list it in NO_PROJECT)"
+                );
+            };
+            assert!(
+                !path.is_positional(),
+                "`specforge {name}` takes its project positionally"
+            );
+            assert_eq!(path.get_long(), project.get_long(), "`specforge {name}`");
             assert_eq!(
-                argument.get_help().map(ToString::to_string).as_deref(),
-                Some(crate::project::PATH_HELP),
-                "`specforge {command}`'s path says something else"
+                shown(path.get_help()),
+                shown(project.get_help()),
+                "`specforge {name}`"
+            );
+            assert_eq!(
+                path.get_default_values(),
+                project.get_default_values(),
+                "`specforge {name}`"
             );
         }
     }

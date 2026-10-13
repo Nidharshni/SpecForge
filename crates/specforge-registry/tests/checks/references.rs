@@ -1,6 +1,7 @@
 //! E022: a reference to an entity of another kind than its field declares.
 
 use specforge_common::Diagnostic;
+use specforge_extension_sdk::PeerDependency;
 use specforge_extension_sdk::prelude::*;
 use specforge_protocol_types::ExtensionDeclaration;
 use specforge_registry::entity::EntityRecord;

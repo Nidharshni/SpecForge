@@ -52,7 +52,7 @@ if [ -n "$PLAIN_TESTS" ]; then
 fi
 mkdir -p "$SPECFORGE_REPORT"
 cat > "$SPECFORGE_REPORT/demo.json" <<'EOF'
-{"entries":[{"entity_id":"login","test_name":"accepts","verify":"accepts valid credentials","status":"pass"}]}
+{"entries":[{"entity_id":"login","test_name":"accepts","verify":"accepts valid credentials","status":"passed"}]}
 EOF
 exit 0
 "#,
@@ -217,7 +217,7 @@ fn yes_runs_the_declared_command() {
     // A stale report from an earlier run must not survive the new one.
     write_report(
         &fx.root(),
-        r#"[{"entity_id":"login","test_name":"old","status":"fail"}]"#,
+        r#"[{"entity_id":"login","test_name":"old","status":"failed"}]"#,
     );
     fx.cmd(&["collect", "--yes"])
         .assert()
@@ -252,7 +252,7 @@ fn no_run_parses_the_existing_report_without_running() {
     let fx = Fixture::new();
     write_report(
         &fx.root(),
-        r#"[{"entity_id":"login","test_name":"a","status":"pass"},{"entity_id":"ghost","test_name":"b","status":"pass"}]"#,
+        r#"[{"entity_id":"login","test_name":"a","status":"passed"},{"entity_id":"ghost","test_name":"b","status":"passed"}]"#,
     );
     let out = fx
         .cmd(&["collect", "--no-run", "--format", "json"])
@@ -281,7 +281,7 @@ fn explicit_report_files_are_parsed() {
     let report = fx.dir.path().join("elsewhere.json");
     std::fs::write(
         &report,
-        r#"{"entries":[{"entity_id":"login","test_name":"a","status":"fail"}]}"#,
+        r#"{"entries":[{"entity_id":"login","test_name":"a","status":"failed"}]}"#,
     )
     .unwrap();
     fx.cmd(&[
@@ -312,10 +312,10 @@ fn collect_links_plain_tests_by_naming_convention() {
     let tests = &fx.report()["results"]["login"]["tests"];
     assert_eq!(tests[0]["name"], "tests::login__accepts_valid_credentials");
     assert_eq!(tests[0]["verify"], "accepts valid credentials");
-    assert_eq!(tests[0]["status"], "pass");
+    assert_eq!(tests[0]["status"], "passed");
     assert_eq!(tests[1]["name"], "login::rejects_a_locked_account");
     assert!(tests[1]["verify"].is_null(), "not an obligation of login");
-    assert_eq!(tests[1]["status"], "fail");
+    assert_eq!(tests[1]["status"], "failed");
     assert!(
         fx.root()
             .join("target/specforge/cargo-test.stdout.txt")

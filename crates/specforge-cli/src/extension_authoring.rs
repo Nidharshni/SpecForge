@@ -35,9 +35,9 @@ pub(crate) struct InitArgs {
     #[arg(long)]
     name: Option<String>,
 
-    /// Path for the new extension
+    /// Directory for the new extension
     #[arg(long, default_value = ".")]
-    path: PathBuf,
+    dir: PathBuf,
 
     #[command(flatten)]
     output: OutputArg,
@@ -46,9 +46,9 @@ pub(crate) struct InitArgs {
 // `specforge extension build`'s command line.
 #[derive(clap::Args)]
 pub(crate) struct BuildArgs {
-    /// Path to the extension project
+    /// The extension crate's directory
     #[arg(long, default_value = ".")]
-    path: PathBuf,
+    dir: PathBuf,
 
     #[command(flatten)]
     output: OutputArg,
@@ -57,9 +57,9 @@ pub(crate) struct BuildArgs {
 // `specforge extension validate`'s command line.
 #[derive(clap::Args)]
 pub(crate) struct ValidateArgs {
-    /// Path to the extension project
+    /// The extension crate's directory
     #[arg(long, default_value = ".")]
-    path: PathBuf,
+    dir: PathBuf,
 
     #[command(flatten)]
     output: OutputArg,
@@ -69,13 +69,13 @@ impl Action {
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         match self {
             Self::Init(args) => run_init(
-                &args.path,
+                &args.dir,
                 args.name.as_deref(),
                 args.output.format,
                 terminal,
             ),
-            Self::Build(args) => run_build(&args.path, args.output.format, terminal),
-            Self::Validate(args) => run_validate(&args.path, args.output.format, terminal),
+            Self::Build(args) => run_build(&args.dir, args.output.format, terminal),
+            Self::Validate(args) => run_validate(&args.dir, args.output.format, terminal),
         }
     }
 }
@@ -126,12 +126,12 @@ fn run_init(path: &Path, name: Option<&str>, format: OutputFormat, terminal: &Te
             outln!(terminal, "next steps:");
             outln!(
                 terminal,
-                "  specforge extension build --path {}",
+                "  specforge extension build --dir {}",
                 ext_dir.display()
             );
             outln!(
                 terminal,
-                "  specforge extension validate --path {}",
+                "  specforge extension validate --dir {}",
                 ext_dir.display()
             );
         }

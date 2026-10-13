@@ -116,7 +116,7 @@ fn render(view: ProjectView<'_>, args: Args) -> Result<Prompted<Payload>, Box<Mc
             entity_id: constraint.id.raw.to_string(),
             kind: constraint.kind.raw.to_string(),
             title: constraint.title.clone().unwrap_or_default(),
-            fields: specforge_emitter::field_map_to_json(&constraint.fields),
+            fields: written_fields(&constraint.fields),
         });
     }
 
@@ -126,7 +126,7 @@ fn render(view: ProjectView<'_>, args: Args) -> Result<Prompted<Payload>, Box<Mc
         contract_text: contract_text.to_string(),
         // Every field, whatever the kind names its text: an invariant's
         // `guarantee`, a decision's `rationale`.
-        fields: specforge_emitter::field_map_to_json(&node.fields),
+        fields: written_fields(&node.fields),
         upstream_entities: upstream,
         downstream_entities: downstream,
         verify_expectations,
@@ -145,4 +145,12 @@ fn render(view: ProjectView<'_>, args: Args) -> Result<Prompted<Payload>, Box<Mc
         instruction,
         payload,
     })
+}
+
+/// `fields` as every output writes them, keyed by name.
+fn written_fields(fields: &specforge_graph::FieldMap) -> BTreeMap<String, Value> {
+    specforge_graph::field_form::write_fields(fields)
+        .into_iter()
+        .map(|(key, written)| (key, Value::from(written)))
+        .collect()
 }

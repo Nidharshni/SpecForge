@@ -45,7 +45,7 @@ declaration diff, commit what it prints.
 
 ## 6. Gate
 
-`scripts/gate.sh full` is green, then the PR. A baseline that fell is lowered with `scripts/gate.sh baseline` in
+`cargo gate full` is green, then the PR. A baseline that fell is lowered with `cargo gate baseline` in
 the same commit.
 
 ## Pitfalls round 7 paid for

@@ -3,8 +3,9 @@
 
 use specforge_common::{SourceSpan, Sym};
 use specforge_extension_sdk::prelude::*;
+use specforge_graph::ValueShape;
 use specforge_protocol_types::ExtensionDeclaration;
-use specforge_registry::entity::{EntityRecord, ValueShape};
+use specforge_registry::entity::EntityRecord;
 use specforge_test_macros::test as spec;
 
 use crate::support::{build, check, coded_in, declare, span};
@@ -33,6 +34,12 @@ fn tickets() -> ExtensionDeclaration {
             });
             k.field("blocker", |f| {
                 f.field_type(FieldType::Reference).target_kind("ticket");
+            });
+            k.field("details", |f| {
+                f.field_type(FieldType::Block);
+            });
+            k.field("watchers", |f| {
+                f.field_type(FieldType::ReferenceList).target_kind("ticket");
             });
         });
     })
@@ -88,6 +95,8 @@ fn values_of_the_declared_types_are_no_diagnostic() {
         ("labels", ValueShape::Strings, "one"),
         ("summary", ValueShape::String, "free text"),
         ("blocker", ValueShape::Identifier, "t2"),
+        ("details", ValueShape::Block, "k"),
+        ("summary", ValueShape::Expression, "a < 1"),
         ("undeclared", ValueShape::Block, "a"),
     ]);
     assert!(found.is_empty(), "{found:?}");
@@ -185,4 +194,83 @@ fn e061_points_at_the_value_else_the_entity() {
     };
     assert_eq!(at(e061[0]), (3, 10));
     assert_eq!(at(e061[1]), (1, 0));
+}
+
+/// Each row is one value on one field: the field, its shape and text, what
+/// the message says was given, and the remedy E061 suggests.
+#[spec(
+    behavior = "check_field_value_types",
+    verify = "a value of a shape its declared type never takes is an error"
+)]
+fn a_value_of_a_shape_its_type_never_takes_is_an_error() {
+    let refused: [(&str, ValueShape, &str, &str, Option<&str>); 7] = [
+        (
+            "summary",
+            ValueShape::Block,
+            "a",
+            "a block",
+            Some("write the value as text"),
+        ),
+        (
+            "blocker",
+            ValueShape::Block,
+            "a",
+            "a block",
+            Some("name one entity by its id"),
+        ),
+        (
+            "blocker",
+            ValueShape::Expression,
+            "a < 1",
+            "an expression",
+            Some("name one entity by its id"),
+        ),
+        (
+            "labels",
+            ValueShape::Block,
+            "a",
+            "a block",
+            Some("write a list: [a, b]"),
+        ),
+        (
+            "watchers",
+            ValueShape::Verify,
+            "x works",
+            "verify statements",
+            Some("write a list: [a, b]"),
+        ),
+        (
+            "details",
+            ValueShape::String,
+            "FieldMap",
+            "\"FieldMap\"",
+            Some("write a block: { name value }"),
+        ),
+        (
+            "points",
+            ValueShape::Expression,
+            "a < 1",
+            "an expression",
+            None,
+        ),
+    ];
+    for (field, shape, text, given, suggestion) in refused {
+        let found = e061(&[(field, shape, text)]);
+        assert_eq!(found.len(), 1, "{field} {shape:?}: {found:?}");
+        let (message, remedy) = &found[0];
+        assert!(
+            message.starts_with(&format!("field '{field}' of ticket 't1' is declared "))
+                && message.ends_with(&format!("but was given {given}")),
+            "{message}"
+        );
+        assert_eq!(remedy.as_deref(), suggestion, "{field} {shape:?}");
+    }
+
+    let admitted = e061(&[
+        ("summary", ValueShape::Expression, "a < 1"),
+        ("summary", ValueShape::TypeUnion, "a | b"),
+        ("labels", ValueShape::Variants, "a, b"),
+        ("details", ValueShape::Block, "k"),
+    ]);
+    assert!(admitted.is_empty(), "{admitted:?}");
 }

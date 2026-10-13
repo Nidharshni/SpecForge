@@ -33,16 +33,17 @@ invariant peer_dependency_satisfaction "Peer Dependency Satisfaction" {
     satisfies its declared semver range. An optional peer may be absent.
     Unsatisfied peer dependencies MUST produce an error diagnostic (E-level), not
     a silent degradation. A range that is not a SemVer requirement satisfies
-    no version (E073). `check`, `doctor`, `add`, `init` and `update` judge a
-    peer by one rule over one set: the extensions the project's
-    specforge.json entries load (ADR 0041).
+    no version (E073). `check`, `doctor`, `add`, `init`, `update` and `remove`, and
+    the dry runs of `add` and `remove`, judge a peer by one rule over one
+    set: the extensions the project's specforge.json entries load
+    (ADR 0041).
   """
   risk      high
   verify unit "satisfied peer dependencies pass validation"
   verify unit "unsatisfied peer dependency produces an error diagnostic"
   verify unit "peer with wrong version range produces an error diagnostic"
   verify unit "one rule judges a peer: its range read as SemVer, then the version its peer is installed at"
-  verify unit "add, init and update judge the set check judges: the extensions the project's entries load"
+  verify unit "add, init, update and remove judge the set check judges: the extensions the project's entries load"
 }
 
 // -- Cache & Isolation Invariants ---------------------------------------------
@@ -123,12 +124,16 @@ invariant collector_output_conformance "Collector Output Conformance" {
     What a collector reports is only recorded for entities the graph
     declares: results for any other entity ID are dropped with a W115
     warning, not a hard error, so one stale annotation doesn't block the
-    rest of a run. Recorded statuses are only `pass` and `fail`; skipped
-    tests are never recorded as proof.
+    rest of a run. A test's status is passed, failed or skipped, the one
+    vocabulary of the collect wire, the recorded test report and a pass's
+    test results. Recorded statuses are only passed and failed; skipped
+    tests are counted, never recorded as proof.
   """
   risk      medium
   verify unit "unknown entity ID in collector entry produces W115"
   verify unit "skipped tests are not recorded as proof"
+  verify unit "a test status is passed, failed or skipped, and no other value decodes"
+  verify unit "a test status outside passed, failed and skipped is an error naming the collector, never a skipped test"
 }
 
 // -- Registry Invariants ----------------------------------------------------
@@ -186,6 +191,7 @@ invariant extension_operation_atomicity "Extension Operation Atomicity" {
   verify unit "failed install rolls back to previous state"
   verify unit "interrupted upgrade preserves original extension"
   verify unit "a pin that cannot be saved puts back everything the install wrote"
+  verify unit "a failed change puts back every file its last step wrote and removes the directories it created"
   verify integration "concurrent install and uninstall are serialized"
 }
 

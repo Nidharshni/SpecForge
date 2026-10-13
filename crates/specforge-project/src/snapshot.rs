@@ -8,7 +8,7 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
-use specforge_graph::{Graph, Node};
+use specforge_graph::{Graph, Node, ValueShape};
 use specforge_parser::{FieldValue, UNION_VARIANTS_FIELD};
 use specforge_protocol_types::{
     PassEdge, PassEntity, PassSpan, ValidatorContext, ValidatorEntity, ValidatorField,
@@ -18,7 +18,7 @@ use specforge_registry::{FieldRegistry, KindRegistry, RegistryBuild};
 
 pub use specforge_registry::entity::{
     Direction, EdgeCounts, EdgeRecord, EntityRecord, Exemption, FieldRecord, MethodRecord,
-    ObligationRecord, ParamRecord, RuleInput, ValueShape,
+    ObligationRecord, ParamRecord, RuleInput,
 };
 
 /// Every entity of one built graph, read with the registry build it was
@@ -476,7 +476,7 @@ fn record(
                     .map(|a| a.name.to_string())
                     .collect(),
                 items: field_items(&entry.value),
-                shape: field_shape(&entry.value),
+                shape: ValueShape::of(&entry.value),
                 value_span: entry.value_span.clone(),
             })
             .collect(),
@@ -596,26 +596,6 @@ pub fn field_text(value: &FieldValue) -> String {
     }
 }
 
-/// What `value` was written as: one shape per `FieldValue` variant, with no
-/// `_` arm, so a new variant does not compile until it has one.
-pub fn field_shape(value: &FieldValue) -> ValueShape {
-    match value {
-        FieldValue::String(_) => ValueShape::String,
-        FieldValue::Identifier(_) => ValueShape::Identifier,
-        FieldValue::Date(_) => ValueShape::Date,
-        FieldValue::Integer(_) => ValueShape::Integer,
-        FieldValue::Boolean(_) => ValueShape::Boolean,
-        FieldValue::StringList(_) => ValueShape::Strings,
-        FieldValue::ReferenceList(_) => ValueShape::References,
-        FieldValue::MixedList(_) => ValueShape::Mixed,
-        FieldValue::VariantList(_) => ValueShape::Variants,
-        FieldValue::TypeUnion(_) => ValueShape::TypeUnion,
-        FieldValue::Block(_) => ValueShape::Block,
-        FieldValue::VerifyList(_) => ValueShape::Verify,
-        FieldValue::Expression(_) => ValueShape::Expression,
-    }
-}
-
 /// A list-shaped value's items, unjoined, each as its text: the list's
 /// strings or ids, a variant list's or type union's members, a mixed
 /// list's items' texts, each expression's display form, each verify
@@ -690,7 +670,7 @@ mod tests {
         behavior = "snapshot_entities_once",
         verify = "every written field keeps its value shape and value span beside its text"
     )]
-    fn field_shape_of_every_variant() {
+    fn every_variant_has_a_value_shape() {
         let source = r#"item x "X" {
   title "a title"
   owner alice

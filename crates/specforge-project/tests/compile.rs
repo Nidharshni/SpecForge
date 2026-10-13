@@ -1071,8 +1071,7 @@ fn an_unreadable_source_is_e025_naming_it() {
 /// `@sdk/greet` installed by hand under `root`: its module, and a lock
 /// entry pinning `hash` (the module's own when `None`).
 fn install_greet(root: &Path, hash: Option<&str>) {
-    let blob =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/greet-extension/greet.wasm");
+    let blob = specforge_component::committed::GREET.path();
     let bytes = fs::read(blob).unwrap();
     let module = root.join(".specforge/extensions/@sdk/greet/extension.wasm");
     fs::create_dir_all(module.parent().unwrap()).unwrap();

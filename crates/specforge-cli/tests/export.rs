@@ -38,6 +38,7 @@ fn export_graph_produces_valid_json_with_all_nodes() {
 
     let output = specforge_cmd()
         .args(["export", "--format=graph"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -61,6 +62,7 @@ fn export_brief_produces_minimal_output() {
 
     let output = specforge_cmd()
         .args(["export", "--format=brief"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -90,6 +92,7 @@ fn export_context_includes_contracts() {
 
     let output = specforge_cmd()
         .args(["export", "--format=context"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -110,6 +113,7 @@ fn export_dot_produces_graphviz() {
 
     let output = specforge_cmd()
         .args(["export", "--format=dot"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -134,6 +138,7 @@ feature gamma "G" { behaviors [alpha, nonexistent] }
 
     let output = specforge_cmd()
         .args(["export", "--format=graph"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -151,6 +156,7 @@ fn export_with_scope_returns_subgraph() {
 
     let output = specforge_cmd()
         .args(["export", "--format=graph", "--scope=alpha"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -172,6 +178,7 @@ fn export_with_nonexistent_scope_exits_one() {
 
     specforge_cmd()
         .args(["export", "--format=graph", "--scope=nonexistent"])
+        .arg("--path")
         .arg(dir.path())
         .assert()
         .code(1);
@@ -186,6 +193,7 @@ fn a_context_export_of_a_missing_scope_is_e003() {
 
     let output = specforge_cmd()
         .args(["export", "--format=context", "--scope=nope"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -206,6 +214,7 @@ fn export_default_produces_v2_with_schema() {
 
     let output = specforge_cmd()
         .args(["export", "--format=graph"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -228,6 +237,7 @@ fn export_no_schema_flag_produces_v1() {
 
     let output = specforge_cmd()
         .args(["export", "--format=graph", "--no-schema"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -257,6 +267,7 @@ fn export_brief_omits_the_schema_unless_asked() {
         let output = specforge_cmd()
             .args(["export", "--format=brief"])
             .args(extra)
+            .arg("--path")
             .arg(dir.path())
             .output()
             .unwrap();
@@ -283,6 +294,7 @@ fn export_context_omits_the_schema_unless_asked() {
         let output = specforge_cmd()
             .args(["export", "--format=context"])
             .args(extra)
+            .arg("--path")
             .arg(dir.path())
             .output()
             .unwrap();
@@ -304,11 +316,17 @@ fn export_context_omits_the_schema_unless_asked() {
 fn export_invalid_schema_version_exits_one() {
     let dir = setup_project(&[("main.spec", SPEC_CONTENT)]);
 
-    specforge_cmd()
+    let refused = specforge_cmd()
         .args(["export", "--format=graph", "--schema-version=invalid"])
+        .arg("--path")
         .arg(dir.path())
         .assert()
         .code(1);
+    let stderr = String::from_utf8_lossy(&refused.get_output().stderr).into_owned();
+    assert!(
+        stderr.starts_with("error[invalid_schema_version]"),
+        "{stderr}"
+    );
 }
 
 // B:serve_schema_resource — specforge schema command outputs JSON
@@ -318,6 +336,7 @@ fn schema_command_outputs_json() {
 
     let output = specforge_cmd()
         .args(["schema"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -338,6 +357,7 @@ fn schema_publish_outputs_json_schema() {
 
     let output = specforge_cmd()
         .args(["schema", "--publish"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -371,6 +391,7 @@ fn export_context_keeps_an_invariants_guarantee() {
     .unwrap();
     let out = specforge_cmd()
         .args(["export", "--format", "context"])
+        .arg("--path")
         .arg(dir.path())
         .assert()
         .success()
@@ -417,6 +438,7 @@ fn export_graph(dir: &TempDir, args: &[&str]) -> (i32, String, String) {
     let output = specforge_cmd()
         .args(["export", "--format=graph"])
         .args(args)
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -559,6 +581,7 @@ fn export_format(dir: &TempDir, format: &str, args: &[&str]) -> (i32, String, St
     let output = specforge_cmd()
         .args(["export", &format!("--format={format}")])
         .args(args)
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -743,6 +766,7 @@ fn the_export_matrix() {
                     if let Some(budget) = budget {
                         args.extend(["--max-tokens".to_string(), budget.to_string()]);
                     }
+                    args.push("--path".to_string());
                     args.push(dir.path().display().to_string());
                     let output = specforge_cmd().arg("export").args(&args).output().unwrap();
                     let code = output.status.code().unwrap_or(-1);

@@ -1,5 +1,5 @@
 use crate::target::View;
-use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
+use crate::tool::{CoreTool, Effect, RefusalArgument, ReplySpec, ToolGroup};
 use specforge_ops::schema::SchemaRequest;
 
 use crate::args::Arguments;
@@ -42,6 +42,10 @@ impl CoreTool for Tool {
     type Args = Args;
     type Input = View;
     type Returns = Answered<Reply>;
+    const REFUSAL_ARGUMENTS: &'static [RefusalArgument] = &[RefusalArgument {
+        code: specforge_ops::view::UNKNOWN_KIND,
+        argument: "kind",
+    }];
 
     fn call(view: ProjectView<'_>, args: Args) -> Answered<Reply> {
         let request = SchemaRequest {
@@ -49,9 +53,7 @@ impl CoreTool for Tool {
             edges: args.include_edges,
             validation_rules: args.include_validation_rules,
         };
-        match specforge_ops::schema::schema(&view, &request) {
-            Ok(outcome) => Ok(outcome.document().into()),
-            Err(error) => Err(Box::new(McpError::from(error).with_argument("kind"))),
-        }
+        let outcome = specforge_ops::schema::schema(&view, &request).map_err(McpError::from)?;
+        Ok(outcome.document().into())
     }
 }

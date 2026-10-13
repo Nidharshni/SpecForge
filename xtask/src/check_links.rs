@@ -16,8 +16,9 @@
 
 use specforge_common::ProjectRoot;
 use specforge_component::ComponentRuntime;
-use specforge_coverage::{RecordedTest, TestResults, assess};
+use specforge_coverage::assess;
 use specforge_project::CompiledProject;
+use specforge_protocol_types::{TestResult, TestResults, TestStatus};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -75,13 +76,15 @@ fn check(root: &Path, scan: &[String]) -> Result<Vec<String>, String> {
     let mut results = TestResults::default();
     for link in links.iter().filter(|l| known.contains_key(l.id.as_str())) {
         results
-            .entities
+            .results
             .entry(link.id.clone())
             .or_default()
-            .push(RecordedTest {
-                name: None,
-                status: specforge_coverage::PASSING_STATUS.to_string(),
+            .tests
+            .push(TestResult {
+                name: format!("{}:{}", link.file, link.line),
+                status: TestStatus::Passed,
                 verify: link.verify.clone(),
+                duration_ms: None,
             });
     }
     let assessment = assess(&entities, Some(&results), None, None);

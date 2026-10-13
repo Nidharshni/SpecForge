@@ -4,9 +4,9 @@
 //! [`emit`]), DOT, and the schema-level `model` and extension `outline`
 //! diagrams. Pure: no compile, no Wasm runtime, no file I/O (ADR 0004
 //! D1-d). Compiling a project is `specforge-project`'s; traces, plans,
-//! stats and the schema cache are `specforge-ops`'.
+//! stats and the schema record are `specforge-ops`'.
 
-pub mod brief;
+mod brief;
 mod budget;
 pub use budget::estimate_tokens;
 pub mod context;
@@ -17,15 +17,14 @@ mod error;
 pub mod json;
 pub mod model;
 pub mod outline;
+mod publish;
 pub mod schema;
 
 pub use dot::DotOptions;
 pub use emit::{EmitFormat, EmitOptions, document_schema, emit};
 pub use error::EmitterError;
-pub use json::{SCHEMA_VERSION, field_map_to_json, field_value_to_json};
+pub use publish::publish;
 pub use schema::{
-    GraphProtocolSchema, SchemaCacheEntry, SchemaCompatibility, SchemaEdgeType, SchemaEntityKind,
-    SchemaExtensionInfo, SchemaField, SchemaMigration, SchemaMigrationChange, SchemaVersion,
-    SchemaVersionError, compute_schema_version, content_hash, diff_schemas, diff_schemas_optional,
-    generate_schema, negotiate_version, publish_json_schema_format,
+    GraphProtocolSchema, SchemaEdgeType, SchemaEntityKind, SchemaExtensionInfo, SchemaField,
+    SchemaVersion, content_hash, generate_schema,
 };

@@ -5,7 +5,7 @@ use specforge_registry::{FieldRegistry, KindRegistry};
 
 use crate::budget::TokenBudget;
 use crate::error::EmitterError;
-use crate::json::Export;
+use crate::json::{Export, ExportVersion};
 use crate::schema::{GraphProtocolSchema, SchemaAttachment, SchemaRefBlock};
 
 /// Output format for graph emission.
@@ -34,8 +34,13 @@ pub struct EmitOptions<'a> {
     pub format: EmitFormat,
     /// Scope to a subgraph rooted at this entity (default: None = full graph).
     pub scope: Option<&'a str>,
-    /// Embed schema in output for V2 format (default: None = V1 format).
-    pub schema: Option<&'a GraphProtocolSchema>,
+    /// The schema the graph is exported against. Its version is every JSON
+    /// export's `schema_version`; the schema itself is in the export only
+    /// when `attach_schema` (embedded, or referenced when `scope` is set).
+    pub schema: &'a GraphProtocolSchema,
+    /// Carry `schema` (format 2.0). False: graph format 1.0, and context and
+    /// brief without a schema; `schema_version` is still `schema`'s.
+    pub attach_schema: bool,
     /// Token budget for truncated output (default: None = no limit).
     pub token_budget: Option<usize>,
     /// Maximum traversal depth from the scoped entity (default: None = unlimited).
@@ -52,12 +57,15 @@ pub struct EmitOptions<'a> {
     pub field_registry: Option<&'a FieldRegistry>,
 }
 
+/// Default: graph format 1.0 of the whole graph against the unversioned
+/// empty schema (1.0.0), unattached: what tests and benches compare.
 impl Default for EmitOptions<'_> {
     fn default() -> Self {
         Self {
             format: EmitFormat::Json,
             scope: None,
-            schema: None,
+            schema: unversioned(),
+            attach_schema: false,
             token_budget: None,
             depth: None,
             kind_filter: Vec::new(),
@@ -65,6 +73,13 @@ impl Default for EmitOptions<'_> {
             field_registry: None,
         }
     }
+}
+
+/// The empty schema at 1.0.0, shared by every default.
+fn unversioned() -> &'static GraphProtocolSchema {
+    static EMPTY: std::sync::LazyLock<GraphProtocolSchema> =
+        std::sync::LazyLock::new(GraphProtocolSchema::empty);
+    &EMPTY
 }
 
 /// Unified graph emission: the one entry point for every export, and the one
@@ -103,7 +118,8 @@ pub fn emit(graph: &Graph, options: &EmitOptions<'_>) -> Result<String, EmitterE
     };
     let shape = Shape {
         format: options.format,
-        schema: options.schema.map(|schema| (schema, attach)),
+        schema: options.schema,
+        attach: options.attach_schema.then_some(attach),
         fields: options.field_registry,
     };
     match options.token_budget {
@@ -173,7 +189,9 @@ fn select<'g>(graph: &'g Graph, options: &EmitOptions<'_>) -> Result<Cow<'g, Gra
 struct Shape<'a> {
     /// Never DOT: it is rendered before a `Shape` exists.
     format: EmitFormat,
-    schema: Option<(&'a GraphProtocolSchema, SchemaAttachment)>,
+    schema: &'a GraphProtocolSchema,
+    /// How the schema is carried; `None`: not at all.
+    attach: Option<SchemaAttachment>,
     fields: Option<&'a FieldRegistry>,
 }
 
@@ -183,7 +201,7 @@ impl Shape<'_> {
     fn render(&self, graph: &Graph, budget: Option<&TokenBudget>) -> Result<String, EmitterError> {
         match self.format {
             EmitFormat::Json => self
-                .envelope(graph, Some("1.0"), graph_nodes(graph), budget)
+                .envelope(graph, Some(ExportVersion::V1), graph_nodes(graph), budget)
                 .to_json(),
             EmitFormat::Context => self
                 .envelope(graph, None, context_nodes(graph, self.fields), budget)
@@ -200,14 +218,14 @@ impl Shape<'_> {
     fn envelope<'e, N: serde::Serialize>(
         &'e self,
         graph: &Graph,
-        plain_version: Option<&'static str>,
+        plain_version: Option<ExportVersion>,
         nodes: Vec<N>,
         budget: Option<&'e TokenBudget>,
     ) -> Export<'e, N> {
-        let mut export = Export::plain(plain_version, graph, nodes);
-        if let Some((schema, attach)) = self.schema {
-            export.format_version = Some("2.0");
-            export.schema_version = Cow::Owned(schema.schema_version.to_string());
+        let schema = self.schema;
+        let mut export = Export::plain(plain_version, &schema.schema_version, graph, nodes);
+        if let Some(attach) = self.attach {
+            export.format_version = Some(ExportVersion::V2);
             match attach {
                 SchemaAttachment::Embedded => export.schema = Some(schema),
                 SchemaAttachment::Referenced => {
@@ -221,8 +239,8 @@ impl Shape<'_> {
 
     /// What an embedded schema alone costs (`None` when none is embedded).
     fn schema_cost(&self) -> Option<usize> {
-        match self.schema {
-            Some((schema, SchemaAttachment::Embedded)) => serde_json::to_string(schema)
+        match self.attach {
+            Some(SchemaAttachment::Embedded) => serde_json::to_string(self.schema)
                 .ok()
                 .map(|json| crate::budget::estimate_tokens(&json)),
             _ => None,

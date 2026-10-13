@@ -5,12 +5,8 @@ version = "0.1.0"
 publish = false
 
 [[bin]]
-name = "build-builtins"
-path = "src/build_builtins.rs"
-
-[[bin]]
-name = "snapshot-builtins"
-path = "src/snapshot_builtins.rs"
+name = "build-blobs"
+path = "src/build_blobs.rs"
 
 [[bin]]
 name = "revendor"
@@ -28,10 +24,11 @@ proc-macro2 = { version = "1", features = ["span-locations"] }
 strsim = { workspace = true }
 syn = { version = "2", features = ["full", "visit"] }
 walkdir = { workspace = true }
-specforge-component = { path = "../crates/specforge-component" }
+specforge-component = { path = "../crates/specforge-component", features = ["testing"] }
 serde = "1.0"
 specforge-emitter = { path = "../crates/specforge-emitter" }
 specforge-installed = { path = "../crates/specforge-installed" }
 specforge-wasm = { path = "../crates/specforge-wasm" }
 specforge-protocol-types = { path = "../crates/specforge-protocol-types" }
 serde_json = "1.0"
+gate = { path = "../gate" }

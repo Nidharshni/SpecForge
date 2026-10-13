@@ -3,7 +3,6 @@ use crate::terminal::{Terminal, errln, outln};
 use specforge_ops::extension::{self, UpdateRequest};
 use specforge_ops_registry::ConfiguredRegistry;
 use specforge_package::Reach;
-use std::path::PathBuf;
 
 // `specforge update`'s command line.
 #[derive(clap::Args)]
@@ -11,8 +10,8 @@ pub(crate) struct Args {
     /// Extension name (updates all if omitted)
     name: Option<String>,
 
-    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
-    path: PathBuf,
+    #[command(flatten)]
+    project: crate::project::ProjectArg,
 
     #[command(flatten)]
     output: OutputArg,
@@ -38,7 +37,7 @@ impl Args {
     /// applied).
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         let format = self.output.format;
-        let root = match crate::project::root(&self.path) {
+        let root = match self.project.root() {
             Ok(root) => root,
             Err(error) => return Refusal::of(format).report(terminal, &error),
         };
@@ -82,10 +81,30 @@ impl Args {
             return Exit::Failed;
         }
 
+        // What a registry never replaces is told before the summary.
+        let mut not_from_registry = false;
+        for e in &outcome.extensions {
+            if let extension::UpdateStatus::NotFromRegistry { source } = &e.status {
+                not_from_registry = true;
+                outln!(
+                    terminal,
+                    "{} is not from a registry ({source}): update never replaces it",
+                    e.name
+                );
+            }
+        }
         if outcome.extensions.is_empty() {
             outln!(terminal, "no extensions to update");
         } else if outcome.updated().next().is_none() {
-            outln!(terminal, "all extensions are up to date");
+            outln!(
+                terminal,
+                "{}",
+                if not_from_registry {
+                    "all registry extensions are up to date"
+                } else {
+                    "all extensions are up to date"
+                }
+            );
         } else {
             outln!(
                 terminal,

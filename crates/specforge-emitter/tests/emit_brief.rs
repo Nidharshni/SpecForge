@@ -210,7 +210,7 @@ fn brief_schema_version_matches_graph_format() {
     .unwrap();
     let full: serde_json::Value =
         serde_json::from_str(&specforge_emitter::json::emit_json(&graph)).unwrap();
-    assert_eq!(brief["schema_version"], "0.1.0", "{brief}");
+    assert_eq!(brief["schema_version"], "1.0.0", "{brief}");
     assert_eq!(
         brief["schema_version"], full["schema_version"],
         "brief and graph formats must use same schema_version"

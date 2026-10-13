@@ -7,7 +7,7 @@ use crate::mutation::{
 use crate::target::ProjectRef;
 use crate::target::{AnyProject, Project};
 use crate::tool::McpError;
-use crate::tool::{CoreTool, Effect, ReplySpec, WriteHints};
+use crate::tool::{CoreTool, Effect, RefusalArgument, ReplySpec, WriteHints};
 use specforge_ops::OpError;
 
 /// `specforge.migrate`'s arguments.
@@ -52,6 +52,10 @@ impl CoreTool for Tool {
     type Args = Args;
     type Input = Project<AnyProject>;
     type Returns = Mutation<Reply>;
+    const REFUSAL_ARGUMENTS: &'static [RefusalArgument] = &[RefusalArgument {
+        code: specforge_common::codes::E019.id(),
+        argument: "target_version",
+    }];
 
     fn call(project: ProjectRef<'_>, args: Args) -> Mutation<Reply> {
         // The project the call migrates, and the runtime its hooks run in.
@@ -70,7 +74,7 @@ impl CoreTool for Tool {
             dry_run,
             no_backup,
         };
-        let outcome = specforge_ops::migrate::run(&request, Some(runtime.clone()));
+        let outcome = specforge_ops::migrate::run(&request, Some(runtime.clone()))?;
         // A failed run's report rides in `data`, and what it left written (its
         // backups after a rollback, the files migrated before a failure) is
         // reported.

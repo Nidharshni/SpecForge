@@ -10,8 +10,10 @@ env:
 
 jobs:
   ci:
-    name: Rust CI
+    # Every check a full run reaches (`cargo gate list`), with the ci nextest profile.
+    name: Check list
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -25,85 +27,15 @@ jobs:
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
 
-      # C3-03: parser.c/grammar.json/node-types.json are committed build
-      # artifacts of grammar.js. A grammar edit without regeneration used to
-      # build silently against stale tables — fail the build instead.
-      - name: Verify tree-sitter grammar artifacts are fresh
-        run: |
-          cargo install tree-sitter-cli --locked --version 0.27.0
-          cd crates/tree-sitter-specforge
-          tree-sitter generate
-          git diff --exit-code -- src/parser.c src/grammar.json src/node-types.json             || (echo "::error::grammar.js changed without regenerating — run 'tree-sitter generate' and commit the artifacts" && exit 1)
-
-      # specforge-component embeds extensions/*/wasm/*.wasm; fail when their recorded sources drift.
-      - name: Verify vendored builtin blobs match their sources
-        run: cargo run -p xtask --bin build-builtins -- --check
-
-      # Principle 2: core crates name no entity kind outside test code.
-      - name: Check zero-entity core
-        run: bash scripts/check-zero-entity-core.sh
-
-      - name: Check formatting
-        run: cargo fmt --all -- --check
-
-      # Extension crates and the fixtures (greet, sandbox probe) live outside
-      # the workspace, so `cargo fmt --all` never sees them; gate each
-      # manifest explicitly.
-      - name: Check extension formatting
-        run: |
-          for manifest in extensions/*/Cargo.toml fixtures/*/Cargo.toml; do
-            [ -f "$manifest" ] || continue
-            cargo fmt --manifest-path "$manifest" -- --check
-          done
-
-      # The spec corpora are formatted with the project's own formatter;
-      # format_corpus (a test) proves formatting changes only layout.
-      - name: Check spec formatting
-        run: cargo run -q -p specforge-cli -- format --check spec integrations/rust/spec examples/todo-app examples/shop
-
-      # A test citing a verify text its entity does not declare (A016), found
-      # without running the tests; the pre-commit hook runs it too.
-      - name: Check test links
-        run: cargo run -q -p xtask --bin check-links
-
-      - name: Run clippy
-        run: |
-          cargo clippy --workspace --all-targets -- -D warnings
-          # Extension crates live outside the workspace; their code compiles
-          # to wasip2 components and needs its own clippy pass to be gated.
-          # (kept outside the main clippy run: a wasm pass for the component, a native one for the tests)
-          for ext in extensions/*/Cargo.toml; do
-            cargo clippy --manifest-path "$ext" --target wasm32-wasip2 -- -D warnings
-            # Their tests compile only natively (`#[cfg(test)]`): lint them there too.
-            cargo clippy --manifest-path "$ext" --all-targets -- -D warnings
-          done
-
       - name: Install nextest
         uses: taiki-e/install-action@nextest
 
       - name: Install z3 (SMT solver for prove tests)
         run: sudo apt-get update && sudo apt-get install -y z3
 
-      - name: Run tests
-        run: |
-          cargo nextest run --workspace --profile ci
-          # Extension crates live outside the workspace; run their native
-          # tests too (e.g. the formal extension's pass unit tests).
-          for ext in extensions/*/Cargo.toml; do
-            cargo test --manifest-path "$ext"
-          done
-
-      # Every committed lockfile: vulns, unsound, and yanked fail; unmaintained only warns.
-      - name: Run cargo-audit (every lockfile)
-        run: |
-          cargo install cargo-audit --locked
-          failed=0
-          for lock in $(git ls-files '*Cargo.lock'); do
-            echo "::group::cargo audit $lock"
-            cargo audit --deny unsound --deny yanked -f "$lock" || { echo "::error file=$lock::cargo audit failed"; failed=1; }
-            echo "::endgroup::"
-          done
-          exit $failed
+      # tree-sitter-cli and cargo-audit are installed by the checks that need them, at the versions the list pins.
+      - name: Run the check list
+        run: cargo gate ci
 
   bootstrap:
     name: Fresh-clone bootstrap (builtin components)
@@ -121,13 +53,7 @@ jobs:
       # can rebuild every builtin component blob from source via the xtask
       # escape hatch (wayfinder map #1, ticket #4).
       # Each blob is built in a staged workspace, so its bytes do not depend on the
-      # checkout path: --verify rebuilds all nine and fails if one differs from the
+      # checkout path: --verify rebuilds every committed blob (the builtins and the fixtures) and fails if one differs from the
       # vendored bytes (a blob vendored by another rustc is built, not compared).
       - name: Build all builtin component blobs from source and compare them with the vendored ones
-        run: cargo run -p xtask --bin build-builtins -- --verify
-
-      - name: Build SDK greet fixture
-        run: cargo build --manifest-path fixtures/greet-extension/Cargo.toml --target wasm32-wasip2 --release
-
-      - name: SDK greet protocol proof
-        run: cargo test -p specforge-component --test greet_sdk
+        run: cargo gate bootstrap

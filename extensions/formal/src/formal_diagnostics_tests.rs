@@ -271,7 +271,7 @@ fn depth_input(proven: bool) -> PassInput {
     entities[3].verify_kinds = vec!["unit".into()];
     entities[3].verify_texts = vec!["works".into()];
     let results = if proven {
-        serde_json::json!({"results": {"kept": {"tests": [{"name": "t", "status": "pass", "verify": "works"}]}}})
+        serde_json::json!({"results": {"kept": {"tests": [{"name": "t", "status": "passed", "verify": "works"}]}}})
     } else {
         serde_json::json!({"results": {}})
     };

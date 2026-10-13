@@ -55,7 +55,7 @@ specforge-mcp/
 /// ERD-oriented intermediate representation.
 /// Built from GraphProtocolSchema, consumed by all five renderers.
 pub struct ModelIntermediate {
-    pub model_version: String,
+    pub schema_version: String,
     pub extensions: Vec<ModelExtension>,
     pub entities: Vec<ModelEntity>,
     pub relationships: Vec<ModelRelationship>,

@@ -157,8 +157,8 @@ fn collect_project() -> tempfile::TempDir {
         .file(
             "target/specforge/t.json",
             &json!({"entries": [
-                {"entity_id": "alpha", "test_name": "works", "status": "pass"},
-                {"entity_id": "ghost", "test_name": "stale", "status": "pass"}
+                {"entity_id": "alpha", "test_name": "works", "status": "passed"},
+                {"entity_id": "ghost", "test_name": "stale", "status": "passed"}
             ]})
             .to_string(),
         )
@@ -188,7 +188,7 @@ fn collect_returns_result() {
     let report: Value =
         serde_json::from_str(&std::fs::read_to_string(root.join("specforge-report.json")).unwrap())
             .unwrap();
-    assert_eq!(report["results"]["alpha"]["tests"][0]["status"], "pass");
+    assert_eq!(report["results"]["alpha"]["tests"][0]["status"], "passed");
 }
 
 #[test]
@@ -457,8 +457,7 @@ const GREET: &str = "@sdk/greet";
 fn server_with_product() -> (Served, std::path::PathBuf) {
     let mut server = test_server();
     let root = server.root().to_path_buf();
-    let blob = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../fixtures/greet-extension/greet.wasm");
+    let blob = specforge_component::committed::GREET.path();
     let resp = call_tool(
         &mut server,
         "specforge.add_extension",

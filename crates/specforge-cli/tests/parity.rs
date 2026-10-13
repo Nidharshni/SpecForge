@@ -19,11 +19,13 @@
 //!
 //! Today's differences are listed in [`EXPECTED_DIVERGENCES`]. A scenario
 //! fails when an aspect differs without a row, and also when a row's aspect
-//! no longer differs: fixing a divergence means deleting its row. The
-//! surfaces' payloads, and everything above, are pinned per surface as
-//! insta snapshots (`tests/snapshots/tests__parity__*.snap`).
+//! no longer differs: fixing a divergence means deleting its row. Each
+//! scenario is pinned once (`tests/snapshots/tests__parity__<scenario>.snap`):
+//! `both` holds every aspect the surfaces agree on, `cli` and `mcp` each
+//! aspect they differ on and what the surface printed beside the outcome
+//! document (its `extras`, ADR 0052 D2, and a failed call's `envelope`).
 
-use serde_json::{Value, json};
+use serde_json::{Map, Value, json};
 use specforge_mcp::McpServer;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -111,8 +113,8 @@ const MAIN_SPEC: &str =
 
 /// A third-party extension (`@sdk/greet` 0.1.0, contributing `greeting`).
 fn greet_blob() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../fixtures/greet-extension/greet.wasm")
+    specforge_component::committed::GREET
+        .path()
         .canonicalize()
         .expect("the greet fixture is vendored")
 }
@@ -387,28 +389,28 @@ const SCENARIOS: &[Scenario] = &[
     Scenario {
         name: "export",
         setup: project,
-        cli: |root| args(&["export", &s(root), "--format", "graph"]),
+        cli: |root| args(&["export", "--path", &s(root), "--format", "graph"]),
         mcp: |_| ("specforge.export", json!({"format": "graph"})),
         mcp_rooted: true,
     },
     Scenario {
         name: "check",
         setup: project,
-        cli: |root| args(&["check", &s(root), "--format", "json"]),
+        cli: |root| args(&["check", "--path", &s(root), "--format", "json"]),
         mcp: |_| ("specforge.validate", json!({})),
         mcp_rooted: true,
     },
     Scenario {
         name: "check_failing",
         setup: project_with_unresolved_reference,
-        cli: |root| args(&["check", &s(root), "--format", "json"]),
+        cli: |root| args(&["check", "--path", &s(root), "--format", "json"]),
         mcp: |_| ("specforge.validate", json!({})),
         mcp_rooted: true,
     },
     Scenario {
         name: "check_cache",
         setup: project,
-        cli: |root| args(&["check", &s(root), "--format", "json", "--cache"]),
+        cli: |root| args(&["check", "--path", &s(root), "--format", "json", "--cache"]),
         mcp: |_| ("specforge.validate", json!({})),
         mcp_rooted: true,
     },
@@ -473,13 +475,16 @@ struct Observed {
     /// Whether the run passed, where the surface says (the CLI always: its
     /// exit code; MCP when it returns `ok`).
     verdict: Option<bool>,
-    payload: Value,
     files: BTreeMap<String, String>,
     config: Value,
     check: Value,
     /// The outcome document: the payload (a failed call's `data`) without
-    /// the surface's own extras.
+    /// the surface's own extras, normalized.
     document: String,
+    /// What the surface printed beside the outcome document: `extras`, the
+    /// keys it alone adds (ADR 0052 D2), and `envelope`, a failed call's
+    /// keys around its `data`. Empty when it printed the document alone.
+    beside: Map<String, Value>,
 }
 
 /// The CLI's own keys beside an outcome document.
@@ -584,6 +589,7 @@ fn read_config(root: &Path) -> Value {
 fn check(root: &Path) -> Value {
     let out = cli()
         .args(["check", "--format", "json"])
+        .arg("--path")
         .arg(root)
         .current_dir(root)
         .output()
@@ -606,19 +612,31 @@ fn check(root: &Path) -> Value {
     json!({"ok": out.status.success(), "diagnostics": codes})
 }
 
-/// The outcome document of `payload`: a failed call's `data` when it has
-/// one, without the top-level keys in `extras`.
-fn document_of(payload: &Value, ok: bool, extras: &[&str]) -> Value {
-    let mut document = match payload.get("data") {
-        Some(data) if !ok && payload.is_object() => data.clone(),
+/// The outcome document of `payload` and what the surface printed beside
+/// it. The document is a failed call's `data` when it has one (the rest of
+/// the payload is then the `envelope`), without the top-level keys in
+/// `extras` (which become the `extras`).
+fn split_payload(payload: &Value, ok: bool, extras: &[&str]) -> (Value, Map<String, Value>) {
+    let mut beside = Map::new();
+    let mut document = match (payload.get("data"), payload.as_object()) {
+        (Some(data), Some(envelope)) if !ok => {
+            let mut envelope = envelope.clone();
+            envelope.remove("data");
+            beside.insert("envelope".into(), Value::Object(envelope));
+            data.clone()
+        }
         _ => payload.clone(),
     };
     if let Value::Object(map) = &mut document {
-        for key in extras {
-            map.remove(*key);
+        let found: Map<String, Value> = extras
+            .iter()
+            .filter_map(|key| map.remove(*key).map(|value| (key.to_string(), value)))
+            .collect();
+        if !found.is_empty() {
+            beside.insert("extras".into(), Value::Object(found));
         }
     }
-    document
+    (document, beside)
 }
 
 fn observe(
@@ -629,18 +647,15 @@ fn observe(
 ) -> Observed {
     (scenario.setup)(root);
     let (ok, payload, verdict) = run(scenario, root);
-    let files = files_under(root);
-    let config = read_config(root);
-    let check = check(root);
-    let document = normalized(&document_of(&payload, ok, extras), root);
+    let (document, beside) = split_payload(&payload, ok, extras);
     Observed {
         ok,
         verdict,
-        payload,
-        files,
-        config,
-        check,
-        document,
+        files: files_under(root),
+        config: read_config(root),
+        check: check(root),
+        document: normalized(&document, root),
+        beside,
     }
 }
 
@@ -699,12 +714,18 @@ pub(crate) fn normalized(value: &Value, root: &Path) -> String {
     text
 }
 
-fn snapshot_of(o: &Observed, root: &Path) -> String {
-    let files: BTreeMap<&String, Value> = o
-        .files
+/// `value` with the machine-specific parts replaced ([`normalized`]), as
+/// a value.
+fn normalized_value(value: &Value, root: &Path) -> Value {
+    serde_json::from_str(&normalized(value, root)).expect("normalizing keeps the JSON")
+}
+
+/// The files as a snapshot shows them: binary files by kind only (blob
+/// sizes move on every rebuild), the schema cache by name only.
+fn files_shown(files: &BTreeMap<String, String>) -> Value {
+    files
         .iter()
         .map(|(path, content)| {
-            // Binary files by kind only: blob sizes move on every rebuild.
             let shown = if content.starts_with("<binary,") {
                 "<binary>".to_string()
             } else if path.ends_with("schema-cache.json") {
@@ -712,17 +733,55 @@ fn snapshot_of(o: &Observed, root: &Path) -> String {
             } else {
                 content.clone()
             };
-            (path, Value::String(shown))
+            (path.clone(), Value::String(shown))
         })
-        .collect();
-    let doc = json!({
-        "ok": o.ok,
-        "payload": o.payload,
-        "files": files,
-        "config": o.config,
-        "check": o.check,
-    });
-    normalized(&doc, root)
+        .collect::<Map<String, Value>>()
+        .into()
+}
+
+/// One compared aspect of `o` as the snapshot shows it, under its key.
+/// `None` for the verdict, which `verdicts_agree` compares and no
+/// snapshot shows.
+fn shown(aspect: Aspect, o: &Observed, root: &Path) -> Option<(&'static str, Value)> {
+    let (key, value) = match aspect {
+        Aspect::Outcome => ("ok", json!(o.ok)),
+        Aspect::Files => ("files", files_shown(&o.files)),
+        Aspect::Config => ("config", o.config.clone()),
+        Aspect::Check => ("check", o.check.clone()),
+        Aspect::Verdict => return None,
+        Aspect::Document => {
+            return Some(("document", serde_json::from_str(&o.document).unwrap()));
+        }
+    };
+    Some((key, normalized_value(&value, root)))
+}
+
+/// A scenario's one snapshot. `both` holds each aspect the surfaces agree
+/// on, as the CLI observed it. `cli` and `mcp` hold each aspect they differ
+/// on, as each observed it, and what each printed beside the outcome
+/// document (`extras`, `envelope`). `{}` means the surface did nothing the
+/// other did not.
+fn snapshot_of(cli: (&Observed, &Path), mcp: (&Observed, &Path)) -> String {
+    let (mut both, mut cli_only, mut mcp_only) = (Map::new(), Map::new(), Map::new());
+    for aspect in ASPECTS {
+        let (Some((key, c)), Some((_, m))) =
+            (shown(aspect, cli.0, cli.1), shown(aspect, mcp.0, mcp.1))
+        else {
+            continue;
+        };
+        if differs(aspect, cli.0, mcp.0) {
+            cli_only.insert(key.into(), c);
+            mcp_only.insert(key.into(), m);
+        } else {
+            both.insert(key.into(), c);
+        }
+    }
+    for (only, (o, root)) in [(&mut cli_only, cli), (&mut mcp_only, mcp)] {
+        for (key, value) in &o.beside {
+            only.insert(key.clone(), normalized_value(value, root));
+        }
+    }
+    serde_json::to_string_pretty(&json!({"both": both, "cli": cli_only, "mcp": mcp_only})).unwrap()
 }
 
 fn differs(aspect: Aspect, cli: &Observed, mcp: &Observed) -> bool {
@@ -747,10 +806,7 @@ fn parity(name: &str) {
     let cli_obs = observe(scenario, cli_dir.path(), run_cli, CLI_EXTRAS);
     let mcp_obs = observe(scenario, mcp_dir.path(), run_mcp, MCP_EXTRAS);
 
-    let cli_snap = snapshot_of(&cli_obs, cli_dir.path());
-    let mcp_snap = snapshot_of(&mcp_obs, mcp_dir.path());
-    insta::assert_snapshot!(format!("{name}__cli"), cli_snap);
-    insta::assert_snapshot!(format!("{name}__mcp"), mcp_snap);
+    let snapshot = snapshot_of((&cli_obs, cli_dir.path()), (&mcp_obs, mcp_dir.path()));
 
     let mut unexpected = Vec::new();
     for aspect in ASPECTS {
@@ -769,11 +825,14 @@ fn parity(name: &str) {
             ));
         }
     }
+    // The rows first: a divergence nobody listed says why before the
+    // snapshot shows what.
     assert!(
         unexpected.is_empty(),
-        "{name}:\n  {}\n--- cli ---\n{cli_snap}\n--- mcp ---\n{mcp_snap}",
+        "{name}:\n  {}\n{snapshot}",
         unexpected.join("\n  ")
     );
+    insta::assert_snapshot!(name, snapshot);
 }
 
 #[test]
@@ -984,6 +1043,7 @@ fn mcp_export(root: &Path, arguments: Value) -> Value {
 fn cli_export(root: &Path, flags: &[&str]) -> Value {
     let out = cli()
         .arg("export")
+        .arg("--path")
         .arg(root)
         .args(flags)
         .current_dir(root)
@@ -1259,9 +1319,9 @@ fn analyze_project(root: &Path) {
 /// A test report proving `widget` and, when `orphan` is set, naming an
 /// entity the project does not have.
 fn analyze_report(root: &Path, orphan: Option<&str>) -> String {
-    let mut results = json!({"widget": {"tests": [{"name": "w", "status": "pass"}]}});
+    let mut results = json!({"widget": {"tests": [{"name": "w", "status": "passed"}]}});
     if let Some(id) = orphan {
-        results[id] = json!({"tests": [{"name": "x", "status": "pass"}]});
+        results[id] = json!({"tests": [{"name": "x", "status": "passed"}]});
     }
     let path = root.join("report.json");
     std::fs::write(
@@ -1421,7 +1481,7 @@ fn export_both_ways(extra: &[&str], arguments: Value) -> (String, String) {
     let dir = tempfile::tempdir().unwrap();
     export_project(dir.path());
     let out = cli()
-        .args(["export", &s(dir.path()), "--format", "brief"])
+        .args(["export", "--path", &s(dir.path()), "--format", "brief"])
         .args(extra)
         .current_dir(dir.path())
         .output()
@@ -1689,8 +1749,8 @@ fn collect_project(root: &Path) {
     std::fs::write(
         root.join("target/specforge/demo.json"),
         json!({"entries": [
-            {"entity_id": "alpha", "test_name": "works", "verify": "works", "status": "pass"},
-            {"entity_id": "omega", "test_name": "lost", "status": "pass"}
+            {"entity_id": "alpha", "test_name": "works", "verify": "works", "status": "passed"},
+            {"entity_id": "omega", "test_name": "lost", "status": "passed"}
         ]})
         .to_string(),
     )

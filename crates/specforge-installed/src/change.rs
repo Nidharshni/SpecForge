@@ -1,11 +1,14 @@
-//! One change to what is installed: binaries, `specforge.lock` and the
-//! `specforge.json` entry written together or not at all (ADR 0028).
+//! One change to what is installed: binaries, `specforge.lock` and the files
+//! the caller's last step writes (`specforge.json`; for `init` also `.gitignore`
+//! and the starter) written together or not at all (ADR 0028).
 //!
 //! The change is staged in memory. Committing it moves every module aside
 //! under `.specforge/extensions/.staging` before it places the new one, so a
 //! previous binary is never deleted before its replacement is in place,
-//! writes the lock once, runs the caller's last step (the `specforge.json` edit,
-//! the publisher-key pins), and, on any failure, puts every file back as it was.
+//! writes the lock once (only when a step was staged), runs the caller's last
+//! step (the `specforge.json` edit, the publisher-key pins), and, on any
+//! failure, puts every file back as it was and removes the directories the
+//! change created.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -30,6 +33,20 @@ pub struct Pin {
     pub peers: Vec<PeerDependency>,
 }
 
+impl Pin {
+    /// The lock entry this pin records for a module whose SHA-256 is `sha256`.
+    pub fn entry(&self, sha256: &str) -> LockFileEntry {
+        LockFileEntry {
+            name: self.name.clone(),
+            version: self.version.clone(),
+            source: self.source.clone(),
+            wasm_hash: sha256.to_string(),
+            key_id: self.key_id.clone(),
+            peer_dependencies: self.peers.clone(),
+        }
+    }
+}
+
 /// One staged step.
 enum Step {
     Install { name: PackageName, module: Module },
@@ -39,8 +56,12 @@ enum Step {
 /// A change to what is installed, staged in memory until it is committed.
 pub struct Change<'a> {
     installed: &'a Installed,
-    lock: LockFile,
+    /// The lock as the change will write it; `None` for a change that installs nothing
+    /// ([`Installed::change_entries`]).
+    lock: Option<LockFile>,
     steps: Vec<Step>,
+    /// The files the last step may write, put back when the change fails.
+    files: Vec<PathBuf>,
 }
 
 /// A committed change: the files whose bytes it changed or that it deleted
@@ -64,53 +85,55 @@ impl Installed {
     /// read (empty when absent). Refused with E033 when `specforge.lock` is
     /// there but can't be read: writing one now would drop what it records.
     pub fn change(&self) -> Result<Change<'_>, Diagnostic> {
-        let lock = match &self.lock {
-            LockState::Read(lock) => lock.clone(),
-            LockState::Absent => LockFile::default(),
-            LockState::Unreadable(problem) => {
-                return Err(problem.clone().with_suggestion(
-                    "fix specforge.lock, or delete it and install the extensions again; \
-                     nothing was changed"
-                        .to_string(),
-                ));
-            }
-        };
         Ok(Change {
             installed: self,
-            lock,
+            lock: Some(self.writable_lock()?),
             steps: Vec::new(),
+            files: Vec::new(),
         })
+    }
+
+    /// The lock a change starts from: the lock as read, empty when absent. E033 when
+    /// `specforge.lock` is there but can't be read: writing one now would drop what it records.
+    pub fn writable_lock(&self) -> Result<LockFile, Diagnostic> {
+        match &self.lock {
+            LockState::Read(lock) => Ok(lock.clone()),
+            LockState::Absent => Ok(LockFile::default()),
+            LockState::Unreadable(problem) => Err(problem.clone().with_suggestion(
+                "fix specforge.lock, or delete it and install the extensions again; \
+                 nothing was changed"
+                    .to_string(),
+            )),
+        }
+    }
+
+    /// A change that installs nothing and writes no lock: only its last step's files. It accepts
+    /// any lock (ADR 0041 B4: a plan that only enables or disables entries).
+    ///
+    /// # Panics
+    /// [`Change::install`] and [`Change::uninstall`] on it.
+    pub fn change_entries(&self) -> Change<'_> {
+        Change {
+            installed: self,
+            lock: None,
+            steps: Vec::new(),
+            files: Vec::new(),
+        }
     }
 }
 
 impl Change<'_> {
-    /// The project's installed extensions as this change leaves them: the same root, and the lock
-    /// it will write (what the lock plan's peer set resolves entries against).
-    pub fn installed(&self) -> Installed {
-        Installed::with_lock(self.installed.root(), LockState::Read(self.lock.clone()))
-    }
-
-    /// The lock as the change will write it (the diamond gate and the
-    /// dependents check read it).
-    pub fn lock(&self) -> &LockFile {
-        &self.lock
-    }
-
     /// Install `module` as `pin.name`: its binary and its lock entry,
     /// replacing what it had.
+    ///
+    /// # Panics
+    /// On a change made by [`Installed::change_entries`].
     pub fn install(&mut self, module: Module, pin: Pin) {
-        let entry = LockFileEntry {
-            name: pin.name.clone(),
-            version: pin.version,
-            source: pin.source,
-            wasm_hash: module.digest().to_string(),
-            key_id: pin.key_id,
-            peer_dependencies: pin.peers,
-        };
-        match self.lock.entries.iter_mut().find(|e| e.name == entry.name) {
-            Some(existing) => *existing = entry,
-            None => self.lock.entries.push(entry),
-        }
+        let entry = pin.entry(module.digest());
+        self.lock
+            .as_mut()
+            .expect("a change that installs reads the lock")
+            .put(entry);
         self.steps.push(Step::Install {
             name: pin.name,
             module,
@@ -119,41 +142,51 @@ impl Change<'_> {
 
     /// Uninstall `name`: its directory and its lock entry. A name the lock
     /// does not hold stages nothing.
+    ///
+    /// # Panics
+    /// On a change made by [`Installed::change_entries`].
     pub fn uninstall(&mut self, name: &PackageName) {
-        if !self.lock.entries.iter().any(|e| e.name == *name) {
-            return;
+        let lock = self
+            .lock
+            .as_mut()
+            .expect("a change that uninstalls reads the lock");
+        if lock.without(name) {
+            self.steps.push(Step::Uninstall { name: name.clone() });
         }
-        self.lock.entries.retain(|e| e.name != *name);
-        self.steps.push(Step::Uninstall { name: name.clone() });
+    }
+
+    /// The files the last step may write (`specforge.json`; for `init` also `.gitignore` and the
+    /// starter). When the change fails, each is put back to its bytes, or removed when it was not
+    /// there, and every directory the change created (for those files, `.specforge/extensions`
+    /// and its parents, the root itself) is removed again when empty.
+    pub fn files(mut self, paths: impl IntoIterator<Item = PathBuf>) -> Self {
+        self.files.extend(paths);
+        self
     }
 
     /// Write the change: every binary placed or moved aside, then the lock
     /// once. All or nothing (see [`Self::commit_with`]).
     pub fn commit(self) -> Result<Committed, Failed<Diagnostic>> {
-        self.run(None, || Ok(()), std::convert::identity)
+        self.run(|| Ok(()), std::convert::identity)
     }
 
-    /// [`Self::commit`], then `last`: what goes with the change outside its
-    /// binaries and lock, run after the lock is written. That is the
-    /// `specforge.json` edit at `config`, and anything kept for the user such
-    /// as publisher-key pins (ADR 0059). A failure at any step, `last`'s
-    /// included, puts every binary, the lock and `config`'s bytes back. `last`
-    /// must itself leave nothing when it fails, since only `config` is
-    /// restored for it. `config` is in [`Committed::changed`] when its bytes
-    /// changed. E032 for a binary that can't be placed or moved aside, E033
-    /// for a lock that can't be written (as `own` makes them an `E`), `last`'s own error otherwise.
+    /// Place every staged module, write the lock once (only when a step was staged), then `last`.
+    /// All or nothing: a failure at any step, `last`'s included, puts back every module, the
+    /// lock, every file named by [`Self::files`] and removes the directories the change created.
+    /// `last` must itself leave nothing outside those files when it fails. [`Committed::changed`]
+    /// lists each module, the lock and each named file whose bytes changed. E032 for a binary
+    /// that can't be placed or moved aside, E033 for a lock that can't be written (as `own` makes
+    /// them an `E`), `last`'s own error otherwise.
     pub fn commit_with<E>(
         self,
-        config: Option<&Path>,
         last: impl FnOnce() -> Result<(), E>,
         own: impl FnOnce(Diagnostic) -> E,
     ) -> Result<Committed, Failed<E>> {
-        self.run(config, last, own)
+        self.run(last, own)
     }
 
     fn run<E>(
         self,
-        config: Option<&Path>,
         last: impl FnOnce() -> Result<(), E>,
         own: impl FnOnce(Diagnostic) -> E,
     ) -> Result<Committed, Failed<E>> {
@@ -161,6 +194,7 @@ impl Change<'_> {
             installed,
             lock,
             steps,
+            files,
         } = self;
         let staging = installed.extensions_dir().join(STAGING);
         // A process killed mid-commit can leave modules here: sweep them.
@@ -168,26 +202,32 @@ impl Change<'_> {
 
         let lock_path = installed.lock_path();
         let lock_before = std::fs::read(&lock_path).ok();
-        let config_before = config.and_then(|path| std::fs::read(path).ok());
+        let files_before: Vec<Option<Vec<u8>>> =
+            files.iter().map(|path| std::fs::read(path).ok()).collect();
+        let created = Absent::of(installed, &files);
         let mut journal = Journal::default();
         let mut changed = BTreeSet::new();
 
         let placed = steps.iter().enumerate().try_for_each(|(i, step)| {
             apply_step(installed, &staging, i, step, &mut journal, &mut changed)
         });
+        let writes_lock = lock.filter(|_| !steps.is_empty());
         let outcome: Result<(), Cause<E>> = placed
             .map_err(Cause::Diagnostic)
-            .and_then(|()| write_lock_file(&lock, &lock_path).map_err(Cause::Diagnostic))
+            .and_then(|()| match &writes_lock {
+                Some(lock) => write_lock_file(lock, &lock_path).map_err(Cause::Diagnostic),
+                None => Ok(()),
+            })
             .and_then(|()| last().map_err(Cause::Last));
 
         match outcome {
             Ok(()) => {
-                if let Some(config) = config
-                    && std::fs::read(config).ok() != config_before
-                {
-                    changed.insert(config.to_path_buf());
+                for (path, before) in files.iter().zip(&files_before) {
+                    if std::fs::read(path).ok() != *before {
+                        changed.insert(path.clone());
+                    }
                 }
-                if std::fs::read(&lock_path).ok() != lock_before {
+                if writes_lock.is_some() && std::fs::read(&lock_path).ok() != lock_before {
                     changed.insert(lock_path);
                 }
                 journal.finish(installed, &staging);
@@ -197,22 +237,67 @@ impl Change<'_> {
             }
             Err(cause) => {
                 let mut left = Vec::new();
-                if let Some(config) = config {
-                    restore_bytes(config, config_before.as_deref(), &mut left);
+                for (path, before) in files.iter().zip(&files_before) {
+                    restore_bytes(path, before.as_deref(), &mut left);
                 }
-                restore_bytes(&lock_path, lock_before.as_deref(), &mut left);
+                if writes_lock.is_some() {
+                    restore_bytes(&lock_path, lock_before.as_deref(), &mut left);
+                }
                 journal.undo(installed, &mut left);
                 left.sort();
                 left.dedup();
                 if left.is_empty() {
                     let _ = std::fs::remove_dir_all(&staging);
                 }
+                created.remove();
                 let error = match cause {
                     Cause::Last(error) => error,
                     Cause::Diagnostic(diagnostic) => own(says_what_is_left(diagnostic, &left)),
                 };
                 Err(Failed { error, left })
             }
+        }
+    }
+}
+
+/// The directories a change may create that did not exist when it began: the project root, the
+/// extensions directory and its parents, and the parents of the files its last step writes.
+struct Absent(Vec<PathBuf>);
+
+impl Absent {
+    fn of(installed: &Installed, files: &[PathBuf]) -> Absent {
+        let root = installed.root();
+        let mut watched: BTreeSet<PathBuf> = BTreeSet::from([root.to_path_buf()]);
+        let starts = files
+            .iter()
+            .filter_map(|file| file.parent())
+            .map(Path::to_path_buf)
+            .chain([installed.extensions_dir()]);
+        for start in starts {
+            if !start.starts_with(root) {
+                watched.insert(start);
+                continue;
+            }
+            let mut dir = start.as_path();
+            while dir != root {
+                watched.insert(dir.to_path_buf());
+                match dir.parent() {
+                    Some(parent) => dir = parent,
+                    None => break,
+                }
+            }
+        }
+        let mut absent: Vec<PathBuf> = watched.into_iter().filter(|dir| !dir.exists()).collect();
+        // Deepest first: a child goes before the directory that holds it.
+        absent.sort_by_key(|dir| std::cmp::Reverse(dir.components().count()));
+        Absent(absent)
+    }
+
+    /// Remove each one that is empty (never recursively: one that holds anything is left, since
+    /// something the change did not write is in it).
+    fn remove(self) {
+        for dir in self.0 {
+            let _ = std::fs::remove_dir(dir);
         }
     }
 }

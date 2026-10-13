@@ -954,7 +954,9 @@ fn init_rejects_an_unknown_extension() {
                "extensions": ["@specforge/software", "@specforge/nonexistent"]}),
     );
 
-    assert_eq!(error["code"], "extension_not_found", "{error}");
+    // A new project has no registry: refused as `add` refuses a registry package with none
+    // configured (E063), naming the specifier.
+    assert_eq!(error["code"], "precondition_failed", "{error}");
     assert!(
         error["message"]
             .as_str()
@@ -962,7 +964,8 @@ fn init_rejects_an_unknown_extension() {
             .contains("@specforge/nonexistent"),
         "{error}"
     );
-    assert!(error["data"]["suggestion"].is_string(), "{error}");
+    assert_eq!(error["diagnostic"]["code"], "E063", "{error}");
+    assert!(error["diagnostic"]["suggestion"].is_string(), "{error}");
     assert!(
         !dir.path().join("specforge.json").exists(),
         "nothing is written"
@@ -1044,7 +1047,7 @@ fn init_contract() {
         json!({"path": other.path().to_str().unwrap(), "name": "other",
                "extensions": ["@specforge/nonexistent"]}),
     );
-    assert_eq!(error["code"], "extension_not_found", "{error}");
+    assert_eq!(error["code"], "precondition_failed", "{error}");
     assert!(!other.path().join("specforge.json").exists());
 
     // project_initialized_emitted (once: only for the created project),
@@ -1064,19 +1067,7 @@ fn add_extension_returns_result() {
     let mut server = TestProject::new().serve_components();
     let dir = server.root().to_path_buf();
     assert!(dir.join("specforge.json").is_file());
-    let blob = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("fixtures/greet-extension/greet.wasm");
-    eprintln!("DEBUG blob exists: {}", blob.exists());
-    let blob = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("fixtures/greet-extension/greet.wasm");
+    let blob = specforge_component::committed::GREET.path();
     let resp = call_tool(
         &mut server,
         "specforge.add_extension",
@@ -1109,8 +1100,7 @@ fn listed_hint(server: &mut McpServer, tool: &str, key: &str) -> Value {
 fn add_extension_overwrites_a_changed_module() {
     let mut server = components_server();
     let root = server.root().to_path_buf();
-    let blob =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/greet-extension/greet.wasm");
+    let blob = specforge_component::committed::GREET.path();
     let add = |server: &mut McpServer| {
         let resp = call_tool(
             server,
@@ -1259,7 +1249,7 @@ fn add_extension_missing_specifier() {
 /// The product blob the build vendors; a local `.wasm` install names the
 /// extension after its file stem.
 fn greet_blob() -> std::path::PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/greet-extension/greet.wasm")
+    specforge_component::committed::GREET.path()
 }
 
 const GREET: &str = "@sdk/greet";
@@ -1504,12 +1494,7 @@ fn add_extension_already_installed_placeholder() {
     let mut server = TestProject::new().serve_components();
     let dir = server.root().to_path_buf();
     assert!(dir.join("specforge.json").is_file());
-    let blob = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("fixtures/greet-extension/greet.wasm");
+    let blob = specforge_component::committed::GREET.path();
     let first = call_tool(
         &mut server,
         "specforge.add_extension",
@@ -1681,12 +1666,7 @@ fn add_extension_dry_run() {
     let mut server = TestProject::new().serve_components();
     let dir = server.root().to_path_buf();
     assert!(dir.join("specforge.json").is_file());
-    let blob = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("fixtures/greet-extension/greet.wasm");
+    let blob = specforge_component::committed::GREET.path();
     let resp = call_tool(
         &mut server,
         "specforge.add_extension",
@@ -1704,12 +1684,7 @@ fn remove_extension_dry_run() {
     let mut server = TestProject::new().serve_components();
     let dir = server.root().to_path_buf();
     assert!(dir.join("specforge.json").is_file());
-    let blob = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("fixtures/greet-extension/greet.wasm");
+    let blob = specforge_component::committed::GREET.path();
     let _install = call_tool(
         &mut server,
         "specforge.add_extension",
@@ -1862,12 +1837,7 @@ fn remove_extension_contract() {
     let mut server = TestProject::new().serve_components();
     let dir = server.root().to_path_buf();
     assert!(dir.join("specforge.json").is_file());
-    let blob = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("fixtures/greet-extension/greet.wasm");
+    let blob = specforge_component::committed::GREET.path();
     let _install = call_tool(
         &mut server,
         "specforge.add_extension",
@@ -2094,12 +2064,13 @@ fn add_extension_from_a_registry_reports_a_duplicate_registry_alias() {
     assert!(builtin["result"]["_meta"].is_null(), "{builtin}");
 }
 
-// §3 R4 (plan 05): a dry run of an exact version asks no registry, so its configuration is not shown.
+// A dry run of a registry package asks its registry for the package's manifest, so the registry
+// configuration's diagnostics are shown, as for the real add (the reply may be the registry's failure).
 #[specforge_test(
     behavior = "configure_registries",
     verify = "an operation shows the registry configuration's diagnostics once it has asked a registry"
 )]
-fn add_extension_dry_run_of_an_exact_version_reports_no_registry_configuration() {
+fn add_extension_dry_run_shows_the_registry_configuration_it_asked() {
     let dir = project_with_duplicate_registry_alias();
     let mut server = test_server();
     let path = dir.path().to_str().unwrap();
@@ -2113,7 +2084,7 @@ fn add_extension_dry_run_of_an_exact_version_reports_no_registry_configuration()
         .as_array()
         .map(|all| all.iter().filter_map(|d| d["code"].as_str()).collect())
         .unwrap_or_default();
-    assert!(!codes.contains(&"W140"), "{resp}");
+    assert!(codes.contains(&"W140"), "{resp}");
 }
 
 /// The new name follows the entity-ID rule (the grammar's identifier,
@@ -2269,4 +2240,125 @@ fn add_then_tools_list_shows_the_extension_tools() {
             .declaration("@specforge/product")
             .is_some()
     );
+}
+
+// --- plan 03: a specforge.json that hides the project's sources ---
+
+/// A `specforge.json` that is cut off: no file is known to be a source.
+const TRUNCATED_CONFIG: &str = r#"{"spec_root": "spec", "extensions": ["#;
+
+/// Every file under `root` with its bytes.
+fn files_under(root: &Path) -> std::collections::BTreeMap<std::path::PathBuf, Vec<u8>> {
+    let mut files = std::collections::BTreeMap::new();
+    let mut dirs = vec![root.to_path_buf()];
+    while let Some(dir) = dirs.pop() {
+        for entry in std::fs::read_dir(&dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                dirs.push(path);
+            } else {
+                files.insert(path.clone(), std::fs::read(&path).unwrap());
+            }
+        }
+    }
+    files
+}
+
+#[specforge_test(
+    behavior = "provide_mcp_format_tool",
+    verify = "a specforge.json that does not say which files are the project's sources fails the call as config_invalid and writes nothing"
+)]
+fn format_refuses_a_config_that_does_not_say_which_files_are_its_sources() {
+    let (mut server, root) = server_with_unformatted();
+    std::fs::write(root.join("specforge.json"), TRUNCATED_CONFIG).unwrap();
+    let before = files_under(&root);
+
+    let resp = call_tool(&mut server, "specforge.format", json!({}));
+
+    let error = crate::tool_errors::mcp_error(&resp);
+    assert_eq!(error["code"], "schema_mismatch", "{error}");
+    assert!(
+        error["message"]
+            .as_str()
+            .unwrap()
+            .contains("specforge.json is not valid JSON: EOF while parsing"),
+        "{error}"
+    );
+    assert_eq!(error["data"]["files_written"], json!([]), "{error}");
+    assert_eq!(files_under(&root), before, "nothing is written");
+}
+
+#[specforge_test(
+    behavior = "provide_mcp_format_tool",
+    verify = "a problem in specforge.json the call goes around is an E069 among the diagnostics and makes ok false"
+)]
+fn format_check_reports_a_config_problem_it_goes_around() {
+    let (mut server, root) =
+        server_with_canonical_and(("b.spec", &CANONICAL.replace("messy", "other")));
+    std::fs::write(root.join("specforge.json"), r#"{"exclude": ["["]}"#).unwrap();
+
+    let parsed = format_result(&mut server, json!({"check": true}));
+
+    assert_eq!(parsed["ok"], false, "{parsed}");
+    assert_eq!(parsed["all_clean"], true, "{parsed}");
+    assert_eq!(parsed["diagnostics"][0]["code"], "E069", "{parsed}");
+}
+
+#[specforge_test(
+    behavior = "provide_mcp_migrate_tool",
+    verify = "a specforge.json that does not say which files are the project's sources fails the call as config_invalid and writes nothing"
+)]
+fn migrate_refuses_a_config_that_does_not_say_which_files_are_its_sources() {
+    let server = project()
+        .file(
+            "a.spec",
+            "// specforge-format: 0.9\nbehavior alpha \"Alpha\" {\n}\n",
+        )
+        .serve(&[TestExtension::software()]);
+    let mut server = server;
+    let root = server.root().to_path_buf();
+    std::fs::write(root.join("specforge.json"), TRUNCATED_CONFIG).unwrap();
+    let before = files_under(&root);
+
+    let resp = call_tool(&mut server, "specforge.migrate", json!({"dry_run": false}));
+
+    let error = crate::tool_errors::mcp_error(&resp);
+    assert_eq!(error["code"], "schema_mismatch", "{error}");
+    assert_eq!(files_under(&root), before, "no rewrite, no .bak");
+}
+
+#[specforge_test(
+    behavior = "provide_mcp_rename_tool",
+    verify = "a specforge.json that does not say which files are the project's sources fails the rename as config_invalid and writes nothing"
+)]
+fn rename_refuses_a_config_that_does_not_say_which_files_are_its_sources() {
+    let (mut server, root) = server_with_token_project();
+    std::fs::create_dir_all(root.join("vendor")).unwrap();
+    std::fs::write(
+        root.join("vendor/v.spec"),
+        "behavior vend \"Vend\" {\n  contract \"y\"\n}\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("specforge.json"),
+        r#"{"name":"t","version":"0.1.0","extensions":["@specforge/software"],"spec_root":["spec"]}"#,
+    )
+    .unwrap();
+    // The next call brings the served project up to date with the config just written.
+    call_tool(&mut server, "specforge.validate", json!({}));
+    let before = files_under(&root);
+
+    let resp = call_tool(
+        &mut server,
+        "specforge.rename",
+        json!({"entity_id": "vend", "new_name": "vended"}),
+    );
+
+    let error = crate::tool_errors::mcp_error(&resp);
+    assert_eq!(error["code"], "schema_mismatch", "{error}");
+    assert!(
+        error["message"].as_str().unwrap().contains("\"spec_root\""),
+        "{error}"
+    );
+    assert_eq!(files_under(&root), before, "vendor/v.spec is unchanged");
 }

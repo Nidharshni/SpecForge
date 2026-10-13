@@ -4,15 +4,14 @@ expression: command.clone().render_long_help().to_string()
 ---
 Export spec graph to stdout in various formats
 
-Usage: specforge export [OPTIONS] [PATH]
+Usage: specforge export [OPTIONS]
 
-Arguments:
-  [PATH]
+Options:
+      --path <PATH>
           A path inside the project (the nearest directory at or above it holding specforge.json; none: the directory itself, with the default configuration)
           
           [default: .]
 
-Options:
       --format <FORMAT>
           Output format
 
@@ -40,7 +39,7 @@ Options:
           Embed the schema in `context` and `brief` exports, and in a `graph` export under --max-tokens. They leave it out by default: an agent reading the export needs the entities, and the schema is most of the bytes. Under --max-tokens an embedded schema counts toward the budget, and a budget it doesn't fit in fails (E062)
 
       --schema-version <SCHEMA_VERSION>
-          Request a specific schema version for the export
+          Fail unless a reader of this schema version reads the export: the same major version, not newer than the project's schema
 
       --max-tokens <MAX_TOKENS>
           Token budget for the export: keeps the most central entities that fit. The schema is left out unless --with-schema is given, and then counts toward the budget. The export lists the dropped entities under `token_budget`; below one entity it is the envelope with no entities, and below even that it fails (E062). Ignored by `dot`

@@ -1,13 +1,12 @@
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal, Written};
 use crate::terminal::{Terminal, errln, outln};
 use specforge_ops::migrate::{self, MigrateDocument, MigrationStatus, Request, RollbackSummary};
-use std::path::PathBuf;
 
 // `specforge migrate`'s command line.
 #[derive(clap::Args)]
 pub(crate) struct Args {
-    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
-    path: PathBuf,
+    #[command(flatten)]
+    project: crate::project::ProjectArg,
 
     /// Show unified diff without modifying files
     #[arg(long)]
@@ -32,7 +31,7 @@ pub(crate) struct Args {
 impl Args {
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         let format = self.output.format;
-        let root = match crate::project::root(&self.path) {
+        let root = match self.project.root() {
             Ok(root) => root,
             Err(error) => return Refusal::of(format).report(terminal, &error),
         };
@@ -65,7 +64,12 @@ impl Args {
             dry_run,
             no_backup,
         };
-        let outcome = migrate::run(&request, Some(runtime));
+        let outcome = match migrate::run(&request, Some(runtime)) {
+            Ok(outcome) => outcome,
+            // A config that does not say which files are the sources or
+            // which extensions load: nothing was read or written.
+            Err(error) => return Refusal::of(format).report(terminal, &error),
+        };
         // Each migrated file and each backup (none for a dry run).
         let written = (!dry_run).then(|| outcome.writes.names_under(path));
         print_migration(&outcome.document(), written, format, terminal);
@@ -75,10 +79,6 @@ impl Args {
         }
         for failure in &outcome.hook_failures {
             errln!(terminal, "migration hook failure: {failure}");
-        }
-        // Graph Protocol compatibility: breaking schema changes warn W053.
-        for warning in &outcome.schema_warnings {
-            errln!(terminal, "warning[{}]: {}", warning.code, warning.message);
         }
         for d in outcome.structural_differences() {
             errln!(terminal, "warning[{}]: {}", d.code, d.message);
@@ -157,6 +157,9 @@ fn print_migration(
                 for d in &document.diffs {
                     outln!(terminal, "{}", d.unified_text);
                 }
+            }
+            for d in &document.diagnostics.0 {
+                errln!(terminal, "{}[{}]: {}", d.severity, d.code, d.message);
             }
 
             errln!(

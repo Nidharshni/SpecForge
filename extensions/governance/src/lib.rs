@@ -19,18 +19,10 @@ impl Contributions for Governance {
     fn contribute(c: &mut ContributionsBuilder) {
         // Diagrams (`model`, `outline`) draw the extension in this colour.
         c.theme_color("#e74c3c");
-        c.meta.peer_dependencies.push(PeerDependency {
-            name: "@specforge/software".to_string(),
-            version: "^1.0".to_string(),
-            // Only ConstrainsBehavior targets a software kind (behavior):
-            // governance works without software (its manifest spec).
-            optional: true,
-        });
-        c.meta.peer_dependencies.push(PeerDependency {
-            name: "@specforge/product".to_string(),
-            version: "^1.0".to_string(),
-            optional: true,
-        });
+        // Only ConstrainsBehavior targets a software kind (behavior):
+        // governance works without software (its manifest spec).
+        c.optional_peer("@specforge/software", "^1.0")
+            .optional_peer("@specforge/product", "^1.0");
 
         declaration::declare(c);
     }

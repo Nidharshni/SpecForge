@@ -38,7 +38,7 @@ mod report;
 pub mod review;
 mod scan;
 pub mod schema;
-mod schema_cache;
+pub mod schema_version;
 pub mod stats;
 #[cfg(feature = "testing")]
 pub mod testing;

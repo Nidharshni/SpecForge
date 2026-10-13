@@ -76,9 +76,8 @@ type GraphAnnotation {
 // ── Schema Cache ───────────────────────────────────────────
 
 type SchemaCacheEntry {
-  schema_version SchemaVersion @readonly
-  hash           string        @readonly // SHA256 of the serialized schema JSON
-  cached_at      string        @readonly // ISO 8601 timestamp
+  schema       GraphProtocolSchema @readonly
+  content_hash string              @readonly // SHA-256 of the schema's JSON
   verify unit "SchemaCacheEntry schema is valid"
 }
 

@@ -104,6 +104,11 @@ has one coverage-row presenter (`tools::coverage::row_json`) and one gap present
   rendered text.
 - **D10. Only `specforge export` records the schema cache**, at the view's root (D1). MCP only
   reads it.
+  *(ADR 0067: it records the versioned schema with its content hash, after a successful export of any
+  format; every reader versions against the record through `SchemaCache::version`.)*
+  *(Round 8 plan 11: every document that names a schema version names the view's versioned schema's: the
+  export in every format, schema attached or not, trace, the model, and the graph an extension command
+  receives. No output carries a hand-kept version constant: `SCHEMA_VERSION = "0.1.0"` is gone.)*
 - **D11. Trace errors are typed**: `TraceError::EntityNotFound { entity_id, near }` replaces the
   emitter error that carried `E003: …` in its message for MCP to re-parse. It converts to an
   `OpError` E003 with a did-you-mean; the CLI prints `error[E003]: …` with a help line.
@@ -427,3 +432,28 @@ the project's runtime).
 
 The extension command runs over `ProjectView::of` in the CLI too (ADR 0011, "One operation runs a
 command"); `ProjectView::new` has no rooted production caller.
+
+## Rewrites of the project's sources read the config the same way (amendment, architecture round 8, plan 03)
+
+`format` and `migrate` read `specforge.json` through `load_project_config`, which dropped every problem: with a
+truncated file they rewrote every `.spec` file under the root, `vendor/` included, and said `ok: true`, while
+`check` failed with E069. A `spec_root` or `exclude` of the wrong type did the same, and `rename` rewrote such a
+file from a compile that had reported the E069.
+
+- **M15. One read for a rewrite.** `config::rewritable(root)` is `read_project_config` refusing with
+  `config::refusal` (M11) the first problem that `ConfigProblem::blocks_rewrites`: the file can't be used, or
+  `spec_root`, `exclude` or `extensions` has the wrong type: the run could not tell which files are the
+  project's sources, or which extensions' migration hooks run. `format` reads every project it selects sources
+  from through it, `migrate` reads its project once (the preview and the migration rewrite one list), `rename`
+  refuses from the view's `config_problems()` as `remove` does (M5). Dry runs, `--check` and `--diff` refuse
+  too, before any source is read.
+- **M16. What a rewrite goes around, it reports.** Every other problem (a mistyped `name` or `version`, a
+  non-string item, an exclude entry that can match no source) leaves the run's files and hooks as the file means
+  them: the run goes on, and each problem is one E069 in its document (`ConfigProblem::diagnostic`, the text the
+  compile reports), which fails its verdict (`format::Outcome::ok`, `migrate::Outcome::ok`). A named `.spec`
+  file selects no config and reads none (ADR 0021 D3).
+- **M17. `load_project_config` is gone**; every reader keeps the problems. The E069 builder is
+  `ConfigProblem::diagnostic` in `specforge-common`.
+
+M11 is amended: `config_invalid` is also format's, migrate's and rename's refusal, decided by `blocks_rewrites`
+(a superset of `blocks_edits`).

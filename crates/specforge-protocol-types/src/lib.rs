@@ -47,8 +47,10 @@ pub use vocabulary::{CheckKind, ConstraintKind, FieldType, ProofRole};
 /// version guarantees; 1.2.0 is ADR 0050's: the declared categories are the
 /// only describe categories, and the handshake says `providers` instead of
 /// carrying contribution flags; 1.3.0 is ADR 0060's: an enhancement declares
-/// no edge types (an edge type is declared once, in `edges`).
-pub const PROTOCOL_VERSION: &str = "1.3.0";
+/// no edge types (an edge type is declared once, in `edges`); 1.4.0 is
+/// ADR 0069's: a recorded test's status is `passed`, `failed` or `skipped`,
+/// and a pass's test results carry `duration_ms`.
+pub const PROTOCOL_VERSION: &str = "1.4.0";
 
 /// Errors that can occur during the extension protocol lifecycle.
 #[derive(Debug, Clone, PartialEq, Eq)]

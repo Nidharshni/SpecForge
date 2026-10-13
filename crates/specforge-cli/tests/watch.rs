@@ -273,6 +273,7 @@ fn watch_rebuild_reports_what_check_reports() {
 
     let check = specforge_cmd()
         .args(["check", "--format", "json"])
+        .arg("--path")
         .arg(project.path())
         .output()
         .unwrap();
@@ -337,6 +338,7 @@ fn watch_and_check(fixture: &str) -> (serde_json::Value, serde_json::Value, serd
 
     let check = specforge_cmd()
         .args(["check", "--format", "json"])
+        .arg("--path")
         .arg(project.path())
         .output()
         .unwrap();
@@ -604,8 +606,7 @@ fn docref_project(spec: &str) -> TempDir {
     )
     .unwrap();
     fs::copy(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../fixtures/docref-extension/docref.wasm"),
+        specforge_component::committed::DOCREF.path(),
         root.join("ext/docref.wasm"),
     )
     .unwrap();
@@ -839,6 +840,7 @@ fn watch_reports_what_check_reports_when_an_excluded_import_target_appears() {
     let check = |project: &TempDir| -> serde_json::Value {
         let out = specforge_cmd()
             .args(["check", "--format", "json"])
+            .arg("--path")
             .arg(project.path())
             .output()
             .unwrap();

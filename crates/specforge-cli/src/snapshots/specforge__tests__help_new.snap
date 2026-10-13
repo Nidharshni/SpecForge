@@ -14,7 +14,7 @@ Options:
       --extension
           Scaffold an extension project (SDK-authored wasm)
 
-      --path <PATH>
+      --dir <DIR>
           Directory to scaffold into
           
           [default: .]

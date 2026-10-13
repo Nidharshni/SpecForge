@@ -57,11 +57,3 @@ type RollbackSummary "What a migration rollback restored" {
   warnings       string[]
   verify unit "RollbackSummary schema is valid"
 }
-
-type PreMigrationSnapshot {
-  node_kinds  SchemaEntityKind[] @readonly
-  edge_types  SchemaEdgeType[]   @readonly
-  field_defs  SchemaField[]      @readonly
-  captured_at string             @readonly // ISO 8601 timestamp
-  verify unit "PreMigrationSnapshot schema is valid"
-}

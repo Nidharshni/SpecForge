@@ -11,9 +11,9 @@ use specforge_emitter::{
     GraphProtocolSchema, SchemaEdgeType, SchemaEntityKind, SchemaExtensionInfo, SchemaVersion,
 };
 
+use crate::OpError;
 use crate::export::{self, AGENT_FORMAT, FORMAT};
 use crate::view::ProjectView;
-use crate::{OpError, OpErrorKind};
 
 /// What part of the schema to return.
 #[derive(Debug, Clone, Copy)]
@@ -90,21 +90,23 @@ impl Serialize for SchemaOutcome {
 /// view's project conforms to, built from the versioned schema (`specforge
 /// schema --publish`). `dot` has none: refused as [`AGENT_FORMAT`] refuses
 /// it.
-pub fn json_schema(view: &ProjectView, format: export::Format) -> Result<String, OpError> {
+pub fn json_schema(view: &ProjectView, format: export::Format) -> Result<Value, OpError> {
     if !AGENT_FORMAT.admits(format) {
         return Err(AGENT_FORMAT
             .parse(FORMAT.name_of(format))
             .expect_err("a format the agent table does not admit is refused"));
     }
-    specforge_emitter::publish_json_schema_format(&view.versioned_schema(), format.emit_format())
-        .map_err(|error| OpError::new(OpErrorKind::Internal, "export_failed", error.to_string()))
+    Ok(
+        specforge_emitter::publish(view.versioned_schema().schema(), format.emit_format())
+            .expect("an agent format has a schema"),
+    )
 }
 
 /// The view's versioned schema, as `request` selects it. A kind no loaded
 /// extension declares is `unknown_kind` ([`ProjectView::kinds`]), naming the
 /// closest one.
 pub fn schema(view: &ProjectView, request: &SchemaRequest) -> Result<SchemaOutcome, OpError> {
-    let mut schema = view.versioned_schema();
+    let mut schema = view.versioned_schema().into_schema();
     if let Some(kind) = request.kind {
         view.kinds().declared(kind)?;
         schema.entity_kinds.retain(|entry| entry.name == kind);

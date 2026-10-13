@@ -9,6 +9,7 @@ fn check_accepts_all_software_entity_kinds() {
 
     specforge_cmd()
         .args(["check"])
+        .arg("--path")
         .arg(dir.path())
         .assert()
         .success();
@@ -22,6 +23,7 @@ fn check_accepts_all_product_entity_kinds() {
 
     specforge_cmd()
         .args(["check"])
+        .arg("--path")
         .arg(dir.path())
         .assert()
         .success();
@@ -35,6 +37,7 @@ fn check_accepts_all_governance_entity_kinds() {
 
     specforge_cmd()
         .args(["check"])
+        .arg("--path")
         .arg(dir.path())
         .assert()
         .success();
@@ -60,6 +63,7 @@ fn check_full_multi_extension_project_exits_zero() {
     // validates and exits 0.
     let output = specforge_cmd()
         .args(["check"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -80,6 +84,7 @@ fn check_full_multi_extension_project_exits_zero() {
     let dir = setup_project(&[("main.spec", &broken)]);
     let output = specforge_cmd()
         .args(["check"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -112,6 +117,7 @@ fn export_graph_includes_all_entity_kinds() {
 
     let output = specforge_cmd()
         .args(["export", "--format=graph"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -155,6 +161,7 @@ fn export_brief_includes_all_entity_kinds() {
 
     let output = specforge_cmd()
         .args(["export", "--format=brief"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -193,6 +200,7 @@ fn export_brief_includes_all_entity_kinds() {
     // And the edges, as the full graph export has them.
     let graph = specforge_cmd()
         .args(["export", "--format=graph"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -227,6 +235,7 @@ fn export_context_shows_contracts_for_all_kinds() {
 
     let output = specforge_cmd()
         .args(["export", "--format=context"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -288,6 +297,7 @@ fn stats_entities_by_kind_counts_all_kinds() {
 
     let output = specforge_cmd()
         .args(["stats", "--format=json"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -325,6 +335,7 @@ fn stats_human_format_lists_all_kinds() {
 
     let output = specforge_cmd()
         .args(["stats"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -379,6 +390,7 @@ feature fast_parsing "Fast Parsing" {
     // Check succeeds with cross-file references
     specforge_cmd()
         .args(["check"])
+        .arg("--path")
         .arg(dir.path())
         .assert()
         .success();
@@ -386,6 +398,7 @@ feature fast_parsing "Fast Parsing" {
     // Export includes entities from both files
     let output = specforge_cmd()
         .args(["export", "--format=graph"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();

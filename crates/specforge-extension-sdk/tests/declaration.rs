@@ -63,6 +63,25 @@ fn the_short_name_reaches_the_handshake() {
 
 #[specforge_test_macros::test(
     behavior = "load_extension_declaration",
+    verify = "the SDK's peer and optional_peer calls reach the handshake as peer_dependencies, in call order"
+)]
+fn peers_reach_the_handshake_in_call_order() {
+    let mut b = ContributionsBuilder::new(ExtensionMeta::new("@acme/peers", "1.0.0"));
+    b.peer("@a/x", "^1.0").optional_peer("@a/y", "^2");
+
+    let handshake: serde_json::Value = serde_json::from_str(&b.handshake_json()).unwrap();
+
+    assert_eq!(
+        handshake["peer_dependencies"],
+        serde_json::json!([
+            {"name": "@a/x", "version": "^1.0", "optional": false},
+            {"name": "@a/y", "version": "^2", "optional": true},
+        ])
+    );
+}
+
+#[specforge_test_macros::test(
+    behavior = "load_extension_declaration",
     verify = "a raw category that does not parse panics when the extension is built"
 )]
 fn a_raw_category_that_does_not_parse_panics() {

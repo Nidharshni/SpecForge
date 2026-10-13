@@ -7,8 +7,9 @@ invariant zero_compiler_dependency "Zero Compiler Dependency" {
     The specforge-test and specforge-test-macros crates MUST have zero
     dependency on any SpecForge compiler crate (specforge-common,
     specforge-parser, specforge-graph, specforge-resolver, specforge-cli).
-    The only coupling MUST be the specforge-report.json schema and the
-    graph export JSON format — both are data contracts, not Rust types.
+    The only coupling MUST be the binary report schema
+    (schema/specforge-binary-report.schema.json): a data contract, not
+    Rust types.
   """
   risk      critical
   verify property "no compiler crate appears in dependency tree"
@@ -52,20 +53,6 @@ invariant convention_separator_unambiguous "Convention Separator Unambiguous" {
   verify property "slugify is deterministic for all valid verify descriptions"
   verify unit "double underscore splits correctly"
   verify unit "entity IDs with single underscores are not misinterpreted"
-}
-
-invariant graceful_degradation "Graceful Degradation" {
-  guarantee """
-    When specforge is not installed or the graph export is unavailable,
-    the crate MUST degrade gracefully: build.rs MUST emit a cargo warning
-    and skip graph export. The atexit handler MUST skip the coverage
-    summary. Tests MUST still compile and run normally. No hard failure
-    MUST occur from missing specforge tooling.
-  """
-  risk      high
-  verify unit "build.rs succeeds when specforge is not on PATH"
-  verify unit "tests compile without graph export present"
-  verify unit "atexit handler skips summary when graph.json is missing"
 }
 
 invariant should_panic_expectation "Should Panic Expectation" {

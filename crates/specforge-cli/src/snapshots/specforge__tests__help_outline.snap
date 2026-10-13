@@ -4,15 +4,14 @@ expression: command.clone().render_long_help().to_string()
 ---
 Render the extension architecture (dependencies, enhancements, contributions)
 
-Usage: specforge outline [OPTIONS] [PATH]
+Usage: specforge outline [OPTIONS]
 
-Arguments:
-  [PATH]
+Options:
+      --path <PATH>
           A path inside the project (the nearest directory at or above it holding specforge.json; none: the directory itself, with the default configuration)
           
           [default: .]
 
-Options:
       --format <FORMAT>
           Output format
 

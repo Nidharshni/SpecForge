@@ -60,6 +60,7 @@ fn finding(d: &serde_json::Value) -> Finding {
 fn check(dir: &TempDir) -> Vec<Finding> {
     let output = specforge_cmd()
         .args(["check", "--format=json"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -354,7 +355,7 @@ fn conditioned_behaviors_are_noted_once_per_check_as_i015() {
 /// `pong`; `sync` is written on `pong` when given.
 fn ping_pong(sync: Option<&str>) -> TempDir {
     let pong_sync = sync
-        .map(|s| format!("  sync [\"{s}\"]\n"))
+        .map(|s| format!("  sync {{\n    bound \"{s}\"\n  }}\n"))
         .unwrap_or_default();
     project(&format!(
         concat!(
@@ -669,11 +670,11 @@ fn an_item_every_test_proves_is_i008_naming_the_tests() {
         &dir,
         serde_json::json!({"runner": "manual", "results": {
             "proven": {"tests": [
-                {"name": "works", "status": "pass", "verify": "it works"},
-                {"name": "fails_safely", "status": "pass", "verify": "it fails safely"}
+                {"name": "works", "status": "passed", "verify": "it works"},
+                {"name": "fails_safely", "status": "passed", "verify": "it fails safely"}
             ]},
             "halfway": {"tests": [
-                {"name": "works", "status": "pass", "verify": "it works"}
+                {"name": "works", "status": "passed", "verify": "it works"}
             ]}
         }}),
     );
@@ -709,21 +710,25 @@ behavior kept "Kept" {
   ensures {
     done "it is done"
   }
-  maintains [unique_ids]
+  maintains {
+    unique_ids "ids stay unique"
+  }
 }
 behavior proven "Proven" {
   contract  "c"
   ensures {
     done "it is done"
   }
-  maintains [unique_ids]
+  maintains {
+    unique_ids "ids stay unique"
+  }
   verify unit "it works"
 }
 "#;
 
 fn depth_results() -> serde_json::Value {
     serde_json::json!({"runner": "manual", "results": {
-        "proven": {"tests": [{"name": "works", "status": "pass", "verify": "it works"}]}
+        "proven": {"tests": [{"name": "works", "status": "passed", "verify": "it works"}]}
     }})
 }
 

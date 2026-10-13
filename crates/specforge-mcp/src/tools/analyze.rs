@@ -3,9 +3,9 @@ use crate::reply::Answered;
 use crate::target::ProjectRef;
 use crate::target::{AnyUnlessCached, Project};
 use crate::tool::McpError;
-use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
+use crate::tool::{CoreTool, Effect, RefusalArgument, ReplySpec, ToolGroup};
 use specforge_ops::OpError;
-use specforge_ops::analyze::{AnalyzeError, AnalyzeOptions, ReportSource, analyze};
+use specforge_ops::analyze::{AnalyzeOptions, ReportSource, analyze};
 
 /// `specforge.analyze`'s reply: the document `specforge analyze --format json`
 /// prints (`McpAnalyzeResult`).
@@ -45,6 +45,16 @@ impl CoreTool for Tool {
     type Args = Args;
     type Input = Project<AnyUnlessCached>;
     type Returns = Answered<Reply>;
+    const REFUSAL_ARGUMENTS: &'static [RefusalArgument] = &[
+        RefusalArgument {
+            code: specforge_ops::analyze::UNKNOWN_PASS,
+            argument: "pass",
+        },
+        RefusalArgument {
+            code: specforge_ops::analyze::INVALID_MIN,
+            argument: "min",
+        },
+    ];
 
     fn call(project: ProjectRef<'_>, args: Args) -> Answered<Reply> {
         let view = project.view();
@@ -62,17 +72,7 @@ impl CoreTool for Tool {
             min: args.min,
             prove: None,
         };
-        match analyze(&view, &options) {
-            Ok(outcome) => Ok(outcome.document().into()),
-            Err(e) => {
-                // The argument an unknown pass names is this surface's spelling.
-                let unknown_pass = matches!(e, AnalyzeError::UnknownPass { .. });
-                let error = McpError::from(OpError::from(e));
-                Err(Box::new(match unknown_pass {
-                    true => error.with_argument("pass"),
-                    false => error,
-                }))
-            }
-        }
+        let outcome = analyze(&view, &options).map_err(|e| McpError::from(OpError::from(e)))?;
+        Ok(outcome.document().into())
     }
 }

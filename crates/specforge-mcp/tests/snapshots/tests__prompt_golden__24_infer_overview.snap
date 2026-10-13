@@ -237,8 +237,6 @@ expression: "shape(&reply, dir.path())"
           "composed_types",
           "description",
           "extends",
-          "fields",
-          "kind",
           "refs"
         ],
         "inference_guide": "[guide]",

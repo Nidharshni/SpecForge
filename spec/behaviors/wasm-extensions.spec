@@ -534,10 +534,12 @@ behavior dispatch_collector "Dispatch Collector" {
     The export answers with test results grouped by entity:
     `{"entity_results": [{"entity_id", "test_results": [{"name", "status",
     "verify"?, "duration_ms"?}]}], "unlinked"?: [{"name", "path",
-    "status"}]}`, where status is passed, failed or skipped and `unlinked`
-    lists tests the report doesn't link to an entity. A trap or an answer
-    that is not a CollectOutput (a test without a name, an empty object) is
-    E028 naming the collector, never empty results. `--no-run`
+    "status"}]}`, where status is the protocol's TestStatus, passed, failed
+    or skipped, read strictly, and `unlinked` lists tests the report doesn't
+    link to an entity. A trap or an answer that is not a CollectOutput (a
+    test without a name, a status outside passed, failed and skipped, an
+    empty object) is E028 naming the collector, never empty results or a
+    skipped test. `--no-run`
     and `--report` skip running and dispatch an existing report.
   """
   produces   [collector_dispatched]
@@ -562,23 +564,28 @@ behavior ingest_collector_report "Ingest Collector Report" {
     runner_results_replaced           "a runner's earlier results are replaced; other runners' results are kept"
     unknown_entities_warned           "results for undeclared entities are dropped with W115"
     skipped_not_recorded              "skipped tests are counted but not recorded"
+    one_vocabulary                    "the report keeps the collect wire's TestResult and statuses"
     merged_report_written             "the merged results are written to specforge-report.json, which analyze reads by default"
   }
   contract   """
     Each runner's answer is merged into `specforge-report.json`: the
     runner's earlier results are removed and its new ones added, so several
-    runners can report on one project. Every recorded test carries its
-    name, `pass` or `fail`, the `verify` obligation it names and the runner
-    that recorded it. Results for entities the graph doesn't declare are
+    runners can report on one project. Every recorded test is the
+    collector's TestResult (its name, `passed` or `failed`, the `verify`
+    obligation it names, its duration) with the runner that recorded it.
+    The report is read strictly: a status outside passed, failed and
+    skipped, or a test without a name, makes it a report that cannot be
+    used (E045), and collect rewrites it. Results for entities the graph doesn't declare are
     dropped with a W115 warning. Skipped tests prove nothing, so they're
     counted but not recorded. `specforge analyze` reads the written report
     without `--test-results`.
   """
   produces   [collector_report_ingested]
   verify unit "merge replaces only the same runner"
+  verify unit "the recorded test report speaks the collect vocabulary, and a status outside it is a report that cannot be used"
   verify unit "the entities results may name are the entity snapshot's, with their obligation texts"
   verify integration "collect then analyze scores the recorded tests"
-  verify contract "Ingest Collector Report: collector report ingestion holds — collector_dispatched_fired, graph_available, collector_report_ingested_emitted, runner_results_replaced, unknown_entities_warned, skipped_not_recorded, merged_report_written"
+  verify contract "Ingest Collector Report: collector report ingestion holds — collector_dispatched_fired, graph_available, collector_report_ingested_emitted, runner_results_replaced, unknown_entities_warned, skipped_not_recorded, one_vocabulary, merged_report_written"
 }
 
 behavior resolve_test_conventions "Resolve Test Naming Conventions" {
@@ -626,16 +633,17 @@ behavior slug_obligation_text "Slug an Obligation Text" {
   invariants [collector_output_conformance]
   category   query
   ensures {
-    one_algorithm "the host and the specforge-test crate slug a text the same way"
+    one_algorithm "one algorithm slugs a text, held to the test vectors"
   }
   contract   """
     A test named after an obligation carries the obligation's slug:
     `<=`, `>=`, `<` and `>` become `lte`, `gte`, `lt` and `gt`, spaces
     become underscores, ASCII letters are lowercased, every other character
     outside `[a-z0-9_]` is dropped, runs of underscores collapse to one and
-    leading or trailing underscores are trimmed. The host and the
-    `specforge-test` crate each carry this algorithm and are held to the
-    same test vectors, so a name that links in one links in the other.
+    leading or trailing underscores are trimmed. The host carries this
+    algorithm once (`specforge_common::slug`), held to its test vectors;
+    the `specforge-test` crate needs no slug, since collect links tests
+    by name on the host.
   """
   verify unit "slug matches the shared test vectors"
 }
@@ -738,13 +746,15 @@ behavior parse_extension_specifier "Parse Extension Specifier" {
   }
   contract   """
     The system MUST read an add argument once into one source: a builtin's
-    name, a local path (ending in .wasm, or starting with ./, ../ or /), a
-    git+ URL, or a package reference @scope/name[@requirement], where the
-    name is a PackageName and the requirement a VersionRequirement (latest
-    when absent). An argument that is none of these MUST be refused with
-    E054 before any registry is asked; a requirement that is not one MUST be
-    refused with R-RES-003 before any registry is asked. No other code may
-    split name@requirement.
+    name, a git+ URL, a package reference @scope/name[@requirement] (it
+    starts with @ and does not end in .wasm), where the name is a
+    PackageName and the requirement a VersionRequirement (latest when
+    absent), or else a local path (a .wasm file or an extension's crate
+    directory, with or without ./). A package reference that is not one,
+    and a path that names nothing, MUST be refused with E054 before any
+    registry is asked; a requirement that is not one MUST be refused with
+    R-RES-003 before any registry is asked. No other code may split
+    name@requirement.
   """
   produces   [extension_specifier_parsed]
   verify unit "@scope/name@version parsed as registry source"
@@ -752,6 +762,7 @@ behavior parse_extension_specifier "Parse Extension Specifier" {
   verify unit "git:url#ref parsed as git source"
   verify unit "invalid specifier produces ExtensionError"
   verify unit "each add argument reads as one extension source"
+  verify unit "a specifier that is no builtin's name, git+ URL or @scope/name reference is a local path, a bare crate directory included"
   verify unit "a package name is @scope/name or a local name, and always a relative path inside its directory"
   verify unit "a package name crosses a registry URL as one segment"
   verify unit "a version requirement is latest, one version or a SemVer requirement"
@@ -905,7 +916,11 @@ behavior update_all_extensions "Update All Extensions" {
     could not write (E032) or the lock (E033); every file is put back, and no
     extension is reported updated. Only registry installs are updated: an
     extension installed from a local file (source local:<path>) MUST NOT be
-    replaced from a registry. When a registry-installed extension is
+    replaced from a registry. An update of one extension by name MUST
+    refuse a name the lock does not hold, before any registry is asked:
+    extension_not_found naming it (E072 when it is no package name; a
+    builtin's name is told that builtins update with specforge).
+    When a registry-installed extension is
     to be updated and no registry is configured in specforge.json, update
     MUST make no network call and MUST fail with E063, whose suggestion
     names the registries key.
@@ -930,6 +945,7 @@ behavior update_all_extensions "Update All Extensions" {
   verify unit "peer dependency conflicts detected before applying"
   verify unit "every upgrade is judged against the lock as the whole update leaves it, whatever order the lock lists them in"
   verify unit "an upgrade whose required peer no entry enables is refused, and update enables nothing"
+  verify unit "an update of a name the lock does not hold is refused before any registry is asked"
   verify unit "failed upgrade rolls back all changes"
   verify unit "a write that fails while applying fails the update, naming what it could not write, and nothing is applied"
   verify integration "update never replaces a locally installed extension from a registry"

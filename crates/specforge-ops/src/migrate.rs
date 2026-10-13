@@ -15,9 +15,7 @@ pub use specforge_migrate::{
     MigrationBackup, MigrationDiff, MigrationRecord, MigrationResult, MigrationStatus,
     MigrationSummary, RecordChange, RollbackSummary,
 };
-use specforge_migrate::{
-    check_schema_compatibility, migrate_project, restore, run_rollback, structural_differences,
-};
+use specforge_migrate::{migrate_project, restore, run_rollback, structural_differences};
 use specforge_parser::{
     CURRENT_FORMAT_VERSION, FormatVersion, MAX_SUPPORTED_VERSION, MIN_SUPPORTED_VERSION,
 };
@@ -85,13 +83,13 @@ pub struct Outcome {
     pub hook_failures: Vec<String>,
     /// Whether the migrated project was compiled and compared.
     pub validated: bool,
-    /// Breaking Graph Protocol schema changes (W053).
-    pub schema_warnings: Vec<Diagnostic>,
     /// The graph delta from the graph before the migration to the graph after it, source positions ignored: the run
     /// keeps the migration only when it is empty. Empty when the run did not compare.
     pub graph_delta: GraphDelta,
     /// What compiling the migrated project reported.
     pub post_diagnostics: Vec<Diagnostic>,
+    /// One E069 per problem in `specforge.json` the run went around.
+    pub diagnostics: Vec<Diagnostic>,
     /// The restore, when the migration was rolled back.
     pub rollback: Option<RollbackSummary>,
     /// The files the run left changed: each migrated file and each backup;
@@ -112,6 +110,9 @@ pub enum Failure {
     ChangedGraph { differences: usize },
     /// Files that could not be migrated (each shown path and its error); the others were.
     FilesFailed { files: Vec<(String, String)> },
+    /// `specforge.json` is not used as written (each E069's message); the
+    /// run did what it could around it.
+    ConfigNotUsedAsWritten { problems: Vec<String> },
 }
 
 impl From<Failure> for OpError {
@@ -151,6 +152,12 @@ impl From<Failure> for OpError {
                     format!("{} file(s) could not be migrated{first}", files.len()),
                 )
             }
+            Failure::ConfigNotUsedAsWritten { problems } => OpError::new(
+                OpErrorKind::SchemaMismatch,
+                "config_invalid",
+                problems.join("; "),
+            )
+            .with_suggestion("fix specforge.json; `specforge explain E069` says what it must be"),
         }
     }
 }
@@ -159,12 +166,16 @@ impl From<Failure> for OpError {
 /// (`McpMigrateResult`): one record whether anything was pending or not.
 #[derive(Debug, Clone, Serialize, Shape)]
 pub struct MigrateDocument {
-    /// No file failed and nothing was rolled back ([`Outcome::ok`]).
+    /// No file failed, nothing was rolled back and `specforge.json` is used
+    /// as written ([`Outcome::ok`]).
     pub ok: bool,
     /// Some file was behind `to_version`; when false nothing else ran.
     pub pending: bool,
     pub from_version: String,
     pub to_version: String,
+    /// One E069 per problem in `specforge.json` the run went around; any
+    /// fails `ok`.
+    pub diagnostics: DiagnosticList,
     /// The migrated files are on disk now ([`Outcome::migrated`]).
     pub migrated: bool,
     pub dry_run: bool,
@@ -178,8 +189,6 @@ pub struct MigrateDocument {
     pub hooks_invoked: Vec<String>,
     /// Why each failing hook failed.
     pub hook_failures: Vec<String>,
-    /// Breaking Graph Protocol schema changes (W053).
-    pub schema_warnings: DiagnosticList,
     /// How the migrated graph differs from the one before (W054).
     pub structural_differences: DiagnosticList,
     pub rolled_back: bool,
@@ -205,6 +214,7 @@ impl Outcome {
             pending: self.pending,
             from_version: self.from.to_string(),
             to_version: self.to.to_string(),
+            diagnostics: DiagnosticList(self.diagnostics.clone()),
             migrated: self.migrated(),
             dry_run: self.dry_run,
             files_migrated: self.summary.migrated_count,
@@ -215,7 +225,6 @@ impl Outcome {
             backups: self.summary.backups.clone(),
             hooks_invoked: self.hooks_invoked.clone(),
             hook_failures: self.hook_failures.clone(),
-            schema_warnings: DiagnosticList(self.schema_warnings.clone()),
             structural_differences: DiagnosticList(self.structural_differences()),
             rolled_back: self.rollback.is_some(),
             rollback: self.rollback.clone(),
@@ -229,20 +238,27 @@ impl Outcome {
         self.applied && self.summary.migrated_count > 0 && self.rollback.is_none()
     }
 
-    /// The run's verdict: no file failed to migrate and nothing was rolled
-    /// back. `specforge migrate` exits by it; MCP `specforge.migrate`
-    /// returns it as `ok`.
+    /// The run's verdict: no file failed to migrate, nothing was rolled
+    /// back, and `specforge.json` is used as written (no E069).
+    /// `specforge migrate` exits by it; MCP `specforge.migrate` returns it
+    /// as `ok`.
     pub fn ok(&self) -> bool {
-        self.summary.failed_count == 0 && self.rollback.is_none()
+        self.summary.failed_count == 0 && self.rollback.is_none() && self.diagnostics.is_empty()
     }
 
     /// Why the run failed; `None` when [`Self::ok`]. A rollback's cause first (a hook that failed,
-    /// a project that does not compile, a graph that changed), then files that failed.
+    /// a project that does not compile, a graph that changed), then files that failed, then the
+    /// config.
     pub fn failure(&self) -> Option<Failure> {
         if self.ok() {
             return None;
         }
         if self.rollback.is_none() {
+            if self.summary.failed_count == 0 {
+                return Some(Failure::ConfigNotUsedAsWritten {
+                    problems: self.diagnostics.iter().map(|d| d.message.clone()).collect(),
+                });
+            }
             let files = self
                 .summary
                 .results
@@ -287,11 +303,19 @@ pub use specforge_protocol_types::MigrationInput;
 /// compile again and compare. A failing hook or a non-empty graph delta
 /// restores every migrated file from its backup. With no runtime no
 /// extension is loaded, so no hook runs.
-pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Outcome {
+///
+/// Its `specforge.json` is read once, through [`crate::config::rewritable`]:
+/// refused (`config_invalid`, nothing read or written) when it does not say
+/// which files are the project's sources or which extensions it loads; each
+/// other problem is one E069 in [`Outcome::diagnostics`] and fails
+/// [`Outcome::ok`]. The preview and the migration rewrite the same sources.
+pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Result<Outcome, OpError> {
     // The project the files are migrated in and the one the hooks and the checks compile.
     let project = request.root;
     let target = &request.target;
-    let preview = migrate_project(project, target, true, true);
+    let read = crate::config::rewritable(project.dir())?;
+    let sources = read.config.spec_files(project.dir());
+    let preview = migrate_project(project, &sources, target, true, true);
     let from = preview
         .results
         .iter()
@@ -309,25 +333,24 @@ pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Outcome {
         hooks_invoked: Vec::new(),
         hook_failures: Vec::new(),
         validated: false,
-        schema_warnings: Vec::new(),
         graph_delta: GraphDelta::default(),
         post_diagnostics: Vec::new(),
+        diagnostics: read.diagnostics(),
         rollback: None,
         writes: Writes::none(),
     };
     if !pending || request.dry_run {
-        return outcome;
+        return Ok(outcome);
     }
 
-    // The graph and schema before any file is touched.
+    // The graph before any file is touched.
     let pre = CompiledProject::compile(project, runtime.clone());
-    let pre_schema = schema_of(&pre);
 
-    outcome.summary = migrate_project(project, target, false, request.no_backup);
+    outcome.summary = migrate_project(project, &sources, target, false, request.no_backup);
     outcome.applied = true;
     outcome.writes = summary_writes(&outcome.summary);
     if outcome.summary.failed_count > 0 {
-        return outcome;
+        return Ok(outcome);
     }
 
     // Extension hooks run on the migrated files, before validation.
@@ -350,21 +373,20 @@ pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Outcome {
     outcome.hook_failures = failures;
     if !outcome.hook_failures.is_empty() {
         roll_back(&mut outcome);
-        return outcome;
+        return Ok(outcome);
     }
 
     // The migrated project must have the graph it had before.
     let post = CompiledProject::compile(project, runtime);
     outcome.validated = true;
-    outcome.schema_warnings = check_schema_compatibility(&pre_schema, &schema_of(&post));
     outcome.graph_delta = compute_graph_delta(pre.graph(), post.graph());
     outcome.post_diagnostics = post.diagnostics();
     if !outcome.graph_delta.is_empty() {
         roll_back(&mut outcome);
-        return outcome;
+        return Ok(outcome);
     }
     keep_record(project.dir(), request, &mut outcome);
-    outcome
+    Ok(outcome)
 }
 
 /// A kept migration made with backups is recorded for a later `--rollback`; one made without removes
@@ -448,10 +470,6 @@ pub fn rollback(root: &specforge_common::ProjectRoot) -> RollbackOutcome {
         writes.record(root.dir().join(MigrationRecord::PATH));
     }
     RollbackOutcome { summary, writes }
-}
-
-fn schema_of(project: &CompiledProject) -> specforge_emitter::GraphProtocolSchema {
-    specforge_emitter::generate_schema(project.environment().registries())
 }
 
 /// Run each extension's declared migration hook, in the registry build's load order (ADR 0041).

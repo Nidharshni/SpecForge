@@ -1,8 +1,7 @@
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use specforge_common::shape::Shape;
-use specforge_common::{Diagnostic, ProjectRoot, Severity, codes, load_project_config};
-use specforge_emitter::schema::{GraphProtocolSchema, SchemaMigration, diff_schemas};
+use specforge_common::{Diagnostic, ProjectRoot, Severity, codes};
 use specforge_formatter::unified_diff;
 use specforge_graph::{EdgeChange, GraphDelta, ModifiedNodeChange, NodeAspect};
 use specforge_parser::{FORMAT_HEADER_PREFIX, FormatVersion, detect_format_version};
@@ -218,31 +217,6 @@ fn sha256_hash(content: &str) -> String {
 // ---------------------------------------------------------------------------
 // Post-migration checks
 // ---------------------------------------------------------------------------
-
-/// Compare pre/post migration schemas and return breaking change diagnostics.
-pub fn check_schema_compatibility(
-    pre: &GraphProtocolSchema,
-    post: &GraphProtocolSchema,
-) -> Vec<Diagnostic> {
-    let migration: SchemaMigration = diff_schemas(pre, post);
-    let mut diagnostics = Vec::new();
-
-    for change in &migration.changes {
-        if change.is_breaking() {
-            diagnostics.push(
-                Diagnostic::new(
-                    codes::W053,
-                    format!("breaking schema change after migration: {change:?}"),
-                )
-                .with_suggestion(
-                    "Review the migration to ensure backward compatibility.".to_string(),
-                ),
-            );
-        }
-    }
-
-    diagnostics
-}
 
 /// What a migration changed in the graph, as W054 warnings, from the graph delta between the graph before it and the
 /// graph after (source positions ignored, ADR 0032): one per entity removed, one per entity added, one per entity
@@ -679,22 +653,17 @@ pub fn run_rollback(root: &ProjectRoot) -> RollbackSummary {
     summary
 }
 
-/// The sources of the project at `project_root`: the
-/// files a compile reads, under `spec_root` without what `exclude` leaves
-/// out (ADR 0021 D3).
-fn project_sources(project_root: &Path) -> Vec<PathBuf> {
-    load_project_config(project_root).spec_files(project_root)
-}
-
-/// Migrate every source of the project at `root`.
+/// Migrate `sources`, files of the project at `root` (the project's
+/// sources, which the caller selected), in order. `root` labels the diffs
+/// and backups.
 pub fn migrate_project(
     root: &ProjectRoot,
+    sources: &[PathBuf],
     target_version: &FormatVersion,
     dry_run: bool,
     no_backup: bool,
 ) -> MigrationSummary {
     let project_root = root.dir();
-    let targets = project_sources(project_root);
 
     let mut results = Vec::new();
     let mut backups = Vec::new();
@@ -704,7 +673,7 @@ pub fn migrate_project(
     let mut skipped = 0;
     let mut failed = 0;
 
-    for target_path in &targets {
+    for target_path in sources {
         let file = migrate_file(
             target_path,
             project_root,

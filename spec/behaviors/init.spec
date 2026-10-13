@@ -203,25 +203,29 @@ behavior non_interactive_init "Non-Interactive Init" {
     When --version is specified, it MUST override the default version
     (0.1.0) in the generated specforge.json.
     --extensions takes builtins and local .wasm files, several to a flag
-    separated by commas: init enables, before each extension it enables or
+    separated by commas, each read as add reads a specifier
+    (parse_extension_specifier: E054, R-RES-003, E040, the same messages
+    and suggestions): init enables, before each extension it enables or
     installs, the builtins that extension requires (its non-optional peers
-    that are builtins, and theirs), as add does, and judges the project's
-    peer set through the lock plan add uses (ADR 0004 D3-e, ADR 0041), its
-    local files installed as one change without reading them again, so it
-    never writes an entry specforge check cannot load or a project whose
-    check reports an E027 for an extension it enabled; the set is judged
-    before any file is written. Any other extension (a registry package,
-    which needs a registry a new project has not configured yet) MUST be
-    rejected with a diagnostic naming it and exit code 1. A project name
-    whose starter spec ID would break the identifier contract (2-60
-    characters) MUST be rejected the same way. Everything is validated
-    before any file is written.
+    that are builtins, and theirs), as add does. Init is one lock-plan
+    change (ADR 0041): the project's peer set is judged once, before any
+    file is written, so it never writes an entry specforge check cannot
+    load or a project whose check reports an E027 for an extension it
+    enabled; then its modules, specforge.lock, specforge.json, .gitignore
+    and starter are written as one change, put back together on failure.
+    A registry package MUST be rejected with E063 (a new project has no
+    registry configured; the suggestion names the specforge add to run
+    once one is), a git source with E064, both with exit code 1 and before
+    anything is written. A project name whose starter spec ID would break
+    the identifier contract (2-60 characters) MUST be rejected the same
+    way. Everything is validated before any file is written.
   """
   verify unit "non-interactive init creates valid specforge.json"
   verify unit "non-interactive init skips all prompts"
   verify unit "non-interactive init with --extensions populates extensions list"
   verify unit "init enables a builtin after the builtins it requires, as add does"
   verify unit "init refuses local extensions the lock plan refuses before it writes anything"
+  verify unit "init reads its extension specifiers as add reads them, with add's codes"
   verify unit "init enables the builtins a local file requires before it"
   verify integration "init with a builtin that requires another passes check"
   verify unit "non-interactive init with unknown extension rejects with diagnostic and exit code 1"
@@ -285,14 +289,21 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
     source "registry", or "local:<path>" for a local .wasm file, so peer
     and diamond checks compare real versions and update never replaces a
     local build from a registry.
-    A local path may name an extension's crate directory: the component its
+    A local path may name an extension's crate directory, with or without ./: the component its
     crate builds (target/wasm32-wasip2/release/<crate>.wasm) is installed
     and locked by its own path, as publish reads it; a directory with no
     built component is E040.
     The system MUST NOT duplicate an already-installed extension.
-    A dry run reports what the add would do for each specifier and writes
-    nothing; an extension already present answers as the add would,
-    whatever its source.
+    A dry run is the add's lock plan judged and not committed: it answers
+    what the add would answer for each specifier (planned, with the
+    builtins it would enable as peers_enabled), or the refusal the add
+    would give, and writes, pins and downloads nothing. A registry
+    package is judged by the declaration it was published with (its
+    manifest, read without its binary), which is what the add's peer
+    check judges; what only the binary can fail (integrity, the publisher
+    signature, its load) is not checked. An extension already present
+    answers as the add would, whatever its source. specforge add --dry-run
+    is that dry run on the command line.
     The system MUST NOT modify any other field in specforge.json.
     When adding an extension, the system MUST judge, by the one peer rule
     (ADR 0041) and before anything is installed, the project's peer set as
@@ -332,9 +343,9 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
     Its JSON output is the add document specforge.add_extension answers
     (McpAddExtensionResult: added, one entry per specifier in the order
     given, each naming its specifier, its action enabled, installed,
-    already_present, planned or duplicate; no note; an enabled builtin or
-    an installed package lists the required builtins the add enabled with
-    it as peers_enabled), with the files it
+    already_present, planned or duplicate; no note; an enabled builtin,
+    an installed package or a planned one lists the required builtins the
+    add enabled with it as peers_enabled), with the files it
     wrote as files_written (empty when every extension was already
     enabled). A registry package's source is registry, and its key_id is
     present only when the package is signed.
@@ -350,6 +361,8 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
   verify unit "an add of several specifiers judges their peers on the whole set, whatever their order"
   verify unit "a specifier naming an extension an earlier one adds is a duplicate, and two adding it differently are refused"
   verify unit "a dry run of several specifiers previews each and writes nothing"
+  verify unit "a dry run answers what the add answers, refusals and the builtins it enables included, and writes nothing"
+  verify unit "a dry run judges a registry package by the declaration it was published with, downloading nothing"
   verify unit "add enables a builtin's required peers but not its optional ones"
   verify unit "add enables the builtins a required builtin peer requires, dependencies first"
   verify unit "a builtin whose declaration cannot be read is refused before anything is written"
@@ -434,6 +447,7 @@ behavior locate_project_root "Locate the Project a Path Is In" {
     missing_path_refused  "A path that does not exist is refused as file_not_found, never read as an empty project"
     symlinks_resolved     "The walk follows the path's resolved directories, and the root is spelled as the path spells it where that spelling reaches it"
     every_surface_agrees  "Every command, watch, the LSP and MCP open the project a path is in by this rule; only init takes its directory as given"
+    one_option            "On the command line a project is named by --path on every command that reads one, never by a positional argument"
   }
   contract   """
     Any path inside a project (the directory itself, a subdirectory, a
@@ -454,8 +468,14 @@ behavior locate_project_root "Locate the Project a Path Is In" {
     workspace root and MCP (its root and a call's path) MUST open the
     project their path is in by this one rule; the project's spec root
     is then read from its specforge.json (spec_root), and is never the
-    path given. A command's path help says it is a path inside the
-    project. Only init takes its directory as given: it creates the
+    path given. On the command line every command that reads a project
+    (every core command but init, new, explain, mcp and extension
+    init|build|validate, and every extension command) names it with
+    --path PATH, default ., whose help says it is a path inside the
+    project; no command takes a project path as a positional argument,
+    and no other argument is called --path (an extension crate's
+    directory is --dir; specforge mcp's served root is its positional
+    ROOT). Only init takes its directory as given: it creates the
     project there. A session keeps the root it was opened at; an
     environment reload does not locate it again.
   """
@@ -474,9 +494,11 @@ behavior locate_project_root "Locate the Project a Path Is In" {
   verify integration "a command given a path that does not exist refuses it as file_not_found"
   verify integration "an extension command run from a subdirectory is routed over the project it is in"
   verify integration "watch run from a subdirectory watches the project it is in"
-  verify unit "every command's project path argument says it is a path inside the project"
+  verify integration "every command given --path acts on the project the path is in, from any directory"
+  verify integration "a project path given as a positional argument is refused as a usage error"
+  verify unit "every command that reads a project takes the one --path option, and none takes a project path as a positional argument"
   verify unit "a server started in a spec root holding specforge.spec serves the project around it"
   verify unit "a workspace root in a spec root holding specforge.spec opens the project around it"
   verify unit "a loose root's I002 says no project was found and suggests init"
-  verify contract "Locate the Project a Path Is In: project root location holds — filesystem_available, closest_wins_enforced, one_marker, loose_root, missing_path_refused, symlinks_resolved, every_surface_agrees"
+  verify contract "Locate the Project a Path Is In: project root location holds — filesystem_available, closest_wins_enforced, one_marker, loose_root, missing_path_refused, symlinks_resolved, every_surface_agrees, one_option"
 }

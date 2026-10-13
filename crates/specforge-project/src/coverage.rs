@@ -10,6 +10,7 @@ use crate::Environment;
 use crate::snapshot::{EntitySnapshot, Standing};
 use serde::Deserialize;
 use specforge_graph::Graph;
+use specforge_protocol_types::{EntityTests, TestResult, TestResults};
 use std::collections::BTreeMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::{Path, PathBuf};
@@ -19,33 +20,29 @@ use std::sync::{Arc, Mutex, OnceLock};
 /// `analyze` and the coverage views read it.
 pub const REPORT_FILE: &str = "specforge-report.json";
 
-/// The recorded test report (`specforge-report.json`, RES-15).
+/// The recorded test report (`specforge-report.json`): per entity id, the
+/// tests `collect` recorded, each with the collector that recorded it. A
+/// status outside the protocol's [`TestStatus`] vocabulary, or a test
+/// without a name, makes it a report that cannot be used (E045, ADR 0069).
 #[derive(Debug, Deserialize, serde::Serialize)]
 pub struct TestReport {
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub runner: Option<String>,
-    #[serde(default)]
     pub results: std::collections::BTreeMap<String, ReportedEntity>,
 }
 
+/// The tests recorded for one entity.
 #[derive(Debug, Deserialize, serde::Serialize)]
 pub struct ReportedEntity {
-    #[serde(default)]
-    pub file: Option<String>,
-    #[serde(default)]
     pub tests: Vec<ReportedTest>,
 }
 
+/// One recorded test: the collector's [`TestResult`] and the runner that
+/// recorded it.
 #[derive(Debug, Deserialize, serde::Serialize)]
 pub struct ReportedTest {
-    #[serde(default)]
-    pub name: Option<String>,
-    pub status: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub duration_ms: Option<f64>,
-    /// The `verify` obligation the test proves, when it says so.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub verify: Option<String>,
+    #[serde(flatten)]
+    pub result: TestResult,
     /// The collector that recorded the test.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub runner: Option<String>,
@@ -53,27 +50,18 @@ pub struct ReportedTest {
 
 pub use specforge_coverage::{Status, Summary, Verdict};
 
-/// The report as a pass receives it (`PassInput::test_results`): per entity
-/// id, each test's name, status and the obligation it proves.
-impl From<&TestReport> for specforge_protocol_types::PassTestResults {
+/// The report as a pass receives it and the coverage rule reads it
+/// (`PassInput::test_results`): each test's result without its runner.
+impl From<&TestReport> for TestResults {
     fn from(report: &TestReport) -> Self {
-        use specforge_protocol_types::{PassEntityResults, PassTestResult};
-        specforge_protocol_types::PassTestResults {
+        TestResults {
             runner: report.runner.clone(),
             results: report
                 .results
                 .iter()
                 .map(|(id, entity)| {
-                    let tests = entity
-                        .tests
-                        .iter()
-                        .map(|test| PassTestResult {
-                            name: test.name.clone(),
-                            status: test.status.clone(),
-                            verify: test.verify.clone(),
-                        })
-                        .collect();
-                    (id.clone(), PassEntityResults { tests })
+                    let tests = entity.tests.iter().map(|t| t.result.clone()).collect();
+                    (id.clone(), EntityTests { tests })
                 })
                 .collect(),
         }
@@ -160,29 +148,6 @@ fn parse_report(path: &Path, bytes: &[u8]) -> Result<TestReport, ReportError> {
     })
 }
 
-/// A report's recorded tests, per entity id, as the rule reads them.
-pub fn recorded_tests(report: &TestReport) -> specforge_coverage::TestResults {
-    specforge_coverage::TestResults {
-        runner: report.runner.clone(),
-        entities: report
-            .results
-            .iter()
-            .map(|(id, entity)| {
-                let tests = entity
-                    .tests
-                    .iter()
-                    .map(|t| specforge_coverage::RecordedTest {
-                        name: t.name.clone(),
-                        status: t.status.clone(),
-                        verify: t.verify.clone(),
-                    })
-                    .collect();
-                (id.clone(), tests)
-            })
-            .collect(),
-    }
-}
-
 /// A project's coverage, computed by the one rule the `coverage` pass
 /// applies (ADR 0004, D2-f). Per-entity views (the MCP coverage, inspect,
 /// query and review surfaces) and stats read it, so none of them
@@ -210,7 +175,7 @@ impl ProjectCoverage {
     /// which computes it once per compile and report content.
     pub(crate) fn compute(entities: &Arc<EntitySnapshot>, report: Option<&TestReport>) -> Self {
         let rule_entities = entities.coverage_entities();
-        let results = report.map(recorded_tests);
+        let results = report.map(TestResults::from);
         let assessment = specforge_coverage::assess(&rule_entities, results.as_ref(), None, None);
         ProjectCoverage {
             entities: Arc::clone(entities),
@@ -473,7 +438,7 @@ mod tests {
         assert!(std::ptr::eq(none.coverage.entities(), &*entities));
         assert!(!none.coverage.verdict("login").unwrap().is_proven());
 
-        std::fs::write(dir.path().join(REPORT_FILE), report("pass")).unwrap();
+        std::fs::write(dir.path().join(REPORT_FILE), report("passed")).unwrap();
         let first = at().unwrap();
         let second = at().unwrap();
         assert!(Arc::ptr_eq(&first.coverage, &second.coverage));
@@ -488,7 +453,7 @@ mod tests {
         ));
 
         // Other bytes, read again at once (no mtime to wait for).
-        std::fs::write(dir.path().join(REPORT_FILE), report("fail")).unwrap();
+        std::fs::write(dir.path().join(REPORT_FILE), report("failed")).unwrap();
         let rewritten = at().unwrap();
         assert!(!Arc::ptr_eq(&first.coverage, &rewritten.coverage));
         assert_eq!(rewritten.coverage.verdict("login").unwrap().failing, 1);
@@ -521,12 +486,45 @@ mod tests {
     }
 
     #[specforge_test(
+        behavior = "ingest_collector_report",
+        verify = "the recorded test report speaks the collect vocabulary, and a status outside it is a report that cannot be used"
+    )]
+    fn the_report_speaks_the_collect_vocabulary() {
+        let project = Scored::new();
+        let verdict_of = |status: &str| {
+            let tests: TestReport = serde_json::from_str(&report(status)).unwrap();
+            let coverage = ProjectCoverage::compute(&project.entities(), Some(&tests));
+            coverage.verdict("login").unwrap().clone()
+        };
+        assert!(verdict_of("passed").is_proven());
+        assert_eq!(verdict_of("failed").failing, 1);
+        let skipped = verdict_of("skipped");
+        assert_eq!((skipped.tests, skipped.failing), (1, 0));
+        assert!(!skipped.is_proven());
+
+        let path = Path::new("specforge-report.json");
+        let Err(ReportError::Malformed { detail, .. }) =
+            parse_report(path, report("pass").as_bytes())
+        else {
+            panic!("a report saying `pass` must be malformed");
+        };
+        assert!(detail.contains("unknown variant `pass`"), "{detail}");
+        let nameless =
+            r#"{"runner": "r", "results": {"login": {"tests": [{"status": "passed"}]}}}"#;
+        let Err(ReportError::Malformed { detail, .. }) = parse_report(path, nameless.as_bytes())
+        else {
+            panic!("a test without a name must be malformed");
+        };
+        assert!(detail.contains("missing field `name`"), "{detail}");
+    }
+
+    #[specforge_test(
         behavior = "read_views_over_the_project_view",
         verify = "an entity is unverified when it counts toward coverage and is not proven"
     )]
     fn every_entity_has_a_standing_and_unverified_reads_it() {
         let project = Scored::new();
-        let tests: TestReport = serde_json::from_str(&report("pass")).unwrap();
+        let tests: TestReport = serde_json::from_str(&report("passed")).unwrap();
         let coverage = ProjectCoverage::compute(&project.entities(), Some(&tests));
         let login = coverage.standing("login").unwrap();
         assert!(login.testable && login.counts() && !login.exempt());

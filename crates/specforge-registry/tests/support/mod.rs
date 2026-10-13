@@ -5,6 +5,7 @@
 use std::path::Path;
 
 use specforge_common::{Diagnostic, SourceSpan, Sym};
+use specforge_extension_sdk::PeerDependency;
 use specforge_extension_sdk::prelude::*;
 use specforge_protocol_types::ExtensionDeclaration;
 use specforge_registry::entity::{EntityRecord, RuleInput};

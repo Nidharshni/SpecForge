@@ -229,8 +229,7 @@ fn json_schema_refuses_dot() {
         "Unknown format: dot. Expected: graph, context, brief"
     );
 
-    let published: Value =
-        serde_json::from_str(&json_schema(&project.view(), Format::Graph).unwrap()).unwrap();
+    let published: Value = json_schema(&project.view(), Format::Graph).unwrap();
     assert_eq!(
         published["$schema"],
         "https://json-schema.org/draft/2020-12/schema"

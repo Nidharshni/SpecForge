@@ -49,7 +49,8 @@ fn graph_contents(graph: &Graph) -> (Vec<String>, Vec<String>) {
                 n.kind.raw,
                 n.source_span.file,
                 n.title,
-                serde_json::to_string(&n.fields).unwrap()
+                serde_json::to_string(&specforge_graph::field_form::write_fields(&n.fields))
+                    .unwrap()
             )
         })
         .collect();
@@ -559,10 +560,7 @@ fn a_reload_reads_the_environment_again() {
 /// input, and a reload after it stops loading reports E028 naming it.
 #[test]
 fn a_wasm_file_entry_loads_in_a_session_and_reloads_with_its_file() {
-    let greet = fs::read(
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/greet-extension/greet.wasm"),
-    )
-    .unwrap();
+    let greet = fs::read(specforge_component::committed::GREET.path()).unwrap();
     let dir = project(
         r#"{"name":"s","version":"0.1.0","extensions":["@specforge/software","ext/greet.wasm"]}"#,
         &[("a.spec", "greeting hello \"Hello\" {\n  style warm\n}\n")],

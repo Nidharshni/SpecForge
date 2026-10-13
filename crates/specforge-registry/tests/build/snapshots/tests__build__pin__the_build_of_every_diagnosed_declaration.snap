@@ -111,9 +111,11 @@ expression: digest(&build)
     },
     "bidirectional_pairs": [],
     "derived_references": [],
-    "field_coercions": {
-      "behavior.watched": "List",
-      "rule.limit": "Text"
+    "field_forms": {
+      "behavior.contract": "block",
+      "behavior.owner": "reference",
+      "behavior.watched": "reference_list",
+      "rule.limit": "string"
     },
     "single_reference_fields": [
       "behavior.owner"

@@ -1,0 +1,47 @@
+{
+  "category": "entities",
+  "items": [
+    {
+      "description": "A thing with docs",
+      "dot_color": null,
+      "dot_fillcolor": null,
+      "dot_shape": null,
+      "fields": [
+        {
+          "default_value": null,
+          "description": null,
+          "edge": null,
+          "field_type": "string_list",
+          "file_reference": true,
+          "inverse_of": null,
+          "name": "docs",
+          "required": false,
+          "target_kind": null
+        },
+        {
+          "default_value": null,
+          "description": null,
+          "edge": null,
+          "field_type": "string",
+          "file_reference": false,
+          "inverse_of": null,
+          "name": "guide",
+          "required": false,
+          "target_kind": null
+        }
+      ],
+      "has_body_parser": false,
+      "incremental": null,
+      "inference_guide": null,
+      "keyword": null,
+      "lsp_icon": null,
+      "name": "gadget",
+      "open_fields": false,
+      "semantic_token": null,
+      "singleton": false,
+      "supports_verify": false,
+      "testable": false,
+      "verify_kinds": []
+    }
+  ]
+}

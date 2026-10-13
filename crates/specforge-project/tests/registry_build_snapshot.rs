@@ -5,7 +5,6 @@
 //! diagnostics in report order), never a field of the build's layout.
 
 use std::collections::BTreeMap;
-use std::path::Path;
 
 use serde_json::{Value, json};
 use specforge_common::Diagnostic;
@@ -21,8 +20,7 @@ fn runtime() -> ComponentRuntime {
 
 /// The SDK greet fixture's component blob.
 fn greet() -> Vec<u8> {
-    let greet =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/greet-extension/greet.wasm");
+    let greet = specforge_component::committed::GREET.path();
     std::fs::read(greet).expect("vendored greet component blob")
 }
 
@@ -105,10 +103,16 @@ fn graph_inputs(env: &Environment) -> Value {
         .iter()
         .map(|((kind, field), target)| (format!("{kind}.{field}"), target))
         .collect();
-    let field_coercions: BTreeMap<String, String> = config
-        .field_coercions
+    let field_forms: BTreeMap<String, String> = config
+        .field_forms
         .iter()
-        .map(|((kind, field), coercion)| (format!("{kind}.{field}"), format!("{coercion:?}")))
+        .map(|((kind, field), form)| {
+            let label = match form.enum_values() {
+                [] => form.field_type().as_str().to_string(),
+                values => format!("{} ({})", form.field_type().as_str(), values.join(", ")),
+            };
+            (format!("{kind}.{field}"), label)
+        })
         .collect();
     let derived_references: Vec<Value> = config
         .derived_references
@@ -128,7 +132,7 @@ fn graph_inputs(env: &Environment) -> Value {
         ),
         "bidirectional_pairs": sorted(bidirectional_pairs),
         "absent_reference_targets": absent_reference_targets,
-        "field_coercions": field_coercions,
+        "field_forms": field_forms,
         "derived_references": derived_references,
     })
 }

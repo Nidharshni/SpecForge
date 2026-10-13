@@ -1,10 +1,10 @@
 {
   "runner": "fixture",
   "results": {
-    "login": {"tests": [{"name": "login works", "status": "pass", "verify": "a known user logs in"}]},
-    "logout": {"tests": [{"name": "logout works", "status": "pass"}]},
-    "reset_password": {"tests": [{"name": "reset expires", "status": "pass", "verify": "reset link expires after one hour"}]},
-    "Payload": {"tests": [{"name": "payload valid", "status": "pass", "verify": "Payload schema is valid"}]},
-    "signin": {"tests": [{"name": "signin works", "status": "pass"}]}
+    "login": {"tests": [{"name": "login works", "status": "passed", "verify": "a known user logs in"}]},
+    "logout": {"tests": [{"name": "logout works", "status": "passed"}]},
+    "reset_password": {"tests": [{"name": "reset expires", "status": "passed", "verify": "reset link expires after one hour"}]},
+    "Payload": {"tests": [{"name": "payload valid", "status": "passed", "verify": "Payload schema is valid"}]},
+    "signin": {"tests": [{"name": "signin works", "status": "passed"}]}
   }
 }

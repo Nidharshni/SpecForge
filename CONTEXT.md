@@ -37,7 +37,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   above the path, the path's own directory is a **loose root**: a project with the default configuration and
   no extension (I002 says so). A path that does not exist is `file_not_found`. The compile, the session open,
   the environment load and every operation that reads a project from disk take a project root, never a raw
-  path; only `init` takes its directory as given. Distinct from the **spec root**, where the project's
+  path; only `init` takes its directory as given. On the command line a project is named by `--path` (any
+  path inside it, `.` by default) on every command that reads one, extension commands included. Distinct from the **spec root**, where the project's
   `.spec` files are discovered (`spec_root` in its `specforge.json`, else the project root): a path inside
   the spec root names the project, never a project of its own.
 - **Format version**: the `.spec` file format a file was written against, `MAJOR.MINOR`, declared by
@@ -47,6 +48,16 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   I007 (older) and E019 (newer, or a header that is not `MAJOR.MINOR`) on the header line, like any
   parser diagnostic; `specforge migrate` reads the version through the same function. It is
   distinct from the Graph Protocol's schema version.
+- **Schema version**: the Graph Protocol schema's `MAJOR.MINOR.PATCH`, computed, never declared: the version the
+  schema record holds, bumped by the largest change between the recorded schema and the one the loaded extensions
+  produce (major when something a reader relies on is removed or reshaped, minor for an addition, patch for
+  documentation and provenance; 1.0.0 with no record). One version names one document (one content hash). A
+  requested version is admitted when its readers read the current schema, never applied
+  (`specforge_ops::schema_version::VersionedSchema`, ADR 0067).
+- **Schema record**: `<root>/.specforge/schema-cache.json`, the versioned schema the last successful `specforge
+  export` recorded, with its content hash (`specforge_ops::schema_version::SchemaCache`). Every reader of the
+  project's schema versions against it; only export writes it, into the project it exports. One that cannot be
+  read is I016 and the version starts again at 1.0.0.
 - **Migration record**: `<root>/.specforge/migration.json`, what `specforge migrate --rollback` undoes: the
   last kept migration made with backups, each file with its backup and the SHA-256 of the file as the migration
   left it (`specforge_migrate::MigrationRecord`). A rollback restores only a recorded file that still holds that
@@ -137,6 +148,11 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   extension declaration, the operation payloads, the extension vocabulary and the command-arg rule. Every
   builtin blob is built from it, so it holds nothing only the host reads: the host's reading of package names,
   version requirements and peer ranges is `specforge-package` (ADR 0050).
+- **Committed blob**: a wasm component the repository commits, at `<crate>/wasm/<artifact>` with the `inputs.json` its
+  build recorded: a builtin (`extensions/<name>`, embedded in the host) or a test fixture (`fixtures/<name>`). Listed
+  once, `specforge_component::committed::COMMITTED`; git tracks exactly that list. An SDK blob answers the host's
+  protocol and its wire answers are pinned; a bridge blob (the runtime's own test component) is written without the
+  SDK and declares the canned protocol it answers. `revendor` rebuilds every one (ADR 0070).
 - **Installed extension**: an extension placed in the project under
   `.specforge/extensions/<name>/extension.wasm` and pinned by its `specforge.lock` entry (version,
   source `registry` or `local:<path>`, the SHA-256 of the binary and, for a signed registry package, its
@@ -144,8 +160,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   the one its entry pins (E070 otherwise; W149 when the entry pins no hash). A project's installed
   extensions are one value, its lock read once (`specforge_installed::Installed`); installing,
   updating and removing them is one **change** (`Installed::change`), written all at once or not at
-  all, `specforge.json` included (ADR 0028); `add`, `update` and `init` install through the
-  **lock plan**.
+  all, with the files its last step writes (`specforge.json`; for `init` also `.gitignore` and the
+  starter) and the directories it created (ADR 0028); `add`, `update`, `init` and `remove` change
+  them through the **lock plan**.
 - **Extension load**: turning a project's `extensions` entries into loaded extensions and their
   declarations, once per environment load (`Installed::load`, over the `WasmRuntime` port): a
   builtin from its embedded binary, an installed extension from its pinned module, a `.wasm` file
@@ -159,8 +176,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`specforge_project::ExtensionLoad`: `NoRuntime`, or what was loaded `In` a runtime).
 - **Extension inventory**: every extension a project has, one row per name: enabled by a
   `specforge.json` entry, pinned in the `specforge.lock` the compile read, or loaded. Each row has its
-  origin (`file:<path>` when only `.wasm` file entries enable it, `builtin`, the lock entry's source,
-  else `unknown`: the order the extension load tries them), its status (loaded, not loaded, not
+  origin (where the load loaded it from, by `Installed::resolve`: `builtin`, the lock entry's source,
+  `file:<path>`; else where its first entry in load order would; else its lock entry's source; else
+  `unknown`: `Origin::of`), its status (loaded, not loaded, not
   configured), the entries that enable it, its declaration, its lock entry and why it did not load
   (`specforge_ops::extension::inventory`, over the project view). The extensions listing, doctor and
   remove read it, so they cannot disagree about which extensions a project has, where one comes from
@@ -174,10 +192,12 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   enables the builtins an extension requires (CONTEXT "Lock plan"), and a builtin that does not load
   refuses the operation.
 - **Lock plan**: the change one operation makes to what the project installs and enables (`add` its
-  installs and builtins, `update` every upgrade, `init` its local files and builtins), staged as the
-  operation leaves them: each package's lock entry replaces its previous one, never sits beside it,
-  and each new `specforge.json` entry is appended (`specforge_ops::extension::lock_plan::LockPlan`, ADR
-  0041). `add` and `init` first enable the builtins what they add requires, dependencies first;
+  installs and builtins, `update` every upgrade, `init` its local files and builtins, `remove` its
+  disabled entries and uninstall), staged as the operation leaves them: each package's lock entry
+  replaces its previous one, never sits beside it, each new `specforge.json` entry is appended, each
+  dropped one removed (`specforge_ops::extension::lock_plan::LockPlan`, ADR 0041, ADR 0065). An
+  operation names what it asks for, each an **ask**; refusals and outcomes are answered per ask.
+  `add` and `init` first enable the builtins what they add requires, dependencies first;
   `update` enables nothing. The peer rule then judges the **project peer set** as the change leaves it,
   once: every declared peer whose dependent or peer the change touches. A required peer no member
   provides is E027; a peer installed from a registry is unified against the registry the install came
@@ -185,14 +205,17 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   file entry) is E027. Lock order and entry order decide nothing. A registry install's binary loads
   only after that and must declare what was published; then the plan is written as one change,
   `specforge.json` included, whose last step pins the publisher keys its fetches accepted
-  (`Registry::pin`): a refused or failed plan pins nothing (ADR 0059).
+  (`Registry::pin`): a refused or failed plan pins nothing (ADR 0059). A **dry run** is the plan
+  checked and not committed: it answers what the operation would, its refusal included, and writes,
+  pins and downloads nothing; a registry package is judged by its published manifest
+  (`Registry::published`).
 - **Project peer set**: the extensions a project's `specforge.json` entries load, as the peer rule reads
   them: a builtin by the declaration this specforge embeds, an installed extension by its lock entry, a
   `.wasm` file entry by its file's declaration, each entry resolved by the extension load's one rule
   (`Installed::resolve`). An entry that loads nothing and a locked extension no entry enables are not in
   it (`specforge_ops::extension::peer_set::ProjectPeers`). The registry build judges it as loaded; the
   lock plan judges it as a change will leave it, before anything is written, so `add`, `init`,
-  `update` and `check` judge one set (ADR 0041).
+  `update`, `remove`, their dry runs and `check` judge one set (ADR 0041).
 - **Setup part**: what part of a project's setup a diagnostic the environment reports is about: the
   config, the lock, one `extensions` entry, structural-only, the configured providers, one declaration,
   the peers, the registries, a rule, a surface, or a collision (two contributions claiming one name: a
@@ -214,7 +237,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   its fields are private (ADR 0031).
 - **Graph inputs**: what the graph build reads of the loaded extensions (`specforge_graph::GraphInputs`):
   the kinds whose bodies an extension parses, the single and the absent-target reference fields, the
-  inverse field pairs (a reference field and its inverse fields, fields of its target kind), each field's value coercion and the derived reference fields. Only the registry
+  inverse field pairs (a reference field and its inverse fields, fields of its target kind), each field's form and the derived reference fields. Only the registry
   build derives them (`RegistryBuild::graph_inputs`); with the provider schemes the environment
   registers they are every graph's `GraphConfig` (`Environment::graph_config`, ADR 0032).
 - **Edge type**: a relationship an extension declares (`edges`), or that fields name without one declaring it
@@ -250,7 +273,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   Each entity's record holds:
   - what it writes, as field text, with each value's shape (quoted, bare, a number, a list of
     strings or references, …) and span beside it for the host's own checks
-    (`specforge_registry::entity::ValueShape`);
+    (`specforge_graph::ValueShape`);
   - its references, obligations and methods;
   - its edge counts, in total and by edge type (each edge typed once, by the edge type its field writes from the
     kind it starts at);
@@ -270,7 +293,18 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   reads a declared type once, into the field's registry entry (`FieldRegistryEntry::new`, the only way
   to make one); every output names it by that one name — the schema and exports, the published JSON
   Schema, the model, the hover and E061 (ADR 0034). The older spellings (`_type` suffixes, `boolean`)
-  are read, never written; any other name is W019.
+  are read, never written; any other name is W019. What a field's type takes, how a written value is
+  stored as it, the JSON every output writes for it and that JSON's schema are its field form
+  (ADR 0064).
+- **Field form**: a field's declared type with an enum's values, read once
+  (`specforge_graph::FieldForm`, from `FieldRegistryEntry::form`): which
+  stored values the field takes (E061 reads it), how the graph build stores a
+  written value (coercion), and the JSON Schema of the written value (the
+  published schema reads it). Every output writes a field value through one
+  writer (`field_form::write`, the `FieldJson` shape): text as a string, an
+  expression group as its conjuncts one per line, lists as arrays, a block as
+  an object; never a parse tree or a position. A value E061 admits is a value
+  the published schema admits (ADR 0064).
 - **Standing**: how the obligation rule sees an entity (`specforge_project::snapshot::Standing`):
   - whether its kind is testable;
   - which `no_verify_statements` rule requires its kind to declare obligations (a rule without a
@@ -355,7 +389,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   means up to date, never a lower version; a lock version that is not SemVer moves to what `latest` picks
   (`specforge_package::upgrade_target`, ADR 0036 as amended).
 - **Peer requirement**: what an extension declares it needs from another extension: the peer's name,
-  a SemVer range read as Cargo reads one, and whether the peer may be absent
+  a SemVer range read as Cargo reads one, and whether the peer may be absent (an extension declares
+  one with the SDK's `peer` or `optional_peer`)
   (`specforge_package::peers::PeerRequirement`, ADR 0050). One rule judges it (`peers::verdict`): an
   unreadable range satisfies nothing (E073); a required peer must be installed; an installed one must
   be at a version the range accepts (E027 otherwise). The registry build, `doctor` and the lock plan
@@ -366,10 +401,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`Peers::load_order`); a cycle among required peers is E027 and its extensions load together in
   entry order (ADR 0041).
 - **Extension specifier**: an `add` argument (also each of `specforge.add_extension`'s
-  `specifiers` and `init --extensions`'): a builtin's name, a local path (a `.wasm` file, or an
-  extension's crate directory, read as the component its crate builds:
-  `specforge_ops::extension::binary_at`), a `git+` URL, or a package
-  reference `@scope/name[@requirement]` (`PackageRef`), read once by
+  `specifiers` and `init --extensions`'): a builtin's name, a local path (anything that is no
+  builtin's name, `git+` URL or package reference: a `.wasm` file, or an extension's crate directory,
+  read as the component its crate builds: `specforge_ops::extension::binary_at`), a `git+` URL, or a
+  package reference `@scope/name[@requirement]` (`PackageRef`; it starts with `@`), read once by
   `specforge_ops::extension::parse`. An add takes one or more and adds them as one change, judged on
   the whole set (one lock plan, ADR 0041); a specifier naming an extension an earlier one of the same
   add names is a *duplicate* of it.
@@ -443,12 +478,26 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   they run before or instead of a compile (ADR 0015), in the runtime their surface passes (ADR 0028
   D7); `add` and `update` read `specforge.json`
   through the compile's own reader and the installed extensions through `Installed::at`, and refuse
-  an unusable `specforge.json` with the refusal `remove` gives.
+  an unusable `specforge.json` with the refusal `remove` gives. `format` and
+  `migrate` read it through the same reader (`specforge_ops::config::rewritable`), and `rename` from the
+  compile's problems. All three refuse with that refusal a file that does not say which files are the
+  project's sources or which extensions it loads (`ConfigProblem::blocks_rewrites`), and report every
+  other problem as its E069, which fails their verdict.
 - **Stranded entity**: an entity whose kind only the extension being removed declares: `remove` lists it
   (`specforge_ops::extension::StrandedEntity`), still removes, and the next compile reports it E024.
-- **Recorded test report**: `<root>/specforge-report.json`, what `specforge collect` last wrote. The
-  project view reads it once per compile and per content
-  (`specforge_project::coverage::RecordedCoverage`).
+- **Recorded test report**: `<root>/specforge-report.json`, what `specforge collect` last wrote: per entity id,
+  its recorded tests, each the protocol's `TestResult` (name, status, the obligation it names, duration) with the
+  collector that recorded it. A status is `passed`, `failed` or `skipped`, the one vocabulary of the collect wire,
+  the report and a pass's test results (`specforge_protocol_types::TestStatus`); any other is no collector's
+  answer (E028) and no usable report (E045). The project view reads it once per compile and per content
+  (`specforge_project::coverage::RecordedCoverage`); the coverage rule reads it as the pass input's `TestResults`,
+  on the host as in every extension pass.
+- **Binary report**: what the `#[specforge_test]` attribute's exit handler writes for one test target:
+  `<package>--<target>.json` in `$SPECFORGE_REPORT` when `specforge collect` sets it, else in `specforge/` in the
+  cargo target directory the binary was built into, never the working directory
+  (`schema/specforge-binary-report.schema.json`). It lists the tests that ran, each with its entity, obligation text,
+  module path, duration and status, and `@specforge/cargo-test` reads it during collect. It scores nothing: which
+  obligations are proven is the coverage rule's, over the recorded test report (ADR 0068).
 - **Stray test record**: a record of the recorded test report naming an entity the graph does not have
   (W097): `analyze` lists it apart from the passes with the closest id, never promotes it under strict,
   and it proves nothing (`specforge_ops::analyze::StrayRecord`).
@@ -521,7 +570,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   key. It carries no `null`. Its spec type is the tool's `Mcp*` reply type (ADR 0052).
 - **Project sources**: the `.spec` files under the spec root (`spec_root`, else the project root) that
   discovery keeps — no skipped directory, no `exclude` entry. What a compile reads, what format and migrate
-  rewrite (`specforge_common::ProjectConfig::spec_files`), and the only files a `use` import names: a
+  rewrite (`specforge_common::ProjectConfig::spec_files`, read through `config::rewritable`, never past a
+  problem that hides them), and the only files a `use` import names: a
   compile holds each by its **key**, its path relative to the spec root, and resolves imports against the
   keys alone (`specforge_resolver`, ADR 0055). An editor buffer the session holds for such a path is a
   source, saved or not.
@@ -634,8 +684,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Tool spec**: the single definition of a core MCP tool: its own module under `specforge_mcp::tools`,
   implementing `CoreTool` once: its name, description and effect, the spec type its reply is, the tool
   arguments it reads, what its handler is given (nothing, the project view, the project, or the
-  directory init creates, with how it reaches its project) and the tool reply it answers (typed, text,
-  or a mutation's). Its category, annotations, call target, descriptor (input and output schemas
+  directory init creates, with how it reaches its project), the tool reply it answers (typed, text,
+  or a mutation's) and which argument each of its operation's refusal codes is about
+  (`REFUSAL_ARGUMENTS`; the dispatcher names it on the refusal, ADR 0033). Its category, annotations, call target, descriptor (input and output schemas
   included) and dispatch derive from it; the core tool table lists each once (`CORE_TOOLS`, each seen
   as a `ToolSpec`), and a declaration that contradicts its handler does not build. A prompt names a
   tool by its typed name (ADR 0024, ADR 0049).

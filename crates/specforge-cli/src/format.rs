@@ -13,8 +13,8 @@ pub(crate) struct Args {
     #[arg()]
     paths: Vec<PathBuf>,
 
-    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
-    path: PathBuf,
+    #[command(flatten)]
+    project: crate::project::ProjectArg,
 
     /// Check formatting without modifying files (exit 1 if unformatted)
     #[arg(long)]
@@ -48,7 +48,7 @@ impl Args {
     /// `--stdin`, whose output is the formatted text, refuses it.
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         let format = self.output.format;
-        let project_root = match crate::project::root(&self.path) {
+        let project_root = match self.project.root() {
             Ok(root) => root,
             Err(error) => return Refusal::of(format).report(terminal, &error),
         };
@@ -64,14 +64,19 @@ impl Args {
                     .with_suggestion("drop --format json, or name the files to format"),
                 );
             }
-            return run_stdin(project_root.dir(), &self.path, terminal);
+            return run_stdin(project_root.dir(), self.project.path(), terminal);
         }
         let mode = Mode::of_flags(self.check, self.diff, None);
-        let outcome = format::run(&Request {
+        let outcome = match format::run(&Request {
             root: &project_root,
             paths: &self.paths,
             mode,
-        });
+        }) {
+            Ok(outcome) => outcome,
+            // A config that does not say which files are the sources:
+            // nothing was read or written.
+            Err(error) => return Refusal::of(format).report(terminal, &error),
+        };
         if format == OutputFormat::Json {
             // The files written, named from the project root as MCP names
             // them; a run that only reports lists none.
@@ -126,14 +131,15 @@ impl Args {
 
 /// A diagnostic on stderr: `<file>: <message>` when it names a file, the
 /// bare message when it is spanned in unnamed text (stdin), else
-/// `warning: <message>` (a configuration file's W141 names its file itself).
+/// `<severity>[<code>]: <message>` (a configuration file's W141 or E069
+/// names its file itself).
 fn print_diagnostic(d: &Diagnostic, terminal: &Terminal) {
     match &d.span {
         Some(span) if !span.file.as_str().is_empty() => {
             errln!(terminal, "{}: {}", span.file.as_str(), d.message);
         }
         Some(_) => errln!(terminal, "{}", d.message),
-        None => errln!(terminal, "warning: {}", d.message),
+        None => errln!(terminal, "{}[{}]: {}", d.severity, d.code, d.message),
     }
 }
 

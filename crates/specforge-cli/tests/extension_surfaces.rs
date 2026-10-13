@@ -1,6 +1,7 @@
 //! What the two surfaces serve from a project's extension commands:
-//! `@specforge/product`'s MCP tools as `tools/list` lists them, and its
-//! command lines as `specforge product <command> --help` shows them.
+//! `@specforge/product`'s MCP tools as `tools/list` lists them, and, for each,
+//! the command line of the same name. The help the host renders from a
+//! declaration is pinned once, over a fake, in `src/extension_command.rs`.
 
 use crate::e2e_fixtures::{find_response, mcp_request};
 use crate::product_commands::{setup_product_project, structured_session};
@@ -56,22 +57,59 @@ fn pinned_product_tools_listing() {
     insta::assert_json_snapshot!("product_tools", product);
 }
 
-#[test]
-fn pinned_product_command_help() {
+/// The commands `specforge product --help` lists, in order, without clap's
+/// own `help`.
+fn listed_commands(help: &str) -> Vec<String> {
+    help.lines()
+        .skip_while(|line| *line != "Commands:")
+        .skip(1)
+        .take_while(|line| !line.is_empty())
+        .filter_map(|line| line.split_whitespace().next())
+        .filter(|name| *name != "help")
+        .map(str::to_string)
+        .collect()
+}
+
+#[specforge_test(
+    behavior = "auto_promote_commands_to_mcp_tools",
+    verify = "each auto-promoted tool is a command line of the same name whose help shows the tool's description and each of its arguments"
+)]
+fn every_product_tool_is_a_product_command_line() {
     let dir = setup_product_project();
-    // `specforge product <unknown>` would print the command list too, but
-    // as an error: `--help` lists them.
-    insta::assert_snapshot!("help_product", product_help(&dir, &["--help"]));
     let tools = listed_tools(&dir);
-    let commands: Vec<String> = tools
-        .iter()
-        .filter(|t| t["source"] == PRODUCT)
-        .map(cli_name)
-        .collect();
-    assert!(!commands.is_empty());
-    for command in commands {
-        let help = product_help(&dir, &[&command, "--help"]);
-        insta::assert_snapshot!(format!("help_{command}"), help);
+    let product: Vec<&Value> = tools.iter().filter(|t| t["source"] == PRODUCT).collect();
+    assert!(!product.is_empty());
+    let commands: Vec<String> = product.iter().map(|t| cli_name(t)).collect();
+    // `specforge product <unknown>` would list them too, but as an error:
+    // `--help` lists them.
+    assert_eq!(listed_commands(&product_help(&dir, &["--help"])), commands);
+    for (tool, command) in product.iter().zip(&commands) {
+        let help = product_help(&dir, &[command, "--help"]);
+        let description = tool["description"].as_str().unwrap();
+        assert!(help.starts_with(description), "{command}: {help}");
+        assert!(
+            help.contains(&format!("Usage: specforge product {command} ")),
+            "{help}"
+        );
+        let schema = &tool["inputSchema"];
+        let required: Vec<&str> = schema["required"]
+            .as_array()
+            .map(|r| r.iter().filter_map(Value::as_str).collect())
+            .unwrap_or_default();
+        for (name, property) in schema["properties"].as_object().unwrap() {
+            let shown = if required.contains(&name.as_str()) {
+                format!("<{}>", name.to_uppercase())
+            } else {
+                format!("--{}", name.replace('_', "-"))
+            };
+            assert!(help.contains(&shown), "{command}: no {shown} in {help}");
+            if let Some(text) = property["description"].as_str() {
+                assert!(
+                    help.contains(text),
+                    "{command}: {name}'s description: {help}"
+                );
+            }
+        }
     }
 }
 
@@ -181,8 +219,7 @@ fn one_mistake_is_one_error_object_on_both_surfaces() {
 /// traps.
 fn probe_project() -> TempDir {
     let dir = TempDir::new().unwrap();
-    let probe = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../fixtures/sandbox-probe/probe.wasm");
+    let probe = specforge_component::committed::PROBE.path();
     std::fs::copy(probe, dir.path().join("probe.wasm")).unwrap();
     std::fs::write(
         dir.path().join("specforge.json"),
@@ -236,7 +273,7 @@ behavior b_half "Half" {
     .unwrap();
     std::fs::write(
         dir.path().join("specforge-report.json"),
-        r#"{"runner":"fixture","results":{"b_proven":{"tests":[{"name":"t1","status":"pass","verify":"works"}]},"b_half":{"tests":[{"name":"t2","status":"pass","verify":"works"}]}}}"#,
+        r#"{"runner":"fixture","results":{"b_proven":{"tests":[{"name":"t1","status":"passed","verify":"works"}]},"b_half":{"tests":[{"name":"t2","status":"passed","verify":"works"}]}}}"#,
     )
     .unwrap();
     dir

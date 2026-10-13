@@ -1,5 +1,5 @@
 use crate::target::View;
-use crate::tool::{CoreTool, Effect, ToolGroup};
+use crate::tool::{CoreTool, Effect, RefusalArgument, ToolGroup};
 use specforge_ops::export::{self, Format, Schema};
 
 use crate::args::Arguments;
@@ -19,7 +19,7 @@ pub struct Args {
     depth: Option<usize>,
     /// Keep only entities of these kinds; the scoped entity always stays
     kinds: Vec<String>,
-    /// Request a specific schema version for the export
+    /// Fail unless a reader of this schema version reads the export: the same major version, not newer than the project's schema
     schema_version: Option<String>,
     /// Optional token budget; truncates the export to the most central entities that fit
     max_tokens: Option<usize>,
@@ -43,6 +43,24 @@ impl CoreTool for Tool {
     type Args = Args;
     type Input = View;
     type Returns = Answered<Text>;
+    const REFUSAL_ARGUMENTS: &'static [RefusalArgument] = &[
+        RefusalArgument {
+            code: export::DEPTH_WITHOUT_SCOPE,
+            argument: "depth",
+        },
+        RefusalArgument {
+            code: specforge_common::codes::E062.id(),
+            argument: "max_tokens",
+        },
+        RefusalArgument {
+            code: export::INVALID_SCHEMA_VERSION,
+            argument: "schema_version",
+        },
+        RefusalArgument {
+            code: specforge_common::codes::E027.id(),
+            argument: "schema_version",
+        },
+    ];
 
     fn call(view: ProjectView<'_>, args: Args) -> Answered<Text> {
         // The tool serves the agent formats; dot is `specforge.render`'s.

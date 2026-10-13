@@ -38,6 +38,10 @@ CommandInput<CommandGraph>`). A payload change is one type edit, seen by the hos
 at compile time. Rejected: host-only typed mirrors (a third copy) and a separate wire crate (a
 second "single source").
 
+*Amended (ADR 0069, 2026-10-13):* the recorded-test payloads are one type: `TestStatus` and `TestResult`
+(with `TestResults` for a pass's `test_results`) replace `CollectTestResult`, `PassTestResult`, `PassTestResults`
+and `PassEntityResults`.
+
 ## D2. JSON over the bridge `call` export stays the encoding
 
 A typed WIT per operation (what `wit/specforge-extension.wit` sketched for worlds nothing
@@ -87,6 +91,9 @@ absent, unknown fields are ignored so a newer peer may add one. No SDK-built gue
 a refused shape. Rejected: lenient decoding (the bugs above) and `deny_unknown_fields` (it breaks
 every additive change).
 
+*Amended (ADR 0069, 2026-10-13):* a collected test whose `status` is not `passed`, `failed` or `skipped` is
+malformed, as one without a `name` is.
+
 ## D6. `PROTOCOL_VERSION` stays 1.0.0
 
 Every guest-facing change is an additive optional field (`exempt`) or a type moving crates with an
@@ -123,7 +130,7 @@ what its bytes prove: its declaration snapshots (`tests/declarations.rs`), that 
 command answers through it as the host calls it (`tests/builtins.rs`, `tests/product_blob.rs`), and
 what the in-process runtime cannot hold it to (the component's stack, as `product_blob.rs`'s long
 chain; the sandbox and the deadline, above). In this repository the extension crates are outside the
-workspace, so their linked tests are recorded by the gate (`scripts/gate.sh full` runs them into
+workspace, so their linked tests are recorded by the gate (`cargo gate full` runs them into
 `target/specforge` before `collect --no-run`), not by a bare `specforge collect`.
 
 ## D9. One `PassDiagnostic`, without the host's diagnostic data

@@ -1,7 +1,7 @@
 //! `specforge.init`: create a project (`specforge_ops::init`).
 
 use crate::target::{NewProject, NewProjectDir};
-use crate::tool::{CoreTool, Effect, ReplySpec, WriteHints};
+use crate::tool::{CoreTool, Effect, RefusalArgument, ReplySpec, WriteHints};
 
 use crate::args::Arguments;
 use crate::events::ProjectInitialized;
@@ -51,6 +51,16 @@ impl CoreTool for Tool {
     type Args = Args;
     type Input = NewProject;
     type Returns = Mutation<Reply>;
+    const REFUSAL_ARGUMENTS: &'static [RefusalArgument] = &[
+        RefusalArgument {
+            code: specforge_ops::init::INVALID_NAME,
+            argument: "name",
+        },
+        RefusalArgument {
+            code: specforge_common::codes::E054.id(),
+            argument: "extensions",
+        },
+    ];
 
     fn call(new: NewProjectDir<'_>, args: Args) -> Mutation<Reply> {
         let (path, runtime) = (new.dir, &new.runtime);
@@ -67,8 +77,7 @@ impl CoreTool for Tool {
             version: &args.version,
             extensions,
         };
-        let outcome = init::plan(&request, runtime.as_ref())
-            .and_then(|plan| init::apply(path, plan, runtime.as_ref()))?;
+        let outcome = init::init(&request, runtime.as_ref())?;
         let reply = outcome.document();
         // With no project served, the server serves the one it created (ADR
         // 0014 D5): `mutation::complete` does, once it wrote.

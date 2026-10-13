@@ -38,6 +38,7 @@ fn payload(reply: &Value) -> Value {
 pub(crate) fn check(root: &Path) -> (bool, Vec<String>) {
     let out = assert_cmd::cargo_bin_cmd!("specforge")
         .args(["check", "--format", "json"])
+        .arg("--path")
         .arg(root)
         .output()
         .unwrap();

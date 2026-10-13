@@ -42,10 +42,19 @@ behavior record_test_via_drop_guard "Record Test via Drop Guard" {
     stays ignored and records nothing; run with `--ignored` it records its
     real result. Results MUST be written via an atexit handler
     to $SPECFORGE_REPORT when `specforge collect` sets it, else to
-    target/specforge/, one report per test target named
+    specforge/ in the cargo target directory the test binary was built
+    into (the nearest directory above it holding CACHEDIR.TAG or
+    .rustc_info.json), never to the working directory; a binary outside
+    any target directory writes none and says so. One report per test
+    target, named
     <package>--<target>.json so a rebuild replaces its predecessor.
     Each entry carries the test's module path, so a collector can match
-    it to the test's line in libtest's output.
+    it to the test's line in libtest's output, and every report conforms
+    to the published binary report schema
+    (schema/specforge-binary-report.schema.json). The exit handler writes
+    that report and nothing else, and prints nothing: which obligations
+    the tests prove is the coverage rule's, after `specforge collect`
+    (ADR 0068).
   """
   verify unit "successful test records pass via Drop"
   verify unit "panicking test records fail via Drop"
@@ -54,4 +63,9 @@ behavior record_test_via_drop_guard "Record Test via Drop Guard" {
   verify unit "an ignored test runs and is recorded only when libtest is asked to run it"
   verify unit "under nextest each test writes its own report and reports of other runs are pruned"
   verify unit "the recorded entry carries the test's module path"
+  verify unit "the exit handler prints no coverage, even beside a graph export"
+  verify unit "a recorded entry conforms to the published binary report schema"
+  verify unit "the exit handler writes the report and nothing else"
+  verify unit "without SPECFORGE_REPORT the report goes to the binary's cargo target directory, never the working directory"
+  verify unit "a binary outside any cargo target directory writes no report and says so"
 }

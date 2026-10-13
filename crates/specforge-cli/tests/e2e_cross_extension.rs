@@ -9,11 +9,13 @@ fn checked_edges(spec: &str) -> EdgeSet {
     let dir = setup_project(&[("main.spec", spec)]);
     specforge_cmd()
         .args(["check"])
+        .arg("--path")
         .arg(dir.path())
         .assert()
         .success();
     let output = specforge_cmd()
         .args(["export", "--format=graph"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -80,6 +82,7 @@ feature gamma "G" { behaviors [alpha, nonexistent_behavior] }
 
     let output = specforge_cmd()
         .args(["check", "--format=json"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -159,6 +162,7 @@ decision use_rust "D" {
 
     let output = specforge_cmd()
         .args(["check", "--format=json"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -266,6 +270,7 @@ feature graph_validation "G" {
 
     let output = specforge_cmd()
         .args(["check"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -303,6 +308,7 @@ behavior user_login "Log in" {
     );
     let output = specforge_cmd()
         .args(["check", "--format=json"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -346,6 +352,7 @@ behavior user_login "Log in" {
     );
     let output = specforge_cmd()
         .args(["export", "--format", "graph"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();

@@ -28,6 +28,7 @@ fn export(dir: &TempDir, args: &[&str]) -> Output {
     specforge_cmd()
         .arg("export")
         .args(args)
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap()
@@ -59,6 +60,7 @@ fn write_cache(dir: &TempDir, cache: &Value) {
 fn generated_schema(dir: &TempDir) -> Value {
     let output = specforge_cmd()
         .arg("schema")
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -140,7 +142,7 @@ fn first_export_of_a_project_reports_nothing() {
 
 #[specforge_test(
     behavior = "detect_breaking_schema_changes",
-    verify = "missing cache without prior exports emits no diagnostic"
+    verify = "a missing schema cache emits no diagnostic"
 )]
 fn export_without_a_cache_emits_no_diagnostic() {
     let dir = software_project();
@@ -181,12 +183,16 @@ fn every_export_format_updates_the_cache() {
 
 #[test]
 fn schema_version_negotiation_does_not_change_the_cached_schema() {
-    // --schema-version relabels the embedded schema; the cache keeps the
-    // schema the extensions produce.
+    // --schema-version admits a reader's version and relabels nothing: the
+    // embedded schema is the one the cache keeps.
     let dir = software_project();
     let output = export(&dir, &["--schema-version", "1.0.0"]);
     assert!(output.status.success());
     assert_eq!(read_cache(&dir)["schema"], generated_schema(&dir));
+    assert_eq!(
+        exported_version(&output),
+        read_cache(&dir)["schema"]["schema_version"]
+    );
 }
 
 #[test]
@@ -429,6 +435,7 @@ fn check_writes_no_schema_cache() {
     let dir = software_project();
     let output = specforge_cmd()
         .arg("check")
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -445,6 +452,7 @@ fn check_writes_no_schema_cache() {
     write_cache(&dir, &cache);
     let output = specforge_cmd()
         .arg("check")
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -615,4 +623,190 @@ fn the_schema_command_reports_the_version_export_embeds() {
     assert_eq!(generated_schema(&dir)["schema_version"], embedded);
     // `schema` only reads the cache.
     assert_eq!(generated_schema(&dir)["schema_version"], embedded);
+}
+
+// --- One schema version names one document ---
+
+fn field_mut<'a>(cache: &'a mut Value, kind: &str, field: &str) -> &'a mut Value {
+    kind_mut(cache, kind)["fields"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|f| f["name"] == field)
+        .unwrap_or_else(|| panic!("no field {kind}.{field} in the cache"))
+}
+
+fn edge_mut<'a>(cache: &'a mut Value, label: &str) -> &'a mut Value {
+    cache["schema"]["edge_types"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|e| e["label"] == label)
+        .unwrap_or_else(|| panic!("no edge type {label} in the cache"))
+}
+
+fn export_version_string(output: &Output) -> String {
+    assert!(
+        output.status.success(),
+        "export failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    parse_json_stdout(output)["schema_version"]
+        .as_str()
+        .unwrap()
+        .to_owned()
+}
+
+#[specforge_test(
+    behavior = "detect_breaking_schema_changes",
+    verify = "a field's required flag changing either way is breaking"
+)]
+fn a_changed_required_flag_bumps_the_major_version_and_warns() {
+    let dir = software_project();
+    export_ok(&dir);
+    let mut cache = read_cache(&dir);
+    field_mut(&mut cache, "behavior", "contract")["required"] = json!(false);
+    write_cache(&dir, &cache);
+
+    let output = export(&dir, &[]);
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+
+    assert_eq!(exported_version(&output), version(2, 0, 0));
+    assert_eq!(
+        read_cache(&dir)["schema"]["schema_version"],
+        version(2, 0, 0)
+    );
+    assert_eq!(
+        w053_lines(&stderr),
+        vec![
+            "warning[W053]: breaking schema change since the last export: the required flag of field `contract` of `behavior` changed from false to true"
+        ],
+        "{stderr}"
+    );
+}
+
+#[specforge_test(
+    behavior = "detect_breaking_schema_changes",
+    verify = "an edge type losing a source or target kind is breaking; gaining one is an addition"
+)]
+fn an_edge_type_that_loses_a_target_kind_bumps_the_major_version() {
+    let dir = software_project();
+    export_ok(&dir);
+    let mut cache = read_cache(&dir);
+    edge_mut(&mut cache, "BehaviorEnforcesInvariant")["target_kinds"] =
+        json!(["feature", "invariant"]);
+    write_cache(&dir, &cache);
+
+    let output = export(&dir, &[]);
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+
+    assert_eq!(exported_version(&output), version(2, 0, 0));
+    assert_eq!(
+        w053_lines(&stderr),
+        vec![
+            "warning[W053]: breaking schema change since the last export: the target kinds of edge type `BehaviorEnforcesInvariant` lost `feature`"
+        ],
+        "{stderr}"
+    );
+}
+
+#[specforge_test(
+    behavior = "compute_schema_version",
+    verify = "an extension's version changing is a patch"
+)]
+fn an_extension_version_change_bumps_the_patch_version() {
+    let dir = software_project();
+    export_ok(&dir);
+    let mut cache = read_cache(&dir);
+    cache["schema"]["extensions"][0]["version"] = json!("0.9.0");
+    write_cache(&dir, &cache);
+
+    let output = export(&dir, &[]);
+
+    assert_eq!(exported_version(&output), version(1, 0, 1));
+    assert_eq!(String::from_utf8_lossy(&output.stderr), "");
+}
+
+#[specforge_test(
+    behavior = "negotiate_schema_version",
+    verify = "a requested version of the same major, not newer, is admitted and the export carries the current version"
+)]
+fn a_requested_version_does_not_relabel_the_export() {
+    let dir = software_project();
+    export_ok(&dir);
+    let mut cache = read_cache(&dir);
+    cache["schema"]["entity_kinds"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|k| k["name"] != "port");
+    write_cache(&dir, &cache);
+    assert_eq!(export_version_string(&export(&dir, &[])), "1.1.0");
+
+    let scoped = export(
+        &dir,
+        &["--scope", "parse_input", "--schema-version", "1.0.0"],
+    );
+
+    assert!(scoped.status.success(), "{scoped:?}");
+    let document = parse_json_stdout(&scoped);
+    assert_eq!(document["schema_version"], "1.1.0");
+    assert!(
+        document["schema_ref"]["url"]
+            .as_str()
+            .unwrap()
+            .ends_with("graph-protocol-v1.1.0.json"),
+        "{}",
+        document["schema_ref"]
+    );
+    assert_eq!(
+        document["schema_ref"]["content_hash"],
+        read_cache(&dir)["content_hash"]
+    );
+}
+
+#[specforge_test(
+    behavior = "detect_breaking_schema_changes",
+    verify = "an unreadable schema cache restarts the version at 1.0.0 with I016"
+)]
+fn an_unreadable_cache_restarts_the_version_with_i016() {
+    let dir = software_project();
+    export_ok(&dir);
+    fs::write(cache_path(&dir), r#"{"schema": {"#).unwrap();
+
+    let output = export(&dir, &[]);
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+
+    assert_eq!(exported_version(&output), version(1, 0, 0));
+    let lines: Vec<&str> = stderr
+        .lines()
+        .filter(|l| l.starts_with("info[I016]: the schema cache "))
+        .collect();
+    assert_eq!(lines.len(), 1, "{stderr}");
+    assert!(lines[0].contains("could not be read"), "{stderr}");
+    assert!(lines[0].contains("starts again at 1.0.0"), "{stderr}");
+    // The export recorded a new cache.
+    assert_eq!(
+        read_cache(&dir)["schema"]["schema_version"],
+        version(1, 0, 0)
+    );
+}
+
+#[specforge_test(
+    behavior = "compute_schema_version",
+    verify = "one schema version names one document: equal versions have equal content hashes"
+)]
+fn an_unchanged_schema_keeps_its_version_and_its_hash() {
+    let dir = software_project();
+    export_ok(&dir);
+    let first = read_cache(&dir);
+
+    let stderr = export_ok(&dir);
+
+    let second = read_cache(&dir);
+    assert_eq!(first["content_hash"], second["content_hash"]);
+    assert_eq!(
+        first["schema"]["schema_version"],
+        second["schema"]["schema_version"]
+    );
+    assert_eq!(stderr, "");
 }

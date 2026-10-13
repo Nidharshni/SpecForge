@@ -110,11 +110,7 @@ struct Testing;
 impl Contributions for Testing {
     fn contribute(c: &mut ContributionsBuilder) {
         for owner in [SOFTWARE, GOVERNANCE] {
-            c.meta.peer_dependencies.push(PeerDependency {
-                name: owner.to_string(),
-                version: "^1.0".to_string(),
-                optional: true,
-            });
+            c.optional_peer(owner, "^1.0");
         }
 
         for t in TESTABLE {
@@ -183,25 +179,6 @@ fn pass_coverage(input: &PassInput) -> PassOutput {
             ..coverage::Entity::from(e)
         })
         .collect();
-    let results = input.test_results.as_ref().map(|r| coverage::TestResults {
-        runner: r.runner.clone(),
-        entities: r
-            .results
-            .iter()
-            .map(|(id, recorded)| {
-                let tests = recorded
-                    .tests
-                    .iter()
-                    .map(|t| coverage::RecordedTest {
-                        name: t.name.clone(),
-                        status: t.status.clone(),
-                        verify: t.verify.clone(),
-                    })
-                    .collect();
-                (id.clone(), tests)
-            })
-            .collect(),
-    });
     let proved: Option<BTreeSet<String>> = input
         .proved_claims
         .as_ref()
@@ -209,7 +186,7 @@ fn pass_coverage(input: &PassInput) -> PassOutput {
 
     let assessment = coverage::assess(
         &entities,
-        results.as_ref(),
+        input.test_results.as_ref(),
         proved.as_ref(),
         grading.as_ref(),
     );

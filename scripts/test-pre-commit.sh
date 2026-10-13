@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Exercises .githooks/pre-commit in a throwaway clone: three bad stages must be
-# refused, a clean stage accepted. Slow the first time (the clone builds).
+# Exercises .githooks/pre-commit in a throwaway clone: bad stages must be
+# refused, clean ones (and a starter template) accepted. Slow the first time (the clone builds).
 set -uo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 TMP=$(mktemp -d)
@@ -39,5 +39,18 @@ echo "// touched" >>crates/specforge-common/src/lib.rs
 cargo fmt --all
 git add crates/specforge-common/src/lib.rs
 expect accepted "a clean stage"
+
+printf '\nfn   unformatted_probe( )  {   }\n' >>extensions/governance/src/lib.rs
+git add extensions/governance/src/lib.rs
+expect refused "an unformatted guest"
+
+echo "// a note" >>extensions/software/src/starter.spec
+git add extensions/software/src/starter.spec
+expect accepted "a staged starter template"
+
+perl -pi -e 's#extras: \(\$\) => \[/\\s/, \$\.comment\]#extras: (\$) => [/\\s/, /;/, \$.comment]#' \
+    crates/tree-sitter-specforge/grammar.js
+git add crates/tree-sitter-specforge/grammar.js
+expect refused "a stale grammar artifact"
 
 [ "$failures" = 0 ]

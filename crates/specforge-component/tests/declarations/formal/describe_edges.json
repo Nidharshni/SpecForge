@@ -2,33 +2,6 @@
   "category": "edges",
   "items": [
     {
-      "description": "Behavior requires an invariant as precondition",
-      "edge_arrowhead": null,
-      "edge_color": "#1A237E",
-      "edge_style": "solid",
-      "label": "BehaviorRequiresInvariant",
-      "source_kind": "behavior",
-      "target_kind": "invariant"
-    },
-    {
-      "description": "Behavior ensures an invariant as postcondition",
-      "edge_arrowhead": null,
-      "edge_color": "#1A237E",
-      "edge_style": "solid",
-      "label": "BehaviorEnsuresInvariant",
-      "source_kind": "behavior",
-      "target_kind": "invariant"
-    },
-    {
-      "description": "Behavior maintains an invariant as frame invariant throughout execution",
-      "edge_arrowhead": null,
-      "edge_color": "#1A237E",
-      "edge_style": "dashed",
-      "label": "BehaviorMaintainsInvariant",
-      "source_kind": "behavior",
-      "target_kind": "invariant"
-    },
-    {
       "description": "Axiom assumes an invariant as foundational truth",
       "edge_arrowhead": null,
       "edge_color": "#311B92",

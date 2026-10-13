@@ -389,31 +389,34 @@ behavior check_field_value_types "Check Field Value Types" {
     registries_populated_fired "registries_populated event has fired, confirming the FieldRegistry holds each field's declared type"
   }
   ensures {
-    single_values_listed "A single value on a string_list or reference_list field is stored as a one-item list"
-    mismatches_diagnosed "E061 error for every value that cannot be the field's declared type"
+    single_values_listed "A string, bare word, integer, boolean or date on a string_list or reference_list field is stored as a one-item list, and a mixed list as a list of its items' text"
+    mismatches_diagnosed "E061 error for every value whose shape the field's declared type never takes, or whose value it refuses; a value it admits is one the published schema admits"
     undeclared_untouched "Unknown fields keep their parsed value and produce no E061"
   }
   contract   """
     The grammar parses every field value generically; the value's type
-    comes from the FieldRegistry. During Phase 2 semantic validation the
-    compiler MUST coerce each registered field's value to its declared
-    type before references resolve and before anything is exported: a
-    single string or reference on a string_list or reference_list field
-    MUST become a one-item list, stored exactly as the one-item list
-    syntax (`field [value]`) would be. A quoted integer or boolean on an
+    comes from the FieldRegistry, read through one field form per field
+    (ADR 0064). During Phase 2 semantic validation the compiler MUST
+    store each registered field's value as its declared type before
+    references resolve and before anything is exported: a single string,
+    integer, boolean or date on a string_list or reference_list field MUST
+    become a one-item list (a bare word the one-item reference list
+    `field [value]` parses to), and a list mixing strings, integers and
+    booleans the list of its items' text. A quoted integer or boolean on an
     integer or bool field MUST become that integer or boolean, and an
     integer or boolean on a string or enum field MUST become its text.
     Coercion MUST NOT produce a diagnostic.
 
-    A value that still cannot be the declared type MUST produce an E061
+    A stored value its declared type does not take MUST produce an E061
     error at the value's source span naming the field, the declared type
-    and the value given: a value that is not an integer on an integer
-    field, not true or false on a bool field, not one of the declared
-    values on an enum field (suggesting the closest declared value), or
-    a list on a field declared as a single value. Fields no extension
-    registers keep their parsed value (W020 reports them). The check MUST
-    run wherever the registry checks run: check, watch and the LSP. It
-    reads each field's value shape and value span from the entity
+    and the value given. A string field takes text, a bare word, a date, a
+    type union or an expression group; an enum one of its declared values
+    (suggesting the closest); an integer field an integer; a bool field
+    true or false; a reference field one id; a string_list or
+    reference_list field a list; a block field a block. Fields no
+    extension registers keep their parsed value (W020 reports them). The
+    check MUST run wherever the registry checks run: check, watch and the
+    LSP. It reads each field's value shape and value span from the entity
     snapshot, never a graph node.
   """
   verify unit "a single string on a string_list field becomes a one-item list"
@@ -422,5 +425,8 @@ behavior check_field_value_types "Check Field Value Types" {
   verify unit "a list on a field declared as a single value is an error"
   verify unit "an enum value suggests the closest declared value"
   verify unit "an export with a coerced string_list validates against the published schema"
+  verify unit "a single integer, boolean or date, or a mixed list, on a list field becomes a list of strings"
+  verify unit "a value of a shape its declared type never takes is an error"
+  verify unit "a value the check admits is written as the published schema admits it"
   verify contract "Check Field Value Types: declared field types hold — registries_populated_fired, single_values_listed, mismatches_diagnosed, undeclared_untouched"
 }
