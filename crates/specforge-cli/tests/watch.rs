@@ -1027,7 +1027,6 @@ fn event_with_e025_at(rx: &mpsc::Receiver<String>, line: i64) -> serde_json::Val
     behavior = "notify_delta_subscribers",
     verify = "watch --format json prints the diagnostics each update added and removed"
 )]
-#[ignore = "fixed by T4"]
 fn watch_prints_the_diagnostics_each_update_added_and_removed() {
     let project = TempDir::new().unwrap();
     fs::write(

@@ -19,7 +19,7 @@ use specforge_common::DiagnosticList;
 use specforge_common::shape::Shape;
 use specforge_ops::check::Counts;
 use specforge_ops::{OpError, OpErrorKind};
-use specforge_project::{GraphDelta, ProjectSession, UpdateKind};
+use specforge_project::{DiagnosticsDelta, GraphDelta, ProjectSession, UpdateKind};
 use specforge_watch::{Applied, DEFAULT_DEBOUNCE_WINDOW, Notify, SessionWatch, WatchEvent};
 
 // `specforge watch`'s command line.
@@ -201,6 +201,9 @@ struct Reloaded<'a> {
     errors: usize,
     warnings: usize,
     diagnostics: DiagnosticList,
+    /// What the reload added and removed in what the session reports: the
+    /// delta MCP notifies (ADR 0074).
+    diagnostics_delta: DiagnosticsDelta,
 }
 
 /// An update of the sources (`rebuilt`) or of the check inputs
@@ -215,7 +218,9 @@ struct Rebuild<'a> {
     errors: usize,
     warnings: usize,
     diagnostics: DiagnosticList,
-    changed_diagnostic_files: &'a [String],
+    /// What the update added and removed in what the session reports: the
+    /// delta MCP notifies as specforge/diagnosticsChanged (ADR 0074).
+    diagnostics_delta: DiagnosticsDelta,
     verification_failed: bool,
     /// `passed`, or the divergence; absent when the update was not
     /// verified.
@@ -248,6 +253,7 @@ fn render(applied: &Applied, format: OutputFormat, stamp: u64) -> Rendered {
                 errors,
                 warnings,
                 diagnostics: DiagnosticList(update.diagnostics.to_vec()),
+                diagnostics_delta: update.diagnostics_delta(),
             })
             .json()
         } else {
@@ -277,7 +283,7 @@ fn render(applied: &Applied, format: OutputFormat, stamp: u64) -> Rendered {
             errors,
             warnings,
             diagnostics: DiagnosticList(update.diagnostics.to_vec()),
-            changed_diagnostic_files: &update.changed_diagnostic_files,
+            diagnostics_delta: update.diagnostics_delta(),
             verification_failed: update.divergence().is_some(),
             verification: match &update.verification {
                 None => None,
@@ -318,6 +324,7 @@ fn render(applied: &Applied, format: OutputFormat, stamp: u64) -> Rendered {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use specforge_common::{Diagnostic, Severity, SourceSpan};
     use specforge_project::{GraphDelta, Update};
     use std::sync::Arc;
 
@@ -328,7 +335,6 @@ mod tests {
                 inputs_changed: false,
                 delta: GraphDelta::default(),
                 rebuilt_files: vec!["a.spec".to_string()],
-                changed_diagnostic_files: Vec::new(),
                 diagnostics: Arc::from(Vec::new()),
                 previous_diagnostics: Arc::from(Vec::new()),
                 verification,
@@ -358,9 +364,9 @@ mod tests {
             keys(&rendered.line),
             [
                 "changed",
-                "changed_diagnostic_files",
                 "delta",
                 "diagnostics",
+                "diagnostics_delta",
                 "errors",
                 "event",
                 "rebuilt_files",
@@ -374,6 +380,40 @@ mod tests {
         assert_eq!(value["verification"], "passed");
         assert_eq!(value["verification_failed"], false);
         assert_eq!(value["changed"], serde_json::json!(["a.spec"]));
+    }
+
+    #[specforge_test_macros::test(
+        behavior = "notify_delta_subscribers",
+        verify = "watch --format json prints the diagnostics each update added and removed"
+    )]
+    fn every_update_line_prints_its_diagnostics_delta() {
+        let at = |line: usize| {
+            Diagnostic::untyped("E001", Severity::Error, "unexpected token").with_span(SourceSpan {
+                file: "a.spec".into(),
+                start_line: line,
+                start_col: 1,
+                end_line: line,
+                end_col: 12,
+            })
+        };
+        for kind in [
+            UpdateKind::Sources,
+            UpdateKind::Checks,
+            UpdateKind::Environment,
+        ] {
+            let mut moved = applied(kind, None);
+            moved.update.previous_diagnostics = Arc::from(vec![at(3)]);
+            moved.update.diagnostics = Arc::from(vec![at(6)]);
+            let delta = moved.update.diagnostics_delta();
+            assert_eq!((delta.added.0.len(), delta.removed.0.len()), (1, 1));
+            let rendered = render(&moved, OutputFormat::Json, 0);
+            let value: serde_json::Value = serde_json::from_str(&rendered.line).unwrap();
+            assert_eq!(
+                value["diagnostics_delta"],
+                serde_json::to_value(&delta).unwrap(),
+                "{kind:?}"
+            );
+        }
     }
 
     #[specforge_test_macros::test(

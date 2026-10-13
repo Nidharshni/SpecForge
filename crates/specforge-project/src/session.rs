@@ -89,8 +89,6 @@ pub struct Update {
     pub delta: GraphDelta,
     /// The files re-parsed or dropped: exactly the changed ones (sorted).
     pub rebuilt_files: Vec<String>,
-    /// Files whose graph-build diagnostics changed (sorted).
-    pub changed_diagnostic_files: Vec<String>,
     /// Everything the session reports now ([`CompiledProject::diagnostics`],
     /// in its order), shared with its compiled project.
     pub diagnostics: Arc<[Diagnostic]>,
@@ -116,7 +114,6 @@ impl Update {
         let Applied {
             files,
             delta,
-            changed_diagnostic_files,
             verification,
         } = applied;
         Update {
@@ -124,7 +121,6 @@ impl Update {
             inputs_changed,
             delta,
             rebuilt_files: files,
-            changed_diagnostic_files,
             diagnostics,
             previous_diagnostics,
             verification,

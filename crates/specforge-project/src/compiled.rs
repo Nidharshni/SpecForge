@@ -276,8 +276,8 @@ impl CompiledProject {
     }
 
     /// What replacing `previous` with this project amounts to, reported as
-    /// an apply: every file rebuilt, the delta between the two graphs,
-    /// every file with graph-build diagnostics; never verified.
+    /// an apply: every file rebuilt, the delta between the two graphs;
+    /// never verified.
     pub(crate) fn replacing(&self, previous: &CompiledProject) -> Applied {
         Applied {
             files: self
@@ -286,7 +286,6 @@ impl CompiledProject {
                 .map(|(path, _)| path.to_string())
                 .collect(),
             delta: compute_graph_delta(previous.graph(), self.graph()),
-            changed_diagnostic_files: self.graph.diagnostic_files(),
             verification: None,
         }
     }

@@ -1093,8 +1093,11 @@ fn diagnostics_from_changed_files_are_refreshed() {
 
     assert!(
         update
-            .changed_diagnostic_files
-            .contains(&"c.spec".to_string())
+            .diagnostics_delta()
+            .added
+            .0
+            .iter()
+            .any(|d| d.code == "E003" && d.span.as_ref().is_some_and(|s| s.file == "c.spec"))
     );
     assert!(
         in_file(&session.project().diagnostics(), "c.spec")
@@ -1130,10 +1133,15 @@ fn diagnostics_from_unchanged_files_are_preserved() {
         in_file(&session.project().diagnostics(), "main.spec"),
         before
     );
+    let delta = update.diagnostics_delta();
     assert!(
-        !update
-            .changed_diagnostic_files
-            .contains(&"main.spec".to_string())
+        delta
+            .added
+            .0
+            .iter()
+            .chain(&delta.removed.0)
+            .all(|d| d.span.as_ref().is_none_or(|s| s.file != "main.spec")),
+        "{delta:?}"
     );
 }
 
@@ -1186,7 +1194,17 @@ fn emit_incremental_diagnostics_contract() {
 
     // Refreshed for the changed file, preserved for the others, and the
     // whole set is a fresh compile's.
-    assert_eq!(update.changed_diagnostic_files, ["c.spec"]);
+    let delta = update.diagnostics_delta();
+    assert!(!delta.added.0.is_empty(), "{delta:?}");
+    assert!(
+        delta
+            .added
+            .0
+            .iter()
+            .chain(&delta.removed.0)
+            .all(|d| d.span.as_ref().is_some_and(|s| s.file == "c.spec")),
+        "{delta:?}"
+    );
     assert_eq!(
         in_file(&session.project().diagnostics(), "main.spec"),
         main_before
