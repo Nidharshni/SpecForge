@@ -670,10 +670,13 @@ mod tests {
             test_results: None,
             proved_claims: Some(&empty_proved),
         };
-        run(&ctx, &crate::solver::Z3::default())
+        run(&ctx, &crate::solver::real_z3())
     }
 
-    #[test]
+    #[specforge_test(
+        behavior = "prove_declared_bounds_and_claims",
+        verify = "contradictory declared bounds are E046 citing every bound of the unsat core"
+    )]
     fn contradictory_bounds_flagged_with_core() {
         let mut g = Graph::new();
         g.add_node(constraint_node("c1", "latency < 100ms"));
@@ -688,7 +691,10 @@ mod tests {
         );
     }
 
-    #[test]
+    #[specforge_test(
+        behavior = "prove_declared_bounds_and_claims",
+        verify = "a claim the bounds entail reaches the extension passes as a proved claim"
+    )]
     fn satisfiable_bounds_prove_entailed_claim() {
         let mut g = Graph::new();
         g.add_node(constraint_node("budget", "latency < 100ms"));
@@ -702,37 +708,40 @@ mod tests {
         assert!(report.findings.iter().all(|f| f.code != "W139"));
     }
 
-    #[test]
+    #[specforge_test(
+        behavior = "prove_declared_bounds_and_claims",
+        verify = "a claim the bounds do not entail is W139 with a counterexample in the declared units"
+    )]
     fn unentailed_claim_yields_counterexample() {
         let mut g = Graph::new();
         g.add_node(constraint_node("budget", "latency < 100ms"));
         g.add_node(claim_node("inv", "latency > 500ms"));
         let report = prove(&g);
         assert_eq!(report.summary["claims_unproved"].as_u64(), Some(1));
-        let e047 = report
+        let w139 = report
             .findings
             .iter()
             .find(|f| f.code == "W139")
             .expect("W139 expected");
         assert!(
-            e047.message.contains("counterexample") && e047.message.contains("latency ="),
+            w139.message.contains("counterexample") && w139.message.contains("latency ="),
             "counterexample must name a violating assignment: {}",
-            e047.message
+            w139.message
         );
         // the model must satisfy the bound and violate the claim
         assert!(
-            e047.message.contains("latency >")
-                || e047.message.contains("latency = 5")
-                || e047.message.contains("latency = 1")
-                || e047.message.contains("latency = 2")
-                || e047.message.contains("latency = 3")
-                || e047.message.contains("latency = 4")
-                || e047.message.contains("latency = 6")
-                || e047.message.contains("latency = 7")
-                || e047.message.contains("latency = 8")
-                || e047.message.contains("latency = 9"),
+            w139.message.contains("latency >")
+                || w139.message.contains("latency = 5")
+                || w139.message.contains("latency = 1")
+                || w139.message.contains("latency = 2")
+                || w139.message.contains("latency = 3")
+                || w139.message.contains("latency = 4")
+                || w139.message.contains("latency = 6")
+                || w139.message.contains("latency = 7")
+                || w139.message.contains("latency = 8")
+                || w139.message.contains("latency = 9"),
             "unexpected model: {}",
-            e047.message
+            w139.message
         );
     }
 
@@ -808,25 +817,28 @@ mod tests {
         assert!(report2.summary["unsatisfiable"].as_bool().unwrap());
     }
 
-    #[test]
+    #[specforge_test(
+        behavior = "prove_declared_bounds_and_claims",
+        verify = "a claim the bounds do not entail is W139 with a counterexample in the declared units"
+    )]
     fn counterexample_renders_declared_units() {
         let mut g = Graph::new();
         g.add_node(constraint_node("budget", "latency < 100ms"));
         g.add_node(claim_node("inv", "latency > 500ms"));
         let report = prove(&g);
-        let e047 = report
+        let w139 = report
             .findings
             .iter()
             .find(|f| f.code == "W139")
             .expect("W139 expected");
         assert!(
-            e047.message.contains("latency = ") && e047.message.contains("ms"),
+            w139.message.contains("latency = ") && w139.message.contains("ms"),
             "counterexample must render in the declared unit: {}",
-            e047.message
+            w139.message
         );
         // the model value must lie in the consistent band (0..=100 ms),
         // proving the conversion happened (raw would be >= 500)
-        let value: f64 = e047
+        let value: f64 = w139
             .message
             .split("latency = ")
             .nth(1)

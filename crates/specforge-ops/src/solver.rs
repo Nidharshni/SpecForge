@@ -246,21 +246,22 @@ fn run(cmd: &mut Command, timeout: Duration) -> Result<Ran, RunError> {
     })
 }
 
+/// A real z3, or a failure that says how to get one: for the tests of what z3
+/// answers.
+#[cfg(test)]
+pub(crate) fn real_z3() -> Z3 {
+    let z3 = Z3::default();
+    assert!(
+        matches!(z3.availability(), Availability::Ready { .. }),
+        "z3 is required for this test: install it (brew install z3 / apt-get install z3); CI installs it"
+    );
+    z3
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use specforge_test_macros::test as specforge_test;
-
-    /// A real z3 or a failure that says how to get one: for the tests of what
-    /// z3 answers.
-    pub(crate) fn real_z3() -> Z3 {
-        let z3 = Z3::default();
-        assert!(
-            matches!(z3.availability(), Availability::Ready { .. }),
-            "z3 is required for this test: install it (brew install z3 / apt-get install z3); CI installs it"
-        );
-        z3
-    }
 
     /// A fake `z3` (a shell script) in a temp directory.
     #[cfg(unix)]

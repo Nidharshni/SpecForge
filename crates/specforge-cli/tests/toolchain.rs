@@ -1,7 +1,6 @@
 //! The SMT solver a `specforge` child process finds on PATH, chosen by the test
-//! (ADR 0079 D7): doctor's toolchain finding and `analyze --prove` never
+//! (ADR 0079 D5): doctor's toolchain finding and `analyze --prove` never
 //! depend on the machine. Unix only: the fakes are shell scripts.
-#![allow(dead_code)] // until every fixture has a caller
 
 use std::path::PathBuf;
 

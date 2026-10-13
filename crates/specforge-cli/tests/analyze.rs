@@ -703,14 +703,7 @@ fn analyze_orders_extension_passes_by_constraints() {
 
 #[test]
 fn analyze_prove_flags_unsatisfiable_constraint() {
-    if std::process::Command::new("z3")
-        .arg("--version")
-        .output()
-        .is_err()
-    {
-        eprintln!("z3 not installed — skipping prove e2e");
-        return;
-    }
+    crate::toolchain::require_z3();
 
     let dir = TempDir::new().unwrap();
     fs::write(
@@ -767,6 +760,7 @@ fn analyze_prove_flags_unsatisfiable_constraint() {
 
 #[test]
 fn analyze_prove_satisfiable_constraint_exits_zero() {
+    crate::toolchain::require_z3();
     let dir = TempDir::new().unwrap();
     fs::write(
         dir.path().join("specforge.json"),
@@ -820,13 +814,7 @@ fn analyze_prove_satisfiable_constraint_exits_zero() {
 fn analyze_proved_claims_discharge_verify_property_obligations() {
     // This test is a linked proof: skipping it would still record a pass,
     // so without z3 it fails instead (CI installs z3).
-    assert!(
-        std::process::Command::new("z3")
-            .arg("--version")
-            .output()
-            .is_ok_and(|o| o.status.success()),
-        "z3 is required for this test: install it (brew install z3 / apt-get install z3)"
-    );
+    crate::toolchain::require_z3();
 
     // A constraint's metric is a bound (governance), an invariant's
     // expression a claim (formal's enhancement of software's invariant).
