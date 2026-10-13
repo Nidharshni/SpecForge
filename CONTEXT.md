@@ -449,6 +449,12 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Recorded test report**: `<root>/specforge-report.json`, what `specforge collect` last wrote. The
   project view reads it once per compile and per content
   (`specforge_project::coverage::RecordedCoverage`).
+- **Binary report**: what the `#[specforge_test]` attribute's exit handler writes for one test target:
+  `<package>--<target>.json` in `$SPECFORGE_REPORT` when `specforge collect` sets it, else in `specforge/` in the
+  cargo target directory the binary was built into, never the working directory
+  (`schema/specforge-binary-report.schema.json`). It lists the tests that ran, each with its entity, obligation text,
+  module path, duration and status, and `@specforge/cargo-test` reads it during collect. It scores nothing: which
+  obligations are proven is the coverage rule's, over the recorded test report (ADR 0068).
 - **Stray test record**: a record of the recorded test report naming an entity the graph does not have
   (W097): `analyze` lists it apart from the passes with the closest id, never promotes it under strict,
   and it proves nothing (`specforge_ops::analyze::StrayRecord`).
