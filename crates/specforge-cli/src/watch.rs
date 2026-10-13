@@ -238,7 +238,7 @@ fn render(applied: &Applied, format: OutputFormat, stamp: u64) -> Rendered {
     let update = &applied.update;
     let Counts {
         errors, warnings, ..
-    } = Counts::of(&update.diagnostics);
+    } = Counts::of(update.diagnostics.iter());
     if update.kind == UpdateKind::Environment {
         let line = if format == OutputFormat::Json {
             Line::ExtensionsReloaded(Reloaded {
@@ -247,7 +247,7 @@ fn render(applied: &Applied, format: OutputFormat, stamp: u64) -> Rendered {
                 nodes: applied.nodes,
                 errors,
                 warnings,
-                diagnostics: DiagnosticList(update.diagnostics.clone()),
+                diagnostics: DiagnosticList(update.diagnostics.to_vec()),
             })
             .json()
         } else {
@@ -276,7 +276,7 @@ fn render(applied: &Applied, format: OutputFormat, stamp: u64) -> Rendered {
             delta: &update.delta,
             errors,
             warnings,
-            diagnostics: DiagnosticList(update.diagnostics.clone()),
+            diagnostics: DiagnosticList(update.diagnostics.to_vec()),
             changed_diagnostic_files: &update.changed_diagnostic_files,
             verification_failed: update.divergence().is_some(),
             verification: match &update.verification {
@@ -319,6 +319,7 @@ fn render(applied: &Applied, format: OutputFormat, stamp: u64) -> Rendered {
 mod tests {
     use super::*;
     use specforge_project::{GraphDelta, Update};
+    use std::sync::Arc;
 
     fn applied(kind: UpdateKind, verification: Option<Result<(), String>>) -> Applied {
         Applied {
@@ -328,7 +329,8 @@ mod tests {
                 delta: GraphDelta::default(),
                 rebuilt_files: vec!["a.spec".to_string()],
                 changed_diagnostic_files: Vec::new(),
-                diagnostics: Vec::new(),
+                diagnostics: Arc::from(Vec::new()),
+                previous_diagnostics: Arc::from(Vec::new()),
                 verification,
             },
             changed: vec!["a.spec".to_string()],

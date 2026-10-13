@@ -47,6 +47,11 @@ pub struct CompiledProject {
     /// coverage: seeded with the snapshot the checks read; made over the
     /// graph on first use after an update that skipped them.
     recorded: OnceLock<RecordedCoverage>,
+    /// What it reports ([`Self::diagnostics`]), in the one report order,
+    /// made on first use after a change and shared: a session's update holds
+    /// it as what the session reports now, and the next update as what it
+    /// reported before (ADR 0074).
+    reported: OnceLock<Arc<[Diagnostic]>>,
     /// `false` for a detached project (no project on disk: an editor with
     /// no workspace folder, MCP while nothing is served): it has no root,
     /// and imports are not resolved, with no spec root to resolve them
@@ -114,13 +119,23 @@ impl CompiledProject {
     /// the graph build's, then the checks'. The one place this order is
     /// written.
     pub fn diagnostics(&self) -> Vec<Diagnostic> {
-        self.env
-            .diagnostics()
-            .chain(&self.import_diagnostics)
-            .chain(self.graph.diagnostics())
-            .chain(&self.check_diagnostics)
-            .cloned()
-            .collect()
+        self.reported().to_vec()
+    }
+
+    /// [`Self::diagnostics`], shared: made once per state of the project.
+    /// The one place the report order is written. The environment's
+    /// diagnostics never change inside a compiled project (a reload builds
+    /// a new one), so the memo resets where the other parts change.
+    pub(crate) fn reported(&self) -> Arc<[Diagnostic]> {
+        Arc::clone(self.reported.get_or_init(|| {
+            self.env
+                .diagnostics()
+                .chain(&self.import_diagnostics)
+                .chain(self.graph.diagnostics())
+                .chain(&self.check_diagnostics)
+                .cloned()
+                .collect()
+        }))
     }
 
     /// The text the graph's spans for `path` (relative to the spec root)
@@ -168,6 +183,7 @@ impl CompiledProject {
             import_diagnostics: Vec::new(),
             check_diagnostics: Vec::new(),
             recorded: OnceLock::new(),
+            reported: OnceLock::new(),
             on_disk: false,
         }
     }
@@ -193,6 +209,7 @@ impl CompiledProject {
             import_diagnostics: imports,
             check_diagnostics: Vec::new(),
             recorded: OnceLock::new(),
+            reported: OnceLock::new(),
             on_disk: true,
         }
     }
@@ -217,6 +234,7 @@ impl CompiledProject {
             .collect();
         let applied = self.graph.apply(changes);
         self.recorded = OnceLock::new();
+        self.reported = OnceLock::new();
         self.import_diagnostics = if self.on_disk {
             self.sources.import_diagnostics(&self.graph)
         } else {
@@ -236,6 +254,7 @@ impl CompiledProject {
     pub(crate) fn check_over(&mut self, entities: Arc<EntitySnapshot>) {
         self.check_diagnostics = self.env.run_checks(self.graph.graph(), &entities);
         self.recorded = OnceLock::from(RecordedCoverage::of(entities));
+        self.reported = OnceLock::new();
     }
 
     /// The checks are skipped for this state: none is reported, and the
@@ -243,6 +262,7 @@ impl CompiledProject {
     pub(crate) fn skip_checks(&mut self) {
         self.check_diagnostics = Vec::new();
         self.recorded = OnceLock::new();
+        self.reported = OnceLock::new();
     }
 
     /// Whether any of `paths` has a parse error (E001) in the graph build.

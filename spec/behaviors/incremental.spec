@@ -336,6 +336,8 @@ behavior emit_incremental_diagnostics "Emit Incremental Diagnostics" {
   verify unit "diagnostics from unchanged files are preserved"
   verify unit "total diagnostic set matches full rebuild"
   verify unit "a diagnostic is unchanged in a delta only when every presented part is"
+  verify unit "an update reports the diagnostics it added and removed"
+  verify unit "a diagnostic without a span is unchanged when only its entities move"
   verify performance "file change to diagnostics emitted within 100ms"
   verify contract "Emit Incremental Diagnostics: incremental diagnostics holds for the declared obligations"
 }
