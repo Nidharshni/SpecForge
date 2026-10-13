@@ -1516,7 +1516,7 @@ fn new_extension_scaffolds_sdk_project() {
             "new",
             "--extension",
             "@you/my-ext",
-            "--path",
+            "--dir",
             out.to_str().unwrap(),
         ])
         .output()
@@ -1548,7 +1548,7 @@ fn new_extension_refuses_existing_directory() {
     fs::create_dir_all(&project).unwrap();
 
     let assert = specforge_cmd()
-        .args(["new", "--extension", "dup", "--path", out.to_str().unwrap()])
+        .args(["new", "--extension", "dup", "--dir", out.to_str().unwrap()])
         .output()
         .unwrap();
     assert!(!assert.status.success());

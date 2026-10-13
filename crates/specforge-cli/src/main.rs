@@ -249,16 +249,6 @@ mod tests {
         pin_help(&root, &[]);
     }
 
-    /// The commands whose `path` is not a project path: a directory taken as
-    /// given (`new`, an extension crate) or `mcp`'s own sentence.
-    const AS_GIVEN: [&str; 5] = [
-        "new",
-        "extension init",
-        "extension build",
-        "extension validate",
-        "mcp",
-    ];
-
     /// Every `path` argument of `command` and of each subcommand under it,
     /// by the command's path from the root.
     fn path_arguments(command: &clap::Command, at: &str, found: &mut Vec<(String, clap::Arg)>) {
@@ -286,16 +276,7 @@ mod tests {
         root.build();
         let mut found = Vec::new();
         path_arguments(&root, "", &mut found);
-        for name in AS_GIVEN {
-            assert!(
-                found.iter().any(|(command, _)| command == name),
-                "AS_GIVEN names `{name}`, which takes no path"
-            );
-        }
         for (command, argument) in &found {
-            if AS_GIVEN.contains(&command.as_str()) {
-                continue;
-            }
             assert_eq!(
                 argument.get_help().map(ToString::to_string).as_deref(),
                 crate::project::ProjectArg::arg()
