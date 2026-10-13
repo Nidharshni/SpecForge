@@ -880,3 +880,115 @@ fn watch_reports_what_check_reports_when_an_excluded_import_target_appears() {
         diagnostic_set(&check(&project))
     );
 }
+
+/// A directory moved inside the spec root, its file removed, another file
+/// declaring the same ID written: watch reports what `check` reports, and
+/// no E002 for the entity that left with the directory (plan 03, repro 1).
+#[specforge_test(
+    behavior = "watch_file_system_for_changes",
+    verify = "a directory moved inside the spec root leaves watch reporting what check reports"
+)]
+fn watch_reports_what_check_reports_after_a_directory_move() {
+    let project = TempDir::new().unwrap();
+    fs::write(
+        project.path().join("specforge.json"),
+        r#"{"extensions":[]}"#,
+    )
+    .unwrap();
+    fs::write(project.path().join("r.spec"), "thing root_one \"R\" {}\n").unwrap();
+    fs::create_dir_all(project.path().join("old")).unwrap();
+    fs::write(
+        project.path().join("old/a.spec"),
+        "thing alpha_one \"A\" {\n}\n",
+    )
+    .unwrap();
+
+    let (rx, child) = spawn_watch(&project);
+    wait_for_line(&rx, "\"event\":\"ready\"", Duration::from_secs(60))
+        .expect("watch never reported ready");
+    settle(&rx);
+
+    fs::rename(project.path().join("old"), project.path().join("new")).unwrap();
+    std::thread::sleep(Duration::from_millis(500));
+    fs::remove_file(project.path().join("new/a.spec")).unwrap();
+    std::thread::sleep(Duration::from_millis(500));
+    fs::write(
+        project.path().join("r2.spec"),
+        "thing alpha_one \"A again\" {\n}\n",
+    )
+    .unwrap();
+
+    let mut last = None;
+    while let Some(event) = next_event(&rx, Duration::from_secs(3)) {
+        last = Some(event);
+    }
+    drop(child);
+    let last = last.expect("watch reported nothing");
+
+    let check = specforge_cmd()
+        .args(["check", "--format", "json", "--path"])
+        .arg(project.path())
+        .output()
+        .unwrap();
+    let check: serde_json::Value = serde_json::from_slice(&check.stdout).unwrap();
+    assert_eq!(
+        diagnostic_set(&last["diagnostics"]),
+        diagnostic_set(&check),
+        "{last}"
+    );
+    assert!(
+        last["diagnostics"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|d| d["code"] != "E002"),
+        "{last}"
+    );
+}
+
+/// An edit to a symlinked source's target, in a directory outside the
+/// project, is seen as an edit to the link (plan 03, repro 4).
+#[cfg(unix)]
+#[specforge_test(
+    behavior = "watch_file_system_for_changes",
+    verify = "an edit to a symlinked source's target is seen"
+)]
+fn watch_sees_an_edit_to_a_symlinked_sources_target() {
+    let outside = TempDir::new().unwrap();
+    let target = fs::canonicalize(outside.path()).unwrap().join("real.spec");
+    fs::write(&target, "thing real_one \"R\" {}\n").unwrap();
+    let project = TempDir::new().unwrap();
+    fs::write(
+        project.path().join("specforge.json"),
+        r#"{"extensions":[]}"#,
+    )
+    .unwrap();
+    fs::write(project.path().join("r.spec"), "thing root_one \"R\" {}\n").unwrap();
+    std::os::unix::fs::symlink(&target, project.path().join("link.spec")).unwrap();
+
+    let (rx, child) = spawn_watch(&project);
+    wait_for_line(&rx, "\"event\":\"ready\"", Duration::from_secs(60))
+        .expect("watch never reported ready");
+    settle(&rx);
+
+    fs::write(
+        &target,
+        "thing real_one \"R\" {}\nthing real_two \"R\" {}\n",
+    )
+    .unwrap();
+    let event = next_event(&rx, Duration::from_secs(20));
+    drop(child);
+
+    let event = event.expect("no event after the target was edited");
+    assert_eq!(
+        event["changed"],
+        serde_json::json!(["link.spec"]),
+        "{event}"
+    );
+    assert!(
+        event["delta"]["added_nodes"]
+            .to_string()
+            .contains("real_two"),
+        "{event}"
+    );
+}

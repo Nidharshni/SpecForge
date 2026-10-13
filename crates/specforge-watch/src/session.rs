@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::sync::mpsc;
 use std::time::Duration;
 
-use specforge_project::{Changes, InputRole, ProjectSession, Update, WatchRoot};
+use specforge_project::{Changes, ProjectSession, Update, WatchRoot};
 
 use crate::{Debouncer, SpecWatcher};
 
@@ -88,9 +88,9 @@ pub enum WatchEvent {
 #[derive(Debug)]
 pub struct Applied {
     pub update: Update,
-    /// The changed paths that mattered: a source by its key, any other
-    /// input by its path under the project root (absolute outside it); for
-    /// a catch-up, the files it rebuilt.
+    /// The sources that changed, by key, and the paths of the batch that
+    /// reached an environment or check input that changed, under the project
+    /// root (absolute outside it); for a catch-up, the files it rebuilt.
     pub changed: Vec<String>,
     /// The session as the update left it: its files and nodes, and the
     /// extensions it loads, by name.
@@ -126,11 +126,6 @@ impl<W: Watchers> SessionWatch<W> {
         &self.session
     }
 
-    /// What `path` is to the session: the session's to say.
-    pub fn classify(&self, path: &std::path::Path) -> InputRole {
-        self.session.inputs().classify(path)
-    }
-
     /// Bring the session up to date with what was written between its open
     /// and its watchers (ADR 0030), following its inputs as they move. Run
     /// before announcing readiness.
@@ -151,9 +146,9 @@ impl<W: Watchers> SessionWatch<W> {
     /// at most `FOLLOW_ROUNDS` times. Empty when the batch changes nothing
     /// the session is built from.
     pub fn changed(&mut self, batch: &[PathBuf]) -> Vec<WatchEvent> {
-        let roles: Vec<InputRole> = batch.iter().map(|path| self.classify(path)).collect();
-        let changed = self.labels(batch, &roles);
-        let Some(update) = self.session.apply(&Changes::from_roles(roles)) else {
+        let changes = self.session.changes(batch.iter().map(PathBuf::as_path));
+        let changed = self.labels(&changes);
+        let Some(update) = self.session.apply(&changes) else {
             return Vec::new();
         };
         let mut events = vec![self.applied(update, changed)];
@@ -222,26 +217,23 @@ impl<W: Watchers> SessionWatch<W> {
         }))
     }
 
-    /// How the changed paths of a batch are named in its event: a source by
-    /// its key under the spec root, any other input by its path under the
-    /// project root (absolute outside it). Paths that change nothing are not
-    /// named.
-    fn labels(&self, batch: &[PathBuf], roles: &[InputRole]) -> Vec<String> {
+    /// How the changes of a batch are named in its event: a source by its
+    /// key under the spec root, any other input by its path under the
+    /// project root (absolute outside it).
+    fn labels(&self, changes: &Changes) -> Vec<String> {
         let root = std::fs::canonicalize(self.session.project().environment().root())
             .unwrap_or_else(|_| self.session.project().environment().root().to_path_buf());
-        let mut labels: Vec<String> = batch
+        let mut labels: Vec<String> = changes
+            .environment
             .iter()
-            .zip(roles)
-            .filter_map(|(path, role)| match role {
-                InputRole::Unrelated => None,
-                InputRole::Source(key) => Some(key.clone()),
-                InputRole::Environment | InputRole::CheckInput => Some(
-                    path.strip_prefix(&root)
-                        .unwrap_or(path)
-                        .to_string_lossy()
-                        .into_owned(),
-                ),
+            .chain(&changes.check_inputs)
+            .map(|path| {
+                path.strip_prefix(&root)
+                    .unwrap_or(path)
+                    .to_string_lossy()
+                    .into_owned()
             })
+            .chain(changes.sources.iter().cloned())
             .collect();
         labels.sort();
         labels.dedup();

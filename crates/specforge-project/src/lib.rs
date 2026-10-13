@@ -13,7 +13,8 @@
 //!   check` reports, in the one report order;
 //! - a [`ProjectSession`] is a compiled project kept current
 //!   ([`ProjectSession::project`]) plus what it is built from: its inputs
-//!   ([`SessionInputs`]) say what a changed path is ([`InputRole`]), and it
+//!   ([`SessionInputs`]) say what it depends on, and [`ProjectSession::changes`]
+//!   turns a batch of changed paths into what differs from what it read; it
 //!   applies changes as an update, an environment reload or a re-check
 //!   (watch, the LSP and MCP each hold one). After every update that runs
 //!   the checks it reports what a fresh compile reports, in the same order.
@@ -57,7 +58,7 @@ use verdicts::WasmVerdicts;
 pub use buffers::Buffer;
 pub use build_cache::{BUILD_CACHE_FILE, BUILD_CACHE_FORMAT, BuildCache, CachedStatus};
 pub use compiled::CompiledProject;
-pub use inputs::{Changes, InputRole, SessionInputs, UpdateKind, WatchRoot, Watched, source_key};
+pub use inputs::{Changes, SessionInputs, UpdateKind, WatchRoot, Watched, source_key};
 pub use policy::{DiagnosticPolicy, LINT_PROFILE_NAMES, LintProfile, UnknownLintProfile};
 pub use providers::Providers;
 pub use session::{CheckMode, OpeningProject, ProjectSession, RuntimeSource, SourceChange, Update};
