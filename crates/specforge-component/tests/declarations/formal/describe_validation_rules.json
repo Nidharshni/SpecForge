@@ -2,25 +2,6 @@
   "category": "validation_rules",
   "items": [
     {
-      "check": "field_value_constraint",
-      "code": "W125",
-      "constraint": {
-        "kind": "one_of",
-        "pattern": null,
-        "values": [
-          "safety",
-          "liveness",
-          "fairness"
-        ]
-      },
-      "edge_type": null,
-      "field": "property_type",
-      "message_template": "property '{id}' has invalid property_type '{value}' — expected one of: safety, liveness, fairness",
-      "severity": "warning",
-      "target_kind": "property",
-      "wasm_function": null
-    },
-    {
       "check": "no_incoming_edges",
       "code": "W123",
       "constraint": null,
