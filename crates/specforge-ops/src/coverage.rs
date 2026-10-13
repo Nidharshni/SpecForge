@@ -121,7 +121,7 @@ pub struct CoverageOutcome {
 /// recorded report that cannot be read is the error.
 pub fn coverage(view: &ProjectView, query: &CoverageQuery) -> Result<CoverageOutcome, OpError> {
     let coverage = view.coverage()?;
-    let rows = coverage
+    let rows = view
         .entities()
         .iter()
         .filter(|(record, standing)| match query.entity_id {
@@ -146,7 +146,7 @@ pub fn coverage(view: &ProjectView, query: &CoverageQuery) -> Result<CoverageOut
 /// One entity's row, counted or not; `None` when the graph lacks it.
 pub fn row(view: &ProjectView, entity_id: &str) -> Result<Option<CoverageRow>, OpError> {
     let coverage = view.coverage()?;
-    Ok(coverage
+    Ok(view
         .entities()
         .get(entity_id)
         .zip(coverage.verdict(entity_id))

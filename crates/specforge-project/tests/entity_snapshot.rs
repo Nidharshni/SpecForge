@@ -421,7 +421,14 @@ fn the_checks_passes_and_coverage_of_one_compile_read_one_snapshot() {
     let memo = compiled.recorded();
     assert!(std::ptr::eq(entities, &**memo.entities()));
     let recorded = memo.at(Some(dir.path())).unwrap();
-    assert!(std::ptr::eq(entities, recorded.coverage.entities()));
+    assert!(
+        recorded
+            .coverage
+            .verdicts
+            .keys()
+            .eq(entities.records().iter().map(|r| &r.id)),
+        "the coverage scores the compile's snapshot"
+    );
 
     // The check pass received the snapshot's adapter, entity by entity.
     let pass_input = runtime

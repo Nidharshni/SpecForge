@@ -2063,7 +2063,7 @@ fn an_update_starts_a_fresh_coverage_memo() {
     };
     let first = coverage(&session);
     assert!(std::sync::Arc::ptr_eq(&first, &coverage(&session)));
-    assert!(first.standing("a").unwrap().counts());
+    assert!(session.project().entities().standing("a").unwrap().counts());
 
     // A source update: the memo scores the new graph.
     write(
@@ -2083,7 +2083,7 @@ fn an_update_starts_a_fresh_coverage_memo() {
         "behavior c \"C\" {\n  contract \"The system MUST c\"\n}\n",
     );
     assert!(session.ensure_fresh().is_some());
-    assert!(coverage(&session).standing("c").is_some());
+    assert!(coverage(&session).verdict("c").is_some());
 }
 
 /// `item` (testable, accepts verify), `P300` obliging it, and a check pass
@@ -2165,10 +2165,13 @@ fn a_sessions_snapshot_follows_every_update() {
         .at(Some(root))
         .unwrap()
         .coverage;
-    assert!(std::ptr::eq(
-        session.project().entities(),
-        coverage.entities()
-    ));
+    assert!(
+        coverage
+            .verdicts
+            .keys()
+            .eq(session.project().entities().records().iter().map(|r| &r.id)),
+        "the coverage scores the session's snapshot"
+    );
     assert_eq!(coverage.verdict("gizmo").unwrap().obligations, 1);
     assert_eq!(coverage.summary.testable_total, 1);
     assert_eq!(
@@ -2233,7 +2236,13 @@ fn an_update_that_skips_the_checks_still_scores_its_own_graph() {
         .at(Some(root))
         .unwrap()
         .coverage;
-    assert!(std::ptr::eq(entities, coverage.entities()));
+    assert!(
+        coverage
+            .verdicts
+            .keys()
+            .eq(entities.records().iter().map(|r| &r.id)),
+        "the coverage scores the session's snapshot"
+    );
 }
 
 /// An in-process extension `name` declaring one kind, `kind`.
