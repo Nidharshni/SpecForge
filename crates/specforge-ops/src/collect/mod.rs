@@ -27,15 +27,14 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Component, Path, PathBuf};
 use std::time::SystemTime;
 
-/// Where `collect` writes the merged results `analyze` reads.
-pub use specforge_project::coverage::REPORT_FILE;
+use specforge_project::coverage::REPORT_FILE;
 
 /// Environment variable the host sets to the absolute report path when it
 /// runs a collector, so a runner integration can write there directly.
-pub const REPORT_ENV: &str = "SPECFORGE_REPORT";
+const REPORT_ENV: &str = "SPECFORGE_REPORT";
 
 /// Overrides the user-level consent store (tests, custom homes).
-pub const CONSENT_FILE_ENV: &str = "SPECFORGE_CONSENT_FILE";
+const CONSENT_FILE_ENV: &str = "SPECFORGE_CONSENT_FILE";
 
 /// A collector contributed by an enabled extension.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -52,7 +51,7 @@ pub struct Collector {
 }
 
 /// The only `capture` value: the command's standard output.
-pub const CAPTURE_STDOUT: &str = "stdout";
+const CAPTURE_STDOUT: &str = "stdout";
 
 /// Every collector the enabled extensions declare, in declaration order.
 pub fn collectors(declarations: &[ExtensionDeclaration]) -> Vec<Collector> {
@@ -80,7 +79,7 @@ pub fn collectors(declarations: &[ExtensionDeclaration]) -> Vec<Collector> {
 }
 
 /// Collectors whose detection files are present at the project root.
-pub fn detect<'a>(collectors: &'a [Collector], root: &Path) -> Vec<&'a Collector> {
+fn detect<'a>(collectors: &'a [Collector], root: &Path) -> Vec<&'a Collector> {
     collectors
         .iter()
         .filter(|c| c.detect.iter().any(|p| pattern_matches(root, p)))
@@ -123,7 +122,7 @@ fn wildcard(pattern: &str, name: &str) -> bool {
 
 /// The absolute report location. Extensions may only name paths inside the
 /// project: absolute paths and `..` are refused.
-pub fn report_path(collector: &Collector, root: &Path) -> Result<PathBuf, String> {
+fn report_path(collector: &Collector, root: &Path) -> Result<PathBuf, String> {
     let relative = Path::new(&collector.report);
     let inside = relative
         .components()
@@ -139,7 +138,7 @@ pub fn report_path(collector: &Collector, root: &Path) -> Result<PathBuf, String
 
 /// Whether the collector keeps its command's standard output. Any value
 /// other than `"stdout"` is refused.
-pub fn captures_stdout(collector: &Collector) -> Result<bool, String> {
+fn captures_stdout(collector: &Collector) -> Result<bool, String> {
     match collector.capture.as_deref() {
         None => Ok(false),
         Some(CAPTURE_STDOUT) => Ok(true),
@@ -152,7 +151,7 @@ pub fn captures_stdout(collector: &Collector) -> Result<bool, String> {
 
 /// Where a captured standard output is kept: inside a report directory
 /// (a report path without an extension), else next to the report file.
-pub fn capture_path(collector: &Collector, report: &Path) -> PathBuf {
+fn capture_path(collector: &Collector, report: &Path) -> PathBuf {
     if report.is_dir() || report.extension().is_none() {
         return report.join(format!("{}.stdout.txt", collector.name));
     }
@@ -163,14 +162,14 @@ pub fn capture_path(collector: &Collector, report: &Path) -> PathBuf {
 
 /// The captured standard output at `path`, if there is one. Runner output
 /// isn't always UTF-8 (tests print what they like), so it's read lossily.
-pub fn read_capture(path: &Path) -> Option<String> {
+fn read_capture(path: &Path) -> Option<String> {
     std::fs::read(path)
         .ok()
         .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
 }
 
 /// The declared command with `{report}` expanded.
-pub fn command_line(collector: &Collector, report: &Path) -> Vec<String> {
+fn command_line(collector: &Collector, report: &Path) -> Vec<String> {
     let report = report.display().to_string();
     collector
         .run
@@ -199,7 +198,7 @@ struct Approval {
 
 /// The user-level consent store. It lives outside the project so a cloned
 /// repository can't pre-approve its own commands.
-pub fn consent_path() -> PathBuf {
+fn consent_path() -> PathBuf {
     if let Some(path) = std::env::var_os(CONSENT_FILE_ENV) {
         return PathBuf::from(path);
     }
@@ -228,13 +227,13 @@ fn load_consent(path: &Path) -> ConsentStore {
 }
 
 /// Whether the user already approved this collector's command here.
-pub fn is_approved(store: &Path, collector: &Collector, root: &Path) -> bool {
+fn is_approved(store: &Path, collector: &Collector, root: &Path) -> bool {
     let wanted = consent_for(collector, root);
     load_consent(store).approved.contains(&wanted)
 }
 
 /// Record the user's approval of this collector's command here.
-pub fn approve(store: &Path, collector: &Collector, root: &Path) -> Result<(), String> {
+fn approve(store: &Path, collector: &Collector, root: &Path) -> Result<(), String> {
     let mut consents = load_consent(store);
     let wanted = consent_for(collector, root);
     consents.approved.retain(|c| {
@@ -265,7 +264,7 @@ pub enum RunnerOutput {
 
 /// What running a collector's command produced.
 #[derive(Debug, Clone)]
-pub struct Ran {
+struct Ran {
     /// The runner's exit code; non-zero is normal when tests fail.
     pub exit_code: Option<i32>,
     /// When the command started: a report directory is only read for
@@ -282,7 +281,7 @@ pub struct Ran {
 /// modification time when it's read. A captured standard output still
 /// reaches the chosen output as it's produced, and is also written to
 /// [`capture_path`].
-pub fn run(
+fn run(
     collector: &Collector,
     root: &Path,
     report: &Path,
@@ -387,7 +386,7 @@ fn json_files(dir: &Path) -> Vec<PathBuf> {
 /// Read the report at `report`: the file itself, or every `*.json` file
 /// directly inside a directory, only those modified at or after `since`
 /// when given. Paths are reported relative to `root`.
-pub fn read_report(
+fn read_report(
     report: &Path,
     root: &Path,
     since: Option<SystemTime>,
@@ -450,11 +449,11 @@ pub fn dispatch(
 /// The entities results may name, each with its obligation texts (the
 /// `verify` descriptions a convention-linked test may prove).
 #[derive(Debug, Clone, Default)]
-pub struct KnownEntities(BTreeMap<String, Vec<String>>);
+struct KnownEntities(BTreeMap<String, Vec<String>>);
 
 impl KnownEntities {
     /// Every entity of the view's entity snapshot, with its obligation texts.
-    pub(crate) fn of(entities: &specforge_project::snapshot::EntitySnapshot) -> Self {
+    fn of(entities: &specforge_project::snapshot::EntitySnapshot) -> Self {
         entities
             .records()
             .iter()
@@ -465,12 +464,12 @@ impl KnownEntities {
             .collect()
     }
 
-    pub fn contains(&self, id: &str) -> bool {
+    fn contains(&self, id: &str) -> bool {
         self.0.contains_key(id)
     }
 
     /// The entity's obligation texts, empty for an unknown entity.
-    pub fn obligations(&self, id: &str) -> &[String] {
+    fn obligations(&self, id: &str) -> &[String] {
         self.0.get(id).map(Vec::as_slice).unwrap_or_default()
     }
 }
@@ -494,7 +493,7 @@ pub struct MergeStats {
 /// results are kept, so several runners can report on one project. Tests
 /// that name an unknown entity become W115 warnings, and skipped tests are
 /// counted but not recorded: a skipped test proves nothing.
-pub fn merge(
+fn merge(
     report: &mut TestReport,
     runner: &str,
     collected: &CollectOutput,
@@ -595,7 +594,7 @@ pub enum Consent<'a> {
     /// which never prompts, and a CLI with nobody to ask.
     Approved,
     /// A command not approved yet is put to `ask`; a yes is remembered in
-    /// the consent store ([`consent_path`]).
+    /// the consent store (`consent_path`).
     Prompt(&'a mut dyn FnMut(&Collector, &[String]) -> bool),
 }
 
@@ -885,7 +884,7 @@ fn select<'a>(
 /// or an empty report when it's missing or unreadable. Unlike the readers
 /// that score coverage ([`specforge_project::coverage::read_report`]), collect is the
 /// writer: it replaces a report it cannot read.
-pub fn load_report(root: &Path) -> TestReport {
+fn load_report(root: &Path) -> TestReport {
     specforge_project::coverage::read_report(root)
         .ok()
         .flatten()
@@ -896,7 +895,7 @@ pub fn load_report(root: &Path) -> TestReport {
 }
 
 /// Write `specforge-report.json`.
-pub fn save_report(root: &Path, report: &TestReport) -> Result<PathBuf, OpError> {
+fn save_report(root: &Path, report: &TestReport) -> Result<PathBuf, OpError> {
     let path = root.join(REPORT_FILE);
     let json = serde_json::to_string_pretty(report).expect("report serialization cannot fail");
     std::fs::write(&path, json).map_err(|e| {
