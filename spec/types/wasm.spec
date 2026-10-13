@@ -106,7 +106,10 @@ type CollectorAutoDetect {
   verify unit "CollectorAutoDetect schema is valid"
 }
 
-type CollectorTestStatus = passed | failed | skipped
+// What a run says of one test: the one status vocabulary of the collect
+// wire, specforge-report.json and a pass's test results (ADR 0069). It is
+// decoded strictly: any other value from a collector is E028, in a report E045.
+type TestStatus = passed | failed | skipped
 
 // What an extension package is called: @scope/name, or name alone for a local
 // module. Each part is a-z 0-9 . _ - and starts with a letter or digit, so a
@@ -171,23 +174,25 @@ type CollectOutput {
 
 type CollectEntityResult {
   entity_id    string
-  test_results CollectTestResult[]
+  test_results TestResult[]
   verify unit "CollectEntityResult schema is valid"
 }
 
-type CollectTestResult {
+// One test: as a collector answers it, as specforge-report.json keeps it
+// (with the runner that recorded it) and as a pass reads it.
+type TestResult {
   name        string
-  status      CollectorTestStatus
+  status      TestStatus
   verify      string @optional
   duration_ms float  @optional
-  verify unit "CollectTestResult schema is valid"
+  verify unit "TestResult schema is valid"
 }
 
 type CollectUnlinkedTest {
   name   string
   // The name's path segments, the test's own name last.
   path   string[]
-  status CollectorTestStatus
+  status TestStatus
   verify unit "CollectUnlinkedTest schema is valid"
 }
 
@@ -198,12 +203,20 @@ type CollectUnlinkedTest {
 type PassInput {
   entities      PassEntity[]
   edges         PassEdge[]
-  // The normalized specforge-report.json: per entity id, its tests.
-  test_results  object   @optional
-  proved_claims string[] @optional
+  // The recorded test report, without each test's runner.
+  test_results  TestResults @optional
+  proved_claims string[]    @optional
   // The build cache's statuses: per entity id, its kind and status.
-  previous      object   @optional
+  previous      object      @optional
   verify unit "PassInput schema is valid"
+}
+
+// The recorded tests a pass reads: results maps each entity id to
+// {tests: TestResult[]}; runner names the collectors, joined ", ".
+type TestResults {
+  runner  string @optional
+  results object
+  verify unit "TestResults schema is valid"
 }
 
 // One entity of the snapshot. testable: its kind's flag; exempt: it owes

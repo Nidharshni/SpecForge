@@ -115,10 +115,14 @@ fn a_collector_receives_a_collect_input_and_answers_a_collect_output() {
     let missing_name = json!({"entity_results": [{"entity_id": "a", "test_results": [
         {"status": "passed"}
     ]}]});
+    let unknown_status = json!({"entity_results": [{"entity_id": "a", "test_results": [
+        {"name": "t", "status": "ok"}
+    ]}]});
     for raw in [
         b"[]".to_vec(),
         b"{}".to_vec(),
         missing_name.to_string().into_bytes(),
+        unknown_status.to_string().into_bytes(),
         b"not json".to_vec(),
     ] {
         let runtime = answering("collect__x", WasmCallResult::Ok(raw.clone()));
@@ -148,6 +152,46 @@ fn a_collector_receives_a_collect_input_and_answers_a_collect_output() {
             .to_string(),
         format!("collector collect__x() of '{EXT}' trapped: k: m")
     );
+}
+
+#[specforge_test(
+    invariant = "collector_output_conformance",
+    verify = "a test status outside passed, failed and skipped is an error naming the collector, never a skipped test"
+)]
+fn a_status_outside_the_vocabulary_is_not_a_collect_output() {
+    let answers = [
+        json!({"entity_results": [{"entity_id": "a", "test_results": [
+            {"name": "t", "status": "ok"}]}]}),
+        json!({"entity_results": [{"entity_id": "a", "test_results": [
+            {"name": "t", "status": "Passed"}]}]}),
+        json!({"entity_results": [], "unlinked": [
+            {"name": "m::t", "path": ["m", "t"], "status": "ignored"}]}),
+    ];
+    for answer in answers {
+        let runtime = answering(
+            "collect__x",
+            WasmCallResult::Ok(answer.to_string().into_bytes()),
+        );
+        let err = dispatch(Some(&runtime), &collector(), &reports(), None).unwrap_err();
+        assert!(
+            matches!(
+                err.failure,
+                CallFailure::Malformed {
+                    expected: "CollectOutput",
+                    ..
+                }
+            ),
+            "{answer}: {err}"
+        );
+        let shown = err.to_string();
+        assert!(
+            shown.starts_with(&format!(
+                "collector collect__x() of '{EXT}' answered output that is not a CollectOutput: "
+            )),
+            "{shown}"
+        );
+        assert!(shown.contains("unknown variant"), "{shown}");
+    }
 }
 
 // ── C8 · migration hook ──
@@ -264,7 +308,7 @@ mod evidence {
     fn the_input_carries_each_counted_entitys_proof() {
         let runtime = probe_runtime();
         let project = Project::in_runtime(SOURCE, registries(&["behavior"], &[]), runtime.clone());
-        let pass = |verify: &str| serde_json::json!({"status": "pass", "verify": verify});
+        let pass = |verify: &str| serde_json::json!({"name": verify, "status": "passed", "verify": verify});
         std::fs::write(
             project.dir.path().join("specforge-report.json"),
             serde_json::json!({"runner": "fixture", "results": {

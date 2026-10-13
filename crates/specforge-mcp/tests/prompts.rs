@@ -215,7 +215,7 @@ fn trace_unverified_is_counted_and_not_proven() {
     // is unverified.
     server.write(
         "specforge-report.json",
-        r#"{"results":{"alpha":{"tests":[{"name":"t","verify":"test alpha","status":"pass"}]}}}"#,
+        r#"{"results":{"alpha":{"tests":[{"name":"t","verify":"test alpha","status":"passed"}]}}}"#,
     );
     let t = trace_plan(&mut server, json!({"entries": [{"entity_id": "beta"}]}));
     assert_eq!(t["unverified_entities"], json!([]), "{t}");
@@ -560,7 +560,7 @@ fn review_coverage_matches_the_coverage_tool() {
     let mut server = project()
         .file(
             "specforge-report.json",
-            r#"{"results":{"alpha":{"tests":[{"name":"t","verify":"test alpha","status":"pass"}]}}}"#,
+            r#"{"results":{"alpha":{"tests":[{"name":"t","verify":"test alpha","status":"passed"}]}}}"#,
         )
         .serve(&[extension()]);
     let resp = get_prompt(

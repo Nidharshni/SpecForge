@@ -2018,7 +2018,7 @@ mod lifecycle_passes {
     use crate::evidence::FeatureEvidence;
     use crate::lifecycle::{pass_delivery_evidence, pass_lifecycle};
     use specforge_extension_sdk::prelude::{
-        EntityEvidence, PassEdge, PassEntity, PassInput, PassTestResult, PassTestResults,
+        EntityEvidence, PassEdge, PassEntity, PassInput, TestResult, TestResults, TestStatus,
     };
 
     fn entity(id: &str, kind: &str, fields: &[(&str, &str)]) -> PassEntity {
@@ -2128,7 +2128,7 @@ mod lifecycle_passes {
         );
     }
 
-    fn evidence_input(test_results: Option<PassTestResults>) -> PassInput {
+    fn evidence_input(test_results: Option<TestResults>) -> PassInput {
         PassInput {
             entities: vec![
                 entity("f_proven", "feature", &[("status", "done")]),
@@ -2152,10 +2152,10 @@ mod lifecycle_passes {
         }
     }
 
-    fn passing(results: &[(&str, &str)]) -> PassTestResults {
-        let mut recorded = PassTestResults {
+    fn passing(results: &[(&str, &str)]) -> TestResults {
+        let mut recorded = TestResults {
             runner: Some("fixture".into()),
-            ..PassTestResults::default()
+            ..TestResults::default()
         };
         for (id, verify) in results {
             recorded
@@ -2163,10 +2163,11 @@ mod lifecycle_passes {
                 .entry(id.to_string())
                 .or_default()
                 .tests
-                .push(PassTestResult {
-                    name: Some(format!("{id}_{verify}")),
-                    status: "pass".into(),
+                .push(TestResult {
+                    name: format!("{id}_{verify}"),
+                    status: TestStatus::Passed,
                     verify: Some(verify.to_string()),
+                    duration_ms: None,
                 });
         }
         recorded

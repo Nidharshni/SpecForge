@@ -21,10 +21,12 @@ type TestRecordEntry {
   // serialized as `verify` (reserved statement keyword in .spec files)
   verify_description string  @optional
   duration_ms        integer @readonly
-  status             TestOutcome
+  status             TestStatus
 }
 
-type TestOutcome = pass | fail | skipped
+// The extension protocol's TestStatus (ADR 0069): specforge-test writes
+// passed or failed; an #[ignore]d test records nothing.
+type TestStatus = passed | failed | skipped
 
 type EntityMappingEntry {
   entity_kind string

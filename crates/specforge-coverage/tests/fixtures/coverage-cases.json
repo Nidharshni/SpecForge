@@ -6,8 +6,8 @@
         "verify_kinds": ["unit", "unit"],
         "verify_texts": ["rejects a duplicate email", "stores a hashed password"]}],
       "test_results": {"runner": "cargo-test", "results": {"create_user": {"tests": [
-        {"name": "dup", "status": "pass", "verify": "rejects a duplicate email"},
-        {"name": "hash", "status": "pass", "verify": "stores a hashed password"}]}}}
+        {"name": "dup", "status": "passed", "verify": "rejects a duplicate email"},
+        {"name": "hash", "status": "passed", "verify": "stores a hashed password"}]}}}
     },
     "expect": {
       "findings": [],
@@ -30,8 +30,8 @@
         "verify_kinds": ["unit", "unit"],
         "verify_texts": ["rejects a duplicate email", "stores a hashed password"]}],
       "test_results": {"runner": "cargo-test", "results": {"create_user": {"tests": [
-        {"name": "any", "status": "pass"},
-        {"name": "hash", "status": "fail", "verify": "stores a hashed password"}]}}}
+        {"name": "any", "status": "passed"},
+        {"name": "hash", "status": "failed", "verify": "stores a hashed password"}]}}}
     },
     "expect": {
       "findings": [
@@ -61,8 +61,8 @@
         "verify_kinds": ["unit", "unit"],
         "verify_texts": ["rejects a duplicate email", "stores a hashed password"]}],
       "test_results": {"runner": "cargo-test", "results": {"create_user": {"tests": [
-        {"name": "dup", "status": "pass", "verify": "rejects a duplicate email"},
-        {"name": "hash", "status": "pass", "verify": "stores a hashed pasword"}]}}}
+        {"name": "dup", "status": "passed", "verify": "rejects a duplicate email"},
+        {"name": "hash", "status": "passed", "verify": "stores a hashed pasword"}]}}}
     },
     "expect": {
       "findings": [
@@ -170,9 +170,9 @@
           "verify_kinds": ["unit"], "verify_texts": ["no login is lost"]}
       ],
       "test_results": {"runner": "cargo-test", "results": {
-        "login": {"tests": [{"name": "login_ok", "status": "pass", "verify": "login succeeds with valid credentials"}]},
-        "Payload": {"tests": [{"name": "payload_ok", "status": "pass", "verify": "Payload schema is valid"}]},
-        "signin": {"tests": [{"name": "signin_flow", "status": "pass"}]}
+        "login": {"tests": [{"name": "login_ok", "status": "passed", "verify": "login succeeds with valid credentials"}]},
+        "Payload": {"tests": [{"name": "payload_ok", "status": "passed", "verify": "Payload schema is valid"}]},
+        "signin": {"tests": [{"name": "signin_flow", "status": "passed"}]}
       }}
     },
     "expect": {
@@ -254,15 +254,15 @@
       ],
       "test_results": {"runner": "vitest", "results": {
         "a_behavior": {"tests": [
-          {"name": "works", "status": "pass", "verify": "works"},
-          {"status": "fail"}]},
-        "ghost": {"tests": [{"name": "g", "status": "pass", "verify": "anything"}]}
+          {"name": "works", "status": "passed", "verify": "works"},
+          {"name": "flaky", "status": "failed"}]},
+        "ghost": {"tests": [{"name": "g", "status": "passed", "verify": "anything"}]}
       }}
     },
     "expect": {
       "findings": [
         {"code": "A014", "entity": "a_behavior", "severity": "error",
-          "message": "behavior 'a_behavior' has 1 failing test(s) in the test results: <unnamed>",
+          "message": "behavior 'a_behavior' has 1 failing test(s) in the test results: flaky",
           "suggestion": null},
         {"code": "A015", "entity": "b_behavior", "severity": "warning",
           "message": "behavior 'b_behavior' has 1 obligation(s) no passing test proves: \"works\"",
@@ -277,6 +277,64 @@
         "invariant_enforced": 0, "invariant_unreferenced": 0,
         "discharge_funnel": {"entities_with_obligations": 2, "entities_proven": 0, "report_failures": 1, "formally_discharged": 0},
         "test_results": {"runner": "vitest", "entities_recorded": 2, "tests_recorded": 3, "tests_failed": 1, "entities_proven": 0, "obligations_proven": 1},
+        "invariants": []
+      }
+    }
+  },
+  {
+    "name": "a skipped test proves and fails nothing",
+    "input": {
+      "entities": [
+        {"id": "a_behavior", "kind": "behavior", "testable": true,
+          "verify_kinds": ["unit"], "verify_texts": ["works"]}
+      ],
+      "test_results": {"runner": "vitest", "results": {
+        "a_behavior": {"tests": [{"name": "s", "status": "skipped", "verify": "works"}]}
+      }}
+    },
+    "expect": {
+      "findings": [
+        {"code": "A015", "entity": "a_behavior", "severity": "warning",
+          "message": "behavior 'a_behavior' has 1 obligation(s) no passing test proves: \"works\"",
+          "suggestion": "link a test to each obligation by its text (`verify = \"...\"` in the test's annotation)"}
+      ],
+      "verdicts": {
+        "a_behavior": {"obligations": 1, "proven": 0, "unproven": ["works"], "undeclared": [], "tests": 1, "failing": 0, "is_proven": false, "status": "uncovered"}
+      },
+      "summary": {
+        "testable_total": 1, "testable_verified": 1, "testable_proven": 0, "testable_exempt": 0, "obligations": 1, "obligation_kinds": {"unit": 1},
+        "invariant_enforced": 0, "invariant_unreferenced": 0,
+        "discharge_funnel": {"entities_with_obligations": 1, "entities_proven": 0, "report_failures": 0, "formally_discharged": 0},
+        "test_results": {"runner": "vitest", "entities_recorded": 1, "tests_recorded": 1, "tests_failed": 0, "entities_proven": 0, "obligations_proven": 0},
+        "invariants": []
+      }
+    }
+  },
+  {
+    "name": "a skipped test proves and fails nothing",
+    "input": {
+      "entities": [
+        {"id": "a_behavior", "kind": "behavior", "testable": true,
+          "verify_kinds": ["unit"], "verify_texts": ["works"]}
+      ],
+      "test_results": {"runner": "vitest", "results": {
+        "a_behavior": {"tests": [{"name": "s", "status": "skipped", "verify": "works"}]}
+      }}
+    },
+    "expect": {
+      "findings": [
+        {"code": "A015", "entity": "a_behavior", "severity": "warning",
+          "message": "behavior 'a_behavior' has 1 obligation(s) no passing test proves: \"works\"",
+          "suggestion": "link a test to each obligation by its text (`verify = \"...\"` in the test's annotation)"}
+      ],
+      "verdicts": {
+        "a_behavior": {"obligations": 1, "proven": 0, "unproven": ["works"], "undeclared": [], "tests": 1, "failing": 0, "is_proven": false, "status": "uncovered"}
+      },
+      "summary": {
+        "testable_total": 1, "testable_verified": 1, "testable_proven": 0, "testable_exempt": 0, "obligations": 1, "obligation_kinds": {"unit": 1},
+        "invariant_enforced": 0, "invariant_unreferenced": 0,
+        "discharge_funnel": {"entities_with_obligations": 1, "entities_proven": 0, "report_failures": 0, "formally_discharged": 0},
+        "test_results": {"runner": "vitest", "entities_recorded": 1, "tests_recorded": 1, "tests_failed": 0, "entities_proven": 0, "obligations_proven": 0},
         "invariants": []
       }
     }

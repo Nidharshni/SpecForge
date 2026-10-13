@@ -21,7 +21,7 @@ use specforge_common::shape::Shape;
 use specforge_common::{Code, Diagnostic, DiagnosticList, codes};
 use specforge_project::coverage::{ReportedEntity, ReportedTest, TestReport};
 use specforge_protocol_types::ExtensionDeclaration;
-use specforge_protocol_types::{CollectInput, CollectOutput, CollectReportFile};
+use specforge_protocol_types::{CollectInput, CollectOutput, CollectReportFile, TestStatus};
 use specforge_wasm::{CallError, CallFailure, ExtensionCalls, Operation};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Component, Path, PathBuf};
@@ -517,24 +517,16 @@ pub fn merge(
         }
         let mut recorded = Vec::new();
         for test in &entity.test_results {
-            let status = match test.status.as_str() {
-                "passed" | "pass" => "pass",
-                "failed" | "fail" => "fail",
-                _ => {
+            match test.status {
+                TestStatus::Passed => stats.passed += 1,
+                TestStatus::Failed => stats.failed += 1,
+                TestStatus::Skipped => {
                     stats.skipped += 1;
                     continue;
                 }
-            };
-            if status == "pass" {
-                stats.passed += 1;
-            } else {
-                stats.failed += 1;
             }
             recorded.push(ReportedTest {
-                name: Some(test.name.clone()),
-                status: status.to_string(),
-                duration_ms: test.duration_ms,
-                verify: test.verify.clone(),
+                result: test.clone(),
                 runner: Some(runner.to_string()),
             });
         }
@@ -545,10 +537,7 @@ pub fn merge(
         report
             .results
             .entry(entity.entity_id.clone())
-            .or_insert_with(|| ReportedEntity {
-                file: None,
-                tests: Vec::new(),
-            })
+            .or_insert_with(|| ReportedEntity { tests: Vec::new() })
             .tests
             .extend(recorded);
     }
@@ -924,7 +913,7 @@ pub fn save_report(root: &Path, report: &TestReport) -> Result<PathBuf, OpError>
 mod tests {
     use super::*;
     use specforge_common::Severity;
-    use specforge_protocol_types::{CollectEntityResult, CollectTestResult};
+    use specforge_protocol_types::{CollectEntityResult, TestResult};
     use specforge_test_macros::test as specforge_test;
 
     fn collector(report: &str) -> Collector {
@@ -1144,12 +1133,12 @@ mod tests {
         );
     }
 
-    fn collected(entries: &[(&str, &str, &str)]) -> CollectOutput {
-        let mut by_entity: BTreeMap<&str, Vec<CollectTestResult>> = BTreeMap::new();
+    fn collected(entries: &[(&str, &str, TestStatus)]) -> CollectOutput {
+        let mut by_entity: BTreeMap<&str, Vec<TestResult>> = BTreeMap::new();
         for (id, name, status) in entries {
-            by_entity.entry(id).or_default().push(CollectTestResult {
+            by_entity.entry(id).or_default().push(TestResult {
                 name: name.to_string(),
-                status: status.to_string(),
+                status: *status,
                 verify: None,
                 duration_ms: None,
             });
@@ -1229,16 +1218,16 @@ mod tests {
         merge(
             &mut report,
             "vitest",
-            &collected(&[("a", "t1", "passed")]),
+            &collected(&[("a", "t1", TestStatus::Passed)]),
             &known,
         );
         let (stats, diags) = merge(
             &mut report,
             "cargo-test",
             &collected(&[
-                ("a", "t2", "failed"),
-                ("b", "t3", "skipped"),
-                ("zz", "t4", "passed"),
+                ("a", "t2", TestStatus::Failed),
+                ("b", "t3", TestStatus::Skipped),
+                ("zz", "t4", TestStatus::Passed),
             ]),
             &known,
         );
@@ -1260,7 +1249,10 @@ mod tests {
         // Re-collecting cargo-test drops its old results, keeps vitest's.
         merge(&mut report, "cargo-test", &collected(&[]), &known);
         assert_eq!(report.results["a"].tests.len(), 1);
-        assert_eq!(report.results["a"].tests[0].status, "pass");
+        assert_eq!(
+            report.results["a"].tests[0].result.status,
+            TestStatus::Passed
+        );
         assert_eq!(report.runner.as_deref(), Some("vitest"));
     }
 
@@ -1269,6 +1261,27 @@ mod tests {
             runner: None,
             results: BTreeMap::new(),
         }
+    }
+
+    #[specforge_test(
+        behavior = "ingest_collector_report",
+        verify = "the recorded test report speaks the collect vocabulary, and a status outside it is a report that cannot be used"
+    )]
+    fn the_report_collect_writes() {
+        let known = KnownEntities::from_iter([("a".to_string(), Vec::new())]);
+        let mut report = empty_report();
+        merge(
+            &mut report,
+            "vitest",
+            &collected(&[("a", "t1", TestStatus::Passed)]),
+            &known,
+        );
+        assert_eq!(
+            serde_json::to_value(&report).unwrap()["results"]["a"],
+            serde_json::json!({"tests": [
+                {"name": "t1", "status": "passed", "runner": "vitest"}
+            ]})
+        );
     }
 
     #[specforge_test(
@@ -1281,7 +1294,7 @@ mod tests {
         let (_, diags) = merge(
             &mut report,
             "r",
-            &collected(&[("zz", "t", "passed")]),
+            &collected(&[("zz", "t", TestStatus::Passed)]),
             &known,
         );
         assert_eq!(diags.len(), 1);
@@ -1300,7 +1313,7 @@ mod tests {
         let (stats, _) = merge(
             &mut report,
             "r",
-            &collected(&[("a", "t", "skipped")]),
+            &collected(&[("a", "t", TestStatus::Skipped)]),
             &known,
         );
         assert_eq!(stats.skipped, 1);

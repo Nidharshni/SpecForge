@@ -202,23 +202,23 @@ fn pass_coverage_tracking(input: &PassInput) -> Vec<PassDiagnostic> {
         if !entity.counts_toward_coverage() {
             continue;
         }
-        let tests = recorded_tests(input, &e.id);
-        if coverage::Verdict::of(&entity, &tests, proved.contains(e.id.as_str())).is_proven() {
+        let tests = input.test_results.as_ref().map_or(&[][..], |r| r.of(&e.id));
+        if coverage::Verdict::of(&entity, tests, proved.contains(e.id.as_str())).is_proven() {
             proven.insert(e.id.as_str());
         } else {
             undischarged.push(e.id.as_str());
         }
         // I008: proven by tests alone, not by an entailed claim.
-        if coverage::Verdict::of(&entity, &tests, false).is_proven() {
+        if coverage::Verdict::of(&entity, tests, false).is_proven() {
             let mut names: Vec<&str> = tests
                 .iter()
-                .filter(|t| t.passed())
+                .filter(|t| t.status == TestStatus::Passed)
                 .filter(|t| {
                     t.verify
                         .as_ref()
                         .is_some_and(|v| e.verify_texts.contains(v))
                 })
-                .map(|t| t.name.as_deref().unwrap_or("(unnamed)"))
+                .map(|t| t.name.as_str())
                 .collect();
             names.sort_unstable();
             names.dedup();
@@ -267,26 +267,6 @@ fn preview(items: &[&str]) -> String {
         text.push_str(&format!(" … and {rest} more"));
     }
     text
-}
-
-/// The recorded tests for entity `id`, as the coverage rule reads them.
-fn recorded_tests(input: &PassInput, id: &str) -> Vec<coverage::RecordedTest> {
-    input
-        .test_results
-        .as_ref()
-        .and_then(|r| r.results.get(id))
-        .map(|recorded| {
-            recorded
-                .tests
-                .iter()
-                .map(|t| coverage::RecordedTest {
-                    name: t.name.clone(),
-                    status: t.status.clone(),
-                    verify: t.verify.clone(),
-                })
-                .collect()
-        })
-        .unwrap_or_default()
 }
 
 /// A behavior's specification depth (`SpecificationDepthLevel`), a ladder:

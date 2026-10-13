@@ -51,7 +51,7 @@ pub fn collected() -> TempDir {
         .file("Cargo.toml", "")
         .file(
             "target/specforge/t.json",
-            &json!({"entries": [{"entity_id": "alpha", "test_name": "works", "status": "pass"}]})
+            &json!({"entries": [{"entity_id": "alpha", "test_name": "works", "status": "passed"}]})
                 .to_string(),
         )
         .into_dir()

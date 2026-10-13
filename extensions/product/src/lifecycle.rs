@@ -287,22 +287,7 @@ pub fn pass_delivery_evidence(input: &PassInput) -> PassOutput {
     let score = |id: &str| -> Option<EntityEvidence> {
         let entity = snap.entities.get(id)?;
         let rule_entity = coverage::Entity::from(*entity);
-        let tests: Vec<coverage::RecordedTest> = results
-            .results
-            .get(id)
-            .map(|recorded| {
-                recorded
-                    .tests
-                    .iter()
-                    .map(|t| coverage::RecordedTest {
-                        name: t.name.clone(),
-                        status: t.status.clone(),
-                        verify: t.verify.clone(),
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
-        let verdict = coverage::Verdict::of(&rule_entity, &tests, proved.contains(id));
+        let verdict = coverage::Verdict::of(&rule_entity, results.of(id), proved.contains(id));
         Some(EntityEvidence {
             obligations: verdict.obligations,
             proven: verdict.proven,

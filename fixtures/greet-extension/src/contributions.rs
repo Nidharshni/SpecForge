@@ -72,22 +72,38 @@ impl Contributions for Greet {
             k.input_format("greet-lines")
                 .report("greet-report.txt")
                 .collect(|input: &CollectInput| {
-                    // One line per test: `<greeting id> <passed|failed>`.
+                    // One line per test: `<greeting id> <passed|failed|skipped>`.
                     let entity_results = input
                         .reports
                         .iter()
-                        .flat_map(|report| report.content.lines())
-                        .filter_map(|line| line.split_once(' '))
-                        .map(|(id, status)| CollectEntityResult {
-                            entity_id: id.to_string(),
-                            test_results: vec![CollectTestResult {
-                                name: format!("greets_{id}"),
-                                status: status.trim().to_string(),
-                                verify: None,
-                                duration_ms: None,
-                            }],
+                        .flat_map(|report| {
+                            report
+                                .content
+                                .lines()
+                                .filter_map(|line| line.split_once(' '))
+                                .map(move |(id, status)| (report, id, status.trim()))
                         })
-                        .collect();
+                        .map(|(report, id, status)| {
+                            let status = serde_json::from_value::<TestStatus>(
+                                serde_json::Value::String(status.to_string()),
+                            )
+                            .map_err(|_| {
+                                format!(
+                                    "{}: '{status}' is not passed, failed or skipped",
+                                    report.path
+                                )
+                            })?;
+                            Ok(CollectEntityResult {
+                                entity_id: id.to_string(),
+                                test_results: vec![TestResult {
+                                    name: format!("greets_{id}"),
+                                    status,
+                                    verify: None,
+                                    duration_ms: None,
+                                }],
+                            })
+                        })
+                        .collect::<Result<Vec<_>, String>>()?;
                     Ok(CollectOutput {
                         entity_results,
                         unlinked: Vec::new(),

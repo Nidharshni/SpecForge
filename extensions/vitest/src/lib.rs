@@ -48,7 +48,7 @@ impl Contributions for Vitest {
                     "--reporter=json",
                     "--outputFile.json={report}",
                 ])
-                .collect(|input| Ok(collect(input)));
+                .collect(collect);
         });
     }
 }
@@ -105,10 +105,23 @@ fn links(meta: &serde_json::Map<String, serde_json::Value>) -> Vec<(String, Opti
     out
 }
 
+/// The status a test has, from the `Status` values of vitest's JSON
+/// reporter. `None` is a value the reporter does not write.
+fn status(reported: &str) -> Option<TestStatus> {
+    match reported {
+        "passed" => Some(TestStatus::Passed),
+        "failed" => Some(TestStatus::Failed),
+        "skipped" | "pending" | "todo" | "disabled" => Some(TestStatus::Skipped),
+        _ => None,
+    }
+}
+
 /// Map vitest JSON reports to entity results. Tests without `specforge`
-/// metadata prove nothing and are left out; unparseable files are skipped.
-fn collect(input: &CollectInput) -> CollectOutput {
-    let mut by_entity: BTreeMap<String, Vec<CollectTestResult>> = BTreeMap::new();
+/// metadata prove nothing and are left out whatever their status;
+/// unparseable files are skipped. A linked test whose status vitest's JSON
+/// reporter does not write is the collector's error (ADR 0069).
+fn collect(input: &CollectInput) -> Result<CollectOutput, String> {
+    let mut by_entity: BTreeMap<String, Vec<TestResult>> = BTreeMap::new();
     for file in &input.reports {
         let Ok(report) = serde_json::from_str::<Report>(&file.content) else {
             continue;
@@ -118,30 +131,32 @@ fn collect(input: &CollectInput) -> CollectOutput {
             .iter()
             .flat_map(|f| &f.assertion_results)
         {
-            let status = match assertion.status.as_str() {
-                "passed" => "passed",
-                "failed" => "failed",
-                _ => "skipped",
-            };
             let name = if assertion.full_name.is_empty() {
                 assertion.title.trim()
             } else {
                 assertion.full_name.trim()
             };
-            for (entity, verify) in links(&assertion.meta) {
-                by_entity
-                    .entry(entity)
-                    .or_default()
-                    .push(CollectTestResult {
-                        name: name.to_string(),
-                        status: status.to_string(),
-                        verify,
-                        duration_ms: assertion.duration,
-                    });
+            let links = links(&assertion.meta);
+            if links.is_empty() {
+                continue;
+            }
+            let Some(status) = status(&assertion.status) else {
+                return Err(format!(
+                    "{}: test '{name}' has status '{}', which vitest's JSON reporter does not write",
+                    file.path, assertion.status
+                ));
+            };
+            for (entity, verify) in links {
+                by_entity.entry(entity).or_default().push(TestResult {
+                    name: name.to_string(),
+                    status,
+                    verify,
+                    duration_ms: assertion.duration,
+                });
             }
         }
     }
-    CollectOutput {
+    Ok(CollectOutput {
         entity_results: by_entity
             .into_iter()
             .map(|(entity_id, test_results)| CollectEntityResult {
@@ -150,7 +165,7 @@ fn collect(input: &CollectInput) -> CollectOutput {
             })
             .collect(),
         ..CollectOutput::default()
-    }
+    })
 }
 
 specforge_extension_sdk::component_guest!(build = specforge_extension_build);

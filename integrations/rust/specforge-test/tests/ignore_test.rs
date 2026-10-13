@@ -68,8 +68,8 @@ fn an_ignored_test_is_recorded_only_when_it_runs() {
     assert_eq!(
         recorded,
         vec![
-            ("ignored_by_default".to_string(), "pass".to_string()),
-            ("ignored_should_panic".to_string(), "pass".to_string()),
+            ("ignored_by_default".to_string(), "passed".to_string()),
+            ("ignored_should_panic".to_string(), "passed".to_string()),
         ]
     );
 }

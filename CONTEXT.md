@@ -473,9 +473,13 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   other problem as its E069, which fails their verdict.
 - **Stranded entity**: an entity whose kind only the extension being removed declares: `remove` lists it
   (`specforge_ops::extension::StrandedEntity`), still removes, and the next compile reports it E024.
-- **Recorded test report**: `<root>/specforge-report.json`, what `specforge collect` last wrote. The
-  project view reads it once per compile and per content
-  (`specforge_project::coverage::RecordedCoverage`).
+- **Recorded test report**: `<root>/specforge-report.json`, what `specforge collect` last wrote: per entity id,
+  its recorded tests, each the protocol's `TestResult` (name, status, the obligation it names, duration) with the
+  collector that recorded it. A status is `passed`, `failed` or `skipped`, the one vocabulary of the collect wire,
+  the report and a pass's test results (`specforge_protocol_types::TestStatus`); any other is no collector's
+  answer (E028) and no usable report (E045). The project view reads it once per compile and per content
+  (`specforge_project::coverage::RecordedCoverage`); the coverage rule reads it as the pass input's `TestResults`,
+  on the host as in every extension pass.
 - **Binary report**: what the `#[specforge_test]` attribute's exit handler writes for one test target:
   `<package>--<target>.json` in `$SPECFORGE_REPORT` when `specforge collect` sets it, else in `specforge/` in the
   cargo target directory the binary was built into, never the working directory

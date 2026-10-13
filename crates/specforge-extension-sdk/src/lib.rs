@@ -1137,9 +1137,9 @@ pub mod prelude {
         AnalyzerBuilder, CheckKind, ConstraintKind, Contributions, ContributionsBuilder,
         EdgeBuilder, EnhancementBuilder, ExtensionMeta, FieldBuilder, FieldConstraintBuilder,
         FieldType, KindBuilder, MigrationInput, PassAnswer, PassBuildCache, PassBuilder,
-        PassCachedStatus, PassDiagnostic, PassEdge, PassEntity, PassEntityResults, PassInput,
-        PassOutput, PassSeverity, PassSpan, PassTestResult, PassTestResults, RuleBuilder,
-        ScanRequest, ScanResponse, ScannedItem,
+        PassCachedStatus, PassDiagnostic, PassEdge, PassEntity, PassInput, PassOutput,
+        PassSeverity, PassSpan, RuleBuilder, ScanRequest, ScanResponse, ScannedItem, TestResult,
+        TestResults, TestStatus,
     };
     pub use crate::{
         ArgBuilder, CommandBuilder, CommandCall, CommandError, CommandEvidence, CommandFormat,
@@ -1147,8 +1147,8 @@ pub mod prelude {
         McpResourceBuilder, McpToolBuilder,
     };
     pub use crate::{
-        CollectEntityResult, CollectInput, CollectOutput, CollectReportFile, CollectTestResult,
-        CollectUnlinkedTest, CollectorBuilder,
+        CollectEntityResult, CollectInput, CollectOutput, CollectReportFile, CollectUnlinkedTest,
+        CollectorBuilder,
     };
     pub use specforge_extension_sdk_macros::extension;
     pub use specforge_protocol_types::{
@@ -1189,12 +1189,12 @@ mod raw_category_tests;
 // ([`CommandOutput::error`]).
 
 pub use specforge_protocol_types::{
-    CollectEntityResult, CollectInput, CollectOutput, CollectReportFile, CollectTestResult,
-    CollectUnlinkedTest, CommandError, CommandEvidence, CommandFormat, CommandOutput,
-    EntityEvidence, GraphEdge, GraphNode, GraphWire, McpResourceContent, McpResourceRequest,
-    MigrationInput, PassAnswer, PassBuildCache, PassCachedStatus, PassDiagnostic, PassEdge,
-    PassEntity, PassEntityResults, PassInput, PassOutput, PassSeverity, PassSpan, PassTestResult,
-    PassTestResults, ScanRequest, ScanResponse, ScannedItem,
+    CollectEntityResult, CollectInput, CollectOutput, CollectReportFile, CollectUnlinkedTest,
+    CommandError, CommandEvidence, CommandFormat, CommandOutput, EntityEvidence, EntityTests,
+    GraphEdge, GraphNode, GraphWire, McpResourceContent, McpResourceRequest, MigrationInput,
+    PassAnswer, PassBuildCache, PassCachedStatus, PassDiagnostic, PassEdge, PassEntity, PassInput,
+    PassOutput, PassSeverity, PassSpan, ScanRequest, ScanResponse, ScannedItem, TestResult,
+    TestResults, TestStatus,
 };
 
 /// What a `cmd__<name>` export receives, its graph indexed for lookups

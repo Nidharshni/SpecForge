@@ -25,15 +25,17 @@ fn seed(path: &Path) {
 }
 
 fn report(path: &Path, proven: bool, extra: Option<&str>) -> String {
-    let status = if proven { "pass" } else { "fail" };
+    let status = if proven { "passed" } else { "failed" };
     let mut json = format!(
         r#"{{"runner":"specforge-test","results":{{"widget":{{"tests":[{{"name":"w test","status":"{status}","verify":"widget valid"}}]}}}}}}"#
     );
     if let Some(orphan) = extra {
         json = json.trim_end_matches('}').to_string();
         json.push_str(
-            format!(r#", "{orphan}": {{"tests":[{{"name":"orphan test","status":"pass"}}]}}}}}}"#)
-                .as_str(),
+            format!(
+                r#", "{orphan}": {{"tests":[{{"name":"orphan test","status":"passed"}}]}}}}}}"#
+            )
+            .as_str(),
         );
     }
     std::fs::write(path.join("specforge-report.json"), &json).unwrap();
@@ -76,7 +78,8 @@ fn min_gate_fails_when_coverage_below_threshold() {
     let tmp = TempDir::new().unwrap();
     seed(tmp.path());
     // 1 of 1 entities proven = 100%; make it fail by NOT proving: failing test
-    let report = r#"{"runner":"r","results":{"widget":{"tests":[{"name":"w","status":"fail"}]}}}"#;
+    let report =
+        r#"{"runner":"r","results":{"widget":{"tests":[{"name":"w","status":"failed"}]}}}"#;
     std::fs::write(tmp.path().join("specforge-report.json"), report).unwrap();
     let out = specforge()
         .args([
@@ -119,8 +122,8 @@ fn a_feature_with_a_passing_test_does_not_raise_the_gate() {
     std::fs::write(
         tmp.path().join("specforge-report.json"),
         r#"{"runner":"r","results":{
-            "widget":{"tests":[{"name":"w","status":"fail","verify":"widget valid"}]},
-            "signin":{"tests":[{"name":"s","status":"pass"}]}}}"#,
+            "widget":{"tests":[{"name":"w","status":"failed","verify":"widget valid"}]},
+            "signin":{"tests":[{"name":"s","status":"passed"}]}}}"#,
     )
     .unwrap();
     let out = specforge()
@@ -209,7 +212,7 @@ fn stray_test_records_warn_with_suggestion() {
     let tmp = TempDir::new().unwrap();
     seed(tmp.path());
     // Report proves "widget" and orphans "wodget" (typo of widget).
-    let report = r#"{"runner":"r","results":{"widget":{"tests":[{"name":"w","status":"pass"}]},"wodget":{"tests":[{"name":"x","status":"pass"}]}}}"#;
+    let report = r#"{"runner":"r","results":{"widget":{"tests":[{"name":"w","status":"passed"}]},"wodget":{"tests":[{"name":"x","status":"passed"}]}}}"#;
     std::fs::write(tmp.path().join("specforge-report.json"), report).unwrap();
     let out = specforge()
         .args([
@@ -239,7 +242,7 @@ fn write_report(path: &Path, ids: &[&str]) {
         .map(|id| {
             (
                 id.to_string(),
-                serde_json::json!({"tests": [{"name": "t", "status": "pass", "verify": "widget valid"}]}),
+                serde_json::json!({"tests": [{"name": "t", "status": "passed", "verify": "widget valid"}]}),
             )
         })
         .collect();
@@ -473,4 +476,62 @@ fn a_gate_without_the_coverage_pass_is_refused_before_the_analysis() {
     assert_eq!(doc["code"], "E068", "{doc}");
     assert!(doc.get("passes").is_none(), "{doc}");
     assert!(stderr.is_empty(), "{stderr}");
+}
+
+// ADR 0069: the committed example report is what `collect` writes from the
+// committed runner fixture (and `schemas_test` holds it to its schema).
+#[test]
+fn the_example_report_is_what_collect_writes() {
+    fn copy(from: &Path, to: &Path) {
+        std::fs::create_dir_all(to).unwrap();
+        for e in std::fs::read_dir(from).unwrap().flatten() {
+            let path = e.path();
+            if path.is_dir() {
+                if path
+                    .file_name()
+                    .is_some_and(|n| n == "target" || n == "tests")
+                {
+                    continue;
+                }
+                copy(&path, &to.join(e.file_name()));
+            } else {
+                std::fs::copy(&path, to.join(e.file_name())).unwrap();
+            }
+        }
+    }
+    let example = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join("examples/todo-app");
+    let tmp = TempDir::new().unwrap();
+    copy(&example, tmp.path());
+    let committed = std::fs::read_to_string(tmp.path().join("specforge-report.json")).unwrap();
+    std::fs::remove_file(tmp.path().join("specforge-report.json")).unwrap();
+
+    let out = specforge()
+        .args([
+            "collect",
+            "--path",
+            tmp.path().to_str().unwrap(),
+            "--report",
+            tmp.path()
+                .join("runner-report.fixture.json")
+                .to_str()
+                .unwrap(),
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "collect: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let written = std::fs::read_to_string(tmp.path().join("specforge-report.json")).unwrap();
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&written).unwrap(),
+        serde_json::from_str::<serde_json::Value>(&committed).unwrap(),
+        "examples/todo-app/specforge-report.json is not what collect writes"
+    );
 }

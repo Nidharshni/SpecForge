@@ -83,8 +83,9 @@
       "a": {
         "tests": [
           {
+            "duration_ms": 1.5,
             "name": "a_works",
-            "status": "pass",
+            "status": "passed",
             "verify": "a works"
           }
         ]

@@ -38,6 +38,10 @@ CommandInput<CommandGraph>`). A payload change is one type edit, seen by the hos
 at compile time. Rejected: host-only typed mirrors (a third copy) and a separate wire crate (a
 second "single source").
 
+*Amended (ADR 0069, 2026-10-13):* the recorded-test payloads are one type: `TestStatus` and `TestResult`
+(with `TestResults` for a pass's `test_results`) replace `CollectTestResult`, `PassTestResult`, `PassTestResults`
+and `PassEntityResults`.
+
 ## D2. JSON over the bridge `call` export stays the encoding
 
 A typed WIT per operation (what `wit/specforge-extension.wit` sketched for worlds nothing
@@ -86,6 +90,9 @@ Required fields are required (a command answer without `exit_code`, a collected 
 absent, unknown fields are ignored so a newer peer may add one. No SDK-built guest ever produced
 a refused shape. Rejected: lenient decoding (the bugs above) and `deny_unknown_fields` (it breaks
 every additive change).
+
+*Amended (ADR 0069, 2026-10-13):* a collected test whose `status` is not `passed`, `failed` or `skipped` is
+malformed, as one without a `name` is.
 
 ## D6. `PROTOCOL_VERSION` stays 1.0.0
 
