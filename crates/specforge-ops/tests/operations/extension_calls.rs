@@ -163,7 +163,7 @@ fn a_status_outside_the_vocabulary_is_not_a_collect_output() {
         json!({"entity_results": [{"entity_id": "a", "test_results": [
             {"name": "t", "status": "ok"}]}]}),
         json!({"entity_results": [{"entity_id": "a", "test_results": [
-            {"name": "t", "status": "pass"}]}]}),
+            {"name": "t", "status": "Passed"}]}]}),
         json!({"entity_results": [], "unlinked": [
             {"name": "m::t", "path": ["m", "t"], "status": "ignored"}]}),
     ];
