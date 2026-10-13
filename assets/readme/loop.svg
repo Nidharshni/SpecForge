@@ -1,0 +1,149 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 430" width="880" height="430" role="img" aria-labelledby="t d">
+  <title id="t">How SpecForge works</title>
+  <desc id="d">A loop of six steps around the checked spec: 1 you describe what you want, 2 your agent drafts the spec, 3 SpecForge checks it and sends errors back with fix hints, 4 your agent builds from the spec, 5 your tests prove it through specforge collect, 6 you review what is proven.</desc>
+  <style>
+    svg { --bg:#ffffff; --panel:#f6f8fa; --line:#d0d7de; --text:#1f2328; --muted:#59636e;
+          --you:#1a7f37; --ai:#8250df; --forge:#d94f00; --test:#0969da; --bad:#cf222e;
+          --youSoft:#dafbe1; --aiSoft:#f3eeff; --forgeSoft:#fff1e5; --testSoft:#ddf4ff; }
+    @media (prefers-color-scheme: dark) {
+      svg { --bg:#0d1117; --panel:#161b22; --line:#30363d; --text:#e6edf3; --muted:#9198a1;
+            --you:#3fb950; --ai:#ab7df8; --forge:#ff7a2e; --test:#4493f8; --bad:#f85149;
+            --youSoft:#12261a; --aiSoft:#231a3a; --forgeSoft:#2b1a0e; --testSoft:#0c2d4a; }
+    }
+    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; fill: var(--text); }
+    .muted { fill: var(--muted); }
+    .ring { fill: none; stroke: var(--line); stroke-width: 2; stroke-dasharray: 6 6; }
+    .card { fill: var(--bg); stroke: var(--line); stroke-width: 1.2; }
+    .num { font-weight: 700; font-size: 15px; fill: #ffffff; }
+    .you  { --c: var(--you);   --s: var(--youSoft); }
+    .ai   { --c: var(--ai);    --s: var(--aiSoft); }
+    .forge{ --c: var(--forge); --s: var(--forgeSoft); }
+    .test { --c: var(--test);  --s: var(--testSoft); }
+    .dot { fill: var(--c); }
+    .hl  { fill: var(--s); stroke: var(--c); stroke-width: 2.5; opacity: 0; }
+    .flow { fill: none; stroke: var(--c); stroke-width: 3; stroke-linecap: round; opacity: 0; }
+
+    .hl, .flow { animation: 12s ease-in-out infinite; }
+    .hl { animation-name: hl; }
+    @keyframes hl { 0% { opacity: 0; } 3%, 14% { opacity: 1; } 18%, 100% { opacity: 0; } }
+    .flow { animation-name: flow; stroke-dasharray: 400; stroke-dashoffset: 400; }
+    @keyframes flow { 0%, 9% { opacity: 0; stroke-dashoffset: 400; } 10% { opacity: 1; stroke-dashoffset: 400; }
+      17% { opacity: 1; stroke-dashoffset: 0; } 20%, 100% { opacity: 0; stroke-dashoffset: 0; } }
+    .d1 { animation-delay: 0s; } .d2 { animation-delay: 2s; } .d3 { animation-delay: 4s; }
+    .d4 { animation-delay: 6s; } .d5 { animation-delay: 8s; } .d6 { animation-delay: 10s; }
+
+    .rework { animation: rework 12s ease-in-out infinite; }
+    @keyframes rework { 0%, 34% { opacity: 0; } 37%, 45% { opacity: 1; } 48%, 100% { opacity: 0; } }
+    .pass { opacity: 0; animation: pass 12s ease-in-out infinite; }
+    @keyframes pass { 0%, 45% { opacity: 0; } 47%, 50% { opacity: 1; } 53%, 100% { opacity: 0; } }
+    .core { animation: core 12s ease-in-out infinite; transform-origin: 440px 180px; }
+    @keyframes core { 0%, 44% { transform: scale(1); } 48% { transform: scale(1.08); } 54%, 100% { transform: scale(1); } }
+    @media (prefers-reduced-motion: reduce) { .hl, .flow, .rework, .pass, .core { animation: none; } }
+  </style>
+  <defs>
+    <marker id="arrow-bad" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="var(--bad)"/>
+    </marker>
+    <marker id="arrow" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="var(--line)"/>
+    </marker>
+  </defs>
+
+  <!-- the ring: x = 440 + 320 cos θ, y = 215 + 150 sin θ, one step every 60° -->
+  <path class="ring" d="M280 85.1 A320 150 0 0 1 600 85.1"/>
+  <path class="ring" d="M600 85.1 A320 150 0 0 1 760 215"/>
+  <path class="ring" d="M760 215 A320 150 0 0 1 600 344.9"/>
+  <path class="ring" d="M600 344.9 A320 150 0 0 1 280 344.9"/>
+  <path class="ring" d="M280 344.9 A320 150 0 0 1 120 215"/>
+  <path class="ring" d="M120 215 A320 150 0 0 1 280 85.1"/>
+
+  <!-- each segment lights up as the work moves on -->
+  <path class="flow you d1"   d="M280 85.1 A320 150 0 0 1 600 85.1"/>
+  <path class="flow ai d2"    d="M600 85.1 A320 150 0 0 1 760 215"/>
+  <path class="flow forge d3" d="M760 215 A320 150 0 0 1 600 344.9"/>
+  <path class="flow ai d4"    d="M600 344.9 A320 150 0 0 1 280 344.9"/>
+  <path class="flow test d5"  d="M280 344.9 A320 150 0 0 1 120 215"/>
+  <path class="flow you d6"   d="M120 215 A320 150 0 0 1 280 85.1"/>
+
+  <!-- the checked spec, at the centre -->
+  <g class="core">
+    <g stroke="var(--line)" stroke-width="2">
+      <line x1="440" y1="180" x2="398" y2="156"/>
+      <line x1="440" y1="180" x2="484" y2="154"/>
+      <line x1="440" y1="180" x2="404" y2="210"/>
+      <line x1="440" y1="180" x2="478" y2="210"/>
+      <line x1="398" y1="156" x2="404" y2="210"/>
+    </g>
+    <circle cx="440" cy="180" r="11" fill="var(--forge)"/>
+    <circle cx="398" cy="156" r="7" fill="var(--ai)"/>
+    <circle cx="484" cy="154" r="7" fill="var(--you)"/>
+    <circle cx="404" cy="210" r="7" fill="var(--test)"/>
+    <circle cx="478" cy="210" r="7" fill="var(--forge)"/>
+  </g>
+  <text x="440" y="252" font-size="16" font-weight="700" text-anchor="middle">The checked spec</text>
+  <text class="muted" x="440" y="272" font-size="12.5" text-anchor="middle">one source of truth for you,</text>
+  <text class="muted" x="440" y="289" font-size="12.5" text-anchor="middle">your agent and your tests</text>
+
+  <!-- the check sends a draft back once -->
+  <g class="rework">
+    <path d="M806 181 C 812 120, 770 92, 712 86" fill="none" stroke="var(--bad)" stroke-width="2.5" stroke-dasharray="6 4" marker-end="url(#arrow-bad)"/>
+    <text x="816" y="132" font-size="12.5" font-weight="700" fill="var(--bad)">errors</text>
+    <text x="816" y="148" font-size="12.5" font-weight="700" fill="var(--bad)">+ fixes</text>
+  </g>
+
+  <!-- the six steps -->
+  <g class="you">
+    <rect class="card" x="173" y="53" width="214" height="64" rx="12"/>
+    <rect class="hl d1" x="173" y="53" width="214" height="64" rx="12"/>
+    <circle class="dot" cx="201" cy="85" r="15"/><text class="num" x="201" y="90" text-anchor="middle">1</text>
+    <text x="226" y="81" font-size="15" font-weight="700">Describe</text>
+    <text class="muted" x="226" y="100" font-size="12.5">You, in conversation</text>
+  </g>
+  <g class="ai">
+    <rect class="card" x="493" y="53" width="214" height="64" rx="12"/>
+    <rect class="hl d2" x="493" y="53" width="214" height="64" rx="12"/>
+    <circle class="dot" cx="521" cy="85" r="15"/><text class="num" x="521" y="90" text-anchor="middle">2</text>
+    <text x="546" y="81" font-size="15" font-weight="700">Draft</text>
+    <text class="muted" x="546" y="100" font-size="12.5">Your agent writes it</text>
+  </g>
+  <g class="forge">
+    <rect class="card" x="653" y="183" width="214" height="64" rx="12"/>
+    <rect class="hl d3" x="653" y="183" width="214" height="64" rx="12"/>
+    <circle class="dot" cx="681" cy="215" r="15"/><text class="num" x="681" y="220" text-anchor="middle">3</text>
+    <text x="706" y="211" font-size="15" font-weight="700">Check</text>
+    <text class="muted" x="706" y="230" font-size="12.5">SpecForge, no AI inside</text>
+    <g class="pass">
+      <circle cx="848" cy="200" r="10" fill="var(--you)"/>
+      <path d="M843 200 l3.5 3.5 l6 -7" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+  </g>
+  <g class="ai">
+    <rect class="card" x="493" y="313" width="214" height="64" rx="12"/>
+    <rect class="hl d4" x="493" y="313" width="214" height="64" rx="12"/>
+    <circle class="dot" cx="521" cy="345" r="15"/><text class="num" x="521" y="350" text-anchor="middle">4</text>
+    <text x="546" y="341" font-size="15" font-weight="700">Build</text>
+    <text class="muted" x="546" y="360" font-size="12.5">Your agent writes code</text>
+  </g>
+  <g class="test">
+    <rect class="card" x="173" y="313" width="214" height="64" rx="12"/>
+    <rect class="hl d5" x="173" y="313" width="214" height="64" rx="12"/>
+    <circle class="dot" cx="201" cy="345" r="15"/><text class="num" x="201" y="350" text-anchor="middle">5</text>
+    <text x="226" y="341" font-size="15" font-weight="700">Prove</text>
+    <text class="muted" x="226" y="360" font-size="12.5">Your tests, via collect</text>
+  </g>
+  <g class="you">
+    <rect class="card" x="13" y="183" width="214" height="64" rx="12"/>
+    <rect class="hl d6" x="13" y="183" width="214" height="64" rx="12"/>
+    <circle class="dot" cx="41" cy="215" r="15"/><text class="num" x="41" y="220" text-anchor="middle">6</text>
+    <text x="66" y="211" font-size="15" font-weight="700">Review</text>
+    <text class="muted" x="66" y="230" font-size="12.5">You read what's proven</text>
+  </g>
+
+  <!-- who does what -->
+  <g font-size="12.5" class="muted">
+    <circle cx="300" cy="412" r="5" fill="var(--you)"/><text x="310" y="416" class="muted">you</text>
+    <circle cx="360" cy="412" r="5" fill="var(--ai)"/><text x="370" y="416" class="muted">your agent</text>
+    <circle cx="460" cy="412" r="5" fill="var(--forge)"/><text x="470" y="416" class="muted">SpecForge</text>
+    <circle cx="555" cy="412" r="5" fill="var(--test)"/><text x="565" y="416" class="muted">your tests</text>
+  </g>
+</svg>

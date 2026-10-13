@@ -173,8 +173,8 @@ work.
 
 1. ~~**Extension-runtime bootstrap**~~ (Manuel/Eckel type, C7) — **done.**
    `.github/workflows/ci.yml`'s "Fresh-clone bootstrap" job runs
-   `xtask build-builtins --force` from a clean checkout and asserts every
-   builtin `.wasm` exists; the blobs are also git-tracked under
+   `cargo gate bootstrap` from a clean checkout, which rebuilds every
+   committed blob and compares it with the vendored bytes; the blobs are also git-tracked under
    `extensions/*/wasm/*.wasm` as a working fallback.
 2. ~~**Incremental/LSP pipeline**~~ (Kladov/Woerister type, C4) — **done.**
    `specforge-lsp` now imports `specforge_watch::IncrementalPipeline`

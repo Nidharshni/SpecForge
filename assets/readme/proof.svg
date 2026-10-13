@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 330" width="880" height="330" role="img" aria-labelledby="t d">
+  <title id="t">Your tests prove the spec</title>
+  <desc id="d">specforge collect runs your tests and records which entity each one proves. Three tests pass, so issue_refund, refund_within_capture and refund_needs_reason become covered. refund_issued has no test yet, so it stays uncovered: 3 of 4 covered, one still open.</desc>
+  <style>
+    svg { --bg:#ffffff; --panel:#f6f8fa; --line:#d0d7de; --text:#1f2328; --muted:#59636e; --track:#eaeef2;
+          --ok:#1a7f37; --okSoft:#dafbe1; --warn:#9a6700; --warnSoft:#fff8c5; --forge:#d94f00; }
+    @media (prefers-color-scheme: dark) {
+      svg { --bg:#0d1117; --panel:#161b22; --line:#30363d; --text:#e6edf3; --muted:#9198a1; --track:#21262d;
+            --ok:#3fb950; --okSoft:#12261a; --warn:#d29922; --warnSoft:#2e2408; --forge:#ff7a2e; }
+    }
+    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; fill: var(--text); }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .muted { fill: var(--muted); }
+    .card { fill: var(--panel); stroke: var(--line); }
+    .ok { fill: var(--ok); } .warn { fill: var(--warn); }
+    .track { fill: var(--track); }
+    .bar { fill: var(--ok); transform-box: fill-box; transform-origin: left center; }
+
+    .a { animation-duration: 10s; animation-iteration-count: infinite; }
+    .t1 { animation-name: t1; } @keyframes t1 { 0%, 10% { opacity: 0; } 12%, 94% { opacity: 1; } 98%, 100% { opacity: 0; } }
+    .t2 { animation-name: t2; } @keyframes t2 { 0%, 22% { opacity: 0; } 24%, 94% { opacity: 1; } 98%, 100% { opacity: 0; } }
+    .t3 { animation-name: t3; } @keyframes t3 { 0%, 34% { opacity: 0; } 36%, 94% { opacity: 1; } 98%, 100% { opacity: 0; } }
+    .t4 { animation-name: t4; } @keyframes t4 { 0%, 46% { opacity: 0; } 48%, 94% { opacity: 1; } 98%, 100% { opacity: 0; } }
+    .b1 { animation-name: b1; } @keyframes b1 { 0%, 13% { transform: scaleX(0); } 18%, 94% { transform: scaleX(1); } 98%, 100% { transform: scaleX(0); } }
+    .b2 { animation-name: b2; } @keyframes b2 { 0%, 25% { transform: scaleX(0); } 30%, 94% { transform: scaleX(1); } 98%, 100% { transform: scaleX(0); } }
+    .b3 { animation-name: b3; } @keyframes b3 { 0%, 37% { transform: scaleX(0); } 42%, 94% { transform: scaleX(1); } 98%, 100% { transform: scaleX(0); } }
+    .c1 { animation-name: c1; } @keyframes c1 { 0%, 16% { opacity: 0; } 18%, 94% { opacity: 1; } 98%, 100% { opacity: 0; } }
+    .c2 { animation-name: c2; } @keyframes c2 { 0%, 28% { opacity: 0; } 30%, 94% { opacity: 1; } 98%, 100% { opacity: 0; } }
+    .c3 { animation-name: c3; } @keyframes c3 { 0%, 40% { opacity: 0; } 42%, 94% { opacity: 1; } 98%, 100% { opacity: 0; } }
+    .u1 { opacity: 0; animation-name: u1; } @keyframes u1 { 0%, 16% { opacity: 1; } 18%, 94% { opacity: 0; } 98%, 100% { opacity: 1; } }
+    .u2 { opacity: 0; animation-name: u2; } @keyframes u2 { 0%, 28% { opacity: 1; } 30%, 94% { opacity: 0; } 98%, 100% { opacity: 1; } }
+    .u3 { opacity: 0; animation-name: u3; } @keyframes u3 { 0%, 40% { opacity: 1; } 42%, 94% { opacity: 0; } 98%, 100% { opacity: 1; } }
+    .open { animation-name: open; } @keyframes open { 0%, 48% { opacity: 0; } 52%, 94% { opacity: 1; } 98%, 100% { opacity: 0; } }
+    .sum { animation-name: sum; } @keyframes sum { 0%, 54% { opacity: 0; } 58%, 94% { opacity: 1; } 98%, 100% { opacity: 0; } }
+    @media (prefers-reduced-motion: reduce) { .a { animation: none; } }
+  </style>
+
+  <!-- left: the test run -->
+  <rect class="card" x="10" y="10" width="370" height="310" rx="14"/>
+  <text class="mono" x="32" y="46" font-size="15" font-weight="600"><tspan fill="var(--ok)">$</tspan> specforge collect</text>
+  <text class="muted" x="32" y="68" font-size="12.5">runs cargo test or vitest, once you approve it</text>
+
+  <g font-size="13.5">
+    <g class="t1 a"><circle class="ok" cx="42" cy="111" r="9"/><path d="M37.5 111 l3 3 l5.5 -6" stroke="var(--bg)" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <text x="60" y="116">refunds the requested amount</text></g>
+    <g class="t2 a"><circle class="ok" cx="42" cy="161" r="9"/><path d="M37.5 161 l3 3 l5.5 -6" stroke="var(--bg)" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <text x="60" y="158">rejects a refund larger than</text><text x="60" y="175">the captured amount</text></g>
+    <g class="t3 a"><circle class="ok" cx="42" cy="211" r="9"/><path d="M37.5 211 l3 3 l5.5 -6" stroke="var(--bg)" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <text x="60" y="216">rejects a refund with no reason</text></g>
+    <g class="t4 a"><circle cx="42" cy="261" r="9" fill="none" stroke="var(--warn)" stroke-width="2" stroke-dasharray="3 3"/>
+      <text class="warn" x="60" y="258">no test for</text><text class="muted" x="60" y="275">"is emitted once per refund"</text></g>
+  </g>
+
+  <!-- right: what the spec now knows -->
+  <rect class="card" x="400" y="10" width="470" height="310" rx="14"/>
+  <text x="422" y="46" font-size="15" font-weight="700">What's proven</text>
+  <text class="mono muted" x="422" y="68" font-size="12">specforge review</text>
+
+  <g font-size="13">
+    <text class="mono" x="422" y="110" font-weight="600">issue_refund</text>
+    <text class="muted" x="422" y="127" font-size="12">behavior</text>
+    <rect class="track" x="622" y="108" width="110" height="8" rx="4"/>
+    <rect class="bar b1 a" x="622" y="108" width="110" height="8" rx="4"/>
+    <text class="mono muted u1 a" x="746" y="117" font-size="12">uncovered 0/1</text>
+    <text class="mono ok c1 a" x="746" y="117" font-size="12" font-weight="700">covered 1/1</text>
+
+    <text class="mono" x="422" y="160" font-weight="600">refund_within_capture</text>
+    <text class="muted" x="422" y="177" font-size="12">invariant</text>
+    <rect class="track" x="622" y="158" width="110" height="8" rx="4"/>
+    <rect class="bar b2 a" x="622" y="158" width="110" height="8" rx="4"/>
+    <text class="mono muted u2 a" x="746" y="167" font-size="12">uncovered 0/1</text>
+    <text class="mono ok c2 a" x="746" y="167" font-size="12" font-weight="700">covered 1/1</text>
+
+    <text class="mono" x="422" y="210" font-weight="600">refund_needs_reason</text>
+    <text class="muted" x="422" y="227" font-size="12">invariant</text>
+    <rect class="track" x="622" y="208" width="110" height="8" rx="4"/>
+    <rect class="bar b3 a" x="622" y="208" width="110" height="8" rx="4"/>
+    <text class="mono muted u3 a" x="746" y="217" font-size="12">uncovered 0/1</text>
+    <text class="mono ok c3 a" x="746" y="217" font-size="12" font-weight="700">covered 1/1</text>
+
+    <rect class="open a" x="410" y="240" width="452" height="44" rx="8" fill="var(--warnSoft)" stroke="var(--warn)"/>
+    <text class="mono" x="422" y="260" font-weight="600">refund_issued</text>
+    <text class="muted" x="422" y="277" font-size="12">event</text>
+    <rect class="track" x="622" y="258" width="110" height="8" rx="4"/>
+    <text class="mono warn" x="746" y="267" font-size="12" font-weight="700">uncovered 0/1</text>
+  </g>
+
+  <text class="sum a" x="635" y="306" font-size="13" text-anchor="middle"><tspan font-weight="700" fill="var(--ok)">3 of 4 covered</tspan><tspan class="muted"> · one promise still has no test</tspan></text>
+</svg>

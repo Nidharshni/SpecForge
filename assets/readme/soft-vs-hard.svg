@@ -1,0 +1,139 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 360" width="880" height="360" role="img" aria-labelledby="t d">
+  <title id="t">Soft skill versus hard skill</title>
+  <desc id="d">Left: a rule written in CLAUDE.md is advice; the AI's refund code passes it by and ships with the rule skipped. Right: the same rule as a SpecForge check stops the draft with W003 (the rule is not enforced by any behavior), the agent links the rule, and it ships with the rule enforced.</desc>
+  <style>
+    svg { --bg:#ffffff; --panel:#f6f8fa; --line:#d0d7de; --text:#1f2328; --muted:#59636e;
+          --ai:#8250df; --forge:#d94f00; --ok:#1a7f37; --bad:#cf222e;
+          --aiSoft:#f3eeff; --okSoft:#dafbe1; --badSoft:#ffebe9; --forgeSoft:#fff1e5; }
+    @media (prefers-color-scheme: dark) {
+      svg { --bg:#0d1117; --panel:#161b22; --line:#30363d; --text:#e6edf3; --muted:#9198a1;
+            --ai:#ab7df8; --forge:#ff7a2e; --ok:#3fb950; --bad:#f85149;
+            --aiSoft:#231a3a; --okSoft:#12261a; --badSoft:#2d1215; --forgeSoft:#2b1a0e; }
+    }
+    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; fill: var(--text); }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .muted { fill: var(--muted); }
+    .card { fill: var(--panel); stroke: var(--line); }
+    .pill { fill: var(--bg); stroke: var(--line); }
+    .path { stroke: var(--line); stroke-width: 2; stroke-dasharray: 5 5; fill: none; }
+    .note { fill: var(--bg); stroke: var(--line); }
+    .ai { fill: var(--ai); } .okf { fill: var(--ok); } .badf { fill: var(--bad); } .forgef { fill: var(--forge); }
+    .bad-box { fill: var(--badSoft); stroke: var(--bad); }
+    .ok-box { fill: var(--okSoft); stroke: var(--ok); }
+    .bad-t { fill: var(--bad); } .ok-t { fill: var(--ok); } .forge-t { fill: var(--forge); } .ai-t { fill: var(--ai); }
+
+    .anim { animation-duration: 10s; animation-iteration-count: infinite; animation-timing-function: ease-in-out; }
+    .tokL { animation-name: tokL; }
+    @keyframes tokL { 0% { opacity: 0; transform: translateY(0); } 5%, 12% { opacity: 1; transform: translateY(0); }
+      45%, 92% { opacity: 1; transform: translateY(112px); } 100% { opacity: 0; transform: translateY(112px); } }
+    .ignored { animation-name: ignored; }
+    @keyframes ignored { 0%, 22% { opacity: 1; } 30%, 40% { opacity: .45; } 48%, 100% { opacity: 1; } }
+    .tagBad { animation-name: tagBad; }
+    @keyframes tagBad { 0%, 47% { opacity: 0; } 52%, 92% { opacity: 1; } 100% { opacity: 0; } }
+
+    .tokR { animation-name: tokR; }
+    @keyframes tokR { 0% { opacity: 0; transform: translateY(0); } 5%, 12% { opacity: 1; transform: translateY(0); }
+      24% { transform: translateY(27px); } 27% { transform: translateY(21px); } 30%, 36% { transform: translateY(27px); opacity: 1; }
+      42% { transform: translateY(0); opacity: 1; } 45%, 100% { transform: translateY(0); opacity: 0; } }
+    .tokOk { animation-name: tokOk; }
+    @keyframes tokOk { 0%, 42% { opacity: 0; transform: translateY(0); } 46% { opacity: 1; transform: translateY(0); }
+      62%, 92% { opacity: 1; transform: translateY(112px); } 100% { opacity: 0; transform: translateY(112px); } }
+    .gateBad { animation-name: gateBad; }
+    @keyframes gateBad { 0%, 23% { opacity: 0; } 25%, 40% { opacity: 1; } 44%, 100% { opacity: 0; } }
+    .gateOk { animation-name: gateOk; }
+    @keyframes gateOk { 0%, 49% { opacity: 0; } 52%, 92% { opacity: 1; } 100% { opacity: 0; } }
+    .msgBad { animation-name: msgBad; opacity: 0; }
+    @keyframes msgBad { 0%, 24% { opacity: 0; } 27%, 44% { opacity: 1; } 48%, 100% { opacity: 0; } }
+    .msgOk { animation-name: msgOk; }
+    @keyframes msgOk { 0%, 49% { opacity: 0; } 53%, 92% { opacity: 1; } 100% { opacity: 0; } }
+    .tagOk { animation-name: tagOk; }
+    @keyframes tagOk { 0%, 60% { opacity: 0; } 65%, 92% { opacity: 1; } 100% { opacity: 0; } }
+    @media (prefers-reduced-motion: reduce) {
+      .anim { animation: none; }
+      .tokR, .tokOk { opacity: 0; }
+    }
+  </style>
+
+  <!-- ───────────── Soft skill ───────────── -->
+  <rect class="card" x="10" y="10" width="420" height="340" rx="14"/>
+  <text x="34" y="46" font-size="19" font-weight="700">Soft skill</text>
+  <text class="muted" x="34" y="68" font-size="13.5">A rule written as advice for the AI</text>
+
+  <rect class="pill" x="40" y="88" width="170" height="34" rx="17"/>
+  <circle class="ai" cx="60" cy="105" r="5"/>
+  <text x="134" y="110" font-size="14" font-weight="600" text-anchor="middle">AI writes refunds</text>
+  <path class="path" d="M125 124 V 268"/>
+
+  <g class="ignored anim">
+    <path class="note" d="M232 150 h158 l20 20 v68 h-178 z"/>
+    <path d="M390 150 v20 h20" fill="none" stroke="var(--line)"/>
+    <text class="mono muted" x="246" y="173" font-size="12">CLAUDE.md</text>
+    <text x="246" y="198" font-size="13.5">Refunds never exceed</text>
+    <text x="246" y="218" font-size="13.5">the captured amount.</text>
+  </g>
+  <path d="M138 196 H 226" stroke="var(--line)" stroke-dasharray="2 4"/>
+
+  <g class="tokL anim">
+    <rect class="ai" x="113" y="140" width="24" height="30" rx="4"/>
+    <path d="M118 150 h14 M118 156 h14 M118 162 h9" stroke="var(--bg)" stroke-width="2"/>
+  </g>
+
+  <rect class="pill" x="40" y="286" width="170" height="34" rx="17"/>
+  <text x="125" y="308" font-size="14" font-weight="600" text-anchor="middle">Shipped</text>
+
+  <g class="tagBad anim">
+    <rect class="bad-box" x="232" y="270" width="178" height="58" rx="10"/>
+    <text class="bad-t" x="248" y="294" font-size="14" font-weight="700">✗  Rule skipped</text>
+    <text class="muted" x="248" y="315" font-size="12.5">found two weeks later</text>
+  </g>
+
+  <!-- ───────────── Hard skill ───────────── -->
+  <rect class="card" x="450" y="10" width="420" height="340" rx="14"/>
+  <text x="474" y="46" font-size="19" font-weight="700">Hard skill</text>
+  <text class="muted" x="474" y="68" font-size="13.5">The same rule, checked by SpecForge</text>
+
+  <rect class="pill" x="480" y="88" width="170" height="34" rx="17"/>
+  <circle class="ai" cx="500" cy="105" r="5"/>
+  <text x="574" y="110" font-size="14" font-weight="600" text-anchor="middle">AI writes refunds</text>
+  <path class="path" d="M565 124 V 268"/>
+
+  <!-- the gate -->
+  <rect class="forgef" x="490" y="196" width="150" height="12" rx="6"/>
+  <rect class="badf gateBad anim" x="490" y="196" width="150" height="12" rx="6" opacity="0"/>
+  <rect class="okf gateOk anim" x="490" y="196" width="150" height="12" rx="6"/>
+  <text class="mono forge-t" x="490" y="226" font-size="11.5" font-weight="600">specforge check --strict</text>
+
+  <path class="note" d="M672 140 h158 l20 20 v58 h-178 z"/>
+  <path d="M830 140 v20 h20" fill="none" stroke="var(--line)"/>
+  <text class="mono muted" x="686" y="163" font-size="12">refunds.spec</text>
+  <text class="mono" x="686" y="186" font-size="12.5"><tspan class="ai-t">invariant</tspan></text>
+  <text class="mono" x="686" y="205" font-size="12">refund_within_capture</text>
+  <path d="M646 202 H 666" stroke="var(--line)" stroke-dasharray="2 4"/>
+
+  <g class="msgBad anim">
+    <rect class="bad-box" x="672" y="228" width="178" height="40" rx="8"/>
+    <text class="mono bad-t" x="684" y="245" font-size="12" font-weight="700">✗ W003</text>
+    <text class="mono muted" x="684" y="261" font-size="11">rule not enforced</text>
+  </g>
+  <g class="msgOk anim">
+    <rect class="ok-box" x="672" y="228" width="178" height="40" rx="8"/>
+    <text class="mono ok-t" x="684" y="253" font-size="12" font-weight="700">✓ 0 errors, 0 warnings</text>
+  </g>
+
+  <g class="tokR anim">
+    <rect class="ai" x="553" y="140" width="24" height="30" rx="4"/>
+    <path d="M558 150 h14 M558 156 h14 M558 162 h9" stroke="var(--bg)" stroke-width="2"/>
+  </g>
+  <g class="tokOk anim">
+    <rect class="okf" x="553" y="140" width="24" height="30" rx="4"/>
+    <path d="M558 156 l4 4 l8 -9" stroke="var(--bg)" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <rect class="pill" x="480" y="286" width="170" height="34" rx="17"/>
+  <text x="565" y="308" font-size="14" font-weight="600" text-anchor="middle">Shipped</text>
+
+  <g class="tagOk anim">
+    <rect class="ok-box" x="672" y="282" width="178" height="46" rx="10"/>
+    <text class="ok-t" x="688" y="310" font-size="14" font-weight="700">✓  Rule enforced</text>
+  </g>
+</svg>
