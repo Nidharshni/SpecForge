@@ -557,7 +557,7 @@ pub(crate) fn run(ctx: &AnalysisContext, solver: &dyn Solver) -> ProveReport {
     }
 
     let summary = serde_json::json!({
-        "solver": solver_version.as_deref().unwrap_or("not found"),
+        "solver": solver_version,
         "solver_available": solver_available,
         "solver_runtime_failure": solver_runtime_failure,
         "entities_with_bounds": entities_with_bounds,
@@ -942,27 +942,17 @@ mod tests {
         );
     }
 
-    #[test]
+    #[specforge_test(
+        behavior = "prove_declared_bounds_and_claims",
+        verify = "a solver that does not run is one W098, the finding doctor states, and nothing is solved"
+    )]
     fn missing_solver_yields_w098_without_solving() {
         let mut g = Graph::new();
         g.add_node(constraint_node("c1", "latency < 100ms"));
         let solver = ScriptedSolver::not_found();
         let report = prove_with(&g, &solver);
-        // Pins today's wording; T4 flips it.
-        let w098 = report
-            .findings
-            .iter()
-            .find(|f| f.code == "W098")
-            .expect("W098 expected");
-        assert_eq!(
-            w098.message,
-            "SMT solver 'z3' not found on PATH; formal entailment and consistency checks were skipped"
-        );
-        assert_eq!(
-            w098.suggestion.as_deref(),
-            Some("install z3 (https://github.com/Z3Prover/z3) to enable `--prove`")
-        );
-        assert_eq!(report.summary["solver"], "not found");
+        assert_eq!(report.findings, vec![crate::solver::Z3::not_on_path()]);
+        assert!(report.summary["solver"].is_null());
         assert_eq!(report.summary["solver_available"], false);
         assert!(solver.scripts().is_empty());
     }

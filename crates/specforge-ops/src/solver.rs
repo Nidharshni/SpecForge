@@ -74,11 +74,7 @@ impl Z3 {
 
     /// The W098 for a z3 that is not on `PATH` (what `ScriptedSolver::not_found` answers).
     pub(crate) fn not_on_path() -> Diagnostic {
-        Diagnostic::new(
-            codes::W098,
-            "SMT solver 'z3' not found on PATH; formal entailment and consistency checks were skipped",
-        )
-        .with_suggestion("install z3 (https://github.com/Z3Prover/z3) to enable `--prove`")
+        unavailable(Unrunnable::NotOnPath)
     }
 }
 
@@ -106,15 +102,24 @@ impl Default for Z3 {
 
 impl Solver for Z3 {
     fn availability(&self) -> Availability {
-        match run(
+        let why = match run(
             Command::new(&self.program).arg("--version"),
             self.probe_timeout,
         ) {
-            Ok(Ran { status, stdout }) if status.success() => Availability::Ready {
-                version: stdout.lines().next().unwrap_or("z3").trim().to_string(),
-            },
-            _ => Availability::Unavailable(Z3::not_on_path()),
-        }
+            Ok(Ran { status, stdout }) if status.success() => {
+                return Availability::Ready {
+                    version: stdout.lines().next().unwrap_or("z3").trim().to_string(),
+                };
+            }
+            Ok(Ran { status, .. }) => Unrunnable::Exited(status),
+            Err(RunError::NotFound) => Unrunnable::NotOnPath,
+            Err(RunError::CannotStart(error)) => Unrunnable::CannotStart(error.to_string()),
+            Err(RunError::TimedOut) => Unrunnable::ProbeTimedOut(self.probe_timeout),
+            Err(RunError::Lost) => {
+                Unrunnable::CannotStart("it ended without an answer".to_string())
+            }
+        };
+        Availability::Unavailable(unavailable(why))
     }
 
     fn solve(&self, script: &str) -> Result<String, SolveFailure> {
@@ -138,6 +143,43 @@ impl Solver for Z3 {
     }
 }
 
+/// Why z3 does not run here.
+enum Unrunnable {
+    NotOnPath,
+    Exited(ExitStatus),
+    CannotStart(String),
+    ProbeTimedOut(Duration),
+}
+
+/// The one W098 for a z3 that does not run: what the prove pass reports and
+/// doctor states.
+fn unavailable(why: Unrunnable) -> Diagnostic {
+    const SKIPPED: &str = "`specforge analyze --prove` skips its consistency and entailment checks";
+    const REINSTALL: &str =
+        "reinstall z3 (https://github.com/Z3Prover/z3) so that `z3 --version` runs";
+    let (message, suggestion) = match why {
+        Unrunnable::NotOnPath => (
+            format!("the SMT solver z3 is not on PATH: {SKIPPED}"),
+            "install z3 (https://github.com/Z3Prover/z3) and put it on PATH",
+        ),
+        Unrunnable::Exited(status) => (
+            format!("the SMT solver z3 does not run (`z3 --version` failed: {status}): {SKIPPED}"),
+            REINSTALL,
+        ),
+        Unrunnable::CannotStart(error) => (
+            format!("the SMT solver z3 does not run ({error}): {SKIPPED}"),
+            REINSTALL,
+        ),
+        Unrunnable::ProbeTimedOut(after) => (
+            format!(
+                "the SMT solver z3 does not run (`z3 --version` did not answer within {after:?}): {SKIPPED}"
+            ),
+            REINSTALL,
+        ),
+    };
+    Diagnostic::new(codes::W098, message).with_suggestion(suggestion)
+}
+
 /// What a finished process left: its exit status and stdout.
 struct Ran {
     status: ExitStatus,
@@ -147,7 +189,6 @@ struct Ran {
 /// Why a process gave no output in time.
 enum RunError {
     NotFound,
-    #[allow(dead_code, reason = "the next ticket words why it could not start")]
     CannotStart(std::io::Error),
     TimedOut,
     Lost,
@@ -296,7 +337,14 @@ mod tests {
         let (_dir, fake) = fake_z3("sleep 30");
         let z3 = Z3::at(fake, Duration::from_secs(30), Duration::from_millis(200));
         let started = Instant::now();
-        assert!(matches!(z3.availability(), Availability::Unavailable(_)));
+        let Availability::Unavailable(w098) = z3.availability() else {
+            panic!("a hung probe is unavailable")
+        };
+        assert!(
+            w098.message.contains("did not answer within 200ms"),
+            "{}",
+            w098.message
+        );
         assert!(started.elapsed() < Duration::from_secs(10));
     }
 
@@ -307,9 +355,29 @@ mod tests {
             Duration::from_secs(1),
             Duration::from_secs(1),
         );
+        let Availability::Unavailable(w098) = z3.availability() else {
+            panic!("a program that is not there is not available")
+        };
+        assert_eq!(w098, Z3::not_on_path());
         assert_eq!(
-            z3.availability(),
-            Availability::Unavailable(Z3::not_on_path())
+            w098.message,
+            "the SMT solver z3 is not on PATH: `specforge analyze --prove` skips its consistency and entailment checks"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_z3_whose_version_fails_does_not_run() {
+        let (_dir, fake) = fake_z3("exit 1");
+        let z3 = Z3::at(fake, Duration::from_secs(1), Duration::from_secs(5));
+        let Availability::Unavailable(w098) = z3.availability() else {
+            panic!("a z3 that exits 1 does not run")
+        };
+        assert!(
+            w098.message
+                .contains("`z3 --version` failed: exit status: 1"),
+            "{}",
+            w098.message
         );
     }
 

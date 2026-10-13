@@ -1181,17 +1181,39 @@ fn prove_report(dir: &Path, path: &Path, extra: &[&str]) -> (Value, Option<i32>)
     (prove, output.status.code())
 }
 
-// Pins today's wording: T4 says why the z3 does not run.
 #[cfg(unix)]
 #[test]
-fn a_z3_that_does_not_run_is_called_not_on_path_today() {
+fn a_z3_that_does_not_run_says_why() {
     let dir = impossible_bounds();
     let (prove, code) = prove_report(dir.path(), &crate::toolchain::z3_broken(), &[]);
     assert_eq!(code, Some(0));
     assert_eq!(
         prove["findings"][0]["message"],
-        "SMT solver 'z3' not found on PATH; formal entailment and consistency checks were skipped"
+        "the SMT solver z3 does not run (`z3 --version` failed: exit status: 1): `specforge analyze --prove` skips its consistency and entailment checks"
     );
+    assert!(prove["summary"]["solver"].is_null(), "{prove}");
+}
+
+#[cfg(unix)]
+#[specforge_test_macros::test(
+    behavior = "prove_declared_bounds_and_claims",
+    verify = "a solver that does not run is one W098, the finding doctor states, and nothing is solved"
+)]
+fn analyze_prove_without_z3_is_one_w098_and_strict_fails() {
+    let dir = impossible_bounds();
+    let (prove, code) = prove_report(dir.path(), &crate::toolchain::z3_absent(), &[]);
+    assert_eq!(code, Some(0));
+    let findings = prove["findings"].as_array().unwrap();
+    assert_eq!(findings.len(), 1, "{prove}");
+    assert_eq!(findings[0]["code"], "W098");
+    assert_eq!(
+        findings[0]["message"],
+        "the SMT solver z3 is not on PATH: `specforge analyze --prove` skips its consistency and entailment checks"
+    );
+    assert_eq!(prove["summary"]["solver_available"], false);
+
+    let (_, strict) = prove_report(dir.path(), &crate::toolchain::z3_absent(), &["--strict"]);
+    assert_eq!(strict, Some(1));
 }
 
 #[cfg(unix)]
