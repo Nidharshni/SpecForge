@@ -7,8 +7,9 @@
 //! `specforge_ops::testing::ScriptedSolver`.
 
 use std::ffi::OsString;
-use std::process::Command;
-use std::time::Duration;
+use std::io::Read;
+use std::process::{Command, ExitStatus, Stdio};
+use std::time::{Duration, Instant};
 
 use specforge_common::{Diagnostic, codes};
 
@@ -47,6 +48,7 @@ pub enum SolveFailure {
 pub struct Z3 {
     program: OsString,
     timeout: Duration,
+    probe_timeout: Duration,
 }
 
 impl Z3 {
@@ -61,6 +63,7 @@ impl Z3 {
         Self {
             program: OsString::from("z3"),
             timeout,
+            probe_timeout: Self::PROBE_TIMEOUT,
         }
     }
 
@@ -79,6 +82,22 @@ impl Z3 {
     }
 }
 
+#[cfg(test)]
+impl Z3 {
+    /// The adapter over another program and probe timeout: a test's fake `z3`.
+    pub(crate) fn at(
+        program: impl Into<OsString>,
+        timeout: Duration,
+        probe_timeout: Duration,
+    ) -> Self {
+        Self {
+            program: program.into(),
+            timeout,
+            probe_timeout,
+        }
+    }
+}
+
 impl Default for Z3 {
     fn default() -> Self {
         Self::with_timeout(Self::DEFAULT_TIMEOUT)
@@ -87,18 +106,14 @@ impl Default for Z3 {
 
 impl Solver for Z3 {
     fn availability(&self) -> Availability {
-        let Ok(output) = Command::new(&self.program).arg("--version").output() else {
-            return Availability::Unavailable(Z3::not_on_path());
-        };
-        if !output.status.success() {
-            return Availability::Unavailable(Z3::not_on_path());
-        }
-        Availability::Ready {
-            version: String::from_utf8_lossy(&output.stdout)
-                .lines()
-                .next()
-                .unwrap_or("z3")
-                .to_string(),
+        match run(
+            Command::new(&self.program).arg("--version"),
+            self.probe_timeout,
+        ) {
+            Ok(Ran { status, stdout }) if status.success() => Availability::Ready {
+                version: stdout.lines().next().unwrap_or("z3").trim().to_string(),
+            },
+            _ => Availability::Unavailable(Z3::not_on_path()),
         }
     }
 
@@ -111,75 +126,207 @@ impl Solver for Z3 {
             COUNTER.fetch_add(1, Ordering::Relaxed)
         ));
         std::fs::write(&tmp, script).map_err(|_| SolveFailure::Failed)?;
-        let result = run_with_timeout(Command::new(&self.program).arg(&tmp), self.timeout);
+        let result = run(Command::new(&self.program).arg(&tmp), self.timeout);
         let _ = std::fs::remove_file(&tmp);
-        result
+        match result {
+            Ok(ran) => Ok(ran.stdout),
+            Err(RunError::TimedOut) => Err(SolveFailure::TimedOut {
+                after: self.timeout,
+            }),
+            Err(_) => Err(SolveFailure::Failed),
+        }
     }
 }
 
-/// Run a command to completion or kill it at `timeout`; returns its stdout.
-fn run_with_timeout(cmd: &mut Command, timeout: Duration) -> Result<String, SolveFailure> {
-    use std::io::Read;
-    use std::process::Stdio;
+/// What a finished process left: its exit status and stdout.
+struct Ran {
+    status: ExitStatus,
+    stdout: String,
+}
+
+/// Why a process gave no output in time.
+enum RunError {
+    NotFound,
+    #[allow(dead_code, reason = "the next ticket words why it could not start")]
+    CannotStart(std::io::Error),
+    TimedOut,
+    Lost,
+}
+
+/// After the process exits, how long its output may still take to arrive.
+const DRAIN_GRACE: Duration = Duration::from_millis(100);
+
+/// Run `cmd` (stdin null, stderr discarded) and read its stdout, stopping at
+/// `timeout`: the process is killed then, and output a child process keeps
+/// open past the deadline is not waited for (its reader thread ends when that
+/// child does).
+fn run(cmd: &mut Command, timeout: Duration) -> Result<Ran, RunError> {
     let mut child = cmd
+        .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .spawn()
-        .map_err(|_| SolveFailure::Failed)?;
-    let mut stdout = child.stdout.take().ok_or(SolveFailure::Failed)?;
-    let reader = std::thread::spawn(move || {
+        .map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                RunError::NotFound
+            } else {
+                RunError::CannotStart(e)
+            }
+        })?;
+    let mut stdout = child.stdout.take().ok_or(RunError::Lost)?;
+    let (sender, received) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
         let mut buf = Vec::new();
         let _ = stdout.read_to_end(&mut buf);
-        buf
+        let _ = sender.send(buf);
     });
-    let deadline = std::time::Instant::now() + timeout;
-    loop {
+    let deadline = Instant::now() + timeout;
+    let status = loop {
         match child.try_wait() {
-            Ok(Some(_)) => break,
-            Ok(None) if std::time::Instant::now() >= deadline => {
+            Ok(Some(status)) => break status,
+            Ok(None) if Instant::now() >= deadline => {
                 let _ = child.kill();
                 let _ = child.wait();
-                let _ = reader.join();
-                return Err(SolveFailure::TimedOut { after: timeout });
+                return Err(RunError::TimedOut);
             }
             Ok(None) => std::thread::sleep(Duration::from_millis(10)),
-            Err(_) => return Err(SolveFailure::Failed),
+            Err(_) => return Err(RunError::Lost),
         }
-    }
-    let buf = reader.join().map_err(|_| SolveFailure::Failed)?;
-    Ok(String::from_utf8_lossy(&buf).to_string())
+    };
+    let left = deadline
+        .saturating_duration_since(Instant::now())
+        .max(DRAIN_GRACE);
+    let buf = received
+        .recv_timeout(left)
+        .map_err(|_| RunError::TimedOut)?;
+    Ok(Ran {
+        status,
+        stdout: String::from_utf8_lossy(&buf).into_owned(),
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use specforge_test_macros::test as specforge_test;
 
-    #[test]
+    /// A real z3 or a failure that says how to get one: for the tests of what
+    /// z3 answers.
+    pub(crate) fn real_z3() -> Z3 {
+        let z3 = Z3::default();
+        assert!(
+            matches!(z3.availability(), Availability::Ready { .. }),
+            "z3 is required for this test: install it (brew install z3 / apt-get install z3); CI installs it"
+        );
+        z3
+    }
+
+    /// A fake `z3` (a shell script) in a temp directory.
+    #[cfg(unix)]
+    fn fake_z3(script: &str) -> (tempfile::TempDir, std::path::PathBuf) {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("z3");
+        std::fs::write(&path, format!("#!/bin/sh\n{script}\n")).unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        (dir, path)
+    }
+
+    #[specforge_test(
+        behavior = "prove_declared_bounds_and_claims",
+        verify = "a solver call ends at its timeout, even when the solver leaves a child process"
+    )]
     fn process_outliving_the_timeout_is_killed() {
-        let started = std::time::Instant::now();
-        let out = run_with_timeout(
+        let started = Instant::now();
+        let out = run(
             std::process::Command::new("sleep").arg("30"),
             Duration::from_millis(200),
         );
-        assert!(matches!(out, Err(SolveFailure::TimedOut { .. })));
+        assert!(matches!(out, Err(RunError::TimedOut)));
         assert!(started.elapsed() < Duration::from_secs(10));
     }
 
     #[cfg(unix)]
-    #[ignore = "fixed by T3"]
-    #[test]
+    #[specforge_test(
+        behavior = "prove_declared_bounds_and_claims",
+        verify = "a solver call ends at its timeout, even when the solver leaves a child process"
+    )]
     fn a_solver_that_leaves_a_child_is_stopped_at_the_timeout() {
         // `sh` forks `sleep`, which keeps the stdout pipe after `sh` is killed.
-        let started = std::time::Instant::now();
-        let out = run_with_timeout(
+        let started = Instant::now();
+        let out = run(
             std::process::Command::new("sh").args(["-c", "sleep 30; true"]),
             Duration::from_millis(200),
         );
-        assert!(matches!(out, Err(SolveFailure::TimedOut { .. })));
+        assert!(matches!(out, Err(RunError::TimedOut)));
         assert!(
             started.elapsed() < Duration::from_secs(10),
             "{:?}",
             started.elapsed()
         );
+    }
+
+    #[cfg(unix)]
+    #[specforge_test(
+        behavior = "prove_declared_bounds_and_claims",
+        verify = "a solver call ends at its timeout, even when the solver leaves a child process"
+    )]
+    fn a_slow_solve_is_timed_out_after_the_adapters_timeout() {
+        let (_dir, fake) = fake_z3(
+            r#"[ "$1" = "--version" ] && { echo "Z3 version 4.13.0 - fake"; exit 0; }; sleep 30; true"#,
+        );
+        let z3 = Z3::at(fake, Duration::from_millis(200), Duration::from_secs(5));
+        let started = Instant::now();
+        let out = z3.solve("(check-sat)");
+        assert_eq!(
+            out,
+            Err(SolveFailure::TimedOut {
+                after: Duration::from_millis(200)
+            })
+        );
+        assert!(started.elapsed() < Duration::from_secs(10));
+    }
+
+    #[cfg(unix)]
+    #[specforge_test(
+        behavior = "prove_declared_bounds_and_claims",
+        verify = "a solver call ends at its timeout, even when the solver leaves a child process"
+    )]
+    fn a_hung_probe_is_unavailable_after_the_probe_timeout() {
+        let (_dir, fake) = fake_z3("sleep 30");
+        let z3 = Z3::at(fake, Duration::from_secs(30), Duration::from_millis(200));
+        let started = Instant::now();
+        assert!(matches!(z3.availability(), Availability::Unavailable(_)));
+        assert!(started.elapsed() < Duration::from_secs(10));
+    }
+
+    #[test]
+    fn a_missing_program_is_unavailable() {
+        let z3 = Z3::at(
+            "/nonexistent/specforge-test/z3",
+            Duration::from_secs(1),
+            Duration::from_secs(1),
+        );
+        assert_eq!(
+            z3.availability(),
+            Availability::Unavailable(Z3::not_on_path())
+        );
+    }
+
+    #[specforge_test(port = "SmtSolver", verify = "SmtSolver contract is satisfied")]
+    fn the_real_z3_keeps_the_port_contract() {
+        let z3 = real_z3();
+        let Availability::Ready { version } = z3.availability() else {
+            unreachable!("real_z3 checked it")
+        };
+        assert!(version.starts_with("Z3 version"), "{version}");
+        let sat = z3
+            .solve("(declare-const x Real)\n(assert (> x 1.0))\n(check-sat)\n")
+            .unwrap();
+        assert_eq!(sat.lines().next(), Some("sat"));
+        let unsat = z3
+            .solve("(declare-const x Real)\n(assert (> x 1.0))\n(assert (< x 0.0))\n(check-sat)\n")
+            .unwrap();
+        assert_eq!(unsat.lines().next(), Some("unsat"));
     }
 }
