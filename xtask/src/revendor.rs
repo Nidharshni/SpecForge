@@ -80,7 +80,7 @@ fn run(root: &Path) -> Result<(), String> {
 
     println!("\nre-vendored. Review `git diff --stat`, then stage:");
     println!(
-        "  git add extensions/*/wasm extensions/*/Cargo.lock {GREET} crates/specforge-component/tests/declarations"
+        "  git add extensions/*/wasm extensions/*/Cargo.lock {GREET}/wasm {GREET}/Cargo.lock crates/specforge-component/tests/declarations"
     );
     if !changed.is_empty() {
         println!("lockfiles refreshed: {}", changed.join(", "));
@@ -139,10 +139,11 @@ fn build_greet(root: &Path) -> Result<(), String> {
         ));
     }
     let built = dir.join("target/wasm32-wasip2/release/greet.wasm");
-    std::fs::copy(&built, dir.join("greet.wasm"))
+    std::fs::create_dir_all(dir.join("wasm")).map_err(|e| format!("cannot create wasm/: {e}"))?;
+    std::fs::copy(&built, dir.join("wasm/greet.wasm"))
         .map_err(|e| format!("cannot copy {}: {e}", built.display()))?;
     let _ = std::fs::remove_dir_all(dir.join("target"));
-    println!("[ok]     {GREET}/greet.wasm");
+    println!("[ok]     {GREET}/wasm/greet.wasm");
     Ok(())
 }
 

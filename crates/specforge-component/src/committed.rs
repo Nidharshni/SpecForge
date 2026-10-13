@@ -42,18 +42,12 @@ pub struct CommittedBlob {
     /// The file `cargo build --release --target wasm32-wasip2` produces for it.
     pub artifact: &'static str,
     pub guest: Guest,
-    /// Where git holds the file until the fixtures move under `<crate_dir>/wasm/`; `None`
-    /// means `<crate_dir>/wasm/<artifact>`.
-    pub committed_at: Option<&'static str>,
 }
 
 impl CommittedBlob {
-    /// Where git holds it, from the repository root.
+    /// `<crate_dir>/wasm/<artifact>`, from the repository root: where git holds it.
     pub fn repo_path(&self) -> String {
-        match self.committed_at {
-            Some(path) => path.to_string(),
-            None => format!("{}/wasm/{}", self.crate_dir, self.artifact),
-        }
+        format!("{}/wasm/{}", self.crate_dir, self.artifact)
     }
 
     /// [`Self::repo_path`] under [`repo_root`].
@@ -85,7 +79,6 @@ pub const GREET: CommittedBlob = CommittedBlob {
     crate_dir: "fixtures/greet-extension",
     artifact: "greet.wasm",
     guest: Guest::Sdk { legacy_keys: &[] },
-    committed_at: Some("fixtures/greet-extension/greet.wasm"),
 };
 
 /// `@sdk/docref`: a kind whose `docs` field names files; the session, watch and LSP tests read it.
@@ -94,7 +87,6 @@ pub const DOCREF: CommittedBlob = CommittedBlob {
     crate_dir: "fixtures/docref-extension",
     artifact: "docref.wasm",
     guest: Guest::Sdk { legacy_keys: &[] },
-    committed_at: Some("fixtures/docref-extension/docref.wasm"),
 };
 
 /// `@test/probe`: surface exports that try every capability. It describes its surfaces as a
@@ -106,18 +98,16 @@ pub const PROBE: CommittedBlob = CommittedBlob {
     guest: Guest::Sdk {
         legacy_keys: &[("surfaces", "sandbox")],
     },
-    committed_at: Some("fixtures/sandbox-probe/probe.wasm"),
 };
 
 /// `@test/component`: the minimal bridge component the runtime tests load (handshake, echo).
 pub const BRIDGE: CommittedBlob = CommittedBlob {
     name: "@test/component",
-    crate_dir: "crates/fixtures/test-component",
+    crate_dir: "fixtures/test-component",
     artifact: "specforge_test_component.wasm",
     guest: Guest::Bridge {
         canned_protocol: "1.0.0",
     },
-    committed_at: Some("crates/fixtures/test-component/test_component.wasm"),
 };
 
 /// The fixtures, in the order [`COMMITTED`] lists them after the builtins.
@@ -133,7 +123,6 @@ pub const COMMITTED: &[CommittedBlob] = &{
             crate_dir: BUILTINS[i].crate_dir,
             artifact: BUILTINS[i].artifact,
             guest: Guest::Sdk { legacy_keys: &[] },
-            committed_at: None,
         };
         i += 1;
     }

@@ -20,7 +20,7 @@ Run it from the main checkout, or from a worktree outside the repository directo
 `rustup target add wasm32-wasip2`.
 
 It refreshes the guest lockfiles, rebuilds and vendors the nine blobs and their `inputs.json`, rebuilds
-`fixtures/greet-extension/greet.wasm`, rewrites the declaration snapshots in
+`fixtures/greet-extension/wasm/greet.wasm`, rewrites the declaration snapshots in
 `crates/specforge-component/tests/declarations/`, checks the lot, and prints the `git add` line that stages exactly
 those paths.
 
