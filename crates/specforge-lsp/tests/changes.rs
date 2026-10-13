@@ -539,7 +539,6 @@ fn a_moved_directory_is_every_source_under_it() {
     assert_eq!(keys, ["a.spec", "new/b.spec"]);
 }
 
-#[ignore = "fixed by T4"]
 #[spec(
     behavior = "classify_project_changes",
     verify = "the LSP drops a nested project's files when its specforge.json is created, and takes them back when it goes"

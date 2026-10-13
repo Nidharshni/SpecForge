@@ -388,6 +388,7 @@ fn file_watchers_follow_what_the_session_is_built_from() {
         absolute,
         vec![
             format!("{root}/**/*.spec"),
+            format!("{root}/**/specforge.json"),
             format!("{root}/**/*"),
             format!("{root}/specforge.json"),
             format!("{root}/specforge.lock"),
@@ -535,7 +536,6 @@ fn the_watchers_cover_what_the_session_classifies() {
     assert!(!globs.iter().any(|g| g.contains("/../")), "{globs:?}");
 }
 
-#[ignore = "fixed by T4"]
 #[spec(
     behavior = "classify_project_changes",
     verify = "the LSP's watchers report every specforge.json under the spec root"

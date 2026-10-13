@@ -935,7 +935,6 @@ fn relinking_a_source_changes_the_inputs() {
     behavior = "classify_project_changes",
     verify = "a nested project's specforge.json appearing or going changes every source under its directory"
 )]
-#[ignore = "fixed by T4"]
 fn a_nested_projects_marker_changes_the_sources_under_it() {
     let (dir, mut session) = open(
         plain(),

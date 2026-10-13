@@ -14,7 +14,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use specforge_common::{ProjectConfig, SourceRoot};
+use specforge_common::{PROJECT_FILE, ProjectConfig, SourceRoot};
 
 use crate::build_cache::BUILD_CACHE_FILE;
 use crate::{Environment, builtins};
@@ -214,7 +214,8 @@ pub struct WatchRoot {
 /// One thing an editor client must report changes to.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Watched {
-    /// Every `.spec` file under this directory, at any depth: the spec root.
+    /// Every `.spec` file and every `specforge.json` under this directory,
+    /// at any depth: the spec root.
     Sources(PathBuf),
     /// Every entry created or deleted under this directory, at any depth: the
     /// project root, and the spec root when it lies outside the root. A
@@ -503,7 +504,17 @@ impl SessionInputs {
             if known.spec_root.starts_with(&canonical_path) {
                 regions.push(String::new());
             } else if let Ok(relative) = in_dir.strip_prefix(&known.spec_root) {
-                regions.push(relative.to_string_lossy().into_owned());
+                // A nested project's `specforge.json` (below the spec root,
+                // not an input of this project) is every source under its
+                // directory.
+                let marker = path.file_name() == Some(std::ffi::OsStr::new(PROJECT_FILE))
+                    && !known.environment.contains_key(&in_dir);
+                match relative.parent() {
+                    Some(directory) if marker && !directory.as_os_str().is_empty() => {
+                        regions.push(directory.to_string_lossy().into_owned());
+                    }
+                    _ => regions.push(relative.to_string_lossy().into_owned()),
+                }
             }
             let mut reached: Vec<(Kind, PathBuf)> = Vec::new();
             for (known, recorded) in &known.environment {

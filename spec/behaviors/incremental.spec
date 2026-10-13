@@ -80,7 +80,10 @@ behavior classify_project_changes "Classify Project Changes" {
     installed extension's extension.wasm, a local .wasm entry) are
     environment inputs; specforge-cache.json, which check-phase passes
     read, and every file a file_reference field or a file_exists rule
-    names, which the checks look for, are check inputs. Each is reached
+    names, which the checks look for, are check inputs; a specforge.json
+    in a directory below the spec root marks a nested project, and its
+    creation or deletion is a change to every source under that
+    directory. Each is reached
     by its own path or by a directory above it, and a missing check
     input's directory also by any file in it. A reached source or input
     is a change when it differs from what the session read (size and
@@ -95,9 +98,10 @@ behavior classify_project_changes "Classify Project Changes" {
     asks its client to report and what the session stamps MUST all derive
     from one set of session inputs, renewed when the environment loads,
     when sources are read and each time the checks run. Watch's watch
-    roots and the LSP's watchers MUST cover every input and every
-    symlinked source's target (the LSP spelling each under the project
-    root as opened), the LSP MUST ask its client to report every entry
+    roots and the LSP's watchers MUST cover every input, every
+    specforge.json under the spec root included, and every symlinked
+    source's target (the LSP spelling each under the project root as
+    opened), the LSP MUST ask its client to report every entry
     created or deleted under the project root, and both MUST follow every
     update that changes the inputs.
   """
