@@ -353,6 +353,41 @@ fn an_enum_value_suggests_its_declared_values() {
 
 #[spec(
     behavior = "complete_field_names",
+    verify = "a builtin vocabulary's field completes its values"
+)]
+fn a_builtin_vocabulary_completes_its_values() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("specforge.json"),
+        serde_json::json!({"name": "vocab", "extensions": ["@specforge/product"]}).to_string(),
+    )
+    .unwrap();
+    let text = "feature f \"F\" {\n  status \n}\n";
+    std::fs::write(dir.path().join("test.spec"), text).unwrap();
+    let runtime = specforge_component::ComponentRuntime::new();
+    specforge_component::builtins::load_builtins_for(&runtime, &["@specforge/product".to_string()])
+        .unwrap();
+    let project = CompiledProject::compile(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        Some(Arc::new(runtime)),
+    );
+    let found = complete(text, 1, 9, &ProjectView::of(&project)).1;
+    assert_eq!(
+        labels(&found),
+        [
+            "proposed",
+            "accepted",
+            "in_progress",
+            "done",
+            "deferred",
+            "deprecated"
+        ]
+    );
+    assert!(all_of_kind(&found, CompletionItemKind::ENUM_MEMBER));
+}
+
+#[spec(
+    behavior = "complete_field_names",
     verify = "a boolean field's value suggests true and false"
 )]
 fn a_bool_value_suggests_true_and_false() {

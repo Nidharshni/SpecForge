@@ -1,8 +1,6 @@
 //! `specforge://prompts/trace`: the dependency chain of a plan or of one
 //! entity, and what in it is unverified.
 
-use std::collections::BTreeSet;
-
 use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_ops::plan::AgentPlan;
@@ -93,27 +91,13 @@ fn render(view: ProjectView<'_>, args: Args) -> Result<Prompted<Payload>, Box<Mc
         }
     };
 
-    // Everything the seeds' trace chains reach, the seeds included.
-    let mut affected: BTreeSet<String> = seeds.iter().cloned().collect();
-    for seed in &seeds {
-        if let Ok(outcome) = trace(&view, Target::Entity(seed)) {
-            affected.extend(outcome.reached().into_iter().map(str::to_string));
-        }
-    }
-
-    // The affected entities that count toward coverage and are not proven
-    // (the coverage view's one definition of unverified).
-    let coverage = view.coverage().map_err(McpError::from)?;
-    let unverified: Vec<String> = affected
-        .iter()
-        .filter(|id| coverage.is_unverified(id))
-        .cloned()
-        .collect();
-
+    // What the seeds' chains reach, and which of it is unverified.
+    let reach = specforge_ops::trace::reach(&view, seeds.iter().map(String::as_str))
+        .map_err(|error| Box::new(McpError::from(error)))?;
     let payload = Payload {
         coverage_gaps,
-        unverified_entities: unverified,
-        affected_entities: affected.into_iter().collect(),
+        unverified_entities: reach.unverified,
+        affected_entities: reach.affected,
     };
 
     let instruction = format!(

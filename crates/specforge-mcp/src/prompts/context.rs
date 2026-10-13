@@ -3,8 +3,9 @@
 use std::collections::BTreeMap;
 
 use serde::Serialize;
-use serde_json::Value;
 use specforge_common::shape::Shape;
+use specforge_graph::FieldJson;
+use specforge_graph::field_form::write_fields;
 
 use crate::args::{Arguments, EntityIds};
 use crate::prompt::{CorePrompt, Prompted};
@@ -47,7 +48,7 @@ pub struct Payload {
     /// empty for a kind that declares none.
     pub contract_text: String,
     /// Every field the entity declares, by name: an open value.
-    pub fields: BTreeMap<String, Value>,
+    pub fields: BTreeMap<String, FieldJson>,
     pub upstream_entities: Vec<String>,
     pub downstream_entities: Vec<String>,
     pub verify_expectations: Vec<String>,
@@ -65,7 +66,7 @@ pub struct ConstraintEntity {
     pub kind: String,
     pub title: String,
     /// Every field it declares, by name: an open value.
-    pub fields: BTreeMap<String, Value>,
+    pub fields: BTreeMap<String, FieldJson>,
 }
 
 /// `specforge://prompts/context`'s arguments.
@@ -125,7 +126,7 @@ fn render(view: ProjectView<'_>, args: Args) -> Result<Prompted<Payload>, Box<Mc
             entity_id: constraint.id.raw.to_string(),
             kind: constraint.kind.raw.to_string(),
             title: constraint.title.clone().unwrap_or_default(),
-            fields: written_fields(&constraint.fields),
+            fields: write_fields(&constraint.fields),
         });
     }
 
@@ -135,7 +136,7 @@ fn render(view: ProjectView<'_>, args: Args) -> Result<Prompted<Payload>, Box<Mc
         contract_text: contract_text.to_string(),
         // Every field, whatever the kind names its text: an invariant's
         // `guarantee`, a decision's `rationale`.
-        fields: written_fields(&node.fields),
+        fields: write_fields(&node.fields),
         upstream_entities: upstream,
         downstream_entities: downstream,
         verify_expectations,
@@ -154,12 +155,4 @@ fn render(view: ProjectView<'_>, args: Args) -> Result<Prompted<Payload>, Box<Mc
         instruction,
         payload,
     })
-}
-
-/// `fields` as every output writes them, keyed by name.
-fn written_fields(fields: &specforge_graph::FieldMap) -> BTreeMap<String, Value> {
-    specforge_graph::field_form::write_fields(fields)
-        .into_iter()
-        .map(|(key, written)| (key, Value::from(written)))
-        .collect()
 }

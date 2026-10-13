@@ -5,10 +5,11 @@
 use crate::target::View;
 use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
 use serde::Serialize;
-use serde_json::Value;
 use specforge_common::shape::Shape;
 use specforge_common::{DiagnosticList, SourceSpan};
+use specforge_graph::FieldJson;
 use specforge_ops::inspect::{EntityCoverage, EntityFacts, obligation_text};
+use std::collections::BTreeMap;
 
 use crate::args::Arguments;
 use crate::refusal::ArgumentOf;
@@ -49,8 +50,9 @@ pub struct Reply {
     /// behavior's `contract`.
     #[serde(skip_serializing_if = "Option::is_none")]
     contract: Option<String>,
-    /// Every field, whatever the kind names its text: an open value.
-    fields: Value,
+    /// Every field, whatever the kind names its text, as every output
+    /// writes it (`FieldJson`).
+    fields: BTreeMap<String, FieldJson>,
     #[serde(skip_serializing_if = "Option::is_none")]
     verify_declarations: Option<Vec<String>>,
     referenced_by: Vec<String>,
@@ -110,12 +112,7 @@ impl Reply {
             source_extension: facts.kind.map(|kind| kind.source_extension.to_string()),
             source_span: node.source_span.clone(),
             contract: facts.headline.as_ref().map(ToString::to_string),
-            fields: Value::Object(
-                specforge_graph::field_form::write_fields(&node.fields)
-                    .into_iter()
-                    .map(|(key, written)| (key, Value::from(written)))
-                    .collect(),
-            ),
+            fields: specforge_graph::field_form::write_fields(&node.fields),
             verify_declarations: declared
                 .then(|| facts.obligations.iter().map(obligation_text).collect()),
             referenced_by: refs.referenced_by().into_iter().map(String::from).collect(),

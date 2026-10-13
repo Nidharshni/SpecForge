@@ -2424,6 +2424,44 @@ expression: listing
           ],
           "type": "object"
         },
+        "FieldJson": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "$ref": "#/$defs/VerifyStatement"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/FieldJson"
+              },
+              "type": "object"
+            }
+          ]
+        },
         "SourceSpan": {
           "additionalProperties": false,
           "properties": {
@@ -2453,6 +2491,22 @@ expression: listing
             "start_col",
             "end_line",
             "end_col"
+          ],
+          "type": "object"
+        },
+        "VerifyStatement": {
+          "additionalProperties": false,
+          "properties": {
+            "description": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "description"
           ],
           "type": "object"
         }
@@ -2485,7 +2539,12 @@ expression: listing
         "exempt": {
           "type": "boolean"
         },
-        "fields": {},
+        "fields": {
+          "additionalProperties": {
+            "$ref": "#/$defs/FieldJson"
+          },
+          "type": "object"
+        },
         "kind": {
           "type": "string"
         },

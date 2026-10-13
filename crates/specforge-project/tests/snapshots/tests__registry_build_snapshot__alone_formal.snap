@@ -459,11 +459,11 @@ expression: "digest(&load(&runtime, &[name]))"
     },
     "property.property_type": {
       "derived_from": null,
-      "description": "Category of temporal property (safety, liveness, or fairness)",
+      "description": "Category of temporal property",
       "edge": null,
       "exempts_obligations": false,
       "field_name": "property_type",
-      "field_type": "String",
+      "field_type": "Enum([\"safety\", \"liveness\", \"fairness\"])",
       "file_reference": false,
       "headline": false,
       "inverse_of": null,
@@ -736,7 +736,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "process.sub_processes": "reference_list",
       "property.description": "string",
       "property.expression": "string",
-      "property.property_type": "string",
+      "property.property_type": "enum (safety, liveness, fairness)",
       "property.refs": "string_list",
       "property.scope": "string",
       "protocol.alphabet": "string_list",
@@ -889,26 +889,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "edge_type": null,
       "field": "description",
       "message_template": "property '{id}' has empty description",
-      "owner": "@specforge/formal",
-      "severity": "Warning",
-      "target_kind": "property",
-      "wasm_function": null
-    },
-    {
-      "check": "field_value_constraint",
-      "code": "W125",
-      "constraint": {
-        "kind": "one_of",
-        "pattern": null,
-        "values": [
-          "safety",
-          "liveness",
-          "fairness"
-        ]
-      },
-      "edge_type": null,
-      "field": "property_type",
-      "message_template": "property '{id}' has invalid property_type '{value}' — expected one of: safety, liveness, fairness",
       "owner": "@specforge/formal",
       "severity": "Warning",
       "target_kind": "property",

@@ -5,7 +5,7 @@ expression: "drawn(&manifests, opts)"
 flowchart TB
 
     subgraph specforge_product["  @specforge/product v1.0.0  "]
-        specforge_product_card["<b>9 entities · 20 edges · 61 rules</b><br>─────────────────────────<br>feature · journey · deliverable<br>milestone · module · term<br>persona · channel · release<br>─────────────────────────<br><i>40 CLI cmds</i><br><i>shared: tags</i>"]
+        specforge_product_card["<b>9 entities · 20 edges · 50 rules</b><br>─────────────────────────<br>feature · journey · deliverable<br>milestone · module · term<br>persona · channel · release<br>─────────────────────────<br><i>40 CLI cmds</i><br><i>shared: tags</i>"]
     end
     classDef cls_specforge_product fill:#fff,stroke:#66bb6a,stroke-width:1.5px,color:#333
     class specforge_product_card cls_specforge_product
@@ -17,13 +17,13 @@ flowchart TB
     class specforge_software_card cls_specforge_software
 
     subgraph specforge_governance["  @specforge/governance v1.0.0  "]
-        specforge_governance_card["<b>3 entities · 11 edges · 7 rules</b><br>─────────────────────────<br>decision · constraint · failure_mode"]
+        specforge_governance_card["<b>3 entities · 11 edges · 0 rules</b><br>─────────────────────────<br>decision · constraint · failure_mode"]
     end
     classDef cls_specforge_governance fill:#fff,stroke:#ffca28,stroke-width:1.5px,color:#333
     class specforge_governance_card cls_specforge_governance
 
     subgraph specforge_formal["  @specforge/formal v1.0.0  "]
-        specforge_formal_card["<b>5 entities · 10 edges · 13 rules</b><br>─────────────────────────<br>property · axiom · protocol<br>refinement · process<br>─────────────────────────<br><i>enhances: behavior +7 · event +3 · invariant +1</i>"]
+        specforge_formal_card["<b>5 entities · 10 edges · 12 rules</b><br>─────────────────────────<br>property · axiom · protocol<br>refinement · process<br>─────────────────────────<br><i>enhances: behavior +7 · event +3 · invariant +1</i>"]
     end
     classDef cls_specforge_formal fill:#fff,stroke:#ab47bc,stroke-width:1.5px,color:#333
     class specforge_formal_card cls_specforge_formal

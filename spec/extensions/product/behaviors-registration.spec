@@ -118,6 +118,7 @@ behavior pe_register_edge_types "Register Product Edge Types" {
   verify unit "DeliverableDependsOn edge has sourceKind=deliverable and targetKind=deliverable"
   verify unit "ReleaseIncludesDeliverable edge has sourceKind=release and targetKind=deliverable"
   verify unit "ReleaseCompletesMilestone edge has sourceKind=release and targetKind=milestone"
+  verify unit "the edge types this behavior ensures are the declaration's, with their kinds"
 }
 
 behavior pe_register_field_definitions "Register Product Field Definitions" {
@@ -158,6 +159,7 @@ behavior pe_register_field_definitions "Register Product Field Definitions" {
   verify unit "deliverable milestones field registered with DeliverableTrackedByMilestone edge"
   verify unit "deliverable depends_on field registered with DeliverableDependsOn edge"
   verify unit "persona pain_points field registered as string_list type"
+  verify unit "the field lists this behavior ensures are the declaration's, field for field"
 }
 
 behavior pe_register_validation_rules "Register Product Validation Rules" {
