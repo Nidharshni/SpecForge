@@ -138,7 +138,9 @@ behavior bring_session_up_to_date "Bring a Session Up to Date with Disk" {
     modification time; a file modified within the timestamp granularity of
     the last build counts as changed unless its content is unchanged, a
     symlinked source compared through its link) and
-    applies exactly those changes: sources by an update, environment
+    applies exactly those changes (a source that is no source any more, a
+    nested project having taken it, leaves the graph, and one that is a
+    source again is read): sources by an update, environment
     inputs by an environment reload, check inputs by re-running the
     checks. Afterwards its graph and diagnostics MUST be those a fresh
     compile of the files on disk produces. specforge.json MUST be read

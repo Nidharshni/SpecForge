@@ -580,7 +580,6 @@ fn a_nested_projects_files_are_not_compiled() {
     behavior = "bring_session_up_to_date",
     verify = "a nested project appearing below the spec root takes its files out of the session, and its removal puts them back"
 )]
-#[ignore = "fixed by T3"]
 fn a_nested_project_appearing_takes_its_files_out_and_its_removal_puts_them_back() {
     let bare = r#"{"name":"s","version":"0.1.0","extensions":["@specforge/software"]}"#;
     let dir = project(

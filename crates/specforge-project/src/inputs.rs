@@ -468,6 +468,7 @@ impl SessionInputs {
                 disk.links.retain(|link| !keys.contains(&link.key));
                 let again: Vec<Link> = keys
                     .iter()
+                    .filter(|key| disk.sources.holds(key))
                     .filter_map(|key| disk.link_at(&disk.sources.dir().join(key)))
                     .collect();
                 disk.links.extend(again);
