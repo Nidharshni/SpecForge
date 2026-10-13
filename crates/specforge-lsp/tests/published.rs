@@ -188,3 +188,38 @@ fn the_formatter_layer_survives_another_documents_publish() {
         "{republished:?}"
     );
 }
+
+#[specforge_test_macros::test(
+    behavior = "document_open_close",
+    verify = "a document in a nested project is no source of the workspace project and gets none of its diagnostics"
+)]
+#[tokio::test]
+async fn a_document_in_a_nested_project_gets_none_of_the_workspace_projects_diagnostics() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let root = dir.path().canonicalize().unwrap();
+    std::fs::create_dir_all(root.join("sub")).unwrap();
+    std::fs::write(
+        root.join("specforge.json"),
+        r#"{"extensions":["@specforge/product"]}"#,
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("a.spec"),
+        "feature f \"F\" {\n  problem \"p\"\n}\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("sub/specforge.json"),
+        r#"{"extensions":["@specforge/software"]}"#,
+    )
+    .unwrap();
+    let nested = "behavior bb_x \"B\" {\n  contract \"MUST b\"\n}\n";
+    std::fs::write(root.join("sub/b.spec"), nested).unwrap();
+    let (mut session, _) = Session::start(Some(&root)).await;
+    let uri = uri_of(&root.join("sub/b.spec"));
+
+    session.open(&uri, nested).await;
+
+    let shown = published(&mut session, &uri, 1).await;
+    assert!(shown.is_empty(), "{shown:?}");
+}

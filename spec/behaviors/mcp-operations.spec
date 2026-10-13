@@ -145,6 +145,8 @@ behavior provide_mcp_rename_tool "Provide MCP Rename Tool" {
     sources (the compile reported it as E069: it can't be used, or
     spec_root, exclude or extensions has the wrong type) MUST fail the
     rename as config_invalid before anything is planned or written.
+    The rename edits the project's sources only: a nested project's files
+    are never edited, and an ID declared only there is not found.
   """
   verify unit "specforge.rename renames entity and all references"
   verify unit "non-existent entity returns error response"
@@ -155,6 +157,7 @@ behavior provide_mcp_rename_tool "Provide MCP Rename Tool" {
   verify unit "rename edits exactly the declaration and the references find_references returns"
   verify unit "rename's updated diagnostics follow a successful write only: a preview and a failure carry none"
   verify unit "a specforge.json that does not say which files are the project's sources fails the rename as config_invalid and writes nothing"
+  verify unit "rename never edits a nested project's files"
 }
 
 // MCP init creates a project at a specified path, not the current project.
