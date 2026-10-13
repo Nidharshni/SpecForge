@@ -70,3 +70,42 @@ pub fn session(
         .filter_map(|l| serde_json::from_str(l).ok())
         .collect()
 }
+
+/// Find a JSON-RPC response by its `id` field in a list of responses.
+pub fn find_response(responses: &[Value], id: u64) -> Option<&Value> {
+    responses.iter().find(|r| r["id"] == id)
+}
+
+/// The `McpError` of a failed MCP tool call: an `isError` result whose text is the error's JSON (ADR 0004 D4-a).
+pub fn tool_error(response: &Value) -> Value {
+    assert!(
+        response.get("error").is_none(),
+        "a tool failure is a result, not a JSON-RPC error: {response}"
+    );
+    assert_eq!(response["result"]["isError"], true, "{response}");
+    let error = parse_tool_content(response);
+    assert!(error["code"].is_string(), "an McpError: {error}");
+    error
+}
+
+/// Parse the `content[0].text` from an MCP tool result as JSON.
+pub fn parse_tool_content(response: &Value) -> Value {
+    let text = response["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap_or_else(|| panic!("no content[0].text in response: {response}"));
+    serde_json::from_str(text)
+        .unwrap_or_else(|e| panic!("content text is not valid JSON: {e}\ntext: {text}"))
+}
+
+/// `requests` after the standard `initialize` (id 0), against `specforge mcp <root>`: every line it wrote.
+pub fn session_in(project: &TestProject, requests: &[String]) -> Vec<Value> {
+    let mut all = vec![initialize(0)];
+    all.extend_from_slice(requests);
+    raw_session_in(project, &all)
+}
+
+/// `specforge mcp <root>` fed exactly `requests`, no `initialize` first (a stateless MCP 2026-07-28 client).
+pub fn raw_session_in(project: &TestProject, requests: &[String]) -> Vec<Value> {
+    let root = project.root().to_str().expect("a UTF-8 root");
+    session(project, project.root(), root, requests, &[])
+}

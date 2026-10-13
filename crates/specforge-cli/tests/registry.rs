@@ -414,7 +414,7 @@ fn mcp_add_extension_without_registry_makes_no_network_call() {
         .unwrap_or_else(|| panic!("no response to the call: {responses:?}"))
         .clone();
 
-    let error = crate::e2e_fixtures::tool_error(&response);
+    let error = crate::support::mcp_process::tool_error(&response);
     assert_eq!(error["diagnostic"]["code"], "E063", "{response}");
     let hint = error["diagnostic"]["suggestion"]
         .as_str()

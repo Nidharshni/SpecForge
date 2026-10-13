@@ -161,7 +161,7 @@ fn mcp_add_refuses_a_version_diamond() {
         json!({"specifiers": ["@acme/app@1.0.0"], "allow_unsigned": true}),
     );
 
-    let error = crate::e2e_fixtures::tool_error(&reply);
+    let error = crate::support::mcp_process::tool_error(&reply);
     assert_eq!(error["diagnostic"]["code"], "R-RES-006", "{reply}");
     let message = error["message"].as_str().unwrap();
     assert!(message.contains("@acme/base 2.0.0"), "{message}");
@@ -204,7 +204,7 @@ fn mcp_add_refuses_an_install_a_locked_extension_does_not_accept() {
         json!({"specifiers": ["@sdk/greet@0.1.0"], "allow_unsigned": true}),
     );
 
-    let error = crate::e2e_fixtures::tool_error(&reply);
+    let error = crate::support::mcp_process::tool_error(&reply);
     assert_eq!(error["diagnostic"]["code"], "R-RES-005", "{reply}");
     let message = error["message"].as_str().unwrap();
     assert!(

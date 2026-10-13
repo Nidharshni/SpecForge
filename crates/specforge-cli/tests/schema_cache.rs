@@ -3,52 +3,56 @@
 // W053 for each breaking change, and after a successful export replaces the
 // cache atomically. `check` and `watch` write no cache.
 
-use crate::e2e_fixtures::*;
+use crate::support::{Cli, TestProject};
 use serde_json::{Value, json};
+use specforge_project::testing::specs;
 use specforge_test::prelude::*;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Output;
 use std::time::{Duration, Instant};
-use tempfile::TempDir;
 
 const SOFTWARE_ONLY: &str =
     r#"{"name":"t","version":"0.1.0","spec_root":"spec","extensions":["@specforge/software"]}"#;
 const SOFTWARE_AND_GOVERNANCE: &str = r#"{"name":"t","version":"0.1.0","spec_root":"spec","extensions":["@specforge/software","@specforge/governance"]}"#;
 
-fn software_project() -> TempDir {
-    setup_project_with_config(SOFTWARE_ONLY, &[("main.spec", SOFTWARE_SPEC)])
+fn software_project() -> TestProject {
+    TestProject::new()
+        .raw_config(SOFTWARE_ONLY)
+        .file("spec/main.spec", specs::SOFTWARE)
 }
 
-fn cache_path(dir: &TempDir) -> PathBuf {
-    dir.path().join(".specforge").join("schema-cache.json")
+/// The JSON a command printed on stdout.
+fn json_stdout(output: &Output) -> Value {
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    serde_json::from_str(&stdout).unwrap_or_else(|e| panic!("invalid JSON: {e}\noutput: {stdout}"))
 }
 
-fn export(dir: &TempDir, args: &[&str]) -> Output {
-    specforge_cmd()
-        .arg("export")
-        .args(args)
-        .arg("--path")
-        .arg(dir.path())
-        .output()
-        .unwrap()
+fn cache_path(dir: &TestProject) -> PathBuf {
+    dir.root().join(".specforge").join("schema-cache.json")
+}
+
+fn export(dir: &TestProject, args: &[&str]) -> Output {
+    let mut argv = vec!["export"];
+    argv.extend(args);
+    Cli::on(dir).command(&argv).output().unwrap()
 }
 
 /// Run a successful `specforge export` and return its stderr.
-fn export_ok(dir: &TempDir) -> String {
+fn export_ok(dir: &TestProject) -> String {
     let output = export(dir, &[]);
     let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
     assert!(output.status.success(), "export failed: {stderr}");
     stderr
 }
 
-fn read_cache(dir: &TempDir) -> Value {
+fn read_cache(dir: &TestProject) -> Value {
     let text = fs::read_to_string(cache_path(dir))
         .unwrap_or_else(|e| panic!("no schema cache at {}: {e}", cache_path(dir).display()));
     serde_json::from_str(&text).unwrap()
 }
 
-fn write_cache(dir: &TempDir, cache: &Value) {
+fn write_cache(dir: &TestProject, cache: &Value) {
     fs::write(
         cache_path(dir),
         serde_json::to_string_pretty(cache).unwrap(),
@@ -57,15 +61,10 @@ fn write_cache(dir: &TempDir, cache: &Value) {
 }
 
 /// The schema `specforge schema` generates for the project.
-fn generated_schema(dir: &TempDir) -> Value {
-    let output = specforge_cmd()
-        .arg("schema")
-        .arg("--path")
-        .arg(dir.path())
-        .output()
-        .unwrap();
+fn generated_schema(dir: &TestProject) -> Value {
+    let output = Cli::on(dir).command(&["schema"]).output().unwrap();
     assert!(output.status.success());
-    parse_json_stdout(&output)
+    json_stdout(&output)
 }
 
 fn kind_mut<'a>(cache: &'a mut Value, name: &str) -> &'a mut Value {
@@ -236,7 +235,7 @@ fn export_replaces_the_cache_atomically() {
     // A hard link shares the cache file's inode. Rewriting the file in
     // place would change what the link reads; a rename puts a new inode at
     // the path and leaves the link on the old, complete content.
-    let cache_dir = dir.path().join(".specforge");
+    let cache_dir = dir.root().join(".specforge");
     let link = cache_dir.join("previous-cache.json");
     fs::hard_link(cache_path(&dir), &link).unwrap();
 
@@ -258,11 +257,13 @@ fn export_replaces_the_cache_atomically() {
     verify = "persisted cache feeds breaking change detection in the next compilation"
 )]
 fn removing_an_extension_warns_on_the_next_export() {
-    let dir = setup_project_with_config(SOFTWARE_AND_GOVERNANCE, &[("main.spec", SOFTWARE_SPEC)]);
+    let dir = TestProject::new()
+        .raw_config(SOFTWARE_AND_GOVERNANCE)
+        .file("spec/main.spec", specs::SOFTWARE);
     assert_eq!(export_ok(&dir), "");
 
     // The upgrade drops governance: its kinds leave the schema.
-    fs::write(dir.path().join("specforge.json"), SOFTWARE_ONLY).unwrap();
+    fs::write(dir.root().join("specforge.json"), SOFTWARE_ONLY).unwrap();
     let stderr = export_ok(&dir);
 
     let warnings = w053_lines(&stderr);
@@ -433,12 +434,7 @@ fn a_new_edge_type_is_silent() {
 #[test]
 fn check_writes_no_schema_cache() {
     let dir = software_project();
-    let output = specforge_cmd()
-        .arg("check")
-        .arg("--path")
-        .arg(dir.path())
-        .output()
-        .unwrap();
+    let output = Cli::on(&dir).command(&["check"]).output().unwrap();
     assert!(output.status.success());
     assert!(!cache_path(&dir).exists(), "check must not write the cache");
 
@@ -450,12 +446,7 @@ fn check_writes_no_schema_cache() {
         .unwrap()
         .push(json!({"name": "legacy_note", "field_type": "string", "required": false, "source_extension": "x"}));
     write_cache(&dir, &cache);
-    let output = specforge_cmd()
-        .arg("check")
-        .arg("--path")
-        .arg(dir.path())
-        .output()
-        .unwrap();
+    let output = Cli::on(&dir).command(&["check"]).output().unwrap();
     assert!(output.status.success());
     assert_eq!(read_cache(&dir), cache);
 }
@@ -463,19 +454,9 @@ fn check_writes_no_schema_cache() {
 #[test]
 fn watch_writes_no_schema_cache() {
     use std::io::{BufRead, BufReader};
-    use std::process::Stdio;
 
     let dir = software_project();
-    let mut watch = std::process::Command::new(assert_cmd::cargo_bin!("specforge"));
-    watch
-        .args(["watch", "--format", "json", "--path"])
-        .arg(dir.path());
-    let mut child = crate::support::child::ChildGuard::spawn(
-        crate::support::child::guarded_command(&watch)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null()),
-    )
-    .unwrap();
+    let mut child = Cli::on(&dir).spawn(&["watch", "--format", "json"]);
     let stdout = child.take_stdout().unwrap();
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
@@ -500,8 +481,11 @@ fn watch_writes_no_schema_cache() {
     let ready = wait_for("\"event\":\"ready\"");
     std::thread::sleep(Duration::from_millis(300));
     fs::write(
-        dir.path().join("spec").join("main.spec"),
-        format!("{SOFTWARE_SPEC}\ninvariant extra \"Extra\" {{ guarantee \"x\" }}\n"),
+        dir.root().join("spec").join("main.spec"),
+        format!(
+            "{}\ninvariant extra \"Extra\" {{ guarantee \"x\" }}\n",
+            specs::SOFTWARE
+        ),
     )
     .unwrap();
     let rebuilt = wait_for("\"event\":\"rebuilt\"");
@@ -525,7 +509,7 @@ fn exported_version(output: &Output) -> Value {
         "export failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let export = parse_json_stdout(output);
+    let export = json_stdout(output);
     let embedded = export["schema"]["schema_version"].clone();
     assert_eq!(
         export["schema_version"],
@@ -541,7 +525,7 @@ fn exported_version(output: &Output) -> Value {
 /// Export once, let `edit` change the cache the export wrote, export again
 /// and return the project, the version the second export embedded and the
 /// one it cached.
-fn version_after_edited_cache(edit: impl FnOnce(&mut Value)) -> (TempDir, Value, Value) {
+fn version_after_edited_cache(edit: impl FnOnce(&mut Value)) -> (TestProject, Value, Value) {
     let dir = software_project();
     export_ok(&dir);
     let mut cache = read_cache(&dir);
@@ -651,7 +635,7 @@ fn export_version_string(output: &Output) -> String {
         "export failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    parse_json_stdout(output)["schema_version"]
+    json_stdout(output)["schema_version"]
         .as_str()
         .unwrap()
         .to_owned()
@@ -748,7 +732,7 @@ fn a_requested_version_does_not_relabel_the_export() {
     );
 
     assert!(scoped.status.success(), "{scoped:?}");
-    let document = parse_json_stdout(&scoped);
+    let document = json_stdout(&scoped);
     assert_eq!(document["schema_version"], "1.1.0");
     assert!(
         document["schema_ref"]["url"]

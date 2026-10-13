@@ -144,10 +144,11 @@ impl<'p> Cli<'p> {
         self.guard(self.process(args, false, &[]))
     }
 
-    /// [`Self::bare`]'s command started, its stdout and stderr piped and not waited for: a test that closes one
-    /// end or reads the other on its own terms.
+    /// [`Self::bare`]'s command started, its stdin, stdout and stderr piped and not waited for: a test that closes
+    /// one end or reads the other on its own terms (`specforge mcp`'s stdio, a closed stdout).
     pub fn start(&self, args: &[&str]) -> std::process::Child {
         self.process(args, false, &[])
+            .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
