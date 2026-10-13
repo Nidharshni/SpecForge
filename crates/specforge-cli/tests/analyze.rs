@@ -1,8 +1,10 @@
 // `specforge analyze` — end-to-end tests against the real binary.
 
 use std::fs;
+use std::path::Path;
 
 use assert_cmd::Command;
+use serde_json::Value;
 use specforge_test_macros::test as specforge_test;
 use tempfile::TempDir;
 
@@ -1131,4 +1133,97 @@ fn an_event_in_a_process_is_used_and_not_w029() {
         .filter(|f| f["code"] == "W029")
         .count();
     assert_eq!(w029, 0, "participation is usage: {report}");
+}
+
+/// A project whose two bounds contradict each other (governance's metric is a bound).
+fn impossible_bounds() -> TempDir {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("specforge.json"),
+        r#"{"extensions": ["@specforge/governance"]}"#,
+    )
+    .unwrap();
+    fs::write(
+        dir.path().join("main.spec"),
+        concat!(
+            "constraint impossible \"Impossible Bounds\" {\n",
+            "  description \"Bounds that can never both hold\"\n",
+            "  category performance\n",
+            "  priority critical\n",
+            "  metric \"\"\"\n",
+            "    latency < 100ms\n",
+            "    latency > 500ms\n",
+            "  \"\"\"\n",
+            "}\n",
+        ),
+    )
+    .unwrap();
+    dir
+}
+
+/// The prove pass's report from `analyze --prove --format json` with `path` as PATH.
+fn prove_report(dir: &Path, path: &Path, extra: &[&str]) -> (Value, Option<i32>) {
+    let output = specforge_cmd()
+        .args(["analyze", "--prove", "--format", "json", "--path"])
+        .arg(dir)
+        .args(extra)
+        .env("PATH", path)
+        .output()
+        .unwrap();
+    let doc: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let prove = doc["passes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["pass"] == "prove")
+        .unwrap_or_else(|| panic!("no prove pass in {doc}"))
+        .clone();
+    (prove, output.status.code())
+}
+
+// Pins today's wording: T4 says why the z3 does not run.
+#[cfg(unix)]
+#[test]
+fn a_z3_that_does_not_run_is_called_not_on_path_today() {
+    let dir = impossible_bounds();
+    let (prove, code) = prove_report(dir.path(), &crate::toolchain::z3_broken(), &[]);
+    assert_eq!(code, Some(0));
+    assert_eq!(
+        prove["findings"][0]["message"],
+        "SMT solver 'z3' not found on PATH; formal entailment and consistency checks were skipped"
+    );
+}
+
+#[cfg(unix)]
+#[ignore = "fixed by T5"]
+#[test]
+fn doctor_answers_within_the_probe_timeout_when_z3_hangs() {
+    let dir = impossible_bounds();
+    let started = std::time::Instant::now();
+    let out = specforge_cmd()
+        .args(["doctor", "--format", "json", "--path"])
+        .arg(dir.path())
+        .env("PATH", crate::toolchain::z3_hung())
+        .output()
+        .unwrap();
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(15),
+        "{:?}",
+        started.elapsed()
+    );
+    let report: Value = serde_json::from_slice(&out.stdout).unwrap();
+    let toolchain = report["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["about"] == "toolchain")
+        .expect("a toolchain finding");
+    assert_eq!(toolchain["code"], "W098");
+    assert!(
+        toolchain["check"]
+            .as_str()
+            .unwrap()
+            .contains("did not answer within 5s"),
+        "{toolchain}"
+    );
 }

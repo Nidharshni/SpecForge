@@ -1081,6 +1081,11 @@ mod tests {
             .find(|f| f.code == "W098")
             .expect("W098 expected");
         assert!(w098.message.contains("timed out"), "{}", w098.message);
+        // T7 names the flag.
+        assert_eq!(
+            w098.suggestion.as_deref(),
+            Some("simplify the declared bounds or claims, or raise the z3 timeout")
+        );
     }
 
     #[test]
@@ -1088,7 +1093,21 @@ mod tests {
         let mut g = Graph::new();
         g.add_node(constraint_node("c1", "latency < 100ms"));
         let report = prove_with(&g, &Scripted::missing());
-        assert!(report.findings.iter().any(|f| f.code == "W098"));
+        // Pins today's wording; T4 flips it.
+        let w098 = report
+            .findings
+            .iter()
+            .find(|f| f.code == "W098")
+            .expect("W098 expected");
+        assert_eq!(
+            w098.message,
+            "SMT solver 'z3' not found on PATH; formal entailment and consistency checks were skipped"
+        );
+        assert_eq!(
+            w098.suggestion.as_deref(),
+            Some("install z3 (https://github.com/Z3Prover/z3) to enable `--prove`")
+        );
+        assert_eq!(report.summary["solver"], "not found");
         assert_eq!(report.summary["solver_available"], false);
     }
 
@@ -1130,5 +1149,23 @@ mod tests {
         );
         assert!(matches!(out, Err(SolveFailure::TimedOut)));
         assert!(started.elapsed() < std::time::Duration::from_secs(10));
+    }
+
+    #[cfg(unix)]
+    #[ignore = "fixed by T3"]
+    #[test]
+    fn a_solver_that_leaves_a_child_is_stopped_at_the_timeout() {
+        // `sh` forks `sleep`, which keeps the stdout pipe after `sh` is killed.
+        let started = std::time::Instant::now();
+        let out = run_with_timeout(
+            std::process::Command::new("sh").args(["-c", "sleep 30; true"]),
+            std::time::Duration::from_millis(200),
+        );
+        assert!(matches!(out, Err(SolveFailure::TimedOut)));
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(10),
+            "{:?}",
+            started.elapsed()
+        );
     }
 }

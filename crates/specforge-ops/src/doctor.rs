@@ -919,6 +919,15 @@ mod tests {
                 ("z3_missing", FindingStatus::Warn)
             ]
         );
+        // Pins today's wording: T5 makes it the W098 `analyze --prove` reports.
+        let toolchain: Vec<&Finding> = report.about(Part::Toolchain).collect();
+        assert_eq!(toolchain.len(), 1);
+        assert_eq!(toolchain[0].check, "z3 on PATH");
+        assert_eq!(
+            toolchain[0].remediation,
+            "install z3; without it `specforge analyze --prove` skips SMT checks (W098)"
+        );
+        assert!(!report.document().z3_available);
         assert!(report.ok());
         assert_eq!(report.cache_status(), CacheStatus::Ok);
     }
