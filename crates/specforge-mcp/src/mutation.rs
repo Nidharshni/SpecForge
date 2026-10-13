@@ -132,8 +132,8 @@ impl<R> Mutated<R> {
 /// entity and produces no domain event.
 #[derive(Debug)]
 pub struct Failed {
-    error: Box<McpError>,
-    files: Writes,
+    pub(crate) error: Box<McpError>,
+    pub(crate) files: Writes,
 }
 
 impl Failed {

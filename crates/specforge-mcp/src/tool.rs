@@ -409,7 +409,12 @@ pub trait ToolSpec: Sync {
         self.arguments()
             .iter()
             .map(|argument| argument.name)
-            .chain(self.target().fields().iter().copied())
+            .chain(
+                self.target()
+                    .fields()
+                    .iter()
+                    .map(|argument| argument.name()),
+            )
             .collect()
     }
 

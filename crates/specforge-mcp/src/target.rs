@@ -162,13 +162,13 @@ impl TargetSpec {
                 _ => "Project root path (uses initialized root if omitted)",
             };
             properties.insert(
-                "path".into(),
+                TargetArgument::Path.name().into(),
                 serde_json::json!({ "type": "string", "description": description }),
             );
         }
         if self.takes_use_cached() {
             properties.insert(
-                "use_cached".into(),
+                TargetArgument::UseCached.name().into(),
                 serde_json::json!({
                     "type": "boolean",
                     "description": "Use the last compile instead of bringing the project up to date with disk; with no project served, the path is compiled anyway",
@@ -181,9 +181,9 @@ impl TargetSpec {
 
     /// The arguments a call cannot be made without: `["path"]` for
     /// `NewProject`, refused by [`resolve`] before the handler runs.
-    pub fn required(self) -> &'static [&'static str] {
+    pub fn required(self) -> &'static [TargetArgument] {
         match self {
-            TargetSpec::NewProject => &["path"],
+            TargetSpec::NewProject => &[TargetArgument::Path],
             _ => &[],
         }
     }
@@ -193,21 +193,21 @@ impl TargetSpec {
     /// project's root and refuses another's,
     /// [`TargetError::OtherProjectRefused`]), and `use_cached` for
     /// `FreshUnlessCached`. [`Self::fields`] stays the listed ones.
-    pub fn accepted(self) -> &'static [&'static str] {
+    pub fn accepted(self) -> &'static [TargetArgument] {
         match (self != TargetSpec::Unscoped, self.takes_use_cached()) {
-            (true, true) => &["path", "use_cached"],
-            (true, false) => &["path"],
-            (false, true) => &["use_cached"],
+            (true, true) => &[TargetArgument::Path, TargetArgument::UseCached],
+            (true, false) => &[TargetArgument::Path],
+            (false, true) => &[TargetArgument::UseCached],
             (false, false) => &[],
         }
     }
 
     /// The names [`Self::properties`] declares, for the schema drift test.
-    pub fn fields(self) -> &'static [&'static str] {
+    pub fn fields(self) -> &'static [TargetArgument] {
         match (self.takes_path(), self.takes_use_cached()) {
-            (true, true) => &["path", "use_cached"],
-            (true, false) => &["path"],
-            (false, true) => &["use_cached"],
+            (true, true) => &[TargetArgument::Path, TargetArgument::UseCached],
+            (true, false) => &[TargetArgument::Path],
+            (false, true) => &[TargetArgument::UseCached],
             (false, false) => &[],
         }
     }
@@ -283,6 +283,24 @@ impl<'a> ProjectRef<'a> {
     }
 }
 
+/// An argument the call target reads from a call beside the entry's own
+/// (ADR 0033 D3): spelled once.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TargetArgument {
+    Path,
+    UseCached,
+}
+
+impl TargetArgument {
+    /// Its name in a call's arguments and in the input schema.
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Path => "path",
+            Self::UseCached => "use_cached",
+        }
+    }
+}
+
 /// Why a call's target could not be resolved: the call fails with it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TargetError {
@@ -302,7 +320,7 @@ pub enum TargetError {
     /// `invalid_input` on that argument, as every argument of the wrong
     /// type is refused.
     InvalidArgument {
-        argument: &'static str,
+        argument: TargetArgument,
         message: String,
     },
     /// Nothing is served and the call names no project, for a target that
@@ -310,25 +328,39 @@ pub enum TargetError {
     NoProject(Reach),
 }
 
+impl TargetError {
+    /// The target argument the refusal is about: `path` for every variant
+    /// but `InvalidArgument` (its own) and `NoProject` (whose refusal names
+    /// `path` only where the entry takes one, [`no_project`]).
+    pub fn argument(&self) -> Option<TargetArgument> {
+        match self {
+            TargetError::PathNotFound(_)
+            | TargetError::OtherProjectRefused
+            | TargetError::InsideServed { .. }
+            | TargetError::PathRequired => Some(TargetArgument::Path),
+            TargetError::InvalidArgument { argument, .. } => Some(*argument),
+            TargetError::NoProject(_) => None,
+        }
+    }
+}
+
 impl From<TargetError> for McpError {
     fn from(error: TargetError) -> Self {
-        match error {
+        let argument = error.argument();
+        let refused = match error {
             TargetError::PathNotFound(path) => McpError::new(
                 ErrorCode::FileNotFound,
                 format!("path not found: {}", path.display()),
-            )
-            .with_argument("path"),
+            ),
             TargetError::OtherProjectRefused => McpError::new(
                 ErrorCode::InvalidInput,
                 "this tool acts on the project the server serves; path cannot name another project",
-            )
-            .with_argument("path"),
+            ),
             TargetError::PathRequired => {
                 McpError::new(ErrorCode::InvalidInput, "Missing required parameter: path")
-                    .with_argument("path")
             }
-            TargetError::InvalidArgument { argument, message } => {
-                McpError::new(ErrorCode::InvalidInput, message).with_argument(argument)
+            TargetError::InvalidArgument { message, .. } => {
+                McpError::new(ErrorCode::InvalidInput, message)
             }
             TargetError::NoProject(reach) => no_project(reach),
             TargetError::InsideServed { dir, served } => McpError::new(
@@ -338,8 +370,11 @@ impl From<TargetError> for McpError {
                     dir.display(),
                     served.display()
                 ),
-            )
-            .with_argument("path"),
+            ),
+        };
+        match argument {
+            Some(argument) => refused.with_argument(argument.name()),
+            None => refused,
         }
     }
 }
@@ -366,7 +401,7 @@ pub fn no_project(reach: Reach) -> McpError {
         format!("no project is served: {}", serve_a_project(reach)),
     );
     if reach.takes_path() {
-        error.with_argument("path")
+        error.with_argument(TargetArgument::Path.name())
     } else {
         error
     }
@@ -404,7 +439,7 @@ pub(crate) fn without_project(target: &CallTarget, error: McpError) -> McpError 
         ),
     );
     if reach.takes_path() {
-        refused.argument = Some("path".to_string());
+        refused.argument = Some(TargetArgument::Path.name().to_string());
     }
     refused.entity_id = error.entity_id;
     refused.tool = error.tool;
@@ -613,7 +648,7 @@ pub fn resolve(
     let (target, without) = match spec {
         TargetSpec::Unscoped => return Ok(CallTarget::Unscoped),
         TargetSpec::NewProject => {
-            let Some(path) = argument::<String>(arguments, "path")? else {
+            let Some(path) = argument::<String>(arguments, TargetArgument::Path)? else {
                 return Err(TargetError::PathRequired);
             };
             let dir = PathBuf::from(path);
@@ -627,10 +662,10 @@ pub fn resolve(
         }
         TargetSpec::Project { target, without } => (target, without),
     };
-    let path = argument::<String>(arguments, "path")?;
+    let path = argument::<String>(arguments, TargetArgument::Path)?;
     let path = path.as_deref();
-    let cached =
-        spec.takes_use_cached() && argument::<bool>(arguments, "use_cached")?.unwrap_or(false);
+    let cached = spec.takes_use_cached()
+        && argument::<bool>(arguments, TargetArgument::UseCached)?.unwrap_or(false);
     let served = |state: &mut McpState| {
         if state.project_root().is_none() {
             // Nothing is served and the call names no project: the target
@@ -670,12 +705,12 @@ pub fn resolve(
 /// or `null`.
 fn argument<T: crate::args::Arg>(
     arguments: &Value,
-    name: &'static str,
+    name: TargetArgument,
 ) -> Result<Option<T>, TargetError> {
-    match arguments.get(name) {
+    match arguments.get(name.name()) {
         None | Some(Value::Null) => Ok(None),
         Some(value) => {
-            T::read(name, value)
+            T::read(name.name(), value)
                 .map(Some)
                 .map_err(|message| TargetError::InvalidArgument {
                     argument: name,
@@ -897,19 +932,29 @@ mod tests {
             );
             let mut declared = names(spec);
             declared.sort();
-            let mut fields: Vec<&str> = spec.fields().to_vec();
+            let mut fields: Vec<String> = spec
+                .fields()
+                .iter()
+                .map(|argument| argument.name().to_string())
+                .collect();
             fields.sort();
             assert_eq!(declared, fields, "{spec:?}");
-            assert_eq!(declared.iter().any(|n| n == "path"), takes_path, "{spec:?}");
             assert_eq!(
-                declared.iter().any(|n| n == "use_cached"),
+                declared.iter().any(|n| n == TargetArgument::Path.name()),
+                takes_path,
+                "{spec:?}"
+            );
+            assert_eq!(
+                declared
+                    .iter()
+                    .any(|n| n == TargetArgument::UseCached.name()),
                 takes_cached,
                 "{spec:?}"
             );
             assert_eq!(
                 spec.required(),
                 if spec == TargetSpec::NewProject {
-                    &["path"][..]
+                    &[TargetArgument::Path][..]
                 } else {
                     &[][..]
                 },
@@ -919,7 +964,7 @@ mod tests {
         }
         // `path` reads differently where the call creates its project.
         let described = |spec: TargetSpec| {
-            spec.properties()["path"]["description"]
+            spec.properties()[TargetArgument::Path.name()]["description"]
                 .as_str()
                 .map(str::to_string)
         };
@@ -974,6 +1019,40 @@ mod tests {
             crate::tool::entity_not_found(&specforge_graph::Graph::new(), "alpha"),
         );
         assert_eq!(refused.argument.as_deref(), Some("path"));
+    }
+
+    #[specforge_test_macros::test(
+        invariant = "mcp_structured_error_responses",
+        verify = "a path that does not exist is a file_not_found error on path"
+    )]
+    fn each_target_refusal_names_its_argument() {
+        let path = Some("path");
+        for (error, argument) in [
+            (TargetError::PathNotFound(PathBuf::from("x")), path),
+            (TargetError::OtherProjectRefused, path),
+            (TargetError::PathRequired, path),
+            (
+                TargetError::InsideServed {
+                    dir: PathBuf::from("a"),
+                    served: PathBuf::from("b"),
+                },
+                path,
+            ),
+            (
+                TargetError::InvalidArgument {
+                    argument: TargetArgument::UseCached,
+                    message: "not a boolean".into(),
+                },
+                Some("use_cached"),
+            ),
+            // `no_project` names `path` only where the entry takes one.
+            (TargetError::NoProject(Reach::Served), None),
+            (TargetError::NoProject(Reach::AnyProject), path),
+        ] {
+            let refused = McpError::from(error.clone());
+            assert_eq!(refused.argument.as_deref(), argument, "{error:?}");
+        }
+        assert_eq!(TargetError::NoProject(Reach::AnyProject).argument(), None);
     }
 
     #[test]
