@@ -65,8 +65,6 @@ pub struct Applied {
     /// declare now can be added, removed or replaced; any other node can
     /// only change through its outgoing edges.
     pub delta: GraphDelta,
-    /// Files whose graph-build diagnostics changed (sorted; `""`: no span).
-    pub changed_diagnostic_files: Vec<String>,
     /// The comparison with a cold build of the same files, when the build
     /// verifies ([`GraphBuild::set_verify`]): `Err` names the first node,
     /// edge or diagnostic that differs, or the delta check that failed.
@@ -131,7 +129,6 @@ impl GraphBuild {
     /// graph and recompute the graph-build diagnostics over every file.
     pub fn apply(&mut self, changes: impl IntoIterator<Item = FileChange>) -> Applied {
         let previous = self.verify.then(|| self.graph.clone());
-        let before = std::mem::take(&mut self.by_file);
         let mut files: BTreeSet<String> = BTreeSet::new();
         let mut ids: BTreeSet<Sym> = BTreeSet::new();
         for change in changes {
@@ -168,7 +165,6 @@ impl GraphBuild {
         let delta = delta::diff(&ids, &old_nodes, &old_edges, &self.graph);
         Applied {
             files: files.into_iter().collect(),
-            changed_diagnostic_files: changed_files(&before, &self.by_file),
             verification: previous.map(|previous| self.verify(&previous, &delta)),
             delta,
         }
@@ -198,13 +194,6 @@ impl GraphBuild {
     /// The graph-build diagnostics whose span is in `path`, in build order.
     pub fn file_diagnostics(&self, path: &str) -> &[Diagnostic] {
         self.by_file.get(path).map(Vec::as_slice).unwrap_or(&[])
-    }
-
-    /// Every file with graph-build diagnostics (sorted).
-    pub fn diagnostic_files(&self) -> Vec<String> {
-        let mut files: Vec<String> = self.by_file.keys().cloned().collect();
-        files.sort();
-        files
     }
 
     /// Every file the build holds, by path, in path order.
@@ -492,28 +481,6 @@ fn partition_by_file(diagnostics: &[Diagnostic]) -> HashMap<String, Vec<Diagnost
         map.entry(file).or_default().push(diag.clone());
     }
     map
-}
-
-/// The files whose diagnostics are not the same in `before` and `after`
-/// (sorted).
-fn changed_files(
-    before: &HashMap<String, Vec<Diagnostic>>,
-    after: &HashMap<String, Vec<Diagnostic>>,
-) -> Vec<String> {
-    let mut changed: Vec<String> = after
-        .iter()
-        .filter(|(file, diags)| before.get(*file) != Some(*diags))
-        .map(|(file, _)| file.clone())
-        .chain(
-            before
-                .keys()
-                .filter(|file| !after.contains_key(*file))
-                .cloned(),
-        )
-        .collect();
-    changed.sort();
-    changed.dedup();
-    changed
 }
 
 /// The incremental graph is the cold one: every node's kind, file, position, title, fields and methods, and every

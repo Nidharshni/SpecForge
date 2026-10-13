@@ -8,6 +8,7 @@ use specforge_graph::{Applied, GraphDelta};
 
 use crate::buffers::{Buffer, Held};
 use crate::compiled::CompiledProject;
+use crate::diagnostics_delta::DiagnosticsDelta;
 use crate::freshness::{DiskSnapshot, Scope};
 use crate::inputs::{Changes, SessionInputs, UpdateKind};
 use crate::sources::Read;
@@ -88,10 +89,11 @@ pub struct Update {
     pub delta: GraphDelta,
     /// The files re-parsed or dropped: exactly the changed ones (sorted).
     pub rebuilt_files: Vec<String>,
-    /// Files whose graph-build diagnostics changed (sorted).
-    pub changed_diagnostic_files: Vec<String>,
-    /// Everything the session reports now: [`ProjectSession::diagnostics`].
-    pub diagnostics: Vec<Diagnostic>,
+    /// Everything the session reports now ([`CompiledProject::diagnostics`],
+    /// in its order), shared with its compiled project.
+    pub diagnostics: Arc<[Diagnostic]>,
+    /// Everything it reported before this update.
+    pub previous_diagnostics: Arc<[Diagnostic]>,
     /// The comparison of the incremental graph with a cold rebuild, when
     /// the session verifies its updates.
     pub verification: Option<Result<(), String>>,
@@ -99,18 +101,19 @@ pub struct Update {
 
 impl Update {
     /// The update of `kind` that applied `applied` (a graph build's apply,
-    /// [`CompiledProject::replacing`], or nothing) and now reports
-    /// `diagnostics`: the one place an update is assembled.
+    /// [`CompiledProject::replacing`], or nothing), after which the session
+    /// reports `diagnostics` where it reported `previous_diagnostics`: the
+    /// one place an update is assembled.
     fn of(
         kind: UpdateKind,
         inputs_changed: bool,
         applied: Applied,
-        diagnostics: Vec<Diagnostic>,
+        previous_diagnostics: Arc<[Diagnostic]>,
+        diagnostics: Arc<[Diagnostic]>,
     ) -> Update {
         let Applied {
             files,
             delta,
-            changed_diagnostic_files,
             verification,
         } = applied;
         Update {
@@ -118,10 +121,22 @@ impl Update {
             inputs_changed,
             delta,
             rebuilt_files: files,
-            changed_diagnostic_files,
             diagnostics,
+            previous_diagnostics,
             verification,
         }
+    }
+
+    /// The diagnostics this update added and removed, compared whole
+    /// ([`DiagnosticsDelta::between`] of what the session reported before it
+    /// and reports now). Computed on each call, so an update nobody asks
+    /// about compares nothing (ADR 0024 D6); an update that changed nothing
+    /// holds one list twice and compares nothing either.
+    pub fn diagnostics_delta(&self) -> DiagnosticsDelta {
+        if Arc::ptr_eq(&self.previous_diagnostics, &self.diagnostics) {
+            return DiagnosticsDelta::default();
+        }
+        DiagnosticsDelta::between(&self.previous_diagnostics, &self.diagnostics)
     }
 
     /// How the incremental graph differs from a cold rebuild, when this
@@ -439,14 +454,10 @@ impl ProjectSession {
                 update.inputs_changed |= moved;
                 update
             } else {
-                Update::of(
-                    UpdateKind::Sources,
-                    moved,
-                    Applied::default(),
-                    self.project.diagnostics(),
-                )
+                self.unchanged(UpdateKind::Sources, moved)
             };
         }
+        let previous = self.project.reported();
         let applied = self.project.apply(reads);
         let inputs_changed = if mode == CheckMode::SyntaxOnlyIfParseErrors
             && self.project.has_parse_errors_in(&applied.files)
@@ -461,7 +472,21 @@ impl ProjectSession {
             UpdateKind::Sources,
             inputs_changed,
             applied,
-            self.project.diagnostics(),
+            previous,
+            self.project.reported(),
+        )
+    }
+
+    /// An update of `kind` that changed nothing the session reports: it
+    /// reports what it reported.
+    fn unchanged(&self, kind: UpdateKind, inputs_changed: bool) -> Update {
+        let now = self.project.reported();
+        Update::of(
+            kind,
+            inputs_changed,
+            Applied::default(),
+            Arc::clone(&now),
+            now,
         )
     }
 
@@ -471,21 +496,11 @@ impl ProjectSession {
     pub fn reload_environment(&mut self) -> Update {
         if self.inputs.root().is_none() {
             // Nothing on disk to load again.
-            return Update::of(
-                UpdateKind::Environment,
-                false,
-                Applied::default(),
-                self.project.diagnostics(),
-            );
+            return self.unchanged(UpdateKind::Environment, false);
         }
         // The session keeps the root it was opened at: it is never located again.
         let Some(root) = self.project.environment().project_root().cloned() else {
-            return Update::of(
-                UpdateKind::Environment,
-                false,
-                Applied::default(),
-                self.project.diagnostics(),
-            );
+            return self.unchanged(UpdateKind::Environment, false);
         };
         let buffers = std::mem::take(&mut self.held).into_buffers();
         let mut next = Self::begin_open(&root, self.source.clone()).finish_holding(buffers);
@@ -501,7 +516,8 @@ impl ProjectSession {
             UpdateKind::Environment,
             previous.inputs != self.inputs,
             self.project.replacing(&previous.project),
-            self.project.diagnostics(),
+            previous.project.reported(),
+            self.project.reported(),
         )
     }
 
@@ -570,12 +586,14 @@ impl ProjectSession {
 
     /// Run every check again on the current graph: a check input changed.
     fn recheck(&mut self) -> Update {
+        let previous = self.project.reported();
         let inputs_changed = self.check();
         Update::of(
             UpdateKind::Checks,
             inputs_changed,
             Applied::default(),
-            self.project.diagnostics(),
+            previous,
+            self.project.reported(),
         )
     }
 

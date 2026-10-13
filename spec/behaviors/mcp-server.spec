@@ -607,15 +607,24 @@ behavior notify_diagnostics_delta_via_mcp "Notify Diagnostics Delta via MCP" {
     notifications/resources/updated for it and then a
     specforge/diagnosticsChanged notification.
     The notification's params MUST be the DiagnosticsDelta since the
-    previous compilation: the diagnostics added and removed, each presented
-    as every surface presents a diagnostic (present_diagnostics_as_json), so
-    a client can locate it. Clients MUST be able to subscribe and unsubscribe. If
-    no clients are subscribed or the diagnostics are unchanged, the notification
-    MUST be suppressed.
+    previous compilation: the diagnostics the update added and removed, as
+    the project session states them (emit_incremental_diagnostics), then
+    the I017 the server's extension surfaces added and removed, each
+    presented as every surface presents a diagnostic
+    (present_diagnostics_as_json), so a client can locate it: a diagnostic
+    that moved, or changed in any presented part, is removed and added.
+    Clients MUST be able to subscribe and unsubscribe. If no clients are
+    subscribed or the diagnostics are unchanged, the notification MUST be
+    suppressed; while no client hears the diagnostics, no delta is
+    computed.
   """
   verify unit "diagnostics_changed notification sent after validation"
   verify unit "payload includes added and removed diagnostics"
   verify unit "each added or removed diagnostic is presented as every surface presents diagnostics"
+  verify unit "a diagnostic that moved is removed where it was and added where it is"
+  verify unit "a diagnostic whose span changed is removed and added"
+  verify unit "removing one of two identical diagnostics is notified"
+  verify unit "the I017 the extension surfaces add and remove is notified with the update's delta"
   verify unit "unsubscribed clients do not receive notifications"
   verify unit "no notification when diagnostics are unchanged"
   verify contract "Notify Diagnostics Delta via MCP: diagnostics delta MCP notification holds — validation_complete_fired, subscribers_notified, unchanged_suppressed, delta_notified_emitted"

@@ -511,6 +511,7 @@ behavior emit_live_diagnostics "Live Diagnostics" {
   verify unit "each file's diagnostics are published under the URI the client named it by"
   verify integration "diagnostics appear within 100ms"
   verify unit "a spanless diagnostic about entities is published at the first one's name"
+  verify unit "a spanless diagnostic is published at its entity's new name when only the entity moved"
   verify unit "a diagnostic is published on the file its span names"
   verify unit "a diagnostic about no entity is published on the edited document"
   verify unit "a define block's W143 is published as unnecessary code"
