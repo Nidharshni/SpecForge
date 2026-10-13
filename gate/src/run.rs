@@ -262,9 +262,6 @@ impl Report {
                 };
                 writeln!(out, "::group::{name} ({}s) {result}", took.as_secs())?;
                 write!(out, "{}", self.log_of(name))?;
-                if let Outcome::Failed(why) = outcome {
-                    writeln!(out, "{why}")?;
-                }
                 writeln!(out, "::endgroup::")?;
                 if !matches!(outcome, Outcome::Passed) {
                     writeln!(out, "::error title={name}::{}", fix_of(name))?;
