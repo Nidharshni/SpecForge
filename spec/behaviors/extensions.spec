@@ -410,9 +410,15 @@ behavior remove_extension "Remove Extension" {
     removal (config_invalid), changing nothing. A removal is all or
     nothing: a failure at any step leaves specforge.json, specforge.lock
     and the binary as they were.
-    Removing an extension that another loaded or installed extension
-    requires as a non-optional peer MUST fail with E027 naming the
-    dependents, unless --force is given. The CLI and the MCP
+    A removal is judged by the one peer rule over the project's peer set
+    as the removal leaves it (ADR 0041; the extensions its specforge.json
+    entries load), as add judges an install: removing an extension a
+    member of the set requires as a non-optional peer MUST fail with E027
+    ("removing '<name>' breaks '<dependent>': ...", its suggestion naming
+    every such dependent), unless --force is given; a locked extension no
+    entry enables is not judged and keeps nothing from being removed.
+    specforge remove --dry-run reports what the removal would do, the
+    same refusal included, and writes nothing. The CLI and the MCP
     remove_extension tool MUST run the same removal. This behavior is the
     user-facing CLI entry point; uninstall_wasm_extension handles the
     implementation. Existing .spec files using the extension's entities

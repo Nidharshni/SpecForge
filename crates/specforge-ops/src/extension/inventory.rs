@@ -8,7 +8,7 @@ use crate::view::ProjectView;
 use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_installed::{EnabledExtension, LoadFailure, LockFileEntry};
-use specforge_protocol_types::{ExtensionDeclaration, PeerDependency};
+use specforge_protocol_types::ExtensionDeclaration;
 use std::collections::BTreeSet;
 
 /// Whether an extension of the project is part of the compiled project.
@@ -189,23 +189,6 @@ impl<'a> Inventory<'a> {
     /// The row named `name`.
     pub fn get(&self, name: &str) -> Option<&ProjectExtension<'a>> {
         self.rows.iter().find(|row| row.name == name)
-    }
-
-    /// The extensions that require `name` as a non-optional peer: loaded
-    /// ones by their declaration, locked ones by the peers recorded at
-    /// install; sorted by name, `name` itself excluded.
-    pub fn dependents(&self, name: &str) -> Vec<&'a str> {
-        let requires =
-            |peers: &[PeerDependency]| peers.iter().any(|p| p.name == name && !p.optional);
-        self.rows
-            .iter()
-            .filter(|row| row.name != name)
-            .filter(|row| {
-                row.declaration.is_some_and(|d| requires(d.peers()))
-                    || row.lock.is_some_and(|e| requires(&e.peer_dependencies))
-            })
-            .map(|row| row.name)
-            .collect()
     }
 
     /// What `argument` names (a `remove` argument): a `.wasm` file entry by
@@ -488,30 +471,6 @@ mod tests {
         assert_eq!(probe.status, Status::NotLoaded);
         assert_eq!(probe.version, None);
         assert!(probe.locked);
-    }
-
-    #[test]
-    fn the_dependents_are_the_loaded_and_locked_extensions_that_require_a_name() {
-        let peer = |optional| PeerDependency {
-            name: "@a/base".into(),
-            version: "^1".into(),
-            optional,
-        };
-        let mut dep = Fixture::declaration("@a/dep", "1.0.0");
-        dep.handshake.peer_dependencies = vec![peer(false)];
-        let mut opt = Fixture::declaration("@a/opt", "1.0.0");
-        opt.handshake.peer_dependencies = vec![peer(true)];
-        let mut fixture = Fixture::new()
-            .declarations(vec![dep, opt, Fixture::declaration("@a/base", "1.0.0")])
-            .lock(&[("@a/locked", "1.0.0", "registry")]);
-        let mut lock = fixture.env().installed().lock().file().unwrap().clone();
-        lock.entries[0].peer_dependencies = vec![peer(false)];
-        fixture = fixture.with_lock_file(lock);
-        let view = fixture.view();
-        let inventory = inventory(&view);
-
-        assert_eq!(inventory.dependents("@a/base"), ["@a/dep", "@a/locked"]);
-        assert!(inventory.dependents("@a/dep").is_empty());
     }
 
     #[test]

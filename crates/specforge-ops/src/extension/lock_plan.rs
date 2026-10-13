@@ -1,9 +1,10 @@
-//! The lock plan (ADR 0041, amendment round 7; ADR 0065): the one way `add`, `update` and `init`
-//! install extensions and enable entries.
+//! The lock plan (ADR 0041, amendment round 7; ADR 0065): the one way `add`, `update`, `init` and
+//! `remove` change what a project installs and enables.
 //!
 //! An operation opens the plan for its verb ([`LockPlan::adding`], [`LockPlan::updating`],
-//! [`LockPlan::initializing`]) and names what it asks for, each charged to an [`Ask`]: it installs,
-//! enables, or fetches from the plan's registry. It never drives the plan's own steps: the plan
+//! [`LockPlan::initializing`], [`LockPlan::removing`]) and names what it asks for, each charged to
+//! an [`Ask`]: it installs, enables, disables, uninstalls, or fetches from the plan's registry. It
+//! never drives the plan's own steps: the plan
 //! stages each install into the lock as the operation will leave it (the package's previous entry
 //! is replaced, never counted beside it), closes over the builtins what it adds requires, and judges,
 //! once, the **project peer set** as the change leaves it (the extensions the project's
@@ -19,6 +20,7 @@
 
 use std::path::Path;
 
+use crate::view::ProjectView;
 use specforge_common::{Diagnostic, codes};
 use specforge_installed::{Installed, LockFile, LockSource, LockState, Module, Pin};
 use specforge_package::peers::{PeerRequirement, Verdict};
@@ -40,6 +42,8 @@ pub(crate) enum Verb {
     Install,
     /// `update`.
     Update,
+    /// `remove`.
+    Remove,
 }
 
 impl Verb {
@@ -53,6 +57,7 @@ impl Verb {
         match self {
             Verb::Install => "installing",
             Verb::Update => "updating",
+            Verb::Remove => "removing",
         }
     }
 
@@ -60,6 +65,7 @@ impl Verb {
         match self {
             Verb::Install => "install",
             Verb::Update => "update",
+            Verb::Remove => "removal",
         }
     }
 }
@@ -68,6 +74,33 @@ impl Verb {
 /// init's specifiers, update's lock entries). Refusals and outcomes are answered per ask.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct Ask(pub(crate) usize);
+
+/// Whether a checked plan is written or only answered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Purpose {
+    Commit,
+    /// A dry run: judged exactly as a commit is, written, pinned and downloaded never.
+    Preview,
+}
+
+/// Which `specforge.json` entries a removal drops.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Disabled {
+    /// Every entry naming this extension (`config::remove_extension`).
+    Named(String),
+    /// The entries written exactly so (a `.wasm` file entry; `config::remove_entry`).
+    Entry(String),
+}
+
+impl Disabled {
+    /// Whether `entry` (a `specforge.json` entry) is dropped by it.
+    fn drops(&self, entry: &str) -> bool {
+        match self {
+            Disabled::Named(name) => specforge_common::extension_entry_name(entry) == name,
+            Disabled::Entry(text) => entry.trim() == text.trim(),
+        }
+    }
+}
 
 /// Where a plan's registry installs come from, and how their publishers are accepted: the
 /// registry port and the caller's two trust choices.
@@ -244,9 +277,16 @@ pub(crate) struct LockPlan<'a> {
     /// The extension each ask enables, in the order they were asked.
     wanted: Vec<(Ask, String)>,
     declarations: Declarations<'a>,
-    /// The runtime the plan's builtins, files and fetched binaries load in.
-    runtime: &'a dyn WasmRuntime,
+    /// The runtime the plan's fetched binaries load in; `None` for a plan that fetches nothing
+    /// and reads its declarations from a compiled project (`remove`).
+    runtime: Option<&'a dyn WasmRuntime>,
     verb: Verb,
+    purpose: Purpose,
+    /// A removal is not judged (`remove --force`).
+    force: bool,
+    /// The entries a removal drops, and the packages it uninstalls, each for its ask.
+    disabled: Vec<(Ask, Disabled)>,
+    uninstalled: Vec<(Ask, PackageName)>,
     /// Where registry installs come from; `None` for a plan that fetches nothing.
     fetching: Option<Fetching<'a>>,
     /// The operation's name, for the refusal of a fetch from no registry.
@@ -269,7 +309,8 @@ impl<'a> LockPlan<'a> {
         LockPlan::open(
             installed,
             entries,
-            runtime,
+            Some(runtime),
+            Declarations::through(runtime),
             Verb::Install,
             Some(fetching),
             "add",
@@ -287,7 +328,8 @@ impl<'a> LockPlan<'a> {
         LockPlan::open(
             installed,
             entries,
-            runtime,
+            Some(runtime),
+            Declarations::through(runtime),
             Verb::Update,
             Some(fetching),
             "update",
@@ -306,7 +348,8 @@ impl<'a> LockPlan<'a> {
         LockPlan::open(
             installed,
             entries,
-            runtime,
+            Some(runtime),
+            Declarations::through(runtime),
             Verb::Install,
             None,
             "init",
@@ -314,10 +357,43 @@ impl<'a> LockPlan<'a> {
         )
     }
 
+    /// `remove`'s plan over the compiled project `view`: its lock as the compile read it, its
+    /// entries, the declarations its compile loaded (read again through the view's runtime only
+    /// for an entry the removal lets load). `uninstalls`: whether it uninstalls (then an
+    /// unreadable lock is E033). `force`: the peer rule is not applied (`remove --force`).
+    pub(crate) fn removing(
+        view: &ProjectView<'a>,
+        purpose: Purpose,
+        force: bool,
+        uninstalls: bool,
+    ) -> Result<LockPlan<'a>, OpError> {
+        let entries: Vec<String> = view
+            .env()
+            .enabled()
+            .iter()
+            .map(|entry| entry.entry.clone())
+            .collect();
+        let mut plan = LockPlan::open(
+            view.installed(),
+            &entries,
+            view.runtime().map(|runtime| &**runtime),
+            Declarations::loaded_by(view),
+            Verb::Remove,
+            None,
+            "remove",
+            uninstalls,
+        )?;
+        plan.purpose = purpose;
+        plan.force = force;
+        Ok(plan)
+    }
+
+    #[allow(clippy::too_many_arguments)]
     fn open(
         installed: &'a Installed,
         entries: &[String],
-        runtime: &'a dyn WasmRuntime,
+        runtime: Option<&'a dyn WasmRuntime>,
+        declarations: Declarations<'a>,
         verb: Verb,
         fetching: Option<Fetching<'a>>,
         operation: &'static str,
@@ -339,9 +415,13 @@ impl<'a> LockPlan<'a> {
             entries: entries.to_vec(),
             appended: Vec::new(),
             wanted: Vec::new(),
-            declarations: Declarations::new(runtime),
+            declarations,
             runtime,
             verb,
+            purpose: Purpose::Commit,
+            force: false,
+            disabled: Vec::new(),
+            uninstalled: Vec::new(),
             fetching,
             operation,
         })
@@ -376,7 +456,7 @@ impl<'a> LockPlan<'a> {
         Ok(Install {
             from: From::Registry {
                 registry: fetching.registry,
-                runtime: self.runtime,
+                runtime: self.runtime.expect("a plan that fetches has a runtime"),
                 declaration: Box::new(package.declaration),
                 publisher: package.publisher,
                 bytes: module.clone(),
@@ -429,6 +509,26 @@ impl<'a> LockPlan<'a> {
         }
     }
 
+    /// Drop the entries `disabled` selects, for `ask`.
+    pub(crate) fn disable(&mut self, ask: Ask, disabled: Disabled) {
+        self.disabled.push((ask, disabled));
+    }
+
+    /// Uninstall `name` (its module and lock entry), for `ask`. A name the lock does not hold
+    /// changes nothing.
+    ///
+    /// # Panics
+    /// On a plan opened with `uninstalls: false` (it changes no lock, so it accepted any lock).
+    pub(crate) fn uninstall(&mut self, ask: Ask, name: &PackageName) {
+        let lock = self
+            .lock
+            .as_mut()
+            .expect("a plan opened with uninstalls: false uninstalls nothing");
+        if lock.without(name) {
+            self.uninstalled.push((ask, name.clone()));
+        }
+    }
+
     /// The entries the change appends, in order: dependencies first once [`Self::close`] ran.
     pub(crate) fn appended(&self) -> &[Appended] {
         &self.appended
@@ -448,6 +548,12 @@ impl<'a> LockPlan<'a> {
     fn entries_after(&self) -> Vec<String> {
         self.entries
             .iter()
+            .filter(|entry| {
+                !self
+                    .disabled
+                    .iter()
+                    .any(|(_, disabled)| disabled.drops(entry))
+            })
             .cloned()
             .chain(self.appended.iter().map(|appended| appended.name.clone()))
             .collect()
@@ -589,25 +695,28 @@ impl<'a> LockPlan<'a> {
     /// fetches decided (`Publisher::pin`), in staging order, for [`Checked::finish`] to save. Lock
     /// order and entry order decide nothing.
     pub(crate) fn check(mut self) -> Result<Checked<'a>, Refused> {
-        if let Err(error) = self.close() {
-            return Err(Refused::of(
-                &Changing::of(&self.staged, &self.appended),
-                error,
-            ));
-        }
-        let changing = Changing::of(&self.staged, &self.appended);
+        let changing = self.touched()?;
         let mut failed: Vec<Option<(OpError, bool)>> =
             changing.names.iter().map(|_| None).collect();
-        if !changing.names.is_empty() {
+        if !changing.names.is_empty() && !(self.verb == Verb::Remove && self.force) {
             let (view, after) = (self.view(), self.entries_after());
             let set = match ProjectPeers::of(&view, &after, &mut self.declarations) {
                 Ok(set) => set,
                 Err(error) => return Err(Refused::of(&changing, error)),
             };
-            for edge in unsatisfied(&set, &changing) {
+            let edges = unsatisfied(&set, &changing);
+            for edge in &edges {
                 let owner = edge.owner(&changing);
                 if failed[owner].is_none() {
-                    let error = refusal(&set, &self.staged, &changing, owner, &edge, self.verb);
+                    let error = refusal(
+                        &set,
+                        &self.staged,
+                        &changing,
+                        owner,
+                        edge,
+                        &edges,
+                        self.verb,
+                    );
                     failed[owner] = Some((error, true));
                 }
             }
@@ -620,6 +729,9 @@ impl<'a> LockPlan<'a> {
             appended,
             wanted,
             fetching,
+            purpose,
+            disabled,
+            uninstalled,
             ..
         } = self;
         for (i, s) in staged.iter().enumerate() {
@@ -644,10 +756,63 @@ impl<'a> LockPlan<'a> {
                 .into_iter()
                 .map(|staged| (staged.module, staged.pin))
                 .collect(),
+            uninstalls: uninstalled.into_iter().map(|(_, name)| name).collect(),
+            disabled: disabled.into_iter().map(|(_, disabled)| disabled).collect(),
+            purpose,
             pins: fetching.map(|fetching| (fetching.registry, pins)),
             entries,
             appended,
             wanted,
+        })
+    }
+
+    /// What the change touches, once what it enables is closed over (E028 refuses the plan when a
+    /// builtin it needs does not load): a staged install, an appended entry, and for a removal the
+    /// members it takes out of the project's peer set or lets load.
+    fn touched(&mut self) -> Result<Changing, Refused> {
+        if self.verb == Verb::Remove {
+            return self.removal_touched();
+        }
+        if let Err(error) = self.close() {
+            return Err(Refused::of(
+                &Changing::of(&self.staged, &self.appended),
+                error,
+            ));
+        }
+        Ok(Changing::of(&self.staged, &self.appended))
+    }
+
+    /// The members that differ between the project peer set before the removal and after it: a
+    /// member it removes, or one it lets load (a `.wasm` file entry another entry shadowed), each
+    /// charged to the first ask.
+    fn removal_touched(&mut self) -> Result<Changing, Refused> {
+        let none = || Changing {
+            names: Vec::new(),
+            asks: Vec::new(),
+            staged: 0,
+        };
+        let before = ProjectPeers::of(self.installed, &self.entries, &mut self.declarations)
+            .map_err(|error| Refused::of(&none(), error))?;
+        let after = ProjectPeers::of(&self.view(), &self.entries_after(), &mut self.declarations)
+            .map_err(|error| Refused::of(&none(), error))?;
+        let mut names: Vec<String> = Vec::new();
+        for member in before.members().iter().chain(after.members()) {
+            if before.member(&member.name) != after.member(&member.name)
+                && !names.contains(&member.name)
+            {
+                names.push(member.name.clone());
+            }
+        }
+        let ask = self
+            .disabled
+            .first()
+            .map(|(ask, _)| *ask)
+            .or_else(|| self.uninstalled.first().map(|(ask, _)| *ask))
+            .unwrap_or(Ask(0));
+        Ok(Changing {
+            asks: names.iter().map(|_| ask).collect(),
+            names,
+            staged: 0,
         })
     }
 }
@@ -698,10 +863,15 @@ impl Changing {
 /// written, and the publisher keys to pin once it is.
 pub(crate) struct Checked<'a> {
     installed: &'a Installed,
-    /// Whether the change writes the lock (the plan was opened to install).
+    /// Whether the change writes the lock (the plan was opened to install or uninstall).
     changes_lock: bool,
     /// The modules to place, each with the lock entry that pins it, in staging order.
     installs: Vec<(Module, Pin)>,
+    /// The packages to uninstall.
+    uninstalls: Vec<PackageName>,
+    /// The `specforge.json` entries to drop.
+    disabled: Vec<Disabled>,
+    purpose: Purpose,
     /// The pins its registry installs call for, and the registry port that pins them; none for a
     /// plan that fetches nothing.
     pins: Option<(&'a dyn Registry, Vec<KeyPin>)>,
@@ -711,12 +881,12 @@ pub(crate) struct Checked<'a> {
     wanted: Vec<(Ask, String)>,
 }
 
-/// What a finished plan did.
+/// What a finished plan did, or for a preview would do.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Done {
-    /// The files written.
+    /// The files written; none for a preview.
     pub(crate) writes: Writes,
-    /// How many extensions `specforge.json` enables after the change.
+    /// How many extensions `specforge.json` enables after the change (would, for a preview).
     pub(crate) enabled: usize,
     asked: Vec<(Ask, Asked)>,
 }
@@ -724,8 +894,9 @@ pub(crate) struct Done {
 /// What a finished plan did for one ask.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub(crate) struct Asked {
-    /// The entry of the extension it asked for was appended by this change; `false` when an entry
-    /// already enabled it, or another writer added it since the plan read the file.
+    /// The entry of the extension it asked for was appended by this change (would be, for a
+    /// preview); `false` when an entry already enabled it, or another writer added it since the
+    /// plan read the file.
     pub(crate) appended: bool,
     /// The builtins enabled because its extension requires them, dependencies first.
     pub(crate) peers_enabled: Vec<&'static str>,
@@ -742,64 +913,93 @@ impl Done {
     }
 }
 
+/// `result`, a missing `specforge.json` being nothing to edit: a project without one (an install
+/// only the lock knows) has no entry to drop.
+fn edited(result: Result<bool, OpError>) -> Result<(), OpError> {
+    match result {
+        Err(error) if error.code == "config_not_found" => Ok(()),
+        other => other.map(|_| ()),
+    }
+}
+
 impl Checked<'_> {
-    /// What `specforge.json` enables as the change leaves it, in order: the entries it held, then
-    /// the appended ones, dependencies first.
+    /// What `specforge.json` enables as the change leaves it, in order: the entries it held
+    /// without the dropped ones, then the appended ones, dependencies first.
     pub(crate) fn entries(&self) -> Vec<String> {
         self.entries
             .iter()
+            .filter(|entry| !self.disabled.iter().any(|disabled| disabled.drops(entry)))
             .cloned()
             .chain(self.appended.iter().map(|appended| appended.name.clone()))
             .collect()
     }
 
-    /// Write it, all or nothing (ADR 0028 D4): each staged module placed, the lock written once,
-    /// then the appended entries (`config::enable`, the change's `specforge.json` edit) and last
-    /// the publisher keys pinned (ADR 0059). A plan that stages no install writes no module and no
-    /// lock: only the edit runs. A failure at any step, the pins' included (R-TRUST-006), puts
-    /// every file back and pins nothing. The error's writes name what could not be put back
-    /// (normally nothing).
+    /// A preview answers without writing. A commit writes, all or nothing (ADR 0028 D4): each
+    /// staged module placed and each uninstalled one moved aside, the lock once (when a module
+    /// changed), then the last step: `specforge.json`'s edit (the appended entries, the dropped
+    /// ones) and last the publisher keys its fetches accepted (ADR 0059). A plan that stages no
+    /// module writes no lock. A failure at any step, the pins' included (R-TRUST-006), puts every
+    /// file back and pins nothing. The error's writes name what could not be put back (normally
+    /// nothing).
     pub(crate) fn finish(self, root: &Path) -> Result<Done, OpError> {
+        let final_entries = self.entries();
         let Checked {
             installed,
             changes_lock,
             installs,
+            uninstalls,
+            disabled,
+            purpose,
             pins,
-            entries,
             appended,
             wanted,
+            ..
         } = self;
         let names: Vec<&str> = appended
             .iter()
             .map(|appended| appended.name.as_str())
             .collect();
-        let config_path = root.join(crate::config::CONFIG_FILE);
         let mut enabled = None;
-        let last = || -> Result<(), OpError> {
-            if !names.is_empty() {
-                enabled = Some(crate::config::enable(root, &names)?);
+        let mut writes = Writes::none();
+        if purpose == Purpose::Commit {
+            let config_path = root.join(crate::config::CONFIG_FILE);
+            let last = || -> Result<(), OpError> {
+                if !names.is_empty() {
+                    enabled = Some(crate::config::enable(root, &names)?);
+                }
+                for dropped in &disabled {
+                    edited(match dropped {
+                        Disabled::Named(name) => crate::config::remove_extension(root, name),
+                        Disabled::Entry(entry) => crate::config::remove_entry(root, entry),
+                    })?;
+                }
+                record(pins)
+            };
+            let mut change = if changes_lock {
+                installed
+                    .change()
+                    .map_err(|why| OpError::of(OpErrorKind::SchemaMismatch, why))?
+            } else {
+                installed.change_entries()
+            };
+            for (module, pin) in installs {
+                change.install(module, pin);
             }
-            record(pins)
-        };
-        let mut change = if changes_lock {
-            installed
-                .change()
-                .map_err(|why| OpError::of(OpErrorKind::SchemaMismatch, why))?
-        } else {
-            installed.change_entries()
-        };
-        for (module, pin) in installs {
-            change.install(module, pin);
+            for name in &uninstalls {
+                change.uninstall(name);
+            }
+            let committed = change
+                .files((!names.is_empty() || !disabled.is_empty()).then(|| config_path.clone()))
+                .commit_with(last, |why| OpError::of(OpErrorKind::Internal, why))
+                .map_err(|failed| failed.error.with_writes(Writes::of(failed.left)))?;
+            writes = Writes::of(committed.changed);
         }
-        let committed = change
-            .files((!names.is_empty()).then(|| config_path.clone()))
-            .commit_with(last, |why| OpError::of(OpErrorKind::Internal, why))
-            .map_err(|failed| failed.error.with_writes(Writes::of(failed.left)))?;
 
-        let written = |name: &str| {
-            enabled
+        let written = |name: &str| match purpose {
+            Purpose::Commit => enabled
                 .as_ref()
-                .is_some_and(|enabled| enabled.appended.iter().any(|a| a == name))
+                .is_some_and(|enabled| enabled.appended.iter().any(|a| a == name)),
+            Purpose::Preview => names.contains(&name),
         };
         let mut asked: Vec<(Ask, Asked)> = Vec::new();
         for (ask, name) in &wanted {
@@ -821,10 +1021,10 @@ impl Checked<'_> {
             ));
         }
         Ok(Done {
-            writes: Writes::of(committed.changed),
+            writes,
             enabled: enabled
                 .as_ref()
-                .map_or(entries.len(), |enabled| enabled.total),
+                .map_or(final_entries.len(), |enabled| enabled.total),
             asked,
         })
     }
@@ -920,8 +1120,12 @@ fn refusal(
     changing: &Changing,
     owner: usize,
     edge: &Edge,
+    edges: &[Edge],
     verb: Verb,
 ) -> OpError {
+    if verb == Verb::Remove {
+        return removal_refusal(changing, owner, edge, edges);
+    }
     let peer = edge.declared.name.as_str();
     let checks = || {
         OpError::of(
@@ -994,6 +1198,37 @@ fn refusal(
             edge.dependent
         ))
     }
+}
+
+/// Why a removal is refused for `edge`: what it takes out of the project's peer set (or lets load)
+/// leaves a member's required peer unsatisfied. "removing '<name>' breaks '<dependent>': ...",
+/// its suggestion naming every member the removal leaves that way.
+fn removal_refusal(changing: &Changing, owner: usize, edge: &Edge, edges: &[Edge]) -> OpError {
+    let diagnostic = match &edge.verdict {
+        Verdict::Unreadable(why) => {
+            specforge_common::peers::unreadable(edge.dependent, edge.declared, why)
+        }
+        verdict => specforge_common::peers::of(edge.dependent, edge.declared, verdict)
+            .expect("an unsatisfied peer is a diagnostic"),
+    };
+    let error = OpError::of(OpErrorKind::Conflict, diagnostic);
+    if changing.contains(edge.dependent) {
+        return error;
+    }
+    let name = &changing.names[owner];
+    let mut dependents: Vec<String> = edges
+        .iter()
+        .filter(|other| other.declared.name == *name && !changing.contains(other.dependent))
+        .map(|other| format!("'{}'", other.dependent))
+        .collect();
+    dependents.sort();
+    dependents.dedup();
+    error
+        .prefixed(format!("removing '{name}' breaks '{}': ", edge.dependent))
+        .with_suggestion(format!(
+            "remove {} first, or use --force to remove '{name}' anyway",
+            dependents.join(", ")
+        ))
 }
 
 /// R-RES-006 naming the version of `edge`'s peer every requirer in `set` accepts, or R-RES-005
@@ -1257,6 +1492,7 @@ mod tests {
                 LockPlan::adding(installed, &entries, runtime, fetching(registry), true)
             }
             Verb::Update => LockPlan::updating(installed, &entries, runtime, fetching(registry)),
+            Verb::Remove => unreachable!("a removal is planned over a compiled project"),
         }
         .unwrap()
     }
@@ -1501,7 +1737,7 @@ mod tests {
         // The staged entry replaced the previous one: base has one requirer, at ^2.
         let view = plan.view();
         let entries = ["@acme/base".to_string(), "@acme/app".to_string()];
-        let set = ProjectPeers::of(&view, &entries, &mut Declarations::new(&runtime)).unwrap();
+        let set = ProjectPeers::of(&view, &entries, &mut Declarations::through(&runtime)).unwrap();
         let listed = set.requirers("@acme/base");
         assert_eq!(listed.len(), 1);
         assert_eq!(

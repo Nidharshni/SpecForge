@@ -1,13 +1,14 @@
 //! `specforge remove` and `specforge.remove_extension`.
 
-use super::{Inventory, NOT_FOUND, Origin, ProjectExtension, Selection};
+use super::lock_plan::{Ask, Disabled, LockPlan, Purpose};
+use super::{NOT_FOUND, Origin, ProjectExtension, Selection};
 use crate::view::ProjectView;
 use crate::{OpError, OpErrorKind, Writes};
 use serde::Serialize;
+use specforge_common::ExtensionEntry;
 use specforge_common::shape::Shape;
-use specforge_common::{ExtensionEntry, codes};
 use specforge_graph::Graph;
-use specforge_installed::{Installed, LockState};
+use specforge_installed::{Installed, LockFileEntry, LockState};
 use specforge_package::PackageName;
 use specforge_project::EnabledExtension;
 use specforge_registry::KindRegistry;
@@ -22,13 +23,13 @@ pub struct RemoveRequest<'a> {
     pub dry_run: bool,
 }
 
-/// What a removal reads of its project: the view's root, the project's
-/// extensions ([`Inventory`]), its kinds and its graph.
+/// What a removal reads of its project: the view, its root, its kinds and
+/// its graph.
 struct Removing<'a> {
+    view: &'a ProjectView<'a>,
     root: &'a Path,
     force: bool,
     dry_run: bool,
-    inventory: &'a Inventory<'a>,
     kinds: &'a KindRegistry,
     graph: &'a Graph,
     /// The project's installed extensions, as the compile read them.
@@ -119,9 +120,10 @@ pub enum RemoveAction {
 /// entry, named by the extension it loaded as, its entry or its path, is
 /// dropped from `specforge.json` (the file and the lock are left alone); an
 /// enabled entry that does not load (E028) is dropped by its name.
-/// Refused with E027 while another loaded or locked extension requires it
-/// as a non-optional peer, unless `force`; with `extension_conflict` when
-/// more than one entry enables `name`.
+/// Refused with E027 while a member of the project's peer set (the
+/// extensions its entries load) would be left without a non-optional peer
+/// it requires, unless `force`; with `extension_conflict` when more than
+/// one entry enables `name`.
 ///
 /// Every refusal is decided from the view before anything is written: a
 /// `specforge.json` the compile could not edit (a problem that
@@ -131,7 +133,9 @@ pub enum RemoveAction {
 /// nothing: the binary, the lock entry and the `specforge.json` entry go as
 /// one change, and a failure at any step puts every file back (the error's
 /// [`OpError::writes`] names what the rollback could not, normally
-/// nothing). Without a root: `no_project`.
+/// nothing). Without a root: `no_project`. The removal is one lock-plan change
+/// ([`LockPlan::removing`]): a dry run is the same plan checked and not
+/// committed.
 pub fn remove(view: &ProjectView, req: &RemoveRequest) -> Result<RemoveOutcome, OpError> {
     let root = view.project_root()?;
     if let Some(problem) = view
@@ -144,10 +148,10 @@ pub fn remove(view: &ProjectView, req: &RemoveRequest) -> Result<RemoveOutcome, 
     }
     let inventory = super::inventory(view);
     let removing = &Removing {
+        view,
         root,
         force: req.force,
         dry_run: req.dry_run,
-        inventory: &inventory,
         kinds: view.registries().kinds(),
         graph: view.graph(),
         installed: view.installed(),
@@ -226,52 +230,47 @@ fn remove_named(req: &Removing, extension: &ProjectExtension) -> Result<RemoveOu
     if !extension.enabled() && extension.lock.is_none() {
         return Err(not_installed(extension.name, None));
     }
-    refuse_if_required(req, extension)?;
-    let mut outcome = RemoveOutcome {
+    let writes = change(
+        req,
+        extension.lock,
+        Disabled::Named(extension.name.to_string()),
+    )?;
+    Ok(RemoveOutcome {
         name: extension.name.to_string(),
         version: extension.version().map(str::to_string),
         origin: extension.origin.clone(),
         stranded: stranded(req.graph, req.kinds, extension.name),
         dry_run: req.dry_run,
-        writes: Writes::none(),
+        writes,
+    })
+}
+
+/// The removal as one lock-plan change: `locked`'s package is uninstalled (its binary and lock
+/// entry) and the entries `disabled` selects are dropped from `specforge.json`, judged by the
+/// peer rule over the project's peer set as the removal leaves it, then written all or nothing
+/// (nothing for a dry run). The files it wrote.
+fn change(
+    req: &Removing,
+    locked: Option<&LockFileEntry>,
+    disabled: Disabled,
+) -> Result<Writes, OpError> {
+    let purpose = if req.dry_run {
+        Purpose::Preview
+    } else {
+        Purpose::Commit
     };
-    if req.dry_run {
-        return Ok(outcome);
+    let mut plan = LockPlan::removing(req.view, purpose, req.force, locked.is_some())?;
+    // Its directory is named by the lock entry's package name, which the lock read validated
+    // (ADR 0036): nothing outside `.specforge/extensions` can be deleted.
+    if let Some(locked) = locked {
+        plan.uninstall(Ask(0), &locked.name);
     }
-    // An installed extension: its binary, its lock entry and its
-    // specforge.json entry go as one change, all or nothing. Anything else
-    // is its specforge.json entry alone; a project without specforge.json
-    // (an install only the lock knows) has no entry to drop.
-    let drop_entry = || match crate::config::remove_extension(req.root, extension.name) {
-        Err(e) if e.code == "config_not_found" => Ok(false),
-        other => other,
-    };
-    let config_file = req.root.join(crate::config::CONFIG_FILE);
-    match extension.lock {
-        // Its directory is named by the lock entry's package name, which
-        // the lock read validated (ADR 0036): nothing outside
-        // `.specforge/extensions` can be deleted.
-        Some(locked) => {
-            let mut change = req
-                .installed
-                .change()
-                .map_err(|why| OpError::of(OpErrorKind::SchemaMismatch, why))?;
-            change.uninstall(&locked.name);
-            let committed = change
-                .files([config_file.clone()])
-                .commit_with(
-                    || drop_entry().map(|_| ()),
-                    |why| OpError::of(OpErrorKind::Internal, why),
-                )
-                .map_err(|failed| failed.error.with_writes(Writes::of(failed.left)))?;
-            outcome.writes = Writes::of(committed.changed);
-        }
-        None => {
-            let dropped = drop_entry()?;
-            outcome.writes.record_if(dropped, config_file);
-        }
-    }
-    Ok(outcome)
+    plan.disable(Ask(0), disabled);
+    let done = plan
+        .check()
+        .map_err(|refused| refused.decisive().1)?
+        .finish(req.root)?;
+    Ok(done.writes)
 }
 
 /// Remove the `.wasm` file entry `file`: only its `specforge.json` entry
@@ -282,8 +281,8 @@ fn remove_file(
     file: &EnabledExtension,
     extension: &ProjectExtension,
 ) -> Result<RemoveOutcome, OpError> {
-    refuse_if_required(req, extension)?;
-    let mut outcome = RemoveOutcome {
+    let writes = change(req, None, Disabled::Entry(file.entry.clone()))?;
+    Ok(RemoveOutcome {
         name: file.name.clone(),
         version: extension.version().map(str::to_string),
         origin: Origin::File {
@@ -291,38 +290,8 @@ fn remove_file(
         },
         stranded: stranded(req.graph, req.kinds, &file.name),
         dry_run: req.dry_run,
-        writes: Writes::none(),
-    };
-    if !req.dry_run {
-        let dropped = crate::config::remove_entry(req.root, &file.entry)?;
-        outcome
-            .writes
-            .record_if(dropped, req.root.join(crate::config::CONFIG_FILE));
-    }
-    Ok(outcome)
-}
-
-/// E027 when another loaded or locked extension requires `extension` as a
-/// non-optional peer and it is itself loaded or locked, unless the request
-/// forces it. An entry that loads nothing breaks nobody by going.
-fn refuse_if_required(req: &Removing, extension: &ProjectExtension) -> Result<(), OpError> {
-    if req.force || (extension.declaration.is_none() && extension.lock.is_none()) {
-        return Ok(());
-    }
-    let dependents = req.inventory.dependents(extension.name);
-    if dependents.is_empty() {
-        return Ok(());
-    }
-    Err(OpError::coded(
-        crate::OpErrorKind::Conflict,
-        codes::E027,
-        format!(
-            "cannot uninstall '{}': required by {}",
-            extension.name,
-            dependents.join(", ")
-        ),
-    )
-    .with_suggestion("use --force to uninstall anyway, or remove dependent extensions first"))
+        writes,
+    })
 }
 
 fn not_installed(name: &str, why: Option<&str>) -> OpError {

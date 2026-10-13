@@ -302,7 +302,9 @@ behavior provide_mcp_remove_extension_tool "Provide MCP Remove Extension Tool" {
     In MCP server mode, the system MUST register a specforge.remove_extension
     tool that accepts name (required), force? and dry_run? (optional
     booleans, default false) and path? (as rename); dependents and stranded
-    entities are those of the project the path names. When dry_run is true, the tool MUST return a
+    entities are those of the project the path names. It judges dependents
+    as specforge remove does (the project's peer set), and a dry run
+    answers the refusal the removal would give. When dry_run is true, the tool MUST return a
     preview of the removal (including the stranded entities) without modifying
     specforge.json. The tool MUST remove the
     extension from specforge.json. If removing the extension strands

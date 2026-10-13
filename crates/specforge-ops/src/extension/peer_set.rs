@@ -8,11 +8,12 @@ use std::path::{Path, PathBuf};
 
 use specforge_installed::{Installed, LockSource, Module, Resolved};
 use specforge_package::peers::{Member, Peers};
-use specforge_protocol_types::PeerDependency;
+use specforge_protocol_types::{ExtensionDeclaration, PeerDependency};
 use specforge_wasm::WasmRuntime;
 
 use super::candidate::Candidate;
 use crate::OpError;
+use crate::view::ProjectView;
 
 /// One extension the project loads: what the peer rule reads of it, and where it comes from.
 #[derive(Debug, Clone, PartialEq)]
@@ -64,7 +65,9 @@ impl ProjectPeers {
         for (i, resolved) in resolution.in_load_order() {
             let member = match resolved {
                 Resolved::Builtin { name, .. } => {
-                    let declared = read.builtin(name)?;
+                    let Some(declared) = read.builtin(name)? else {
+                        continue;
+                    };
                     PeerMember {
                         name: (*name).to_string(),
                         version: declared.version().to_string(),
@@ -107,7 +110,6 @@ impl ProjectPeers {
         })
     }
 
-    #[cfg(test)]
     pub(crate) fn members(&self) -> &[PeerMember] {
         &self.members
     }
@@ -142,44 +144,87 @@ impl ProjectPeers {
     }
 }
 
-/// What a builtin or a `.wasm` file entry declares, read once each through the operation's runtime
-/// (ADR 0028 D7): what the peer set needs that the lock does not record.
+/// What a builtin or a `.wasm` file entry declares, read once each: through the operation's
+/// runtime (`add`, `update`, `init`), or from what the view's compile loaded, falling back to the
+/// view's runtime for an entry it did not load (`remove`). What the lock does not record (ADR 0028
+/// D7).
 pub(crate) struct Declarations<'r> {
-    runtime: &'r dyn WasmRuntime,
-    builtins: Vec<(String, Candidate)>,
-    files: Vec<(PathBuf, Option<Candidate>)>,
+    /// With no runtime (a view assembled in a test), an entry that was not loaded is no member.
+    runtime: Option<&'r dyn WasmRuntime>,
+    builtins: Vec<(String, ExtensionDeclaration)>,
+    files: Vec<(PathBuf, Option<ExtensionDeclaration>)>,
 }
 
 impl<'r> Declarations<'r> {
-    pub(crate) fn new(runtime: &'r dyn WasmRuntime) -> Self {
+    /// Declarations read through `runtime`.
+    pub(crate) fn through(runtime: &'r dyn WasmRuntime) -> Self {
         Declarations {
-            runtime,
+            runtime: Some(runtime),
             builtins: Vec::new(),
             files: Vec::new(),
         }
     }
 
-    /// The builtin `name`'s declaration (`Candidate::builtin`): E028 "the builtin '<name>' does not
-    /// load: …" when it does not.
-    pub(crate) fn builtin(&mut self, name: &str) -> Result<&Candidate, OpError> {
-        if let Some(at) = self.builtins.iter().position(|(read, _)| read == name) {
-            return Ok(&self.builtins[at].1);
+    /// The declarations `view`'s compile loaded: each builtin by its name, each `.wasm` file entry
+    /// that loaded by the file it names; anything else is read through the view's runtime.
+    pub(crate) fn loaded_by(view: &ProjectView<'r>) -> Self {
+        let declarations = view.registries().declarations();
+        let builtins = declarations
+            .iter()
+            .filter(|declared| super::builtin_name(declared.name()).is_some())
+            .map(|declared| (declared.name().to_string(), declared.clone()))
+            .collect();
+        let files = view
+            .root()
+            .map(|root| {
+                view.env()
+                    .enabled()
+                    .iter()
+                    .filter(|entry| entry.file.is_some() && entry.failure.is_none())
+                    .filter_map(|entry| {
+                        let file =
+                            specforge_common::ExtensionEntry::parse(&entry.entry).file(root)?;
+                        let declared = declarations.iter().find(|d| d.name() == entry.name)?;
+                        Some((file, Some(declared.clone())))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        Declarations {
+            runtime: view.runtime().map(|runtime| &**runtime),
+            builtins,
+            files,
         }
-        let candidate = Candidate::builtin(self.runtime, name)?;
-        self.builtins.push((name.to_string(), candidate));
-        Ok(&self.builtins.last().expect("just pushed").1)
+    }
+
+    /// The builtin `name`'s declaration (`Candidate::builtin`): E028 "the builtin '<name>' does not
+    /// load: …" when it does not; `None` when it was not loaded and there is no runtime to read it.
+    pub(crate) fn builtin(&mut self, name: &str) -> Result<Option<&ExtensionDeclaration>, OpError> {
+        if let Some(at) = self.builtins.iter().position(|(read, _)| read == name) {
+            return Ok(Some(&self.builtins[at].1));
+        }
+        let Some(runtime) = self.runtime else {
+            return Ok(None);
+        };
+        let candidate = Candidate::builtin(runtime, name)?;
+        self.builtins
+            .push((name.to_string(), candidate.declaration().clone()));
+        Ok(self.builtins.last().map(|(_, declared)| declared))
     }
 
     /// The declaration of the component at `path`, `None` when it can't be read or does not load:
     /// the compile reports that entry's E028, and it is no member.
-    pub(crate) fn file(&mut self, path: &Path) -> Option<&Candidate> {
+    pub(crate) fn file(&mut self, path: &Path) -> Option<&ExtensionDeclaration> {
         let at = match self.files.iter().position(|(read, _)| read == path) {
             Some(at) => at,
             None => {
-                let candidate = Module::read(path)
-                    .ok()
-                    .and_then(|module| Candidate::read(self.runtime, module.bytes()).ok());
-                self.files.push((path.to_path_buf(), candidate));
+                let declared = self.runtime.and_then(|runtime| {
+                    Module::read(path)
+                        .ok()
+                        .and_then(|module| Candidate::read(runtime, module.bytes()).ok())
+                        .map(|candidate| candidate.declaration().clone())
+                });
+                self.files.push((path.to_path_buf(), declared));
                 self.files.len() - 1
             }
         };
@@ -208,7 +253,7 @@ mod tests {
 
     #[specforge_test(
         invariant = "peer_dependency_satisfaction",
-        verify = "add, init and update judge the set check judges: the extensions the project's entries load"
+        verify = "add, init, update and remove judge the set check judges: the extensions the project's entries load"
     )]
     fn the_set_is_what_the_entries_load() {
         let dir = tempfile::tempdir().unwrap();
@@ -240,7 +285,8 @@ mod tests {
         .map(String::from)
         .to_vec();
 
-        let set = ProjectPeers::of(&installed, &entries, &mut Declarations::new(&runtime)).unwrap();
+        let set =
+            ProjectPeers::of(&installed, &entries, &mut Declarations::through(&runtime)).unwrap();
 
         let members: Vec<(&str, &str, &MemberOrigin)> = set
             .members()

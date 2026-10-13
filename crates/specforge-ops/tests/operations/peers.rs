@@ -489,7 +489,6 @@ fn removal_project(
     behavior = "remove_extension",
     verify = "remove and check agree: a removal check would report E027 for is refused, and a removal that passes leaves none"
 )]
-#[ignore = "fixed by T3"]
 fn remove_and_check_agree_on_the_project_peer_set() {
     use specforge_ops::extension::{self, RemoveRequest};
     use specforge_ops::testing::{BASE_1, DEP_1, NEEDS_SOFTWARE_1, NEEDS_SOFTWARE_9, probes};

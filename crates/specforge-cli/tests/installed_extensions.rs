@@ -939,7 +939,11 @@ fn a_name_two_entries_enable_is_refused_as_ambiguous() {
 )]
 fn removing_a_wasm_file_entry_another_requires_is_e027_unless_forced() {
     let dir = greet_file_project();
-    enable(dir.path(), json!(["@specforge/software", "greet.wasm"]));
+    // The dependent is enabled: a locked extension no entry enables is not judged.
+    enable(
+        dir.path(),
+        json!(["@specforge/software", "greet.wasm", "@acme/uses-greet"]),
+    );
     let lock = json!({
         "lockfile_version": 1,
         "entries": [{"name": "@acme/uses-greet", "version": "1.0.0", "source": "registry",
@@ -961,10 +965,41 @@ fn removing_a_wasm_file_entry_another_requires_is_e027_unless_forced() {
     );
     assert_eq!(
         enabled(dir.path()),
-        json!(["@specforge/software", "greet.wasm"])
+        json!(["@specforge/software", "greet.wasm", "@acme/uses-greet"])
     );
 
     let (ok, output) = remove(dir.path(), "@sdk/greet", &["--force"]);
+    assert!(ok, "{output}");
+    assert_eq!(
+        enabled(dir.path()),
+        json!(["@specforge/software", "@acme/uses-greet"])
+    );
+    assert_eq!(
+        std::fs::read(dir.path().join("specforge.lock")).unwrap(),
+        lock_before
+    );
+    assert!(dir.path().join("greet.wasm").is_file());
+}
+
+#[specforge_test(
+    behavior = "remove_extension",
+    verify = "a locked extension no specforge.json entry enables does not keep its peer from being removed"
+)]
+fn removing_a_wasm_file_entry_a_disabled_lock_entry_requires_is_accepted() {
+    let dir = greet_file_project();
+    // `@acme/uses-greet` is locked and requires `@sdk/greet`, but no entry enables it.
+    enable(dir.path(), json!(["@specforge/software", "greet.wasm"]));
+    let lock = json!({
+        "lockfile_version": 1,
+        "entries": [{"name": "@acme/uses-greet", "version": "1.0.0", "source": "registry",
+                     "wasm_hash": "00",
+                     "peer_dependencies": [{"name": "@sdk/greet", "version": "^0.1.0"}]}],
+    });
+    std::fs::write(dir.path().join("specforge.lock"), lock.to_string()).unwrap();
+    let lock_before = std::fs::read(dir.path().join("specforge.lock")).unwrap();
+
+    let (ok, output) = remove(dir.path(), "greet.wasm", &[]);
+
     assert!(ok, "{output}");
     assert_eq!(enabled(dir.path()), json!(["@specforge/software"]));
     assert_eq!(
