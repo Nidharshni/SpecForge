@@ -156,6 +156,15 @@ fn expression_positions_are_not_a_modification() {
     );
 }
 
+#[test]
+fn a_changed_expression_is_a_modification() {
+    let before = graph_with_metric("a < 1", 1);
+    let after = graph_with_metric("a < 2", 1);
+    let delta = compute_graph_delta(&before, &after);
+    assert_eq!(delta.modified_nodes.len(), 1, "{:?}", delta.modified_nodes);
+    assert_eq!(delta.modified_nodes[0].changed_fields, ["metric"]);
+}
+
 #[specforge_test(
     behavior = "compute_graph_delta",
     verify = "added and removed edges appear in delta"

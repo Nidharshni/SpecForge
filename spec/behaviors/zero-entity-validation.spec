@@ -422,5 +422,7 @@ behavior check_field_value_types "Check Field Value Types" {
   verify unit "a list on a field declared as a single value is an error"
   verify unit "an enum value suggests the closest declared value"
   verify unit "an export with a coerced string_list validates against the published schema"
+  verify unit "a single integer, boolean or date, or a mixed list, on a list field becomes a list of strings"
+  verify unit "a value of a shape its declared type never takes is an error"
   verify contract "Check Field Value Types: declared field types hold — registries_populated_fired, single_values_listed, mismatches_diagnosed, undeclared_untouched"
 }

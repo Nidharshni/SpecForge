@@ -865,3 +865,211 @@ fn schema_publish_describes_the_requested_format() {
         "brief schema exposes exactly id/kind/title"
     );
 }
+
+// --- Exports validate against what is published (ADR-NEW-01, plan 01) ---
+
+/// The messages for which `export` does not conform to `published`: the
+/// published schema's own check, one message per violation.
+fn conforms(published: &serde_json::Value, export: &serde_json::Value) -> Vec<String> {
+    validate(export, published, published, "#")
+}
+
+/// Copy `<repo>/<rel>` into a tempdir, leaving out `.specforge` and
+/// `target`; for the repository itself, only `specforge.json` and `spec/`.
+/// `export` records the schema cache in the project it exports, so a test
+/// never exports a committed directory.
+fn copy_project(rel: &str) -> tempfile::TempDir {
+    fn copy(from: &std::path::Path, to: &std::path::Path) {
+        std::fs::create_dir_all(to).unwrap();
+        for entry in std::fs::read_dir(from).unwrap() {
+            let entry = entry.unwrap();
+            let name = entry.file_name();
+            if name == ".specforge" || name == "target" {
+                continue;
+            }
+            let (from, to) = (entry.path(), to.join(&name));
+            if entry.file_type().unwrap().is_dir() {
+                copy(&from, &to);
+            } else {
+                std::fs::copy(&from, &to).unwrap();
+            }
+        }
+    }
+    let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let tmp = tempfile::TempDir::new().unwrap();
+    if rel == "." {
+        std::fs::copy(
+            repo.join("specforge.json"),
+            tmp.path().join("specforge.json"),
+        )
+        .unwrap();
+        copy(&repo.join("spec"), &tmp.path().join("spec"));
+    } else {
+        copy(&repo.join(rel), tmp.path());
+    }
+    tmp
+}
+
+/// The projects whose exports must validate against what they publish.
+const PUBLISHED_PROJECTS: [&str; 9] = [
+    ".",
+    "integrations/rust/spec",
+    "examples/todo-app",
+    "examples/shop",
+    "crates/specforge-cli/tests/fixtures/parity/clean",
+    "crates/specforge-cli/tests/fixtures/parity/body_parser_type",
+    "crates/specforge-cli/tests/fixtures/read_views/rv1",
+    "crates/specforge-cli/tests/fixtures/coverage/fx1",
+    "xtask/tests/fixtures/links",
+];
+
+/// Every named format's export of `dir` against the format's published
+/// schema; one message per violation, prefixed by the format.
+fn export_violations(dir: &std::path::Path, formats: &[&str]) -> Vec<String> {
+    let mut messages = Vec::new();
+    for format in formats {
+        let published = run_json(&["schema", "--publish", "--format", format], dir);
+        let export = run_json(&["export", "--format", format], dir);
+        messages.extend(
+            conforms(&published, &export)
+                .into_iter()
+                .map(|m| format!("{format}: {m}")),
+        );
+    }
+    messages
+}
+
+#[specforge_test(
+    behavior = "publish_schema_specification",
+    verify = "a context or brief export validates against the published schema of its format"
+)]
+#[ignore = "fixed by 01-T6"]
+fn agent_exports_validate_against_their_published_schema() {
+    let dir = setup_project_with_config(
+        r#"{"name":"t","version":"0.1.0","spec_root":"spec","extensions":["@specforge/software"]}"#,
+        &[(
+            "main.spec",
+            "spec \"fixture\" {\n  version \"1.0\"\n}\n\nbehavior register \"Register\" {\n  contract \"registers an id\"\n}\n",
+        )],
+    );
+    for with_schema in [false, true] {
+        for format in ["context", "brief"] {
+            let published = run_json(&["schema", "--publish", "--format", format], dir.path());
+            let mut args = vec!["export", "--format", format];
+            if with_schema {
+                args.push("--with-schema");
+            }
+            let export = run_json(&args, dir.path());
+            let messages = conforms(&published, &export);
+            assert!(
+                messages.is_empty(),
+                "{format} (with_schema {with_schema}):\n{}",
+                messages.join("\n")
+            );
+        }
+    }
+}
+
+const ADMITTED_SPEC: &str = r#"spec "fixture" {
+  version "1.0"
+}
+
+invariant unique_ids "Unique ids" {
+  guarantee "ids are unique"
+  expression expr {
+    duplicates < 1
+    collisions <= 0
+  }
+}
+
+behavior register "Register" {
+  contract   "registers an id"
+  invariants [unique_ids]
+  produces   [registered]
+  requires {
+    id_free "the id is not taken"
+  }
+  ensures {
+    id_taken "the id is taken"
+  }
+  maintains {
+    unique_ids "ids stay unique"
+  }
+}
+
+type Registration {
+  id     string
+  fields RegistrationFields
+  kind   string
+}
+
+type RegistrationFields {
+  entries string[]
+}
+
+event registered "Registered" {
+  payload Registration
+  sync {
+    timeout "5s"
+  }
+}
+
+failure_mode clash "Clash" {
+  cause    "two writers"
+  effect   "duplicate ids"
+  severity "high"
+  rpn      12
+  post_mitigation {
+    severity low
+    rpn      2
+  }
+}
+
+decision d1 "D" {
+  status       accepted
+  context      "c"
+  decision     "x"
+  consequences 5
+}
+"#;
+
+#[specforge_test(
+    behavior = "publish_schema_specification",
+    verify = "an export of a project with no errors validates against the published schema"
+)]
+#[ignore = "fixed by 01-T8"]
+fn an_export_of_a_project_check_admits_validates_against_its_published_schema() {
+    let dir = setup_project_with_config(
+        r#"{"name":"t","version":"0.1.0","spec_root":"spec","extensions":["@specforge/software","@specforge/product","@specforge/governance","@specforge/formal"]}"#,
+        &[("main.spec", ADMITTED_SPEC)],
+    );
+    specforge_cmd()
+        .args(["check"])
+        .arg(dir.path())
+        .assert()
+        .success();
+    let messages = export_violations(dir.path(), &["graph", "context", "brief"]);
+    assert!(messages.is_empty(), "{}", messages.join("\n"));
+}
+
+#[specforge_test(
+    behavior = "export_agent_graph_format",
+    verify = "output conforms to Graph Protocol schema"
+)]
+#[specforge_test(
+    behavior = "publish_schema_specification",
+    verify = "this repository's and its example projects' exports validate against their published schemas"
+)]
+#[ignore = "fixed by 01-T8"]
+fn this_repository_and_its_example_projects_export_what_they_publish() {
+    for rel in PUBLISHED_PROJECTS {
+        let dir = copy_project(rel);
+        specforge_cmd()
+            .args(["check"])
+            .arg(dir.path())
+            .assert()
+            .success();
+        let messages = export_violations(dir.path(), &["graph", "context", "brief"]);
+        assert!(messages.is_empty(), "{rel}:\n{}", messages.join("\n"));
+    }
+}
