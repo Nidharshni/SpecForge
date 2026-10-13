@@ -1,7 +1,7 @@
 //! `specforge remove` and `specforge.remove_extension`.
 
 use super::lock_plan::{Ask, Disabled, LockPlan, Purpose};
-use super::{NOT_FOUND, Origin, ProjectExtension, Selection};
+use super::{NOT_FOUND, Origin, ProjectExtension, Selection, not_installed};
 use crate::view::ProjectView;
 use crate::{OpError, OpErrorKind, Writes};
 use serde::Serialize;
@@ -292,15 +292,6 @@ fn remove_file(
         dry_run: req.dry_run,
         writes,
     })
-}
-
-fn not_installed(name: &str, why: Option<&str>) -> OpError {
-    let mut message = format!("extension '{name}' is not installed");
-    if let Some(why) = why {
-        message.push_str(&format!(" ({why})"));
-    }
-    OpError::new(OpErrorKind::ExtensionNotFound, NOT_FOUND, message)
-        .with_data(serde_json::json!({ "extension": name }))
 }
 
 /// The entities whose kind only `extension` defines, in id order.

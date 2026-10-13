@@ -907,7 +907,11 @@ behavior update_all_extensions "Update All Extensions" {
     could not write (E032) or the lock (E033); every file is put back, and no
     extension is reported updated. Only registry installs are updated: an
     extension installed from a local file (source local:<path>) MUST NOT be
-    replaced from a registry. When a registry-installed extension is
+    replaced from a registry. An update of one extension by name MUST
+    refuse a name the lock does not hold, before any registry is asked:
+    extension_not_found naming it (E072 when it is no package name; a
+    builtin's name is told that builtins update with specforge).
+    When a registry-installed extension is
     to be updated and no registry is configured in specforge.json, update
     MUST make no network call and MUST fail with E063, whose suggestion
     names the registries key.

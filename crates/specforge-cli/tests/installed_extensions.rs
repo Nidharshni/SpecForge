@@ -1259,3 +1259,41 @@ fn add_dry_run_refuses_what_add_refuses() {
     assert_eq!((dry_code, dry_stderr), (real_code, real_stderr));
     assert_eq!(tree(dir.path()), before, "a refused add writes nothing");
 }
+
+#[test]
+fn update_of_a_local_install_says_it_is_not_from_a_registry() {
+    let dir = greeting_project();
+    add_local_greet(dir.path());
+
+    let update = |name: &str| {
+        specforge()
+            .args(["update", name, "--path"])
+            .arg(dir.path())
+            .output()
+            .unwrap()
+    };
+    let out = update("@sdk/greet");
+    assert!(out.status.success(), "{out:?}");
+    let text = String::from_utf8(out.stdout).unwrap();
+    assert!(
+        text.starts_with(
+            "@sdk/greet is not from a registry (local:greet.wasm): update never replaces it\n"
+        ),
+        "{text}"
+    );
+
+    // A name the lock does not hold is refused, whatever it is.
+    for (name, code) in [
+        ("@nope/typo", "extension_not_found"),
+        ("Bad Name", "E072"),
+        ("@specforge/product", "extension_not_found"),
+    ] {
+        let out = update(name);
+        assert_eq!(out.status.code(), Some(1), "{name}: {out:?}");
+        let stderr = String::from_utf8(out.stderr).unwrap();
+        assert!(
+            stderr.contains(&format!("error[{code}]")),
+            "{name}: {stderr}"
+        );
+    }
+}

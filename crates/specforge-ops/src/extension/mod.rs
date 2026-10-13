@@ -42,6 +42,17 @@ use specforge_installed::LockSource;
 /// have.
 pub const NOT_FOUND: &str = "extension_not_found";
 
+/// The refusal for an extension the project has nothing under: `extension_not_found` "extension
+/// '<name>' is not installed", saying `why` when it is known.
+pub(crate) fn not_installed(name: &str, why: Option<&str>) -> crate::OpError {
+    let mut message = format!("extension '{name}' is not installed");
+    if let Some(why) = why {
+        message.push_str(&format!(" ({why})"));
+    }
+    crate::OpError::new(crate::OpErrorKind::ExtensionNotFound, NOT_FOUND, message)
+        .with_data(serde_json::json!({ "extension": name }))
+}
+
 /// Where an extension comes from.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Origin {
