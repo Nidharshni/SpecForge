@@ -4,7 +4,7 @@
 //! description names each choice. The tools that parse a format with a
 //! table accept its names and aliases and refuse any other name.
 
-use crate::support::{Served, TestProject, call_tool};
+use crate::support::{Serve, Served, TestProject, call_tool};
 use serde_json::{Value, json};
 use specforge_ops::coverage::STATUS;
 use specforge_ops::export::{AGENT_FORMAT, FORMAT};

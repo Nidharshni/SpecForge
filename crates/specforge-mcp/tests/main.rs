@@ -23,6 +23,7 @@ mod refusal_arguments;
 mod resources;
 mod revision;
 mod schema_reflection;
+mod served;
 mod served_project;
 mod stateless;
 mod stdio;

@@ -308,7 +308,7 @@ fn file_scope_lists_the_entities_anchored_to_the_file() {
         .file("src/auth.rs", "\n\npub fn login() {}\n")
         .file(
             "specforge-anchors.json",
-            &json!({"version": 1, "anchors": [
+            json!({"version": 1, "anchors": [
                 {"entity_id": "auth_login", "file": "src/auth.rs", "line": 3,
                  "symbol_name": "login", "item_kind": "fn", "scanner": "manual"},
                 {"entity_id": "cache_get", "file": "src/cache.rs", "line": 1,

@@ -39,9 +39,9 @@ fn server_with_delta() -> Served {
     project()
         .file(
             "features.spec",
-            &BETA.replace("behaviors [alpha]", "behaviors [alpha, delta]"),
+            BETA.replace("behaviors [alpha]", "behaviors [alpha, delta]"),
         )
-        .file("delta.spec", &ALPHA.replace("alpha", "delta"))
+        .file("delta.spec", ALPHA.replace("alpha", "delta"))
         .serve(&[extension()])
 }
 

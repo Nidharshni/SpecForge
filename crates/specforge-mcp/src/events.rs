@@ -2,7 +2,7 @@
 //! event the spec declares for it, recorded through the server's one
 //! [`EventSink`]. Events never leave the process (ADR 0022 D7): a production
 //! server's sink ([`Discard`]) keeps none, so what a server holds never
-//! grows with the requests it answered; a test's ([`testing::EventLog`])
+//! grows with the requests it answered; a test's ([`crate::testing::EventLog`])
 //! keeps every event, stamped, in order.
 
 use serde::Serialize;
@@ -268,7 +268,7 @@ impl McpEvent {
 
 /// Where a server's events go: the one seam every module records through.
 /// Two adapters: [`Discard`] (what a host runs: keeps nothing) and
-/// [`testing::EventLog`] (a test's: keeps each event, stamped, in order).
+/// [`crate::testing::EventLog`] (a test's: keeps each event, stamped, in order).
 pub trait EventSink: Send {
     /// Take `event`, which happened now.
     fn record(&mut self, event: McpEvent);
@@ -281,122 +281,4 @@ pub struct Discard;
 
 impl EventSink for Discard {
     fn record(&mut self, _: McpEvent) {}
-}
-
-/// The test adapter (`features = ["testing"]`).
-#[cfg(feature = "testing")]
-pub mod testing {
-    use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
-
-    use chrono::{DateTime, SecondsFormat, Utc};
-    use serde_json::{Map, Value};
-
-    use super::{EventSink, McpEvent};
-
-    /// One event a log kept, with the time it was recorded.
-    #[derive(Debug, Clone, PartialEq)]
-    pub struct Recorded {
-        pub event: McpEvent,
-        pub timestamp: DateTime<Utc>,
-    }
-
-    impl Recorded {
-        /// Its name as `spec/events` declares it (the serialized `event`
-        /// tag).
-        pub fn name(&self) -> String {
-            self.serialized().0
-        }
-
-        /// Its payload as `spec/events` declares it: the event serialized,
-        /// its tag removed, `timestamp` added (RFC 3339, UTC,
-        /// milliseconds).
-        pub fn payload(&self) -> Value {
-            let mut payload = self.serialized().1;
-            payload.insert(
-                "timestamp".into(),
-                Value::String(self.timestamp.to_rfc3339_opts(SecondsFormat::Millis, true)),
-            );
-            Value::Object(payload)
-        }
-
-        /// The event's name and its payload without `timestamp`.
-        fn serialized(&self) -> (String, Map<String, Value>) {
-            let Value::Object(mut payload) =
-                serde_json::to_value(&self.event).expect("an event serializes")
-            else {
-                unreachable!("a tagged event serializes to an object");
-            };
-            let Some(Value::String(name)) = payload.remove("event") else {
-                unreachable!("a tagged event carries its name");
-            };
-            (name, payload)
-        }
-    }
-
-    /// Keeps every event, in the order recorded. Clones share the log: a
-    /// test keeps one and gives the server another
-    /// (`McpServer::with_events`).
-    #[derive(Debug, Clone, Default)]
-    pub struct EventLog {
-        kept: Arc<Mutex<Vec<Recorded>>>,
-    }
-
-    impl EventLog {
-        pub fn new() -> Self {
-            Self::default()
-        }
-
-        fn kept(&self) -> MutexGuard<'_, Vec<Recorded>> {
-            self.kept.lock().unwrap_or_else(PoisonError::into_inner)
-        }
-
-        /// Everything recorded so far, oldest first.
-        pub fn recorded(&self) -> Vec<Recorded> {
-            self.kept().clone()
-        }
-
-        /// How many events were recorded.
-        pub fn len(&self) -> usize {
-            self.kept().len()
-        }
-
-        pub fn is_empty(&self) -> bool {
-            self.kept().is_empty()
-        }
-
-        /// The names of every event recorded, oldest first.
-        pub fn names(&self) -> Vec<String> {
-            self.kept().iter().map(Recorded::name).collect()
-        }
-
-        /// The payloads of every `name` event, oldest first, without their
-        /// `timestamp`. Panics when no `McpEvent` variant is called `name`
-        /// (read from `McpEvent`'s derived schema), so a misspelt name
-        /// fails instead of matching nothing.
-        pub fn named(&self, name: &str) -> Vec<Value> {
-            let document = specforge_common::shape::document::<McpEvent>();
-            let known = document["oneOf"].as_array().is_some_and(|branches| {
-                branches
-                    .iter()
-                    .any(|branch| branch["properties"]["event"]["enum"][0] == name)
-            });
-            assert!(known, "no McpEvent is called {name}");
-            self.kept()
-                .iter()
-                .filter_map(|recorded| {
-                    let (event, payload) = recorded.serialized();
-                    (event == name).then_some(Value::Object(payload))
-                })
-                .collect()
-        }
-    }
-
-    impl EventSink for EventLog {
-        fn record(&mut self, event: McpEvent) {
-            self.kept().push(Recorded {
-                event,
-                timestamp: Utc::now(),
-            });
-        }
-    }
 }

@@ -794,7 +794,7 @@ fn server_with_report(tests: &[(&str, &str)]) -> Served {
         )
         .file(
             "specforge-report.json",
-            &json!({"results": {"two": {"tests": tests}}}).to_string(),
+            json!({"results": {"two": {"tests": tests}}}).to_string(),
         )
         .serve(&[extension()])
 }

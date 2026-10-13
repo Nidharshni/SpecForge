@@ -1,13 +1,13 @@
 //! What a test reads of the events a server records (ADR 0057): every
 //! server a test builds through support records into an
-//! [`EventLog`](specforge_mcp::events::testing::EventLog) the test keeps a
+//! [`EventLog`](specforge_mcp::testing::EventLog) the test keeps a
 //! clone of. A production server records into `Discard`, which keeps none.
 
 use std::ops::{Deref, DerefMut};
 
 use serde_json::{Value, json};
 use specforge_mcp::McpServer;
-use specforge_mcp::events::testing::EventLog;
+use specforge_mcp::testing::EventLog;
 
 /// What can show the events its server recorded.
 pub trait Logs {
@@ -28,6 +28,12 @@ pub fn logged(server: McpServer) -> Logged {
     Logged {
         server: server.with_events(log.clone()),
         log,
+    }
+}
+
+impl Logs for specforge_mcp::testing::Served {
+    fn log(&self) -> &EventLog {
+        specforge_mcp::testing::Served::log(self)
     }
 }
 

@@ -20,6 +20,8 @@ pub mod subscriptions;
 mod surface_call;
 pub mod surface_table;
 pub mod target;
+#[cfg(feature = "testing")]
+pub mod testing;
 pub mod tool;
 pub mod tools;
 mod uri_template;
@@ -57,7 +59,7 @@ impl McpServer {
     }
 
     /// The same server, its events recorded into `sink` instead of
-    /// discarded (a test's `events::testing::EventLog`). Every server
+    /// discarded (a test's `testing::EventLog`). Every server
     /// records into [`events::Discard`] until given another sink.
     pub fn with_events(mut self, sink: impl EventSink + 'static) -> Self {
         self.state.events = Box::new(sink);

@@ -55,7 +55,7 @@ fn server_with_unformatted() -> (Served, std::path::PathBuf) {
     let server = project()
         .file("test.spec", "")
         .file("a.spec", UNFORMATTED)
-        .file("b.spec", &UNFORMATTED.replace("messy", "other"))
+        .file("b.spec", UNFORMATTED.replace("messy", "other"))
         .serve(&[TestExtension::software()]);
     let root = server.root().to_path_buf();
     (server, root)

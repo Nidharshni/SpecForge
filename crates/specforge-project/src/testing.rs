@@ -138,6 +138,13 @@ impl TestProject {
         self
     }
 
+    /// Install the enabled extensions that are not builtins, as [`Self::serving`] does, for a test that gives its
+    /// own runtime to a server or a compile ([`Self::compile_in`], `Served::initialized_in`).
+    pub fn installing_enabled(self) -> Self {
+        self.install_enabled();
+        self
+    }
+
     /// The project directory (where `specforge.json` is).
     pub fn root(&self) -> &Path {
         self.dir.path()
@@ -279,26 +286,25 @@ impl TestProject {
     fn refresh(&self) {
         self.write_config();
         if self.served.is_some() {
-            let entries = self
-                .extensions
-                .clone()
-                .or_else(|| {
-                    self.config
-                        .as_ref()
-                        .and_then(|c| c["extensions"].as_array())
-                        .map(|a| {
-                            a.iter()
-                                .filter_map(|e| e.as_str().map(str::to_string))
-                                .collect()
-                        })
-                })
-                .unwrap_or_default();
-            specforge_installed::testing::install_enabled(
-                self.root(),
-                &entries,
-                &crate::builtins(),
-            );
+            self.install_enabled();
         }
+    }
+
+    /// Install what `specforge.json` enables and is neither a builtin nor a `.wasm` file.
+    fn install_enabled(&self) {
+        let entries: Vec<String> = match (&self.extensions, &self.config) {
+            (Some(chosen), _) => chosen.clone(),
+            (None, Some(config)) => config["extensions"]
+                .as_array()
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|e| e.as_str().map(str::to_string))
+                        .collect()
+                })
+                .unwrap_or_default(),
+            (None, None) => Vec::new(),
+        };
+        specforge_installed::testing::install_enabled(self.root(), &entries, &crate::builtins());
     }
 
     /// Write `specforge.json`, its `extensions` merged in. It is what `specforge init` writes: pretty-printed,

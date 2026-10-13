@@ -31,9 +31,9 @@ serde_json = { workspace = true }
 chrono = { version = "0.4.41", optional = true }
 
 [features]
-# `specforge_mcp::events::testing::EventLog`: a sink that keeps every event
-# a server records, stamped, for tests (`McpServer::with_events`).
-testing = ["dep:chrono"]
+# `specforge_mcp::testing`: the MCP driver over a `TestProject` (`Served`), the request helpers and `EventLog`, a
+# sink that keeps every event a server records, stamped, for tests (`McpServer::with_events`).
+testing = ["dep:chrono", "specforge-project/testing", "specforge-ops/testing", "specforge-wasm/testing"]
 
 [dev-dependencies]
 specforge-mcp = { path = ".", features = ["testing"] }
