@@ -339,3 +339,43 @@ fn export_with_max_tokens_within_budget_includes_metadata() {
     expected.sort();
     assert_eq!(all, expected);
 }
+
+#[test]
+fn a_budget_counts_each_nodes_coverage_status() {
+    use specforge_emitter::{EmitOptions, estimate_tokens};
+    use std::collections::BTreeMap;
+
+    let graph = build_hub_graph();
+    let verdicts: BTreeMap<String, specforge_coverage::Verdict> = HUB_DEGREES
+        .iter()
+        .map(|(id, _)| {
+            (
+                id.to_string(),
+                specforge_coverage::Verdict {
+                    obligations: 1,
+                    proven: 1,
+                    ..Default::default()
+                },
+            )
+        })
+        .collect();
+    let plain = specforge_emitter::emit(&graph, &EmitOptions::default()).unwrap();
+    let budget = estimate_tokens(&plain);
+    let fitted = specforge_emitter::emit(
+        &graph,
+        &EmitOptions {
+            coverage: Some(&verdicts),
+            token_budget: Some(budget),
+            ..EmitOptions::default()
+        },
+    )
+    .unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&fitted).unwrap();
+    let truncated = parsed["token_budget"]["truncated_entities"]
+        .as_array()
+        .expect("the keys no longer fit the plain export's budget");
+    assert!(!truncated.is_empty());
+    for node in parsed["nodes"].as_array().unwrap() {
+        assert_eq!(node["coverage_status"], "covered", "{node}");
+    }
+}

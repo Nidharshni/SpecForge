@@ -321,3 +321,66 @@ fn context_lifts_the_fields_an_extension_declares_headline() {
         "{t}"
     );
 }
+
+#[test]
+fn a_headline_field_named_coverage_status_is_not_lifted() {
+    use specforge_registry::{FieldRegistry, FieldRegistryEntry};
+    use std::collections::BTreeMap;
+
+    let mut fields = FieldMap::new();
+    fields.push(
+        Sym::new("coverage_status"),
+        FieldValue::String("x".to_string()),
+    );
+    let mut graph = Graph::new();
+    graph.add_node(Node {
+        id: EntityId { raw: Sym::new("b") },
+        kind: EntityKind {
+            raw: Sym::new("behavior"),
+        },
+        title: None,
+        fields,
+        source_span: span(),
+        methods: Vec::new(),
+    });
+    let mut registry = FieldRegistry::new();
+    registry.register(
+        FieldRegistryEntry::new(
+            "behavior",
+            "@test/ext",
+            specforge_registry::FieldDescriptor {
+                name: "coverage_status".to_string(),
+                field_type: "string".to_string(),
+                headline: true,
+                ..Default::default()
+            },
+        )
+        .unwrap(),
+    );
+    let verdicts = BTreeMap::from([(
+        "b".to_string(),
+        specforge_coverage::Verdict {
+            obligations: 1,
+            proven: 1,
+            ..Default::default()
+        },
+    )]);
+    let emit = |coverage| {
+        specforge_emitter::emit(
+            &graph,
+            &specforge_emitter::EmitOptions {
+                format: specforge_emitter::EmitFormat::Context,
+                field_registry: Some(&registry),
+                coverage,
+                ..Default::default()
+            },
+        )
+        .unwrap()
+    };
+    let plain: serde_json::Value = serde_json::from_str(&emit(None)).unwrap();
+    assert!(plain["nodes"][0].get("coverage_status").is_none());
+    let text = emit(Some(&verdicts));
+    assert_eq!(text.matches("\"coverage_status\"").count(), 1, "{text}");
+    let parsed: serde_json::Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(parsed["nodes"][0]["coverage_status"], "covered");
+}

@@ -16,6 +16,7 @@ use crate::view::ProjectView;
 use crate::{OpError, OpErrorKind, Refusal};
 use specforge_common::Diagnostic;
 use specforge_emitter::{EmitFormat, EmitOptions, EmitterError, SchemaVersion, emit};
+use specforge_project::coverage::ProjectCoverage;
 use std::path::PathBuf;
 
 /// An export format.
@@ -119,6 +120,10 @@ pub struct Request<'a> {
     /// version as the project's schema, not newer. Checked whatever the
     /// format; never applied (the export carries the schema's own version).
     pub schema_version: Option<&'a str>,
+    /// Give every exported node whose entity has a verdict its coverage
+    /// status (`coverage_status`). `None`, the default: no node carries one.
+    /// Query's `include_coverage` sets it; `specforge export` never does.
+    pub coverage: Option<&'a ProjectCoverage>,
 }
 
 impl Request<'_> {
@@ -205,6 +210,7 @@ fn export_versioned(
         token_budget: request.max_tokens,
         kind_registry: Some(view.registries().kinds()),
         field_registry: Some(view.registries().fields()),
+        coverage: request.coverage.map(|coverage| &coverage.verdicts),
     };
     emit(view.graph(), &options).map_err(|error| failure(view, error))
 }

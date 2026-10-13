@@ -1083,11 +1083,14 @@ behavior query_graph_multi_resolution "Query Graph at Multiple Resolutions" {
     know matches nothing and is reported as I020 with the closest kind.
     Kind names are extension-defined; examples use placeholders.
     --format selects an agent format (graph, context, brief) and
-    --include-coverage gives each entity its coverage status. The output
-    MUST be the export of the entity's subgraph under the export schema
-    policy: valid JSON conforming to the Graph Protocol schema with a
-    schema_version field (a graph-format query references the published
-    schema). An entity that does not exist MUST be E003, naming the closest
+    --include-coverage gives each entity its coverage status
+    (coverage_status: covered, partial or uncovered), written by the
+    export itself, last in each entity. The output MUST be the export of
+    the entity's subgraph under the export schema policy: valid JSON
+    conforming to the published Graph Protocol schema of its format, with
+    or without coverage, with a schema_version field (a graph-format query
+    references the published schema). An entity that does not exist MUST
+    be E003, naming the closest
     entity, with exit code 1. The CLI and MCP specforge.query MUST return
     the same document for the same arguments. This enables agents to
     request exactly the context slice they need without consuming the full
@@ -1103,6 +1106,7 @@ behavior query_graph_multi_resolution "Query Graph at Multiple Resolutions" {
   verify unit "a non-existent entity is E003 naming the closest entity"
   verify unit "--include-coverage gives each entity its coverage status"
   verify unit "output conforms to Graph Protocol schema"
+  verify unit "a query with --include-coverage validates against the published schema of its format"
   verify unit "output includes schema_version field"
   verify property "querying same entity at same depth produces identical subgraph"
   verify unit "filter_nodes with field predicate"

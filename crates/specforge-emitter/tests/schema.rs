@@ -1634,3 +1634,56 @@ fn a_plain_export_carries_the_given_schemas_version() {
     let document: serde_json::Value = serde_json::from_str(&json).unwrap();
     assert_eq!(document["format_version"], "1.0");
 }
+
+#[specforge_test(
+    behavior = "publish_schema_specification",
+    verify = "the published schema of every format admits a node's coverage_status"
+)]
+fn every_published_format_admits_a_nodes_coverage_status() {
+    use specforge_common::shape::violations;
+    use std::collections::BTreeMap;
+
+    let schema = sample_schema();
+    let mut graph = Graph::new();
+    graph.add_node(node("alpha", "behavior", Some("Alpha")));
+    let verdicts = BTreeMap::from([(
+        "alpha".to_string(),
+        specforge_coverage::Verdict {
+            obligations: 1,
+            proven: 1,
+            ..Default::default()
+        },
+    )]);
+    for format in [EmitFormat::Json, EmitFormat::Context, EmitFormat::Brief] {
+        let text = specforge_emitter::emit(
+            &graph,
+            &EmitOptions {
+                format,
+                schema: &schema,
+                attach_schema: true,
+                coverage: Some(&verdicts),
+                ..EmitOptions::default()
+            },
+        )
+        .unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&text).unwrap();
+        let published = publish(&schema, format).unwrap();
+        assert_eq!(
+            violations(&published, &parsed),
+            Vec::<String>::new(),
+            "{format:?}"
+        );
+        assert_eq!(parsed["nodes"][0]["coverage_status"], "covered");
+        let node_schema = match format {
+            EmitFormat::Json => &published["$defs"]["node_behavior"],
+            _ => &published["properties"]["nodes"]["items"],
+        };
+        assert_eq!(
+            node_schema["properties"]["coverage_status"],
+            serde_json::json!({"type": "string", "enum": ["covered", "partial", "uncovered"]}),
+            "{format:?}"
+        );
+        let required = node_schema["required"].as_array().unwrap();
+        assert!(!required.contains(&serde_json::json!("coverage_status")));
+    }
+}

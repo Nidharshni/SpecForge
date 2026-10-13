@@ -70,6 +70,7 @@ impl CoreTool for Tool {
             max_tokens: args.max_tokens,
             schema,
             schema_version: args.schema_version.as_deref(),
+            coverage: None,
         };
 
         let document = export::export(&view, &request).map_err(Self::refused)?;
