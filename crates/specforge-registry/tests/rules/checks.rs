@@ -728,7 +728,6 @@ fn message_template_interpolates_field_and_value() {
     behavior = "emit_diagnostic_from_pattern",
     verify = "message template interpolates {allowed} with a one_of rule's values"
 )]
-#[ignore = "fixed by 01-T1"]
 fn a_one_of_rule_fills_allowed_with_its_values() {
     let mut declared = rule("W900", "field_value_constraint");
     declared.target_kind = Some("behavior".to_string());

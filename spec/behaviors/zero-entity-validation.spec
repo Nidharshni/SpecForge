@@ -131,13 +131,14 @@ behavior emit_diagnostic_from_pattern "Emit Diagnostic From Pattern" {
   }
   ensures {
     diagnostic_emitted    "Diagnostic emitted with interpolated message, configured code, and correct severity"
-    template_interpolated "All interpolation variables ({id}, {kind}, {field}, {value}) resolved in messageTemplate"
+    template_interpolated "All interpolation variables ({id}, {kind}, {field}, {value}, and {allowed} for a one_of constraint) resolved in messageTemplate"
   }
   contract   """
     When a declarative validation pattern detects a violation, the engine
     MUST emit a diagnostic using the pattern's messageTemplate with
     interpolation variables: {id} for the entity ID, {kind} for the
-    entity kind, {field} for the field name, {value} for the field value.
+    entity kind, {field} for the field name, {value} for the field value,
+    {allowed} for a one_of constraint's values joined by commas.
     The diagnostic code MUST be the pattern's code field. The severity
     MUST match the pattern's severity field (error, warning, info).
   """
