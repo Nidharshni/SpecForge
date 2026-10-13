@@ -388,6 +388,7 @@ fn file_watchers_follow_what_the_session_is_built_from() {
         absolute,
         vec![
             format!("{root}/**/*.spec"),
+            format!("{root}/**/*"),
             format!("{root}/specforge.json"),
             format!("{root}/specforge.lock"),
             format!("{root}/ext/local.wasm"),
@@ -413,6 +414,10 @@ fn file_watchers_follow_what_the_session_is_built_from() {
     );
     assert!(
         relative.contains(&(dir.path().to_path_buf(), "**/*.spec".to_string())),
+        "{relative:?}"
+    );
+    assert!(
+        relative.contains(&(dir.path().to_path_buf(), "**/*".to_string())),
         "{relative:?}"
     );
 
@@ -600,7 +605,6 @@ fn the_watchers_cover_a_symlinked_sources_target() {
     behavior = "classify_project_changes",
     verify = "the LSP asks its client to report every directory created or deleted under the project root"
 )]
-#[ignore = "fixed by T5"]
 fn the_client_reports_directories_under_the_root() {
     use tower_lsp::lsp_types::{GlobPattern, WatchKind};
 

@@ -408,6 +408,7 @@ fn config_lock_and_loaded_modules_are_environment_inputs() {
         session.inputs().watched(),
         vec![
             Watched::Sources(root.to_path_buf()),
+            Watched::Directories(root.to_path_buf()),
             Watched::File(root.join("specforge.json")),
             Watched::File(root.join("specforge.lock")),
             Watched::File(root.join("ext/local.wasm")),

@@ -219,6 +219,11 @@ pub struct WatchRoot {
 pub enum Watched {
     /// Every `.spec` file under this directory, at any depth: the spec root.
     Sources(PathBuf),
+    /// Every entry created or deleted under this directory, at any depth: the
+    /// project root, and the spec root when it lies outside the root. A
+    /// directory created, moved or deleted there reaches every source and
+    /// input under it (ADR 0073).
+    Directories(PathBuf),
     /// This one file: the config, the lock, a module, the build cache, a
     /// file the checks read.
     File(PathBuf),
@@ -302,8 +307,9 @@ impl SessionInputs {
         watch_roots
     }
 
-    /// What an editor client must report: the spec root's `.spec` files,
-    /// then the config, the lock, each module, the build cache, each named
+    /// What an editor client must report: the spec root's `.spec` files, every
+    /// entry created or deleted under the root (and under the spec root when
+    /// it lies outside it), then the config, the lock, each module, the build cache, each named
     /// file and each missing named file's directory. Each path is canonical
     /// (as the checks read it, `..` resolved), re-spelled from the root as
     /// the session was opened when it lies under it (the spelling the
@@ -313,7 +319,10 @@ impl SessionInputs {
             return Vec::new();
         };
         let spelled = |path: &Path| disk.respell(path);
+        let spec_root_apart = !disk.canonical.spec_root.starts_with(&disk.canonical.root);
         std::iter::once(Watched::Sources(spelled(&disk.spec_root)))
+            .chain(std::iter::once(Watched::Directories(spelled(&disk.root))))
+            .chain(spec_root_apart.then(|| Watched::Directories(spelled(&disk.spec_root))))
             .chain(
                 [&disk.config, &disk.lock]
                     .into_iter()
@@ -821,6 +830,7 @@ mod tests {
             inputs.watched(),
             vec![
                 Watched::Sources(root.join("spec")),
+                Watched::Directories(root.to_path_buf()),
                 Watched::File(root.join("specforge.json")),
                 Watched::File(root.join("specforge.lock")),
                 Watched::File(root.join("ext/local.wasm")),
