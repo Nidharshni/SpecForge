@@ -165,7 +165,7 @@ Implement `pub fn render_json(model: &ModelIntermediate, options: &ModelOptions)
 
 **Tests:**
 - Output is valid JSON
-- model_version present
+- schema_version present
 - Entities have correct field structure
 - Relationships have cardinality strings
 - No compiler metadata (testable, singleton, etc.)

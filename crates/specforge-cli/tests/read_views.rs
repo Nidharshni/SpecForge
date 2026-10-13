@@ -798,10 +798,10 @@ fn contract_read_views() {
         rows["entities"][0]["status"].as_str().unwrap().to_string()
     };
     assert_eq!(alpha_status(), "uncovered");
-    record_alpha(root, "fail");
+    record_alpha(root, "failed");
     assert_eq!(alpha_status(), "partial");
     assert_eq!(alpha_status(), "partial");
-    record_alpha(root, "pass");
+    record_alpha(root, "passed");
     assert_eq!(alpha_status(), "covered");
     assert_eq!(
         cli_json(&["stats", "--format", "json", "--path", s(root)])["proof_pct"],

@@ -506,9 +506,9 @@
         },
         {
           "default_value": null,
-          "description": "Summary of the residual risk state after mitigation",
+          "description": "Residual risk after mitigation: severity, occurrence, detection and rpn",
           "edge": null,
-          "field_type": "string",
+          "field_type": "block",
           "file_reference": false,
           "inverse_of": null,
           "name": "post_mitigation",

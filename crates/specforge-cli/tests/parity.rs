@@ -1319,9 +1319,9 @@ fn analyze_project(root: &Path) {
 /// A test report proving `widget` and, when `orphan` is set, naming an
 /// entity the project does not have.
 fn analyze_report(root: &Path, orphan: Option<&str>) -> String {
-    let mut results = json!({"widget": {"tests": [{"name": "w", "status": "pass"}]}});
+    let mut results = json!({"widget": {"tests": [{"name": "w", "status": "passed"}]}});
     if let Some(id) = orphan {
-        results[id] = json!({"tests": [{"name": "x", "status": "pass"}]});
+        results[id] = json!({"tests": [{"name": "x", "status": "passed"}]});
     }
     let path = root.join("report.json");
     std::fs::write(
@@ -1749,8 +1749,8 @@ fn collect_project(root: &Path) {
     std::fs::write(
         root.join("target/specforge/demo.json"),
         json!({"entries": [
-            {"entity_id": "alpha", "test_name": "works", "verify": "works", "status": "pass"},
-            {"entity_id": "omega", "test_name": "lost", "status": "pass"}
+            {"entity_id": "alpha", "test_name": "works", "verify": "works", "status": "passed"},
+            {"entity_id": "omega", "test_name": "lost", "status": "passed"}
         ]})
         .to_string(),
     )

@@ -273,7 +273,7 @@ behavior b_half "Half" {
     .unwrap();
     std::fs::write(
         dir.path().join("specforge-report.json"),
-        r#"{"runner":"fixture","results":{"b_proven":{"tests":[{"name":"t1","status":"pass","verify":"works"}]},"b_half":{"tests":[{"name":"t2","status":"pass","verify":"works"}]}}}"#,
+        r#"{"runner":"fixture","results":{"b_proven":{"tests":[{"name":"t1","status":"passed","verify":"works"}]},"b_half":{"tests":[{"name":"t2","status":"passed","verify":"works"}]}}}"#,
     )
     .unwrap();
     dir

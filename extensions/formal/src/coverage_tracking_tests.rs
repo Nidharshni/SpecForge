@@ -21,8 +21,8 @@ fn coverage_tracking_lists_what_the_coverage_rule_does_not_prove() {
              "fields": {"tests": "tests/x.rs"}}
         ],
         "test_results": {"results": {
-            "b1": {"tests": [{"name": "t", "status": "pass", "verify": "works"}]},
-            "feat1": {"tests": [{"name": "u", "status": "pass"}]}
+            "b1": {"tests": [{"name": "t", "status": "passed", "verify": "works"}]},
+            "feat1": {"tests": [{"name": "u", "status": "passed"}]}
         }}
     }));
     let all = pass_coverage_tracking(&input);

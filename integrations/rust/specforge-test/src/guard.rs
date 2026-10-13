@@ -1,5 +1,6 @@
 use crate::atexit;
-use crate::registry::{self, TestOutcome, TestRecordEntry};
+use crate::registry::{self, TestRecordEntry};
+use specforge_protocol_types::TestStatus;
 use std::time::Instant;
 
 pub struct TestGuard {
@@ -97,22 +98,22 @@ impl TestGuard {
 
 impl Drop for TestGuard {
     fn drop(&mut self) {
-        let outcome = if self.expect_panic {
+        let status = if self.expect_panic {
             // C11-04: a panic under #[should_panic] is the success path —
             // recording Fail made every should_panic test count against
             // coverage.
             if std::thread::panicking() {
-                TestOutcome::Pass
+                TestStatus::Passed
             } else {
                 // should_panic tests that never panicked are harness
                 // failures; the harness itself catches that case, but the
                 // guard still ran, so record Fail.
-                TestOutcome::Fail
+                TestStatus::Failed
             }
         } else if std::thread::panicking() {
-            TestOutcome::Fail
+            TestStatus::Failed
         } else {
-            TestOutcome::Pass
+            TestStatus::Passed
         };
 
         let entry = TestRecordEntry {
@@ -123,7 +124,7 @@ impl Drop for TestGuard {
             file: self.file.to_string(),
             verify: self.verify.map(|s| s.to_string()),
             duration_ms: u64::try_from(self.started.elapsed().as_millis()).unwrap_or(u64::MAX),
-            outcome,
+            status,
         };
         registry::record(entry);
     }

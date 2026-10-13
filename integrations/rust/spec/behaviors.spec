@@ -49,7 +49,7 @@ behavior record_test_result_on_drop "Record Test Result on Drop" {
   features   [test_annotation]
   category   command
   invariants [drop_guard_correctness]
-  types      [TestGuard, TestRecordEntry, TestOutcome]
+  types      [TestGuard, TestRecordEntry, TestStatus]
   ports      [TestRegistry]
   produces   [test_result_recorded]
   contract   """
@@ -63,7 +63,7 @@ behavior record_test_result_on_drop "Record Test Result on Drop" {
   }
   ensures {
     entry_recorded  "TestRegistry contains exactly one new entry for this guard"
-    status_correct  "status is fail iff std::thread::panicking() was true"
+    status_correct  "status is failed iff std::thread::panicking() was true"
     no_panic_change "guard does not alter panic propagation"
   }
   verify unit "passing test records pass"

@@ -341,28 +341,6 @@
       "fields": [
         {
           "default_value": null,
-          "description": "The type category (e.g. struct, enum, alias, opaque)",
-          "edge": null,
-          "field_type": "string",
-          "file_reference": false,
-          "inverse_of": null,
-          "name": "kind",
-          "required": false,
-          "target_kind": null
-        },
-        {
-          "default_value": null,
-          "description": "Structured field definitions for this type",
-          "edge": null,
-          "field_type": "block",
-          "file_reference": false,
-          "inverse_of": null,
-          "name": "fields",
-          "required": false,
-          "target_kind": null
-        },
-        {
-          "default_value": null,
           "derived_from": "type_expressions",
           "description": "Types composed or referenced by this type (derived from its field types)",
           "edge": "TypeComposesType",
@@ -409,7 +387,7 @@
       ],
       "has_body_parser": true,
       "incremental": null,
-      "inference_guide": "Look for domain model structs, data transfer objects, API request/response shapes, database entities, and enum definitions that carry business meaning. Signals: struct/class definitions in models/ or domain/ directories; TypeScript interfaces/types for API contracts; protobuf/GraphQL/JSON Schema type definitions; ORM model classes; enum types with business variants. Use open_fields to list the type's fields. Set kind field to 'struct', 'enum', 'alias', or 'opaque'. Reference composed_types for nested or referenced types. Skip: internal implementation structs, builder patterns, framework-generated types, test fixtures.",
+      "inference_guide": "Look for domain model structs, data transfer objects, API request/response shapes, database entities, and enum definitions that carry business meaning. Signals: struct/class definitions in models/ or domain/ directories; TypeScript interfaces/types for API contracts; protobuf/GraphQL/JSON Schema type definitions; ORM model classes; enum types with business variants. List the type's members in its body, one `name Type` per line (with `@optional` where it may be absent). Reference composed_types for nested or referenced types. Skip: internal implementation structs, builder patterns, framework-generated types, test fixtures.",
       "keyword": "type",
       "lsp_icon": "Struct",
       "name": "Type",

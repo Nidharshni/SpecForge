@@ -1,5 +1,6 @@
 //! The order the registry build reads its declarations in.
 
+use specforge_extension_sdk::PeerDependency;
 use specforge_extension_sdk::prelude::*;
 use specforge_protocol_types::ExtensionDeclaration;
 use specforge_registry::{DeclaredPass, build_registries};

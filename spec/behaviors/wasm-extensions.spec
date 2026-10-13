@@ -534,10 +534,12 @@ behavior dispatch_collector "Dispatch Collector" {
     The export answers with test results grouped by entity:
     `{"entity_results": [{"entity_id", "test_results": [{"name", "status",
     "verify"?, "duration_ms"?}]}], "unlinked"?: [{"name", "path",
-    "status"}]}`, where status is passed, failed or skipped and `unlinked`
-    lists tests the report doesn't link to an entity. A trap or an answer
-    that is not a CollectOutput (a test without a name, an empty object) is
-    E028 naming the collector, never empty results. `--no-run`
+    "status"}]}`, where status is the protocol's TestStatus, passed, failed
+    or skipped, read strictly, and `unlinked` lists tests the report doesn't
+    link to an entity. A trap or an answer that is not a CollectOutput (a
+    test without a name, a status outside passed, failed and skipped, an
+    empty object) is E028 naming the collector, never empty results or a
+    skipped test. `--no-run`
     and `--report` skip running and dispatch an existing report.
   """
   produces   [collector_dispatched]
@@ -562,23 +564,28 @@ behavior ingest_collector_report "Ingest Collector Report" {
     runner_results_replaced           "a runner's earlier results are replaced; other runners' results are kept"
     unknown_entities_warned           "results for undeclared entities are dropped with W115"
     skipped_not_recorded              "skipped tests are counted but not recorded"
+    one_vocabulary                    "the report keeps the collect wire's TestResult and statuses"
     merged_report_written             "the merged results are written to specforge-report.json, which analyze reads by default"
   }
   contract   """
     Each runner's answer is merged into `specforge-report.json`: the
     runner's earlier results are removed and its new ones added, so several
-    runners can report on one project. Every recorded test carries its
-    name, `pass` or `fail`, the `verify` obligation it names and the runner
-    that recorded it. Results for entities the graph doesn't declare are
+    runners can report on one project. Every recorded test is the
+    collector's TestResult (its name, `passed` or `failed`, the `verify`
+    obligation it names, its duration) with the runner that recorded it.
+    The report is read strictly: a status outside passed, failed and
+    skipped, or a test without a name, makes it a report that cannot be
+    used (E045), and collect rewrites it. Results for entities the graph doesn't declare are
     dropped with a W115 warning. Skipped tests prove nothing, so they're
     counted but not recorded. `specforge analyze` reads the written report
     without `--test-results`.
   """
   produces   [collector_report_ingested]
   verify unit "merge replaces only the same runner"
+  verify unit "the recorded test report speaks the collect vocabulary, and a status outside it is a report that cannot be used"
   verify unit "the entities results may name are the entity snapshot's, with their obligation texts"
   verify integration "collect then analyze scores the recorded tests"
-  verify contract "Ingest Collector Report: collector report ingestion holds — collector_dispatched_fired, graph_available, collector_report_ingested_emitted, runner_results_replaced, unknown_entities_warned, skipped_not_recorded, merged_report_written"
+  verify contract "Ingest Collector Report: collector report ingestion holds — collector_dispatched_fired, graph_available, collector_report_ingested_emitted, runner_results_replaced, unknown_entities_warned, skipped_not_recorded, one_vocabulary, merged_report_written"
 }
 
 behavior resolve_test_conventions "Resolve Test Naming Conventions" {

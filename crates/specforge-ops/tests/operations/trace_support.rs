@@ -1,5 +1,6 @@
 //! Registries for trace tests: what three made-up extensions declare.
 
+use specforge_extension_sdk::PeerDependency;
 use specforge_extension_sdk::prelude::*;
 use specforge_registry::{RegistryBuild, build_registries};
 

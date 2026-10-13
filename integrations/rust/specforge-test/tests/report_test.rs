@@ -1,8 +1,9 @@
-use specforge_test::registry::{TestOutcome, TestRecordEntry};
+use specforge_protocol_types::TestStatus;
+use specforge_test::registry::TestRecordEntry;
 use specforge_test::report;
 use std::fs;
 
-fn entry(id: &str, outcome: TestOutcome) -> TestRecordEntry {
+fn entry(id: &str, status: TestStatus) -> TestRecordEntry {
     TestRecordEntry {
         entity_kind: "behavior".to_string(),
         entity_id: id.to_string(),
@@ -11,7 +12,7 @@ fn entry(id: &str, outcome: TestOutcome) -> TestRecordEntry {
         file: "test.rs".to_string(),
         verify: None,
         duration_ms: 0,
-        outcome,
+        status,
     }
 }
 
@@ -19,8 +20,8 @@ fn entry(id: &str, outcome: TestOutcome) -> TestRecordEntry {
 fn writes_report_json() {
     let dir = tempfile::tempdir().unwrap();
     let entries = vec![
-        entry("create_user", TestOutcome::Pass),
-        entry("delete_user", TestOutcome::Fail),
+        entry("create_user", TestStatus::Passed),
+        entry("delete_user", TestStatus::Failed),
     ];
 
     report::write_report(dir.path(), "my_binary", &entries).unwrap();
@@ -35,9 +36,9 @@ fn writes_report_json() {
     assert_eq!(content["entries"].as_array().unwrap().len(), 2);
     // Entries are sorted by entity_id
     assert_eq!(content["entries"][0]["entity_id"], "create_user");
-    assert_eq!(content["entries"][0]["status"], "pass");
+    assert_eq!(content["entries"][0]["status"], "passed");
     assert_eq!(content["entries"][1]["entity_id"], "delete_user");
-    assert_eq!(content["entries"][1]["status"], "fail");
+    assert_eq!(content["entries"][1]["status"], "failed");
 }
 
 #[test]
@@ -53,7 +54,7 @@ fn empty_entries_writes_nothing() {
 #[test]
 fn report_bytes_are_compact_json() {
     let dir = tempfile::tempdir().unwrap();
-    let entries = vec![entry("compact", TestOutcome::Pass)];
+    let entries = vec![entry("compact", TestStatus::Passed)];
 
     report::write_report(dir.path(), "compact_binary", &entries).unwrap();
 
@@ -70,7 +71,7 @@ fn report_bytes_are_compact_json() {
     assert_eq!(content["schema_version"], "1.0");
     assert_eq!(content["binary_name"], "compact_binary");
     assert_eq!(content["entries"][0]["entity_id"], "compact");
-    assert_eq!(content["entries"][0]["status"], "pass");
+    assert_eq!(content["entries"][0]["status"], "passed");
 }
 
 #[test]
@@ -78,9 +79,9 @@ fn entries_are_sorted_in_report() {
     let dir = tempfile::tempdir().unwrap();
     // Write entries in reverse order
     let entries = vec![
-        entry("zebra", TestOutcome::Pass),
-        entry("alpha", TestOutcome::Pass),
-        entry("middle", TestOutcome::Fail),
+        entry("zebra", TestStatus::Passed),
+        entry("alpha", TestStatus::Passed),
+        entry("middle", TestStatus::Failed),
     ];
 
     report::write_report(dir.path(), "sorted_binary", &entries).unwrap();

@@ -1,0 +1,24 @@
+{
+  "artifact": "greet.wasm",
+  "artifact_sha256": "ce843190979b6df7394b14ef5fd40d75ea0b6d816ece89fde10ccebba9a02f3d",
+  "built_with": "rustc 1.98.1 (48a229cea 2026-09-01)",
+  "inputs": {
+    "Cargo.toml#workspace-inherited": "d73adcb604631f322bd0869972ea48bddc7b73ebd513d9e2d3a5e0d4a9806d7d",
+    "crates/specforge-extension-sdk-macros/Cargo.toml": "bfe09b19206691f6683a853136148d8fa2453cfbd575f2b65a560691ddee9c56",
+    "crates/specforge-extension-sdk-macros/src/lib.rs": "05b9dfd092444a55acc0993f35172ee3d0e4db9b6b1bed77682ce912ba54f67a",
+    "crates/specforge-extension-sdk/Cargo.toml": "e04177d9a557e7b81def113a66892a8df6befd097d5227fdb2ccd9e5e0d22e4d",
+    "crates/specforge-extension-sdk/src/lib.rs": "8e465bd72d650bfc35f9fb07fcb35c6adc20840709c08edb7c0948a31f87d279",
+    "crates/specforge-extension-sdk/src/operations.rs": "5abc571e460dd645044eb5b5c40e505bec76f4ca12600ae1e23a1eb77895c2f4",
+    "crates/specforge-extension-sdk/src/surface.rs": "04753671ca050f7a48b7f2b7bdcbb024e89da6585081e1aae87dde14653b946e",
+    "crates/specforge-protocol-types/Cargo.toml": "190740994b099d4dabae43a6a7666b3e78fc64dba467b536b400cf972bbd12d7",
+    "crates/specforge-protocol-types/src/calls.rs": "85fa2c828aff14ea5b02cceb9b62bcbec834cfd5ea144928cbbd58e912f3da71",
+    "crates/specforge-protocol-types/src/command_args.rs": "dfb15939e9da35bf8e321a7bb23c95e8bd3602ded60b392d3a1ac2f043c041a9",
+    "crates/specforge-protocol-types/src/declaration.rs": "efbb1fe12cb0a26b393113206ecc96daefa0abf8869e58ea72d06fe5a0d8455c",
+    "crates/specforge-protocol-types/src/lib.rs": "74871431d67e3865564c664451169949e08e599f37c9af43211b2400671feb1c",
+    "crates/specforge-protocol-types/src/vocabulary.rs": "0d175d196adfc20eca38e2eaaed16c5d5d3912c26b0c99509ef2393f917e1c70",
+    "fixtures/greet-extension/Cargo.lock": "60b53dbde86f5bcc5f5feef8b6a68444f0ea8f051a6721f0e84400e96071baef",
+    "fixtures/greet-extension/Cargo.toml": "c9e0cb502c28c396f54f8561e48b8ca38b672ea8dbd4c98943b9278ee8f919d3",
+    "fixtures/greet-extension/src/contributions.rs": "37474497a7dda17257f6660f0b48b3e219b32a28f1b63cd9c761bcf0516292a5",
+    "fixtures/greet-extension/src/lib.rs": "e0521642bba7ae2971b70189c7acf0b76c2d748b87b3822e15257018cd08c5ab"
+  }
+}

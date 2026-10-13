@@ -230,14 +230,14 @@ fn inspect_coverage_matches_the_coverage_tool() {
     };
 
     // A passing test that names no obligation proves none of them.
-    report(&server, r#"{"name":"t","status":"pass"}"#);
+    report(&server, r#"{"name":"t","status":"passed"}"#);
     let (inspect, coverage) = statuses(&mut server);
     assert_eq!(inspect, "uncovered");
     assert_eq!(inspect, coverage);
 
     report(
         &server,
-        r#"{"name":"t","status":"pass","verify":"test alpha"}"#,
+        r#"{"name":"t","status":"passed","verify":"test alpha"}"#,
     );
     let (inspect, coverage) = statuses(&mut server);
     assert_eq!(inspect, "covered");

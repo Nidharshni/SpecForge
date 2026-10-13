@@ -1,74 +1,44 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://specforge.dev/schema/specforge-report.json",
-  "title": "SpecForge Report",
-  "description": "Schema for specforge-report.json files produced by test runner adapters.",
+  "title": "SpecForge Recorded Test Report",
+  "description": "specforge-report.json: the tests `specforge collect` recorded, per entity id. `analyze`, `stats` and every coverage view read it; a file that does not match is E045 (ADR 0069).",
   "type": "object",
-  "required": ["entities"],
+  "required": ["results"],
   "properties": {
-    "schema_version": {
+    "runner": {
       "type": "string",
-      "description": "Schema version for the report format.",
-      "default": "1.0"
+      "description": "The collectors whose results it holds, joined \", \"."
     },
-    "timestamp": {
-      "type": "string",
-      "description": "ISO 8601 timestamp when the report was generated.",
-      "format": "date-time"
-    },
-    "adapter": {
-      "type": "string",
-      "description": "Name of the test runner adapter that produced this report (e.g., 'vitest', 'pytest', 'nextest')."
-    },
-    "entities": {
-      "type": "array",
-      "description": "Per-entity test results.",
-      "items": {
-        "$ref": "#/$defs/EntityResult"
-      }
+    "results": {
+      "type": "object",
+      "description": "Per entity id, the tests recorded for it.",
+      "additionalProperties": { "$ref": "#/$defs/EntityTests" }
     }
   },
   "additionalProperties": false,
   "$defs": {
-    "EntityResult": {
+    "EntityTests": {
       "type": "object",
-      "required": ["entity_id", "tests"],
+      "required": ["tests"],
       "properties": {
-        "entity_id": {
-          "type": "string",
-          "description": "The spec entity identifier (e.g., 'auth_login')."
-        },
-        "tests": {
-          "type": "array",
-          "description": "Individual test results for this entity.",
-          "items": {
-            "$ref": "#/$defs/TestResult"
-          }
-        }
+        "tests": { "type": "array", "items": { "$ref": "#/$defs/RecordedTest" } }
       },
       "additionalProperties": false
     },
-    "TestResult": {
+    "RecordedTest": {
       "type": "object",
       "required": ["name", "status"],
       "properties": {
-        "name": {
-          "type": "string",
-          "description": "Test function name (e.g., 'auth_login__rejects_invalid_password')."
-        },
+        "name": { "type": "string", "description": "The test's name as its runner reports it." },
         "status": {
           "type": "string",
-          "enum": ["pass", "fail", "skip", "error"],
-          "description": "Test execution status."
+          "enum": ["passed", "failed", "skipped"],
+          "description": "The protocol's TestStatus. collect records passed and failed; a skipped test proves and fails nothing."
         },
-        "duration_ms": {
-          "type": "number",
-          "description": "Test duration in milliseconds."
-        },
-        "message": {
-          "type": "string",
-          "description": "Error or failure message."
-        }
+        "verify": { "type": "string", "description": "The exact text of the obligation the test proves." },
+        "duration_ms": { "type": "number", "description": "How long the test took, in milliseconds." },
+        "runner": { "type": "string", "description": "The collector that recorded the test." }
       },
       "additionalProperties": false
     }

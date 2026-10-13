@@ -410,6 +410,7 @@ dependencies = [
  "libc",
  "serde",
  "serde_json",
+ "specforge-protocol-types",
  "specforge-test-macros",
 ]
 

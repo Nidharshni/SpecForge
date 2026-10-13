@@ -378,7 +378,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   means up to date, never a lower version; a lock version that is not SemVer moves to what `latest` picks
   (`specforge_package::upgrade_target`, ADR 0036 as amended).
 - **Peer requirement**: what an extension declares it needs from another extension: the peer's name,
-  a SemVer range read as Cargo reads one, and whether the peer may be absent
+  a SemVer range read as Cargo reads one, and whether the peer may be absent (an extension declares
+  one with the SDK's `peer` or `optional_peer`)
   (`specforge_package::peers::PeerRequirement`, ADR 0050). One rule judges it (`peers::verdict`): an
   unreadable range satisfies nothing (E073); a required peer must be installed; an installed one must
   be at a version the range accepts (E027 otherwise). The registry build, `doctor` and the lock plan
@@ -473,9 +474,13 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   other problem as its E069, which fails their verdict.
 - **Stranded entity**: an entity whose kind only the extension being removed declares: `remove` lists it
   (`specforge_ops::extension::StrandedEntity`), still removes, and the next compile reports it E024.
-- **Recorded test report**: `<root>/specforge-report.json`, what `specforge collect` last wrote. The
-  project view reads it once per compile and per content
-  (`specforge_project::coverage::RecordedCoverage`).
+- **Recorded test report**: `<root>/specforge-report.json`, what `specforge collect` last wrote: per entity id,
+  its recorded tests, each the protocol's `TestResult` (name, status, the obligation it names, duration) with the
+  collector that recorded it. A status is `passed`, `failed` or `skipped`, the one vocabulary of the collect wire,
+  the report and a pass's test results (`specforge_protocol_types::TestStatus`); any other is no collector's
+  answer (E028) and no usable report (E045). The project view reads it once per compile and per content
+  (`specforge_project::coverage::RecordedCoverage`); the coverage rule reads it as the pass input's `TestResults`,
+  on the host as in every extension pass.
 - **Binary report**: what the `#[specforge_test]` attribute's exit handler writes for one test target:
   `<package>--<target>.json` in `$SPECFORGE_REPORT` when `specforge collect` sets it, else in `specforge/` in the
   cargo target directory the binary was built into, never the working directory

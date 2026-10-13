@@ -308,7 +308,7 @@ fn analyze_discharge_intent_and_proof() {
     };
     let (doc, code) = analyze_with(serde_json::json!({
         "runner": "manual",
-        "results": {"held": {"tests": [{"name": "holds", "status": "fail"}]}}
+        "results": {"held": {"tests": [{"name": "holds", "status": "failed"}]}}
     }));
     assert_eq!(code, Some(1), "failing proof must exit 1: {doc}");
     assert_eq!(doc["ok"], false);
@@ -323,7 +323,7 @@ fn analyze_discharge_intent_and_proof() {
     // Proven: all recorded tests pass.
     let (doc, code) = analyze_with(serde_json::json!({
         "runner": "manual",
-        "results": {"held": {"tests": [{"name": "holds", "status": "pass", "verify": "holds"}]}}
+        "results": {"held": {"tests": [{"name": "holds", "status": "passed", "verify": "holds"}]}}
     }));
     assert_eq!(code, Some(0));
     let summary = &coverage(&doc)["summary"];
@@ -347,8 +347,8 @@ fn analyze_reports_unproven_and_undeclared_obligations() {
     let report = serde_json::json!({
         "runner": "manual",
         "results": {"unique_emails": {"tests": [
-            {"name": "dup", "status": "pass", "verify": "rejects a duplicate email"},
-            {"name": "hash", "status": "pass", "verify": "stores a hashed pasword"}
+            {"name": "dup", "status": "passed", "verify": "rejects a duplicate email"},
+            {"name": "hash", "status": "passed", "verify": "stores a hashed pasword"}
         ]}}
     });
     fs::write(dir.path().join("specforge-report.json"), report.to_string()).unwrap();

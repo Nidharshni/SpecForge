@@ -10,7 +10,7 @@ use serde_json::{Value, json};
 use specforge_protocol_types::{
     CollectInput, CommandError, CommandFormat, CommandInput, CommandOutput, GraphWire,
     McpResourceContent, McpResourceRequest, MigrationInput, PassAnswer, PassDiagnostic, PassInput,
-    PassOutput, PassSeverity, ScanRequest, ValidatorContext,
+    PassOutput, PassSeverity, ScanRequest, TestStatus, ValidatorContext,
 };
 
 fn wire(name: &str) -> Value {
@@ -63,9 +63,8 @@ fn the_host_payloads_decode_as_their_protocol_types() {
     assert_eq!(input.graph.nodes[0].title.as_deref(), Some("One"));
 
     round_trips::<McpResourceRequest>(&wire("resource.input.json"));
-    // The analysis input decodes with the report's keys the protocol does
-    // not define (a result's `file`, a test's `duration_ms` and `runner`)
-    // ignored.
+    // The analysis input carries the recorded tests as the protocol's
+    // `TestResults`: a test's name, status, `verify` and `duration_ms`.
     let pass: PassInput = serde_json::from_value(wire("pass.input.json")).unwrap();
     assert_eq!(pass.entities.len(), 3);
     assert_eq!(pass.edges[0].label, "needs");
@@ -75,6 +74,8 @@ fn the_host_payloads_decode_as_their_protocol_types() {
     );
     let tests = &pass.test_results.unwrap().results["a"].tests;
     assert_eq!(tests[0].verify.as_deref(), Some("a works"));
+    assert_eq!(tests[0].status, TestStatus::Passed);
+    assert_eq!(tests[0].duration_ms, Some(1.5));
     let check: PassInput = round_trips(&wire("pass.check.input.json"));
     assert_eq!(check.previous.unwrap().statuses["a"].status, "draft");
     let collect: CollectInput = round_trips(&wire("collect.input.json"));

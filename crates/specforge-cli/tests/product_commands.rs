@@ -983,8 +983,8 @@ behavior b2 "B2" {
     fs::write(
         dir.path().join("specforge-report.json"),
         serde_json::json!({"runner": "fixture", "results": {
-            "b1": {"tests": [{"name": "t1", "status": "pass", "verify": "b1 works"}]},
-            "b2": {"tests": [{"name": "t2", "status": "pass", "verify": "b2 works"}]},
+            "b1": {"tests": [{"name": "t1", "status": "passed", "verify": "b1 works"}]},
+            "b2": {"tests": [{"name": "t2", "status": "passed", "verify": "b2 works"}]},
         }})
         .to_string(),
     )
@@ -1052,8 +1052,8 @@ behavior b_half "Half" {
         fs::write(
             dir.path().join("specforge-report.json"),
             serde_json::json!({"runner": "fixture", "results": {
-                "b_proven": {"tests": [{"name": "t1", "status": "pass", "verify": "works"}]},
-                "b_half": {"tests": [{"name": "t2", "status": "pass", "verify": "works"}]},
+                "b_proven": {"tests": [{"name": "t1", "status": "passed", "verify": "works"}]},
+                "b_half": {"tests": [{"name": "t2", "status": "passed", "verify": "works"}]},
             }})
             .to_string(),
         )

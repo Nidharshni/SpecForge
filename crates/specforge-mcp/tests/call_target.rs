@@ -97,7 +97,7 @@ fn collect_project() -> TempDir {
     fs::create_dir_all(root.join("target/specforge")).unwrap();
     fs::write(
         root.join("target/specforge/t.json"),
-        json!({"entries": [{"entity_id": "alpha", "test_name": "works", "status": "pass"}]})
+        json!({"entries": [{"entity_id": "alpha", "test_name": "works", "status": "passed"}]})
             .to_string(),
     )
     .unwrap();

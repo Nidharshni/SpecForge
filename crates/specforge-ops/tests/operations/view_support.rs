@@ -6,6 +6,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use specforge_common::{ConfigRead, Diagnostic};
+use specforge_extension_sdk::PeerDependency;
 use specforge_extension_sdk::prelude::*;
 use specforge_graph::Graph;
 use specforge_ops::plan::{PlanGapKind, PlanOutcome};
@@ -168,7 +169,7 @@ impl Project {
             results.insert(
                 entity.to_string(),
                 serde_json::json!({"tests": [
-                    {"name": format!("{entity}_test"), "status": "pass", "verify": obligation}
+                    {"name": format!("{entity}_test"), "status": "passed", "verify": obligation}
                 ]}),
             );
         }
