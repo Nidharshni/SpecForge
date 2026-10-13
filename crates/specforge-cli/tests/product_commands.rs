@@ -639,6 +639,39 @@ fn completions_include_the_commands_of_the_project_here() {
     let script = String::from_utf8_lossy(&output.stdout);
     assert!(script.contains("specforge__subcmd__check"));
     assert!(!script.contains("specforge__subcmd__product"));
+
+    // `--path` names the project from anywhere.
+    let output = cargo_bin_cmd!("specforge")
+        .current_dir(empty.path())
+        .args(["completions", "bash", "--path"])
+        .arg(dir.path())
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(0), "{output:?}");
+    let script = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        script.contains("specforge__subcmd__product__subcmd__milestone__subcmd__completion"),
+        "the product commands of the --path project are completed"
+    );
+}
+
+#[specforge_test_macros::test(
+    behavior = "locate_project_root",
+    verify = "a command given a path that does not exist refuses it as file_not_found"
+)]
+fn completions_refuse_a_path_that_does_not_exist() {
+    let empty = TempDir::new().unwrap();
+    let output = cargo_bin_cmd!("specforge")
+        .current_dir(empty.path())
+        .args(["completions", "bash", "--path", "nope"])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .contains("error[file_not_found]: path not found: nope"),
+        "{output:?}"
+    );
 }
 
 /// `requests` after an `initialize` negotiating MCP 2025-06-18, the first

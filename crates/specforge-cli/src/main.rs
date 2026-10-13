@@ -40,7 +40,6 @@ mod watch;
 use clap::{CommandFactory, Parser, Subcommand};
 use clap_complete::Shell;
 use outcome::Exit;
-use std::path::Path;
 use terminal::{Stream, Terminal};
 
 #[derive(Parser)]
@@ -117,11 +116,14 @@ enum Commands {
     /// Migrate .spec files between format versions
     Migrate(migrate::Args),
     /// Generate shell completions: the built-in commands, and the commands
-    /// of the extensions the project in the current directory enables
+    /// of the extensions the project at --path enables
     Completions {
         /// Target shell
         #[arg(value_enum)]
         shell: Shell,
+
+        #[command(flatten)]
+        project: project::ProjectArg,
     },
     /// Explain a diagnostic code
     Explain(explain::Args),
@@ -158,14 +160,16 @@ fn main() {
 }
 
 /// `specforge completions`: the built-ins, and the commands the extensions
-/// of the project in the current directory contribute (`specforge product
-/// ...`).
-fn completions(shell: Shell, terminal: &Terminal) -> Exit {
-    // A working directory that can't be resolved (deleted) lists the built-ins only.
-    let mut cmd = Cli::command();
-    if let Ok(root) = specforge_common::ProjectRoot::of(Path::new(".")) {
-        cmd = extension_command::with_extension_commands(cmd, &root);
-    }
+/// of the project at `--path` contribute (`specforge product ...`). A path
+/// that does not exist is refused like on every command.
+fn completions(shell: Shell, project: &project::ProjectArg, terminal: &Terminal) -> Exit {
+    let root = match project.root() {
+        Ok(root) => root,
+        Err(error) => {
+            return outcome::Refusal::of(outcome::OutputFormat::Human).report(terminal, &error);
+        }
+    };
+    let mut cmd = extension_command::with_extension_commands(Cli::command(), &root);
     clap_complete::generate(
         shell,
         &mut cmd,
@@ -206,7 +210,7 @@ fn run(command: Commands, terminal: &Terminal) -> Exit {
         Commands::Collect(args) => args.run(terminal),
         Commands::Doctor(args) => args.run(terminal),
         Commands::Mcp(args) => args.run(terminal),
-        Commands::Completions { shell } => completions(shell, terminal),
+        Commands::Completions { shell, project } => completions(shell, &project, terminal),
         Commands::Explain(args) => args.run(terminal),
         Commands::Migrate(args) => args.run(terminal),
         Commands::InferStatus(args) => args.run(terminal),
