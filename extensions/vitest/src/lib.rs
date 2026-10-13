@@ -34,11 +34,7 @@ struct Vitest;
 
 impl Contributions for Vitest {
     fn contribute(c: &mut ContributionsBuilder) {
-        c.meta.peer_dependencies.push(PeerDependency {
-            name: "@specforge/testing".to_string(),
-            version: "^1.0".to_string(),
-            optional: false,
-        });
+        c.peer("@specforge/testing", "^1.0");
         c.collector(COLLECTOR, |k| {
             k.input_format("vitest-json")
                 .detect_files(&["vitest.config.*", "vitest.workspace.*"])

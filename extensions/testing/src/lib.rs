@@ -110,11 +110,7 @@ struct Testing;
 impl Contributions for Testing {
     fn contribute(c: &mut ContributionsBuilder) {
         for owner in [SOFTWARE, GOVERNANCE] {
-            c.meta.peer_dependencies.push(PeerDependency {
-                name: owner.to_string(),
-                version: "^1.0".to_string(),
-                optional: true,
-            });
+            c.optional_peer(owner, "^1.0");
         }
 
         for t in TESTABLE {

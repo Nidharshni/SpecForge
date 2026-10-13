@@ -6,6 +6,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use specforge_common::{ConfigRead, Diagnostic};
+use specforge_extension_sdk::PeerDependency;
 use specforge_extension_sdk::prelude::*;
 use specforge_graph::Graph;
 use specforge_ops::plan::{PlanGapKind, PlanOutcome};

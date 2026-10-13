@@ -1152,7 +1152,7 @@ pub mod prelude {
     };
     pub use specforge_extension_sdk_macros::extension;
     pub use specforge_protocol_types::{
-        PeerDependency, SandboxPolicy, ValidationSeverity, ValidatorContext, ValidatorVerdict,
+        SandboxPolicy, ValidationSeverity, ValidatorContext, ValidatorVerdict,
     };
 }
 

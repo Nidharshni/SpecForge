@@ -22,11 +22,7 @@ impl Contributions for Software {
         // and milestone links; without it those links are inert (I004).
         // Diagrams (`model`, `outline`) draw the extension in this colour.
         c.theme_color("#4a90d9");
-        c.meta.peer_dependencies.push(PeerDependency {
-            name: "@specforge/product".to_string(),
-            version: "^1.0".to_string(),
-            optional: true,
-        });
+        c.optional_peer("@specforge/product", "^1.0");
         c.meta.sandbox_policy = Some(SandboxPolicy {
             max_memory_mb: Some(256),
             max_execution_ms: Some(5000),
