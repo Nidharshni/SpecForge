@@ -1,15 +1,11 @@
-// specforge-test crate behaviors
-// Organized by phase: Phase 1 (annotation + collection),
-// Phase 2 (build.rs integration), Phase 3 (coverage summary).
+// specforge-test crate behaviors: the attribute, the drop guard and the
+// per-binary report. Which obligations the recorded tests prove is scored by
+// `specforge collect` and the coverage rule, never by this crate (ADR 0068).
 
 use "events"
 use "invariants"
 use "ports"
 use "types"
-
-// ============================================================
-// Phase 1: Annotation + Collection (Option A)
-// ============================================================
 
 behavior expand_test_attribute "Expand Test Attribute" {
   features   [test_annotation]
@@ -87,9 +83,14 @@ behavior emit_binary_report "Emit Binary Report" {
   contract   """
     At process exit, the atexit handler MUST drain all entries from the
     TestRegistry, construct a BinaryReport, and write it to
-    target/specforge/<binary-name>.json. It MUST use std::sync::Once to
-    guarantee single invocation. If the registry is empty (no specforge
-    tests ran), it MUST NOT write a report file.
+    $SPECFORGE_REPORT when `specforge collect` sets it, else to
+    specforge/ in the cargo target directory the binary was built into,
+    never the working directory, named <package>--<target>.json. It MUST
+    use std::sync::Once to guarantee single invocation. If the registry is
+    empty (no specforge tests ran), it MUST NOT write a report file. The
+    report is all it writes, and it prints nothing: which obligations the
+    tests prove is scored by `specforge collect` and `specforge analyze
+    coverage` (ADR 0068).
   """
   requires {
     atexit_registered "atexit handler was registered during first TestGuard creation"
@@ -98,11 +99,13 @@ behavior emit_binary_report "Emit Binary Report" {
     report_written "target/specforge/<binary>.json exists with all collected entries"
     empty_skipped  "no file written when zero entries collected"
     valid_json     "report file is valid JSON matching BinaryReport schema"
+    report_only    "the handler writes the report and nothing else, and prints nothing"
   }
   verify unit "report contains all recorded test entries"
   verify unit "empty registry produces no file"
   verify unit "report file is valid JSON"
   verify unit "binary name is correctly resolved"
+  verify unit "the exit handler writes the report and prints nothing"
   verify integration "multi-threaded test suite produces complete report"
 }
 
@@ -157,166 +160,4 @@ behavior register_atexit_handler "Register Atexit Handler" {
   }
   verify unit "first guard triggers atexit registration"
   verify unit "second guard does not re-register"
-}
-
-// ============================================================
-// Phase 2: build.rs Integration
-// ============================================================
-
-behavior invoke_specforge_export "Invoke Specforge Export" {
-  features   [build_integration]
-  category   command
-  invariants [graceful_degradation]
-  types      [GraphExport]
-  ports      [SpecforgeCli, FileSystem]
-  produces   [graph_export_refreshed]
-  contract   """
-    The build.rs script MUST invoke `specforge export --format=graph
-    --output target/specforge/graph.json`. If the specforge binary is
-    not found or the command fails, build.rs MUST emit a cargo::warning
-    and continue without error. It MUST set cargo::rerun-if-changed=spec/
-    so the export refreshes when spec files change.
-  """
-  requires {
-    build_script_context "running inside a Cargo build.rs execution context"
-  }
-  ensures {
-    graph_written_or_skipped "target/specforge/graph.json exists, or a cargo warning was emitted"
-    rerun_directive_set      "cargo::rerun-if-changed=spec/ is printed to stdout"
-  }
-  verify unit "specforge on PATH produces graph.json"
-  verify unit "specforge not on PATH emits warning and succeeds"
-  verify unit "specforge command failure emits warning and succeeds"
-  verify unit "rerun-if-changed is always emitted"
-  verify integration "graph.json matches GraphExport schema"
-}
-
-behavior generate_entity_constants "Generate Entity Constants" {
-  features   [build_integration]
-  category   command
-  invariants [graceful_degradation]
-  types      [GraphExport, ExportedEntity]
-  ports      [FileSystem]
-  consumes   [graph_export_refreshed]
-  contract   """
-    When graph.json is available, build.rs MAY generate a Rust module
-    containing const &str values for each entity ID. This module MUST
-    be written to OUT_DIR and included via include!(concat!(env!("OUT_DIR"),
-    "/specforge_entities.rs")). If graph.json is not available, the
-    module MUST NOT be generated and the include! MUST be behind a
-    cfg attribute.
-  """
-  requires {
-    graph_export_present "target/specforge/graph.json exists and is valid"
-  }
-  ensures {
-    constants_match_graph "every entity in graph.json has a corresponding const"
-    names_are_valid_rust  "entity IDs are converted to valid SCREAMING_SNAKE_CASE identifiers"
-  }
-  verify unit "entity IDs are converted to SCREAMING_SNAKE_CASE"
-  verify unit "hyphens in IDs are converted to underscores"
-  verify unit "generated module compiles"
-  verify unit "missing graph.json skips generation"
-}
-
-// ============================================================
-// Phase 3: Coverage Summary at Test Exit (Option C)
-// ============================================================
-
-behavior load_graph_at_exit "Load Graph at Exit" {
-  features   [coverage_summary]
-  category   query
-  invariants [graceful_degradation]
-  types      [GraphExport, ExportedEntity]
-  ports      [FileSystem]
-  contract   """
-    During the atexit handler, after draining the test registry, the
-    handler MUST attempt to read target/specforge/graph.json. If the
-    file does not exist or cannot be parsed, the handler MUST skip the
-    coverage summary silently. The graph MUST NOT be loaded during test
-    execution — only at exit.
-  """
-  requires {
-    atexit_context "executing inside the atexit handler after tests complete"
-  }
-  ensures {
-    graph_loaded_or_skipped "GraphExport is available, or coverage summary is skipped"
-    no_load_during_tests    "graph is not read until atexit fires"
-  }
-  verify unit "valid graph.json is parsed into GraphExport"
-  verify unit "missing graph.json causes silent skip"
-  verify unit "malformed graph.json causes silent skip"
-}
-
-behavior compute_coverage_diff "Compute Coverage Diff" {
-  features [coverage_summary]
-  category query
-  types    [GraphExport, TestRecordEntry, CoverageDiff, CoverageDiffStatus]
-  contract """
-    Given a GraphExport and collected TestRecordEntries, the system MUST
-    compute a CoverageDiff per testable entity: expected verify count from
-    the graph, covered count from matching test records, and a status
-    (fully_covered, covered_with_failures, partially_covered, uncovered,
-    gherkin_specified, no_intent). Test records match a verify by its exact
-    description only, the rule specforge analyze coverage applies: a record
-    whose text matches only up to case or punctuation (the same slug)
-    covers nothing, and unmatched_records labels it a slug match naming
-    the spec's text. Entities with verify
-    statements but no matching records MUST be reported as uncovered —
-    never filtered out. Entities whose only intent is a gherkin feature
-    reference MUST be reported as gherkin_specified; entities without
-    verify statements and without gherkin MUST be reported as no_intent.
-  """
-  requires {
-    graph_available "GraphExport is loaded"
-    entries_drained "TestRecordEntries are collected from registry"
-  }
-  ensures {
-    all_testable_covered "every testable entity in graph appears in the diff"
-    counts_accurate      "expected = graph verify count, covered = matching test count"
-    status_derived       "status is fully_covered iff covered >= expected and expected > 0"
-    unmatched_surfaced   "test records matching no exported verify are reportable via unmatched_records (C11-02)"
-  }
-  verify unit "entity with 3 verify and 3 tests is fully_covered"
-  verify unit "entity with 3 verify and 1 test is partially_covered"
-  verify unit "entity with 2 verify and 0 tests is uncovered"
-  verify unit "entity with 0 verify is no_intent"
-  verify unit "non-testable entities are excluded"
-  verify unit "all verify covered but some failing is covered_with_failures"
-  verify unit "partial coverage with mixed pass/fail counted correctly"
-}
-
-behavior print_coverage_summary "Print Coverage Summary" {
-  features   [coverage_summary]
-  category   command
-  invariants [graceful_degradation]
-  types      [CoverageDiff, CoverageDiffStatus, GraphExport]
-  ports      [Stderr, FileSystem]
-  consumes   [binary_report_written]
-  contract   """
-    After computing the coverage diff, the atexit handler MUST print a
-    compact summary to stderr showing each entity this test binary
-    recorded tests for, with its coverage status. Entities the binary
-    didn't exercise are left out: project-wide gaps are reported by
-    `specforge analyze coverage` after `specforge collect`. The header
-    MUST include the graph export timestamp when the export carries one.
-    If no graph export is available, the summary MUST be skipped silently.
-    The summary MUST be printed only when at least one #[specforge_test]
-    was collected.
-  """
-  requires {
-    diff_computed   "CoverageDiff list is available"
-    stderr_writable "stderr is open for writing"
-  }
-  ensures {
-    summary_printed       "stderr shows coverage table with entity/expected/covered/status for the binary's recorded entities"
-    timestamp_visible     "a graph export timestamp, when present, is included in header"
-    skipped_when_no_graph "no output when graph.json was unavailable"
-    skipped_when_no_tests "no output when zero specforge tests ran"
-  }
-  verify unit "summary includes the entities the binary recorded"
-  verify unit "timestamp from graph export appears in header"
-  verify unit "no graph means no output"
-  verify unit "no specforge tests means no output"
-  verify integration "summary format matches expected layout"
 }

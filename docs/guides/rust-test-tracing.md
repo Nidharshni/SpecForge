@@ -148,15 +148,28 @@ usually a typo or a reworded statement, is A016.
   `specforge collect --report out.txt`.
 - **Custom target directory:** `collect` sets `SPECFORGE_REPORT`, and
   `specforge-test` writes its per-binary reports there, wherever
-  `CARGO_TARGET_DIR` points.
+  `CARGO_TARGET_DIR` points. A plain `cargo test` writes them to
+  `specforge/` in the target directory (`$CARGO_TARGET_DIR/specforge/`);
+  record them with `specforge collect --report "$CARGO_TARGET_DIR/specforge"`.
 - **Another command** (for example `cargo nextest run`): run it yourself, then
-  `specforge collect --no-run`. The reports land in `target/specforge/`.
+  `specforge collect --no-run`. The reports land in `specforge/` in the
+  target directory, `target/specforge/` by default (with a custom one, use
+  `--report` as above).
   Under nextest, which runs each test in its own process, every test writes
   its own report, and a run replaces the previous run's reports. Linking by
   name reads `cargo test`'s output format, so it doesn't apply to nextest
   runs.
 
 ## Troubleshooting
+
+- **Stray `<crate>/target/specforge/` directories in the source tree:** older
+  versions wrote a report into the working directory when the target
+  directory had no `target` path component. This lists the leftovers (none
+  holds cargo's `CACHEDIR.TAG`); they are gitignored and safe to delete:
+  ```sh
+  find crates integrations xtask extensions examples -maxdepth 3 -type d -name target -prune \
+    -exec sh -c 'test -e "$1/CACHEDIR.TAG" || echo "$1"' _ {} \;
+  ```
 
 - **`W115 ... reported tests for unknown entity 'x'`:** a test names an entity
   no spec declares, usually after a rename. Fix the annotation.

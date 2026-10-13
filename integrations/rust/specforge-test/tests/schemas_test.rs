@@ -6,6 +6,8 @@
 //! direction (a new field, a renamed key) now fails a test instead of
 //! silently breaking every consumer.
 
+mod support;
+
 use serde_json::Value;
 use specforge_test::registry::{TestOutcome, TestRecordEntry};
 use specforge_test::report;
@@ -107,10 +109,9 @@ fn make_entry(id: &str, outcome: TestOutcome) -> TestRecordEntry {
         entity_kind: "behavior".to_string(),
         entity_id: id.to_string(),
         test_name: format!("test_{id}"),
-        module_path: None,
+        module_path: Some("specforge_test::cases".to_string()),
         file: "tests/x.rs".to_string(),
         verify: Some("rejects invalid input".to_string()),
-        verify_kind: Some("unit".to_string()),
         duration_ms: 3,
         outcome,
     }
@@ -124,7 +125,6 @@ fn binary_report_conforms_to_published_schema() {
         make_entry("auth_logout", TestOutcome::Fail),
         {
             let mut e = make_entry("auth_locked", TestOutcome::Skipped);
-            e.verify_kind = None;
             e.verify = None;
             e
         },
@@ -142,7 +142,7 @@ fn binary_report_conforms_to_published_schema() {
         "serialized report violates schema: {errors:?}"
     );
 
-    // C11-04/C11-07 fields are actually producible end-to-end. Reports are
+    // C11-04 fields are actually producible end-to-end. Reports are
     // sorted by (entity_id, test_name) — look entries up by id.
     let by_id = |id: &str| {
         report_json["entries"]
@@ -155,14 +155,34 @@ fn binary_report_conforms_to_published_schema() {
     };
     let passing = by_id("auth_login");
     assert_eq!(passing["status"], "pass");
-    assert_eq!(passing["verify_kind"], "unit");
+    assert_eq!(passing["module_path"], "specforge_test::cases");
     assert_eq!(passing["duration_ms"], 3);
     let skipped = by_id("auth_locked");
     assert_eq!(skipped["status"], "skipped");
-    assert!(
-        skipped.get("verify_kind").is_none(),
-        "optional kind omitted when unknown"
-    );
+}
+
+#[specforge_test_macros::test(
+    behavior = "record_test_via_drop_guard",
+    verify = "a recorded entry conforms to the published binary report schema"
+)]
+fn a_recorded_report_conforms_to_the_published_schema() {
+    let reports = tempfile::tempdir().unwrap();
+    support::run_fixture(&["--include-ignored"], reports.path());
+    let schema = load_schema("specforge-binary-report.schema.json");
+    let mut checked = 0;
+    for file in std::fs::read_dir(reports.path()).unwrap() {
+        let path = file.unwrap().path();
+        if path.extension().is_some_and(|e| e == "json") {
+            let report: Value =
+                serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+            assert!(report["entries"][0]["module_path"].is_string(), "{report}");
+            let mut errors = Vec::new();
+            validate(&report, &schema, &schema, "$", &mut errors);
+            assert!(errors.is_empty(), "{}: {errors:?}", path.display());
+            checked += 1;
+        }
+    }
+    assert_eq!(checked, 1, "one report per fixture run");
 }
 
 #[test]

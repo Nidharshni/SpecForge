@@ -1,5 +1,5 @@
 // specforge-test crate milestones
-// Phased delivery: start with pure annotation, evolve to integrated feedback.
+// Delivery of the attribute, the drop guard and the per-binary report.
 
 use "behaviors"
 use "features"
@@ -23,32 +23,5 @@ milestone phase_1_annotation "Phase 1: Annotation and Collection" {
     multi_binary        "workspace with multiple test binaries produces separate reports"
     published           "specforge-test and specforge-test-macros published to crates.io"
     zero_compiler_dep   "cargo tree shows no specforge compiler crates"
-  }
-}
-
-milestone phase_2_build_integration "Phase 2: build.rs Graph Export" {
-  status    planned
-  features  [build_integration]
-  behaviors [invoke_specforge_export, generate_entity_constants]
-  exit_criteria {
-    build_rs_calls_export   "build.rs invokes specforge export and produces graph.json"
-    graceful_without_sf     "build succeeds with cargo warning when specforge not installed"
-    rerun_on_spec_change    "cargo rebuilds when spec/ files change"
-    entity_constants_opt_in "generated entity constants compile behind cfg attribute"
-    typo_is_compile_error   "referencing a non-existent entity ID fails at compile time"
-  }
-}
-
-milestone phase_3_coverage_summary "Phase 3: Coverage Summary at Test Exit" {
-  status    planned
-  features  [coverage_summary]
-  behaviors [load_graph_at_exit, compute_coverage_diff, print_coverage_summary]
-  exit_criteria {
-    summary_after_test "coverage table prints to stderr after cargo test"
-    timestamp_visible  "graph export age is shown in summary header"
-    no_graph_silent    "no output when graph.json is missing"
-    no_tests_silent    "no output when zero specforge tests ran"
-    diff_accurate      "expected/covered counts match graph and collected results"
-    sub_second         "coverage diff computation adds < 50ms to test exit"
   }
 }

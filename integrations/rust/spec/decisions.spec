@@ -27,27 +27,52 @@ decision drop_over_catch_unwind "Drop Guard Over catch_unwind" {
 }
 
 decision build_rs_over_manual_export "build.rs Over Manual Export" {
-  status       accepted
-  context      """
+  status        superseded
+  superseded_by records_not_scores
+  context       """
     The coverage summary and compile-time entity validation need the spec
     graph to be available at build/test time. Options: (a) manual
     `specforge export` step, (b) build.rs calls specforge automatically.
     Manual export leads to staleness — developers forget to re-export
     after spec changes.
   """
-  decision     """
+  decision      """
     build.rs calls `specforge export --format=graph --output
     target/specforge/graph.json` and sets cargo::rerun-if-changed=spec/.
     If specforge is not installed, build.rs emits a cargo::warning and
     continues. This makes the graph always fresh without manual steps.
   """
-  consequences """
+  consequences  """
     Positive: zero staleness, zero manual steps, spec changes trigger
     rebuild, standard Rust pattern (like protoc for prost).
     Negative: adds ~1 second to builds when spec changes. Requires
     specforge on PATH for full functionality.
   """
-  invariants   [graceful_degradation]
+}
+
+decision records_not_scores "The Crate Records, Collect Scores" {
+  status       accepted
+  context      """
+    The crate printed a coverage table at test exit, scored by a rule of
+    its own against a graph file that only SpecForge's own repository
+    wrote, from a build script in specforge-graph. No user project ever
+    had that file; the table showed one test binary's slice of the
+    project's proof; and its rule was kept in step with the coverage
+    rule by hand.
+  """
+  decision     """
+    The exit handler writes the binary report and nothing else. Which
+    obligations the recorded tests prove is scored once, by the coverage
+    rule over the recorded test report: `specforge collect`, then
+    `specforge analyze coverage` (ADR 0068). No build script exports
+    the graph.
+  """
+  consequences """
+    Positive: one obligation rule; a .spec edit rebuilds no Rust crate;
+    the crate reads nothing at exit.
+    Negative: `cargo test` alone shows no coverage; run specforge collect.
+  """
+  invariants   [atexit_write_once]
 }
 
 decision separate_workspace "Separate Workspace from Compiler" {
@@ -108,9 +133,9 @@ decision convention_as_fallback "Convention Mapping as Fallback" {
   """
   consequences """
     Positive: zero-dependency path exists, works with proptest decl macros.
-    Negative: convention is fragile — renames break it. Mitigated by
-    unmatched_records (C11-02): records matching no exported verify are
-    listed instead of silently ignored.
+    Negative: convention is fragile — renames break it. Mitigated by the
+    attribute: a test that names its obligation's text is checked by
+    `specforge analyze` (A016).
   """
   invariants   [convention_separator_unambiguous]
 }
