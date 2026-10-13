@@ -290,6 +290,8 @@ behavior read_mcp_arguments_as_declared "Read MCP Arguments as Declared" {
   verify unit "an argument neither the tool nor its target declares is refused naming it, with the declared one it is close to"
   verify unit "a prompt reads its arguments by the same rule its listing states"
   verify unit "an operation's refusal of a core tool's call names the argument it is about"
+  verify unit "a refusal a value the caller gave earns names that argument, whatever its kind"
+  verify unit "a prompt's or a resource read's refusal names the argument or query key it is about"
 }
 
 behavior list_mcp_prompts "List MCP Prompts" {

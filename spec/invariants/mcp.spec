@@ -36,6 +36,7 @@ invariant mcp_structured_error_responses "MCP Structured Error Responses" {
   verify unit "a no-project refusal names path only for an entry that takes one"
   verify unit "a path that does not exist is a file_not_found error on path"
   verify unit "an operation's failure kind decides its McpError code, never its code text"
+  verify unit "an operation states the request field each refusal is about, and a refusal of the project or the environment is about none"
 }
 
 invariant mcp_subscription_cleanup "MCP Subscription Cleanup" {
