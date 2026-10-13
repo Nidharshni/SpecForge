@@ -2,11 +2,10 @@
 //! SDK: an SDK crate declaring the extension, its wasm32-wasip2 component,
 //! and the declaration that component serves (ADR 0012).
 
-use assert_cmd::Command;
+use crate::support::{Cli, TestProject};
 use specforge_test_macros::test as specforge_test;
 use std::fs;
 use std::path::{Path, PathBuf};
-use tempfile::TempDir;
 
 /// Every file under `dir`, recursively.
 fn walk(dir: &Path) -> Vec<PathBuf> {
@@ -22,8 +21,9 @@ fn walk(dir: &Path) -> Vec<PathBuf> {
     files
 }
 
-fn specforge_cmd() -> Command {
-    assert_cmd::cargo_bin_cmd!("specforge")
+/// An empty directory the test scaffolds and builds in (no `specforge.json`).
+fn scratch() -> TestProject {
+    TestProject::new().without_config()
 }
 
 fn repo_root() -> PathBuf {
@@ -31,14 +31,14 @@ fn repo_root() -> PathBuf {
 }
 
 /// `extension init --name <name>` in a fresh directory.
-fn init(name: &str) -> (TempDir, PathBuf) {
-    let dir = TempDir::new().unwrap();
-    specforge_cmd()
-        .args(["extension", "init", "--name", name, "--dir"])
-        .arg(dir.path())
+fn init(name: &str) -> (TestProject, PathBuf) {
+    let dir = scratch();
+    Cli::on(&dir)
+        .bare_command(&["extension", "init", "--name", name, "--dir"])
+        .arg(dir.root())
         .assert()
         .success();
-    let ext = dir.path().join(name);
+    let ext = dir.root().join(name);
     (dir, ext)
 }
 
@@ -135,10 +135,10 @@ fn extension_init_targets_wasm32_wasip2() {
     verify = "specforge extension init rejects when directory already exists"
 )]
 fn extension_init_rejects_existing_directory() {
-    let dir = TempDir::new().unwrap();
-    fs::create_dir(dir.path().join("taken")).unwrap();
-    let output = specforge_cmd()
-        .args([
+    let dir = scratch();
+    fs::create_dir(dir.root().join("taken")).unwrap();
+    let output = Cli::on(&dir)
+        .bare_command(&[
             "extension",
             "init",
             "--name",
@@ -147,7 +147,7 @@ fn extension_init_rejects_existing_directory() {
             "json",
             "--dir",
         ])
-        .arg(dir.path())
+        .arg(dir.root())
         .output()
         .unwrap();
     assert_eq!(output.status.code(), Some(1));
@@ -159,9 +159,9 @@ fn extension_init_rejects_existing_directory() {
     verify = "specforge extension init --format=json outputs structured JSON"
 )]
 fn extension_init_json_output() {
-    let dir = TempDir::new().unwrap();
-    let output = specforge_cmd()
-        .args([
+    let dir = scratch();
+    let output = Cli::on(&dir)
+        .bare_command(&[
             "extension",
             "init",
             "--name",
@@ -170,7 +170,7 @@ fn extension_init_json_output() {
             "json",
             "--dir",
         ])
-        .arg(dir.path())
+        .arg(dir.root())
         .output()
         .unwrap();
     assert!(output.status.success());
@@ -189,21 +189,21 @@ fn extension_init_json_output() {
     verify = "specforge extension init uses default name when --name not provided"
 )]
 fn extension_init_default_name() {
-    let dir = TempDir::new().unwrap();
-    specforge_cmd()
-        .args(["extension", "init", "--dir"])
-        .arg(dir.path())
+    let dir = scratch();
+    Cli::on(&dir)
+        .bare_command(&["extension", "init", "--dir"])
+        .arg(dir.root())
         .assert()
         .success();
-    assert!(dir.path().join("my-extension/src/lib.rs").exists());
+    assert!(dir.root().join("my-extension/src/lib.rs").exists());
 }
 
 #[test]
 fn the_next_steps_name_the_crate_with_dir() {
-    let dir = TempDir::new().unwrap();
-    let output = specforge_cmd()
-        .args(["extension", "init", "--dir"])
-        .arg(dir.path())
+    let dir = scratch();
+    let output = Cli::on(&dir)
+        .bare_command(&["extension", "init", "--dir"])
+        .arg(dir.root())
         .output()
         .unwrap();
     assert!(output.status.success());
@@ -228,10 +228,11 @@ fn the_next_steps_name_the_crate_with_dir() {
     verify = "specforge extension build validates project structure exists"
 )]
 fn extension_build_validates_structure() {
-    let dir = TempDir::new().unwrap();
-    let output = specforge_cmd()
-        .args(["extension", "build", "--format", "json", "--dir"])
-        .arg(dir.path())
+    let dir = scratch();
+    let output = Cli::on(&dir)
+        .with_toolchain()
+        .bare_command(&["extension", "build", "--format", "json", "--dir"])
+        .arg(dir.root())
         .output()
         .unwrap();
     assert_eq!(output.status.code(), Some(1));
@@ -239,7 +240,7 @@ fn extension_build_validates_structure() {
     assert_eq!(json["code"], "E040", "{json}");
     assert_eq!(
         json["error"],
-        format!("no Cargo.toml found at {}", dir.path().display())
+        format!("no Cargo.toml found at {}", dir.root().display())
     );
 }
 
@@ -248,17 +249,18 @@ fn extension_build_validates_structure() {
     verify = "build errors reported as ExtensionError diagnostics"
 )]
 fn extension_build_reports_a_failed_build() {
-    let dir = TempDir::new().unwrap();
+    let dir = scratch();
     fs::write(
-        dir.path().join("Cargo.toml"),
+        dir.root().join("Cargo.toml"),
         "[package]\nname = \"broken\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[lib]\ncrate-type = [\"cdylib\"]\n",
     )
     .unwrap();
-    fs::create_dir(dir.path().join("src")).unwrap();
-    fs::write(dir.path().join("src/lib.rs"), "this is not rust").unwrap();
-    let output = specforge_cmd()
-        .args(["extension", "build", "--format", "json", "--dir"])
-        .arg(dir.path())
+    fs::create_dir(dir.root().join("src")).unwrap();
+    fs::write(dir.root().join("src/lib.rs"), "this is not rust").unwrap();
+    let output = Cli::on(&dir)
+        .with_toolchain()
+        .bare_command(&["extension", "build", "--format", "json", "--dir"])
+        .arg(dir.root())
         .output()
         .unwrap();
     assert_eq!(output.status.code(), Some(1));
@@ -283,7 +285,7 @@ fn a_scaffolded_extension_builds_and_validates() {
         eprintln!("skipped: the wasm32-wasip2 target is not installed");
         return;
     }
-    let (_dir, ext) = init("round-trip");
+    let (dir, ext) = init("round-trip");
     // Build against this repository's SDK, from the local cargo cache.
     let mut cargo = fs::read_to_string(ext.join("Cargo.toml")).unwrap();
     let sdk = repo_root().join("crates/specforge-extension-sdk");
@@ -295,9 +297,10 @@ fn a_scaffolded_extension_builds_and_validates() {
 
     // A target directory configured elsewhere doesn't move the component
     // out of the crate, where `validate` and `publish` look.
-    let elsewhere = TempDir::new().unwrap();
-    let output = specforge_cmd()
-        .args(["extension", "build", "--format", "json", "--dir"])
+    let elsewhere = tempfile::TempDir::new().unwrap();
+    let output = Cli::on(&dir)
+        .with_toolchain()
+        .bare_command(&["extension", "build", "--format", "json", "--dir"])
         .arg(&ext)
         .env("CARGO_NET_OFFLINE", "true")
         .env("CARGO_TARGET_DIR", elsewhere.path())
@@ -310,8 +313,8 @@ fn a_scaffolded_extension_builds_and_validates() {
     assert!(component.ends_with("target/wasm32-wasip2/release/round_trip.wasm"));
     assert!(component.exists());
 
-    let output = specforge_cmd()
-        .args(["extension", "validate", "--format", "json", "--dir"])
+    let output = Cli::on(&dir)
+        .bare_command(&["extension", "validate", "--format", "json", "--dir"])
         .arg(&ext)
         .output()
         .unwrap();
@@ -336,10 +339,10 @@ fn greet_wasm() -> PathBuf {
     verify = "specforge extension validate errors when no built component is found"
 )]
 fn extension_validate_without_a_built_component() {
-    let dir = TempDir::new().unwrap();
-    let output = specforge_cmd()
-        .args(["extension", "validate", "--format", "json", "--dir"])
-        .arg(dir.path())
+    let dir = scratch();
+    let output = Cli::on(&dir)
+        .bare_command(&["extension", "validate", "--format", "json", "--dir"])
+        .arg(dir.root())
         .output()
         .unwrap();
     assert_eq!(output.status.code(), Some(1));
@@ -362,9 +365,10 @@ fn extension_validate_reports_the_registry_build_diagnostics() {
     // The formal builtin, alone: it enhances software's kinds, which no
     // loaded extension declares (I004), reported; its missing peer is not
     // (it is installed beside it), and it is still valid.
+    let dir = scratch();
     let formal = repo_root().join("extensions/formal/wasm/specforge_ext_formal.wasm");
-    let output = specforge_cmd()
-        .args(["extension", "validate", "--format", "json", "--dir"])
+    let output = Cli::on(&dir)
+        .bare_command(&["extension", "validate", "--format", "json", "--dir"])
         .arg(&formal)
         .output()
         .unwrap();
@@ -381,11 +385,10 @@ fn extension_validate_reports_the_registry_build_diagnostics() {
     assert!(!codes.contains(&"E027"), "{codes:?}");
 
     // A binary that is not an extension is E028.
-    let dir = TempDir::new().unwrap();
-    let bogus = dir.path().join("bogus.wasm");
+    let bogus = dir.root().join("bogus.wasm");
     fs::write(&bogus, b"\0asm\x01\0\0\0").unwrap();
-    let output = specforge_cmd()
-        .args(["extension", "validate", "--format", "json", "--dir"])
+    let output = Cli::on(&dir)
+        .bare_command(&["extension", "validate", "--format", "json", "--dir"])
         .arg(&bogus)
         .output()
         .unwrap();
@@ -398,8 +401,9 @@ fn extension_validate_reports_the_registry_build_diagnostics() {
     verify = "valid manifest passes validation"
 )]
 fn extension_validate_a_valid_declaration() {
-    let output = specforge_cmd()
-        .args(["extension", "validate", "--format", "json", "--dir"])
+    let project = scratch();
+    let output = Cli::on(&project)
+        .bare_command(&["extension", "validate", "--format", "json", "--dir"])
         .arg(greet_wasm())
         .output()
         .unwrap();
@@ -413,8 +417,8 @@ fn extension_validate_a_valid_declaration() {
     assert_eq!(json["declaration"]["handshake"]["name"], "@sdk/greet");
 
     // Human output says so.
-    specforge_cmd()
-        .args(["extension", "validate", "--dir"])
+    Cli::on(&project)
+        .bare_command(&["extension", "validate", "--dir"])
         .arg(greet_wasm())
         .assert()
         .success()
@@ -446,10 +450,10 @@ fn contract_init_creates_the_sdk_crate() {
 )]
 fn contract_build_needs_a_crate() {
     // No crate: E040 before anything runs, on stderr in human form.
-    let dir = TempDir::new().unwrap();
-    specforge_cmd()
-        .args(["extension", "build", "--dir"])
-        .arg(dir.path())
+    let dir = scratch();
+    Cli::on(&dir)
+        .bare_command(&["extension", "build", "--dir"])
+        .arg(dir.root())
         .assert()
         .code(1)
         .stderr(predicates::str::contains(
@@ -464,15 +468,15 @@ fn contract_build_needs_a_crate() {
 fn contract_validate_exit_codes() {
     // A valid declaration exits 0, no component or a binary that is not an
     // extension exits 1.
-    specforge_cmd()
-        .args(["extension", "validate", "--dir"])
+    let dir = scratch();
+    Cli::on(&dir)
+        .bare_command(&["extension", "validate", "--dir"])
         .arg(greet_wasm())
         .assert()
         .success();
-    let dir = TempDir::new().unwrap();
-    specforge_cmd()
-        .args(["extension", "validate", "--dir"])
-        .arg(dir.path())
+    Cli::on(&dir)
+        .bare_command(&["extension", "validate", "--dir"])
+        .arg(dir.root())
         .assert()
         .failure();
 }

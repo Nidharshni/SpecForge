@@ -1,8 +1,8 @@
 //! The one request-helper set. Every request has id 1; a request with no
 //! reply panics, naming the method.
 
+use crate::McpServer;
 use serde_json::{Value, json};
-use specforge_mcp::McpServer;
 
 /// Send the request `method` with `params`; its reply.
 pub fn call(server: &mut McpServer, method: &str, params: Value) -> Value {
@@ -90,15 +90,13 @@ pub fn resource(server: &mut McpServer, uri: &str) -> (Value, Value) {
 }
 
 /// The latest handshake revision: the one `initialize` negotiates by default.
-pub fn latest() -> specforge_mcp::lifecycle::Revision {
-    specforge_mcp::lifecycle::Revision::Negotiated(
-        specforge_mcp::lifecycle::LATEST_PROTOCOL_VERSION,
-    )
+pub fn latest() -> crate::lifecycle::Revision {
+    crate::lifecycle::Revision::Negotiated(crate::lifecycle::LATEST_PROTOCOL_VERSION)
 }
 
 /// The core tools as `tools/list` describes them, in listing order.
-pub fn core_tools() -> Vec<specforge_mcp::registry::ToolDescriptor<'static>> {
-    specforge_mcp::tools::CORE_TOOLS
+pub fn core_tools() -> Vec<crate::registry::ToolDescriptor<'static>> {
+    crate::tools::CORE_TOOLS
         .iter()
         .map(|tool| tool.descriptor(latest()))
         .collect()

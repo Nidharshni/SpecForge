@@ -474,7 +474,7 @@ fn named(root: Option<&Path>, files: &Writes) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::events::testing::EventLog;
+    use crate::testing::EventLog;
     use crate::tool::ErrorCode;
     use serde_json::json;
     use specforge_common::{Diagnostic, Severity};

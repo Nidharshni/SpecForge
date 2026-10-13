@@ -1,41 +1,40 @@
+use crate::support::{Cli, TestProject};
 use assert_cmd::Command;
 use predicates::prelude::*;
 use specforge_test_macros::test as specforge_test;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use tempfile::TempDir;
 
-#[allow(deprecated)]
-fn specforge_cmd() -> Command {
-    Command::cargo_bin("specforge").unwrap()
+/// An empty directory: no `specforge.json`.
+fn scratch() -> TestProject {
+    TestProject::new().without_config()
 }
 
 /// A Rust project collected by `@specforge/cargo-test`, a fake `cargo` on
 /// `PATH` that writes a report the way `specforge-test` does (and leaves a
-/// marker so tests can tell whether it ran), and a private consent store.
+/// marker so tests can tell whether it ran). The consent store is the project's own HOME.
 /// With `PLAIN_TESTS` set, the fake prints libtest's output for plain
 /// `#[test]` functions instead, and writes no report.
 struct Fixture {
-    dir: TempDir,
+    project: TestProject,
+    /// The directory holding the fake `cargo`, beside the project.
+    tools: TempDir,
 }
 
 impl Fixture {
     fn new() -> Self {
-        let dir = TempDir::new().unwrap();
-        let root = dir.path().join("proj");
-        std::fs::create_dir_all(&root).unwrap();
-        std::fs::write(
-            root.join("specforge.json"),
-            r#"{"name":"demo","version":"0.1.0","extensions":["@specforge/software","@specforge/testing","@specforge/cargo-test"]}"#,
-        )
-        .unwrap();
-        std::fs::write(
-            root.join("app.spec"),
-            "behavior login \"Login\" {\n  verify unit \"accepts valid credentials\"\n}\n",
-        )
-        .unwrap();
-        std::fs::write(root.join("Cargo.toml"), "").unwrap();
+        let project = TestProject::new()
+            .raw_config(
+                r#"{"name":"demo","version":"0.1.0","extensions":["@specforge/software","@specforge/testing","@specforge/cargo-test"]}"#,
+            )
+            .file(
+                "app.spec",
+                "behavior login \"Login\" {\n  verify unit \"accepts valid credentials\"\n}\n",
+            )
+            .file("Cargo.toml", "");
 
-        let bin = dir.path().join("bin");
+        let tools = TempDir::new().unwrap();
+        let bin = tools.path().join("bin");
         std::fs::create_dir_all(&bin).unwrap();
         let cargo = bin.join("cargo");
         std::fs::write(
@@ -63,34 +62,26 @@ exit 0
             use std::os::unix::fs::PermissionsExt;
             std::fs::set_permissions(&cargo, std::fs::Permissions::from_mode(0o755)).unwrap();
         }
-        Fixture { dir }
+        Fixture { project, tools }
     }
 
-    fn root(&self) -> PathBuf {
-        self.dir.path().join("proj")
+    fn root(&self) -> &Path {
+        self.project.root()
     }
 
     fn ran(&self) -> bool {
-        self.dir.path().join("bin/ran").exists()
+        self.tools.path().join("bin/ran").exists()
     }
 
     /// `specforge <args>` in the fixture's environment, with stdin closed.
     fn cmd(&self, args: &[&str]) -> Command {
         let path = format!(
             "{}:{}",
-            self.dir.path().join("bin").display(),
+            self.tools.path().join("bin").display(),
             std::env::var("PATH").unwrap_or_default()
         );
-        let mut cmd = specforge_cmd();
-        cmd.args(args)
-            .arg("--path")
-            .arg(self.root())
-            .env("PATH", path)
-            .env(
-                "SPECFORGE_CONSENT_FILE",
-                self.dir.path().join("consent.json"),
-            )
-            .write_stdin("");
+        let mut cmd = Cli::on(&self.project).env("PATH", path).command(args);
+        cmd.write_stdin("");
         cmd
     }
 
@@ -108,8 +99,8 @@ fn write_report(root: &Path, entries: &str) {
 
 #[test]
 fn test_collect_help_exits_0() {
-    specforge_cmd()
-        .args(["collect", "--help"])
+    Cli::on(&scratch())
+        .bare_command(&["collect", "--help"])
         .assert()
         .success()
         .stdout(predicate::str::contains("--no-run"))
@@ -118,9 +109,9 @@ fn test_collect_help_exits_0() {
 
 #[test]
 fn test_collect_in_empty_dir_exits_1() {
-    let dir = TempDir::new().unwrap();
-    specforge_cmd()
-        .args(["collect", "--path", dir.path().to_str().unwrap()])
+    let dir = scratch();
+    Cli::on(&dir)
+        .command(&["collect"])
         .assert()
         .failure()
         .stderr(predicate::str::contains("no specforge project at"));
@@ -128,15 +119,9 @@ fn test_collect_in_empty_dir_exits_1() {
 
 #[test]
 fn test_collect_json_format_in_empty_dir() {
-    let dir = TempDir::new().unwrap();
-    specforge_cmd()
-        .args([
-            "collect",
-            "--path",
-            dir.path().to_str().unwrap(),
-            "--format",
-            "json",
-        ])
+    let dir = scratch();
+    Cli::on(&dir)
+        .command(&["collect", "--format", "json"])
         .assert()
         .failure()
         .stdout(predicate::str::contains("\"error\""));
@@ -144,14 +129,9 @@ fn test_collect_json_format_in_empty_dir() {
 
 #[test]
 fn collect_without_a_runner_extension_is_e058() {
-    let dir = TempDir::new().unwrap();
-    std::fs::write(
-        dir.path().join("specforge.json"),
-        r#"{"name":"test","version":"0.1.0"}"#,
-    )
-    .unwrap();
-    specforge_cmd()
-        .args(["collect", "--path", dir.path().to_str().unwrap()])
+    let dir = TestProject::new().raw_config(r#"{"name":"test","version":"0.1.0"}"#);
+    Cli::on(&dir)
+        .command(&["collect"])
         .assert()
         .failure()
         .stderr(predicate::str::contains("error[E058]"))
@@ -216,7 +196,7 @@ fn yes_runs_the_declared_command() {
     let fx = Fixture::new();
     // A stale report from an earlier run must not survive the new one.
     write_report(
-        &fx.root(),
+        fx.root(),
         r#"[{"entity_id":"login","test_name":"old","status":"failed"}]"#,
     );
     fx.cmd(&["collect", "--yes"])
@@ -251,7 +231,7 @@ fn runner_that_writes_no_report_is_e045() {
 fn no_run_parses_the_existing_report_without_running() {
     let fx = Fixture::new();
     write_report(
-        &fx.root(),
+        fx.root(),
         r#"[{"entity_id":"login","test_name":"a","status":"passed"},{"entity_id":"ghost","test_name":"b","status":"passed"}]"#,
     );
     let out = fx
@@ -278,7 +258,7 @@ fn no_run_parses_the_existing_report_without_running() {
 #[test]
 fn explicit_report_files_are_parsed() {
     let fx = Fixture::new();
-    let report = fx.dir.path().join("elsewhere.json");
+    let report = fx.tools.path().join("elsewhere.json");
     std::fs::write(
         &report,
         r#"{"entries":[{"entity_id":"login","test_name":"a","status":"failed"}]}"#,
@@ -338,9 +318,8 @@ fn collect_links_plain_tests_by_naming_convention() {
 fn collect_then_analyze_scores_the_recorded_tests() {
     let fx = Fixture::new();
     fx.cmd(&["collect", "--yes"]).assert().success();
-    let out = specforge_cmd()
-        .args(["analyze", "coverage", "--format", "json", "--path"])
-        .arg(fx.root())
+    let out = Cli::on(&fx.project)
+        .command(&["analyze", "coverage", "--format", "json"])
         .assert()
         .success()
         .get_output()
@@ -358,24 +337,21 @@ fn collect_then_analyze_scores_the_recorded_tests() {
     verify = "collect runs vitest with the report path and maps linked tests"
 )]
 fn vitest_runs_with_the_report_path_and_maps_linked_tests() {
-    let dir = TempDir::new().unwrap();
-    let root = dir.path().join("web");
-    std::fs::create_dir_all(&root).unwrap();
-    std::fs::write(
-        root.join("specforge.json"),
-        r#"{"name":"web","version":"0.1.0","extensions":["@specforge/software","@specforge/testing","@specforge/vitest"]}"#,
-    )
-    .unwrap();
-    std::fs::write(
-        root.join("app.spec"),
-        "behavior login \"Login\" {\n  verify unit \"accepts valid credentials\"\n}\n",
-    )
-    .unwrap();
-    std::fs::write(root.join("vitest.config.ts"), "export default {}\n").unwrap();
+    let project = TestProject::new()
+        .raw_config(
+            r#"{"name":"web","version":"0.1.0","extensions":["@specforge/software","@specforge/testing","@specforge/vitest"]}"#,
+        )
+        .file(
+            "app.spec",
+            "behavior login \"Login\" {\n  verify unit \"accepts valid credentials\"\n}\n",
+        )
+        .file("vitest.config.ts", "export default {}\n");
+    let root = project.root();
+    let tools = TempDir::new().unwrap();
 
     // A fake `npx` that records its arguments and writes a vitest JSON
     // report to the `--outputFile.json=` path the collector declared.
-    let bin = dir.path().join("bin");
+    let bin = tools.path().join("bin");
     std::fs::create_dir_all(&bin).unwrap();
     let npx = bin.join("npx");
     std::fs::write(
@@ -407,11 +383,9 @@ exit 0
         bin.display(),
         std::env::var("PATH").unwrap_or_default()
     );
-    specforge_cmd()
-        .args(["collect", "--yes", "--path"])
-        .arg(&root)
+    Cli::on(&project)
         .env("PATH", path)
-        .env("SPECFORGE_CONSENT_FILE", dir.path().join("consent.json"))
+        .command(&["collect", "--yes"])
         .write_stdin("")
         .assert()
         .success()
@@ -441,28 +415,22 @@ exit 0
     verify = "a plain cargo test proves obligations by naming convention"
 )]
 fn a_plain_cargo_test_proves_obligations_by_naming_convention() {
-    let dir = TempDir::new().unwrap();
-    let root = dir.path();
-    std::fs::write(
-        root.join("specforge.json"),
-        r#"{"name":"shop","version":"0.1.0","extensions":["@specforge/software","@specforge/testing","@specforge/cargo-test"]}"#,
-    )
-    .unwrap();
-    std::fs::write(
-        root.join("cart.spec"),
-        "behavior add_item \"Add an item\" {\n  verify unit \"rejects an empty name\"\n  verify unit \"rejects a duplicate item\"\n}\n",
-    )
-    .unwrap();
-    // No specforge-test dependency: only the names link the tests.
-    std::fs::write(
-        root.join("Cargo.toml"),
-        "[package]\nname = \"shop\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n",
-    )
-    .unwrap();
-    std::fs::create_dir_all(root.join("src")).unwrap();
-    std::fs::write(
-        root.join("src/lib.rs"),
-        r#"#[cfg(test)]
+    let project = TestProject::new()
+        .raw_config(
+            r#"{"name":"shop","version":"0.1.0","extensions":["@specforge/software","@specforge/testing","@specforge/cargo-test"]}"#,
+        )
+        .file(
+            "cart.spec",
+            "behavior add_item \"Add an item\" {\n  verify unit \"rejects an empty name\"\n  verify unit \"rejects a duplicate item\"\n}\n",
+        )
+        // No specforge-test dependency: only the names link the tests.
+        .file(
+            "Cargo.toml",
+            "[package]\nname = \"shop\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n",
+        )
+        .file(
+            "src/lib.rs",
+            r#"#[cfg(test)]
 mod tests {
     #[test]
     #[allow(non_snake_case)]
@@ -477,22 +445,20 @@ mod tests {
     fn unrelated() {}
 }
 "#,
-    )
-    .unwrap();
+        );
+    let root = project.root();
 
-    specforge_cmd()
-        .args(["collect", "--yes", "--path"])
-        .arg(root)
+    Cli::on(&project)
+        .with_toolchain()
         .env("CARGO_TARGET_DIR", root.join("target"))
-        .env("SPECFORGE_CONSENT_FILE", root.join("consent.json"))
+        .command(&["collect", "--yes"])
         .write_stdin("")
         .assert()
         .success()
         .stdout(predicate::str::contains("2 linked by naming convention"));
 
-    let out = specforge_cmd()
-        .args(["analyze", "coverage", "--format", "json", "--path"])
-        .arg(root)
+    let out = Cli::on(&project)
+        .command(&["analyze", "coverage", "--format", "json"])
         .assert()
         .get_output()
         .stdout

@@ -1,6 +1,7 @@
 //! C6-13 acceptance: the shipped config JSON schema covers every user-facing
 //! config key, and the two shipped copies never drift.
 
+use crate::support::{Cli, TestProject};
 use std::path::Path;
 
 fn repo_root() -> &'static Path {
@@ -62,29 +63,21 @@ fn schema_covers_project_config_keys() {
 fn specforge_json_with_inference_and_registries_loads() {
     // End-to-end: the compiler consumes both keys without treating them as
     // unknown config (they parse into ProjectConfig / registry client).
-    let tmp = tempfile::TempDir::new().unwrap();
-    let root = tmp.path();
-    std::fs::create_dir_all(root.join("src")).unwrap();
-    std::fs::write(
-        root.join("specforge.json"),
-        r#"{
+    let project = TestProject::new()
+        .raw_config(
+            r#"{
             "name": "parity",
             "spec_root": "src",
             "extensions": [],
             "inference": { "density_threshold": 0.5, "kinds": { "widget": "src/" } },
             "registries": [ { "alias": "local", "url": "http://127.0.0.1:1", "default_registry": true } ]
         }"#,
-    )
-    .unwrap();
-    std::fs::write(
-        root.join("src/a.spec"),
-        "type Widget {\n  id string @unique\n}\n",
-    )
-    .unwrap();
+        )
+        .file("src/a.spec", "type Widget {\n  id string @unique\n}\n");
 
-    let bin = env!("CARGO_BIN_EXE_specforge");
-    let out = std::process::Command::new(bin)
-        .args(["check", "--path", root.join("src").to_str().unwrap()])
+    let src = project.root().join("src");
+    let out = Cli::on(&project)
+        .bare_command(&["check", "--path", src.to_str().unwrap()])
         .output()
         .unwrap();
     assert!(

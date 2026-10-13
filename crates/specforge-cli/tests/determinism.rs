@@ -9,26 +9,12 @@
 //! It also pins the D1 semantics: only nodes ON the cycle are flagged — a
 //! feeder node leading into the cycle is not.
 
-use std::fs;
-use std::process::Command;
-use tempfile::TempDir;
-
-fn binary() -> &'static str {
-    env!("CARGO_BIN_EXE_specforge")
-}
+use crate::support::{Cli, TestProject};
 
 /// feature cycle_b ⇄ cycle_c (a real 2-cycle), with cycle_a feeding into it.
 /// Before hardening D1, the flagged set flip-flopped between `{cycle_b,
 /// cycle_c}` and `{cycle_a, cycle_b, cycle_c}` depending on HashMap seeding.
-fn setup_cycle_project() -> TempDir {
-    let dir = TempDir::new().unwrap();
-    let config = serde_json::json!({
-        "name": "det-fixture",
-        "version": "0.1.0",
-        "extensions": ["@specforge/product"]
-    });
-    fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
-
+fn setup_cycle_project() -> TestProject {
     let spec = "\
 feature cycle_a \"Feeder\" {
     depends_on [cycle_b]
@@ -51,18 +37,15 @@ feature cycle_c \"Cycle C\" {
     flow [step]
 }
 ";
-    fs::write(dir.path().join("cycle.spec"), spec).unwrap();
-    dir
+    TestProject::new()
+        .config(|c| c["name"] = "det-fixture".into())
+        .enabling(&["@specforge/product"])
+        .file("cycle.spec", spec)
 }
 
-fn run_check(dir: &TempDir) -> (Vec<u8>, Vec<u8>, i32) {
-    let out = Command::new(binary())
-        .arg("check")
-        .arg("--path")
-        .arg(dir.path())
-        .output()
-        .expect("specforge binary runs");
-    (out.stdout, out.stderr, out.status.code().unwrap_or(-1))
+fn run_check(dir: &TestProject) -> (Vec<u8>, Vec<u8>, i32) {
+    let out = Cli::on(dir).run(&["check"]);
+    (out.stdout.into_bytes(), out.stderr.into_bytes(), out.code)
 }
 
 #[test]

@@ -1,10 +1,10 @@
-use assert_cmd::Command;
+use crate::support::{Cli, TestProject};
 use specforge_test_macros::test as specforge_test;
 use std::fs;
-use tempfile::TempDir;
 
-fn specforge_cmd() -> Command {
-    assert_cmd::cargo_bin_cmd!("specforge")
+/// An empty directory: no `specforge.json`, the project `init` scaffolds in.
+fn scratch() -> TestProject {
+    TestProject::new().without_config()
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -16,15 +16,14 @@ fn specforge_cmd() -> Command {
     verify = "scaffold creates valid specforge.json"
 )]
 fn init_creates_valid_specforge_json() {
-    let dir = TempDir::new().unwrap();
+    let dir = scratch();
 
-    specforge_cmd()
-        .args(["init", "--name", "my-project"])
-        .current_dir(dir.path())
+    Cli::on(&dir)
+        .bare_command(&["init", "--name", "my-project"])
         .assert()
         .success();
 
-    let config_path = dir.path().join("specforge.json");
+    let config_path = dir.root().join("specforge.json");
     assert!(config_path.exists(), "specforge.json should be created");
 
     let content = fs::read_to_string(&config_path).unwrap();
@@ -42,15 +41,14 @@ fn init_creates_valid_specforge_json() {
     verify = "scaffold includes $schema field in generated config"
 )]
 fn init_includes_schema_field() {
-    let dir = TempDir::new().unwrap();
+    let dir = scratch();
 
-    specforge_cmd()
-        .args(["init", "--name", "test-schema"])
-        .current_dir(dir.path())
+    Cli::on(&dir)
+        .bare_command(&["init", "--name", "test-schema"])
         .assert()
         .success();
 
-    let content = fs::read_to_string(dir.path().join("specforge.json")).unwrap();
+    let content = fs::read_to_string(dir.root().join("specforge.json")).unwrap();
     let json: serde_json::Value = serde_json::from_str(&content).unwrap();
 
     assert!(
@@ -68,12 +66,11 @@ fn init_includes_schema_field() {
     verify = "scaffold rejects when specforge.json already exists"
 )]
 fn init_rejects_existing_project() {
-    let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("specforge.json"), "{}").unwrap();
+    let dir = scratch();
+    fs::write(dir.root().join("specforge.json"), "{}").unwrap();
 
-    specforge_cmd()
-        .args(["init", "--name", "duplicate"])
-        .current_dir(dir.path())
+    Cli::on(&dir)
+        .bare_command(&["init", "--name", "duplicate"])
         .assert()
         .failure()
         .stderr(predicates::str::contains("already exists"));
@@ -84,14 +81,14 @@ fn init_rejects_existing_project() {
     verify = "scaffold inside another project creates a separate project"
 )]
 fn init_inside_another_project_creates_a_separate_one() {
-    let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("specforge.json"), "{}").unwrap();
+    let dir = scratch();
+    fs::write(dir.root().join("specforge.json"), "{}").unwrap();
 
-    let child = dir.path().join("subdir");
+    let child = dir.root().join("subdir");
     fs::create_dir_all(&child).unwrap();
 
-    specforge_cmd()
-        .args(["init", "--name", "nested"])
+    Cli::on(&dir)
+        .bare_command(&["init", "--name", "nested"])
         .current_dir(&child)
         .assert()
         .success()
@@ -101,13 +98,13 @@ fn init_inside_another_project_creates_a_separate_one() {
     assert_eq!(config["name"], "nested");
 
     // Commands run inside it resolve to the nearest project.
-    specforge_cmd()
-        .arg("check")
+    Cli::on(&dir)
+        .bare_command(&["check"])
         .current_dir(&child)
         .assert()
         .success();
     assert_eq!(
-        fs::read_to_string(dir.path().join("specforge.json")).unwrap(),
+        fs::read_to_string(dir.root().join("specforge.json")).unwrap(),
         "{}",
         "the enclosing project is untouched"
     );
@@ -118,28 +115,27 @@ fn init_inside_another_project_creates_a_separate_one() {
     verify = "scaffold in non-empty directory preserves existing files"
 )]
 fn init_preserves_existing_files() {
-    let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("README.md"), "# Hello").unwrap();
-    fs::create_dir_all(dir.path().join("src")).unwrap();
-    fs::write(dir.path().join("src/main.rs"), "fn main() {}").unwrap();
+    let dir = scratch();
+    fs::write(dir.root().join("README.md"), "# Hello").unwrap();
+    fs::create_dir_all(dir.root().join("src")).unwrap();
+    fs::write(dir.root().join("src/main.rs"), "fn main() {}").unwrap();
 
-    specforge_cmd()
-        .args(["init", "--name", "existing"])
-        .current_dir(dir.path())
+    Cli::on(&dir)
+        .bare_command(&["init", "--name", "existing"])
         .assert()
         .success();
 
     // Original files should still exist
     assert_eq!(
-        fs::read_to_string(dir.path().join("README.md")).unwrap(),
+        fs::read_to_string(dir.root().join("README.md")).unwrap(),
         "# Hello"
     );
     assert_eq!(
-        fs::read_to_string(dir.path().join("src/main.rs")).unwrap(),
+        fs::read_to_string(dir.root().join("src/main.rs")).unwrap(),
         "fn main() {}"
     );
     // And specforge.json should also exist
-    assert!(dir.path().join("specforge.json").exists());
+    assert!(dir.root().join("specforge.json").exists());
 }
 
 #[specforge_test(
@@ -147,26 +143,25 @@ fn init_preserves_existing_files() {
     verify = "scaffold in non-empty directory preserves existing files"
 )]
 fn init_refuses_to_overwrite_a_starter_file() {
-    let dir = TempDir::new().unwrap();
-    fs::create_dir_all(dir.path().join("spec")).unwrap();
+    let dir = scratch();
+    fs::create_dir_all(dir.root().join("spec")).unwrap();
     fs::write(
-        dir.path().join("spec/hello.spec"),
+        dir.root().join("spec/hello.spec"),
         "term mine \"Mine\" {\n}\n",
     )
     .unwrap();
 
-    specforge_cmd()
-        .args(["init", "--name", "victim"])
-        .current_dir(dir.path())
+    Cli::on(&dir)
+        .bare_command(&["init", "--name", "victim"])
         .assert()
         .code(1)
         .stderr(predicates::str::contains("spec/hello.spec already exists"));
 
     assert_eq!(
-        fs::read_to_string(dir.path().join("spec/hello.spec")).unwrap(),
+        fs::read_to_string(dir.root().join("spec/hello.spec")).unwrap(),
         "term mine \"Mine\" {\n}\n"
     );
-    assert!(!dir.path().join("specforge.json").exists());
+    assert!(!dir.root().join("specforge.json").exists());
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -178,15 +173,14 @@ fn init_refuses_to_overwrite_a_starter_file() {
     verify = "starter spec file is created alongside specforge.json"
 )]
 fn init_creates_starter_spec_file() {
-    let dir = TempDir::new().unwrap();
+    let dir = scratch();
 
-    specforge_cmd()
-        .args(["init", "--name", "test-starter"])
-        .current_dir(dir.path())
+    Cli::on(&dir)
+        .bare_command(&["init", "--name", "test-starter"])
         .assert()
         .success();
 
-    let starter = dir.path().join("spec").join("hello.spec");
+    let starter = dir.root().join("spec").join("hello.spec");
     assert!(
         starter.exists(),
         "starter spec file should be created at spec/hello.spec"
@@ -206,19 +200,20 @@ fn a_fresh_project_is_formatted_and_checks_clean() {
         .iter()
         .map(|(name, _)| Some(*name));
     for extension in std::iter::once(None).chain(builtins) {
-        let dir = TempDir::new().unwrap();
-        let mut init = specforge_cmd();
+        let dir = scratch();
+        let mut init = Cli::on(&dir).bare_command(&[]);
         init.args(["init", "--name", "fresh"])
-            .current_dir(dir.path());
+            .current_dir(dir.root());
         if let Some(extension) = extension {
             init.args(["--extensions", extension]);
         }
         init.assert().success();
 
         for command in [&["format", "--check"][..], &["check"][..]] {
-            let run = specforge_cmd()
+            let run = Cli::on(&dir)
+                .bare_command(&[])
                 .args(command)
-                .current_dir(dir.path())
+                .current_dir(dir.root())
                 .output()
                 .unwrap();
             assert!(
@@ -236,10 +231,10 @@ fn a_fresh_project_is_formatted_and_checks_clean() {
     verify = "init with a builtin that requires another passes check"
 )]
 fn init_with_a_builtin_that_requires_another_passes_check() {
-    let dir = TempDir::new().unwrap();
+    let dir = scratch();
 
-    let init = specforge_cmd()
-        .args([
+    let init = Cli::on(&dir)
+        .bare_command(&[
             "init",
             "--name",
             "needs-software",
@@ -248,7 +243,6 @@ fn init_with_a_builtin_that_requires_another_passes_check() {
             "--format",
             "json",
         ])
-        .current_dir(dir.path())
         .output()
         .unwrap();
     assert!(init.status.success(), "{init:?}");
@@ -266,9 +260,8 @@ fn init_with_a_builtin_that_requires_another_passes_check() {
         "{installed:?}"
     );
 
-    let check = specforge_cmd()
-        .args(["check", "--format", "json"])
-        .current_dir(dir.path())
+    let check = Cli::on(&dir)
+        .bare_command(&["check", "--format", "json"])
         .output()
         .unwrap();
     assert!(check.status.success(), "{check:?}");
@@ -278,7 +271,10 @@ fn init_with_a_builtin_that_requires_another_passes_check() {
 
 #[test]
 fn init_help_states_the_default_version_from_the_constant() {
-    let help = specforge_cmd().args(["init", "-h"]).output().unwrap();
+    let help = Cli::on(&scratch())
+        .bare_command(&["init", "-h"])
+        .output()
+        .unwrap();
     let text = String::from_utf8(help.stdout).unwrap();
     assert!(
         text.contains(&format!(
@@ -295,19 +291,17 @@ fn init_help_states_the_default_version_from_the_constant() {
     verify = "starter spec file passes specforge check with zero errors"
 )]
 fn init_starter_passes_check() {
-    let dir = TempDir::new().unwrap();
+    let dir = scratch();
 
-    specforge_cmd()
-        .args(["init", "--name", "check-test"])
-        .current_dir(dir.path())
+    Cli::on(&dir)
+        .bare_command(&["init", "--name", "check-test"])
         .assert()
         .success();
 
     // Run specforge check on the newly created project
-    specforge_cmd()
-        .args(["check", "--format", "json"])
-        .arg("--path")
-        .arg(dir.path().join("spec"))
+    Cli::on(&dir)
+        .bare_command(&["check", "--format", "json", "--path"])
+        .arg(dir.root().join("spec"))
         .assert()
         .success();
 }
@@ -317,15 +311,14 @@ fn init_starter_passes_check() {
     verify = "starter file uses only structural syntax when no extensions contribute templates"
 )]
 fn init_starter_uses_structural_syntax_only() {
-    let dir = TempDir::new().unwrap();
+    let dir = scratch();
 
-    specforge_cmd()
-        .args(["init", "--name", "structural"])
-        .current_dir(dir.path())
+    Cli::on(&dir)
+        .bare_command(&["init", "--name", "structural"])
         .assert()
         .success();
 
-    let content = fs::read_to_string(dir.path().join("spec/hello.spec")).unwrap();
+    let content = fs::read_to_string(dir.root().join("spec/hello.spec")).unwrap();
 
     // Should NOT contain domain-specific keywords from any extension
     let domain_keywords = [
@@ -356,19 +349,19 @@ fn init_starter_uses_structural_syntax_only() {
     verify = "starter file content is deterministic for same extension set"
 )]
 fn init_starter_is_deterministic() {
-    let dir1 = TempDir::new().unwrap();
-    let dir2 = TempDir::new().unwrap();
+    let dir1 = scratch();
+    let dir2 = scratch();
 
-    for dir in [dir1.path(), dir2.path()] {
-        specforge_cmd()
-            .args(["init", "--name", "deterministic"])
+    for dir in [dir1.root(), dir2.root()] {
+        Cli::on(&dir1)
+            .bare_command(&["init", "--name", "deterministic"])
             .current_dir(dir)
             .assert()
             .success();
     }
 
-    let content1 = fs::read_to_string(dir1.path().join("spec/hello.spec")).unwrap();
-    let content2 = fs::read_to_string(dir2.path().join("spec/hello.spec")).unwrap();
+    let content1 = fs::read_to_string(dir1.root().join("spec/hello.spec")).unwrap();
+    let content2 = fs::read_to_string(dir2.root().join("spec/hello.spec")).unwrap();
 
     assert_eq!(
         content1, content2,
@@ -385,15 +378,14 @@ fn init_starter_is_deterministic() {
     verify = "zero-extension init creates valid specforge.json with empty extensions"
 )]
 fn zero_ext_init_creates_valid_config() {
-    let dir = TempDir::new().unwrap();
+    let dir = scratch();
 
-    specforge_cmd()
-        .args(["init", "--name", "zero-ext"])
-        .current_dir(dir.path())
+    Cli::on(&dir)
+        .bare_command(&["init", "--name", "zero-ext"])
         .assert()
         .success();
 
-    let content = fs::read_to_string(dir.path().join("specforge.json")).unwrap();
+    let content = fs::read_to_string(dir.root().join("specforge.json")).unwrap();
     let json: serde_json::Value = serde_json::from_str(&content).unwrap();
 
     assert_eq!(json["extensions"], serde_json::json!([]));
@@ -404,15 +396,14 @@ fn zero_ext_init_creates_valid_config() {
     verify = "zero-extension config produces empty extensions array []"
 )]
 fn zero_ext_config_has_empty_array() {
-    let dir = TempDir::new().unwrap();
+    let dir = scratch();
 
-    specforge_cmd()
-        .args(["init", "--name", "empty-ext"])
-        .current_dir(dir.path())
+    Cli::on(&dir)
+        .bare_command(&["init", "--name", "empty-ext"])
         .assert()
         .success();
 
-    let content = fs::read_to_string(dir.path().join("specforge.json")).unwrap();
+    let content = fs::read_to_string(dir.root().join("specforge.json")).unwrap();
     // Verify the raw JSON contains "extensions": []
     assert!(
         content.contains(r#""extensions": []"#),
@@ -425,18 +416,16 @@ fn zero_ext_config_has_empty_array() {
     verify = "zero-extension starter file passes specforge check"
 )]
 fn zero_ext_starter_passes_check() {
-    let dir = TempDir::new().unwrap();
+    let dir = scratch();
 
-    specforge_cmd()
-        .args(["init", "--name", "zero-check"])
-        .current_dir(dir.path())
+    Cli::on(&dir)
+        .bare_command(&["init", "--name", "zero-check"])
         .assert()
         .success();
 
-    specforge_cmd()
-        .args(["check", "--format", "json"])
-        .arg("--path")
-        .arg(dir.path().join("spec"))
+    Cli::on(&dir)
+        .bare_command(&["check", "--format", "json", "--path"])
+        .arg(dir.root().join("spec"))
         .assert()
         .success();
 }
@@ -446,18 +435,16 @@ fn zero_ext_starter_passes_check() {
     verify = "zero-extension project produces valid graph via specforge export"
 )]
 fn zero_ext_export_produces_valid_graph() {
-    let dir = TempDir::new().unwrap();
+    let dir = scratch();
 
-    specforge_cmd()
-        .args(["init", "--name", "zero-export"])
-        .current_dir(dir.path())
+    Cli::on(&dir)
+        .bare_command(&["init", "--name", "zero-export"])
         .assert()
         .success();
 
-    let output = specforge_cmd()
-        .args(["export", "--format", "graph"])
-        .arg("--path")
-        .arg(dir.path().join("spec"))
+    let output = Cli::on(&dir)
+        .bare_command(&["export", "--format", "graph", "--path"])
+        .arg(dir.root().join("spec"))
         .output()
         .unwrap();
 
@@ -478,15 +465,14 @@ fn zero_ext_export_produces_valid_graph() {
     verify = "non-interactive init creates valid specforge.json"
 )]
 fn non_interactive_creates_valid_config() {
-    let dir = TempDir::new().unwrap();
+    let dir = scratch();
 
-    specforge_cmd()
-        .args(["init", "--name", "ci-project"])
-        .current_dir(dir.path())
+    Cli::on(&dir)
+        .bare_command(&["init", "--name", "ci-project"])
         .assert()
         .success();
 
-    let content = fs::read_to_string(dir.path().join("specforge.json")).unwrap();
+    let content = fs::read_to_string(dir.root().join("specforge.json")).unwrap();
     let json: serde_json::Value = serde_json::from_str(&content).unwrap();
     assert_eq!(json["name"], "ci-project");
 }
@@ -496,12 +482,11 @@ fn non_interactive_creates_valid_config() {
     verify = "non-interactive init skips all prompts"
 )]
 fn non_interactive_no_prompts() {
-    let dir = TempDir::new().unwrap();
+    let dir = scratch();
 
     // Pipe empty stdin — should not hang waiting for input
-    let output = specforge_cmd()
-        .args(["init", "--name", "no-prompt"])
-        .current_dir(dir.path())
+    let output = Cli::on(&dir)
+        .bare_command(&["init", "--name", "no-prompt"])
         .write_stdin("")
         .output()
         .unwrap();
@@ -510,7 +495,7 @@ fn non_interactive_no_prompts() {
         output.status.success(),
         "should succeed without interactive input"
     );
-    assert!(dir.path().join("specforge.json").exists());
+    assert!(dir.root().join("specforge.json").exists());
 }
 
 #[specforge_test(
@@ -518,10 +503,10 @@ fn non_interactive_no_prompts() {
     verify = "non-interactive init with --extensions populates extensions list"
 )]
 fn non_interactive_with_extensions() {
-    let dir = TempDir::new().unwrap();
+    let dir = scratch();
 
-    specforge_cmd()
-        .args([
+    Cli::on(&dir)
+        .bare_command(&[
             "init",
             "--name",
             "ext-project",
@@ -530,11 +515,10 @@ fn non_interactive_with_extensions() {
             "--extensions",
             "@specforge/product",
         ])
-        .current_dir(dir.path())
         .assert()
         .success();
 
-    let content = fs::read_to_string(dir.path().join("specforge.json")).unwrap();
+    let content = fs::read_to_string(dir.root().join("specforge.json")).unwrap();
     let json: serde_json::Value = serde_json::from_str(&content).unwrap();
     let extensions = json["extensions"].as_array().unwrap();
     // Enabling software enables the test vocabulary it relies on (ADR 0002).
@@ -549,20 +533,19 @@ fn non_interactive_with_extensions() {
 #[test]
 fn init_enables_runner_extensions_for_detected_test_runners() {
     let init = |setup: &dyn Fn(&std::path::Path)| {
-        let dir = TempDir::new().unwrap();
-        setup(dir.path());
-        specforge_cmd()
-            .args([
+        let dir = scratch();
+        setup(dir.root());
+        Cli::on(&dir)
+            .bare_command(&[
                 "init",
                 "--name",
                 "demo",
                 "--extensions",
                 "@specforge/software",
             ])
-            .current_dir(dir.path())
             .assert()
             .success();
-        let content = fs::read_to_string(dir.path().join("specforge.json")).unwrap();
+        let content = fs::read_to_string(dir.root().join("specforge.json")).unwrap();
         let json: serde_json::Value = serde_json::from_str(&content).unwrap();
         json["extensions"].clone()
     };
@@ -593,11 +576,10 @@ fn init_enables_runner_extensions_for_detected_test_runners() {
     verify = "non-interactive init with --format=json prints the init document specforge.init answers"
 )]
 fn non_interactive_json_output() {
-    let dir = TempDir::new().unwrap();
+    let dir = scratch();
 
-    let output = specforge_cmd()
-        .args(["init", "--name", "json-out", "--format", "json"])
-        .current_dir(dir.path())
+    let output = Cli::on(&dir)
+        .bare_command(&["init", "--name", "json-out", "--format", "json"])
         .output()
         .unwrap();
 
@@ -622,10 +604,10 @@ fn non_interactive_json_output() {
     verify = "non-interactive init --format=json includes project_root, name, version, config_file, starter_file and extensions_installed"
 )]
 fn non_interactive_json_all_fields() {
-    let dir = TempDir::new().unwrap();
+    let dir = scratch();
 
-    let output = specforge_cmd()
-        .args([
+    let output = Cli::on(&dir)
+        .bare_command(&[
             "init",
             "--name",
             "fields-test",
@@ -634,7 +616,6 @@ fn non_interactive_json_all_fields() {
             "--extensions",
             "@specforge/software",
         ])
-        .current_dir(dir.path())
         .output()
         .unwrap();
 
@@ -665,15 +646,14 @@ fn non_interactive_json_all_fields() {
     verify = "non-interactive init with --version overrides default version in specforge.json"
 )]
 fn non_interactive_version_override() {
-    let dir = TempDir::new().unwrap();
+    let dir = scratch();
 
-    specforge_cmd()
-        .args(["init", "--name", "versioned", "--version", "2.0.0"])
-        .current_dir(dir.path())
+    Cli::on(&dir)
+        .bare_command(&["init", "--name", "versioned", "--version", "2.0.0"])
         .assert()
         .success();
 
-    let content = fs::read_to_string(dir.path().join("specforge.json")).unwrap();
+    let content = fs::read_to_string(dir.root().join("specforge.json")).unwrap();
     let json: serde_json::Value = serde_json::from_str(&content).unwrap();
     assert_eq!(json["version"], "2.0.0");
 }
@@ -682,19 +662,19 @@ fn non_interactive_version_override() {
 fn non_interactive_matches_default_name() {
     // With --name, the result should be deterministic regardless of how
     // the name was provided (flag vs. directory name inference).
-    let dir1 = TempDir::new().unwrap();
-    let dir2 = TempDir::new().unwrap();
+    let dir1 = scratch();
+    let dir2 = scratch();
 
-    for dir in [dir1.path(), dir2.path()] {
-        specforge_cmd()
-            .args(["init", "--name", "same-project"])
+    for dir in [dir1.root(), dir2.root()] {
+        Cli::on(&dir1)
+            .bare_command(&["init", "--name", "same-project"])
             .current_dir(dir)
             .assert()
             .success();
     }
 
-    let c1 = fs::read_to_string(dir1.path().join("specforge.json")).unwrap();
-    let c2 = fs::read_to_string(dir2.path().join("specforge.json")).unwrap();
+    let c1 = fs::read_to_string(dir1.root().join("specforge.json")).unwrap();
+    let c2 = fs::read_to_string(dir2.root().join("specforge.json")).unwrap();
     assert_eq!(c1, c2, "same --name should produce identical config");
 }
 
@@ -707,28 +687,25 @@ fn non_interactive_matches_default_name() {
     verify = "scaffolded project passes init-check-export cycle"
 )]
 fn init_check_export_cycle() {
-    let dir = TempDir::new().unwrap();
+    let dir = scratch();
 
     // init
-    specforge_cmd()
-        .args(["init", "--name", "cycle-test"])
-        .current_dir(dir.path())
+    Cli::on(&dir)
+        .bare_command(&["init", "--name", "cycle-test"])
         .assert()
         .success();
 
     // check
-    specforge_cmd()
-        .args(["check", "--format", "json"])
-        .arg("--path")
-        .arg(dir.path().join("spec"))
+    Cli::on(&dir)
+        .bare_command(&["check", "--format", "json", "--path"])
+        .arg(dir.root().join("spec"))
         .assert()
         .success();
 
     // export
-    let output = specforge_cmd()
-        .args(["export", "--format", "graph"])
-        .arg("--path")
-        .arg(dir.path().join("spec"))
+    let output = Cli::on(&dir)
+        .bare_command(&["export", "--format", "graph", "--path"])
+        .arg(dir.root().join("spec"))
         .output()
         .unwrap();
     assert!(output.status.success(), "export should succeed");
@@ -743,26 +720,23 @@ fn init_check_export_cycle() {
     verify = "full init-check-export cycle completes in under 60 seconds"
 )]
 fn init_check_export_performance() {
-    let dir = TempDir::new().unwrap();
+    let dir = scratch();
     let start = std::time::Instant::now();
 
-    specforge_cmd()
-        .args(["init", "--name", "perf-test"])
-        .current_dir(dir.path())
+    Cli::on(&dir)
+        .bare_command(&["init", "--name", "perf-test"])
         .assert()
         .success();
 
-    specforge_cmd()
-        .args(["check"])
-        .arg("--path")
-        .arg(dir.path().join("spec"))
+    Cli::on(&dir)
+        .bare_command(&["check", "--path"])
+        .arg(dir.root().join("spec"))
         .assert()
         .success();
 
-    specforge_cmd()
-        .args(["export", "--format", "graph"])
-        .arg("--path")
-        .arg(dir.path().join("spec"))
+    Cli::on(&dir)
+        .bare_command(&["export", "--format", "graph", "--path"])
+        .arg(dir.root().join("spec"))
         .assert()
         .success();
 
@@ -783,15 +757,14 @@ fn init_check_export_performance() {
     verify = "starter file contains no domain-specific keywords from extensions"
 )]
 fn init_starter_no_domain_keywords() {
-    let dir = TempDir::new().unwrap();
+    let dir = scratch();
 
-    specforge_cmd()
-        .args(["init", "--name", "no-domain"])
-        .current_dir(dir.path())
+    Cli::on(&dir)
+        .bare_command(&["init", "--name", "no-domain"])
         .assert()
         .success();
 
-    let content = fs::read_to_string(dir.path().join("spec/hello.spec")).unwrap();
+    let content = fs::read_to_string(dir.root().join("spec/hello.spec")).unwrap();
 
     // All 14 domain entity keywords from the 3 standard extensions
     let domain_keywords = [
@@ -829,29 +802,26 @@ fn init_starter_no_domain_keywords() {
     verify = "graceful_zero_extension_init completes full init-check-export cycle in under 60 seconds"
 )]
 fn zero_ext_full_cycle_performance() {
-    let dir = TempDir::new().unwrap();
+    let dir = scratch();
     let start = std::time::Instant::now();
 
     // init with zero extensions (default)
-    specforge_cmd()
-        .args(["init", "--name", "zero-perf"])
-        .current_dir(dir.path())
+    Cli::on(&dir)
+        .bare_command(&["init", "--name", "zero-perf"])
         .assert()
         .success();
 
     // check
-    specforge_cmd()
-        .args(["check"])
-        .arg("--path")
-        .arg(dir.path().join("spec"))
+    Cli::on(&dir)
+        .bare_command(&["check", "--path"])
+        .arg(dir.root().join("spec"))
         .assert()
         .success();
 
     // export
-    specforge_cmd()
-        .args(["export", "--format", "graph"])
-        .arg("--path")
-        .arg(dir.path().join("spec"))
+    Cli::on(&dir)
+        .bare_command(&["export", "--format", "graph", "--path"])
+        .arg(dir.root().join("spec"))
         .assert()
         .success();
 
@@ -872,30 +842,29 @@ fn zero_ext_full_cycle_performance() {
     verify = "invalid project name is rejected with InitError::invalid_name"
 )]
 fn non_interactive_invalid_name_rejected() {
-    let dir = TempDir::new().unwrap();
+    let dir = scratch();
 
     // Empty name
-    specforge_cmd()
-        .args(["init", "--name", ""])
-        .current_dir(dir.path())
+    Cli::on(&dir)
+        .bare_command(&["init", "--name", ""])
         .assert()
         .failure()
         .stderr(predicates::str::contains("invalid project name"));
 
     // Name starting with dot
-    let dir2 = TempDir::new().unwrap();
-    specforge_cmd()
-        .args(["init", "--name", ".hidden"])
-        .current_dir(dir2.path())
+    let dir2 = scratch();
+    Cli::on(&dir)
+        .bare_command(&["init", "--name", ".hidden"])
+        .current_dir(dir2.root())
         .assert()
         .failure()
         .stderr(predicates::str::contains("invalid project name"));
 
     // Name starting with dash — use --name=VALUE form to prevent clap flag parsing
-    let dir3 = TempDir::new().unwrap();
-    specforge_cmd()
-        .args(["init", "--name=-bad"])
-        .current_dir(dir3.path())
+    let dir3 = scratch();
+    Cli::on(&dir)
+        .bare_command(&["init", "--name=-bad"])
+        .current_dir(dir3.root())
         .assert()
         .failure()
         .stderr(predicates::str::contains("invalid project name"));
@@ -906,32 +875,29 @@ fn non_interactive_invalid_name_rejected() {
     verify = "non_interactive_init completes full init-check-export cycle in under 60 seconds"
 )]
 fn non_interactive_full_cycle_performance() {
-    let dir = TempDir::new().unwrap();
+    let dir = scratch();
     let start = std::time::Instant::now();
 
-    specforge_cmd()
-        .args([
+    Cli::on(&dir)
+        .bare_command(&[
             "init",
             "--name",
             "ci-perf",
             "--extensions",
             "@specforge/software",
         ])
-        .current_dir(dir.path())
         .assert()
         .success();
 
-    specforge_cmd()
-        .args(["check"])
-        .arg("--path")
-        .arg(dir.path().join("spec"))
+    Cli::on(&dir)
+        .bare_command(&["check", "--path"])
+        .arg(dir.root().join("spec"))
         .assert()
         .success();
 
-    specforge_cmd()
-        .args(["export", "--format", "graph"])
-        .arg("--path")
-        .arg(dir.path().join("spec"))
+    Cli::on(&dir)
+        .bare_command(&["export", "--format", "graph", "--path"])
+        .arg(dir.root().join("spec"))
         .assert()
         .success();
 
@@ -948,43 +914,41 @@ fn non_interactive_full_cycle_performance() {
     verify = "non-interactive init with unknown extension rejects with diagnostic and exit code 1"
 )]
 fn non_interactive_unknown_extension_rejected() {
-    let dir = TempDir::new().unwrap();
+    let dir = scratch();
 
     // A well-formed name nothing can install: it used to pass the syntax
     // check, exit 0 and report the extension installed, and `check` then
     // failed E028. A new project has no registry: E063, as `add` answers it
     // with none configured, saying how to add it once there is one.
-    specforge_cmd()
-        .args(["init", "--name", "bad-ext", "--extensions", "@acme/unknown"])
-        .current_dir(dir.path())
+    Cli::on(&dir)
+        .bare_command(&["init", "--name", "bad-ext", "--extensions", "@acme/unknown"])
         .assert()
         .code(1)
         .stderr(predicates::str::contains("error[E063]"))
         .stderr(predicates::str::contains("specforge add @acme/unknown"));
 
     // Nothing is written on failure.
-    assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
+    assert_eq!(std::fs::read_dir(dir.root()).unwrap().count(), 0);
 
     // A malformed one, too.
-    specforge_cmd()
-        .args([
+    Cli::on(&dir)
+        .bare_command(&[
             "init",
             "--name",
             "bad-ext",
             "--extensions",
             "not-a-valid-ext",
         ])
-        .current_dir(dir.path())
         .assert()
         .failure()
         .stderr(predicates::str::contains("error[E054]"));
-    assert!(!dir.path().join("specforge.json").exists());
+    assert!(!dir.root().join("specforge.json").exists());
 
     // Empty extension
-    let dir2 = TempDir::new().unwrap();
-    specforge_cmd()
-        .args(["init", "--name", "empty-ext", "--extensions", ""])
-        .current_dir(dir2.path())
+    let dir2 = scratch();
+    Cli::on(&dir)
+        .bare_command(&["init", "--name", "empty-ext", "--extensions", ""])
+        .current_dir(dir2.root())
         .assert()
         .failure()
         .stderr(predicates::str::contains("error[E054]"))
@@ -1002,15 +966,14 @@ fn non_interactive_unknown_extension_rejected() {
 fn scaffold_new_project_contract_in_init() {
     // Requires: filesystem available, no existing project
     // Ensures: valid config created, $schema included, project_initialized emitted
-    let dir = TempDir::new().unwrap();
+    let dir = scratch();
 
-    specforge_cmd()
-        .args(["init", "--name", "contract-scaffold"])
-        .current_dir(dir.path())
+    Cli::on(&dir)
+        .bare_command(&["init", "--name", "contract-scaffold"])
         .assert()
         .success();
 
-    let config_path = dir.path().join("specforge.json");
+    let config_path = dir.root().join("specforge.json");
     assert!(config_path.exists(), "specforge.json must be created");
 
     let content = fs::read_to_string(&config_path).unwrap();
@@ -1023,26 +986,25 @@ fn scaffold_new_project_contract_in_init() {
     assert!(json["spec_root"].is_string(), "spec_root must be present");
 
     // Starter spec file must also exist
-    assert!(dir.path().join("spec").join("hello.spec").exists());
+    assert!(dir.root().join("spec").join("hello.spec").exists());
 
     // Reject when project already exists (precondition violated)
-    specforge_cmd()
-        .args(["init", "--name", "contract-scaffold"])
-        .current_dir(dir.path())
+    Cli::on(&dir)
+        .bare_command(&["init", "--name", "contract-scaffold"])
         .assert()
         .failure();
 }
 
 /// The starter file `init --name demo` writes with `extensions` enabled.
 fn starter_written_for(extensions: &[&str]) -> String {
-    let dir = TempDir::new().unwrap();
-    let mut cmd = specforge_cmd();
+    let dir = scratch();
+    let mut cmd = Cli::on(&dir).bare_command(&[]);
     cmd.args(["init", "--name", "demo"]);
     for ext in extensions {
         cmd.args(["--extensions", ext]);
     }
-    cmd.current_dir(dir.path()).assert().success();
-    fs::read_to_string(dir.path().join("spec").join("hello.spec")).unwrap()
+    cmd.current_dir(dir.root()).assert().success();
+    fs::read_to_string(dir.root().join("spec").join("hello.spec")).unwrap()
 }
 
 /// The starter template the builtin `extension` declares in its handshake,
@@ -1131,18 +1093,18 @@ fn extensions_without_a_template_get_the_structural_starter() {
 )]
 fn extension_starter_passes_check() {
     for extension in ["@specforge/software", "@specforge/product"] {
-        let dir = TempDir::new().unwrap();
-        specforge_cmd()
+        let dir = scratch();
+        Cli::on(&dir)
+            .bare_command(&[])
             .args(["init", "--name", "ext-check", "--extensions", extension])
-            .current_dir(dir.path())
+            .current_dir(dir.root())
             .assert()
             .success();
 
         // The starter an extension contributes must pass check in the
         // project it scaffolds.
-        let output = specforge_cmd()
-            .args(["check", "--format", "json"])
-            .current_dir(dir.path())
+        let output = Cli::on(&dir)
+            .bare_command(&["check", "--format", "json"])
             .output()
             .unwrap();
         let diagnostics: Vec<serde_json::Value> = serde_json::from_slice(&output.stdout).unwrap();
@@ -1163,28 +1125,26 @@ fn scaffold_starter_spec_file_contract() {
     // Requires: specforge.json created, filesystem available
     // Ensures: starter file created, structural syntax only (no extensions),
     //          zero diagnostic pass
-    let dir = TempDir::new().unwrap();
+    let dir = scratch();
 
-    specforge_cmd()
-        .args(["init", "--name", "starter-contract"])
-        .current_dir(dir.path())
+    Cli::on(&dir)
+        .bare_command(&["init", "--name", "starter-contract"])
         .assert()
         .success();
 
     // Config must exist (precondition for starter file creation)
-    assert!(dir.path().join("specforge.json").exists());
+    assert!(dir.root().join("specforge.json").exists());
 
     // Starter file must exist alongside config
-    let starter = dir.path().join("spec").join("hello.spec");
+    let starter = dir.root().join("spec").join("hello.spec");
     assert!(starter.exists(), "starter file must be created");
     let content = fs::read_to_string(&starter).unwrap();
     assert!(!content.is_empty(), "starter file must not be empty");
 
     // Must pass check with zero diagnostics
-    specforge_cmd()
-        .args(["check", "--format", "json"])
-        .arg("--path")
-        .arg(dir.path().join("spec"))
+    Cli::on(&dir)
+        .bare_command(&["check", "--format", "json", "--path"])
+        .arg(dir.root().join("spec"))
         .assert()
         .success();
 }
@@ -1197,14 +1157,13 @@ fn non_interactive_init_contract_in_init() {
     // Requires: --name flag provided, filesystem available, no existing project
     // Ensures: config identical to interactive, all prompts skipped,
     //          JSON output supported, project_initialized emitted
-    let dir = TempDir::new().unwrap();
+    let dir = scratch();
 
     // name_flag_provided, filesystem_available, all_prompts_skipped: with
     // --name and a closed stdin, init runs to completion.
     // project_initialized_emitted: it reports the initialized project.
-    let output = specforge_cmd()
-        .args(["init", "--name", "ni-contract"])
-        .current_dir(dir.path())
+    let output = Cli::on(&dir)
+        .bare_command(&["init", "--name", "ni-contract"])
         .write_stdin("")
         .timeout(std::time::Duration::from_secs(30))
         .output()
@@ -1221,15 +1180,15 @@ fn non_interactive_init_contract_in_init() {
 
     // config_identical_to_interactive: the same config as a plain `init`
     // in a directory of that name, which takes every default.
-    let parent = TempDir::new().unwrap();
-    let named = parent.path().join("ni-contract");
+    let parent = scratch();
+    let named = parent.root().join("ni-contract");
     fs::create_dir(&named).unwrap();
-    specforge_cmd()
-        .arg("init")
+    Cli::on(&dir)
+        .bare_command(&["init"])
         .current_dir(&named)
         .assert()
         .success();
-    let config = fs::read_to_string(dir.path().join("specforge.json")).unwrap();
+    let config = fs::read_to_string(dir.root().join("specforge.json")).unwrap();
     assert_eq!(
         config,
         fs::read_to_string(named.join("specforge.json")).unwrap()
@@ -1238,26 +1197,25 @@ fn non_interactive_init_contract_in_init() {
     assert_eq!(json["name"], "ni-contract");
 
     // no_existing_project: init again in the same directory fails.
-    specforge_cmd()
-        .args(["init", "--name", "ni-contract"])
-        .current_dir(dir.path())
+    Cli::on(&dir)
+        .bare_command(&["init", "--name", "ni-contract"])
         .assert()
         .failure();
     assert_eq!(
-        fs::read_to_string(dir.path().join("specforge.json")).unwrap(),
+        fs::read_to_string(dir.root().join("specforge.json")).unwrap(),
         config
     );
 
     // json_output_supported: --format json prints the init document.
-    let json_dir = TempDir::new().unwrap();
-    let output = specforge_cmd()
-        .args(["init", "--name", "ni-json", "--format", "json"])
-        .current_dir(json_dir.path())
+    let json_dir = scratch();
+    let output = Cli::on(&dir)
+        .bare_command(&["init", "--name", "ni-json", "--format", "json"])
+        .current_dir(json_dir.root())
         .output()
         .unwrap();
     assert!(output.status.success());
     let out: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    let root = json_dir.path().canonicalize().unwrap();
+    let root = json_dir.root().canonicalize().unwrap();
     let root_of = std::path::PathBuf::from(out["project_root"].as_str().unwrap())
         .canonicalize()
         .unwrap();
@@ -1281,15 +1239,14 @@ fn graceful_zero_extension_init_contract_in_init() {
     // Requires: zero extensions selected, filesystem available
     // Ensures: empty extensions list, structural starter valid,
     //          valid graph exportable, project_initialized emitted
-    let dir = TempDir::new().unwrap();
+    let dir = scratch();
 
-    specforge_cmd()
-        .args(["init", "--name", "zero-contract"])
-        .current_dir(dir.path())
+    Cli::on(&dir)
+        .bare_command(&["init", "--name", "zero-contract"])
         .assert()
         .success();
 
-    let content = fs::read_to_string(dir.path().join("specforge.json")).unwrap();
+    let content = fs::read_to_string(dir.root().join("specforge.json")).unwrap();
     let json: serde_json::Value = serde_json::from_str(&content).unwrap();
     assert_eq!(
         json["extensions"],
@@ -1298,18 +1255,16 @@ fn graceful_zero_extension_init_contract_in_init() {
     );
 
     // Check passes
-    specforge_cmd()
-        .args(["check", "--format", "json"])
-        .arg("--path")
-        .arg(dir.path().join("spec"))
+    Cli::on(&dir)
+        .bare_command(&["check", "--format", "json", "--path"])
+        .arg(dir.root().join("spec"))
         .assert()
         .success();
 
     // Export produces valid graph
-    let export_output = specforge_cmd()
-        .args(["export", "--format", "graph"])
-        .arg("--path")
-        .arg(dir.path().join("spec"))
+    let export_output = Cli::on(&dir)
+        .bare_command(&["export", "--format", "graph", "--path"])
+        .arg(dir.root().join("spec"))
         .output()
         .unwrap();
     assert!(export_output.status.success());
@@ -1325,21 +1280,19 @@ fn graceful_zero_extension_init_contract_in_init() {
     verify = "the software starter passes specforge check with no warnings"
 )]
 fn init_software_starter_checks_clean() {
-    let dir = TempDir::new().unwrap();
-    specforge_cmd()
-        .args([
+    let dir = scratch();
+    Cli::on(&dir)
+        .bare_command(&[
             "init",
             "--name",
             "demo",
             "--extensions",
             "@specforge/software",
         ])
-        .current_dir(dir.path())
         .assert()
         .success();
-    specforge_cmd()
-        .args(["check", "--format", "json"])
-        .current_dir(dir.path())
+    Cli::on(&dir)
+        .bare_command(&["check", "--format", "json"])
         .assert()
         .success();
 }
@@ -1349,18 +1302,17 @@ fn init_software_starter_checks_clean() {
     verify = "init adds the generated report files to .gitignore without duplicating entries"
 )]
 fn init_ignores_generated_files() {
-    let dir = TempDir::new().unwrap();
+    let dir = scratch();
     fs::write(
-        dir.path().join(".gitignore"),
+        dir.root().join(".gitignore"),
         "/target\nspecforge-report.json",
     )
     .unwrap();
-    specforge_cmd()
-        .args(["init", "--name", "demo"])
-        .current_dir(dir.path())
+    Cli::on(&dir)
+        .bare_command(&["init", "--name", "demo"])
         .assert()
         .success();
-    let gitignore = fs::read_to_string(dir.path().join(".gitignore")).unwrap();
+    let gitignore = fs::read_to_string(dir.root().join(".gitignore")).unwrap();
     assert_eq!(
         gitignore,
         "/target\nspecforge-report.json\nspecforge-infer.json\n.specforge/\n"
@@ -1372,22 +1324,21 @@ fn init_ignores_generated_files() {
     verify = "--extensions splits a comma-separated list into its extensions"
 )]
 fn extensions_flag_splits_a_comma_separated_list() {
-    let dir = TempDir::new().unwrap();
+    let dir = scratch();
 
-    specforge_cmd()
-        .args([
+    Cli::on(&dir)
+        .bare_command(&[
             "init",
             "--name",
             "listed",
             "--extensions",
             "@specforge/software,@specforge/product",
         ])
-        .current_dir(dir.path())
         .assert()
         .success();
 
     let config: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(dir.path().join("specforge.json")).unwrap())
+        serde_json::from_str(&std::fs::read_to_string(dir.root().join("specforge.json")).unwrap())
             .unwrap();
     // Two entries (and software's testing), not one "a,b" entry.
     assert_eq!(
@@ -1398,12 +1349,7 @@ fn extensions_flag_splits_a_comma_separated_list() {
             "@specforge/testing"
         ])
     );
-    specforge_cmd()
-        .args(["check"])
-        .arg("--path")
-        .arg(dir.path())
-        .assert()
-        .success();
+    Cli::on(&dir).command(&["check"]).assert().success();
 }
 
 #[specforge_test(
@@ -1411,31 +1357,24 @@ fn extensions_flag_splits_a_comma_separated_list() {
     verify = "a one-character project name is rejected before its starter can fail E014"
 )]
 fn one_character_name_is_rejected() {
-    let dir = TempDir::new().unwrap();
+    let dir = scratch();
 
-    specforge_cmd()
-        .args(["init", "--name", "a"])
-        .current_dir(dir.path())
+    Cli::on(&dir)
+        .bare_command(&["init", "--name", "a"])
         .assert()
         .code(1)
         .stderr(predicates::str::contains("invalid project name 'a'"));
-    assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
+    assert_eq!(std::fs::read_dir(dir.root()).unwrap().count(), 0);
 
     // Two characters is the shortest ID: its starter checks clean.
-    specforge_cmd()
-        .args(["init", "--name", "ab"])
-        .current_dir(dir.path())
+    Cli::on(&dir)
+        .bare_command(&["init", "--name", "ab"])
         .assert()
         .success();
-    specforge_cmd()
-        .args(["check"])
-        .arg("--path")
-        .arg(dir.path())
-        .assert()
-        .success();
+    Cli::on(&dir).command(&["check"]).assert().success();
 }
 
-use crate::written::{changed_since, files_written};
+use crate::support::written::{changed_since, files_written};
 
 #[specforge_test(
     behavior = "scaffold_new_project",
@@ -1443,10 +1382,9 @@ use crate::written::{changed_since, files_written};
 )]
 fn init_lists_every_file_it_wrote() {
     // Human: one line per file written.
-    let dir = TempDir::new().unwrap();
-    let output = specforge_cmd()
-        .args(["init", "--name", "listed"])
-        .current_dir(dir.path())
+    let dir = scratch();
+    let output = Cli::on(&dir)
+        .bare_command(&["init", "--name", "listed"])
         .output()
         .unwrap();
     assert!(output.status.success(), "{output:?}");
@@ -1457,17 +1395,17 @@ fn init_lists_every_file_it_wrote() {
         .take_while(|line| line.starts_with("  "))
         .map(str::trim)
         .collect();
-    let written = changed_since(dir.path(), &Default::default());
+    let written = changed_since(dir.root(), &Default::default());
     assert_eq!(written, [".gitignore", "spec/hello.spec", "specforge.json"]);
     assert_eq!(listed, written, "{stdout}");
 
     // JSON, with a local extension: its module and the lock too.
-    let dir = TempDir::new().unwrap();
-    let blob = TempDir::new().unwrap();
-    let wasm = blob.path().join("greet.wasm");
-    fs::write(&wasm, crate::registry::greet_wasm()).unwrap();
-    let output = specforge_cmd()
-        .args([
+    let dir = scratch();
+    let blob = scratch();
+    let wasm = blob.root().join("greet.wasm");
+    fs::write(&wasm, crate::support::registry::greet_wasm()).unwrap();
+    let output = Cli::on(&dir)
+        .bare_command(&[
             "init",
             "--name",
             "listed",
@@ -1476,12 +1414,12 @@ fn init_lists_every_file_it_wrote() {
             "--extensions",
         ])
         .arg(&wasm)
-        .current_dir(dir.path())
+        .current_dir(dir.root())
         .output()
         .unwrap();
     assert!(output.status.success(), "{output:?}");
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    let written = changed_since(dir.path(), &Default::default());
+    let written = changed_since(dir.root(), &Default::default());
     assert_eq!(
         written,
         [

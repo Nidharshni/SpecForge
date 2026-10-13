@@ -3,51 +3,39 @@
 //! loaded through `check`: the loader keyed modules by file stem while
 //! compile looked them up by name, and nothing read the lock.
 
-use crate::published::{Package, serve};
-use crate::registry::{greet_wasm, project_on};
+use crate::support::registry::greet_wasm;
+use crate::support::registry::project_on;
+use crate::support::registry::{Package, serve};
+use crate::support::{Cli, TestProject};
 use serde_json::{Value, json};
 use specforge_test_macros::test as specforge_test;
 use std::path::Path;
-use tempfile::TempDir;
 
 /// A spec using `greeting`, the kind only `@sdk/greet` defines.
 const GREETING: &str = "greeting hello \"Hello\" {\n  style warm\n}\n";
 
-fn specforge() -> assert_cmd::Command {
-    assert_cmd::cargo_bin_cmd!("specforge")
-}
-
 /// A project enabling `@specforge/software` with a spec that uses the
 /// `greeting` kind.
-fn greeting_project() -> TempDir {
-    let dir = TempDir::new().unwrap();
-    std::fs::write(
-        dir.path().join("specforge.json"),
-        json!({"name": "p", "version": "0.1.0", "extensions": ["@specforge/software"]}).to_string(),
-    )
-    .unwrap();
-    std::fs::write(dir.path().join("main.spec"), GREETING).unwrap();
-    dir
+fn greeting_project() -> TestProject {
+    TestProject::new()
+        .config(|c| c["name"] = "p".into())
+        .enabling(&["@specforge/software"])
+        .file("main.spec", GREETING)
 }
 
-fn add_local_greet(root: &Path) {
-    let wasm = root.join("greet.wasm");
-    std::fs::write(&wasm, greet_wasm()).unwrap();
-    specforge()
-        .args(["add", "greet.wasm", "--path"])
-        .arg(root)
-        .current_dir(root)
+fn add_local_greet(project: &TestProject) {
+    project.write("greet.wasm", greet_wasm());
+    Cli::on(project)
+        .command(&["add", "greet.wasm"])
         .assert()
         .success();
 }
 
 /// Every diagnostic a fresh `specforge check` reports, as `(code, message,
 /// suggestion)`, with its exit status.
-fn check(root: &Path) -> (bool, Vec<(String, String, String)>) {
-    let out = specforge()
-        .args(["check", "--format", "json"])
-        .arg("--path")
-        .arg(root)
+fn check(project: &TestProject) -> (bool, Vec<(String, String, String)>) {
+    let out = Cli::on(project)
+        .command(&["check", "--format", "json"])
         .output()
         .unwrap();
     let diagnostics: Vec<Value> = serde_json::from_slice(&out.stdout).unwrap_or_default();
@@ -91,12 +79,12 @@ fn enabled(root: &Path) -> Value {
 )]
 fn a_local_install_loads_through_check() {
     let dir = greeting_project();
-    let (_, before) = check(dir.path());
+    let (_, before) = check(&dir);
     assert!(codes(&before).contains(&"E024"), "{before:?}");
 
-    add_local_greet(dir.path());
+    add_local_greet(&dir);
 
-    let (ok, after) = check(dir.path());
+    let (ok, after) = check(&dir);
     assert!(ok, "{after:?}");
     // `greeting` is a known kind now, and nothing failed to load — its
     // field types (W019) and rule (W112) included.
@@ -112,14 +100,14 @@ fn a_local_install_loads_through_check() {
 fn a_local_install_is_locked_at_its_declared_version() {
     let dir = greeting_project();
 
-    add_local_greet(dir.path());
+    add_local_greet(&dir);
 
     // The handshake's name and version, not the file stem or a placeholder.
-    let entry = lock_entry(dir.path(), "@sdk/greet");
+    let entry = lock_entry(dir.root(), "@sdk/greet");
     assert_eq!(entry["version"], "0.1.0", "{entry}");
     assert_eq!(entry["source"], "local:greet.wasm", "{entry}");
     assert_eq!(
-        enabled(dir.path()),
+        enabled(dir.root()),
         json!(["@specforge/software", "@sdk/greet"])
     );
 }
@@ -131,22 +119,19 @@ fn a_local_install_is_locked_at_its_declared_version() {
 fn a_registry_install_loads_through_check() {
     let registry = serve(vec![Package::new("@sdk/greet", "0.1.0", greet_wasm())]);
     let dir = project_on(&registry);
-    std::fs::write(dir.path().join("main.spec"), GREETING).unwrap();
-    let home = TempDir::new().unwrap();
+    dir.write("main.spec", GREETING);
 
-    specforge()
-        .args(["add", "@sdk/greet@0.1.0", "--allow-unsigned", "--path"])
-        .arg(dir.path())
-        .env("HOME", home.path())
+    Cli::on(&dir)
+        .command(&["add", "@sdk/greet@0.1.0", "--allow-unsigned"])
         .assert()
         .success();
 
-    assert_eq!(lock_entry(dir.path(), "@sdk/greet")["source"], "registry");
+    assert_eq!(lock_entry(dir.root(), "@sdk/greet")["source"], "registry");
     assert_eq!(
-        enabled(dir.path()),
+        enabled(dir.root()),
         json!(["@specforge/software", "@sdk/greet"])
     );
-    let (ok, found) = check(dir.path());
+    let (ok, found) = check(&dir);
     assert!(ok, "{found:?}");
     assert!(!codes(&found).contains(&"E024"), "{found:?}");
 }
@@ -156,11 +141,10 @@ fn a_registry_install_loads_through_check() {
 #[test]
 fn add_json_names_its_source_and_a_key_only_when_signed() {
     let dir = greeting_project();
-    std::fs::write(dir.path().join("greet.wasm"), greet_wasm()).unwrap();
-    let out = specforge()
-        .args(["add", "greet.wasm", "--format", "json", "--path"])
-        .arg(dir.path())
-        .current_dir(dir.path())
+    dir.write("greet.wasm", greet_wasm());
+    let out = Cli::on(&dir)
+        .command(&["add", "greet.wasm", "--format", "json"])
+        .current_dir(dir.root())
         .output()
         .unwrap();
     assert!(out.status.success(), "{out:?}");
@@ -170,18 +154,14 @@ fn add_json_names_its_source_and_a_key_only_when_signed() {
 
     let registry = serve(vec![Package::new("@sdk/greet", "0.1.0", greet_wasm())]);
     let dir = project_on(&registry);
-    let home = TempDir::new().unwrap();
-    let out = specforge()
-        .args([
+    let out = Cli::on(&dir)
+        .command(&[
             "add",
             "@sdk/greet@0.1.0",
             "--allow-unsigned",
             "--format",
             "json",
-            "--path",
         ])
-        .arg(dir.path())
-        .env("HOME", home.path())
         .output()
         .unwrap();
     assert!(out.status.success(), "{out:?}");
@@ -197,15 +177,15 @@ fn add_json_names_its_source_and_a_key_only_when_signed() {
 )]
 fn a_tampered_installed_binary_is_refused_with_e070() {
     let dir = greeting_project();
-    add_local_greet(dir.path());
+    add_local_greet(&dir);
     let installed = dir
-        .path()
+        .root()
         .join(".specforge/extensions/@sdk/greet/extension.wasm");
     let mut bytes = std::fs::read(&installed).unwrap();
     bytes.extend_from_slice(b"tampered");
     std::fs::write(&installed, bytes).unwrap();
 
-    let (ok, found) = check(dir.path());
+    let (ok, found) = check(&dir);
 
     assert!(!ok, "{found:?}");
     let (_, message, _) = found
@@ -221,11 +201,11 @@ fn a_tampered_installed_binary_is_refused_with_e070() {
 )]
 fn an_enabled_extension_that_is_not_installed_is_e028_with_a_remedy() {
     let dir = greeting_project();
-    add_local_greet(dir.path());
+    add_local_greet(&dir);
     // A fresh clone: `.specforge/` is gitignored, the config and lock are not.
-    std::fs::remove_dir_all(dir.path().join(".specforge")).unwrap();
+    std::fs::remove_dir_all(dir.root().join(".specforge")).unwrap();
 
-    let (ok, found) = check(dir.path());
+    let (ok, found) = check(&dir);
 
     assert!(!ok, "{found:?}");
     let (_, message, suggestion) = found
@@ -241,23 +221,23 @@ fn an_enabled_extension_that_is_not_installed_is_e028_with_a_remedy() {
     verify = "specforge init followed by specforge check produces zero config errors"
 )]
 fn init_installs_a_local_extension_check_loads() {
-    let dir = TempDir::new().unwrap();
-    std::fs::write(dir.path().join("greet.wasm"), greet_wasm()).unwrap();
+    let dir = TestProject::new()
+        .without_config()
+        .file("greet.wasm", greet_wasm());
 
     // D3-e: init installs a local file through the add operation.
-    specforge()
-        .args(["init", "--name", "hello", "--extensions", "greet.wasm"])
-        .current_dir(dir.path())
+    Cli::on(&dir)
+        .bare_command(&["init", "--name", "hello", "--extensions", "greet.wasm"])
         .assert()
         .success();
-    std::fs::write(dir.path().join("spec/greet.spec"), GREETING).unwrap();
+    std::fs::write(dir.root().join("spec/greet.spec"), GREETING).unwrap();
 
-    assert_eq!(enabled(dir.path()), json!(["@sdk/greet"]));
+    assert_eq!(enabled(dir.root()), json!(["@sdk/greet"]));
     assert_eq!(
-        lock_entry(dir.path(), "@sdk/greet")["source"],
+        lock_entry(dir.root(), "@sdk/greet")["source"],
         "local:greet.wasm"
     );
-    let (ok, found) = check(dir.path());
+    let (ok, found) = check(&dir);
     assert!(ok, "{found:?}");
     assert!(!codes(&found).contains(&"E024"), "{found:?}");
 }
@@ -265,17 +245,17 @@ fn init_installs_a_local_extension_check_loads() {
 #[test]
 fn a_legacy_versioned_entry_still_loads() {
     let dir = greeting_project();
-    add_local_greet(dir.path());
+    add_local_greet(&dir);
     // What `add` wrote before D3-b.
     std::fs::write(
-        dir.path().join("specforge.json"),
+        dir.root().join("specforge.json"),
         json!({"name": "p", "version": "0.1.0",
                "extensions": ["@specforge/software", "@sdk/greet@0.1.0"]})
         .to_string(),
     )
     .unwrap();
 
-    let (ok, found) = check(dir.path());
+    let (ok, found) = check(&dir);
     assert!(ok, "{found:?}");
     assert!(!codes(&found).contains(&"E024"), "{found:?}");
 }
@@ -288,19 +268,16 @@ fn update_never_replaces_a_local_install() {
     // The registry publishes a newer package under the same name.
     let registry = serve(vec![Package::new("@sdk/greet", "9.9.9", greet_wasm())]);
     let dir = project_on(&registry);
-    add_local_greet(dir.path());
-    let lock_before = std::fs::read(dir.path().join("specforge.lock")).unwrap();
-    let home = TempDir::new().unwrap();
+    add_local_greet(&dir);
+    let lock_before = std::fs::read(dir.root().join("specforge.lock")).unwrap();
 
-    specforge()
-        .args(["update", "--allow-unsigned", "--path"])
-        .arg(dir.path())
-        .env("HOME", home.path())
+    Cli::on(&dir)
+        .command(&["update", "--allow-unsigned"])
         .assert()
         .success();
 
     assert_eq!(
-        std::fs::read(dir.path().join("specforge.lock")).unwrap(),
+        std::fs::read(dir.root().join("specforge.lock")).unwrap(),
         lock_before
     );
     assert_eq!(
@@ -326,20 +303,16 @@ fn a_bulk_update_reports_batch_update_completed() {
             {"name": "@acme/local", "version": "1.0.0", "source": "local:local.wasm", "wasm_hash": "00"},
         ],
     });
-    std::fs::write(dir.path().join("specforge.lock"), lock.to_string()).unwrap();
-    let home = TempDir::new().unwrap();
+    dir.write("specforge.lock", lock.to_string());
 
-    let out = specforge()
-        .args(["update", "--major", "--allow-unsigned", "--format", "json"])
-        .args(["--path"])
-        .arg(dir.path())
-        .env("HOME", home.path())
+    let out = Cli::on(&dir)
+        .command(&["update", "--major", "--allow-unsigned", "--format", "json"])
         .output()
         .unwrap();
 
     assert!(out.status.success(), "{out:?}");
     let output: Value = serde_json::from_slice(&out.stdout).unwrap();
-    assert_eq!(lock_entry(dir.path(), "@sdk/greet")["version"], "0.1.0");
+    assert_eq!(lock_entry(dir.root(), "@sdk/greet")["version"], "0.1.0");
     let event = &output["batch_update_completed"];
     assert_eq!(event["updatedCount"], 1, "{output}");
     assert_eq!(event["failedCount"], 0, "{output}");
@@ -355,7 +328,7 @@ fn a_bulk_update_reports_batch_update_completed() {
 /// with greet one version behind a registry serving 0.1.0, and `second` as
 /// the lock's other entry: the exit status and the document, with the clock
 /// and the hashes redacted.
-fn update_json(second: Value) -> (bool, Value, TempDir) {
+fn update_json(second: Value) -> (bool, Value, TestProject) {
     let registry = serve(vec![Package::new("@sdk/greet", "0.1.0", greet_wasm())]);
     let dir = project_on(&registry);
     let lock = json!({
@@ -365,13 +338,9 @@ fn update_json(second: Value) -> (bool, Value, TempDir) {
             second,
         ],
     });
-    std::fs::write(dir.path().join("specforge.lock"), lock.to_string()).unwrap();
-    let home = TempDir::new().unwrap();
-    let out = specforge()
-        .args(["update", "--major", "--allow-unsigned", "--format", "json"])
-        .args(["--path"])
-        .arg(dir.path())
-        .env("HOME", home.path())
+    dir.write("specforge.lock", lock.to_string());
+    let out = Cli::on(&dir)
+        .command(&["update", "--major", "--allow-unsigned", "--format", "json"])
         .output()
         .unwrap();
     let mut document: Value = serde_json::from_slice(&out.stdout)
@@ -410,7 +379,7 @@ fn update_json_lists_every_locked_extension() {
     let local = json!({"name": "@acme/local", "version": "1.0.0", "source": "local:local.wasm", "wasm_hash": "00"});
     let (ok, document, dir) = update_json(local);
     assert!(ok, "{document}");
-    assert_eq!(lock_entry(dir.path(), "@sdk/greet")["version"], "0.1.0");
+    assert_eq!(lock_entry(dir.root(), "@sdk/greet")["version"], "0.1.0");
     assert_eq!(document["ok"], true, "{document}");
     let rows = document["extensions"].as_array().unwrap();
     assert_eq!(rows.len(), 2, "{document}");
@@ -463,7 +432,7 @@ fn a_failed_update_prints_its_document() {
         json!({"name": "@acme/gone", "version": "1.0.0", "source": "registry", "wasm_hash": "00"});
     let (ok, document, dir) = update_json(gone);
     assert!(!ok, "{document}");
-    assert_eq!(lock_entry(dir.path(), "@sdk/greet")["version"], "0.0.9");
+    assert_eq!(lock_entry(dir.root(), "@sdk/greet")["version"], "0.0.9");
     let mut keys: Vec<&str> = document
         .as_object()
         .unwrap()
@@ -509,15 +478,11 @@ fn update_major_on_a_pre_release_lock_installs_nothing_lower() {
             {"name": "@sdk/greet", "version": "0.2.0-beta.1", "source": "registry", "wasm_hash": "00"},
         ],
     });
-    std::fs::write(dir.path().join("specforge.lock"), lock.to_string()).unwrap();
-    let lock_before = std::fs::read(dir.path().join("specforge.lock")).unwrap();
-    let home = TempDir::new().unwrap();
+    dir.write("specforge.lock", lock.to_string());
+    let lock_before = std::fs::read(dir.root().join("specforge.lock")).unwrap();
 
-    let out = specforge()
-        .args(["update", "--major", "--allow-unsigned", "--format", "json"])
-        .args(["--path"])
-        .arg(dir.path())
-        .env("HOME", home.path())
+    let out = Cli::on(&dir)
+        .command(&["update", "--major", "--allow-unsigned", "--format", "json"])
         .output()
         .unwrap();
 
@@ -542,20 +507,17 @@ fn update_major_on_a_pre_release_lock_installs_nothing_lower() {
         "{document}"
     );
     assert_eq!(
-        std::fs::read(dir.path().join("specforge.lock")).unwrap(),
+        std::fs::read(dir.root().join("specforge.lock")).unwrap(),
         lock_before
     );
 }
 
 /// `specforge doctor --format json` on `root`: whether it passed, and the
 /// report.
-fn doctor(root: &Path) -> (bool, Value) {
-    let home = TempDir::new().unwrap();
-    let out = specforge()
-        .args(["doctor", "--format", "json", "--path"])
-        .arg(root)
-        .env("HOME", home.path())
+fn doctor(project: &TestProject) -> (bool, Value) {
+    let out = Cli::on(project)
         .env("PATH", crate::toolchain::z3_ready())
+        .command(&["doctor", "--format", "json"])
         .output()
         .unwrap();
     let report = serde_json::from_slice(&out.stdout)
@@ -579,15 +541,15 @@ fn finding<'a>(report: &'a Value, code: &str) -> &'a Value {
 fn doctor_reports_an_extension_that_fails_to_load() {
     // A binary that no longer matches its lock entry: check refuses it (E070).
     let tampered = greeting_project();
-    add_local_greet(tampered.path());
+    add_local_greet(&tampered);
     let installed = tampered
-        .path()
+        .root()
         .join(".specforge/extensions/@sdk/greet/extension.wasm");
     let mut bytes = std::fs::read(&installed).unwrap();
     bytes.extend_from_slice(b"tampered");
     std::fs::write(&installed, bytes).unwrap();
 
-    let (ok, report) = doctor(tampered.path());
+    let (ok, report) = doctor(&tampered);
     assert!(!ok, "{report}");
     // One finding, with the command that reinstalls it; the load failure
     // it causes is not listed again.
@@ -622,11 +584,11 @@ fn doctor_reports_an_extension_that_fails_to_load() {
 
     // Enabled, but neither locked nor installed: only the load knows (E028).
     let missing = greeting_project();
-    add_local_greet(missing.path());
-    std::fs::remove_file(missing.path().join("specforge.lock")).unwrap();
-    std::fs::remove_dir_all(missing.path().join(".specforge")).unwrap();
+    add_local_greet(&missing);
+    std::fs::remove_file(missing.root().join("specforge.lock")).unwrap();
+    std::fs::remove_dir_all(missing.root().join(".specforge")).unwrap();
 
-    let (ok, report) = doctor(missing.path());
+    let (ok, report) = doctor(&missing);
     assert!(!ok, "{report}");
     assert_eq!(report["ok"], false, "{report}");
     let e028 = finding(&report, "E028");
@@ -647,15 +609,11 @@ fn doctor_reports_an_extension_that_fails_to_load() {
 )]
 fn a_local_install_a_locked_extension_does_not_accept_is_refused() {
     let dir = greeting_project();
-    std::fs::write(
-        dir.path().join("specforge.json"),
-        json!({"name": "p", "version": "0.1.0", "extensions": ["@specforge/software", "@acme/app"]})
-            .to_string(),
-    )
-    .unwrap();
+    dir.write("specforge.json", json!({"name": "p", "version": "0.1.0", "extensions": ["@specforge/software", "@acme/app"]})
+            .to_string());
     // `@acme/app` is locked, and wants a newer `@sdk/greet` than the one added.
     let wasm = b"module";
-    let installed = dir.path().join(".specforge/extensions/@acme/app");
+    let installed = dir.root().join(".specforge/extensions/@acme/app");
     std::fs::create_dir_all(&installed).unwrap();
     std::fs::write(installed.join("extension.wasm"), wasm).unwrap();
     let lock = json!({
@@ -666,14 +624,13 @@ fn a_local_install_a_locked_extension_does_not_accept_is_refused() {
              "peer_dependencies": [{"name": "@sdk/greet", "version": "^2.0"}]},
         ],
     });
-    std::fs::write(dir.path().join("specforge.lock"), lock.to_string()).unwrap();
-    let lock_before = std::fs::read(dir.path().join("specforge.lock")).unwrap();
-    std::fs::write(dir.path().join("greet.wasm"), greet_wasm()).unwrap();
+    dir.write("specforge.lock", lock.to_string());
+    let lock_before = std::fs::read(dir.root().join("specforge.lock")).unwrap();
+    dir.write("greet.wasm", greet_wasm());
 
-    let out = specforge()
-        .args(["add", "greet.wasm", "--format", "json", "--path"])
-        .arg(dir.path())
-        .current_dir(dir.path())
+    let out = Cli::on(&dir)
+        .command(&["add", "greet.wasm", "--format", "json"])
+        .current_dir(dir.root())
         .output()
         .unwrap();
 
@@ -686,32 +643,29 @@ fn a_local_install_a_locked_extension_does_not_accept_is_refused() {
         "{text}"
     );
     assert_eq!(
-        std::fs::read(dir.path().join("specforge.lock")).unwrap(),
+        std::fs::read(dir.root().join("specforge.lock")).unwrap(),
         lock_before,
         "the lock is untouched"
     );
-    assert!(!dir.path().join(".specforge/extensions/@sdk/greet").exists());
+    assert!(!dir.root().join(".specforge/extensions/@sdk/greet").exists());
     assert_eq!(
-        enabled(dir.path()),
+        enabled(dir.root()),
         json!(["@specforge/software", "@acme/app"])
     );
 }
 
 /// Enable `entries` in the project at `root`, replacing what it enabled.
-fn enable(root: &Path, entries: Value) {
-    std::fs::write(
-        root.join("specforge.json"),
+fn enable(project: &TestProject, entries: Value) {
+    project.write(
+        "specforge.json",
         json!({"name": "p", "version": "0.1.0", "extensions": entries}).to_string(),
-    )
-    .unwrap();
+    );
 }
 
 /// A greeting project with the greet component at `greet.wasm`, not
 /// installed: `specforge.json` names the file itself.
-fn greet_file_project() -> TempDir {
-    let dir = greeting_project();
-    std::fs::write(dir.path().join("greet.wasm"), greet_wasm()).unwrap();
-    dir
+fn greet_file_project() -> TestProject {
+    greeting_project().file("greet.wasm", greet_wasm())
 }
 
 /// Every form a `.wasm` entry takes, for the project at `root`.
@@ -732,15 +686,15 @@ fn wasm_entry_forms(root: &Path) -> Vec<String> {
 )]
 fn a_wasm_file_entry_loads_through_check() {
     let probe = greet_file_project();
-    for entry in wasm_entry_forms(probe.path()) {
+    for entry in wasm_entry_forms(probe.root()) {
         let dir = greet_file_project();
         let entry = entry.replace(
-            &probe.path().display().to_string(),
-            &dir.path().display().to_string(),
+            &probe.root().display().to_string(),
+            &dir.root().display().to_string(),
         );
-        enable(dir.path(), json!(["@specforge/software", entry]));
+        enable(&dir, json!(["@specforge/software", entry]));
 
-        let (ok, found) = check(dir.path());
+        let (ok, found) = check(&dir);
 
         assert!(ok, "{entry}: {found:?}");
         // `greeting` is a known kind, and greet's field types (W019) and
@@ -757,11 +711,10 @@ fn a_wasm_file_entry_loads_through_check() {
 )]
 fn a_wasm_file_entry_is_listed_by_its_declared_name() {
     let dir = greet_file_project();
-    enable(dir.path(), json!(["@specforge/software", "greet.wasm"]));
+    enable(&dir, json!(["@specforge/software", "greet.wasm"]));
 
-    let out = specforge()
-        .args(["extensions", "--format", "json", "--path"])
-        .arg(dir.path())
+    let out = Cli::on(&dir)
+        .command(&["extensions", "--format", "json"])
         .output()
         .unwrap();
 
@@ -795,14 +748,11 @@ fn a_wasm_file_entry_that_cannot_load_is_e028_naming_it() {
     ];
     for (entry, says) in cases {
         let dir = greet_file_project();
-        std::fs::write(dir.path().join("bad.wasm"), b"\0asm not a component").unwrap();
-        std::fs::write(dir.path().join("copy.wasm"), greet_wasm()).unwrap();
-        enable(
-            dir.path(),
-            json!(["@specforge/software", "greet.wasm", entry]),
-        );
+        std::fs::write(dir.root().join("bad.wasm"), b"\0asm not a component").unwrap();
+        std::fs::write(dir.root().join("copy.wasm"), greet_wasm()).unwrap();
+        enable(&dir, json!(["@specforge/software", "greet.wasm", entry]));
 
-        let (ok, found) = check(dir.path());
+        let (ok, found) = check(&dir);
 
         assert!(!ok, "{entry}: {found:?}");
         let e028: Vec<_> = found.iter().filter(|(code, _, _)| code == "E028").collect();
@@ -821,12 +771,9 @@ fn a_wasm_file_entry_that_cannot_load_is_e028_naming_it() {
 fn a_legacy_versioned_builtin_entry_still_loads() {
     let dir = greet_file_project();
     // A builtin as `add` wrote it before D3-b.
-    enable(
-        dir.path(),
-        json!(["@specforge/software@0.1.0", "greet.wasm"]),
-    );
+    enable(&dir, json!(["@specforge/software@0.1.0", "greet.wasm"]));
 
-    let (ok, found) = check(dir.path());
+    let (ok, found) = check(&dir);
 
     assert!(ok, "{found:?}");
     for code in ["E024", "E028", "I002"] {
@@ -836,13 +783,10 @@ fn a_legacy_versioned_builtin_entry_still_loads() {
 
 /// `specforge remove <name> --format json` on `root` (with `extra`
 /// arguments): whether it succeeded, and its JSON output.
-fn remove(root: &Path, name: &str, extra: &[&str]) -> (bool, Value) {
-    let out = specforge()
-        .args(["remove", name, "--format", "json", "--path"])
-        .arg(root)
-        .args(extra)
-        .output()
-        .unwrap();
+fn remove(project: &TestProject, name: &str, extra: &[&str]) -> (bool, Value) {
+    let mut args = vec!["remove", name, "--format", "json"];
+    args.extend(extra);
+    let out = Cli::on(project).command(&args).output().unwrap();
     let output = serde_json::from_slice(&out.stdout)
         .unwrap_or_else(|e| panic!("remove is not JSON ({e}): {out:?}"));
     (out.status.success(), output)
@@ -863,9 +807,9 @@ fn a_wasm_file_entry_is_removed_by_its_declared_name_or_its_entry() {
     ];
     for (entry, name) in cases {
         let dir = greet_file_project();
-        enable(dir.path(), json!(["@specforge/software", entry]));
+        enable(&dir, json!(["@specforge/software", entry]));
 
-        let (ok, output) = remove(dir.path(), name, &[]);
+        let (ok, output) = remove(&dir, name, &[]);
 
         assert!(ok, "{entry} by {name}: {output}");
         assert_eq!(
@@ -883,21 +827,21 @@ fn a_wasm_file_entry_is_removed_by_its_declared_name_or_its_entry() {
             json!([{"entity_id": "hello", "kind": "greeting"}]),
             "{entry} by {name}: {output}"
         );
-        assert_eq!(enabled(dir.path()), json!(["@specforge/software"]));
+        assert_eq!(enabled(dir.root()), json!(["@specforge/software"]));
         assert!(
-            dir.path().join("greet.wasm").is_file(),
+            dir.root().join("greet.wasm").is_file(),
             "the file is the user's"
         );
-        assert!(!dir.path().join("specforge.lock").exists());
+        assert!(!dir.root().join("specforge.lock").exists());
     }
 
     // An entry whose file does not load is removed by its entry.
     let dir = greet_file_project();
-    enable(dir.path(), json!(["@specforge/software", "missing.wasm"]));
-    let (ok, output) = remove(dir.path(), "missing.wasm", &[]);
+    enable(&dir, json!(["@specforge/software", "missing.wasm"]));
+    let (ok, output) = remove(&dir, "missing.wasm", &[]);
     assert!(ok, "{output}");
     assert_eq!(output["extension"], "missing.wasm", "{output}");
-    assert_eq!(enabled(dir.path()), json!(["@specforge/software"]));
+    assert_eq!(enabled(dir.root()), json!(["@specforge/software"]));
 }
 
 #[specforge_test(
@@ -912,11 +856,11 @@ fn a_name_two_entries_enable_is_refused_as_ambiguous() {
     ];
     for entries in cases {
         let dir = greet_file_project();
-        std::fs::write(dir.path().join("copy.wasm"), greet_wasm()).unwrap();
-        enable(dir.path(), entries.clone());
-        let before = std::fs::read(dir.path().join("specforge.json")).unwrap();
+        std::fs::write(dir.root().join("copy.wasm"), greet_wasm()).unwrap();
+        enable(&dir, entries.clone());
+        let before = std::fs::read(dir.root().join("specforge.json")).unwrap();
 
-        let (ok, output) = remove(dir.path(), "@sdk/greet", &[]);
+        let (ok, output) = remove(&dir, "@sdk/greet", &[]);
 
         assert!(!ok, "{entries}: {output}");
         assert_eq!(output["code"], "extension_conflict", "{output}");
@@ -929,7 +873,7 @@ fn a_name_two_entries_enable_is_refused_as_ambiguous() {
         }
         assert!(output["suggestion"].as_str().is_some(), "{output}");
         assert_eq!(
-            std::fs::read(dir.path().join("specforge.json")).unwrap(),
+            std::fs::read(dir.root().join("specforge.json")).unwrap(),
             before
         );
     }
@@ -943,7 +887,7 @@ fn removing_a_wasm_file_entry_another_requires_is_e027_unless_forced() {
     let dir = greet_file_project();
     // The dependent is enabled: a locked extension no entry enables is not judged.
     enable(
-        dir.path(),
+        &dir,
         json!(["@specforge/software", "greet.wasm", "@acme/uses-greet"]),
     );
     let lock = json!({
@@ -952,10 +896,10 @@ fn removing_a_wasm_file_entry_another_requires_is_e027_unless_forced() {
                      "wasm_hash": "00",
                      "peer_dependencies": [{"name": "@sdk/greet", "version": "^0.1.0"}]}],
     });
-    std::fs::write(dir.path().join("specforge.lock"), lock.to_string()).unwrap();
-    let lock_before = std::fs::read(dir.path().join("specforge.lock")).unwrap();
+    std::fs::write(dir.root().join("specforge.lock"), lock.to_string()).unwrap();
+    let lock_before = std::fs::read(dir.root().join("specforge.lock")).unwrap();
 
-    let (ok, output) = remove(dir.path(), "greet.wasm", &[]);
+    let (ok, output) = remove(&dir, "greet.wasm", &[]);
     assert!(!ok, "{output}");
     assert_eq!(output["code"], "E027", "{output}");
     assert!(
@@ -966,21 +910,21 @@ fn removing_a_wasm_file_entry_another_requires_is_e027_unless_forced() {
         "{output}"
     );
     assert_eq!(
-        enabled(dir.path()),
+        enabled(dir.root()),
         json!(["@specforge/software", "greet.wasm", "@acme/uses-greet"])
     );
 
-    let (ok, output) = remove(dir.path(), "@sdk/greet", &["--force"]);
+    let (ok, output) = remove(&dir, "@sdk/greet", &["--force"]);
     assert!(ok, "{output}");
     assert_eq!(
-        enabled(dir.path()),
+        enabled(dir.root()),
         json!(["@specforge/software", "@acme/uses-greet"])
     );
     assert_eq!(
-        std::fs::read(dir.path().join("specforge.lock")).unwrap(),
+        std::fs::read(dir.root().join("specforge.lock")).unwrap(),
         lock_before
     );
-    assert!(dir.path().join("greet.wasm").is_file());
+    assert!(dir.root().join("greet.wasm").is_file());
 }
 
 #[specforge_test(
@@ -990,33 +934,33 @@ fn removing_a_wasm_file_entry_another_requires_is_e027_unless_forced() {
 fn removing_a_wasm_file_entry_a_disabled_lock_entry_requires_is_accepted() {
     let dir = greet_file_project();
     // `@acme/uses-greet` is locked and requires `@sdk/greet`, but no entry enables it.
-    enable(dir.path(), json!(["@specforge/software", "greet.wasm"]));
+    enable(&dir, json!(["@specforge/software", "greet.wasm"]));
     let lock = json!({
         "lockfile_version": 1,
         "entries": [{"name": "@acme/uses-greet", "version": "1.0.0", "source": "registry",
                      "wasm_hash": "00",
                      "peer_dependencies": [{"name": "@sdk/greet", "version": "^0.1.0"}]}],
     });
-    std::fs::write(dir.path().join("specforge.lock"), lock.to_string()).unwrap();
-    let lock_before = std::fs::read(dir.path().join("specforge.lock")).unwrap();
+    std::fs::write(dir.root().join("specforge.lock"), lock.to_string()).unwrap();
+    let lock_before = std::fs::read(dir.root().join("specforge.lock")).unwrap();
 
-    let (ok, output) = remove(dir.path(), "greet.wasm", &[]);
+    let (ok, output) = remove(&dir, "greet.wasm", &[]);
 
     assert!(ok, "{output}");
-    assert_eq!(enabled(dir.path()), json!(["@specforge/software"]));
+    assert_eq!(enabled(dir.root()), json!(["@specforge/software"]));
     assert_eq!(
-        std::fs::read(dir.path().join("specforge.lock")).unwrap(),
+        std::fs::read(dir.root().join("specforge.lock")).unwrap(),
         lock_before
     );
-    assert!(dir.path().join("greet.wasm").is_file());
+    assert!(dir.root().join("greet.wasm").is_file());
 }
 
 #[test]
 fn removing_a_wasm_file_no_entry_names_is_not_found() {
     let dir = greet_file_project();
-    enable(dir.path(), json!(["@specforge/software", "greet.wasm"]));
+    enable(&dir, json!(["@specforge/software", "greet.wasm"]));
 
-    let (ok, output) = remove(dir.path(), "other.wasm", &[]);
+    let (ok, output) = remove(&dir, "other.wasm", &[]);
 
     assert!(!ok, "{output}");
     assert_eq!(output["code"], "extension_not_found", "{output}");
@@ -1025,7 +969,7 @@ fn removing_a_wasm_file_no_entry_names_is_not_found() {
         "{output}"
     );
     assert_eq!(
-        enabled(dir.path()),
+        enabled(dir.root()),
         json!(["@specforge/software", "greet.wasm"])
     );
 }
@@ -1040,9 +984,9 @@ fn removing_a_wasm_file_no_entry_names_is_not_found() {
 )]
 fn doctor_lists_a_wasm_file_entry_with_its_file_source() {
     let dir = greet_file_project();
-    enable(dir.path(), json!(["@specforge/software", "greet.wasm"]));
+    enable(&dir, json!(["@specforge/software", "greet.wasm"]));
 
-    let (_, report) = doctor(dir.path());
+    let (_, report) = doctor(&dir);
 
     let greet = report["extensions"]
         .as_array()
@@ -1052,9 +996,8 @@ fn doctor_lists_a_wasm_file_entry_with_its_file_source() {
         .unwrap_or_else(|| panic!("@sdk/greet not listed: {report}"));
     assert_eq!(greet["source"], "file:greet.wasm", "{report}");
 
-    let out = specforge()
-        .args(["extensions", "--format", "json", "--path"])
-        .arg(dir.path())
+    let out = Cli::on(&dir)
+        .command(&["extensions", "--format", "json"])
         .output()
         .unwrap();
     let listed: Value = serde_json::from_slice(&out.stdout).unwrap();
@@ -1078,17 +1021,17 @@ fn doctor_lists_a_wasm_file_entry_with_its_file_source() {
 )]
 fn a_removal_with_an_unreadable_config_changes_nothing() {
     let dir = greeting_project();
-    add_local_greet(dir.path());
+    add_local_greet(&dir);
     let binary = dir
-        .path()
+        .root()
         .join(".specforge/extensions/@sdk/greet/extension.wasm");
     assert!(binary.is_file(), "{}", binary.display());
     let broken = r#"{ "extensions": ["@sdk/greet",  }"#;
-    std::fs::write(dir.path().join("specforge.json"), broken).unwrap();
-    let lock_before = std::fs::read(dir.path().join("specforge.lock")).unwrap();
+    std::fs::write(dir.root().join("specforge.json"), broken).unwrap();
+    let lock_before = std::fs::read(dir.root().join("specforge.lock")).unwrap();
     let binary_before = std::fs::read(&binary).unwrap();
 
-    let (ok, output) = remove(dir.path(), "@sdk/greet", &[]);
+    let (ok, output) = remove(&dir, "@sdk/greet", &[]);
 
     assert!(!ok, "{output}");
     assert_eq!(output["code"], "config_invalid", "{output}");
@@ -1100,23 +1043,23 @@ fn a_removal_with_an_unreadable_config_changes_nothing() {
         "{output}"
     );
     assert_eq!(
-        std::fs::read(dir.path().join("specforge.lock")).unwrap(),
+        std::fs::read(dir.root().join("specforge.lock")).unwrap(),
         lock_before
     );
     assert_eq!(std::fs::read(&binary).unwrap(), binary_before);
     assert_eq!(
-        std::fs::read_to_string(dir.path().join("specforge.json")).unwrap(),
+        std::fs::read_to_string(dir.root().join("specforge.json")).unwrap(),
         broken
     );
 
     // The config fixed, remove finishes: specforge.json, lock and binary.
-    enable(dir.path(), json!(["@specforge/software", "@sdk/greet"]));
-    let (ok, output) = remove(dir.path(), "@sdk/greet", &[]);
+    enable(&dir, json!(["@specforge/software", "@sdk/greet"]));
+    let (ok, output) = remove(&dir, "@sdk/greet", &[]);
     assert!(ok, "{output}");
-    assert_eq!(enabled(dir.path()), json!(["@specforge/software"]));
-    let lock = std::fs::read_to_string(dir.path().join("specforge.lock")).unwrap();
+    assert_eq!(enabled(dir.root()), json!(["@specforge/software"]));
+    let lock = std::fs::read_to_string(dir.root().join("specforge.lock")).unwrap();
     assert!(!lock.contains("@sdk/greet"), "{lock}");
-    assert!(!dir.path().join(".specforge/extensions/@sdk/greet").exists());
+    assert!(!dir.root().join(".specforge/extensions/@sdk/greet").exists());
 }
 
 /// Every file under `root` with its bytes: what a dry run must leave as it was.
@@ -1142,20 +1085,13 @@ fn tree(root: &Path) -> std::collections::BTreeMap<std::path::PathBuf, Vec<u8>> 
 )]
 fn add_dry_run_prints_the_plan_and_writes_nothing() {
     let dir = greet_file_project();
-    enable(dir.path(), json!([]));
-    let before = tree(dir.path());
+    enable(&dir, json!([]));
+    let before = tree(dir.root());
 
     // A builtin that requires another: the plan names both, dependencies first.
-    let human = specforge()
-        .args([
-            "add",
-            "--dry-run",
-            "@specforge/formal",
-            "greet.wasm",
-            "--path",
-        ])
-        .arg(dir.path())
-        .current_dir(dir.path())
+    let human = Cli::on(&dir)
+        .command(&["add", "--dry-run", "@specforge/formal", "greet.wasm"])
+        .current_dir(dir.root())
         .output()
         .unwrap();
     assert!(human.status.success(), "{human:?}");
@@ -1171,16 +1107,8 @@ fn add_dry_run_prints_the_plan_and_writes_nothing() {
         "{text}"
     );
 
-    let json = specforge()
-        .args([
-            "add",
-            "--dry-run",
-            "@specforge/formal",
-            "--format",
-            "json",
-            "--path",
-        ])
-        .arg(dir.path())
+    let json = Cli::on(&dir)
+        .command(&["add", "--dry-run", "@specforge/formal", "--format", "json"])
         .output()
         .unwrap();
     assert!(json.status.success(), "{json:?}");
@@ -1193,7 +1121,7 @@ fn add_dry_run_prints_the_plan_and_writes_nothing() {
     );
     assert_eq!(document["files_written"], json!([]), "{document}");
 
-    assert_eq!(tree(dir.path()), before, "a dry run writes nothing");
+    assert_eq!(tree(dir.root()), before, "a dry run writes nothing");
 }
 
 #[specforge_test(
@@ -1202,12 +1130,11 @@ fn add_dry_run_prints_the_plan_and_writes_nothing() {
 )]
 fn remove_dry_run_prints_the_plan_and_writes_nothing() {
     let dir = greet_file_project();
-    enable(dir.path(), json!(["@specforge/software", "greet.wasm"]));
-    let before = tree(dir.path());
+    enable(&dir, json!(["@specforge/software", "greet.wasm"]));
+    let before = tree(dir.root());
 
-    let human = specforge()
-        .args(["remove", "--dry-run", "greet.wasm", "--path"])
-        .arg(dir.path())
+    let human = Cli::on(&dir)
+        .command(&["remove", "--dry-run", "greet.wasm"])
         .output()
         .unwrap();
     assert!(human.status.success(), "{human:?}");
@@ -1217,12 +1144,12 @@ fn remove_dry_run_prints_the_plan_and_writes_nothing() {
         "{text}"
     );
 
-    let (ok, output) = remove(dir.path(), "greet.wasm", &["--dry-run"]);
+    let (ok, output) = remove(&dir, "greet.wasm", &["--dry-run"]);
     assert!(ok, "{output}");
     assert_eq!(output["action"], "planned", "{output}");
     assert_eq!(output["files_written"], json!([]), "{output}");
 
-    assert_eq!(tree(dir.path()), before, "a dry run writes nothing");
+    assert_eq!(tree(dir.root()), before, "a dry run writes nothing");
 }
 
 #[specforge_test(
@@ -1231,21 +1158,17 @@ fn remove_dry_run_prints_the_plan_and_writes_nothing() {
 )]
 fn add_dry_run_refuses_what_add_refuses() {
     let dir = greet_file_project();
-    enable(dir.path(), json!(["@x/y"]));
+    enable(&dir, json!(["@x/y"]));
     let lock = json!({
         "lockfile_version": 1,
         "entries": [{"name": "@x/y", "version": "1.0.0", "source": "registry", "wasm_hash": "00",
                      "peer_dependencies": [{"name": "@sdk/greet", "version": "^9.0"}]}],
     });
-    std::fs::write(dir.path().join("specforge.lock"), lock.to_string()).unwrap();
-    let before = tree(dir.path());
+    std::fs::write(dir.root().join("specforge.lock"), lock.to_string()).unwrap();
+    let before = tree(dir.root());
 
     let run = |dry: bool| {
-        let mut command = specforge();
-        command
-            .args(["add", "greet.wasm", "--path"])
-            .arg(dir.path())
-            .current_dir(dir.path());
+        let mut command = Cli::on(&dir).command(&["add", "greet.wasm"]);
         if dry {
             command.arg("--dry-run");
         }
@@ -1253,24 +1176,24 @@ fn add_dry_run_refuses_what_add_refuses() {
         (out.status.code(), String::from_utf8(out.stderr).unwrap())
     };
     let (dry_code, dry_stderr) = run(true);
-    assert_eq!(tree(dir.path()), before, "a dry run writes nothing");
+    assert_eq!(tree(dir.root()), before, "a dry run writes nothing");
     let (real_code, real_stderr) = run(false);
 
     assert_eq!(dry_code, Some(1), "{dry_stderr}");
     assert!(dry_stderr.contains("E027"), "{dry_stderr}");
     assert_eq!((dry_code, dry_stderr), (real_code, real_stderr));
-    assert_eq!(tree(dir.path()), before, "a refused add writes nothing");
+    assert_eq!(tree(dir.root()), before, "a refused add writes nothing");
 }
 
 #[test]
 fn update_of_a_local_install_says_it_is_not_from_a_registry() {
     let dir = greeting_project();
-    add_local_greet(dir.path());
+    add_local_greet(&dir);
 
     let update = |name: &str| {
-        specforge()
-            .args(["update", name, "--path"])
-            .arg(dir.path())
+        Cli::on(&dir)
+            .command(&["update"])
+            .arg(name)
             .output()
             .unwrap()
     };

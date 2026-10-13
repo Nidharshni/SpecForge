@@ -2,28 +2,17 @@
 //! to end: each test compiles a small project with the real product Wasm
 //! extension loaded and checks which entities a rule reports.
 
+use specforge_project::testing::TestProject;
 use specforge_test_macros::test as specforge_test;
-use std::fs;
-use std::sync::Arc;
-use tempfile::TempDir;
 
 /// Compile `spec` in a project that enables only @specforge/product and
 /// return its diagnostics as (code, message) pairs.
 fn product_diagnostics(spec: &str) -> Vec<(String, String)> {
-    let dir = TempDir::new().unwrap();
-    fs::write(
-        dir.path().join("specforge.json"),
-        r#"{"name":"t","version":"0.1.0","extensions":["@specforge/product"]}"#,
-    )
-    .unwrap();
-    fs::write(dir.path().join("main.spec"), spec).unwrap();
-    let runtime = specforge_component::ComponentRuntime::with_user_cache();
-    let ctx = specforge_project::CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        Some(Arc::new(runtime)),
-    );
-    let diagnostics = ctx.diagnostics();
-    diagnostics
+    TestProject::new()
+        .enabling(&["@specforge/product"])
+        .file("main.spec", spec)
+        .compile()
+        .diagnostics()
         .iter()
         .map(|d| (d.code.clone(), d.message.clone()))
         .collect()
@@ -1241,4 +1230,77 @@ deliverable shipped_bare "Bare" {{
     assert_quiet(&diags, "I065", "shipped_ok");
     assert_quiet(&diags, "I065", "drafted");
     assert_quiet(&diags, "I065", "shipped_bare");
+}
+
+/// A product project with the milestone `m1` due in 2000: past due, and still no I058 from the compile.
+const OVERDUE_MILESTONE_PROJECT: &str = r#"persona dev "Developer" {
+    description "A software developer"
+    status active
+}
+
+channel cli "CLI" {
+    description "Command-line interface"
+    status active
+}
+
+feature f1 "Core Feature" {
+    status proposed
+    priority high
+}
+
+feature f2 "Secondary Feature" {
+    status done
+    priority medium
+    depends_on [f1]
+}
+
+journey j1 "Dev Flow" {
+    persona dev
+    channels [cli]
+    features [f1, f2]
+    description "Developer uses CLI"
+}
+
+module mod1 "Core Module" {
+    features [f1]
+}
+
+milestone m1 "Launch" {
+    status planned
+    target_date "2000-01-01"
+    features [f1, f2]
+    modules [mod1]
+}
+
+deliverable d1 "CLI App" {
+    artifact_type cli
+    status draft
+    journeys [j1]
+    modules [mod1]
+    milestones [m1]
+}
+
+term specification "Specification" {
+    definition "A formal description of system behavior"
+}
+
+release r1 "Initial Release" {
+    version "1.0.0"
+    status planned
+    deliverables [d1]
+    milestones [m1]
+}
+"#;
+
+#[specforge_test(
+    behavior = "pe_query_milestone_timeline",
+    verify = "specforge check emits no I058 diagnostics (query-time only)"
+)]
+fn check_reports_no_overdue_milestone() {
+    let diagnostics = product_diagnostics(OVERDUE_MILESTONE_PROJECT);
+    // Infos are always reported, so an I058 would be among them.
+    assert!(
+        diagnostics.iter().all(|(code, _)| code != "I058"),
+        "{diagnostics:?}"
+    );
 }

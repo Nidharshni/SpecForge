@@ -1,22 +1,9 @@
-use assert_cmd::Command;
+use crate::support::{Cli, TestProject};
 use specforge_test_macros::test as specforge_test;
-use std::fs;
-use tempfile::TempDir;
 
-fn setup_project(files: &[(&str, &str)]) -> TempDir {
-    let dir = TempDir::new().unwrap();
-    for (path, content) in files {
-        let full = dir.path().join(path);
-        if let Some(parent) = full.parent() {
-            fs::create_dir_all(parent).unwrap();
-        }
-        fs::write(&full, content).unwrap();
-    }
-    dir
-}
-
-fn specforge_cmd() -> Command {
-    assert_cmd::cargo_bin_cmd!("specforge")
+/// A directory holding `files` and nothing else.
+fn setup_project(files: &[(&str, &str)]) -> TestProject {
+    TestProject::new().without_config().files(files)
 }
 
 const SPEC_CONTENT: &str = r#"
@@ -36,10 +23,8 @@ feature gamma "Gamma Feature" {
 fn export_graph_produces_valid_json_with_all_nodes() {
     let dir = setup_project(&[("main.spec", SPEC_CONTENT)]);
 
-    let output = specforge_cmd()
-        .args(["export", "--format=graph"])
-        .arg("--path")
-        .arg(dir.path())
+    let output = Cli::on(&dir)
+        .command(&["export", "--format=graph"])
         .output()
         .unwrap();
 
@@ -60,10 +45,8 @@ fn export_graph_produces_valid_json_with_all_nodes() {
 fn export_brief_produces_minimal_output() {
     let dir = setup_project(&[("main.spec", SPEC_CONTENT)]);
 
-    let output = specforge_cmd()
-        .args(["export", "--format=brief"])
-        .arg("--path")
-        .arg(dir.path())
+    let output = Cli::on(&dir)
+        .command(&["export", "--format=brief"])
         .output()
         .unwrap();
 
@@ -90,10 +73,8 @@ fn export_context_includes_contracts() {
         ("main.spec", SPEC_CONTENT),
     ]);
 
-    let output = specforge_cmd()
-        .args(["export", "--format=context"])
-        .arg("--path")
-        .arg(dir.path())
+    let output = Cli::on(&dir)
+        .command(&["export", "--format=context"])
         .output()
         .unwrap();
 
@@ -111,10 +92,8 @@ fn export_context_includes_contracts() {
 fn export_dot_produces_graphviz() {
     let dir = setup_project(&[("main.spec", SPEC_CONTENT)]);
 
-    let output = specforge_cmd()
-        .args(["export", "--format=dot"])
-        .arg("--path")
-        .arg(dir.path())
+    let output = Cli::on(&dir)
+        .command(&["export", "--format=dot"])
         .output()
         .unwrap();
 
@@ -136,10 +115,8 @@ feature gamma "G" { behaviors [alpha, nonexistent] }
 "#,
     )]);
 
-    let output = specforge_cmd()
-        .args(["export", "--format=graph"])
-        .arg("--path")
-        .arg(dir.path())
+    let output = Cli::on(&dir)
+        .command(&["export", "--format=graph"])
         .output()
         .unwrap();
 
@@ -154,10 +131,8 @@ feature gamma "G" { behaviors [alpha, nonexistent] }
 fn export_with_scope_returns_subgraph() {
     let dir = setup_project(&[("main.spec", SPEC_CONTENT)]);
 
-    let output = specforge_cmd()
-        .args(["export", "--format=graph", "--scope=alpha"])
-        .arg("--path")
-        .arg(dir.path())
+    let output = Cli::on(&dir)
+        .command(&["export", "--format=graph", "--scope=alpha"])
         .output()
         .unwrap();
 
@@ -176,10 +151,8 @@ fn export_with_scope_returns_subgraph() {
 fn export_with_nonexistent_scope_exits_one() {
     let dir = setup_project(&[("main.spec", SPEC_CONTENT)]);
 
-    specforge_cmd()
-        .args(["export", "--format=graph", "--scope=nonexistent"])
-        .arg("--path")
-        .arg(dir.path())
+    Cli::on(&dir)
+        .command(&["export", "--format=graph", "--scope=nonexistent"])
         .assert()
         .code(1);
 }
@@ -191,10 +164,8 @@ fn export_with_nonexistent_scope_exits_one() {
 fn a_context_export_of_a_missing_scope_is_e003() {
     let dir = setup_project(&[("main.spec", SPEC_CONTENT)]);
 
-    let output = specforge_cmd()
-        .args(["export", "--format=context", "--scope=nope"])
-        .arg("--path")
-        .arg(dir.path())
+    let output = Cli::on(&dir)
+        .command(&["export", "--format=context", "--scope=nope"])
         .output()
         .unwrap();
 
@@ -212,10 +183,8 @@ fn a_context_export_of_a_missing_scope_is_e003() {
 fn export_default_produces_v2_with_schema() {
     let dir = setup_project(&[("main.spec", SPEC_CONTENT)]);
 
-    let output = specforge_cmd()
-        .args(["export", "--format=graph"])
-        .arg("--path")
-        .arg(dir.path())
+    let output = Cli::on(&dir)
+        .command(&["export", "--format=graph"])
         .output()
         .unwrap();
 
@@ -235,10 +204,8 @@ fn export_default_produces_v2_with_schema() {
 fn export_no_schema_flag_produces_v1() {
     let dir = setup_project(&[("main.spec", SPEC_CONTENT)]);
 
-    let output = specforge_cmd()
-        .args(["export", "--format=graph", "--no-schema"])
-        .arg("--path")
-        .arg(dir.path())
+    let output = Cli::on(&dir)
+        .command(&["export", "--format=graph", "--no-schema"])
         .output()
         .unwrap();
 
@@ -264,13 +231,9 @@ fn export_no_schema_flag_produces_v1() {
 fn export_brief_omits_the_schema_unless_asked() {
     let dir = setup_project(&[("main.spec", SPEC_CONTENT)]);
     let export = |extra: &[&str]| {
-        let output = specforge_cmd()
-            .args(["export", "--format=brief"])
-            .args(extra)
-            .arg("--path")
-            .arg(dir.path())
-            .output()
-            .unwrap();
+        let mut argv = vec!["export", "--format=brief"];
+        argv.extend(extra);
+        let output = Cli::on(&dir).command(&argv).output().unwrap();
         assert!(output.status.success());
         serde_json::from_slice::<serde_json::Value>(&output.stdout).unwrap()
     };
@@ -291,13 +254,9 @@ fn export_brief_omits_the_schema_unless_asked() {
 fn export_context_omits_the_schema_unless_asked() {
     let dir = setup_project(&[("main.spec", SPEC_CONTENT)]);
     let export = |extra: &[&str]| {
-        let output = specforge_cmd()
-            .args(["export", "--format=context"])
-            .args(extra)
-            .arg("--path")
-            .arg(dir.path())
-            .output()
-            .unwrap();
+        let mut argv = vec!["export", "--format=context"];
+        argv.extend(extra);
+        let output = Cli::on(&dir).command(&argv).output().unwrap();
         assert!(output.status.success());
         serde_json::from_slice::<serde_json::Value>(&output.stdout).unwrap()
     };
@@ -316,10 +275,8 @@ fn export_context_omits_the_schema_unless_asked() {
 fn export_invalid_schema_version_exits_one() {
     let dir = setup_project(&[("main.spec", SPEC_CONTENT)]);
 
-    let refused = specforge_cmd()
-        .args(["export", "--format=graph", "--schema-version=invalid"])
-        .arg("--path")
-        .arg(dir.path())
+    let refused = Cli::on(&dir)
+        .command(&["export", "--format=graph", "--schema-version=invalid"])
         .assert()
         .code(1);
     let stderr = String::from_utf8_lossy(&refused.get_output().stderr).into_owned();
@@ -334,12 +291,7 @@ fn export_invalid_schema_version_exits_one() {
 fn schema_command_outputs_json() {
     let dir = setup_project(&[("main.spec", SPEC_CONTENT)]);
 
-    let output = specforge_cmd()
-        .args(["schema"])
-        .arg("--path")
-        .arg(dir.path())
-        .output()
-        .unwrap();
+    let output = Cli::on(&dir).command(&["schema"]).output().unwrap();
 
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -355,10 +307,8 @@ fn schema_command_outputs_json() {
 fn schema_publish_outputs_json_schema() {
     let dir = setup_project(&[("main.spec", SPEC_CONTENT)]);
 
-    let output = specforge_cmd()
-        .args(["schema", "--publish"])
-        .arg("--path")
-        .arg(dir.path())
+    let output = Cli::on(&dir)
+        .command(&["schema", "--publish"])
         .output()
         .unwrap();
 
@@ -378,21 +328,11 @@ fn schema_publish_outputs_json_schema() {
     verify = "export --format context keeps an invariant's guarantee"
 )]
 fn export_context_keeps_an_invariants_guarantee() {
-    let dir = TempDir::new().unwrap();
-    fs::write(
-        dir.path().join("specforge.json"),
-        r#"{"name":"t","version":"0.1.0","extensions":["@specforge/software"]}"#,
-    )
-    .unwrap();
-    fs::write(
-        dir.path().join("app.spec"),
-        "invariant unique_ids \"Unique ids\" {\n  guarantee \"Ids MUST be unique\"\n  risk \"duplicates\"\n}\n",
-    )
-    .unwrap();
-    let out = specforge_cmd()
-        .args(["export", "--format", "context"])
-        .arg("--path")
-        .arg(dir.path())
+    let dir = TestProject::new()
+        .raw_config(r#"{"name":"t","version":"0.1.0","extensions":["@specforge/software"]}"#);
+    dir.write("app.spec", "invariant unique_ids \"Unique ids\" {\n  guarantee \"Ids MUST be unique\"\n  risk \"duplicates\"\n}\n");
+    let out = Cli::on(&dir)
+        .command(&["export", "--format", "context"])
         .assert()
         .success()
         .get_output()
@@ -417,7 +357,7 @@ fn export_context_keeps_an_invariants_guarantee() {
 /// Nine entities, each well over 100 tokens: eight behaviors with long
 /// contracts and a feature linking them all. Two extensions give the export
 /// a schema of real size.
-fn budget_project() -> TempDir {
+fn budget_project() -> TestProject {
     const CONFIG: &str = r#"{"name":"t","version":"0.1.0","extensions":["@specforge/software","@specforge/product"]}"#;
     let mut spec = String::new();
     for i in 0..8 {
@@ -434,14 +374,10 @@ fn budget_project() -> TempDir {
 
 /// `specforge export <dir> --format=graph <args>`: the exit code, stdout and
 /// stderr.
-fn export_graph(dir: &TempDir, args: &[&str]) -> (i32, String, String) {
-    let output = specforge_cmd()
-        .args(["export", "--format=graph"])
-        .args(args)
-        .arg("--path")
-        .arg(dir.path())
-        .output()
-        .unwrap();
+fn export_graph(dir: &TestProject, args: &[&str]) -> (i32, String, String) {
+    let mut argv = vec!["export", "--format=graph"];
+    argv.extend(args);
+    let output = Cli::on(dir).command(&argv).output().unwrap();
     (
         output.status.code().unwrap_or(-1),
         String::from_utf8_lossy(&output.stdout).into_owned(),
@@ -451,7 +387,7 @@ fn export_graph(dir: &TempDir, args: &[&str]) -> (i32, String, String) {
 
 /// The embedded schema of this project's graph export, and what it costs by
 /// the estimator the budget uses.
-fn schema_tokens(dir: &TempDir) -> (serde_json::Value, usize) {
+fn schema_tokens(dir: &TestProject) -> (serde_json::Value, usize) {
     let (code, stdout, stderr) = export_graph(dir, &["--with-schema"]);
     assert_eq!(code, 0, "{stderr}");
     let full: serde_json::Value = serde_json::from_str(&stdout).unwrap();
@@ -577,14 +513,11 @@ fn budget_below_one_entity_yields_an_empty_envelope() {
 
 /// `specforge export <dir> --format=<format> <args>`: the exit code, stdout and
 /// stderr.
-fn export_format(dir: &TempDir, format: &str, args: &[&str]) -> (i32, String, String) {
-    let output = specforge_cmd()
-        .args(["export", &format!("--format={format}")])
-        .args(args)
-        .arg("--path")
-        .arg(dir.path())
-        .output()
-        .unwrap();
+fn export_format(dir: &TestProject, format: &str, args: &[&str]) -> (i32, String, String) {
+    let format_flag = format!("--format={format}");
+    let mut argv = vec!["export", format_flag.as_str()];
+    argv.extend(args);
+    let output = Cli::on(dir).command(&argv).output().unwrap();
     (
         output.status.code().unwrap_or(-1),
         String::from_utf8_lossy(&output.stdout).into_owned(),
@@ -766,9 +699,9 @@ fn the_export_matrix() {
                     if let Some(budget) = budget {
                         args.extend(["--max-tokens".to_string(), budget.to_string()]);
                     }
-                    args.push("--path".to_string());
-                    args.push(dir.path().display().to_string());
-                    let output = specforge_cmd().arg("export").args(&args).output().unwrap();
+                    let mut argv = vec!["export"];
+                    argv.extend(args.iter().map(String::as_str));
+                    let output = Cli::on(&dir).command(&argv).output().unwrap();
                     let code = output.status.code().unwrap_or(-1);
                     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
                     let stderr = String::from_utf8_lossy(&output.stderr).into_owned();

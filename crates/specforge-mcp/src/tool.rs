@@ -1126,11 +1126,11 @@ mod tests {
 #[cfg(test)]
 mod spec_tests {
     use super::*;
-    use crate::events::testing::EventLog;
     use crate::mutation::{Mutated, NoDiagnostics, Written};
     use crate::reply::Answer;
     use crate::state::McpState;
     use crate::target::{CallTarget, Unscoped};
+    use crate::testing::EventLog;
     use specforge_common::shape::Shape;
 
     #[derive(Debug, Serialize, Shape)]

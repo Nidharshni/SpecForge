@@ -1,22 +1,9 @@
-use assert_cmd::Command;
+use crate::support::{Cli, TestProject};
 use specforge_test::prelude::*;
-use std::fs;
-use tempfile::TempDir;
 
-fn setup_project(files: &[(&str, &str)]) -> TempDir {
-    let dir = TempDir::new().unwrap();
-    for (path, content) in files {
-        let full = dir.path().join(path);
-        if let Some(parent) = full.parent() {
-            fs::create_dir_all(parent).unwrap();
-        }
-        fs::write(&full, content).unwrap();
-    }
-    dir
-}
-
-fn specforge_cmd() -> Command {
-    assert_cmd::cargo_bin_cmd!("specforge")
+/// A directory holding `files` and nothing else.
+fn setup_project(files: &[(&str, &str)]) -> TestProject {
+    TestProject::new().without_config().files(files)
 }
 
 #[test]
@@ -30,12 +17,7 @@ feature gamma "G" { behaviors [alpha, beta] }
 "#,
     )]);
 
-    let output = specforge_cmd()
-        .arg("stats")
-        .arg("--path")
-        .arg(dir.path())
-        .output()
-        .unwrap();
+    let output = Cli::on(&dir).command(&["stats"]).output().unwrap();
 
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -47,12 +29,7 @@ feature gamma "G" { behaviors [alpha, beta] }
 fn stats_on_empty_project() {
     let dir = setup_project(&[("main.spec", "")]);
 
-    let output = specforge_cmd()
-        .arg("stats")
-        .arg("--path")
-        .arg(dir.path())
-        .output()
-        .unwrap();
+    let output = Cli::on(&dir).command(&["stats"]).output().unwrap();
 
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -69,10 +46,8 @@ feature gamma "G" { behaviors [alpha] }
 "#,
     )]);
 
-    let output = specforge_cmd()
-        .args(["stats", "--format=json"])
-        .arg("--path")
-        .arg(dir.path())
+    let output = Cli::on(&dir)
+        .command(&["stats", "--format=json"])
         .output()
         .unwrap();
 
@@ -107,10 +82,8 @@ feature gamma "G" { behaviors [alpha, beta] }
         ),
     ]);
 
-    let output = specforge_cmd()
-        .args(["stats", "--format=json"])
-        .arg("--path")
-        .arg(dir.path())
+    let output = Cli::on(&dir)
+        .command(&["stats", "--format=json"])
         .output()
         .unwrap();
     assert!(output.status.success());
@@ -118,12 +91,7 @@ feature gamma "G" { behaviors [alpha, beta] }
     assert_eq!(parsed["testable_count"], 2, "{parsed}");
     assert_eq!(parsed["declared_pct"], 50.0, "{parsed}");
 
-    let output = specforge_cmd()
-        .arg("stats")
-        .arg("--path")
-        .arg(dir.path())
-        .output()
-        .unwrap();
+    let output = Cli::on(&dir).command(&["stats"]).output().unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("Declared: 50% of 2 testable"), "{stdout}");
 }

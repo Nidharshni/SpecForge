@@ -1,21 +1,8 @@
-use assert_cmd::Command;
-use std::fs;
-use tempfile::TempDir;
+use crate::support::{Cli, TestProject};
 
-fn setup_project(files: &[(&str, &str)]) -> TempDir {
-    let dir = TempDir::new().unwrap();
-    for (path, content) in files {
-        let full = dir.path().join(path);
-        if let Some(parent) = full.parent() {
-            fs::create_dir_all(parent).unwrap();
-        }
-        fs::write(&full, content).unwrap();
-    }
-    dir
-}
-
-fn specforge_cmd() -> Command {
-    assert_cmd::cargo_bin_cmd!("specforge")
+/// A directory holding `files` and nothing else.
+fn setup_project(files: &[(&str, &str)]) -> TestProject {
+    TestProject::new().without_config().files(files)
 }
 
 const SPEC_CONTENT: &str = r#"
@@ -28,12 +15,7 @@ feature gamma "Gamma" { behaviors [alpha, beta] }
 fn trace_produces_upstream_and_downstream_json() {
     let dir = setup_project(&[("main.spec", SPEC_CONTENT)]);
 
-    let output = specforge_cmd()
-        .args(["trace", "alpha"])
-        .arg("--path")
-        .arg(dir.path())
-        .output()
-        .unwrap();
+    let output = Cli::on(&dir).command(&["trace", "alpha"]).output().unwrap();
 
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -54,10 +36,8 @@ fn trace_produces_upstream_and_downstream_json() {
 fn trace_nonexistent_entity_exits_one() {
     let dir = setup_project(&[("main.spec", SPEC_CONTENT)]);
 
-    specforge_cmd()
-        .args(["trace", "nonexistent"])
-        .arg("--path")
-        .arg(dir.path())
+    Cli::on(&dir)
+        .command(&["trace", "nonexistent"])
         .assert()
         .code(1);
 }

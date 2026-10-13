@@ -792,7 +792,7 @@ fn contract_outline() {
     let mut server = contracts_project()
         .file(
             "test.spec",
-            &format!(
+            format!(
                 "{ALPHA_SPEC}\nport gamma \"GAMMA\" {{\n    method check(x: Int) -> Bool\n    // a\n    // b\n    // c\n}}\n"
             ),
         )
@@ -993,7 +993,7 @@ fn contract_review_prompt() {
     let mut server = contracts_project()
         .file(
             "test.spec",
-            &format!(
+            format!(
                 "{ALPHA_SPEC}\nbehavior gamma \"GAMMA\" {{\n    depends_on [delta]\n}}\n\nbehavior delta \"DELTA\" {{\n\n}}\n"
             ),
         )
@@ -1093,7 +1093,7 @@ fn contract_explore_prompt() {
     let mut server = contracts_project()
         .file(
             "test.spec",
-            &format!("{ALPHA_SPEC}\n\n\n\n\nbehavior delta \"DELTA\" {{\n\n}}\n"),
+            format!("{ALPHA_SPEC}\n\n\n\n\nbehavior delta \"DELTA\" {{\n\n}}\n"),
         )
         .file("feat.spec", BETA_WITH_GAMMA)
         .file("inv.spec", "invariant gamma \"GAMMA\" {\n}\n")

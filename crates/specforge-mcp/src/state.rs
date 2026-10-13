@@ -323,7 +323,7 @@ mod tests {
     use serde_json::json;
 
     use crate::McpServer;
-    use crate::events::testing::EventLog;
+    use crate::testing::EventLog;
 
     /// The replies to `initialize`, `ping` and a listing.
     fn replies(server: &mut McpServer) -> Vec<String> {

@@ -13,27 +13,23 @@
 //! commit, where the diff shows it.
 
 use std::fmt::Write as _;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-use assert_cmd::Command;
 use serde_json::{Value, json};
 use specforge_ops::export::{AGENT_FORMAT, FORMAT};
 use specforge_ops::model::{
     DEPS, GROUP_BY, MODEL_FIELDS, MODEL_FORMAT, OUTLINE_FIELDS, OUTLINE_FORMAT,
 };
 use specforge_ops::options::OptionTable;
-use tempfile::TempDir;
 
-use crate::coverage_corpus::{copy_tree, mcp_calls};
+use crate::coverage_corpus::{mcp_calls, served};
+use crate::support::{Cli, TestProject};
 
 /// A scratch copy of `fixtures/read_views/rv1`.
-fn rv1() -> TempDir {
-    let tmp = TempDir::new().unwrap();
-    copy_tree(
-        &Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/read_views/rv1"),
-        tmp.path(),
-    );
-    tmp
+fn rv1() -> TestProject {
+    TestProject::copy_of(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/read_views/rv1"),
+    )
 }
 
 /// The placeholders of a probe's CLI command line.
@@ -175,14 +171,13 @@ struct Run {
     stdout: String,
 }
 
-fn cli(args: &[String]) -> Run {
-    let out = Command::new(env!("CARGO_BIN_EXE_specforge"))
-        .args(args)
-        .output()
-        .unwrap();
+/// `specforge <args>` (naming its own `--path`) on `project`.
+fn cli(project: &TestProject, args: &[String]) -> Run {
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    let out = Cli::on(project).bare(&args);
     Run {
-        code: out.status.code(),
-        stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
+        code: Some(out.code),
+        stdout: out.stdout,
     }
 }
 
@@ -209,7 +204,7 @@ fn command_line(line: &[&str], root: &Path, name: Option<&str>) -> Vec<String> {
 
 /// The `-h` lines of the flag (or positional) `line` passes the name with,
 /// joined into one.
-fn help_line(line: &[&str]) -> String {
+fn help_line(project: &TestProject, line: &[&str]) -> String {
     let at = line.iter().position(|token| *token == NAME).unwrap();
     let previous = line[at - 1];
     let (command, wanted) = if previous.starts_with("--") {
@@ -217,7 +212,7 @@ fn help_line(line: &[&str]) -> String {
     } else {
         (line[0], "[PASS]".to_string())
     };
-    let help = cli(&[command.to_string(), "-h".to_string()]).stdout;
+    let help = cli(project, &[command.to_string(), "-h".to_string()]).stdout;
     let mut lines = help
         .lines()
         .skip_while(|l| !l.trim_start().starts_with(&wanted));
@@ -295,7 +290,7 @@ fn defaults<T: PartialEq>(absent: &T, outputs: &[(&str, T)]) -> String {
 /// What each surface answered for one probe.
 struct Probed {
     probe: &'static Probe,
-    root: TempDir,
+    root: PathBuf,
     help: Option<String>,
     advertised: Option<String>,
     /// The CLI run with the argument absent, then one per name.
@@ -306,15 +301,16 @@ struct Probed {
 
 /// Run `probe` on each surface it has, over its own copy of rv1.
 fn run_probe(probe: &'static Probe) -> Probed {
-    let tmp = rv1();
-    let root = tmp.path();
-    let help = probe.cli.map(help_line);
+    let mut tmp = served(rv1());
+    let root = tmp.root().to_path_buf();
+    let root = root.as_path();
+    let help = probe.cli.map(|line| help_line(tmp.project(), line));
     let cli = probe.cli.map(|line| {
-        let absent = cli(&command_line(line, root, None));
+        let absent = cli(tmp.project(), &command_line(line, root, None));
         let runs = probe
             .names
             .iter()
-            .map(|name| cli(&command_line(line, root, Some(name))))
+            .map(|name| cli(tmp.project(), &command_line(line, root, Some(name))))
             .collect();
         (absent, runs)
     });
@@ -329,13 +325,13 @@ fn run_probe(probe: &'static Probe) -> Probed {
             arguments[argument] = json!(name);
             calls.push(json!({"name": tool, "arguments": arguments}));
         }
-        let mut results = mcp_calls(root, &calls).into_iter();
+        let mut results = mcp_calls(&mut tmp, &calls).into_iter();
         let absent = results.next().unwrap();
         (absent, results.collect())
     });
     Probed {
         probe,
-        root: tmp,
+        root: root.to_path_buf(),
         help,
         advertised,
         cli,
@@ -358,7 +354,7 @@ fn run_probes(wanted: impl Fn(&str) -> bool) -> Vec<Probed> {
 /// One probe's section of the snapshot.
 fn render(probed: &Probed) -> String {
     let probe = probed.probe;
-    let root = probed.root.path();
+    let root = probed.root.as_path();
     let mut section = format!("## {}\n", probe.label);
     if let Some(help) = &probed.help {
         writeln!(section, "cli -h: {help}").unwrap();

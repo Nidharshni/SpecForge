@@ -13,15 +13,15 @@ pub mod events;
 pub mod extension;
 pub mod project;
 pub mod replies;
-pub mod rpc;
 pub mod spec;
 
 pub use disk::{changed_files, files_under};
 pub use events::*;
 pub use extension::TestExtension;
-pub use project::{Served, TestProject};
-pub use rpc::*;
+pub use project::{Serve, TestProject};
 pub use spec::spec_files;
+pub use specforge_mcp::testing::Served;
+pub use specforge_mcp::testing::rpc::*;
 
 use serde_json::{Value, json};
 use std::sync::Arc;

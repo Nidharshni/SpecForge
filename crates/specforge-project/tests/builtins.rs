@@ -1,4 +1,5 @@
 use specforge_common::Diagnostic;
+use specforge_project::testing::TestProject;
 use specforge_protocol_types::{DeclaredCategory, EntityKindDescriptor, ExtensionDeclaration};
 use specforge_wasm::WasmRuntime;
 use specforge_wasm::protocol::load_declaration;
@@ -575,4 +576,34 @@ fn product_declares_its_lifecycle_passes() {
             ("delivery_evidence", Some("resolve"), None),
         ]
     );
+}
+
+#[specforge_test_macros::test(
+    behavior = "se_validate_unused_invariants",
+    verify = "invariant nothing references produces W003"
+)]
+#[specforge_test_macros::test(
+    behavior = "se_validate_unused_invariants",
+    verify = "invariant with incoming reference edge passes"
+)]
+fn check_reports_an_unreferenced_invariant_as_w003() {
+    let compiled = TestProject::new()
+        .enabling(&["@specforge/software"])
+        .file(
+            "main.spec",
+            concat!(
+                "invariant held \"Held\" {\n  guarantee \"g\"\n}\n",
+                "invariant orphan \"Orphan\" {\n  guarantee \"g\"\n}\n",
+                "behavior keeper \"Keeper\" {\n  contract \"c\"\n  invariants [held]\n}\n",
+            ),
+        )
+        .compile();
+    let diagnostics = compiled.diagnostics();
+    let w003: Vec<&str> = diagnostics
+        .iter()
+        .filter(|d| d.code == "W003")
+        .map(|d| d.message.as_str())
+        .collect();
+    assert_eq!(w003.len(), 1, "{diagnostics:?}");
+    assert!(w003[0].contains("'orphan'"), "{w003:?}");
 }

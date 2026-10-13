@@ -70,7 +70,10 @@ fn each_core_tool_schema_advertises_exactly_what_its_handler_reads() {
     verify = "each core prompt lists exactly the arguments its handler reads"
 )]
 fn each_core_prompt_lists_exactly_the_arguments_its_handler_reads() {
-    let mut served = crate::support::TestProject::new().serve_components();
+    let mut served = {
+        use crate::support::Serve;
+        crate::support::TestProject::new().serve_components()
+    };
     let mut drift = Vec::new();
     for prompt in specforge_mcp::prompts::CORE_PROMPTS {
         let declared = prompt.arguments();

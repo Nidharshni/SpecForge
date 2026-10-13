@@ -53,7 +53,7 @@ fn server_with_unordered_file() -> Served {
     project()
         .file(
             "order.spec",
-            &format!(
+            format!(
                 "{}{}{}",
                 at_line(5, "behavior early \"Early\" {\n}\n"),
                 at_line(6, "behavior middle \"Middle\" {\n}\n"),
@@ -376,7 +376,7 @@ fn find_definition_returns_location() {
     let mut server = project()
         .file(
             "nested.spec",
-            &at_line(7, "    behavior indented \"Indented\" {\n    }\n"),
+            at_line(7, "    behavior indented \"Indented\" {\n    }\n"),
         )
         .serve(&[TestExtension::software()]);
     let parsed = result(

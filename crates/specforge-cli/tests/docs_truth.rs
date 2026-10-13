@@ -2,6 +2,7 @@
 //! silently when an extension adds a kind. Derive the number from the
 //! builtin manifests and pin the docs to it.
 
+use crate::support::{Cli, TestProject};
 use std::collections::BTreeSet;
 
 fn repo_root() -> std::path::PathBuf {
@@ -138,18 +139,17 @@ fn vscode_cli_calls() -> Vec<VscodeCliCall> {
 }
 
 fn specforge_help(args: &[&str]) -> String {
-    let out = std::process::Command::new(env!("CARGO_BIN_EXE_specforge"))
-        .args(args)
-        .arg("--help")
-        .output()
-        .expect("run specforge --help");
-    assert!(
-        out.status.success(),
+    let mut argv = args.to_vec();
+    argv.push("--help");
+    let out = Cli::on(&TestProject::new().without_config()).bare(&argv);
+    assert_eq!(
+        out.code,
+        0,
         "`specforge {} --help` failed: {}",
         args.join(" "),
-        String::from_utf8_lossy(&out.stderr)
+        out.stderr
     );
-    String::from_utf8_lossy(&out.stdout).into_owned()
+    out.stdout
 }
 
 /// The VS Code extension shells out to the CLI. Every subcommand it names

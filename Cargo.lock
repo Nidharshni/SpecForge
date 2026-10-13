@@ -3150,6 +3150,7 @@ dependencies = [
  "specforge-installed",
  "specforge-package",
  "specforge-parser",
+ "specforge-project",
  "specforge-protocol-types",
  "specforge-registry",
  "specforge-resolver",
