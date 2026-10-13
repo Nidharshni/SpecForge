@@ -14,9 +14,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use specforge_common::{
-    Exclude, ProjectConfig, discover_spec_files, discover_spec_files_at, is_discovered,
-};
+use specforge_common::{ProjectConfig, SourceRoot};
 
 use crate::build_cache::BUILD_CACHE_FILE;
 use crate::{Environment, builtins};
@@ -91,8 +89,7 @@ enum Place {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct OnDisk {
     root: PathBuf,
-    spec_root: PathBuf,
-    exclude: Exclude,
+    sources: SourceRoot,
     config: PathBuf,
     lock: PathBuf,
     /// The module of every enabled extension that is not built in:
@@ -173,7 +170,7 @@ impl OnDisk {
         if !target.is_file() {
             return None;
         }
-        let key = path.strip_prefix(&self.spec_root).ok()?;
+        let key = path.strip_prefix(self.sources.dir()).ok()?;
         Some(Link {
             key: key.to_string_lossy().into_owned(),
             target,
@@ -247,7 +244,7 @@ impl SessionInputs {
 
     /// Where `.spec` files are discovered; `None` when detached.
     pub fn spec_root(&self) -> Option<&Path> {
-        self.disk().map(|disk| disk.spec_root.as_path())
+        self.disk().map(|disk| disk.sources.dir())
     }
 
     /// The directories a file watcher must watch to see a change to any
@@ -260,7 +257,7 @@ impl SessionInputs {
         let Some(disk) = self.disk() else {
             return Vec::new();
         };
-        let candidates = [canonical(&disk.root), canonical(&disk.spec_root)]
+        let candidates = [canonical(&disk.root), canonical(disk.sources.dir())]
             .into_iter()
             .chain(
                 disk.modules
@@ -320,9 +317,9 @@ impl SessionInputs {
         };
         let spelled = |path: &Path| disk.respell(path);
         let spec_root_apart = !disk.canonical.spec_root.starts_with(&disk.canonical.root);
-        std::iter::once(Watched::Sources(spelled(&disk.spec_root)))
+        std::iter::once(Watched::Sources(spelled(disk.sources.dir())))
             .chain(std::iter::once(Watched::Directories(spelled(&disk.root))))
-            .chain(spec_root_apart.then(|| Watched::Directories(spelled(&disk.spec_root))))
+            .chain(spec_root_apart.then(|| Watched::Directories(spelled(disk.sources.dir()))))
             .chain(
                 [&disk.config, &disk.lock]
                     .into_iter()
@@ -338,7 +335,7 @@ impl SessionInputs {
                         link.target
                             .strip_prefix(&disk.canonical.spec_root)
                             .map_or(true, |relative| {
-                                !is_discovered(&relative.to_string_lossy(), &disk.exclude)
+                                !disk.sources.holds(&relative.to_string_lossy())
                             })
                     })
                     .map(|link| Watched::File(spelled(&link.target))),
@@ -371,8 +368,7 @@ impl SessionInputs {
         let modules = installed.modules(&config.extensions, &builtins());
         Self::on_disk(OnDisk {
             root: root.to_path_buf(),
-            spec_root: config.spec_root_in(root),
-            exclude: config.exclude.clone(),
+            sources: config.sources(root),
             config: root.join("specforge.json"),
             lock: installed.lock_path(),
             modules,
@@ -443,7 +439,7 @@ impl SessionInputs {
     /// The `.spec` files discovery finds now (none when detached).
     pub(crate) fn discover(&self) -> Vec<PathBuf> {
         self.disk()
-            .map(|disk| discover_spec_files(&disk.spec_root, &disk.exclude))
+            .map(|disk| disk.sources.files())
             .unwrap_or_default()
     }
 
@@ -472,7 +468,7 @@ impl SessionInputs {
                 disk.links.retain(|link| !keys.contains(&link.key));
                 let again: Vec<Link> = keys
                     .iter()
-                    .filter_map(|key| disk.link_at(&disk.spec_root.join(key)))
+                    .filter_map(|key| disk.link_at(&disk.sources.dir().join(key)))
                     .collect();
                 disk.links.extend(again);
                 disk.links.sort_by(|a, b| a.key.cmp(&b.key));
@@ -565,10 +561,11 @@ impl SessionInputs {
         let Some(disk) = self.disk() else {
             return Vec::new();
         };
-        discover_spec_files_at(&disk.spec_root, &disk.spec_root.join(key), &disk.exclude)
+        disk.sources
+            .files_at(&disk.sources.dir().join(key))
             .into_iter()
             .map(|path| {
-                path.strip_prefix(&disk.spec_root)
+                path.strip_prefix(disk.sources.dir())
                     .unwrap_or(&path)
                     .to_string_lossy()
                     .into_owned()
@@ -578,15 +575,14 @@ impl SessionInputs {
 
     /// A changed key the session ignores (never, detached).
     pub(crate) fn excludes(&self, key: &str) -> bool {
-        self.disk()
-            .is_some_and(|disk| !is_discovered(key, &disk.exclude))
+        self.disk().is_some_and(|disk| !disk.sources.holds(key))
     }
 
     /// The value for `disk`, its canonical forms taken now.
     fn on_disk(mut disk: OnDisk) -> Self {
         disk.canonical = Canonical {
             root: canonical(&disk.root),
-            spec_root: canonical(&disk.spec_root),
+            spec_root: canonical(disk.sources.dir()),
             environment: [&disk.config, &disk.lock]
                 .into_iter()
                 .chain(&disk.modules)
@@ -636,7 +632,7 @@ impl OnDisk {
             })
         };
         let mut pending: Vec<Pending> = Vec::new();
-        let candidates = std::iter::once((self.spec_root.as_path(), Kind::Environment))
+        let candidates = std::iter::once((self.sources.dir(), Kind::Environment))
             .chain(
                 self.modules
                     .iter()
@@ -676,7 +672,7 @@ impl Environment {
     /// under it (as `specforge check` names it), else the path itself.
     /// With no spec root (no project), every key is the path itself.
     pub fn source_key(&self, path: &Path) -> String {
-        source_key(&self.spec_root, path)
+        source_key(self.sources.dir(), path)
     }
 }
 

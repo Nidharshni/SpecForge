@@ -32,8 +32,7 @@ pub struct Walked {
 /// - a directory below `root` for which `stop` holds is not entered but is
 ///   listed in [`Walked::stopped`].
 ///
-/// No `exclude` entry applies here; a project's sources are
-/// [`discover_spec_files`].
+/// No `exclude` entry applies here; a project's sources are [`SourceRoot`].
 pub fn walk_spec_files(root: &Path, mut stop: impl FnMut(&Path) -> bool) -> Walked {
     let mut stopped: Vec<PathBuf> = Vec::new();
     let mut files: Vec<PathBuf> = walkdir::WalkDir::new(root)
@@ -80,85 +79,121 @@ fn is_source_entry(ft: std::fs::FileType, path: &Path) -> bool {
     }
 }
 
-/// A project's sources under `root` (its spec root): the `.spec` files
-/// [`walk_spec_files`] reaches that no `exclude` entry leaves out (the
-/// project's `specforge.json` `exclude`, ADR 0055 D7). Sorted for
-/// deterministic downstream behavior.
-pub fn discover_spec_files(root: &Path, exclude: &Exclude) -> Vec<PathBuf> {
-    walk_spec_files(root, |_| false)
-        .files
-        .into_iter()
-        .filter(|path| !exclude.excludes(path.strip_prefix(root).unwrap_or(path)))
-        .collect()
+/// Where a project's sources are (CONTEXT "Project sources"): its spec root
+/// and what its `exclude` entries leave out. The one answer every compile,
+/// session, format, migrate and rename asks for "which files are the
+/// sources" ([`Self::files`]), "which are at this path" ([`Self::files_at`])
+/// and "is this one of them" ([`Self::holds`]).
+///
+/// The walk enters the spec root whatever its own name, and below it enters
+/// no [`SKIP_DIRS`] directory and no symlink. Only files are sources, a
+/// symlink only when it resolves to a file.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SourceRoot {
+    dir: PathBuf,
+    exclude: Exclude,
 }
 
-/// The sources [`discover_spec_files`] finds at `path` under `root`, now: when
-/// `path` is a directory (not a symlink), every one under it; when it is a
-/// source file (a file, through a symlink too, that [`is_discovered`] keeps),
-/// itself; else none. Equal to `discover_spec_files(root, exclude)` filtered to
-/// `path` and what lies under it.
-pub fn discover_spec_files_at(root: &Path, path: &Path, exclude: &Exclude) -> Vec<PathBuf> {
-    use std::path::Component;
-    let Ok(relative) = path.strip_prefix(root) else {
-        return Vec::new();
-    };
-    if relative.as_os_str().is_empty() {
-        return discover_spec_files(root, exclude);
+impl SourceRoot {
+    /// The sources under `dir` (a spec root) that `exclude` does not leave out.
+    pub fn new(dir: PathBuf, exclude: Exclude) -> Self {
+        SourceRoot { dir, exclude }
     }
-    let names: Vec<&std::ffi::OsStr> = relative
-        .components()
-        .filter_map(|c| match c {
-            Component::Normal(name) => Some(name),
-            _ => None,
-        })
-        .collect();
-    if names.len() != relative.components().count()
-        || names
-            .iter()
-            .any(|name| name.to_str().is_some_and(|n| SKIP_DIRS.contains(&n)))
-    {
-        return Vec::new();
+
+    /// The spec root.
+    pub fn dir(&self) -> &Path {
+        &self.dir
     }
-    // No directory on the way is a symlink: the walk never enters one.
-    let mut walked = root.to_path_buf();
-    for name in &names[..names.len() - 1] {
-        walked.push(name);
-        if std::fs::symlink_metadata(&walked).is_ok_and(|m| m.file_type().is_symlink()) {
-            return Vec::new();
-        }
-    }
-    match std::fs::symlink_metadata(path) {
-        Ok(meta) if meta.file_type().is_dir() => walk_spec_files(path, |_| false)
+
+    /// The sources on disk now, sorted: the `.spec` files [`walk_spec_files`]
+    /// reaches under the spec root that no `exclude` entry leaves out (the
+    /// project's `specforge.json` `exclude`, ADR 0055 D7).
+    pub fn files(&self) -> Vec<PathBuf> {
+        walk_spec_files(&self.dir, |_| false)
             .files
             .into_iter()
-            .filter(|file| !exclude.excludes(file.strip_prefix(root).unwrap_or(file)))
-            .collect(),
-        Ok(meta)
-            if is_source_entry(meta.file_type(), path)
-                && is_discovered(&relative.to_string_lossy(), exclude) =>
-        {
-            vec![path.to_path_buf()]
-        }
-        _ => Vec::new(),
+            .filter(|path| self.keeps(path))
+            .collect()
     }
-}
 
-/// Whether [`discover_spec_files`] finds `relative` (a path relative to
-/// the walked root): a `.spec` file inside the root, under no
-/// [`SKIP_DIRS`] directory, that no `exclude` entry leaves out. A surface
-/// told about one changed file applies the policy the walk would.
-pub fn is_discovered(relative: &str, exclude: &Exclude) -> bool {
-    use std::path::Component;
-    let path = Path::new(relative);
-    path.extension().is_some_and(|ext| ext == "spec")
-        && path.parent().is_none_or(|dir| {
-            dir.components().all(|c| match c {
-                Component::Normal(name) => !name.to_str().is_some_and(|n| SKIP_DIRS.contains(&n)),
-                Component::CurDir => true,
-                _ => false,
+    /// The sources [`Self::files`] lists at `path`, now: when `path` is a
+    /// directory (not a symlink), every one under it; when it is a source
+    /// file (a file, through a symlink too, that [`Self::holds`] keeps),
+    /// itself; else none. Equal to [`Self::files`] filtered to `path` and what
+    /// lies under it.
+    pub fn files_at(&self, path: &Path) -> Vec<PathBuf> {
+        use std::path::Component;
+        let Ok(relative) = path.strip_prefix(&self.dir) else {
+            return Vec::new();
+        };
+        if relative.as_os_str().is_empty() {
+            return self.files();
+        }
+        let names: Vec<&std::ffi::OsStr> = relative
+            .components()
+            .filter_map(|c| match c {
+                Component::Normal(name) => Some(name),
+                _ => None,
             })
-        })
-        && !exclude.excludes(path)
+            .collect();
+        if names.len() != relative.components().count()
+            || names
+                .iter()
+                .any(|name| name.to_str().is_some_and(|n| SKIP_DIRS.contains(&n)))
+        {
+            return Vec::new();
+        }
+        // No directory on the way is a symlink: the walk never enters one.
+        let mut walked = self.dir.clone();
+        for name in &names[..names.len() - 1] {
+            walked.push(name);
+            if std::fs::symlink_metadata(&walked).is_ok_and(|m| m.file_type().is_symlink()) {
+                return Vec::new();
+            }
+        }
+        match std::fs::symlink_metadata(path) {
+            Ok(meta) if meta.file_type().is_dir() => walk_spec_files(path, |_| false)
+                .files
+                .into_iter()
+                .filter(|file| self.keeps(file))
+                .collect(),
+            Ok(meta)
+                if is_source_entry(meta.file_type(), path)
+                    && self.holds(&relative.to_string_lossy()) =>
+            {
+                vec![path.to_path_buf()]
+            }
+            _ => Vec::new(),
+        }
+    }
+
+    /// Whether `key`, a path relative to the spec root, is one [`Self::files`]
+    /// lists once the file exists: a `.spec` path inside the spec root (no
+    /// `..`, not absolute), under no [`SKIP_DIRS`] directory, that no
+    /// `exclude` entry leaves out. A surface told about one changed path
+    /// applies the walk's policy through it.
+    pub fn holds(&self, key: &str) -> bool {
+        use std::path::Component;
+        let path = Path::new(key);
+        path.extension().is_some_and(|ext| ext == "spec")
+            && path.parent().is_none_or(|dir| {
+                dir.components().all(|c| match c {
+                    Component::Normal(name) => {
+                        !name.to_str().is_some_and(|n| SKIP_DIRS.contains(&n))
+                    }
+                    Component::CurDir => true,
+                    _ => false,
+                })
+            })
+            && !self.exclude.excludes(path)
+    }
+
+    /// Whether no `exclude` entry leaves out `file`, a path under the spec root.
+    fn keeps(&self, file: &Path) -> bool {
+        !self
+            .exclude
+            .excludes(file.strip_prefix(&self.dir).unwrap_or(file))
+    }
 }
 
 #[cfg(test)]
@@ -177,7 +212,7 @@ mod tests {
         fs::write(root.join("src/notes.txt"), "").unwrap();
         fs::write(root.join("target/generated.spec"), "").unwrap();
 
-        let found = discover_spec_files(root, &Exclude::default());
+        let found = sources(root, Exclude::default()).files();
         let names: Vec<String> = found
             .iter()
             .map(|p| p.strip_prefix(root).unwrap().to_string_lossy().to_string())
@@ -193,7 +228,7 @@ mod tests {
         fs::write(root.join("specs/current.spec"), "").unwrap();
         fs::write(root.join("specs/legacy/old.spec"), "").unwrap();
 
-        let found = discover_spec_files(root, &Exclude::parse(["legacy"]).unwrap());
+        let found = sources(root, Exclude::parse(["legacy"]).unwrap()).files();
         let names: Vec<String> = found
             .iter()
             .map(|p| p.strip_prefix(root).unwrap().to_string_lossy().to_string())
@@ -202,21 +237,27 @@ mod tests {
     }
 
     #[test]
-    fn is_discovered_applies_the_walk_policy_to_one_path() {
-        let exclude = Exclude::parse(["drafts/"]).unwrap();
-        assert!(is_discovered("a.spec", &exclude));
-        assert!(is_discovered("src/deep/a.spec", &exclude));
-        assert!(!is_discovered("notes.txt", &exclude));
-        assert!(!is_discovered("target/generated.spec", &exclude));
-        assert!(!is_discovered("src/node_modules/x.spec", &exclude));
-        assert!(!is_discovered("drafts/a.spec", &exclude));
-        assert!(!is_discovered("../outside.spec", &exclude));
+    fn holds_applies_the_walk_policy_to_one_path() {
+        let tmp = tempfile::tempdir().unwrap();
+        let exclude = sources(tmp.path(), Exclude::parse(["drafts/"]).unwrap());
+        assert!(exclude.holds("a.spec"));
+        assert!(exclude.holds("src/deep/a.spec"));
+        assert!(!exclude.holds("notes.txt"));
+        assert!(!exclude.holds("target/generated.spec"));
+        assert!(!exclude.holds("src/node_modules/x.spec"));
+        assert!(!exclude.holds("drafts/a.spec"));
+        assert!(!exclude.holds("../outside.spec"));
         // A file merely named like a skipped directory is still found.
-        assert!(is_discovered("build.spec", &exclude));
+        assert!(exclude.holds("build.spec"));
     }
 
     fn found(relative: &str, exclude: &[&str]) -> bool {
-        is_discovered(relative, &Exclude::parse(exclude.iter().copied()).unwrap())
+        let tmp = tempfile::tempdir().unwrap();
+        sources(tmp.path(), Exclude::parse(exclude.iter().copied()).unwrap()).holds(relative)
+    }
+
+    fn sources(dir: &Path, exclude: Exclude) -> SourceRoot {
+        SourceRoot::new(dir.to_path_buf(), exclude)
     }
 
     #[specforge_test(
@@ -274,11 +315,11 @@ mod tests {
         fs::write(root.join("build/a.spec"), "").unwrap();
 
         assert_eq!(
-            discover_spec_files(&root.join("build"), &Exclude::default()),
+            sources(&root.join("build"), Exclude::default()).files(),
             vec![root.join("build/a.spec")]
         );
         // The `build` directory as a child is still skipped.
-        assert!(discover_spec_files(root, &Exclude::default()).is_empty());
+        assert!(sources(root, Exclude::default()).files().is_empty());
     }
 
     #[specforge_test(
@@ -292,7 +333,7 @@ mod tests {
         fs::create_dir_all(root.join("archive.spec")).unwrap();
 
         assert_eq!(
-            discover_spec_files(root, &Exclude::default()),
+            sources(root, Exclude::default()).files(),
             vec![root.join("a.spec")]
         );
     }
@@ -315,7 +356,7 @@ mod tests {
         std::os::unix::fs::symlink(sibling.join("other.spec"), root.join("link.spec")).unwrap();
 
         assert_eq!(
-            discover_spec_files(&root, &Exclude::default()),
+            sources(&root, Exclude::default()).files(),
             vec![root.join("a.spec"), root.join("link.spec")]
         );
     }
@@ -374,7 +415,8 @@ mod tests {
             std::os::unix::fs::symlink("nowhere.spec", root.join("dangling.spec")).unwrap();
         }
         let exclude = Exclude::parse(["drafts/"]).unwrap();
-        let whole = discover_spec_files(&root, &exclude);
+        let sources = sources(&root, exclude);
+        let whole = sources.files();
         let mut paths: Vec<PathBuf> = walkdir::WalkDir::new(&root)
             .into_iter()
             .filter_map(Result::ok)
@@ -389,12 +431,7 @@ mod tests {
                 .filter(|f| **f == path || f.starts_with(&path))
                 .cloned()
                 .collect();
-            assert_eq!(
-                discover_spec_files_at(&root, &path, &exclude),
-                expected,
-                "{}",
-                path.display()
-            );
+            assert_eq!(sources.files_at(&path), expected, "{}", path.display());
         }
     }
 
@@ -424,7 +461,7 @@ mod tests {
         let tmp = tree_with_a_nested_project();
         let root = tmp.path();
         assert_eq!(
-            discover_spec_files(root, &Exclude::default()),
+            sources(root, Exclude::default()).files(),
             vec![root.join("a.spec"), root.join("q/c.spec")]
         );
     }
@@ -435,12 +472,12 @@ mod tests {
         verify = "a .spec file inside a nested project below the spec root is no source"
     )]
     fn a_path_in_a_nested_project_is_no_source() {
-        let _tmp = tree_with_a_nested_project();
-        let exclude = Exclude::default();
-        assert!(!is_discovered("p/b.spec", &exclude));
-        assert!(!is_discovered("p/deep/d.spec", &exclude));
-        assert!(is_discovered("q/c.spec", &exclude));
-        assert!(is_discovered("p.spec", &exclude));
-        assert!(is_discovered("gone/x.spec", &exclude));
+        let tmp = tree_with_a_nested_project();
+        let held = sources(tmp.path(), Exclude::default());
+        assert!(!held.holds("p/b.spec"));
+        assert!(!held.holds("p/deep/d.spec"));
+        assert!(held.holds("q/c.spec"));
+        assert!(held.holds("p.spec"));
+        assert!(held.holds("gone/x.spec"));
     }
 }

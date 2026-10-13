@@ -294,10 +294,7 @@ pub(super) mod tests {
         let mut inputs = Vec::new();
         let mut seed = 0;
         for (corpus, dir) in CORPORA.iter().enumerate() {
-            for file in specforge_common::discover_spec_files(
-                &workspace.join(dir),
-                &specforge_common::Exclude::default(),
-            ) {
+            for file in specforge_common::walk_spec_files(&workspace.join(dir), |_| false).files {
                 let Ok(text) = std::fs::read_to_string(&file) else {
                     continue;
                 };

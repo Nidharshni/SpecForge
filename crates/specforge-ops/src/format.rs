@@ -630,7 +630,7 @@ impl FileFailure {
 fn targets(root: &Path, paths: &[PathBuf]) -> Result<Targets, OpError> {
     let mut projects = Projects::default();
     let found: Vec<PathBuf> = if paths.is_empty() {
-        projects.config(root)?.spec_files(root)
+        projects.config(root)?.sources(root).files()
     } else {
         let mut found = Vec::new();
         for path in paths {
@@ -687,7 +687,7 @@ impl Projects {
     /// The `.spec` files of a named directory (see [`targets`]), sorted.
     fn walk(&mut self, dir: &Path) -> Result<Vec<PathBuf>, OpError> {
         if ProjectRoot::is_root(dir) {
-            return Ok(self.config(dir)?.spec_files(dir));
+            return Ok(self.config(dir)?.sources(dir).files());
         }
         let walked = walk_spec_files(dir, ProjectRoot::is_root);
         let mut files = Vec::new();
@@ -697,7 +697,7 @@ impl Projects {
             }
         }
         for project in walked.stopped {
-            files.extend(self.config(&project)?.spec_files(&project));
+            files.extend(self.config(&project)?.sources(&project).files());
         }
         files.sort();
         Ok(files)
@@ -717,8 +717,10 @@ impl Projects {
             .clone();
         match root {
             Some(root) => {
-                let config = self.config(&root)?;
-                Ok(config.excludes(&config.spec_root_in(&root), &file))
+                let sources = self.config(&root)?.sources(&root);
+                Ok(file
+                    .strip_prefix(sources.dir())
+                    .is_ok_and(|key| !sources.holds(&key.to_string_lossy())))
             }
             None => Ok(false),
         }
@@ -1265,10 +1267,11 @@ mod tests {
         let sources: Vec<PathBuf> = CI_GATE
             .iter()
             .flat_map(|(_, dir)| {
-                specforge_common::discover_spec_files(
-                    &workspace.join(dir),
-                    &specforge_common::Exclude::default(),
+                specforge_common::SourceRoot::new(
+                    workspace.join(dir),
+                    specforge_common::Exclude::default(),
                 )
+                .files()
             })
             .collect();
         for target in &found {

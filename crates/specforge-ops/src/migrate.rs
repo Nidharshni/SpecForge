@@ -314,7 +314,7 @@ pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Result<Outcome,
     let project = request.root;
     let target = &request.target;
     let read = crate::config::rewritable(project.dir())?;
-    let sources = read.config.spec_files(project.dir());
+    let sources = read.config.sources(project.dir()).files();
     let preview = migrate_project(project, &sources, target, true, true);
     let from = preview
         .results
