@@ -336,6 +336,43 @@ fn files_at_target_version_are_skipped() {
     );
 }
 
+#[specforge_test(
+    behavior = "migrate_spec_files_in_place",
+    verify = "migrate leaves a nested project's files alone"
+)]
+fn migrate_leaves_a_nested_projects_files_alone() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    setup_project(root);
+    fs::write(root.join("a.spec"), "term t \"T\" {\n}\n").unwrap();
+    fs::create_dir_all(root.join("sub")).unwrap();
+    fs::write(root.join("sub/specforge.json"), "{}").unwrap();
+    fs::write(root.join("sub/c.spec"), "term u \"U\" {\n}\n").unwrap();
+
+    let output = Command::cargo_bin("specforge")
+        .unwrap()
+        .args([
+            "migrate",
+            "--dry-run",
+            "--format=json",
+            "--path",
+            root.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["files_skipped"], 1, "{json}");
+    let files: Vec<&str> = json["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["file_path"].as_str().unwrap())
+        .collect();
+    assert_eq!(files.len(), 1, "{json}");
+    assert!(files[0].ends_with("/a.spec"), "{json}");
+}
+
 // C2: Backup created before modification (simulated with version 0.1 if we had a transform)
 // Since v1 is current and no older versions exist yet, we test the backup mechanism
 // by using a file that requires header addition.

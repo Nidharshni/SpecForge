@@ -80,7 +80,10 @@ behavior classify_project_changes "Classify Project Changes" {
     installed extension's extension.wasm, a local .wasm entry) are
     environment inputs; specforge-cache.json, which check-phase passes
     read, and every file a file_reference field or a file_exists rule
-    names, which the checks look for, are check inputs. Each is reached
+    names, which the checks look for, are check inputs; a specforge.json
+    in a directory below the spec root marks a nested project, and its
+    creation or deletion is a change to every source under that
+    directory. Each is reached
     by its own path or by a directory above it, and a missing check
     input's directory also by any file in it. A reached source or input
     is a change when it differs from what the session read (size and
@@ -95,9 +98,10 @@ behavior classify_project_changes "Classify Project Changes" {
     asks its client to report and what the session stamps MUST all derive
     from one set of session inputs, renewed when the environment loads,
     when sources are read and each time the checks run. Watch's watch
-    roots and the LSP's watchers MUST cover every input and every
-    symlinked source's target (the LSP spelling each under the project
-    root as opened), the LSP MUST ask its client to report every entry
+    roots and the LSP's watchers MUST cover every input, every
+    specforge.json under the spec root included, and every symlinked
+    source's target (the LSP spelling each under the project root as
+    opened), the LSP MUST ask its client to report every entry
     created or deleted under the project root, and both MUST follow every
     update that changes the inputs.
   """
@@ -121,6 +125,9 @@ behavior classify_project_changes "Classify Project Changes" {
   verify unit "a session's watch roots and the LSP's watchers cover every symlinked source's target"
   verify integration "the LSP asks its client to report every directory created or deleted under the project root"
   verify property "the changes of a batch naming every changed path are what the session finds stale"
+  verify unit "a nested project's specforge.json appearing or going changes every source under its directory"
+  verify unit "the LSP's watchers report every specforge.json under the spec root"
+  verify integration "the LSP drops a nested project's files when its specforge.json is created, and takes them back when it goes"
 }
 
 behavior bring_session_up_to_date "Bring a Session Up to Date with Disk" {
@@ -135,7 +142,9 @@ behavior bring_session_up_to_date "Bring a Session Up to Date with Disk" {
     modification time; a file modified within the timestamp granularity of
     the last build counts as changed unless its content is unchanged, a
     symlinked source compared through its link) and
-    applies exactly those changes: sources by an update, environment
+    applies exactly those changes (a source that is no source any more, a
+    nested project having taken it, leaves the graph, and one that is a
+    source again is read): sources by an update, environment
     inputs by an environment reload, check inputs by re-running the
     checks. Afterwards its graph and diagnostics MUST be those a fresh
     compile of the files on disk produces. specforge.json MUST be read
@@ -155,6 +164,7 @@ behavior bring_session_up_to_date "Bring a Session Up to Date with Disk" {
   verify unit "a specforge.json or module written while the extension runtime loads is seen next time"
   verify integration "after the LSP's watchers move, the session catches up on what changed while they did"
   verify integration "the LSP's catch-up keeps an open buffer"
+  verify unit "a nested project appearing below the spec root takes its files out of the session, and its removal puts them back"
 }
 
 behavior hold_editor_buffers "Hold Editor Buffers" {

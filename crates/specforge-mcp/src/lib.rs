@@ -47,11 +47,12 @@ impl McpServer {
         }
     }
 
-    /// A server that compiles `root` when the client's `initialize` does not
-    /// name a `projectRoot` — standard MCP clients never send one.
+    /// A server whose root is `root`: the project at or above it is served
+    /// by `initialize` (unless the client names a `projectRoot`), or by the
+    /// first request that finds one there.
     pub fn with_project_root(root: std::path::PathBuf) -> Self {
         let mut server = Self::new();
-        server.state.default_project_root = Some(root);
+        server.state.root = Some(root);
         server
     }
 

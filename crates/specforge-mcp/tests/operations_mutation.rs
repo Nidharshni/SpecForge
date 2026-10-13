@@ -1194,6 +1194,32 @@ fn a_repeated_rename_changes_nothing() {
 }
 
 #[specforge_test(
+    behavior = "provide_mcp_rename_tool",
+    verify = "rename never edits a nested project's files"
+)]
+fn rename_leaves_a_nested_projects_files_alone() {
+    let (mut server, dir) = served_project(&[], &[("a.spec", "term outer_one \"O\" {\n}\n")]);
+    std::fs::create_dir_all(dir.path().join("sub")).unwrap();
+    std::fs::write(dir.path().join("sub/specforge.json"), "{}").unwrap();
+    let nested = "term sub_only \"S\" {\n}\n";
+    std::fs::write(dir.path().join("sub/c.spec"), nested).unwrap();
+
+    let resp = call_tool(
+        &mut server,
+        "specforge.rename",
+        json!({"entity_id": "sub_only", "new_name": "renamed"}),
+    );
+
+    let error = crate::tool_errors::mcp_error(&resp);
+    assert_eq!(error["code"], "entity_not_found", "{error}");
+    assert_eq!(error["data"]["files_written"], json!([]), "{error}");
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("sub/c.spec")).unwrap(),
+        nested
+    );
+}
+
+#[specforge_test(
     behavior = "provide_mcp_add_extension_tool",
     verify = "add, init and publish read a candidate's declaration in the runtime their surface passes"
 )]

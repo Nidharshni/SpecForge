@@ -21,7 +21,7 @@ detached session read any `.spec` file a disk event named into its project.
   `SessionWatch::classify` with them.
 - **D2. What a path reaches.**
   - A path under the spec root reaches the sources at or under it: for a directory, every source discovery finds there
-    now (`specforge_common::discover_spec_files_at`) and every source the session read from there; for a file, itself.
+    now (`specforge_common::SourceRoot::files_at`, ADR 0080) and every source the session read from there; for a file, itself.
   - The spec root, or a directory above it, reaches every source.
   - An environment or check input is reached by its own path or a directory above it, and a missing check input's
     directory also by any file in it.

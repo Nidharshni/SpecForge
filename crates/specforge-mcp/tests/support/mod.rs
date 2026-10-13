@@ -23,9 +23,34 @@ pub use project::{Served, TestProject};
 pub use rpc::*;
 pub use spec::spec_files;
 
+use serde_json::{Value, json};
 use std::sync::Arc;
 
 /// The solver every served test project's doctor sees: z3 runs (ADR 0079 D5).
 pub fn z3_ready() -> Arc<dyn specforge_ops::solver::Solver> {
     Arc::new(specforge_ops::testing::ScriptedSolver::ready())
+}
+
+/// What each tool that takes a `path` is called with to act on a project
+/// with `behavior alpha` (its path added by the caller).
+pub fn path_tool_calls() -> Vec<(&'static str, Value)> {
+    vec![
+        ("specforge.validate", json!({})),
+        ("specforge.analyze", json!({"pass": "contracts"})),
+        ("specforge.collect", json!({})),
+        ("specforge.format", json!({"check": true})),
+        (
+            "specforge.rename",
+            json!({"entity_id": "alpha", "new_name": "gamma"}),
+        ),
+        (
+            "specforge.add_extension",
+            json!({"specifiers": ["@specforge/software"], "dry_run": true}),
+        ),
+        (
+            "specforge.remove_extension",
+            json!({"name": "@specforge/software", "dry_run": true}),
+        ),
+        ("specforge.migrate", json!({"dry_run": true})),
+    ]
 }

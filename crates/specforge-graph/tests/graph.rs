@@ -720,7 +720,8 @@ fn setup_project(files: &[(&str, &str)]) -> tempfile::TempDir {
 
 /// The `.spec` files under `dir`, read and parsed as a compile reads them.
 fn parse_dir(dir: &std::path::Path) -> Vec<specforge_graph::SpecFile> {
-    specforge_common::discover_spec_files(dir, &specforge_common::Exclude::default())
+    specforge_common::walk_spec_files(dir, |_| false)
+        .files
         .into_iter()
         .map(|path| {
             let key = path

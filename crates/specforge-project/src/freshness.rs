@@ -150,6 +150,11 @@ impl DiskSnapshot {
             return;
         };
         for key in keys {
+            if inputs.excludes(key) {
+                // No source (any more): a stamp kept would hide its return.
+                self.sources.remove(key);
+                continue;
+            }
             match Entry::stamp(&spec_root.join(key)) {
                 Some(entry) => self.sources.insert(key.clone(), entry),
                 None => self.sources.remove(key),

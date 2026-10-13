@@ -598,9 +598,9 @@ fn doctor_reports_an_extension_that_fails_to_load() {
 
 #[specforge_test(
     behavior = "provide_mcp_doctor_tool",
-    verify = "specforge.doctor compiles the project afresh unless use_cached is set"
+    verify = "specforge.doctor reports the project as it is on disk, edits made outside the server included"
 )]
-fn doctor_compiles_afresh_unless_use_cached() {
+fn doctor_reports_the_project_as_it_is_on_disk() {
     let (mut server, root) = software_project();
     assert!(finding(&doctor(&mut server), "E028").is_none());
 
@@ -612,10 +612,6 @@ fn doctor_compiles_afresh_unless_use_cached() {
         .to_string(),
     )
     .unwrap();
-
-    let resp = call_tool(&mut server, "specforge.doctor", json!({"use_cached": true}));
-    let cached: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
-    assert!(finding(&cached, "E028").is_none(), "{cached}");
 
     let fresh = doctor(&mut server);
     let e028 = finding(&fresh, "E028").unwrap_or_else(|| panic!("no E028: {fresh}"));
@@ -638,8 +634,7 @@ fn doctor_lists_extension_conflicts_from_the_compile() {
         TestExtension::named("@test/other").kind("feature", false),
     ]);
 
-    // Over those diagnostics, as the last compile's, not a fresh compile.
-    let resp = call_tool(&mut server, "specforge.doctor", json!({"use_cached": true}));
+    let resp = call_tool(&mut server, "specforge.doctor", json!({}));
     let report: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
 
     let conflicts = report["conflicts"].as_array().unwrap();

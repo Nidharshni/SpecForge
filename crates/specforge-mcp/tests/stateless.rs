@@ -5,8 +5,10 @@
 use serde_json::{Value, json};
 use specforge_mcp::McpServer;
 use specforge_test::prelude::*;
+use std::path::{Path, PathBuf};
 
-use crate::support::{Logged, events, logged};
+use crate::support::{Logged, events, logged, path_tool_calls, tool_json};
+use crate::tool_errors::mcp_error;
 
 const REVISION: &str = "2026-07-28";
 
@@ -29,6 +31,49 @@ fn project() -> tempfile::TempDir {
 /// A server for `dir` as `specforge mcp <dir>` starts it: nothing sent yet.
 fn server(dir: &tempfile::TempDir) -> Logged {
     logged(McpServer::with_project_root(dir.path().to_path_buf()))
+}
+
+/// A server with no root (`McpServer::new()`): nothing served, nothing sent yet.
+fn rootless() -> Logged {
+    logged(McpServer::new())
+}
+
+/// The root the server serves, canonical.
+fn served(server: &McpServer) -> Option<PathBuf> {
+    server.state().project_root().map(canonical)
+}
+
+fn canonical(path: &Path) -> PathBuf {
+    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+}
+
+/// A stateless `tools/call` of `name`; its reply.
+fn tool(server: &mut McpServer, name: &str, arguments: Value) -> Value {
+    stateless(
+        server,
+        "tools/call",
+        json!({"name": name, "arguments": arguments}),
+    )
+}
+
+/// Write a project at `root`: `specforge.json` with no extension, `main.spec` with `alpha`.
+fn write_project(root: &Path) {
+    std::fs::write(
+        root.join("specforge.json"),
+        r#"{"name":"late","version":"0.1.0"}"#,
+    )
+    .unwrap();
+    std::fs::write(root.join("main.spec"), "behavior alpha \"Alpha\" {\n}\n").unwrap();
+}
+
+/// The diagnostic codes a stateless `specforge.validate` reply reports.
+fn codes(reply: &Value) -> Vec<String> {
+    tool_json(reply)
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|d| d["code"].as_str().unwrap().to_string())
+        .collect()
 }
 
 /// The `_meta` a stateless request carries.
@@ -480,4 +525,248 @@ fn stateless_prompt_get_renders() {
         serde_json::from_str(messages[1]["content"]["text"].as_str().unwrap()).unwrap();
     assert_eq!(payload["entity_id"], "alpha");
     assert_eq!(payload["contract_text"], "MUST work");
+}
+
+/// A project at the root of a fresh directory, `@specforge/software` installed,
+/// `main.spec` holding `behavior alpha` (and `extra`, when given, after it).
+fn installed_project(extra: &str) -> tempfile::TempDir {
+    let dir = tempfile::TempDir::new().unwrap();
+    std::fs::write(
+        dir.path().join("specforge.json"),
+        json!({"name": "other", "version": "0.1.0", "extensions": ["@specforge/software"]})
+            .to_string(),
+    )
+    .unwrap();
+    specforge_installed::testing::install_configured(dir.path(), &specforge_project::builtins());
+    std::fs::write(
+        dir.path().join("main.spec"),
+        format!("behavior alpha \"Alpha\" {{\n}}\n{extra}"),
+    )
+    .unwrap();
+    dir
+}
+
+#[specforge_test(
+    behavior = "serve_stateless_mcp_requests",
+    verify = "a stateless call's path is read for that call only, whatever tool takes it, and what the server serves is unchanged"
+)]
+fn a_stateless_path_is_read_for_its_call_only_for_every_tool() {
+    let mut covered: Vec<&str> = path_tool_calls().iter().map(|(name, _)| *name).collect();
+    covered.push("specforge.init");
+    covered.sort_unstable();
+    let mut with_path: Vec<&str> = specforge_mcp::tools::CORE_TOOLS
+        .iter()
+        .filter(|tool| tool.input_schema()["properties"].get("path").is_some())
+        .map(|tool| tool.name())
+        .collect();
+    with_path.sort_unstable();
+    assert_eq!(covered, with_path);
+
+    for (name, mut arguments) in path_tool_calls() {
+        let other = installed_project("");
+        arguments["path"] = Value::from(other.path().to_str().unwrap());
+        let mut server = rootless();
+        tool(&mut server, name, arguments);
+        assert_eq!(
+            served(&server),
+            None,
+            "{name} served the project its path names"
+        );
+        let stats = tool(&mut server, "specforge.stats", json!({}));
+        assert_eq!(tool_json(&stats)["entity_count"], 0, "{name}: {stats}");
+        if name == "specforge.rename" {
+            // The rename acted on the project the path names.
+            let text = std::fs::read_to_string(other.path().join("main.spec")).unwrap();
+            assert!(text.contains("behavior gamma"), "{text}");
+        }
+    }
+
+    // validate reports the named project's diagnostics, and the server's own
+    // (none: nothing is served) are untouched.
+    let other = installed_project("behavior beta \"Beta\" {\n  invariants [missing_one]\n}\n");
+    let mut server = rootless();
+    let reply = tool(
+        &mut server,
+        "specforge.validate",
+        json!({"path": other.path().to_str().unwrap()}),
+    );
+    assert!(codes(&reply).contains(&"E003".to_string()), "{reply}");
+    let diagnostics = stateless(
+        &mut server,
+        "resources/read",
+        json!({"uri": "specforge://diagnostics"}),
+    );
+    let text = diagnostics["result"]["contents"][0]["text"]
+        .as_str()
+        .unwrap();
+    assert_eq!(
+        serde_json::from_str::<Value>(text).unwrap(),
+        json!([]),
+        "{diagnostics}"
+    );
+}
+
+#[specforge_test(
+    behavior = "serve_stateless_mcp_requests",
+    verify = "a stateless init serves nothing it creates"
+)]
+fn a_stateless_init_serves_nothing_it_creates() {
+    let parent = tempfile::TempDir::new().unwrap();
+    let created = parent.path().join("created");
+    let mut server = rootless();
+    let reply = tool(
+        &mut server,
+        "specforge.init",
+        json!({"path": created.to_str().unwrap(), "name": "created"}),
+    );
+    assert_eq!(reply["result"]["isError"], false, "{reply}");
+    assert!(created.join("specforge.json").exists());
+    assert_eq!(served(&server), None);
+
+    // A server whose root is the new project serves it from its first request.
+    let mut rooted = logged(McpServer::with_project_root(created.clone()));
+    tool(&mut rooted, "specforge.stats", json!({}));
+    assert_eq!(served(&rooted), Some(canonical(&created)));
+}
+
+#[specforge_test(
+    invariant = "mcp_served_project_consistency",
+    verify = "while nothing is served, a project created at or above the server's root is served by the next request, in either revision"
+)]
+fn a_project_created_at_the_root_is_served_by_the_next_stateless_request() {
+    let root = tempfile::TempDir::new().unwrap();
+    let mut server = logged(McpServer::with_project_root(root.path().to_path_buf()));
+    stateless(&mut server, "server/discover", json!({}));
+    write_project(root.path());
+    let stats = tool(&mut server, "specforge.stats", json!({}));
+    assert_eq!(tool_json(&stats)["entity_count"], 1, "{stats}");
+    assert_eq!(served(&server), Some(canonical(root.path())));
+    let extensions = tool(&mut server, "specforge.extensions", json!({}));
+    assert_eq!(extensions["result"]["isError"], false, "{extensions}");
+}
+
+#[specforge_test(
+    behavior = "serve_stateless_mcp_requests",
+    verify = "a stateless no-project refusal names no call that would serve a project"
+)]
+fn a_stateless_no_project_refusal_names_no_call_that_serves_one() {
+    let mut server = rootless();
+    let reply = tool(&mut server, "specforge.extensions", json!({}));
+    let error = mcp_error(&reply);
+    assert_eq!(
+        error["message"],
+        "no project is served: start the server in a project (`specforge mcp <root>`), or create one at its root",
+        "{error}"
+    );
+    assert!(error.get("argument").is_none(), "{error}");
+
+    // An entry that takes a path still says to pass one.
+    let reply = tool(&mut server, "specforge.validate", json!({}));
+    let error = mcp_error(&reply);
+    assert_eq!(
+        error["message"],
+        "no project is served: pass {\"path\": ...} or start the server in a project",
+        "{error}"
+    );
+    assert_eq!(error["argument"], "path", "{error}");
+}
+
+#[specforge_test(
+    behavior = "serve_stateless_mcp_requests",
+    verify = "a stateless request after initialize reads the project the handshake session serves"
+)]
+fn a_stateless_request_after_initialize_reads_what_the_session_serves() {
+    let alpha = |server: &mut McpServer| {
+        let reply = tool(server, "specforge.query", json!({"entity_id": "alpha"}));
+        tool_json(&reply)["nodes"]
+            .as_array()
+            .is_some_and(|nodes| nodes.iter().any(|n| n["id"] == "alpha"))
+    };
+    let dir = project();
+    let mut named = rootless();
+    send(
+        &mut named,
+        1,
+        "initialize",
+        json!({"protocolVersion": "2025-11-25", "projectRoot": dir.path().to_str().unwrap()}),
+    );
+    assert!(alpha(&mut named));
+
+    let mut adopted = rootless();
+    send(&mut adopted, 1, "initialize", json!({}));
+    let reply = send(
+        &mut adopted,
+        2,
+        "tools/call",
+        json!({"name": "specforge.validate", "arguments": {"path": dir.path().to_str().unwrap()}}),
+    )
+    .unwrap();
+    assert_eq!(reply["result"]["isError"], false, "{reply}");
+    assert!(alpha(&mut adopted));
+}
+
+#[specforge_test(
+    behavior = "serve_stateless_mcp_requests",
+    verify = "a stateless request is answered as a fresh server answers it, whatever stateless requests came before"
+)]
+fn a_stateless_answer_depends_on_no_earlier_request() {
+    for starts_with_project in [true, false] {
+        let root = tempfile::TempDir::new().unwrap();
+        if starts_with_project {
+            write_project(root.path());
+        }
+        let other = project();
+        let parent = tempfile::TempDir::new().unwrap();
+
+        // A history that names projects, creates one and reads what is served.
+        let mut worn = logged(McpServer::with_project_root(root.path().to_path_buf()));
+        stateless(&mut worn, "server/discover", json!({}));
+        tool(
+            &mut worn,
+            "specforge.validate",
+            json!({"path": other.path().to_str().unwrap()}),
+        );
+        tool(
+            &mut worn,
+            "specforge.init",
+            json!({"path": parent.path().join("new").to_str().unwrap(), "name": "new"}),
+        );
+        tool(&mut worn, "specforge.stats", json!({}));
+        stateless(
+            &mut worn,
+            "resources/read",
+            json!({"uri": "specforge://diagnostics"}),
+        );
+        tool(&mut worn, "specforge.extensions", json!({}));
+
+        // The disk changes since: a project at the root, and a file with a
+        // dangling reference.
+        if !starts_with_project {
+            write_project(root.path());
+        }
+        std::fs::write(
+            root.path().join("extra.spec"),
+            "behavior beta \"Beta\" {\n  invariants [missing_one]\n}\n",
+        )
+        .unwrap();
+
+        let mut fresh = logged(McpServer::with_project_root(root.path().to_path_buf()));
+        let call = |name: &str, arguments: Value| {
+            ("tools/call", json!({"name": name, "arguments": arguments}))
+        };
+        for (method, params) in [
+            call("specforge.stats", json!({})),
+            call("specforge.validate", json!({})),
+            ("resources/read", json!({"uri": "specforge://diagnostics"})),
+            ("resources/read", json!({"uri": "specforge://graph"})),
+            ("tools/list", json!({})),
+            call("specforge.extensions", json!({})),
+        ] {
+            assert_eq!(
+                stateless(&mut worn, method, params.clone()),
+                stateless(&mut fresh, method, params.clone()),
+                "{method} {params} (starts_with_project: {starts_with_project})"
+            );
+        }
+    }
 }

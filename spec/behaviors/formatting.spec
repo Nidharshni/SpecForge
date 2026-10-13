@@ -579,7 +579,12 @@ behavior discover_format_targets "Discover Format Targets" {
     directory named explicitly that holds specforge.json MUST be read as
     that project's sources; walking any other named directory MUST take a
     nested project's sources where it reaches that project's
-    specforge.json, never the rest of its files. When explicit paths are
+    specforge.json, never the rest of its files. A project's sources end
+    at every directory below its spec root that holds specforge.json
+    (resolve_use_imports): a run with no paths, or naming a project, MUST
+    NOT format a nested project's files, and a walk takes the sources of
+    each project it reaches, never those of a project nested in one of
+    them. When explicit paths are
     provided, only those paths MUST be formatted. Directories provided as
     arguments MUST be recursively searched for .spec files.
     A directory is walked as discovery walks (no skipped directory
@@ -604,4 +609,5 @@ behavior discover_format_targets "Discover Format Targets" {
   verify contract "Discover Format Targets: format target discovery holds — project_root_available, filesystem_accessible, all_spec_files_discovered, exclusions_applied, non_spec_skipped"
   verify unit "a specforge.json that does not say which files are the project's sources refuses the run, and nothing is written"
   verify unit "a named file is formatted whatever specforge.json says"
+  verify unit "a project's sources end at a nested project, which a run from the project does not format"
 }

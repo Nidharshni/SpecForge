@@ -39,8 +39,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   the environment load and every operation that reads a project from disk take a project root, never a raw
   path; only `init` takes its directory as given. On the command line a project is named by `--path` (any
   path inside it, `.` by default) on every command that reads one, extension commands included. Distinct from the **spec root**, where the project's
-  `.spec` files are discovered (`spec_root` in its `specforge.json`, else the project root): a path inside
-  the spec root names the project, never a project of its own.
+  `.spec` files are discovered (`spec_root` in its `specforge.json`, else the project root): the spec root is
+  never a project of its own, but a directory below it that holds `specforge.json` is a **nested project**,
+  and a path inside it names that project, whose files are none of the outer project's sources (ADR 0080).
 - **Format version**: the `.spec` file format a file was written against, `MAJOR.MINOR`, declared by
   the `// specforge-format:` header on its first non-blank line; a file with no header is at the
   current version and reports nothing. The parser reads it with the file
@@ -108,18 +109,21 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   formatter's (a W142 per region formatting kept verbatim, while the document is the text it formatted). A publish
   sends the file's whole list, the compile layer plus the formatter layer of the same version, under the one URI
   the client names the file by. Hover and code actions read the layers; one module writes them (ADR 0056).
-- **Call target**: the project one MCP call acts on, resolved from the call's optional `path` (the target's arguments are
-  `TargetArgument`: `path`, `use_cached`, each spelled once) and its
-  entry's target before the handler runs: the served session (brought up to date unless `use_cached`),
-  another project opened as a session for that call only and brought up to date after the call writes, as the served one is, the directory `init` creates, or, with nothing served and
-  no project named, the empty session for an entry that reads only the project view
-  (`specforge_mcp::target::CallTarget`).
-  Only a project (a directory holding `specforge.json`) is ever served: the server
-  serves the nearest one at or above its root, else nothing, and a `path` to a directory that is no
-  project is read for its call only (ADR 0014 D6 as amended).
-  An entry's target is derived from what its handler is given
-  (nothing, the project view, the project, the new directory), never declared beside it: an entry
-  whose handler acts on the project is refused as no project before it runs (ADR 0014, ADR 0024).
+- **Call target**: the project one MCP call acts on, resolved from the call's optional `path` and its
+  entry's target before the handler runs: the served session (brought up to date), another project opened as a
+  session for that call only and brought up to date after the call writes, as the served one is, the directory
+  `init` creates, or, with nothing served and no project named, the empty session for an entry that reads only the
+  project view (`specforge_mcp::target::CallTarget`). The revision of the request decides whether the call may
+  change what is served (`target::Serving`): in a handshake session a `path` naming a project while none is served
+  is adopted and the project `init` creates is served (ADR 0014 D5); a stateless request serves nothing it names
+  (ADR 0077). An entry's target is derived from what its handler is given (nothing, the project view, the
+  project, the new directory), never declared beside it: an entry whose handler acts on the project is refused as
+  no project before it runs (ADR 0014, ADR 0024).
+- **Served project**: the project an MCP server serves to every call that names none: the nearest project (a
+  directory holding `specforge.json`) at or above the server's root (the path `specforge mcp` was started with, or
+  a handshake client's `projectRoot`), else nothing; while none is served, every request looks there again first
+  (`McpState::follow_root`). In a handshake session a call may also serve one (Call target). It is replaced whole or
+  not at all, and brought up to date with disk before a request reads it (ADR 0014, ADR 0077).
 - **Update**: one change applied to a project session. It re-reads and re-parses exactly the changed files (an
   importer parses the same, since references resolve without `use`), applies them to the session's graph
   build, resolves every file's imports again and re-runs the checks (`specforge_project::Update`, ADR 0006,
@@ -608,15 +612,18 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   key. It carries no `null`. Its spec type is the tool's `Mcp*` reply type (ADR 0052).
 - **Project sources**: the `.spec` files under the spec root (`spec_root`, else the project root) that
   discovery keeps — no skipped directory, no `exclude` entry. What a compile reads, what format and migrate
-  rewrite (`specforge_common::ProjectConfig::spec_files`, read through `config::rewritable`, never past a
-  problem that hides them), and the only files a `use` import names: a
+  rewrite (`specforge_common::SourceRoot`, built by `ProjectConfig::sources` from a config read through
+  `config::rewritable`, never past a problem that hides them), and the only files a `use` import names: a
   compile holds each by its **key**, its path relative to the spec root, and resolves imports against the
   keys alone (`specforge_resolver`, ADR 0055). An editor buffer the session holds for such a path is a
   source, saved or not.
-  The walk is `specforge_common::walk_spec_files`: the spec root is read whatever its own name, no
-  skipped directory below it is entered, no symlinked directory is entered, and only files are sources: a symlink is one when it resolves
-  to a file, read through the link and keyed by its own path (ADR 0073). Format's
-  directory walk is the same walk, stopping at nested projects.
+  `SourceRoot::files` lists them and `SourceRoot::holds` answers for one path, by one policy: the spec root is
+  read whatever its own name and whatever it holds, no skipped directory below it is entered, no symlink is
+  followed into a directory, only files are sources (a symlink is one when it resolves to a file, read through
+  the link and keyed by its own path, ADR 0073), and the walk ends at every directory below the spec root that
+  holds `specforge.json`: a nested project, whose files are its own project's sources, on every surface
+  (ADR 0080). Format's walk of a named directory that is no project is the same walk, taking the sources of
+  each project it reaches.
   An **exclude entry** is a gitignore-style pattern over a source's path (`specforge_common::Exclude`): no
   `/` but a trailing one matches a name at any depth, a `/` at the start or in the middle anchors it at the
   spec root, a trailing `/` matches directories only, and a file is left out when an entry matches it or
@@ -789,7 +796,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   answered on its own without `initialize`; every other request follows the revision `initialize`
   negotiated (`specforge_mcp::modern`). Every request is served under its revision, which travels
   with it from the router to the reply (`specforge_mcp::lifecycle::Revision`); the server state
-  keeps only the negotiated one.
+  keeps only the negotiated one. A stateless request never changes what the server serves (its `path` is read
+  for that call only, `init` serves nothing); on a connection that sent `initialize` it reads what that session
+  serves (ADR 0077).
 - **Stdio transport**: how one MCP client and the server talk over a pair of byte streams (`specforge mcp`:
   its standard input and output). Each line of input is one JSON-RPC message; a line of only JSON whitespace is
   skipped, and one that is not UTF-8 is answered as a parse error. A message's response, then each notification it

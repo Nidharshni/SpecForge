@@ -306,12 +306,13 @@ pub struct Request<'a> {
     /// with the configuration of its own project (D2).
     pub root: &'a ProjectRoot,
     /// Files or directories to format; empty means the project's sources
-    /// (`ProjectConfig::spec_files`). A named file is always formatted. A
-    /// named directory that is a project (`ProjectRoot::is_root`) is that
-    /// project's sources; any other named directory is walked as discovery
-    /// walks (`specforge_common::walk_spec_files`), taking a nested
-    /// project's sources where the walk reaches its root,
-    /// without the files their project's `exclude` entries leave out (D3).
+    /// (`ProjectConfig::sources`), which end at its nested projects. A named
+    /// file is always formatted. A named directory that is a project
+    /// (`ProjectRoot::is_root`) is that project's sources; any other named
+    /// directory is walked (`specforge_common::walk_spec_files`), taking the
+    /// sources of each project the walk reaches, not those of a project
+    /// nested in one of them, without the files their project's `exclude`
+    /// entries leave out (D3).
     pub paths: &'a [PathBuf],
     pub mode: Mode,
 }
@@ -618,19 +619,21 @@ impl FileFailure {
 /// discovery order (ADR 0021 D3). A file reached several times is one target,
 /// shown as first spelled:
 ///
-/// - no paths: the project's sources ([`ProjectConfig::spec_files`]);
+/// - no paths: the project's sources ([`ProjectConfig::sources`]), which end
+///   at its nested projects;
 /// - a named `.spec` file: that file, even if excluded (the user named it);
 ///   any other named file is skipped;
 /// - a named directory that is a project root (it holds `specforge.json`):
 ///   that project's sources;
 /// - any other named directory: its `.spec` files as discovery walks them
-///   (`specforge_common::walk_spec_files`), taking a nested project's
-///   sources where the walk reaches its root, without the files their
-///   project's `exclude` entries leave out.
+///   (`specforge_common::walk_spec_files`), taking the sources of each
+///   project the walk reaches (a project's sources end at the projects
+///   nested in it), without the files their project's `exclude` entries
+///   leave out.
 fn targets(root: &Path, paths: &[PathBuf]) -> Result<Targets, OpError> {
     let mut projects = Projects::default();
     let found: Vec<PathBuf> = if paths.is_empty() {
-        projects.config(root)?.spec_files(root)
+        projects.config(root)?.sources(root).files()
     } else {
         let mut found = Vec::new();
         for path in paths {
@@ -687,7 +690,7 @@ impl Projects {
     /// The `.spec` files of a named directory (see [`targets`]), sorted.
     fn walk(&mut self, dir: &Path) -> Result<Vec<PathBuf>, OpError> {
         if ProjectRoot::is_root(dir) {
-            return Ok(self.config(dir)?.spec_files(dir));
+            return Ok(self.config(dir)?.sources(dir).files());
         }
         let walked = walk_spec_files(dir, ProjectRoot::is_root);
         let mut files = Vec::new();
@@ -697,7 +700,7 @@ impl Projects {
             }
         }
         for project in walked.stopped {
-            files.extend(self.config(&project)?.spec_files(&project));
+            files.extend(self.config(&project)?.sources(&project).files());
         }
         files.sort();
         Ok(files)
@@ -717,8 +720,10 @@ impl Projects {
             .clone();
         match root {
             Some(root) => {
-                let config = self.config(&root)?;
-                Ok(config.excludes(&config.spec_root_in(&root), &file))
+                let sources = self.config(&root)?.sources(&root);
+                Ok(file
+                    .strip_prefix(sources.dir())
+                    .is_ok_and(|key| !sources.holds(&key.to_string_lossy())))
             }
             None => Ok(false),
         }
@@ -1265,10 +1270,11 @@ mod tests {
         let sources: Vec<PathBuf> = CI_GATE
             .iter()
             .flat_map(|(_, dir)| {
-                specforge_common::discover_spec_files(
-                    &workspace.join(dir),
-                    &specforge_common::Exclude::default(),
+                specforge_common::SourceRoot::new(
+                    workspace.join(dir),
+                    specforge_common::Exclude::default(),
                 )
+                .files()
             })
             .collect();
         for target in &found {
@@ -1875,12 +1881,31 @@ mod tests {
 
         let outcome = check_paths(dir.path(), &["sub"]);
 
-        // N is a project (its `specforge.json` marks it), so its sources are
-        // N's own discovery, which does not stop at `inner`.
-        assert_eq!(
-            changed_in(dir.path(), &outcome),
-            ["sub/N/inner/drafts/d.spec", "sub/N/n.spec"]
+        // N is a project, so its sources are N's own, which end at `inner`,
+        // another project.
+        assert_eq!(changed_in(dir.path(), &outcome), ["sub/N/n.spec"]);
+    }
+
+    #[specforge_test(
+        behavior = "discover_format_targets",
+        verify = "a project's sources end at a nested project, which a run from the project does not format"
+    )]
+    fn a_run_from_a_project_leaves_a_nested_project_alone() {
+        let dir = project_with(
+            "{}",
+            &[
+                ("a.spec", MESSY),
+                ("sub/specforge.json", r#"{"exclude": ["b.spec"]}"#),
+                ("sub/b.spec", MESSY),
+                ("sub/c.spec", MESSY),
+            ],
         );
+
+        assert_eq!(changed(dir.path()), ["a.spec"]);
+        let named = check_paths(dir.path(), &[""]);
+        assert_eq!(changed_in(dir.path(), &named), ["a.spec"]);
+        let nested = check_paths(dir.path(), &["sub"]);
+        assert_eq!(changed_in(dir.path(), &nested), ["sub/c.spec"]);
     }
 
     #[specforge_test(

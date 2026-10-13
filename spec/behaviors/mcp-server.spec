@@ -239,7 +239,7 @@ behavior list_mcp_tools "List MCP Tools" {
   verify unit "an extension tool is annotated read-only and is never listed as a mutation"
   verify unit "an extension tool is listed once across recompiles"
   verify unit "an extension tool's declared output_schema is listed as its outputSchema"
-  verify unit "a tool's path and use_cached are declared once, by its target"
+  verify unit "a tool's path is declared once, by its target"
   verify unit "a core tool's spec is derived from its one module: its name, description, effect, arguments, target and reply"
   verify unit "every listed extension tool is the one dispatched under its name, listed once"
 }
@@ -266,7 +266,7 @@ behavior read_mcp_arguments_as_declared "Read MCP Arguments as Declared" {
     Every core MCP tool and prompt MUST read its call's arguments into one
     typed definition from which its listing is derived: a tool's inputSchema
     (each property's type, description, default, enum, minimum and whether
-    it is required, then its target's path and use_cached, with no other
+    it is required, then its target's path, with no other
     property allowed) and a prompt's listed arguments (name, description,
     required). An absent or null argument MUST read as the default the
     listing states, an option as none, a list as empty; a required argument
@@ -775,7 +775,12 @@ behavior serve_stateless_mcp_requests "Serve Stateless MCP Requests" {
     the stateless revision. A request whose _meta names a protocol version
     is served on its own: no initialize before it, and nothing a prior
     request said changes its answer; a request without that _meta follows
-    the revision initialize negotiated. server/discover MUST be answered
+    the revision initialize negotiated. A stateless request MUST NOT change
+    what the server serves: a path it names is read for that call only, and
+    a project init creates is not served; what it reads is the project at
+    or above the server's root as it is on disk when it arrives. A
+    connection that sent initialize is a handshake session: its stateless
+    requests read what that session serves. server/discover MUST be answered
     with or without initialize, listing the stateless revisions the server
     speaks and its capabilities. A stateless request missing the version or
     the client capabilities is malformed (-32602); one naming a version the
@@ -795,6 +800,11 @@ behavior serve_stateless_mcp_requests "Serve Stateless MCP Requests" {
   verify unit "ping and resources/subscribe are not stateless methods"
   verify unit "a stateless request after initialize is served under its own revision"
   verify unit "a stateless request's revision ends with the request"
+  verify unit "a stateless request after initialize reads the project the handshake session serves"
+  verify unit "a stateless call's path is read for that call only, whatever tool takes it, and what the server serves is unchanged"
+  verify unit "a stateless init serves nothing it creates"
+  verify unit "a stateless no-project refusal names no call that would serve a project"
+  verify unit "a stateless request is answered as a fresh server answers it, whatever stateless requests came before"
 }
 
 behavior listen_for_mcp_resource_updates "Listen for MCP Resource Updates" {

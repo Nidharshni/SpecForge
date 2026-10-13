@@ -304,10 +304,11 @@ Either a `.spec` file discovery found can't be read (not UTF-8, no permission):
 it is named, left out of the graph, and an import of it reports nothing more; or
 a `use` import names no source of the project: no `.spec` file by that path
 under the spec root that discovery keeps. A file an `exclude` entry leaves out,
-one under a skipped directory (`target`, `build`, ...), one above the spec root
-and one whose name differs only in case are no source. Fix the import path or
-the `exclude` entry; a `did you mean` suggestion is included when a close match
-exists.
+one under a skipped directory (`target`, `build`, ...), one inside a nested
+project (a directory below the spec root holding its own `specforge.json`), one
+above the spec root and one whose name differs only in case are no source. Fix
+the import path or the `exclude` entry; a `did you mean` suggestion is included
+when a close match exists.
 
 Owner: core
 Level: error
