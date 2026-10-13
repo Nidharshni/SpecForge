@@ -59,7 +59,6 @@ These don't block compilation, but most indicate a missing edge or coverage gap.
 | **W045 / W092** | `<feature/release> dependency cycle detected` | Cyclic `depends_on`. | Break the cycle. |
 | **W043 / W046** | `deliverable 'X' supports no journeys` / `contains no modules` | The deliverable lists no journeys / no modules. | Add `journeys [...]` / `modules [...]`. |
 | **W049** | `milestone 'X' has no features — it may be empty` | The milestone has no `features` field (modules don't count). | Add `features [...]`. |
-| **W051 / W052 / W121** | `failure_mode 'X' has invalid severity/occurrence/detection` | A FMEA score used a number or unknown word. | Use the enum words (severity: critical/high/medium/low; occurrence: certain/likely/occasional/unlikely/rare; detection: certain/likely/moderate/unlikely/undetectable). |
 | **E061** | `field 'status' of feature 'X' is declared enum (…), but was given …` | A value outside the field's vocabulary (status, priority, effort, artifact_type, technical_level, interaction_model, FMEA ratings, property_type, …). | Use one of the values the message lists; the suggestion names the closest. |
 | **W093** | `release 'X' has invalid version format` | `version` is not valid semver. | Use a semver string like `1.0.0`, `2.1.0-rc.1`, or `1.0.0+build.5`. |
 

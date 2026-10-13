@@ -15,14 +15,13 @@ fn declared(kind: &str, name: &str) -> FieldDescriptor {
         .unwrap_or_else(|| panic!("{kind}.{name} is not declared"))
 }
 
-/// Pinned by plan 01 (fixed by T7): the fields that take a closed set of
+/// The fields that take a closed set of
 /// values are enums of it, with no default, and a value outside it is the
 /// core's E061, so the extension declares no rule of its own.
 #[specforge_test(
     behavior = "ge_declare_vocabularies",
     verify = "decision status, constraint priority and every failure mode rating are declared enums of their vocabularies"
 )]
-#[ignore = "fixed by 01-T7"]
 fn governance_declares_its_rating_and_status_vocabularies() {
     const SEVERITY: &[&str] = &["critical", "high", "medium", "low"];
     const OCCURRENCE: &[&str] = &["certain", "likely", "occasional", "unlikely", "rare"];

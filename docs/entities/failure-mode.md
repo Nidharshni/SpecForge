@@ -136,9 +136,7 @@ Failure modes are leaf nodes in the traceability chain. They are referenced by i
 |------|------|
 | E003 | The `invariant` reference must resolve to a declared entity. |
 | E002 | No two failure modes may share the same ID. |
-| W051 | `severity` must be a recognized value. |
-| W052 | `occurrence` must be a recognized value. |
-| W121 | `detection` must be a recognized value. |
+| E061 | `severity`, `occurrence`, `detection` and their `post_` forms must be a value of their vocabulary. |
 
 The compiler doesn't check that a declared `rpn` equals `severity * occurrence * detection`.
 

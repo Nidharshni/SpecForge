@@ -2472,45 +2472,6 @@ Owner: @specforge/product
 Level: warning
 ```
 
-## W050
-
-```
-W050: Invalid decision status
-
-A `decision` entity's `status` field is not one of the recognized values
-(`proposed`, `accepted`, `deprecated`, `superseded`). Set `status` to one of
-these values.
-
-Owner: @specforge/governance
-Level: warning
-```
-
-## W051
-
-```
-W051: Invalid failure mode severity
-
-A `failure_mode` entity's `severity` or `post_severity` field is not one of the
-recognized values (`critical`, `high`, `medium`, `low`). Set the field to one of
-these values.
-
-Owner: @specforge/governance
-Level: warning
-```
-
-## W052
-
-```
-W052: Invalid failure mode occurrence
-
-A `failure_mode` entity's `occurrence` or `post_occurrence` field is not one of
-the recognized values (`certain`, `likely`, `occasional`, `unlikely`, `rare`).
-Set the field to one of these values.
-
-Owner: @specforge/governance
-Level: warning
-```
-
 ## W053
 
 ```
@@ -2717,19 +2678,6 @@ configured provider. Add the missing field, or install an extension that
 contributes the provider.
 
 Owner: core
-Level: warning
-```
-
-## W121
-
-```
-W121: Invalid failure mode detection
-
-A `failure_mode` entity's `detection` or `post_detection` field is not one of
-the recognized values (`certain`, `likely`, `moderate`, `unlikely`,
-`undetectable`). Set the field to one of these values.
-
-Owner: @specforge/governance
 Level: warning
 ```
 
@@ -3210,6 +3158,9 @@ These codes are no longer emitted, and are never reused for another meaning.
 | W025 | (nothing) |
 | W026 | (nothing) |
 | W028 | (nothing) |
+| W050 | [E061](#e061) |
+| W051 | [E061](#e061) |
+| W052 | [E061](#e061) |
 | W062 | [E073](#e073) |
 | W063 | (nothing) |
 | W077 | [E061](#e061) |
@@ -3227,5 +3178,6 @@ These codes are no longer emitted, and are never reused for another meaning.
 | W117 | (nothing) |
 | W119 | (nothing) |
 | W120 | (nothing) |
+| W121 | [E061](#e061) |
 | W122 | (nothing) |
 | W146 | (nothing) |

@@ -202,6 +202,9 @@ pub const RETIRED: &[(&str, Option<&str>)] = &[
     ("W025", None),
     ("W026", None),
     ("W028", None),
+    ("W050", Some("E061")),
+    ("W051", Some("E061")),
+    ("W052", Some("E061")),
     ("W062", Some("E073")),
     ("W063", None),
     ("W077", Some("E061")),
@@ -219,6 +222,7 @@ pub const RETIRED: &[(&str, Option<&str>)] = &[
     ("W117", None),
     ("W119", None),
     ("W120", None),
+    ("W121", Some("E061")),
     ("W122", None),
     ("W146", None),
 ];

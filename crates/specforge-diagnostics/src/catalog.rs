@@ -598,15 +598,6 @@ catalog! {
     W049: Warning product,
         "Milestone without features",
         "A `milestone` entity has no `features` field, so it may be empty. Modules listed in `modules` don't count: the check reads only `features`. List the features the milestone delivers, or remove the milestone.";
-    W050: Warning governance,
-        "Invalid decision status",
-        "A `decision` entity's `status` field is not one of the recognized values (`proposed`, `accepted`, `deprecated`, `superseded`). Set `status` to one of these values.";
-    W051: Warning governance,
-        "Invalid failure mode severity",
-        "A `failure_mode` entity's `severity` or `post_severity` field is not one of the recognized values (`critical`, `high`, `medium`, `low`). Set the field to one of these values.";
-    W052: Warning governance,
-        "Invalid failure mode occurrence",
-        "A `failure_mode` entity's `occurrence` or `post_occurrence` field is not one of the recognized values (`certain`, `likely`, `occasional`, `unlikely`, `rare`). Set the field to one of these values.";
     W053: Warning core,
         "Breaking schema change",
         "A graph protocol schema change classified as breaking since the last export: something a reader of the recorded schema relies on was removed or reshaped — a removed entity kind, edge type or field, a field added as required, a field whose type, required flag, edge type or target kind changed, an enum value lost, or an edge type that lost a source or target kind. `specforge export` compares every attribute of the schema against the one the previous export recorded in `.specforge/schema-cache.json`, bumps the major version, and names the versions in the warning; the export is still written and the cache updated. Update the agents and tools that read the export, or keep the extension versions that produced the old schema.";
@@ -652,9 +643,6 @@ catalog! {
     W118: Warning core,
         "Invalid provider configuration",
         "A `providers` entry in `specforge.json` is missing its `alias`/`name` or `scheme` field, or no installed extension contributes providers to back a configured provider. Add the missing field, or install an extension that contributes the provider.";
-    W121: Warning governance,
-        "Invalid failure mode detection",
-        "A `failure_mode` entity's `detection` or `post_detection` field is not one of the recognized values (`certain`, `likely`, `moderate`, `unlikely`, `undetectable`). Set the field to one of these values.";
     W123: Warning formal,
         "Unreferenced property",
         "A `property` entity is not referenced by any `behavior`, so it may be unused. Reference the property from a behavior's `verify` block, or remove it if it is no longer needed.";

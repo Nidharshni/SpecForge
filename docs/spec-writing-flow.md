@@ -320,7 +320,7 @@ After completing all phases, the spec should have zero errors:
 | No duplicate IDs (E002) | Each entity ID is unique |
 | No import cycles (W113, a warning) | File imports form a DAG |
 | No circular modules (E007) | Module deps form a DAG |
-| Valid failure-mode ratings (W051, W052, W121) | Severity, occurrence and detection are recognized values |
+| Valid failure-mode ratings (E061) | Severity, occurrence and detection are recognized values |
 | Resolved references (E003) | Journey personas and channels are declared |
 | Valid triggers (E051) | Event triggers reference real behaviors |
 
