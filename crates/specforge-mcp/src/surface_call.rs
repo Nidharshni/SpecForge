@@ -171,7 +171,7 @@ pub(crate) fn serve<S: Surface>(
     }
     // The project the call acts on, resolved (and brought up to date)
     // before the handler runs: handlers never pick a root or reload.
-    let outcome = match target::resolve(state, S::target(&found), &invocation.arguments) {
+    let outcome = match target::resolve(state, revision, S::target(&found), &invocation.arguments) {
         Ok(target) => {
             let mut call = Call::new(state, target);
             // The handler records its own events through `call.events()`.

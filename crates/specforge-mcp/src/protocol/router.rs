@@ -76,7 +76,12 @@ pub fn route(
             Some(_) if !(state.is_initialized() || revision.is_stateless()) => {
                 JsonRpcResponse::error(id, error_codes::INVALID_REQUEST, "Server not initialized")
             }
-            Some(session) => session_method(state, revision, session, params, id),
+            Some(session) => {
+                // What is served follows the server's root before the
+                // request reads it (ADR 0077 D3).
+                state.follow_root();
+                session_method(state, revision, session, params, id)
+            }
         },
     }
 }

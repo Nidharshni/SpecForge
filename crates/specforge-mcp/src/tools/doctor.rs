@@ -2,8 +2,8 @@
 
 use crate::args::NoArgs;
 use crate::reply::Answered;
+use crate::target::Project;
 use crate::target::ProjectRef;
-use crate::target::{Project, ServedUnlessCached};
 use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
 
 /// `specforge.doctor`'s reply: the document `specforge doctor --format json`
@@ -21,12 +21,11 @@ impl CoreTool for Tool {
     const SPEC: ReplySpec = ReplySpec::Type("McpDoctorReport");
     const OPEN_VALUES: &'static [&'static str] = &["$.enhancements"];
     type Args = NoArgs;
-    type Input = Project<ServedUnlessCached>;
+    type Input = Project;
     type Returns = Answered<Reply>;
 
     fn call(project: ProjectRef<'_>, _args: NoArgs) -> Answered<Reply> {
-        // The target brought the project up to date with disk unless the
-        // caller opted into the last compile (`use_cached`, ADR 0004 D3-d).
+        // The target brought the project up to date with disk.
         // The same report `specforge doctor` prints (`DoctorReport::document`), as
         // the spec's McpDoctorReport. Credential health is the user's, not the
         // project's: only the CLI reports it.
