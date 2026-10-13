@@ -6,6 +6,8 @@
 //! direction (a new field, a renamed key) now fails a test instead of
 //! silently breaking every consumer.
 
+mod support;
+
 use serde_json::Value;
 use specforge_test::registry::{TestOutcome, TestRecordEntry};
 use specforge_test::report;
@@ -163,6 +165,31 @@ fn binary_report_conforms_to_published_schema() {
         skipped.get("verify_kind").is_none(),
         "optional kind omitted when unknown"
     );
+}
+
+#[specforge_test_macros::test(
+    behavior = "record_test_via_drop_guard",
+    verify = "a recorded entry conforms to the published binary report schema"
+)]
+#[ignore = "fixed by T3"]
+fn a_recorded_report_conforms_to_the_published_schema() {
+    let reports = tempfile::tempdir().unwrap();
+    support::run_fixture(&["--include-ignored"], reports.path());
+    let schema = load_schema("specforge-binary-report.schema.json");
+    let mut checked = 0;
+    for file in std::fs::read_dir(reports.path()).unwrap() {
+        let path = file.unwrap().path();
+        if path.extension().is_some_and(|e| e == "json") {
+            let report: Value =
+                serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+            assert!(report["entries"][0]["module_path"].is_string(), "{report}");
+            let mut errors = Vec::new();
+            validate(&report, &schema, &schema, "$", &mut errors);
+            assert!(errors.is_empty(), "{}: {errors:?}", path.display());
+            checked += 1;
+        }
+    }
+    assert_eq!(checked, 1, "one report per fixture run");
 }
 
 #[test]

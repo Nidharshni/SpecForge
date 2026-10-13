@@ -54,4 +54,9 @@ behavior record_test_via_drop_guard "Record Test via Drop Guard" {
   verify unit "an ignored test runs and is recorded only when libtest is asked to run it"
   verify unit "under nextest each test writes its own report and reports of other runs are pruned"
   verify unit "the recorded entry carries the test's module path"
+  verify unit "the exit handler prints no coverage, even beside a graph export"
+  verify unit "a recorded entry conforms to the published binary report schema"
+  verify unit "the exit handler writes the report and nothing else"
+  verify unit "without SPECFORGE_REPORT the report goes to the binary's cargo target directory, never the working directory"
+  verify unit "a binary outside any cargo target directory writes no report and says so"
 }
