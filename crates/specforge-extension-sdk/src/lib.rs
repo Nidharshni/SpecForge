@@ -422,6 +422,31 @@ impl ContributionsBuilder {
         self
     }
 
+    /// Declare a peer this extension needs (a peer requirement): `name`,
+    /// installed at a version `range` accepts. `range` is a SemVer
+    /// requirement read as Cargo reads one (`^1.0`); one that does not
+    /// parse satisfies nothing (E073). `specforge add` and `init` enable a
+    /// required builtin peer along with the extension, and refuse the
+    /// install when the peer is missing or out of range (E027).
+    pub fn peer(&mut self, name: &str, range: &str) -> &mut Self {
+        self.push_peer(name, range, false)
+    }
+
+    /// Declare a peer this extension works without: when it is installed,
+    /// its version must be one `range` accepts (E027 otherwise).
+    pub fn optional_peer(&mut self, name: &str, range: &str) -> &mut Self {
+        self.push_peer(name, range, true)
+    }
+
+    fn push_peer(&mut self, name: &str, range: &str, optional: bool) -> &mut Self {
+        self.meta.peer_dependencies.push(PeerDependency {
+            name: name.to_string(),
+            version: range.to_string(),
+            optional,
+        });
+        self
+    }
+
     /// Everything this extension declares, as the guest serves it and the
     /// host loads it: the handshake (from [`ExtensionMeta`]),
     /// every category the builders contributed, the declared surfaces, and

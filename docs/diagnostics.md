@@ -901,7 +901,7 @@ as `1.2.0`, which means `^1.2.0`), so no version of the peer can satisfy it,
 whether the peer is installed or not. `specforge check` (and the LSP and MCP)
 and `doctor` report it, `specforge add` and `update` refuse to install or update
 around it, and `specforge publish` refuses to upload it. Fix the range in the
-extension's declaration (its SDK `peer_dependencies`) and rebuild, or install a
+extension's declaration (its SDK `peer` or `optional_peer` call) and rebuild, or install a
 version of the extension that declares one.
 
 Owner: core
