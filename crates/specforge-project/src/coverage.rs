@@ -520,6 +520,23 @@ mod tests {
         ));
     }
 
+    // Plan 08, T0 pin: a report in the collect vocabulary scores as failing.
+    // T2 flips it.
+    #[test]
+    fn a_report_in_the_collect_vocabulary_scores_failing_today() {
+        let project = Scored::new();
+        for status in ["passed", "skipped"] {
+            let tests: TestReport = serde_json::from_str(&report(status)).unwrap();
+            let coverage = ProjectCoverage::compute(&project.entities(), Some(&tests));
+            let login = coverage.verdict("login").unwrap();
+            assert_eq!(login.failing, 1, "{status}");
+            assert!(!login.is_proven(), "{status}");
+        }
+        let tests: TestReport = serde_json::from_str(&report("pass")).unwrap();
+        let coverage = ProjectCoverage::compute(&project.entities(), Some(&tests));
+        assert!(coverage.verdict("login").unwrap().is_proven());
+    }
+
     #[specforge_test(
         behavior = "read_views_over_the_project_view",
         verify = "an entity is unverified when it counts toward coverage and is not proven"

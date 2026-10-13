@@ -150,6 +150,24 @@ fn a_collector_receives_a_collect_input_and_answers_a_collect_output() {
     );
 }
 
+// Plan 08, T0 pin: a status outside passed, failed and skipped is a valid
+// CollectOutput today. T3 flips it to an E028 refusal.
+#[test]
+fn a_status_outside_the_vocabulary_is_a_collect_output_today() {
+    let answer = json!({"entity_results": [{"entity_id": "a", "test_results": [
+        {"name": "t", "status": "ok"}
+    ]}]});
+    let runtime = answering(
+        "collect__x",
+        WasmCallResult::Ok(answer.to_string().into_bytes()),
+    );
+    let read = dispatch(Some(&runtime), &collector(), &reports(), None).unwrap();
+    assert_eq!(
+        serde_json::to_value(&read).unwrap()["entity_results"][0]["test_results"][0]["status"],
+        "ok"
+    );
+}
+
 // ── C8 · migration hook ──
 
 fn hooked() -> specforge_registry::RegistryBuild {

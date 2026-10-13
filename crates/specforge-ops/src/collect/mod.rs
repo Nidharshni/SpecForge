@@ -1271,6 +1271,37 @@ mod tests {
         }
     }
 
+    // Plan 08, T0 pin: an unknown status is counted skipped, silently.
+    // T3 deletes it (a `TestStatus` cannot hold `ok`).
+    #[test]
+    fn an_unknown_status_is_counted_skipped_without_a_diagnostic_today() {
+        let known = KnownEntities::from_iter([("a".to_string(), Vec::new())]);
+        let mut report = empty_report();
+        let (stats, diags) = merge(&mut report, "r", &collected(&[("a", "t", "ok")]), &known);
+        assert_eq!(stats.skipped, 1);
+        assert!(diags.is_empty());
+        assert!(!report.results.contains_key("a"));
+    }
+
+    // Plan 08, T0 pin: the report collect writes. T2 flips it.
+    #[test]
+    fn the_report_collect_writes_today() {
+        let known = KnownEntities::from_iter([("a".to_string(), Vec::new())]);
+        let mut report = empty_report();
+        merge(
+            &mut report,
+            "vitest",
+            &collected(&[("a", "t1", "passed")]),
+            &known,
+        );
+        assert_eq!(
+            serde_json::to_value(&report).unwrap()["results"]["a"],
+            serde_json::json!({"file": null, "tests": [
+                {"name": "t1", "status": "pass", "runner": "vitest"}
+            ]})
+        );
+    }
+
     #[specforge_test(
         invariant = "collector_output_conformance",
         verify = "unknown entity ID in collector entry produces W115"

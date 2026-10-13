@@ -474,3 +474,63 @@ fn a_gate_without_the_coverage_pass_is_refused_before_the_analysis() {
     assert!(doc.get("passes").is_none(), "{doc}");
     assert!(stderr.is_empty(), "{stderr}");
 }
+
+// ADR-NEW-08 (plan 08, T0): the committed example report must be what
+// `collect` writes from the committed runner fixture. It does not today (no
+// names, no `verify`, a `total` key), so it is ignored until T5 fixes it.
+#[test]
+#[ignore = "fixed by T5"]
+fn the_example_report_is_what_collect_writes() {
+    fn copy(from: &Path, to: &Path) {
+        std::fs::create_dir_all(to).unwrap();
+        for e in std::fs::read_dir(from).unwrap().flatten() {
+            let path = e.path();
+            if path.is_dir() {
+                if path
+                    .file_name()
+                    .is_some_and(|n| n == "target" || n == "tests")
+                {
+                    continue;
+                }
+                copy(&path, &to.join(e.file_name()));
+            } else {
+                std::fs::copy(&path, to.join(e.file_name())).unwrap();
+            }
+        }
+    }
+    let example = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join("examples/todo-app");
+    let tmp = TempDir::new().unwrap();
+    copy(&example, tmp.path());
+    let committed = std::fs::read_to_string(tmp.path().join("specforge-report.json")).unwrap();
+    std::fs::remove_file(tmp.path().join("specforge-report.json")).unwrap();
+
+    let out = specforge()
+        .args([
+            "collect",
+            "--path",
+            tmp.path().to_str().unwrap(),
+            "--report",
+            tmp.path()
+                .join("runner-report.fixture.json")
+                .to_str()
+                .unwrap(),
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "collect: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let written = std::fs::read_to_string(tmp.path().join("specforge-report.json")).unwrap();
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&written).unwrap(),
+        serde_json::from_str::<serde_json::Value>(&committed).unwrap(),
+        "examples/todo-app/specforge-report.json is not what collect writes"
+    );
+}
