@@ -828,16 +828,6 @@ impl ToolOutcome {
         McpError::new(code, message).into()
     }
 
-    /// Invalid input: an argument the tool cannot use.
-    pub fn invalid_input(argument: &str, message: impl Into<String>) -> Self {
-        McpError::invalid_input(argument, message).into()
-    }
-
-    /// A tool that needs a project and has none to work on.
-    pub fn no_project(message: impl Into<String>) -> Self {
-        Self::error(ErrorCode::PreconditionFailed, message)
-    }
-
     /// The same outcome with `extra` added to its `_meta.diagnostics`.
     pub fn with_diagnostics(mut self, extra: Vec<Diagnostic>) -> Self {
         match &mut self {

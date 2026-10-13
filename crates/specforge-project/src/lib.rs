@@ -44,7 +44,7 @@ use sources::SourceCache;
 
 use snapshot::EntitySnapshot;
 use specforge_common::{
-    ConfigProblem, ConfigRead, Diagnostic, ProjectConfig, ProjectRoot, codes, discover_spec_files,
+    ConfigProblem, ConfigRead, Diagnostic, ProjectConfig, ProjectRoot, SourceRoot, codes,
     read_project_config,
 };
 use specforge_graph::{Graph, GraphBuild, GraphConfig};
@@ -114,9 +114,10 @@ pub struct Environment {
     /// the runtime loaded it (a `.wasm` file entry by the name its
     /// component declares).
     enabled: Vec<EnabledExtension>,
-    /// Where `.spec` files are discovered: `spec_root` from the config,
-    /// relative to the project root, or the project root itself.
-    spec_root: PathBuf,
+    /// Where the project's sources are: `spec_root` from the config,
+    /// relative to the project root (or the project root itself), and
+    /// what `exclude` leaves out.
+    sources: SourceRoot,
     /// The registries, rules, passes and graph inputs built from the loaded
     /// declarations.
     registries: RegistryBuild,
@@ -149,7 +150,7 @@ impl Environment {
             read: ConfigRead::default(),
             installed: Installed::none(),
             enabled: Vec::new(),
-            spec_root: PathBuf::new(),
+            sources: SourceRoot::default(),
             registries: RegistryBuild::default(),
             providers: Providers::default(),
             config_diagnostics: Vec::new(),
@@ -219,12 +220,12 @@ impl Environment {
                 &read.problems,
             )
         });
-        let spec_root = read.config.spec_root_in(installed.root());
+        let sources = read.config.sources(installed.root());
         Environment {
             read,
             installed,
             enabled,
-            spec_root,
+            sources,
             registries,
             providers,
             config_diagnostics,
@@ -299,7 +300,7 @@ impl Environment {
 
     /// Where `.spec` files are discovered.
     pub fn spec_root(&self) -> &Path {
-        &self.spec_root
+        self.sources.dir()
     }
 
     /// The registries, rules, passes and surfaces built from the loaded
@@ -336,7 +337,7 @@ impl Environment {
     /// the relative paths the rules read. The one place a snapshot is
     /// taken from an environment.
     pub fn entity_snapshot(&self, graph: &Graph) -> EntitySnapshot {
-        EntitySnapshot::of(graph, &self.registries, &self.spec_root)
+        EntitySnapshot::of(graph, &self.registries, self.sources.dir())
     }
 
     /// Every check a compile runs on a built graph, over its entity
@@ -415,7 +416,7 @@ impl Environment {
     /// The project sources discovery finds now (`exclude` and the skipped
     /// directories applied).
     pub fn discover(&self) -> Vec<PathBuf> {
-        discover_spec_files(&self.spec_root, &self.read.config.exclude)
+        self.sources.files()
     }
 
     /// Read and parse `discovered`, build their graph and resolve their
@@ -430,7 +431,7 @@ impl Environment {
         discovered: &[PathBuf],
         held: &BTreeMap<String, &str>,
     ) -> SourceBuild {
-        let (sources, files) = SourceCache::read_all(&self.spec_root, discovered, held);
+        let (sources, files) = SourceCache::read_all(self.sources.dir(), discovered, held);
         let graph = GraphBuild::of(files, self.graph_config());
         let imports = sources.import_diagnostics(&graph);
         SourceBuild {

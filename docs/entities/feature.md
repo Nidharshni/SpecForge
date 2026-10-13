@@ -63,17 +63,23 @@ All fields are optional at the type level. Features are intentionally lightweigh
 
 | To | Edge Type | Meaning |
 |----|-----------|---------|
-| `feature` | `FeatureDependsOn` | "This feature depends on that feature" |
-| `ref` | `links_to` | "This feature links to these external references" |
+| `feature` | `FeatureDependsOn` | "This feature depends on these features" (via `depends_on` field) |
+| `feature` | `FeatureRelatesTo` | "This feature relates to these features" (via `features` field) |
 
 ### Incoming edges
 
 | From | Edge Type | Meaning |
 |------|-----------|---------|
-| `behavior` | `Implements` | "A behavior implements this feature" (requires `@specforge/software`) |
-| `journey` | `JourneyFeature` | "This UX journey delivers this feature" |
-| `module` | `ModuleFeature` | "A module provides the code for this feature" |
-| `milestone` | `MilestoneFeature` | "A milestone schedules this feature" |
+| `behavior` | `BehaviorImplementsFeature` | "Behaviors that implement this feature" (via `features` field) |
+| `constraint` | `ConstraintGovernsFeature` | "Constraints that govern this feature" (via `governs_features` field) |
+| `decision` | `DecisionAffectsFeature` | "Decisions that affect this feature" (via `affects_features` field) |
+| `failure_mode` | `FailureModeThreatensFeature` | "Failure modes that threaten this feature" (via `threatens_features` field) |
+| `feature` | `FeatureDependsOn` | "Features that depend on this feature" (via `depends_on` field) |
+| `feature` | `FeatureRelatesTo` | "Features that relate to this feature" (via `features` field) |
+| `journey` | `JourneyExercisesFeature` | "Journeys that exercise this feature" (via `features` field) |
+| `milestone` | `MilestoneDeliversFeature` | "Milestones that schedule this feature" (via `features` field) |
+| `module` | `ModuleContainsFeature` | "Modules that implement this feature" (via `features` field) |
+| `persona` | `PersonaPrioritizesFeature` | "Personas that prioritize this feature" (via `key_features` field) |
 
 ## Validation Rules
 
@@ -143,11 +149,17 @@ The `status` field drives milestone completion calculations. A feature counts as
 | Direction | Entity | Edge | Meaning |
 |-----------|--------|------|---------|
 | outgoing | [feature](feature.md) | `FeatureDependsOn` | Features this feature depends on |
-| outgoing | [ref](ref.md) | `links_to` | External references linked to this feature |
-| incoming | [behavior](behavior.md) | `Implements` | Behaviors that implement this feature |
-| incoming | [journey](journey.md) | `JourneyFeature` | Journeys that deliver this feature |
-| incoming | [module](module.md) | `ModuleFeature` | Modules that implement this feature |
-| incoming | [milestone](milestone.md) | `MilestoneFeature` | Milestones that schedule this feature |
+| outgoing | [feature](feature.md) | `FeatureRelatesTo` | Features this feature relates to |
+| incoming | [behavior](behavior.md) | `BehaviorImplementsFeature` | Behaviors that implement this feature |
+| incoming | [constraint](constraint.md) | `ConstraintGovernsFeature` | Constraints that govern this feature |
+| incoming | [decision](decision.md) | `DecisionAffectsFeature` | Decisions that affect this feature |
+| incoming | [failure_mode](failure-mode.md) | `FailureModeThreatensFeature` | Failure modes that threaten this feature |
+| incoming | [feature](feature.md) | `FeatureDependsOn` | Features that depend on this feature |
+| incoming | [feature](feature.md) | `FeatureRelatesTo` | Features that relate to this feature |
+| incoming | [journey](journey.md) | `JourneyExercisesFeature` | Journeys that exercise this feature |
+| incoming | [milestone](milestone.md) | `MilestoneDeliversFeature` | Milestones that schedule this feature |
+| incoming | [module](module.md) | `ModuleContainsFeature` | Modules that implement this feature |
+| incoming | [persona](persona.md) | `PersonaPrioritizesFeature` | Personas that prioritize this feature |
 
 ## Examples
 

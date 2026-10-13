@@ -468,7 +468,11 @@ behavior locate_project_root "Locate the Project a Path Is In" {
     workspace root and MCP (its root and a call's path) MUST open the
     project their path is in by this one rule; the project's spec root
     is then read from its specforge.json (spec_root), and is never the
-    path given. On the command line every command that reads a project
+    path given. A path inside a directory below a project's spec root
+    that holds its own specforge.json is in that nested project, and only
+    there: the outer project's sources end at it (resolve_use_imports), so
+    no command, watch, the LSP or MCP reads its files as the outer
+    project's. On the command line every command that reads a project
     (every core command but init, new, explain, mcp and extension
     init|build|validate, and every extension command) names it with
     --path PATH, default ., whose help says it is a path inside the
@@ -500,5 +504,6 @@ behavior locate_project_root "Locate the Project a Path Is In" {
   verify unit "a server started in a spec root holding specforge.spec serves the project around it"
   verify unit "a workspace root in a spec root holding specforge.spec opens the project around it"
   verify unit "a loose root's I002 says no project was found and suggests init"
+  verify integration "a file in a nested project is checked by its own project and by no project above it"
   verify contract "Locate the Project a Path Is In: project root location holds — filesystem_available, closest_wins_enforced, one_marker, loose_root, missing_path_refused, symlinks_resolved, every_surface_agrees, one_option"
 }

@@ -39,8 +39,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   the environment load and every operation that reads a project from disk take a project root, never a raw
   path; only `init` takes its directory as given. On the command line a project is named by `--path` (any
   path inside it, `.` by default) on every command that reads one, extension commands included. Distinct from the **spec root**, where the project's
-  `.spec` files are discovered (`spec_root` in its `specforge.json`, else the project root): a path inside
-  the spec root names the project, never a project of its own.
+  `.spec` files are discovered (`spec_root` in its `specforge.json`, else the project root): the spec root is
+  never a project of its own, but a directory below it that holds `specforge.json` is a **nested project**,
+  and a path inside it names that project, whose files are none of the outer project's sources (ADR 0080).
 - **Format version**: the `.spec` file format a file was written against, `MAJOR.MINOR`, declared by
   the `// specforge-format:` header on its first non-blank line; a file with no header is at the
   current version and reports nothing. The parser reads it with the file
@@ -611,15 +612,18 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   key. It carries no `null`. Its spec type is the tool's `Mcp*` reply type (ADR 0052).
 - **Project sources**: the `.spec` files under the spec root (`spec_root`, else the project root) that
   discovery keeps — no skipped directory, no `exclude` entry. What a compile reads, what format and migrate
-  rewrite (`specforge_common::ProjectConfig::spec_files`, read through `config::rewritable`, never past a
-  problem that hides them), and the only files a `use` import names: a
+  rewrite (`specforge_common::SourceRoot`, built by `ProjectConfig::sources` from a config read through
+  `config::rewritable`, never past a problem that hides them), and the only files a `use` import names: a
   compile holds each by its **key**, its path relative to the spec root, and resolves imports against the
   keys alone (`specforge_resolver`, ADR 0055). An editor buffer the session holds for such a path is a
   source, saved or not.
-  The walk is `specforge_common::walk_spec_files`: the spec root is read whatever its own name, no
-  skipped directory below it is entered, no symlinked directory is entered, and only files are sources: a symlink is one when it resolves
-  to a file, read through the link and keyed by its own path (ADR 0073). Format's
-  directory walk is the same walk, stopping at nested projects.
+  `SourceRoot::files` lists them and `SourceRoot::holds` answers for one path, by one policy: the spec root is
+  read whatever its own name and whatever it holds, no skipped directory below it is entered, no symlink is
+  followed into a directory, only files are sources (a symlink is one when it resolves to a file, read through
+  the link and keyed by its own path, ADR 0073), and the walk ends at every directory below the spec root that
+  holds `specforge.json`: a nested project, whose files are its own project's sources, on every surface
+  (ADR 0080). Format's walk of a named directory that is no project is the same walk, taking the sources of
+  each project it reaches.
   An **exclude entry** is a gitignore-style pattern over a source's path (`specforge_common::Exclude`): no
   `/` but a trailing one matches a name at any depth, a `/` at the start or in the middle anchors it at the
   spec root, a trailing `/` matches directories only, and a file is left out when an entry matches it or

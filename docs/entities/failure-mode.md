@@ -122,8 +122,9 @@ failure_mode write_loss "Write Acknowledged but Lost" {
 
 | To | Edge Type | Meaning |
 |----|-----------|---------|
-| `invariant` | `mitigates` | "This failure mode threatens this invariant" |
-| `ref` | `links_to` | "This failure mode links to these external references" |
+| `behavior` | `FailureModeAffectsBehavior` | "This failure mode affects these behaviors" (via `affected_behaviors` field) |
+| `invariant` | `FailureModeTargetsInvariant` | "This failure mode targets these invariants" (via `invariant` field) |
+| `feature` | `FailureModeThreatensFeature` | "This failure mode threatens these features" (via `threatens_features` field) |
 
 ### No incoming edges
 
@@ -168,8 +169,9 @@ Always reassess after mitigation. Good mitigations should:
 
 | Direction | Entity | Edge | Meaning |
 |-----------|--------|------|---------|
-| outgoing | [invariant](invariant.md) | `mitigates` | Invariant this failure mode threatens |
-| outgoing | [ref](ref.md) | `links_to` | External references linked to this failure mode |
+| outgoing | [behavior](behavior.md) | `FailureModeAffectsBehavior` | Behaviors this failure mode affects |
+| outgoing | [invariant](invariant.md) | `FailureModeTargetsInvariant` | Invariants this failure mode targets |
+| outgoing | [feature](feature.md) | `FailureModeThreatensFeature` | Features this failure mode threatens |
 
 No incoming edges. Failure modes are leaf nodes in the traceability chain.
 
