@@ -3,13 +3,12 @@ use crate::outcome::{Exit, OutputFormat, Refusal};
 use crate::terminal::{Terminal, out};
 use specforge_ops::model::{DependencyDepth, OutlineDetail, OutlineFormat, OutlineOptions};
 use specforge_ops::view::ProjectView;
-use std::path::PathBuf;
 
 // `specforge outline`'s command line.
 #[derive(clap::Args)]
 pub(crate) struct Args {
-    #[arg(default_value = ".", help = crate::project::PATH_HELP)]
-    path: PathBuf,
+    #[command(flatten)]
+    project: crate::project::ProjectArg,
 
     /// Output format
     #[arg(
@@ -49,7 +48,7 @@ impl Args {
     /// `specforge outline`: the outline operation over the project compiled
     /// at `path`.
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
-        let project = match crate::project::compile(&self.path) {
+        let project = match self.project.compile() {
             Ok(project) => project,
             Err(error) => return Refusal::of(OutputFormat::Human).report(terminal, &error),
         };

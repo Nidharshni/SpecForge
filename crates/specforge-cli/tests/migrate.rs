@@ -976,6 +976,7 @@ fn check_json(root: &std::path::Path) -> (Option<i32>, Vec<serde_json::Value>) {
     let output = Command::cargo_bin("specforge")
         .unwrap()
         .args(["check", "--format", "json"])
+        .arg("--path")
         .arg(root)
         .output()
         .unwrap();
@@ -1100,6 +1101,7 @@ fn detect_format_version_contract() {
     let export = Command::cargo_bin("specforge")
         .unwrap()
         .args(["export", "--format", "graph", "--no-schema"])
+        .arg("--path")
         .arg(root)
         .output()
         .unwrap();

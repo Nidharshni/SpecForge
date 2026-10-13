@@ -389,28 +389,28 @@ const SCENARIOS: &[Scenario] = &[
     Scenario {
         name: "export",
         setup: project,
-        cli: |root| args(&["export", &s(root), "--format", "graph"]),
+        cli: |root| args(&["export", "--path", &s(root), "--format", "graph"]),
         mcp: |_| ("specforge.export", json!({"format": "graph"})),
         mcp_rooted: true,
     },
     Scenario {
         name: "check",
         setup: project,
-        cli: |root| args(&["check", &s(root), "--format", "json"]),
+        cli: |root| args(&["check", "--path", &s(root), "--format", "json"]),
         mcp: |_| ("specforge.validate", json!({})),
         mcp_rooted: true,
     },
     Scenario {
         name: "check_failing",
         setup: project_with_unresolved_reference,
-        cli: |root| args(&["check", &s(root), "--format", "json"]),
+        cli: |root| args(&["check", "--path", &s(root), "--format", "json"]),
         mcp: |_| ("specforge.validate", json!({})),
         mcp_rooted: true,
     },
     Scenario {
         name: "check_cache",
         setup: project,
-        cli: |root| args(&["check", &s(root), "--format", "json", "--cache"]),
+        cli: |root| args(&["check", "--path", &s(root), "--format", "json", "--cache"]),
         mcp: |_| ("specforge.validate", json!({})),
         mcp_rooted: true,
     },
@@ -589,6 +589,7 @@ fn read_config(root: &Path) -> Value {
 fn check(root: &Path) -> Value {
     let out = cli()
         .args(["check", "--format", "json"])
+        .arg("--path")
         .arg(root)
         .current_dir(root)
         .output()
@@ -1042,6 +1043,7 @@ fn mcp_export(root: &Path, arguments: Value) -> Value {
 fn cli_export(root: &Path, flags: &[&str]) -> Value {
     let out = cli()
         .arg("export")
+        .arg("--path")
         .arg(root)
         .args(flags)
         .current_dir(root)
@@ -1479,7 +1481,7 @@ fn export_both_ways(extra: &[&str], arguments: Value) -> (String, String) {
     let dir = tempfile::tempdir().unwrap();
     export_project(dir.path());
     let out = cli()
-        .args(["export", &s(dir.path()), "--format", "brief"])
+        .args(["export", "--path", &s(dir.path()), "--format", "brief"])
         .args(extra)
         .current_dir(dir.path())
         .output()

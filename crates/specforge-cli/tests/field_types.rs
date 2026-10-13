@@ -15,6 +15,7 @@ fn governance_project(spec: &str) -> tempfile::TempDir {
 fn check(dir: &tempfile::TempDir) -> (Option<i32>, Vec<serde_json::Value>) {
     let output = specforge_cmd()
         .args(["check", "--format=json"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -29,6 +30,7 @@ fn check(dir: &tempfile::TempDir) -> (Option<i32>, Vec<serde_json::Value>) {
 fn exported_fields(dir: &tempfile::TempDir, id: &str) -> serde_json::Value {
     let output = specforge_cmd()
         .args(["export", "--format=graph"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -109,6 +111,7 @@ decision d1 "D" {
     // The single reference is an edge, exactly as `invariants [inv1]` is.
     let output = specforge_cmd()
         .args(["export", "--format=graph"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();

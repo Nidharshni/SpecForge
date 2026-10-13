@@ -28,6 +28,7 @@ fn export(dir: &TempDir, args: &[&str]) -> Output {
     specforge_cmd()
         .arg("export")
         .args(args)
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap()
@@ -59,6 +60,7 @@ fn write_cache(dir: &TempDir, cache: &Value) {
 fn generated_schema(dir: &TempDir) -> Value {
     let output = specforge_cmd()
         .arg("schema")
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -433,6 +435,7 @@ fn check_writes_no_schema_cache() {
     let dir = software_project();
     let output = specforge_cmd()
         .arg("check")
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -449,6 +452,7 @@ fn check_writes_no_schema_cache() {
     write_cache(&dir, &cache);
     let output = specforge_cmd()
         .arg("check")
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();

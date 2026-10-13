@@ -4,15 +4,14 @@ expression: command.clone().render_long_help().to_string()
 ---
 Validate .spec files and report diagnostics
 
-Usage: specforge check [OPTIONS] [PATH]
+Usage: specforge check [OPTIONS]
 
-Arguments:
-  [PATH]
+Options:
+      --path <PATH>
           A path inside the project (the nearest directory at or above it holding specforge.json; none: the directory itself, with the default configuration)
           
           [default: .]
 
-Options:
       --strict
           Promote warnings to errors
 

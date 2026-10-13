@@ -13,8 +13,8 @@ pub(crate) struct Args {
     #[arg()]
     paths: Vec<PathBuf>,
 
-    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
-    path: PathBuf,
+    #[command(flatten)]
+    project: crate::project::ProjectArg,
 
     /// Check formatting without modifying files (exit 1 if unformatted)
     #[arg(long)]
@@ -48,7 +48,7 @@ impl Args {
     /// `--stdin`, whose output is the formatted text, refuses it.
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         let format = self.output.format;
-        let project_root = match crate::project::root(&self.path) {
+        let project_root = match self.project.root() {
             Ok(root) => root,
             Err(error) => return Refusal::of(format).report(terminal, &error),
         };
@@ -64,7 +64,7 @@ impl Args {
                     .with_suggestion("drop --format json, or name the files to format"),
                 );
             }
-            return run_stdin(project_root.dir(), &self.path, terminal);
+            return run_stdin(project_root.dir(), self.project.path(), terminal);
         }
         let mode = Mode::of_flags(self.check, self.diff, None);
         let outcome = match format::run(&Request {

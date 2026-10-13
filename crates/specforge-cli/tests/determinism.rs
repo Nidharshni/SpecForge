@@ -58,6 +58,7 @@ feature cycle_c \"Cycle C\" {
 fn run_check(dir: &TempDir) -> (Vec<u8>, Vec<u8>, i32) {
     let out = Command::new(binary())
         .arg("check")
+        .arg("--path")
         .arg(dir.path())
         .output()
         .expect("specforge binary runs");

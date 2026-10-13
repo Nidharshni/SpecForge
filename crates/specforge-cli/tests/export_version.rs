@@ -29,6 +29,7 @@ fn schema_version_within_same_major_is_accepted() {
     let out = specforge()
         .args([
             "export",
+            "--path",
             tmp.path().join("src").to_str().unwrap(),
             "--format",
             "graph",
@@ -56,6 +57,7 @@ fn schema_version_other_major_is_rejected_with_range() {
     let out = specforge()
         .args([
             "export",
+            "--path",
             tmp.path().join("src").to_str().unwrap(),
             "--format",
             "graph",
@@ -93,6 +95,7 @@ fn a_refused_schema_version_is_not_a_peer_error() {
     let graph = specforge()
         .args([
             "export",
+            "--path",
             root,
             "--format",
             "graph",
@@ -112,6 +115,7 @@ fn a_refused_schema_version_is_not_a_peer_error() {
     let brief = specforge()
         .args([
             "export",
+            "--path",
             root,
             "--format",
             "brief",

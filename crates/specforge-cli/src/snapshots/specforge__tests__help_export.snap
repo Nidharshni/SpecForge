@@ -4,15 +4,14 @@ expression: command.clone().render_long_help().to_string()
 ---
 Export spec graph to stdout in various formats
 
-Usage: specforge export [OPTIONS] [PATH]
+Usage: specforge export [OPTIONS]
 
-Arguments:
-  [PATH]
+Options:
+      --path <PATH>
           A path inside the project (the nearest directory at or above it holding specforge.json; none: the directory itself, with the default configuration)
           
           [default: .]
 
-Options:
       --format <FORMAT>
           Output format
 

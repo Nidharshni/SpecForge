@@ -4,15 +4,14 @@ expression: command.clone().render_long_help().to_string()
 ---
 Output the Graph Protocol schema
 
-Usage: specforge schema [OPTIONS] [PATH]
+Usage: specforge schema [OPTIONS]
 
-Arguments:
-  [PATH]
+Options:
+      --path <PATH>
           A path inside the project (the nearest directory at or above it holding specforge.json; none: the directory itself, with the default configuration)
           
           [default: .]
 
-Options:
       --kind <KIND>
           That entity kind and the edge types that can start or end at it
 

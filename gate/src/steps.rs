@@ -312,16 +312,18 @@ fn read_baseline(repo: &Repo) -> Result<Value, String> {
     serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))
 }
 
-/// `specforge check <project> --format json` for every project: each one's diagnostics.
+/// `specforge check --path <project> --format json` for every project: each one's diagnostics.
 fn project_diagnostics(ctx: &Ctx) -> Result<BTreeMap<String, Vec<Value>>, String> {
     let specforge = ctx.specforge()?;
     let mut found = BTreeMap::new();
     for project in ctx.repo.projects()? {
-        let (_, out) =
-            ctx.capture(
-                ctx.cmd(specforge)
-                    .args(["check", &project.root, "--format", "json"]),
-            )?;
+        let (_, out) = ctx.capture(ctx.cmd(specforge).args([
+            "check",
+            "--path",
+            &project.root,
+            "--format",
+            "json",
+        ]))?;
         let diagnostics: Value = serde_json::from_str(&out).map_err(|e| {
             format!(
                 "{}: `specforge check` printed no JSON ({e}): {out}",

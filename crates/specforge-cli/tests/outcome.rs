@@ -186,7 +186,7 @@ fn verdicts() {
     std::fs::write(&wasm, b"nope").unwrap();
     let validate_none = exit(
         none.path(),
-        &["extension", "validate", "--path", wasm.to_str().unwrap()],
+        &["extension", "validate", "--dir", wasm.to_str().unwrap()],
     );
 
     for (what, got, expected) in [

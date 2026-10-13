@@ -10,6 +10,7 @@ fn exported_graph(spec: &str) -> (BTreeSet<String>, EdgeSet) {
     let dir = setup_project(&[("main.spec", spec)]);
     let output = specforge_cmd()
         .args(["export", "--format=graph"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -154,6 +155,7 @@ feature gamma "G" { behaviors [alpha] }
 
     let output = specforge_cmd()
         .args(["export", "--format=graph"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -181,6 +183,7 @@ feature gamma "G" { behaviors [alpha] }
 
     let output = specforge_cmd()
         .args(["export", "--format=dot"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -319,6 +322,7 @@ fn dot_export_all_entity_kinds_as_nodes() {
 
     let output = specforge_cmd()
         .args(["export", "--format=dot"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -354,6 +358,7 @@ failure_mode fm "FM" { severity 1 occurrence 1 detection 1 cause "x" effect "y" 
 
     let output = specforge_cmd()
         .args(["export", "--format=dot"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -375,12 +380,14 @@ fn dot_export_deterministic_output() {
 
     let output1 = specforge_cmd()
         .args(["export", "--format=dot"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
 
     let output2 = specforge_cmd()
         .args(["export", "--format=dot"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();

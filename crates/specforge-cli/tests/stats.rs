@@ -32,6 +32,7 @@ feature gamma "G" { behaviors [alpha, beta] }
 
     let output = specforge_cmd()
         .arg("stats")
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -48,6 +49,7 @@ fn stats_on_empty_project() {
 
     let output = specforge_cmd()
         .arg("stats")
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -69,6 +71,7 @@ feature gamma "G" { behaviors [alpha] }
 
     let output = specforge_cmd()
         .args(["stats", "--format=json"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -106,6 +109,7 @@ feature gamma "G" { behaviors [alpha, beta] }
 
     let output = specforge_cmd()
         .args(["stats", "--format=json"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -116,6 +120,7 @@ feature gamma "G" { behaviors [alpha, beta] }
 
     let output = specforge_cmd()
         .arg("stats")
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();

@@ -12,7 +12,6 @@ use specforge_ops::infer::{
 };
 use specforge_ops::view::ProjectView;
 use specforge_project::CompiledProject;
-use std::path::PathBuf;
 
 /// What `specforge infer-status --format json` prints: the progress document
 /// `specforge.infer_progress` answers, and the sections only the CLI's flags
@@ -32,8 +31,8 @@ struct Printed {
 // `specforge infer-status`'s command line.
 #[derive(clap::Args)]
 pub(crate) struct Args {
-    #[arg(long, default_value = ".", help = crate::project::PATH_HELP)]
-    path: PathBuf,
+    #[command(flatten)]
+    project: crate::project::ProjectArg,
 
     #[command(flatten)]
     output: OutputArg,
@@ -55,7 +54,7 @@ impl Args {
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         let (format, show_gaps, show_stale, show_gaps_detail) =
             (self.output.format, self.gaps, self.stale, self.gaps_detail);
-        let project = match crate::project::compile(&self.path) {
+        let project = match self.project.compile() {
             Ok(project) => project,
             Err(error) => return Refusal::of(format).report(terminal, &error),
         };

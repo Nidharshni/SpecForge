@@ -49,3 +49,24 @@ the LSP and format.
 
 A surface that must act on part of a project (a file-scoped check), or a second project marker that carries
 configuration.
+
+## Amendment (architecture round 8, plan 10): one option
+
+D7 kept 28 declarations of a project path saying the same help, by a test over the command tree with an
+exception list. Six core commands took the path as a positional argument and refused `--path`; twenty-one
+took `--path` and refused a positional; extension commands took `--path`. `specforge check --path p` exited 2,
+`doctor p` exited 2, and `explore p` read `p` as an entity.
+
+- **D7a. One option.** Every command that reads a project names it with `--path` (default `.`), declared once
+  by the CLI's `ProjectArg`, which every such core command flattens and whose `Arg` the extension command line
+  takes; no command takes a project path as a positional argument. A positional cannot be the rule: twelve
+  core commands and every extension command with a required arg already have positionals that are not
+  paths. `completions` takes `--path` too. A directory that is not a project is not called `--path`: an
+  extension crate's is `--dir` (`new`, `extension init|build|validate`), and `specforge mcp`'s served root
+  stays its positional `ROOT`, since none there means nothing is served, not a loose root. The test over the
+  command tree now checks that every command reads its project through `ProjectArg` or is listed as reading
+  none.
+
+User-visible: `specforge check <dir>`, `stats <dir>`, `export <dir>`, `schema <dir>`, `model <dir>` and
+`outline <dir>` are usage errors (exit 2): write `--path <dir>`. `new --path` and `extension
+init|build|validate --path` are `--dir`. `completions` refuses a `--path` that does not exist.
