@@ -1,11 +1,11 @@
-//! Builds every builtin extension component (`specforge_component::builtins::BUILTINS`, wasm32-wasip2) and keeps the
-//! vendored copies under `extensions/<name>/wasm/` — the bytes
+//! Builds every committed component (`specforge_component::committed::COMMITTED`: the builtins and the fixtures,
+//! wasm32-wasip2) and keeps the vendored copies under `<crate_dir>/wasm/` — for the builtins, the bytes
 //! `specforge-component` embeds — in step with their sources.
 //!
 //! ```text
 //! build-builtins             build any blob missing from target/builtin-stage/
 //! build-builtins --force     rebuild every blob into target/builtin-stage/
-//! build-builtins --install   rebuild, vendor into extensions/<name>/wasm/, record inputs.json
+//! build-builtins --install   rebuild, vendor into <crate_dir>/wasm/, record inputs.json
 //! build-builtins --check     fail if a vendored blob or any recorded input changed (no build)
 //! build-builtins --verify    rebuild every blob and fail if one differs from its vendored bytes
 //!                            (a blob vendored by another rustc is built, not compared)
@@ -16,7 +16,7 @@
 
 use gate::blob_inputs::{self, BlobRecord, WORKSPACE_INHERITED};
 use serde_json::Value;
-use specforge_component::builtins::BUILTINS;
+use specforge_component::committed::{COMMITTED, CommittedBlob};
 use specforge_installed::hex_sha256;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -63,22 +63,20 @@ fn main() {
         .expect("CARGO_MANIFEST_DIR is set when run via cargo xtask");
 
     let mut failed = false;
-    for builtin in BUILTINS {
-        let (name, artifact) = (builtin.dir, builtin.artifact);
+    for blob in COMMITTED {
         let ok = match mode {
-            Mode::Check => check(&root, name, artifact),
-            Mode::Verify => verify(&root, name, artifact),
-            Mode::Missing | Mode::Force => {
-                build(&root, name, artifact, mode == Mode::Force).is_some()
+            Mode::Check => check(&root, blob),
+            Mode::Verify => verify(&root, blob),
+            Mode::Missing | Mode::Force => build(&root, blob, mode == Mode::Force).is_some(),
+            Mode::Install => {
+                build(&root, blob, true).is_some_and(|built| install(&root, blob, &built))
             }
-            Mode::Install => build(&root, name, artifact, true)
-                .is_some_and(|built| install(&root, name, artifact, &built)),
         };
         failed |= !ok;
     }
     if failed && mode == Mode::Check {
         eprintln!(
-            "\nVendored builtin blobs are stale. Re-vendor with\n  \
+            "\nVendored blobs are stale. Re-vendor with\n  \
              cargo run -p xtask --bin revendor\n\
              (docs/agents/revendor.md) and commit what it prints."
         );
@@ -86,15 +84,25 @@ fn main() {
     std::process::exit(i32::from(failed));
 }
 
-/// Where `name`'s blob is built.
-fn staged_blob(root: &Path, name: &str, artifact: &str) -> PathBuf {
+/// The directory under `target/builtin-stage/` that holds `blob`'s stage: the last segment of its crate directory
+/// (unique over [`COMMITTED`]; a test asserts it).
+fn stage_name(blob: &CommittedBlob) -> &'static str {
+    blob.crate_dir.rsplit('/').next().unwrap_or(blob.crate_dir)
+}
+
+/// Where `blob` is built.
+fn staged_blob(root: &Path, blob: &CommittedBlob) -> PathBuf {
     root.join(format!(
-        "target/builtin-stage/{name}/target/{TARGET}/release/{artifact}"
+        "target/builtin-stage/{}/target/{TARGET}/release/{}",
+        stage_name(blob),
+        blob.artifact
     ))
 }
 
-fn build(root: &Path, name: &'static str, artifact: &str, force: bool) -> Option<PathBuf> {
-    let blob = staged_blob(root, name, artifact);
+fn build(root: &Path, committed: &CommittedBlob, force: bool) -> Option<PathBuf> {
+    let name = committed.crate_dir;
+    let artifact = committed.artifact;
+    let blob = staged_blob(root, committed);
     if blob.exists() && !force {
         println!("[skip]   {name}: {} exists", blob.display());
         return Some(blob);
@@ -103,7 +111,7 @@ fn build(root: &Path, name: &'static str, artifact: &str, force: bool) -> Option
         "[build]  {name} for {TARGET}{}",
         if force { " (forced)" } else { "" }
     );
-    match Stage::prepare(root, name).and_then(|stage| stage.build(artifact)) {
+    match Stage::prepare(root, committed).and_then(|stage| stage.build(artifact)) {
         Ok(built) => {
             println!("[ok]     {name}");
             Some(built)
@@ -117,26 +125,27 @@ fn build(root: &Path, name: &'static str, artifact: &str, force: bool) -> Option
     }
 }
 
-/// A builtin built so that nothing about the checkout reaches its bytes.
+/// A committed blob built so that nothing about the checkout reaches its bytes.
 ///
-/// Each extension is its own workspace, so cargo hashes the absolute path of every path
+/// Each crate is its own workspace, so cargo hashes the absolute path of every path
 /// dependency outside it (the SDK, the protocol types, ...) into `-C metadata`. That renames
 /// the symbols and reorders generic code, and no rustc flag reaches it. The stage is a workspace
-/// under `<repo>/target/builtin-stage/<name>/` holding the extension and every path package its
+/// under `<repo>/target/builtin-stage/<last segment of the crate dir>/` holding the crate and every path package its
 /// `wasm32-wasip2` build compiles, at their repo-relative paths: cargo then hashes their paths
 /// relative to the stage, and passes them to rustc relative. The cargo home is remapped to
 /// `/cargo` and the stage to `/specforge`.
 struct Stage {
     /// Canonical.
     root: PathBuf,
-    name: &'static str,
-    /// The extension's package name, from `cargo metadata`.
+    /// The crate directory from the repository root: `extensions/product`, `fixtures/greet-extension`.
+    crate_dir: &'static str,
+    /// The crate's package name, from `cargo metadata`.
     package: String,
     repo: PathBuf,
 }
 
 impl Stage {
-    /// Lay out `name`'s stage, after emptying it:
+    /// Lay out `blob`'s stage, after emptying it:
     /// - the path packages reached from the extension over normal and build dependencies, each
     ///   copied without `target/` (and the extension without `wasm/`);
     /// - every staged `Cargo.toml` without its dev-dependency tables: a staged path package is a
@@ -144,15 +153,16 @@ impl Stage {
     /// - a `Cargo.toml` naming the extension as the member, with the root manifest's inherited
     ///   tables;
     /// - the extension's `Cargo.lock` and the toolchain file.
-    fn prepare(repo: &Path, name: &'static str) -> Result<Stage, String> {
-        let dir = repo.join(format!("target/builtin-stage/{name}"));
+    fn prepare(repo: &Path, blob: &CommittedBlob) -> Result<Stage, String> {
+        let crate_dir = blob.crate_dir;
+        let dir = repo.join(format!("target/builtin-stage/{}", stage_name(blob)));
         if dir.exists() {
             std::fs::remove_dir_all(&dir).map_err(|e| format!("empty {}: {e}", dir.display()))?;
         }
         std::fs::create_dir_all(&dir).map_err(|e| format!("create {}: {e}", dir.display()))?;
         let root = std::fs::canonicalize(&dir).map_err(|e| e.to_string())?;
 
-        let manifest = repo.join(format!("extensions/{name}/Cargo.toml"));
+        let manifest = repo.join(crate_dir).join("Cargo.toml");
         let output = Command::new("cargo")
             .args([
                 "metadata",
@@ -176,7 +186,6 @@ impl Stage {
             serde_json::from_slice(&output.stdout).map_err(|e| format!("cargo metadata: {e}"))?;
         let (package, dirs) = path_packages(&metadata)?;
 
-        let extension_dir = format!("extensions/{name}");
         for package_dir in &dirs {
             let rel = package_dir.strip_prefix(repo).map_err(|_| {
                 format!(
@@ -184,22 +193,18 @@ impl Stage {
                     package_dir.display()
                 )
             })?;
-            copy_package(
-                package_dir,
-                &root.join(rel),
-                rel == Path::new(&extension_dir),
-            )?;
+            copy_package(package_dir, &root.join(rel), rel == Path::new(crate_dir))?;
         }
 
         let root_manifest = std::fs::read_to_string(repo.join("Cargo.toml"))
             .map_err(|e| format!("read Cargo.toml: {e}"))?;
         let workspace = format!(
-            "[workspace]\nresolver = \"2\"\nmembers = [\"extensions/{name}\"]\n\n{}",
+            "[workspace]\nresolver = \"2\"\nmembers = [\"{crate_dir}\"]\n\n{}",
             blob_inputs::inherited_tables(&root_manifest)
         );
         std::fs::write(root.join("Cargo.toml"), workspace).map_err(|e| e.to_string())?;
         std::fs::copy(
-            repo.join(format!("extensions/{name}/Cargo.lock")),
+            repo.join(crate_dir).join("Cargo.lock"),
             root.join("Cargo.lock"),
         )
         .map_err(|e| format!("copy Cargo.lock: {e}"))?;
@@ -210,7 +215,7 @@ impl Stage {
         .map_err(|e| format!("copy rust-toolchain.toml: {e}"))?;
         Ok(Stage {
             root,
-            name,
+            crate_dir,
             package,
             repo: repo.to_path_buf(),
         })
@@ -245,7 +250,7 @@ impl Stage {
         }
         let status = command
             .status()
-            .map_err(|e| format!("spawn cargo while building builtin '{}': {e}", self.name))?;
+            .map_err(|e| format!("spawn cargo while building '{}': {e}", self.crate_dir))?;
         let blob = self
             .root
             .join(format!("target/{TARGET}/release/{artifact}"));
@@ -254,15 +259,12 @@ impl Stage {
         }
         let staged = std::fs::read_to_string(self.root.join("Cargo.lock"))
             .map_err(|e| format!("read the stage's Cargo.lock: {e}"))?;
-        let extension = std::fs::read_to_string(
-            self.repo
-                .join(format!("extensions/{}/Cargo.lock", self.name)),
-        )
-        .map_err(|e| format!("read Cargo.lock: {e}"))?;
+        let extension = std::fs::read_to_string(self.repo.join(self.crate_dir).join("Cargo.lock"))
+            .map_err(|e| format!("read Cargo.lock: {e}"))?;
         lock_subset(&staged, &extension).map_err(|package| {
             format!(
-                "the stage resolved {package} differently from extensions/{}/Cargo.lock",
-                self.name
+                "the stage resolved {package} differently from {}/Cargo.lock",
+                self.crate_dir
             )
         })?;
         Ok(blob)
@@ -283,7 +285,7 @@ fn cargo_home() -> Result<PathBuf, String> {
     std::fs::canonicalize(&home).map_err(|e| format!("cargo home {}: {e}", home.display()))
 }
 
-/// The extension's package name and the directory of each path package its build compiles
+/// The crate's package name and the directory of each path package its build compiles
 /// (normal and build dependencies, transitively), from `cargo metadata`'s output.
 fn path_packages(metadata: &Value) -> Result<(String, Vec<PathBuf>), String> {
     let packages = metadata["packages"]
@@ -330,7 +332,7 @@ fn path_packages(metadata: &Value) -> Result<(String, Vec<PathBuf>), String> {
     Ok((package, dirs.into_iter().collect()))
 }
 
-/// Copy a package into the stage without `target/` (and without `wasm/` for the extension), its
+/// Copy a package into the stage without `target/` (and without `wasm/` for the blob's own crate), its
 /// manifest without dev-dependencies. A `Cargo.toml` nested in the package (a fixture) is copied
 /// as it is.
 fn copy_package(from: &Path, to: &Path, extension: bool) -> Result<(), String> {
@@ -428,12 +430,13 @@ fn lock_subset(staged: &str, extension: &str) -> Result<(), String> {
 
 /// `--verify`: the vendored blob is what its sources build, byte for byte. A blob built by
 /// another `rustc` is built, but not compared, and that is said.
-fn verify(root: &Path, name: &'static str, artifact: &str) -> bool {
-    let vendor_dir = root.join(format!("extensions/{name}/wasm"));
+fn verify(root: &Path, committed: &CommittedBlob) -> bool {
+    let (name, artifact) = (committed.crate_dir, committed.artifact);
+    let vendor_dir = root.join(name).join("wasm");
     let record = BlobRecord::read(root, name).ok();
     let this = rustc_version();
     // Always built, so a cold clone proves every blob builds; another rustc's bytes differ.
-    let Some(built) = build(root, name, artifact, true) else {
+    let Some(built) = build(root, committed, true) else {
         return false;
     };
     if let Some(built_with) = record.as_ref().map(|r| r.built_with.as_str())
@@ -463,12 +466,15 @@ fn verify(root: &Path, name: &'static str, artifact: &str) -> bool {
     }
 }
 
-fn install(root: &Path, name: &str, artifact: &str, built: &Path) -> bool {
-    let vendor_dir = root.join(format!("extensions/{name}/wasm"));
+fn install(root: &Path, committed: &CommittedBlob, built: &Path) -> bool {
+    let (name, artifact) = (committed.crate_dir, committed.artifact);
+    let vendor_dir = root.join(name).join("wasm");
     let result = (|| -> Result<usize, String> {
         let bytes = std::fs::read(built).map_err(|e| format!("read {}: {e}", built.display()))?;
-        let stage = std::fs::canonicalize(root.join(format!("target/builtin-stage/{name}")))
-            .map_err(|e| e.to_string())?;
+        let stage = std::fs::canonicalize(
+            root.join(format!("target/builtin-stage/{}", stage_name(committed))),
+        )
+        .map_err(|e| e.to_string())?;
         let inputs = collect_inputs(root, &stage, name, &built.with_extension("d"))?;
         let count = inputs.len();
         std::fs::create_dir_all(&vendor_dir).map_err(|e| e.to_string())?;
@@ -494,8 +500,9 @@ fn install(root: &Path, name: &str, artifact: &str, built: &Path) -> bool {
     }
 }
 
-fn check(root: &Path, name: &str, artifact: &str) -> bool {
-    let vendor_dir = root.join(format!("extensions/{name}/wasm"));
+fn check(root: &Path, committed: &CommittedBlob) -> bool {
+    let (name, artifact) = (committed.crate_dir, committed.artifact);
+    let vendor_dir = root.join(name).join("wasm");
     let record = match BlobRecord::read(root, name) {
         Ok(record) => record,
         Err(e) => {
@@ -534,13 +541,13 @@ fn check(root: &Path, name: &str, artifact: &str) -> bool {
 }
 
 /// Every repo-local file rustc read for the artifact (from cargo's dep-info, taken in the
-/// stage, which mirrors the repository's layout), the manifest owning each, the extension's
+/// stage, which mirrors the repository's layout), the manifest owning each, the crate's
 /// lockfile (pins registry crates), and the root manifest tables the shared crates inherit
 /// from. Each is hashed as the repository holds it.
 fn collect_inputs(
     root: &Path,
     stage: &Path,
-    name: &str,
+    name: &str, // the crate directory
     dep_info: &Path,
 ) -> Result<BTreeMap<String, String>, String> {
     let text = std::fs::read_to_string(dep_info)
@@ -560,14 +567,14 @@ fn collect_inputs(
             keys.insert(manifest);
         }
     }
-    let own_lib = format!("extensions/{name}/src/lib.rs");
+    let own_lib = format!("{name}/src/lib.rs");
     if !keys.contains(&own_lib) {
         return Err(format!(
             "dep-info {} does not list {own_lib}; refusing to record an incomplete input set",
             dep_info.display()
         ));
     }
-    keys.insert(format!("extensions/{name}/Cargo.lock"));
+    keys.insert(format!("{name}/Cargo.lock"));
     keys.insert(WORKSPACE_INHERITED.to_string());
 
     keys.into_iter()
@@ -700,6 +707,27 @@ mod tests {
         assert_eq!(stage_key(stage, Path::new("/elsewhere/lib.rs")), None);
     }
 
+    /// The committed blobs that are builtins. The fixtures record their inputs at the round's re-vendor; the
+    /// stage builds them like the builtins, but these two lists are the builtins' (ADR 0039, 0050).
+    fn builtins() -> impl Iterator<Item = &'static CommittedBlob> {
+        COMMITTED
+            .iter()
+            .filter(|blob| blob.crate_dir.starts_with("extensions/"))
+    }
+
+    #[test]
+    fn every_stage_name_is_unique() {
+        let mut names = BTreeSet::new();
+        for blob in COMMITTED {
+            assert!(
+                names.insert(stage_name(blob)),
+                "{}: stage name {} is taken",
+                blob.name,
+                stage_name(blob)
+            );
+        }
+    }
+
     /// The crates a builtin blob compiles besides its own sources: the guest wire, the SDK and its
     /// macros, and the coverage rule (ADR 0039, 0050). A host-only module in one of them, or a new
     /// path dependency of a guest, shows here as an input outside this list.
@@ -713,10 +741,10 @@ mod tests {
     #[test]
     fn a_builtin_compiles_only_its_own_sources_and_the_guest_crates() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
-        for builtin in BUILTINS {
-            let name = builtin.dir;
+        for builtin in builtins() {
+            let name = builtin.crate_dir;
             let record = BlobRecord::read(&root, name).unwrap();
-            let own = format!("extensions/{name}/");
+            let own = format!("{name}/");
             let inputs = &record.inputs;
             for key in inputs.keys() {
                 assert!(
@@ -741,8 +769,8 @@ mod tests {
     #[test]
     fn a_builtin_compiles_no_test_code() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
-        for builtin in BUILTINS {
-            let name = builtin.dir;
+        for builtin in builtins() {
+            let name = builtin.crate_dir;
             let record = BlobRecord::read(&root, name).unwrap();
             for key in record.inputs.keys() {
                 assert_ne!(

@@ -6,7 +6,7 @@ CHECK             REACH      TRIGGER (hook, quick)
 pending-snapshots hook       always
                              no insta `.snap.new` is staged (hook) or tracked
 rustfmt           hook       **/*.rs
-                             the workspace, the nine guests and the fixtures are rustfmt-clean
+                             the workspace, the nine guests and the four fixtures (the bridge component included) are rustfmt-clean
 spec-format       hook       computed: a .spec file in a project's spec dir; the formatter, parser or grammar
                              the .spec files of every project are formatted
 grammar           hook       crates/tree-sitter-specforge/grammar.js, crates/tree-sitter-specforge/src/**
@@ -16,7 +16,7 @@ zero-entity       hook       crates/*/src/**, scripts/check-zero-entity-core.sh
 links             hook       computed: a .spec file; a test file or one with a `verify =` attribute
                              every test's verify text and entity is declared by the spec (A016, static)
 builtins          quick      computed: a file some blob's inputs.json records
-                             every builtin blob was built from the sources it recorded
+                             every committed blob was built from the sources it recorded
 guests            quick      extensions/**, crates/**, integrations/rust/**, Cargo.toml
                              each guest's tests pass and it is clippy-clean for wasm and native
 audit             quick      **/Cargo.lock
@@ -34,4 +34,4 @@ specs             quick      **/*.spec, **/specforge.json, gate/baseline.json, e
 dogfood           full       always (after tests, guests)
                              the tests' reports leave no unknown entity (W115), failing proof (A014) or undeclared obligation (A016)
 builtins-verify   bootstrap  always
-                             a cold clone rebuilds every builtin blob to the vendored bytes
+                             a cold clone rebuilds every committed blob to the vendored bytes
