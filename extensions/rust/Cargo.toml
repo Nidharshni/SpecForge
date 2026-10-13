@@ -12,3 +12,4 @@ specforge-protocol-types = { path = "../../crates/specforge-protocol-types" }
 
 [dev-dependencies]
 serde_json = "1.0"
+specforge-extension-sdk = { path = "../../crates/specforge-extension-sdk", features = ["testing"] }

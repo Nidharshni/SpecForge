@@ -116,7 +116,7 @@ pub struct HandshakeRequest {
 /// means the plugin declares no limits and the host holds it to its ceiling
 /// (`Limits::CEILING` in `specforge_wasm::sandbox`).
 /// All builtin fixtures and every SDK-built extension serialize all six
-/// fields (`ContributionsBuilder::handshake_json` never elides them).
+/// fields (`ExtensionDeclaration::handshake_json` never elides them).
 ///
 /// `starter_template` is optional metadata: the text of the starter `.spec`
 /// file `specforge init` writes for a project that enables this extension.

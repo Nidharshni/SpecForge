@@ -139,7 +139,7 @@ fn an_extension_declaring_no_policy_runs_under_the_ceiling() {
 /// as that SDK wrote it (permission fields the type no longer has).
 fn older_handshake(name: &'static str, sandbox_policy: serde_json::Value) -> WasmCallResult {
     let mut handshake: serde_json::Value =
-        serde_json::from_str(&declaring(name)().handshake_json()).unwrap();
+        serde_json::from_str(&declaring(name)().declaration().handshake_json()).unwrap();
     handshake["sandbox_policy"] = sandbox_policy;
     raw(handshake.to_string().as_bytes())
 }
