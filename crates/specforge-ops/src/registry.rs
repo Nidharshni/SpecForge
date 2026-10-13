@@ -75,6 +75,17 @@ pub struct Package {
     pub publisher: Publisher,
 }
 
+/// What a registry says it publishes as `name@version`, without its binary: the declaration it was
+/// published with (its manifest) and the SHA-256 its binary must have. Nothing here is checked against a
+/// binary or a signature: it is what a preview judges, never what is installed.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Manifest {
+    pub name: PackageName,
+    pub version: Version,
+    pub sha256: String,
+    pub declaration: ExtensionDeclaration,
+}
+
 /// How a fetch decides a package's publisher: the caller's two choices, and the key the project
 /// already records for the name. The adapter applies it (ADR 0010, 0044, 0059) and writes nothing;
 /// what it decided is the package's [`Publisher`].
@@ -302,7 +313,8 @@ pub const CONTRIBUTES: OptionTable<DeclaredCategory> = OptionTable {
     default: None,
 };
 
-/// The registry port the extension operations use. It lists a package's versions,
+/// The registry port the extension operations use. It lists a package's versions, reads one's
+/// published manifest without its binary (what a dry run judges),
 /// fetches one, pins the publisher keys a committed install accepted and publishes one; it does not resolve a requirement (ADR 0036): ops
 /// does, with [`crate::extension::resolve`]. Each call asks the one registry that
 /// serves the name (ADR 0045).
@@ -326,6 +338,11 @@ pub trait Registry {
         version: &Version,
         policy: TrustPolicy<'_>,
     ) -> Result<Package, OpError>;
+    /// `name@version`'s [`Manifest`], read from the registry that serves the name without
+    /// downloading the binary: the reply must name the package and version asked for and its manifest
+    /// must read as that package's declaration (the fetch policy's steps 1 and 3), else the fetch's
+    /// refusal. Writes nothing, asks no question and decides no publisher.
+    fn published(&self, name: &PackageName, version: &Version) -> Result<Manifest, OpError>;
     /// Pin `pins` for the user, all or none: what a committed lock plan's fetches decided. Refused
     /// with R-TRUST-006 when the pins can't be saved or the store can't be read, and nothing is
     /// saved then. Each pin that replaces another is reported as W156 by an adapter that reports.
@@ -369,6 +386,10 @@ impl Registry for Unconfigured {
     }
 
     fn fetch(&self, _: &PackageName, _: &Version, _: TrustPolicy<'_>) -> Result<Package, OpError> {
+        Err(no_registry(self.0))
+    }
+
+    fn published(&self, _: &PackageName, _: &Version) -> Result<Manifest, OpError> {
         Err(no_registry(self.0))
     }
 

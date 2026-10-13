@@ -111,9 +111,12 @@ pub(crate) struct Fetching<'a> {
     pub(crate) trust: Trust,
 }
 
-/// One install a lock plan stages: a module and the lock entry that pins it.
+/// One install a lock plan stages: a module (none for a preview's registry package, which has not
+/// been downloaded) and the lock entry that pins it.
 pub(crate) struct Install<'a> {
-    module: Module,
+    module: Option<Module>,
+    /// The SHA-256 the lock pins: the module's, or for a preview the one its registry publishes.
+    sha256: String,
     pin: Pin,
     from: From<'a>,
 }
@@ -122,6 +125,9 @@ pub(crate) struct Install<'a> {
 enum From<'a> {
     /// A `.wasm` file: loaded and checked when it was read.
     File,
+    /// A preview's registry package: judged by the declaration it was published with, never
+    /// downloaded, loaded or committed.
+    Published { registry: &'a dyn Registry },
     /// A registry: `bytes` (a copy of the module) load in `runtime` after the gate, and must
     /// declare `declaration`.
     Registry {
@@ -146,8 +152,10 @@ impl<'a> Install<'a> {
             key_id: None,
             peers: candidate.peers().to_vec(),
         };
+        let module = local.binary.into_module();
         Ok(Install {
-            module: local.binary.into_module(),
+            sha256: module.digest().to_string(),
+            module: Some(module),
             pin,
             from: From::File,
         })
@@ -164,7 +172,7 @@ impl<'a> Install<'a> {
 
     /// The module's SHA-256: what the lock pins.
     pub(crate) fn sha256(&self) -> &str {
-        self.module.digest()
+        &self.sha256
     }
 
     pub(crate) fn source(&self) -> &LockSource {
@@ -175,7 +183,7 @@ impl<'a> Install<'a> {
     pub(crate) fn publisher(&self) -> Option<&Publisher> {
         match &self.from {
             From::Registry { publisher, .. } => Some(publisher),
-            From::File => None,
+            From::File | From::Published { .. } => None,
         }
     }
 }
@@ -185,7 +193,7 @@ struct Staged<'a> {
     ask: Ask,
     name: PackageName,
     version: String,
-    module: Module,
+    module: Option<Module>,
     pin: Pin,
     from: From<'a>,
 }
@@ -196,7 +204,7 @@ impl Staged<'_> {
     fn key_pin(&self) -> Option<KeyPin> {
         match &self.from {
             From::Registry { publisher, .. } => publisher.pin(&self.name),
-            From::File => None,
+            From::File | From::Published { .. } => None,
         }
     }
 
@@ -204,7 +212,7 @@ impl Staged<'_> {
     /// local file (E027).
     fn registry(&self) -> Option<&dyn Registry> {
         match &self.from {
-            From::Registry { registry, .. } => Some(*registry),
+            From::Registry { registry, .. } | From::Published { registry } => Some(*registry),
             From::File => None,
         }
     }
@@ -219,6 +227,7 @@ impl Staged<'_> {
             ..
         } = &self.from
         else {
+            // A local file was checked when it was read; a preview loads nothing.
             return Ok(());
         };
         let binary = Installable::read(*runtime, bytes.clone())?;
@@ -298,15 +307,16 @@ impl<'a> LockPlan<'a> {
     /// `entries`. Builtins and `.wasm` file entries are read through `runtime`, as are the local
     /// files it installs and, once the gate passed, what it fetched. `installs`: whether a
     /// specifier installs; then an unreadable lock refuses here (E033), before a file is read or a
-    /// registry asked.
+    /// registry asked. A preview fetches nothing: a registry package is judged by its [`Manifest`].
     pub(crate) fn adding(
         installed: &'a Installed,
         entries: &[String],
         runtime: &'a dyn WasmRuntime,
         fetching: Fetching<'a>,
+        purpose: Purpose,
         installs: bool,
     ) -> Result<LockPlan<'a>, OpError> {
-        LockPlan::open(
+        let mut plan = LockPlan::open(
             installed,
             entries,
             Some(runtime),
@@ -315,7 +325,9 @@ impl<'a> LockPlan<'a> {
             Some(fetching),
             "add",
             installs,
-        )
+        )?;
+        plan.purpose = purpose;
+        Ok(plan)
     }
 
     /// `update`'s plan: as [`Self::adding`], never enabling; E033 for an unreadable lock.
@@ -432,8 +444,9 @@ impl<'a> LockPlan<'a> {
     /// `name` when the user has no pin of their own, nothing written. Its pin is read from the
     /// published declaration: its version and its peers, the publisher's key id, `source:
     /// registry`. Its binary is not loaded: [`Self::check`] loads it after the gate. Nothing is
-    /// pinned for the user: the publisher the fetch decided is pinned when the plan commits.
-    /// E063 when the plan fetches from no registry.
+    /// pinned for the user: the publisher the fetch decided is pinned when the plan commits. For a
+    /// preview, its [`Manifest`] only: nothing is downloaded and no publisher is decided. E063
+    /// when the plan fetches from no registry.
     pub(crate) fn fetch(
         &self,
         name: &PackageName,
@@ -442,6 +455,24 @@ impl<'a> LockPlan<'a> {
         let Some(fetching) = self.fetching else {
             return Err(crate::registry::no_registry(self.operation));
         };
+        if self.purpose == Purpose::Preview {
+            let manifest = fetching.registry.published(name, version)?;
+            let pin = Pin {
+                name: manifest.name,
+                version: manifest.version.to_string(),
+                source: LockSource::Registry,
+                key_id: None,
+                peers: manifest.declaration.peers().to_vec(),
+            };
+            return Ok(Install {
+                module: None,
+                sha256: manifest.sha256,
+                pin,
+                from: From::Published {
+                    registry: fetching.registry,
+                },
+            });
+        }
         let policy = TrustPolicy::new(fetching.allow_unsigned, fetching.trust)
             .locked(self.installed.locked_key(name));
         let mut package = fetching.registry.fetch(name, version, policy)?;
@@ -461,7 +492,8 @@ impl<'a> LockPlan<'a> {
                 publisher: package.publisher,
                 bytes: module.clone(),
             },
-            module,
+            sha256: module.digest().to_string(),
+            module: Some(module),
             pin,
         })
     }
@@ -473,11 +505,16 @@ impl<'a> LockPlan<'a> {
     /// # Panics
     /// On a plan opened with `installs: false` (it changes no lock, so it accepted any lock).
     pub(crate) fn install(&mut self, ask: Ask, install: Install<'a>) {
-        let Install { module, pin, from } = install;
+        let Install {
+            module,
+            sha256,
+            pin,
+            from,
+        } = install;
         self.lock
             .as_mut()
             .expect("a plan opened with installs: false stages no install")
-            .put(pin.entry(module.digest()));
+            .put(pin.entry(&sha256));
         if self.verb.enables() {
             self.enable(ask, pin.name.as_str());
         }
@@ -754,7 +791,7 @@ impl<'a> LockPlan<'a> {
             changes_lock: lock.is_some(),
             installs: staged
                 .into_iter()
-                .map(|staged| (staged.module, staged.pin))
+                .filter_map(|staged| staged.module.map(|module| (module, staged.pin)))
                 .collect(),
             uninstalls: uninstalled.into_iter().map(|(_, name)| name).collect(),
             disabled: disabled.into_iter().map(|(_, disabled)| disabled).collect(),
@@ -1488,9 +1525,14 @@ mod tests {
             .map(|e| e.name.to_string())
             .collect();
         match verb {
-            Verb::Install => {
-                LockPlan::adding(installed, &entries, runtime, fetching(registry), true)
-            }
+            Verb::Install => LockPlan::adding(
+                installed,
+                &entries,
+                runtime,
+                fetching(registry),
+                Purpose::Commit,
+                true,
+            ),
             Verb::Update => LockPlan::updating(installed, &entries, runtime, fetching(registry)),
             Verb::Remove => unreachable!("a removal is planned over a compiled project"),
         }
@@ -1825,8 +1867,15 @@ mod tests {
         ]);
         let runtime = runtime();
         // No entry enables `@acme/other`: it is in the lock only.
-        let mut plan =
-            LockPlan::adding(&installed, &[], &runtime, fetching(no_registry()), true).unwrap();
+        let mut plan = LockPlan::adding(
+            &installed,
+            &[],
+            &runtime,
+            fetching(no_registry()),
+            Purpose::Commit,
+            true,
+        )
+        .unwrap();
         stage(&mut plan, local(&runtime, BASE, "base.wasm"));
 
         assert!(plan.check().is_ok());
@@ -2134,8 +2183,15 @@ mod tests {
         let registry =
             MemoryRegistry::new().serving(published_probe(crate::testing::NEEDS_SOFTWARE_9));
         let entries = ["@specforge/software".to_string()];
-        let mut plan =
-            LockPlan::adding(&installed, &entries, &runtime, fetching(&registry), true).unwrap();
+        let mut plan = LockPlan::adding(
+            &installed,
+            &entries,
+            &runtime,
+            fetching(&registry),
+            Purpose::Commit,
+            true,
+        )
+        .unwrap();
         stage_fetched(
             &mut plan,
             &PackageName::parse("@probe/needs-software").unwrap(),
@@ -2208,6 +2264,7 @@ mod tests {
             &entries,
             &runtime,
             fetching(no_registry()),
+            Purpose::Commit,
             true,
         )
         .unwrap();
@@ -2231,6 +2288,7 @@ mod tests {
             &entries,
             &runtime,
             fetching(no_registry()),
+            Purpose::Commit,
             true,
         )
         .unwrap();
@@ -2267,8 +2325,15 @@ mod tests {
             declaration("@acme/app", "1.0.0", &[("@acme/base", "^2.0")]),
         ));
         let entries = ["@acme/base".to_string(), "x.wasm".to_string()];
-        let mut plan =
-            LockPlan::adding(&installed, &entries, &runtime, fetching(&registry), true).unwrap();
+        let mut plan = LockPlan::adding(
+            &installed,
+            &entries,
+            &runtime,
+            fetching(&registry),
+            Purpose::Commit,
+            true,
+        )
+        .unwrap();
         stage_fetched(
             &mut plan,
             &PackageName::parse("@acme/app").unwrap(),
@@ -2296,6 +2361,7 @@ mod tests {
             &entries,
             &runtime,
             fetching(no_registry()),
+            Purpose::Commit,
             true,
         )
         .unwrap();
@@ -2320,14 +2386,28 @@ mod tests {
         let runtime = crate::testing::probes();
 
         // A plan that only enables opens no change: the lock hides the installed extensions.
-        let mut enabling =
-            LockPlan::adding(&installed, &[], &runtime, fetching(no_registry()), false).unwrap();
+        let mut enabling = LockPlan::adding(
+            &installed,
+            &[],
+            &runtime,
+            fetching(no_registry()),
+            Purpose::Commit,
+            false,
+        )
+        .unwrap();
         enabling.enable(Ask(0), "@specforge/software");
         assert!(enabling.check().is_ok());
 
         // One that installs refuses: writing a lock would drop what it records.
-        let refused =
-            LockPlan::adding(&installed, &[], &runtime, fetching(no_registry()), true).map(drop);
+        let refused = LockPlan::adding(
+            &installed,
+            &[],
+            &runtime,
+            fetching(no_registry()),
+            Purpose::Commit,
+            true,
+        )
+        .map(drop);
         assert_eq!(refused.unwrap_err().code, "E033");
     }
 
@@ -2358,8 +2438,15 @@ mod tests {
         );
         let installed = nowhere(Vec::new());
 
-        let mut plan =
-            LockPlan::adding(&installed, &[], &runtime, fetching(no_registry()), true).unwrap();
+        let mut plan = LockPlan::adding(
+            &installed,
+            &[],
+            &runtime,
+            fetching(no_registry()),
+            Purpose::Commit,
+            true,
+        )
+        .unwrap();
         stage(&mut plan, local(&runtime, APP_NEEDS_FORMAL, "app.wasm"));
         plan.close().unwrap();
 
@@ -2381,8 +2468,15 @@ mod tests {
         assert_eq!(plan.appended().len(), 3, "idempotent");
 
         // Asked in the wrong order, a builtin still comes after the builtin it requires.
-        let mut plan =
-            LockPlan::adding(&installed, &[], &runtime, fetching(no_registry()), false).unwrap();
+        let mut plan = LockPlan::adding(
+            &installed,
+            &[],
+            &runtime,
+            fetching(no_registry()),
+            Purpose::Commit,
+            false,
+        )
+        .unwrap();
         plan.enable(Ask(0), "@specforge/formal");
         plan.enable(Ask(0), "@specforge/software");
         plan.close().unwrap();
@@ -2431,9 +2525,15 @@ mod tests {
             )
             .unwrap();
             let installed = Installed::at(dir.path());
-            let mut plan =
-                LockPlan::adding(&installed, &[], &runtime, fetching(no_registry()), false)
-                    .unwrap();
+            let mut plan = LockPlan::adding(
+                &installed,
+                &[],
+                &runtime,
+                fetching(no_registry()),
+                Purpose::Commit,
+                false,
+            )
+            .unwrap();
             for (at, name) in asked.iter().enumerate() {
                 plan.enable(Ask(at), name);
             }

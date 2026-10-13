@@ -199,6 +199,16 @@ type RegistryPackage "Registry Package" {
   verify unit "RegistryPackage is what a package that passed the fetch policy hands an operation"
 }
 
+type RegistryManifest "What a registry says it publishes as one version, without its binary" {
+  name        PackageName
+  version     string
+  /// The SHA-256 its binary must have.
+  sha256      string
+  /// The declaration it was published with (its manifest).
+  declaration ExtensionDeclaration
+  verify unit "RegistryManifest schema is valid"
+}
+
 // How a fetch decides a package's publisher (specforge_ops::registry::TrustPolicy):
 // the caller's choices and the key the project's lock records for the name,
 // which is the pin when the user has none of their own.

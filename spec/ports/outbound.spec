@@ -84,14 +84,16 @@ port Registry {
   direction outbound
   category  "io/registry"
   // What operations reach a package registry through (ADR 0010, 0036,
-  // 0044, 0045, 0059): it lists a package's versions, fetches one that
-  // passed the fetch policy, pins the publisher keys a committed install
+  // 0044, 0045, 0059): it lists a package's versions, reads one's
+  // published manifest without its binary (what a dry run judges), fetches
+  // one that passed the fetch policy, pins the publisher keys a committed install
   // accepted, and publishes one, each to the one registry that serves the
   // name. A fetch decides its publisher and writes nothing; the lock plan
   // pins what it accepted as the last step of its change. Its adapters are
   // the configured registry (production) and the in-memory registry
   // (tests); both keep one contract suite.
   method versions(name: PackageName) -> Result<string[], ExtensionError>
+  method published(name: PackageName, version: string) -> Result<RegistryManifest, ExtensionError>
   method fetch(name: PackageName, version: string, policy: TrustPolicy) -> Result<RegistryPackage, ExtensionError>
   method pin(pins: KeyPin[]) -> Result<void, ExtensionError>
   method publish(name: PackageName, version: string, wasm: u8[], declaration: ExtensionDeclaration) -> Result<RegistryPublished, ExtensionError>

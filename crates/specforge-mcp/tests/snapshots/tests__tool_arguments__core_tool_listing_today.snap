@@ -1,6 +1,5 @@
 ---
 source: crates/specforge-mcp/tests/tool_arguments.rs
-assertion_line: 17
 expression: listing
 ---
 [
@@ -3993,6 +3992,12 @@ expression: listing
                   "extension": {
                     "type": "string"
                   },
+                  "peers_enabled": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
                   "source": {
                     "type": "string"
                   },
@@ -4007,7 +4012,8 @@ expression: listing
                   "action",
                   "specifier",
                   "extension",
-                  "source"
+                  "source",
+                  "peers_enabled"
                 ],
                 "type": "object"
               },

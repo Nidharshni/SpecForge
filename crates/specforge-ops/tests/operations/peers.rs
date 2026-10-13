@@ -400,7 +400,6 @@ fn snapshot(root: &Path) -> std::collections::BTreeMap<std::path::PathBuf, Vec<u
     behavior = "add_extension_to_existing_project",
     verify = "a dry run answers what the add answers, refusals and the builtins it enables included, and writes nothing"
 )]
-#[ignore = "fixed by T4"]
 fn a_dry_run_answers_what_the_add_answers() {
     use specforge_ops::extension::{self, AddRequest, Source, Trust};
     use specforge_ops::testing::probes;

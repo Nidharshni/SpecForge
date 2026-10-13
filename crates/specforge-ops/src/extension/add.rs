@@ -1,14 +1,14 @@
 //! `specforge add` and `specforge.add_extension`.
 
 use super::candidate::LocalFile;
-use super::lock_plan::{Ask, Asked, Fetching, Install, LockPlan};
+use super::lock_plan::{Ask, Asked, Fetching, Install, LockPlan, Purpose};
 use super::{Origin, builtin_name};
 use crate::registry::{Acceptance, Publisher, Registry};
 use crate::{OpError, OpErrorKind, Writes};
 use serde::Serialize;
 use specforge_common::codes;
 use specforge_common::shape::Shape;
-use specforge_installed::{Installed, LockSource};
+use specforge_installed::Installed;
 use specforge_package::SpecifierError;
 use specforge_package::{PackageName, PackageRef};
 use specforge_wasm::WasmRuntime;
@@ -197,9 +197,10 @@ pub struct AddRequest<'a> {
     /// Accept a registry package with no publisher signature.
     pub allow_unsigned: bool,
     pub trust: Trust,
-    /// Resolve and report what the add would do; write and download nothing. An extension
-    /// already present answers as the real add would (`AlreadyPresent`, or
-    /// `Builtin { changed: false }`).
+    /// The add's lock plan judged and not committed: report what the add would do, or the refusal it
+    /// would give; write, pin and download nothing. A registry package is judged by the
+    /// declaration it was published with (its manifest). An extension already present answers as
+    /// the real add would (`AlreadyPresent`, or `Builtin { changed: false }`).
     pub dry_run: bool,
 }
 
@@ -227,11 +228,13 @@ pub enum AddOutcome {
     /// Already installed at this version (or, from a local file, with
     /// these exact bytes) and enabled: nothing changed.
     AlreadyPresent { name: String, version: String },
-    /// A dry run: what would be installed or enabled.
+    /// A dry run: what would be installed or enabled, and the required builtins that would be
+    /// enabled with it, dependencies first.
     Planned {
         name: String,
         version: Option<String>,
         origin: Origin,
+        peers_enabled: Vec<&'static str>,
     },
     /// An extension an earlier specifier of the same add names, as that one adds it: added
     /// once, by `first` (that specifier).
@@ -312,11 +315,16 @@ impl AddedExtension {
                 name,
                 version,
                 origin,
+                peers_enabled,
             } => AddResult::Planned(PlannedAdd {
                 specifier,
                 extension: name.clone(),
                 version: version.clone(),
                 source: origin.source(),
+                peers_enabled: peers_enabled
+                    .iter()
+                    .map(|peer| (*peer).to_string())
+                    .collect(),
             }),
             AddOutcome::Duplicate { name, first } => AddResult::Duplicate(DuplicateSpecifier {
                 specifier,
@@ -407,6 +415,8 @@ pub struct PlannedAdd {
     pub version: Option<String>,
     /// `builtin`, `registry` or `local:<path>`.
     pub source: String,
+    /// The required builtins the add would enable with it, dependencies first.
+    pub peers_enabled: Vec<String>,
 }
 
 /// A specifier naming an extension an earlier one of the same add names.
@@ -489,6 +499,11 @@ pub fn add(
             registry,
             allow_unsigned: req.allow_unsigned,
             trust: req.trust,
+        },
+        if req.dry_run {
+            Purpose::Preview
+        } else {
+            Purpose::Commit
         },
         req.extensions.iter().any(|e| e.source.installs()),
     )?;
@@ -626,13 +641,6 @@ impl<'a> Resolver<'_, 'a> {
                 peers_enabled: Vec::new(),
             }));
         }
-        if self.req.dry_run {
-            return Ok(Step::Unchanged(AddOutcome::Planned {
-                name: name.to_string(),
-                version: None,
-                origin: Origin::Builtin,
-            }));
-        }
         Ok(Step::Enable { name })
     }
 
@@ -648,15 +656,6 @@ impl<'a> Resolver<'_, 'a> {
             e.wasm_hash == install.sha256() && e.source.local_path().is_some()
         }) {
             return Ok(Step::Unchanged(present));
-        }
-        if self.req.dry_run {
-            return Ok(Step::Unchanged(AddOutcome::Planned {
-                name: name.to_string(),
-                version: Some(install.version().to_string()),
-                origin: Origin::Installed {
-                    source: install.source().clone(),
-                },
-            }));
         }
         Ok(Step::Local(install))
     }
@@ -686,15 +685,6 @@ impl<'a> Resolver<'_, 'a> {
             e.version == version.to_string() && e.source.is_registry()
         }) {
             return Ok(Step::Unchanged(present));
-        }
-        if self.req.dry_run {
-            return Ok(Step::Unchanged(AddOutcome::Planned {
-                name: name.to_string(),
-                version: Some(version.to_string()),
-                origin: Origin::Installed {
-                    source: LockSource::Registry,
-                },
-            }));
         }
         Ok(Step::Fetch(package.name.clone(), version))
     }
@@ -746,9 +736,26 @@ impl Wanted {
         }
     }
 
-    /// What the add did for it, given what the plan did for its ask.
-    fn outcome(self, asked: Asked) -> AddOutcome {
+    /// What the add did (or, for a dry run, would do) for it, given what the plan did for its ask.
+    fn outcome(self, asked: Asked, dry_run: bool) -> AddOutcome {
         match self {
+            Wanted::Builtin(name) if dry_run => AddOutcome::Planned {
+                name: name.to_string(),
+                version: None,
+                origin: Origin::Builtin,
+                peers_enabled: asked.peers_enabled,
+            },
+            Wanted::Package {
+                name,
+                version,
+                origin,
+                ..
+            } if dry_run => AddOutcome::Planned {
+                name,
+                version: Some(version),
+                origin,
+                peers_enabled: asked.peers_enabled,
+            },
             Wanted::Builtin(name) => AddOutcome::Builtin {
                 name,
                 changed: asked.appended,
@@ -825,7 +832,7 @@ fn apply<'a>(
         })?
         .finish(req.root.dir())?;
     for (at, wanted) in asked {
-        outcomes[at] = Some(wanted.outcome(done.asked(Ask(at))));
+        outcomes[at] = Some(wanted.outcome(done.asked(Ask(at)), req.dry_run));
     }
     Ok(Added {
         added: added(req, outcomes),
@@ -2299,8 +2306,9 @@ mod tests {
                     name: "@specforge/product".into(),
                     version: None,
                     origin: Origin::Builtin,
+                    peers_enabled: vec!["@specforge/software"],
                 },
-                serde_json::json!({"specifier": "s", "action": "planned", "extension": "@specforge/product", "source": "builtin"}),
+                serde_json::json!({"specifier": "s", "action": "planned", "extension": "@specforge/product", "source": "builtin", "peers_enabled": ["@specforge/software"]}),
             ),
         ];
         let cases = cases.into_iter().chain([(
@@ -2797,6 +2805,7 @@ mod tests {
                 name: "@specforge/product".into(),
                 version: None,
                 origin: Origin::Builtin,
+                peers_enabled: vec![],
             }
         );
         assert!(
@@ -2833,7 +2842,6 @@ mod tests {
         behavior = "add_extension_to_existing_project",
         verify = "a dry run of several specifiers previews each and writes nothing"
     )]
-    #[ignore = "fixed by T4"]
     fn a_dry_run_reports_the_builtins_it_would_enable() {
         let dir = project_with(EMPTY_PROJECT);
         let chain = serving_builtin(
@@ -2874,7 +2882,6 @@ mod tests {
         behavior = "add_extension_to_existing_project",
         verify = "a dry run judges a registry package by the declaration it was published with, downloading nothing"
     )]
-    #[ignore = "fixed by T4"]
     fn a_dry_run_judges_a_registry_package_by_its_published_declaration() {
         let published = || {
             MemoryRegistry::new()
@@ -2910,13 +2917,19 @@ mod tests {
         let registry = published();
         let dry = add(&request(true), &registry, &runtime()).unwrap_err();
         assert_eq!((dry.code, dry.message), (real.code, real.message));
+        let asked = registry.asked();
         assert!(
-            !registry
-                .asked()
+            asked.contains(&crate::registry::testing::Asked::Published(
+                PackageName::parse("@acme/app").unwrap(),
+                specforge_package::Version::new(1, 0, 0)
+            )),
+            "{asked:?}"
+        );
+        assert!(
+            !asked
                 .iter()
                 .any(|asked| matches!(asked, crate::registry::testing::Asked::Fetch(..))),
-            "a dry run downloads nothing: {:?}",
-            registry.asked()
+            "a dry run downloads nothing: {asked:?}"
         );
     }
 

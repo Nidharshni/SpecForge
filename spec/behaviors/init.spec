@@ -291,9 +291,15 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
     and locked by its own path, as publish reads it; a directory with no
     built component is E040.
     The system MUST NOT duplicate an already-installed extension.
-    A dry run reports what the add would do for each specifier and writes
-    nothing; an extension already present answers as the add would,
-    whatever its source.
+    A dry run is the add's lock plan judged and not committed: it answers
+    what the add would answer for each specifier (planned, with the
+    builtins it would enable as peers_enabled), or the refusal the add
+    would give, and writes, pins and downloads nothing. A registry
+    package is judged by the declaration it was published with (its
+    manifest, read without its binary), which is what the add's peer
+    check judges; what only the binary can fail (integrity, the publisher
+    signature, its load) is not checked. An extension already present
+    answers as the add would, whatever its source.
     The system MUST NOT modify any other field in specforge.json.
     When adding an extension, the system MUST judge, by the one peer rule
     (ADR 0041) and before anything is installed, the project's peer set as
@@ -333,9 +339,9 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
     Its JSON output is the add document specforge.add_extension answers
     (McpAddExtensionResult: added, one entry per specifier in the order
     given, each naming its specifier, its action enabled, installed,
-    already_present, planned or duplicate; no note; an enabled builtin or
-    an installed package lists the required builtins the add enabled with
-    it as peers_enabled), with the files it
+    already_present, planned or duplicate; no note; an enabled builtin,
+    an installed package or a planned one lists the required builtins the
+    add enabled with it as peers_enabled), with the files it
     wrote as files_written (empty when every extension was already
     enabled). A registry package's source is registry, and its key_id is
     present only when the package is signed.
