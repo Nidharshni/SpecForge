@@ -3010,3 +3010,24 @@ fn a_batch_naming_every_changed_path_changes_what_is_stale() {
         }
     }
 }
+
+#[specforge_test(
+    behavior = "compute_graph_delta",
+    verify = "an entity that only moved is a moved node, not a modification"
+)]
+fn an_update_lists_the_nodes_it_moved() {
+    let alpha = "behavior alpha \"A\" { contract \"a\" }\n";
+    let dir = project(CONFIG, &[("main.spec", alpha)]);
+    let root = dir.path();
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
+    assert!(session.project().graph().node("alpha").is_some());
+
+    write(root, "main.spec", &format!("\n\n\n{alpha}"));
+    let update = session.update(SourceChange::Disk(&changed(&["main.spec"])));
+
+    assert!(update.delta.is_empty());
+    assert_eq!(update.moved.len(), 1);
+    assert_eq!(update.moved[0].id, "alpha");
+    assert_eq!(update.moved[0].file, "main.spec");
+    assert_eq!(update.moved[0].line, 4);
+}

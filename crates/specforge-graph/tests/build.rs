@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use specforge_graph::{FileChange, Graph, GraphBuild, GraphConfig};
+use specforge_graph::{FileChange, Graph, GraphBuild, GraphConfig, NodeChange};
 use specforge_parser::parse;
 use specforge_test_macros::test as specforge_test;
 
@@ -304,4 +304,62 @@ fn a_format_version_header_is_a_diagnostic_of_its_file() {
     assert_eq!(applied.verification, Some(Ok(())));
     assert!(codes(&build).is_empty());
     assert!(build.file_diagnostics("a.spec").is_empty());
+}
+
+#[specforge_test(
+    behavior = "compute_graph_delta",
+    verify = "an entity that only moved is a moved node, not a modification"
+)]
+fn a_node_that_only_moved_is_listed_apart_from_the_delta() {
+    let mut build = GraphBuild::of([file("a.spec", ALPHA)], GraphConfig::default());
+
+    let applied = build.apply([parsed("a.spec", &format!("\n\n\n{ALPHA}"))]);
+
+    assert!(applied.delta.is_empty());
+    assert_eq!(
+        applied.moved,
+        [NodeChange {
+            id: "alpha".to_string(),
+            kind: "behavior".to_string(),
+            file: "a.spec".to_string(),
+            line: 4,
+        }]
+    );
+}
+
+#[specforge_test(
+    behavior = "compute_graph_delta",
+    verify = "an entity that only moved is a moved node, not a modification"
+)]
+fn a_node_moved_to_another_file_is_listed_where_it_is_now() {
+    let mut build = GraphBuild::of([file("a.spec", ALPHA)], GraphConfig::default());
+
+    let applied = build.apply([
+        FileChange::Removed("a.spec".to_string()),
+        parsed("b.spec", ALPHA),
+    ]);
+
+    assert!(applied.delta.is_empty());
+    assert_eq!(applied.moved.len(), 1);
+    assert_eq!(applied.moved[0].id, "alpha");
+    assert_eq!(applied.moved[0].file, "b.spec");
+}
+
+#[specforge_test(
+    behavior = "compute_graph_delta",
+    verify = "a change of column or content alone moves no node"
+)]
+fn a_column_or_content_change_is_no_move() {
+    let mut build = GraphBuild::of([file("a.spec", ALPHA)], GraphConfig::default());
+
+    let indented = build.apply([parsed("a.spec", &format!("  {ALPHA}"))]);
+    assert!(indented.moved.is_empty());
+
+    let edited = build.apply([parsed(
+        "a.spec",
+        "behavior alpha \"A\" { contract \"changed\" }\n",
+    )]);
+    assert!(edited.moved.is_empty());
+    assert_eq!(edited.delta.modified_nodes.len(), 1);
+    assert_eq!(edited.delta.modified_nodes[0].id, "alpha");
 }

@@ -334,6 +334,7 @@ mod tests {
                 kind,
                 inputs_changed: false,
                 delta: GraphDelta::default(),
+                moved: Vec::new(),
                 rebuilt_files: vec!["a.spec".to_string()],
                 diagnostics: Arc::from(Vec::new()),
                 previous_diagnostics: Arc::from(Vec::new()),

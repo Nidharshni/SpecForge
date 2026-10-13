@@ -4,6 +4,7 @@ pub use field_form::{FieldForm, FieldJson, ValueShape};
 mod delta;
 pub use delta::{
     EdgeChange, GraphDelta, ModifiedNodeChange, NodeAspect, NodeChange, compute_graph_delta,
+    moved_nodes,
 };
 mod derive;
 pub use derive::{DerivedFrom, DerivedReference};
