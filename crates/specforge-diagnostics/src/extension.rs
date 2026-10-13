@@ -161,7 +161,7 @@ mod tests {
             Err(CodeMisuse::NotItsCode { owner: "core", .. })
         ));
         // Another extension's catalogued code is not this one's.
-        let other = check_extension_code("@acme/squat", "W077", Level::Warning).unwrap_err();
+        let other = check_extension_code("@acme/squat", "W041", Level::Warning).unwrap_err();
         assert!(
             other.to_string().contains("@specforge/product owns"),
             "{other}"
@@ -174,7 +174,7 @@ mod tests {
     )]
     fn an_extensions_own_code_at_its_level_is_accepted() {
         assert_eq!(
-            check_extension_code("@specforge/product", "W077", Level::Warning),
+            check_extension_code("@specforge/product", "W041", Level::Warning),
             Ok(())
         );
         assert_eq!(
@@ -199,7 +199,7 @@ mod tests {
         verify = "an extension reports only its own catalogued codes, or third-party codes whose prefix states their level"
     )]
     fn an_extensions_own_code_at_another_level_is_refused() {
-        let misuse = check_extension_code("@specforge/product", "W077", Level::Error).unwrap_err();
+        let misuse = check_extension_code("@specforge/product", "W041", Level::Error).unwrap_err();
         assert_eq!(
             misuse,
             CodeMisuse::WrongLevel {

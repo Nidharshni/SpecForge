@@ -147,7 +147,7 @@ catalog! {
         "An entity block uses a kind keyword that neither the core grammar nor any installed extension declares. Install the extension that provides the keyword, or fix a typo in the kind name.";
     E025: Error core,
         "Import resolution failed",
-        "Either a `.spec` file discovery found can't be read (not UTF-8, no permission): it is named, left out of the graph, and an import of it reports nothing more; or a `use` import names no source of the project: no `.spec` file by that path under the spec root that discovery keeps. A file an `exclude` entry leaves out, one under a skipped directory (`target`, `build`, ...), one above the spec root and one whose name differs only in case are no source. Fix the import path or the `exclude` entry; a `did you mean` suggestion is included when a close match exists.";
+        "Either a `.spec` file discovery found can't be read (not UTF-8, no permission): it is named, left out of the graph, and an import of it reports nothing more; or a `use` import names no source of the project: no `.spec` file by that path under the spec root that discovery keeps. A file an `exclude` entry leaves out, one under a skipped directory (`target`, `build`, ...), one inside a nested project (a directory below the spec root holding its own `specforge.json`), one above the spec root and one whose name differs only in case are no source. Fix the import path or the `exclude` entry; a `did you mean` suggestion is included when a close match exists.";
     E026: Error core,
         "Entity kind registration conflict",
         "Two extensions register the same entity kind keyword; the first registration wins and the later one is rejected. Rename the conflicting kind keyword.";
@@ -219,7 +219,7 @@ catalog! {
         "A runner extension declares the command that runs its tests, and `specforge collect` only runs it after you approve it for the project. The approval is asked at an interactive prompt and remembered per project, extension and command, in your user-level `~/.specforge/collector-consent.json`, never in the project. Without a terminal (CI, `--format json`) nothing is asked: pass `--yes` to run the command, or `--no-run` to parse a report the runner already wrote.";
     E061: Error core,
         "Field value is not the declared type",
-        "The extension that registers a field declares its type, and the value given can't be that type. A string field takes text, a bare word, a date, a type union or an `expr { }` group; an enum one of its declared values (the suggestion names the closest one); an integer field an integer; a bool field true or false; a reference field one id; a string_list or reference_list field a list; a block field a block. Values that can be read as the declared type are converted without a diagnostic: a single string, id, integer, boolean or date on a list field becomes a one-item list, a mixed list the list of its items' text, a quoted integer or boolean the number or boolean. Fix the value, or check the field's type with `specforge schema --kind <kind>`.";
+        "The extension that registers a field declares its type, and the value given can't be that type. A string field takes text, a bare word, a date, a type union or an `expr { }` group; an enum one of its declared values (the suggestion names the closest one; the closed vocabularies the builtins declare, a feature's `status`, a failure mode's `severity`, a property's `property_type`, and the like, are enum fields); an integer field an integer; a bool field true or false; a reference field one id; a string_list or reference_list field a list; a block field a block. Values that can be read as the declared type are converted without a diagnostic: a single string, id, integer, boolean or date on a list field becomes a one-item list, a mixed list the list of its items' text, a quoted integer or boolean the number or boolean. Fix the value, or check the field's type with `specforge schema --kind <kind>`.";
     E062: Error core,
         "Token budget too small for the export",
         "`specforge export --max-tokens` (or the MCP `export` tool's `max_tokens`) keeps the most central entities that fit the budget, but some of the export never shrinks: the envelope (`format_version`, `schema_version`), the `token_budget` block listing the dropped entity IDs, and, with `--with-schema`, the embedded schema, which is never cut short. The budget is below that fixed part, so no export fits. Raise the budget, or drop `--with-schema` when the schema alone is over it.";
@@ -598,15 +598,6 @@ catalog! {
     W049: Warning product,
         "Milestone without features",
         "A `milestone` entity has no `features` field, so it may be empty. Modules listed in `modules` don't count: the check reads only `features`. List the features the milestone delivers, or remove the milestone.";
-    W050: Warning governance,
-        "Invalid decision status",
-        "A `decision` entity's `status` field is not one of the recognized values (`proposed`, `accepted`, `deprecated`, `superseded`). Set `status` to one of these values.";
-    W051: Warning governance,
-        "Invalid failure mode severity",
-        "A `failure_mode` entity's `severity` or `post_severity` field is not one of the recognized values (`critical`, `high`, `medium`, `low`). Set the field to one of these values.";
-    W052: Warning governance,
-        "Invalid failure mode occurrence",
-        "A `failure_mode` entity's `occurrence` or `post_occurrence` field is not one of the recognized values (`certain`, `likely`, `occasional`, `unlikely`, `rare`). Set the field to one of these values.";
     W053: Warning core,
         "Breaking schema change",
         "A graph protocol schema change classified as breaking since the last export: something a reader of the recorded schema relies on was removed or reshaped — a removed entity kind, edge type or field, a field added as required, a field whose type, required flag, edge type or target kind changed, an enum value lost, or an edge type that lost a source or target kind. `specforge export` compares every attribute of the schema against the one the previous export recorded in `.specforge/schema-cache.json`, bumps the major version, and names the versions in the warning; the export is still written and the cache updated. Update the agents and tools that read the export, or keep the extension versions that produced the old schema.";
@@ -622,36 +613,12 @@ catalog! {
     W061: Warning core,
         "Reference cycle detected",
         "The resolved reference graph contains a cycle among entity references. Break the cycle by removing or inverting one of the references in the reported path.";
-    W077: Warning product,
-        "Invalid feature status",
-        "A `feature` entity's `status` field is not one of the recognized values (`proposed`, `accepted`, `in_progress`, `done`, `deferred`, `deprecated`). Set `status` to one of these values.";
-    W078: Warning product,
-        "Invalid priority value",
-        "A `feature`, `journey`, `milestone`, or `constraint` entity's `priority` field is not one of the recognized values (`critical`, `high`, `medium`, `low`). Set `priority` to one of these values.";
-    W079: Warning product,
-        "Invalid milestone status",
-        "A `milestone` entity's `status` field is not one of the recognized values (`planned`, `in_progress`, `completed`, `blocked`). Set `status` to one of these values.";
-    W080: Warning product,
-        "Invalid deliverable artifact type",
-        "A `deliverable` entity's `artifact_type` field is not one of the recognized values (e.g. `cli`, `service`, `library`, `web_app`, `mobile_app`, `api`, `extension`, `documentation`, `package`). Set `artifact_type` to one of these values.";
-    W083: Warning product,
-        "Invalid persona status",
-        "A `persona` entity's `status` field is not one of the recognized values (`active`, `deprecated`). Set `status` to one of these values.";
-    W084: Warning product,
-        "Invalid channel status",
-        "A `channel` entity's `status` field is not one of the recognized values (`active`, `deprecated`). Set `status` to one of these values.";
-    W085: Warning product,
-        "Invalid deliverable status",
-        "A `deliverable` entity's `status` field is not one of the recognized values (`draft`, `in_progress`, `shipped`, `deprecated`). Set `status` to one of these values.";
     W092: Warning product,
         "Release dependency cycle",
         "Two or more `release` entities form a cycle through their `depends_on` edges. Break the cycle by removing or restructuring one of the dependency references.";
     W093: Warning product,
         "Invalid release version format",
         "A `release` entity's `version` field does not match semver format (e.g. `1.0.0`). Set `version` to a valid semver string.";
-    W095: Warning product,
-        "Invalid feature effort",
-        "A `feature` entity's `effort` field is not one of the recognized values (`xs`, `s`, `m`, `l`, `xl`). Set `effort` to one of these values.";
     W096: Warning formal,
         "Behavior requires without ensures",
         "A `behavior` entity declares a `requires` clause (an obligation on callers) but no `ensures` clause (a guarantee in return). Add an `ensures` clause describing what the behavior guarantees when its `requires` is satisfied.";
@@ -676,18 +643,12 @@ catalog! {
     W118: Warning core,
         "Invalid provider configuration",
         "A `providers` entry in `specforge.json` is missing its `alias`/`name` or `scheme` field, or no installed extension contributes providers to back a configured provider. Add the missing field, or install an extension that contributes the provider.";
-    W121: Warning governance,
-        "Invalid failure mode detection",
-        "A `failure_mode` entity's `detection` or `post_detection` field is not one of the recognized values (`certain`, `likely`, `moderate`, `unlikely`, `undetectable`). Set the field to one of these values.";
     W123: Warning formal,
         "Unreferenced property",
         "A `property` entity is not referenced by any `behavior`, so it may be unused. Reference the property from a behavior's `verify` block, or remove it if it is no longer needed.";
     W124: Warning formal,
         "Empty property description",
         "A `property` entity writes a `description` that is empty or only whitespace, which makes the temporal assertion opaque to readers and agents. Write the description, or remove the field. A property that writes no description is not reported.";
-    W125: Warning formal,
-        "Invalid property type",
-        "A `property` entity's `property_type` field is not one of the recognized values (`safety`, `liveness`, `fairness`). Set `property_type` to one of these values.";
     W126: Warning formal,
         "Unreferenced axiom",
         "An `axiom` entity is not referenced by any other entity, so it may be unused. Reference the axiom from a relevant entity, or remove it if it is no longer needed.";

@@ -45,7 +45,7 @@ This directory contains the entity model reference and design documentation for 
 | refinement | `identifier` | Abstract-to-concrete behavior mapping with condition deltas |
 | process | `identifier` | CSP-style communicating process with alphabet and composition |
 
-Provides structured conditions (inline requires/ensures/maintains fields on behaviors), specification layering, event graph linting, and coverage tracking. Conditions are inline fields that reference invariants, not standalone entities. Contributes 8 edge types (AssumedBy, Satisfies, FollowsProtocol, PropertyDependsOn, RefinesTo, RefinementChainLink, ParticipatesIn, ProcessComposition), 4 compiler passes (condition_check, layering_verify, event_graph_analyze, coverage_tracking), and formal analysis diagnostics (E031, E041, E042, W029-W031, W035, W096, W110, W123, W125, W126, W128, W131, W134; see [Diagnostic Codes](diagnostics.md)). Requires `warning_level=strict` in specforge.json.
+Provides structured conditions (inline requires/ensures/maintains fields on behaviors), specification layering, event graph linting, and coverage tracking. Conditions are inline fields that reference invariants, not standalone entities. Contributes 8 edge types (AssumedBy, Satisfies, FollowsProtocol, PropertyDependsOn, RefinesTo, RefinementChainLink, ParticipatesIn, ProcessComposition), 4 compiler passes (condition_check, layering_verify, event_graph_analyze, coverage_tracking), and formal analysis diagnostics (E031, E041, E042, W029-W031, W035, W096, W110, W123, W126, W128, W131, W134; see [Diagnostic Codes](diagnostics.md)). Requires `warning_level=strict` in specforge.json.
 
 ## Traceability Chain
 

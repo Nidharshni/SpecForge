@@ -173,7 +173,7 @@ fn context_is_smaller_than_full_json() {
     graph.add_node(rich_node());
 
     let context = crate::export(&graph, specforge_emitter::EmitFormat::Context, None);
-    let full = specforge_emitter::json::emit_json(&graph);
+    let full = crate::support::emit_json(&graph);
     assert!(
         context.len() < full.len(),
         "context ({}) should be smaller than full ({})",

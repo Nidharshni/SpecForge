@@ -7,7 +7,9 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
 use specforge_common::{Diagnostic, ProjectRoot, codes};
-use specforge_graph::{Applied, FileChange, Graph, GraphBuild, GraphConfig, compute_graph_delta};
+use specforge_graph::{
+    Applied, FileChange, Graph, GraphBuild, GraphConfig, compute_graph_delta, moved_nodes,
+};
 
 use crate::coverage::RecordedCoverage;
 use crate::snapshot::EntitySnapshot;
@@ -286,6 +288,7 @@ impl CompiledProject {
                 .map(|(path, _)| path.to_string())
                 .collect(),
             delta: compute_graph_delta(previous.graph(), self.graph()),
+            moved: moved_nodes(previous.graph(), self.graph()),
             verification: None,
         }
     }

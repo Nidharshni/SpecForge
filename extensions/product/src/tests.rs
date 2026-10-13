@@ -2,6 +2,7 @@ use crate::queries::*;
 use specforge_extension_sdk::prelude::{
     CommandFormat, CommandGraph, CommandInput, GraphEdge, GraphNode,
 };
+use specforge_extension_sdk::testing::MockHost;
 
 mod coverage_matrices;
 mod dates_and_effort;
@@ -130,15 +131,14 @@ fn an_absent_persona_or_channel_status_is_active() {
     assert_eq!(listed_channels, ["c1", "c2"]);
 }
 
-/// Pinned by plan 01 (fixed by T6, which rewrites it against
-/// `vocabulary::fields()`): every closed list filter, `priority` and `effort`
-/// are declared as the enum of the vocabulary they read, and a status filter's
-/// absent value is the declared default.
+/// Every field with a vocabulary is declared an enum of it (its absent value
+/// the default), every declared enum field is one with a vocabulary, and
+/// every closed list filter reads the same vocabulary: the filter's arg is
+/// `one_of` its values, with the help derived from the filter.
 #[specforge_test::prelude::specforge_test(
     behavior = "validate_product_vocabularies",
     verify = "every vocabulary field is declared an enum of its vocabulary, with its absent value as default, and every closed list filter reads the same vocabulary"
 )]
-#[ignore = "fixed by 01-T6"]
 fn every_vocabulary_field_is_declared_with_its_vocabulary() {
     let declaration = crate::specforge_extension_build().declaration();
     let declared = |kind: &str, field: &str| {
@@ -151,60 +151,47 @@ fn every_vocabulary_field_is_declared_with_its_vocabulary() {
             .unwrap_or_else(|| panic!("{kind}.{field} is not declared"))
             .clone()
     };
-    let kinds = [
-        &FEATURES,
-        &JOURNEYS,
-        &DELIVERABLES,
-        &MILESTONES,
-        &PERSONAS,
-        &CHANNELS,
-        &RELEASES,
-    ];
     let mut checked = 0;
-    for kind in kinds {
-        for filter in kind.filters {
-            let Some(values) = filter.values else {
-                continue;
-            };
-            let field = declared(kind.kind, filter.arg);
-            assert_eq!(field.field_type, "enum", "{}.{}", kind.kind, filter.arg);
-            assert_eq!(field.enum_values, values, "{}.{}", kind.kind, filter.arg);
-            assert_eq!(
-                field.default_value.as_deref(),
-                filter.absent_as,
-                "{}.{}",
-                kind.kind,
-                filter.arg
-            );
-            checked += 1;
-        }
-    }
-    assert_eq!(checked, 12, "twelve closed filters");
-    for (kind, field, values) in [
-        ("feature", "priority", PRIORITY),
-        ("journey", "priority", PRIORITY),
-        ("milestone", "priority", PRIORITY),
-        (
-            "feature",
-            "effort",
-            closed_values(&FEATURES, "effort").unwrap(),
-        ),
-    ] {
+    for (kind, field, vocabulary) in crate::vocabulary::fields() {
         let declared = declared(kind, field);
         assert_eq!(declared.field_type, "enum", "{kind}.{field}");
-        assert_eq!(declared.enum_values, values, "{kind}.{field}");
+        assert_eq!(declared.enum_values, vocabulary.values(), "{kind}.{field}");
+        assert_eq!(
+            declared.default_value.as_deref(),
+            vocabulary.absent(),
+            "{kind}.{field}"
+        );
+        checked += 1;
     }
-}
+    assert_eq!(checked, 13, "thirteen vocabulary fields");
+    // Both directions: an enum field the declaration holds has a vocabulary.
+    for entity in &declaration.entities {
+        let kind = entity.keyword.as_deref().unwrap();
+        for field in entity.fields.iter().filter(|f| f.field_type == "enum") {
+            assert!(
+                crate::vocabulary::of(kind, &field.name).is_some(),
+                "{kind}.{} is an enum with no vocabulary",
+                field.name
+            );
+        }
+    }
+    // The retired value rules are gone.
+    for rule in &declaration.validation_rules {
+        assert!(
+            !["W077", "W078", "W079", "W080", "W083", "W084", "W085", "W095"]
+                .contains(&rule.code.as_str()),
+            "{} is retired to E061",
+            rule.code
+        );
+    }
 
-#[test]
-fn a_closed_enum_is_the_one_its_validation_rule_checks() {
-    // Every `one_of` value constraint a product kind's field is checked
-    // against (W077, W078, ...) is the enum its list filters and sorts by,
-    // and the `one_of` its list's filter arg declares, value for value and
-    // in order; `family`'s (I062, an info) is open.
-    let rules = serde_json::json!({
-        "items": crate::specforge_extension_build().declaration().validation_rules,
-    });
+    let surfaces: serde_json::Value = serde_json::from_str(
+        &MockHost::new(crate::specforge_extension_build())
+            .describe_json("surfaces")
+            .unwrap(),
+    )
+    .unwrap();
+    let commands = surfaces["items"][0]["commands"].as_array().unwrap();
     let kinds = [
         &FEATURES,
         &JOURNEYS,
@@ -216,63 +203,6 @@ fn a_closed_enum_is_the_one_its_validation_rule_checks() {
         &CHANNELS,
         &RELEASES,
     ];
-    let surfaces: serde_json::Value = serde_json::from_str(
-        &crate::specforge_extension_build()
-            .describe_response_json("surfaces")
-            .unwrap(),
-    )
-    .unwrap();
-    let commands = surfaces["items"][0]["commands"].as_array().unwrap();
-    let mut checked = 0;
-    let mut filtered = 0;
-    for rule in rules["items"].as_array().unwrap() {
-        if rule["check"] != "field_value_constraint" || rule["constraint"]["kind"] != "one_of" {
-            continue;
-        }
-        let Some(kind) = kinds.iter().find(|k| rule["target_kind"] == k.kind) else {
-            continue;
-        };
-        let field = rule["field"].as_str().unwrap();
-        let values: Vec<&str> = rule["constraint"]["values"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|v| v.as_str().unwrap())
-            .collect();
-        let code = &rule["code"];
-        if rule["severity"] == "info" {
-            assert_eq!(closed_values(kind, field), None, "{code}: {field} is open");
-            continue;
-        }
-        assert_eq!(
-            closed_values(kind, field),
-            Some(values.as_slice()),
-            "{code}: {} {field}",
-            kind.kind
-        );
-        // A list filtering by the field declares it `one_of` those values,
-        // so the SDK refuses any other (and the CLI and MCP list them).
-        if kind.filter(field).is_some() {
-            let arg = commands
-                .iter()
-                .find(|c| c["id"] == kind.plural)
-                .and_then(|c| c["args"].as_array())
-                .and_then(|args| args.iter().find(|a| a["name"] == field))
-                .unwrap_or_else(|| panic!("{} declares no --{field}", kind.plural));
-            assert_eq!(
-                arg["arg_type"]["enum"]["values"],
-                serde_json::json!(values),
-                "{code}: {} --{field}",
-                kind.plural
-            );
-            filtered += 1;
-        }
-        checked += 1;
-    }
-    assert!(checked >= 10, "only {checked} rules checked");
-    assert!(filtered >= 9, "only {filtered} filters checked");
-    // Every closed filter, with a rule or not (a priority), and the sort
-    // order are `one_of` the values the list takes.
     let mut closed = 0;
     for kind in kinds {
         let args = commands
@@ -282,13 +212,32 @@ fn a_closed_enum_is_the_one_its_validation_rule_checks() {
             .unwrap();
         let arg = |name: &str| args.iter().find(|a| a["name"] == name).unwrap();
         for filter in kind.filters {
-            let declared = &arg(filter.arg)["arg_type"];
-            match filter.values {
-                Some(values) => {
-                    assert_eq!(declared["enum"]["values"], serde_json::json!(values));
+            let declared = arg(filter.field());
+            assert_eq!(
+                declared["description"],
+                filter.help(kind),
+                "{} --{}",
+                kind.plural,
+                filter.field()
+            );
+            match filter {
+                FilterArg::Closed(field) => {
+                    let vocabulary = kind.vocabulary(field).expect("a closed filter has one");
+                    assert_eq!(
+                        declared["arg_type"]["enum"]["values"],
+                        serde_json::json!(vocabulary.values())
+                    );
                     closed += 1;
                 }
-                None => assert_eq!(declared, "string", "{} --{}", kind.plural, filter.arg),
+                FilterArg::Open { .. } => {
+                    assert_eq!(
+                        declared["arg_type"],
+                        "string",
+                        "{} --{}",
+                        kind.plural,
+                        filter.field()
+                    )
+                }
             }
         }
         assert_eq!(
@@ -296,7 +245,7 @@ fn a_closed_enum_is_the_one_its_validation_rule_checks() {
             serde_json::json!(SORT_ORDER)
         );
     }
-    assert_eq!(closed, 12);
+    assert_eq!(closed, 12, "twelve closed filters");
 }
 
 #[test]
@@ -1905,8 +1854,8 @@ fn an_id_list_says_none_when_empty() {
 #[test]
 fn every_declared_command_answers_its_export() {
     let described: serde_json::Value = serde_json::from_str(
-        &crate::specforge_extension_build()
-            .describe_response_json("surfaces")
+        &MockHost::new(crate::specforge_extension_build())
+            .describe_json("surfaces")
             .unwrap(),
     )
     .unwrap();
@@ -2066,14 +2015,17 @@ fn fnv1a(bytes: &[u8]) -> u64 {
 ///   changed.
 /// - 40926 bytes, `0xaf70_6cd8_0efd_2f6a`: `health`'s description says "unreferenced
 ///   counts" where it said "orphan counts"; nothing else changed.
+/// - 40406 bytes, `0x918e_c4ab_1cec_3bf5`: the closed filters' help no longer lists the
+///   values (clap and MCP list them) and says what an absent value counts
+///   as; nothing else changed.
 #[test]
 fn the_surfaces_payload_is_pinned() {
-    let payload = crate::specforge_extension_build()
-        .describe_response_json("surfaces")
+    let payload = MockHost::new(crate::specforge_extension_build())
+        .describe_json("surfaces")
         .unwrap();
     assert_eq!(
         (payload.len(), fnv1a(payload.as_bytes())),
-        (40926, 0xaf70_6cd8_0efd_2f6a),
+        (40406, 0x918e_c4ab_1cec_3bf5),
         "the surfaces payload changed"
     );
 }

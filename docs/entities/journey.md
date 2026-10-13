@@ -53,7 +53,7 @@ All fields are optional at the type level.
 | `persona` | EntityId | The persona performing this journey. Must resolve to a declared entity (E003). |
 | `description` | string | Brief summary of the journey's purpose. |
 | `channels` | EntityId[] | The channel entities where this journey is available. Each must resolve to a declared entity (E003). |
-| `features` | EntityId[] | Features this journey delivers. Creates `JourneyFeature` edges. |
+| `features` | EntityId[] | Features this journey delivers. Creates `JourneyExercisesFeature` edges. |
 | `flow` | string[] | Step-by-step interaction flow describing what the user does and what the system responds. |
 | `priority` | Priority | Importance level: `critical`, `high`, `medium`, `low`. |
 | `tags` | string[] | Free-form tags for categorization. |
@@ -65,16 +65,15 @@ All fields are optional at the type level.
 
 | To | Edge Type | Meaning |
 |----|-----------|---------|
-| `feature` | `JourneyFeature` | "This UX journey delivers these features" |
-| `persona` | `JourneyPersona` | "This journey is performed by this persona" |
-| `channel` | `JourneyChannel` | "This journey uses these channels" |
-| `ref` | `links_to` | "This journey links to these external references" |
+| `feature` | `JourneyExercisesFeature` | "This journey exercises these features" (via `features` field) |
+| `persona` | `JourneyTargetsPersona` | "This journey is performed by these personas" (via `persona` field) |
+| `channel` | `JourneyUsesChannel` | "This journey uses these channels" (via `channels` field) |
 
 ### Incoming edges
 
 | From | Edge Type | Meaning |
 |------|-----------|---------|
-| `deliverable` | `DeliverableJourney` | "A deliverable ships this journey" |
+| `deliverable` | `DeliverableSupportsJourney` | "Deliverables that ship this journey" (via `journeys` field) |
 
 ## Validation Rules
 
@@ -147,11 +146,10 @@ feature user_management
 
 | Direction | Entity | Edge | Meaning |
 |-----------|--------|------|---------|
-| outgoing | [feature](feature.md) | `JourneyFeature` | Features this journey delivers |
-| outgoing | [persona](persona.md) | `JourneyPersona` | Persona performing this journey |
-| outgoing | [channel](channel.md) | `JourneyChannel` | Channels this journey uses |
-| outgoing | [ref](ref.md) | `links_to` | External references linked to this journey |
-| incoming | [deliverable](deliverable.md) | `DeliverableJourney` | Deliverables that ship this journey |
+| outgoing | [feature](feature.md) | `JourneyExercisesFeature` | Features this journey exercises |
+| outgoing | [persona](persona.md) | `JourneyTargetsPersona` | Personas this journey is performed by |
+| outgoing | [channel](channel.md) | `JourneyUsesChannel` | Channels this journey uses |
+| incoming | [deliverable](deliverable.md) | `DeliverableSupportsJourney` | Deliverables that ship this journey |
 
 ## Examples
 

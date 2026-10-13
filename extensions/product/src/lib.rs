@@ -15,6 +15,7 @@ mod lifecycle;
 mod queries;
 #[cfg(test)]
 mod tests;
+mod vocabulary;
 
 use specforge_extension_sdk::prelude::*;
 

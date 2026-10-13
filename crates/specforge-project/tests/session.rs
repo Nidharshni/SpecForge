@@ -529,6 +529,93 @@ fn excluded_files_stay_out_of_the_compile_and_the_session() {
     assert_eq!(session.project().file_count(), 1);
 }
 
+/// A project whose spec root holds a nested project (`sub`, with its own
+/// `specforge.json`) that declares what the outer project does too.
+#[specforge_test(
+    behavior = "resolve_use_imports",
+    verify = "a nested project's files are not compiled, an editor buffer of one included"
+)]
+fn a_nested_projects_files_are_not_compiled() {
+    let dir = project(
+        CONFIG,
+        &[
+            ("a.spec", "term login_flow \"Login\" {\n}\n"),
+            ("sub/specforge.json", "{}"),
+            ("sub/b.spec", "term login_flow \"Login (sub)\" {\n}\n"),
+            ("sub/c.spec", "term sub_c \"C\" {\n}\n"),
+            ("sub/d.spec", "use \"c\"\n\nterm sub_d \"D\" {\n}\n"),
+        ],
+    );
+    let root = dir.path();
+    let project_root = specforge_common::ProjectRoot::of(root).unwrap();
+
+    let compiled = CompiledProject::compile(&project_root, None);
+    let mut keys: Vec<String> = compiled.source_texts().into_keys().collect();
+    keys.sort();
+    assert_eq!(keys, ["a.spec"]);
+    let diagnostics = compiled.diagnostics();
+    let codes: Vec<&str> = diagnostics.iter().map(|d| d.code.as_str()).collect();
+    for code in ["E002", "E025", "E024"] {
+        assert!(!codes.contains(&code), "{code} in {codes:?}");
+    }
+
+    let mut session = ProjectSession::open(&project_root);
+    let held = root.join("sub/b.spec");
+    let update = session.update(SourceChange::Hold(&[Buffer::new(
+        held.to_str().unwrap(),
+        "term login_flow \"Held\" {\n}\n",
+    )]));
+    assert!(
+        update.rebuilt_files.is_empty(),
+        "{:?}",
+        update.rebuilt_files
+    );
+    assert_eq!(session.project().file_count(), 1);
+    assert!(session.project().graph().node("sub_c").is_none());
+}
+
+/// A nested project appearing below the spec root takes its files out of
+/// the session, and its removal puts them back.
+#[specforge_test(
+    behavior = "bring_session_up_to_date",
+    verify = "a nested project appearing below the spec root takes its files out of the session, and its removal puts them back"
+)]
+fn a_nested_project_appearing_takes_its_files_out_and_its_removal_puts_them_back() {
+    let bare = r#"{"name":"s","version":"0.1.0","extensions":["@specforge/software"]}"#;
+    let dir = project(
+        bare,
+        &[
+            ("a.spec", "term outer_one \"O\" {\n}\n"),
+            ("sub/c.spec", "term sub_only \"S\" {\n}\n"),
+        ],
+    );
+    let root = dir.path();
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
+    assert!(session.project().graph().node("sub_only").is_some());
+
+    write(root, "sub/specforge.json", "{}");
+    assert_eq!(session.stale().sources, ["sub/c.spec"]);
+    assert!(session.ensure_fresh().is_some());
+    assert!(session.project().graph().node("sub_only").is_none());
+    assert_matches_a_fresh_compile(&session, root);
+
+    fs::remove_file(root.join("sub/specforge.json")).unwrap();
+    assert_eq!(session.stale().sources, ["sub/c.spec"]);
+    assert!(session.ensure_fresh().is_some());
+    assert!(session.project().graph().node("sub_only").is_some());
+    assert_matches_a_fresh_compile(&session, root);
+
+    // A buffer released while the marker exists leaves the graph.
+    let path = root.join("sub/c.spec");
+    session.update(SourceChange::Hold(&[Buffer::new(
+        path.to_str().unwrap(),
+        "term sub_only \"S\" {\n}\n",
+    )]));
+    write(root, "sub/specforge.json", "{}");
+    session.release(std::slice::from_ref(&path));
+    assert!(session.project().graph().node("sub_only").is_none());
+}
+
 /// A reload picks up a changed `specforge.json`: here an extension that
 /// can't load (E028), which a fresh compile reports too.
 #[test]
@@ -3018,4 +3105,25 @@ fn a_batch_naming_every_changed_path_changes_what_is_stale() {
             assert_matches_a_fresh_compile(&session, &root);
         }
     }
+}
+
+#[specforge_test(
+    behavior = "compute_graph_delta",
+    verify = "an entity that only moved is a moved node, not a modification"
+)]
+fn an_update_lists_the_nodes_it_moved() {
+    let alpha = "behavior alpha \"A\" { contract \"a\" }\n";
+    let dir = project(CONFIG, &[("main.spec", alpha)]);
+    let root = dir.path();
+    let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(root).unwrap());
+    assert!(session.project().graph().node("alpha").is_some());
+
+    write(root, "main.spec", &format!("\n\n\n{alpha}"));
+    let update = session.update(SourceChange::Disk(&changed(&["main.spec"])));
+
+    assert!(update.delta.is_empty());
+    assert_eq!(update.moved.len(), 1);
+    assert_eq!(update.moved[0].id, "alpha");
+    assert_eq!(update.moved[0].file, "main.spec");
+    assert_eq!(update.moved[0].line, 4);
 }

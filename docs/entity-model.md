@@ -35,7 +35,7 @@ Every entity has a unique ID, compiler-checked cross-references, and a defined r
 │  @specforge/formal (5 kinds: property, axiom, protocol,      │
 │  refinement, process) · structured conditions (inline) ·     │
 │  specification layering · event graph linting · coverage     │
-│  tracking · 8 edge types · 4 compiler passes · 3 feature    │
+│  tracking · 10 edge types · 4 compiler passes · 3 feature    │
 │  flags                                                       │
 └──────────────────────────────────────────────────────────────┘
 ```
@@ -132,7 +132,7 @@ specforge extensions                    # list installed extensions
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│                    @specforge/formal (5 kinds, 8 edges)              │
+│                    @specforge/formal (5 kinds, 10 edges)             │
 ├──────────────────────────────────────────────────────────────────────┤
 │                                                                      │
 │  ┌─────────────────── Structured Conditions ──────────────────────┐  │
@@ -379,11 +379,10 @@ behavior ──enforces──→ invariant
     ▼
   event
 
-type ←──extends_type── type (inheritance)
-type / port (code bridge, with UsesType edges)
+type ←──TypeExtendsType── type (inheritance)
+behavior / port ──references──→ type (code bridge)
 
-any entity ──tested_by──→ test file
-any entity ──external_ref──→ URI
+any entity ──ExternalRef──→ URI
 ```
 
 ### Extended by @specforge/product
@@ -423,57 +422,88 @@ failure_mode ──mitigates──→ invariant (software)
 
 ## Edge Types
 
-### @specforge/software Edges (11)
+### @specforge/software Edges (15)
 
 | Edge Type | From | To | Semantics |
 |-----------|------|----|-----------|
-| `References` | any | any | General cross-reference |
-| `Implements` | behavior | feature (product) | "This behavior implements this feature" |
-| `Produces` | behavior | event | "This behavior emits these events" |
-| `Consumes` | behavior | event | "This behavior reacts to these events" |
-| `UsesType` | behavior/port/type | type | "This entity uses these type definitions" |
-| `UsesPort` | behavior | port | "This behavior uses these port interfaces" |
-| `Enforces` | behavior | invariant | "This behavior enforces these invariants" |
-| `ExtendsType` | type | type | "This type extends/composes that type" |
-| `TestedBy` | any testable | test file | "This entity is tested by these files" |
-| `ExternalRef` | any | URI | "This entity links to this external reference" |
-| `MilestoneBehavior` | milestone | behavior | Cross-extension enhancement edge |
+| `ExternalRef` | any | any | Entity references an external URI or resource |
+| `References` | any | any | General cross-reference between entities |
+| `BehaviorConsumesEvent` | behavior | event | This behavior consumes these events |
+| `BehaviorEnforcesInvariant` | behavior | invariant | This behavior enforces these invariants |
+| `BehaviorImplementsFeature` | behavior | feature | This behavior implements these features |
+| `BehaviorProducesEvent` | behavior | event | This behavior emits these events |
+| `BehaviorReferencesType` | behavior | type | This behavior uses these types |
+| `BehaviorUsesPort` | behavior | port | This behavior uses these ports |
+| `EventCarriesPayloadType` | event | type | This event has as its payload these types |
+| `MilestoneIncludesBehavior` | milestone | behavior | This milestone delivers these behaviors |
+| `ModuleConsumesPort` | module | port | This module consumes these ports |
+| `ModuleDefinesPort` | module | port | This module defines these ports |
+| `PortReferencesType` | port | type | This port references these types |
+| `TypeComposesType` | type | type | This type composes these types |
+| `TypeExtendsType` | type | type | This type extends these types |
 
-### @specforge/product Edges
-
-| Edge Type | From | To | Semantics |
-|-----------|------|----|-----------|
-| `JourneyFeature` | journey | feature | "This UX flow maps to these features" |
-| `DeliverableJourney` | deliverable | journey | "This deliverable ships these journeys" |
-| `DeliverableModule` | deliverable | module | "This deliverable uses these modules" |
-| `ModuleDependsOn` | module | module | "This module depends on that module" |
-| `ModuleFeature` | module | feature | "This module implements these features" |
-| `MilestoneFeature` | milestone | feature | "This phase schedules these features" |
-| `FeatureDependsOn` | feature | feature | "This feature depends on that feature" |
-| `JourneyPersona` | journey | persona | "This journey is performed by this persona" |
-| `JourneyChannel` | journey | channel | "This journey occurs through this channel" |
-| `MilestoneModule` | milestone | module | "This milestone includes these modules" |
-| `MilestoneDependsOn` | milestone | milestone | "This milestone depends on that milestone completing first" |
-| `TermSeeAlso` | term | term | "This term cross-references that term" |
-| `DeliverableDependsOn` | deliverable | deliverable | "This deliverable depends on that deliverable" |
-| `DeliverableMilestone` | deliverable | milestone | "This deliverable targets these milestones" |
-| `ReleaseDeliverable` | release | deliverable | "This release ships these deliverables" |
-| `ReleaseMilestone` | release | milestone | "This release targets these milestones" |
-
-### @specforge/governance Edges
+### @specforge/product Edges (20)
 
 | Edge Type | From | To | Semantics |
 |-----------|------|----|-----------|
-| `protects` | decision | invariant | "This decision protects these invariants" |
-| `constrains` | constraint | behavior/invariant | "This quality requirement applies to these entities" |
-| `mitigates` | failure_mode | invariant | "This failure mode threatens this invariant" |
+| `DeliverableContainsModule` | deliverable | module | This deliverable contains these modules |
+| `DeliverableDependsOn` | deliverable | deliverable | This deliverable depends on these deliverables |
+| `DeliverableSupportsJourney` | deliverable | journey | This deliverable ships these journeys |
+| `DeliverableTrackedByMilestone` | deliverable | milestone | This deliverable is tracked by these milestones |
+| `FeatureDependsOn` | feature | feature | This feature depends on these features |
+| `FeatureRelatesTo` | feature | feature | This feature relates to these features |
+| `JourneyExercisesFeature` | journey | feature | This journey exercises these features |
+| `JourneyTargetsPersona` | journey | persona | This journey is performed by these personas |
+| `JourneyUsesChannel` | journey | channel | This journey uses these channels |
+| `MilestoneDeliversFeature` | milestone | feature | This milestone schedules these features |
+| `MilestoneDependsOn` | milestone | milestone | This milestone depends on these milestones |
+| `MilestoneScopesModule` | milestone | module | This milestone includes these modules |
+| `ModuleContainsFeature` | module | feature | This module implements these features |
+| `ModuleDependsOn` | module | module | This module depends on these modules |
+| `PersonaPrioritizesFeature` | persona | feature | This persona prioritizes these features |
+| `ReleaseCompletesMilestone` | release | milestone | This release targets these milestones |
+| `ReleaseDependsOn` | release | release | This release depends on these releases |
+| `ReleaseIncludesDeliverable` | release | deliverable | This release ships these deliverables |
+| `TermBelongsToModule` | term | module | This term belongs to these modules |
+| `TermReferencesRelatedTerm` | term | term | This term cross-references these terms |
+
+### @specforge/governance Edges (11)
+
+| Edge Type | From | To | Semantics |
+|-----------|------|----|-----------|
+| `ConstraintConstrainsBehavior` | constraint | behavior | This constraint constrains these behaviors |
+| `ConstraintEnforcedByBehavior` | constraint | behavior | This constraint is enforced by these behaviors |
+| `ConstraintGovernsFeature` | constraint | feature | This constraint governs these features |
+| `ConstraintProtectsInvariant` | constraint | invariant | This constraint protects these invariants |
+| `DecisionAffectsFeature` | decision | feature | This decision affects these features |
+| `DecisionImposesConstraint` | decision | constraint | This decision imposes these constraints |
+| `DecisionProtectsInvariant` | decision | invariant | This decision protects these invariants |
+| `DecisionSupersedesDecision` | decision | decision | This decision supersedes these decisions |
+| `FailureModeAffectsBehavior` | failure_mode | behavior | This failure mode affects these behaviors |
+| `FailureModeTargetsInvariant` | failure_mode | invariant | This failure mode targets these invariants |
+| `FailureModeThreatensFeature` | failure_mode | feature | This failure mode threatens these features |
+
+### @specforge/formal Edges (10)
+
+| Edge Type | From | To | Semantics |
+|-----------|------|----|-----------|
+| `AxiomAssumesInvariant` | axiom | invariant | This axiom assumes these invariants |
+| `BehaviorRefinesBehavior` | behavior | behavior | This behavior refines these behaviors |
+| `BehaviorSatisfiesProperty` | behavior | property | This behavior satisfies these properties |
+| `EventFollowsProtocol` | event | protocol | This event follows these protocols |
+| `EventParticipatesInProcess` | event | process | This event participates in these processes |
+| `ProcessComposesProcess` | process | process | This process composes these processes |
+| `PropertyDependsOnInvariant` | property | invariant | This property depends on these invariants |
+| `RefinementChainsToRefinement` | refinement | refinement | This refinement chains to these refinements |
+| `RefinementRefinesAbstract` | refinement | behavior | This refinement maps from these behaviors |
+| `RefinementRefinesConcrete` | refinement | behavior | This refinement maps to these behaviors |
 
 ### Cross-Extension Edges (Soft References)
 
 | Edge Type | From | To | Semantics |
 |-----------|------|----|-----------|
-| `Implements` | behavior (software) | feature (product) | "This behavior implements this feature" — via peer_dependency |
-| `MilestoneBehavior` | milestone (product) | behavior (software) | "This milestone delivers these behaviors" — via entity_enhancement |
+| `BehaviorImplementsFeature` | behavior (software) | feature (product) | "This behavior implements this feature" — via peer_dependency |
+| `MilestoneIncludesBehavior` | milestone (product) | behavior (software) | "This milestone delivers these behaviors" — via entity_enhancement |
 
 ## Validation Rules
 

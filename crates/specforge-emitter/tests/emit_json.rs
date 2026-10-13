@@ -33,7 +33,7 @@ fn node(id: &str, kind: &str, title: Option<&str>) -> Node {
 #[specforge_test(behavior = "serialize_json_graph", verify = "output is valid JSON")]
 fn empty_graph_produces_valid_json_with_empty_arrays() {
     let graph = Graph::new();
-    let json = specforge_emitter::json::emit_json(&graph);
+    let json = crate::support::emit_json(&graph);
     let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
 
     assert_eq!(parsed["nodes"], serde_json::json!([]));
@@ -54,7 +54,7 @@ fn json_contains_all_nodes() {
     graph.add_node(node("alpha", "behavior", Some("Alpha Behavior")));
     graph.add_node(node("beta", "feature", Some("Beta Feature")));
 
-    let json = specforge_emitter::json::emit_json(&graph);
+    let json = crate::support::emit_json(&graph);
     let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
 
     let nodes = parsed["nodes"].as_array().expect("nodes is array");
@@ -84,7 +84,7 @@ fn json_contains_all_edges() {
         label: Sym::new("behaviors"),
     });
 
-    let json = specforge_emitter::json::emit_json(&graph);
+    let json = crate::support::emit_json(&graph);
     let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
 
     let edges = parsed["edges"].as_array().expect("edges is array");
@@ -101,7 +101,7 @@ fn json_contains_all_edges() {
 )]
 fn json_includes_schema_version() {
     let graph = Graph::new();
-    let json = specforge_emitter::json::emit_json(&graph);
+    let json = crate::support::emit_json(&graph);
     let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
 
     let version = parsed["schema_version"]
@@ -138,7 +138,7 @@ fn json_includes_fields() {
         methods: Vec::new(),
     });
 
-    let json = specforge_emitter::json::emit_json(&graph);
+    let json = crate::support::emit_json(&graph);
     let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
 
     let node = &parsed["nodes"].as_array().unwrap()[0];
@@ -154,7 +154,7 @@ fn json_includes_fields() {
 )]
 fn empty_graph_valid_json_with_empty_arrays() {
     let graph = Graph::new();
-    let json = specforge_emitter::json::emit_json(&graph);
+    let json = crate::support::emit_json(&graph);
     let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
 
     assert_eq!(parsed["nodes"], serde_json::json!([]));
@@ -168,7 +168,7 @@ fn empty_graph_valid_json_with_empty_arrays() {
 )]
 fn schema_included_even_for_empty_graph() {
     let graph = Graph::new();
-    let json = specforge_emitter::json::emit_json(&graph);
+    let json = crate::support::emit_json(&graph);
     let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
 
     let version = parsed["schema_version"]
@@ -188,7 +188,7 @@ fn structural_only_graph_produces_valid_json_with_raw_keywords() {
     graph.add_node(node("my_entity", "custom_kind", Some("Custom Entity")));
     graph.add_node(node("another", "unknown_type", None));
 
-    let json = specforge_emitter::json::emit_json(&graph);
+    let json = crate::support::emit_json(&graph);
     let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
 
     let nodes = parsed["nodes"].as_array().unwrap();
@@ -229,7 +229,7 @@ fn json_includes_source_location() {
         methods: Vec::new(),
     });
 
-    let json = specforge_emitter::json::emit_json(&graph);
+    let json = crate::support::emit_json(&graph);
     let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
 
     let node = &parsed["nodes"].as_array().unwrap()[0];
@@ -270,7 +270,7 @@ fn export_is_valid_json_for_a_structural_only_graph() {
     let source = "thing my_thing \"A Thing\" {\n  data \"hello\"\n}\n";
     let parsed = specforge_parser::parse(source, "test.spec");
     let (graph, _) = specforge_graph::build_graph(&[parsed]);
-    let json = specforge_emitter::json::emit_json(&graph);
+    let json = crate::support::emit_json(&graph);
     let value: serde_json::Value = serde_json::from_str(&json).unwrap();
     assert!(value.is_object());
 }
@@ -283,7 +283,7 @@ fn generic_nodes_appear_in_the_exported_graph() {
     let source = "thing my_thing \"A Thing\" {\n  data \"hello\"\n}\n";
     let parsed = specforge_parser::parse(source, "test.spec");
     let (graph, _) = specforge_graph::build_graph(&[parsed]);
-    let json = specforge_emitter::json::emit_json(&graph);
+    let json = crate::support::emit_json(&graph);
     let value: serde_json::Value = serde_json::from_str(&json).unwrap();
     let nodes = value["nodes"].as_array().unwrap();
     assert!(nodes.iter().any(|n| n["id"] == "my_thing"));
@@ -297,7 +297,7 @@ fn references_between_generic_entities_produce_edges() {
     let source = "thing a \"A\" {\n  refs [b]\n}\nthing b \"B\" {\n  data \"ok\"\n}\n";
     let parsed = specforge_parser::parse(source, "test.spec");
     let (graph, _) = specforge_graph::build_graph(&[parsed]);
-    let json = specforge_emitter::json::emit_json(&graph);
+    let json = crate::support::emit_json(&graph);
     let value: serde_json::Value = serde_json::from_str(&json).unwrap();
     let edges = value["edges"].as_array().unwrap();
     assert!(
@@ -315,7 +315,7 @@ fn exported_fields(fields: FieldMap) -> serde_json::Value {
     let mut n = node("alpha", "behavior", None);
     n.fields = fields;
     graph.add_node(n);
-    let json = specforge_emitter::json::emit_json(&graph);
+    let json = crate::support::emit_json(&graph);
     let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
     parsed["nodes"][0]["fields"].clone()
 }

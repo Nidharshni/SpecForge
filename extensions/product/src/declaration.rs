@@ -2,7 +2,13 @@
 //! The host loads exactly this (`ContributionsBuilder::declaration`);
 //! `crates/specforge-component/tests/declarations/` pins its wire form.
 
+use crate::queries::PRODUCT_KINDS;
+use crate::vocabulary::*;
 use specforge_extension_sdk::prelude::*;
+
+/// A tag: lowercase letters, digits and hyphens, 2-50 characters, not starting or ending with a hyphen.
+const TAG_FORMAT: &str =
+    "^(?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?(?:, (?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?)*$";
 
 /// Declare everything this module holds on `c`.
 pub(crate) fn declare(c: &mut ContributionsBuilder) {
@@ -39,12 +45,12 @@ fn kinds(c: &mut ContributionsBuilder) {
                 .normative();
         });
         k.field("priority", |f| {
-            f.field_type(FieldType::String)
-                .description("Importance level: critical, high, medium, or low");
+            f.vocabulary(&PRIORITY)
+                .description("Importance level");
         });
         k.field("status", |f| {
-            f.field_type(FieldType::String)
-                .description("Lifecycle state: proposed, accepted, in_progress, done, deferred, or deprecated")
+            f.vocabulary(&FEATURE_STATUS)
+                .description("Lifecycle state")
                 .headline();
         });
         k.field("acceptance", |f| {
@@ -80,8 +86,8 @@ fn kinds(c: &mut ContributionsBuilder) {
                 .description("Additional people or teams contributing to this feature");
         });
         k.field("effort", |f| {
-            f.field_type(FieldType::String)
-                .description("T-shirt size estimate: xs, s, m, l, or xl");
+            f.vocabulary(&EFFORT)
+                .description("T-shirt size estimate");
         });
         k.field("tests", |f| {
             f.field_type(FieldType::StringList)
@@ -125,8 +131,8 @@ fn kinds(c: &mut ContributionsBuilder) {
                 .description("Ordered steps the user takes through the journey");
         });
         k.field("priority", |f| {
-            f.field_type(FieldType::String)
-                .description("Importance level: critical, high, medium, or low");
+            f.vocabulary(&PRIORITY)
+                .description("Importance level");
         });
     });
     c.kind("Deliverable", |k| {
@@ -137,20 +143,20 @@ fn kinds(c: &mut ContributionsBuilder) {
             .dot_shape("box3d")
             .dot_color("#4CAF50")
             .dot_fillcolor("#E8F5E9")
-            .inference_guide("Look for independently shippable artifacts: binaries, packages, services, libraries, or documentation bundles. Signals: Cargo.toml/package.json with distinct package names; Dockerfile definitions; CI/CD deployment targets; published npm/crate packages; separate apps in a monorepo (apps/ directory); versioned API specifications. Set artifact_type (cli, service, library, web_app, api, etc.). Link modules it contains and milestones it's tracked under. Link depends_on for build or runtime dependencies between deliverables. Skip: internal modules (those are modules), test utilities, development-only tooling.")
+            .inference_guide("Look for independently shippable artifacts: binaries, packages, services, libraries, or documentation bundles. Signals: Cargo.toml/package.json with distinct package names; Dockerfile definitions; CI/CD deployment targets; published npm/crate packages; separate apps in a monorepo (apps/ directory); versioned API specifications. Set artifact_type to the kind of artifact. Link modules it contains and milestones it's tracked under. Link depends_on for build or runtime dependencies between deliverables. Skip: internal modules (those are modules), test utilities, development-only tooling.")
             .lifecycle_field("status");
         k.field("description", |f| {
             f.field_type(FieldType::String)
                 .description("Human-readable summary of the deliverable");
         });
         k.field("artifact_type", |f| {
-            f.field_type(FieldType::String)
+            f.vocabulary(&ARTIFACT_TYPE)
                 .required()
-                .description("Kind of artifact produced: cli, service, library, web_app, mobile_app, api, extension, documentation, or package");
+                .description("Kind of artifact produced");
         });
         k.field("status", |f| {
-            f.field_type(FieldType::String)
-                .description("Lifecycle state: draft, in_progress, shipped, or deprecated")
+            f.vocabulary(&DELIVERABLE_STATUS)
+                .description("Lifecycle state")
                 .headline();
         });
         k.field("journeys", |f| {
@@ -209,8 +215,8 @@ fn kinds(c: &mut ContributionsBuilder) {
                 .description("Human-readable summary of the milestone");
         });
         k.field("status", |f| {
-            f.field_type(FieldType::String)
-                .description("Lifecycle state: planned, in_progress, completed, or blocked")
+            f.vocabulary(&MILESTONE_STATUS)
+                .description("Lifecycle state")
                 .headline();
         });
         k.field("features", |f| {
@@ -248,8 +254,8 @@ fn kinds(c: &mut ContributionsBuilder) {
                 .description("Outstanding issues preventing progress on this milestone");
         });
         k.field("priority", |f| {
-            f.field_type(FieldType::String)
-                .description("Importance level: critical, high, medium, or low");
+            f.vocabulary(&PRIORITY)
+                .description("Importance level");
         });
         k.field("reason", |f| {
             f.field_type(FieldType::String)
@@ -278,8 +284,10 @@ fn kinds(c: &mut ContributionsBuilder) {
             .dot_fillcolor("#ECEFF1")
             .inference_guide("Look for logical boundaries in the codebase: bounded contexts, packages, crates, or top-level directories that group related functionality. Signals: top-level directories in src/ (e.g., src/auth/, src/billing/); Cargo workspace members; Go packages; separate npm workspaces; DDD bounded contexts; module declarations in architecture docs. Set family for higher-level grouping (e.g., 'core', 'platform', 'integration'). Link features contained in this module and depends_on for inter-module dependencies. Modules are logical groupings of features; for shippable artifacts, use deliverable instead. Skip: pure utility directories with no domain cohesion, test directories, build tooling.");
         k.field("family", |f| {
-            f.field_type(FieldType::String)
-                .description("Category or family this module belongs to");
+            f.field_type(FieldType::String).description(&format!(
+                "Category or family this module belongs to; the standard ones are {}",
+                MODULE_FAMILY.values().join(", ")
+            ));
         });
         k.field("description", |f| {
             f.field_type(FieldType::String)
@@ -354,8 +362,8 @@ fn kinds(c: &mut ContributionsBuilder) {
                 .description("Human-readable summary of this persona");
         });
         k.field("technical_level", |f| {
-            f.field_type(FieldType::String)
-                .description("Technical proficiency of this persona (e.g., beginner, intermediate, expert)");
+            f.vocabulary(&TECHNICAL_LEVEL)
+                .description("Technical proficiency of this persona");
         });
         k.field("goals", |f| {
             f.field_type(FieldType::StringList)
@@ -366,8 +374,8 @@ fn kinds(c: &mut ContributionsBuilder) {
                 .description("Frustrations or problems this persona currently faces");
         });
         k.field("status", |f| {
-            f.field_type(FieldType::String)
-                .description("Whether this persona is active or deprecated")
+            f.vocabulary(&PERSONA_STATUS)
+                .description("Lifecycle state")
                 .headline();
         });
         k.field("reason", |f| {
@@ -389,7 +397,7 @@ fn kinds(c: &mut ContributionsBuilder) {
             .dot_shape("rectangle")
             .dot_color("#00BCD4")
             .dot_fillcolor("#E0F7FA")
-            .inference_guide("Look for distinct surfaces through which users interact with the product. Signals: separate frontend applications (web app, mobile app, CLI); API endpoints exposed to external consumers; notification channels (email, push, SMS); documentation sites; IDE extensions; webhook integrations; Slack/Discord bots. Set interaction_model (sync, async, push, pull). Set url if applicable. One channel per distinct interaction surface. Skip: internal communication between services (those are ports), monitoring/alerting channels, CI/CD pipelines.")
+            .inference_guide("Look for distinct surfaces through which users interact with the product. Signals: separate frontend applications (web app, mobile app, CLI); API endpoints exposed to external consumers; notification channels (email, push, SMS); documentation sites; IDE extensions; webhook integrations; Slack/Discord bots. Set interaction_model to how users interact through it. Set url if applicable. One channel per distinct interaction surface. Skip: internal communication between services (those are ports), monitoring/alerting channels, CI/CD pipelines.")
             .lifecycle_field("status");
         k.field("description", |f| {
             f.field_type(FieldType::String)
@@ -397,16 +405,16 @@ fn kinds(c: &mut ContributionsBuilder) {
                 .description("Human-readable summary of this channel");
         });
         k.field("interaction_model", |f| {
-            f.field_type(FieldType::String)
-                .description("How users interact through this channel (e.g., sync, async, push, pull)");
+            f.vocabulary(&INTERACTION_MODEL)
+                .description("How users interact through this channel");
         });
         k.field("url", |f| {
             f.field_type(FieldType::String)
                 .description("URL or endpoint for this channel");
         });
         k.field("status", |f| {
-            f.field_type(FieldType::String)
-                .description("Whether this channel is active or deprecated")
+            f.vocabulary(&CHANNEL_STATUS)
+                .description("Lifecycle state")
                 .headline();
         });
         k.field("reason", |f| {
@@ -434,7 +442,7 @@ fn kinds(c: &mut ContributionsBuilder) {
                 .description("Semantic version identifier for this release");
         });
         k.field("status", |f| {
-            f.field_type(FieldType::String)
+            f.vocabulary(&RELEASE_STATUS)
                 .description("Lifecycle state of the release")
                 .headline();
         });
@@ -621,136 +629,6 @@ fn shared_fields(c: &mut ContributionsBuilder) {
 }
 
 fn rules(c: &mut ContributionsBuilder) {
-    c.rule("W077", |r| {
-        r.check(CheckKind::FieldValueConstraint)
-            .severity(ValidationSeverity::Warning)
-            .message_template("feature '{id}' has invalid status '{value}' — expected one of: proposed, accepted, in_progress, done, deferred, deprecated")
-            .target_kind("feature")
-            .field("status");
-        r.constraint(|fc| {
-            fc.kind(ConstraintKind::OneOf)
-                .values(&["proposed", "accepted", "in_progress", "done", "deferred", "deprecated"]);
-        });
-    });
-    c.rule("W078", |r| {
-        r.check(CheckKind::FieldValueConstraint)
-            .severity(ValidationSeverity::Warning)
-            .message_template("{kind} '{id}' has invalid priority '{value}' — expected one of: critical, high, medium, low")
-            .target_kind("feature")
-            .field("priority");
-        r.constraint(|fc| {
-            fc.kind(ConstraintKind::OneOf)
-                .values(&["critical", "high", "medium", "low"]);
-        });
-    });
-    c.rule("W078", |r| {
-        r.check(CheckKind::FieldValueConstraint)
-            .severity(ValidationSeverity::Warning)
-            .message_template("{kind} '{id}' has invalid priority '{value}' — expected one of: critical, high, medium, low")
-            .target_kind("journey")
-            .field("priority");
-        r.constraint(|fc| {
-            fc.kind(ConstraintKind::OneOf)
-                .values(&["critical", "high", "medium", "low"]);
-        });
-    });
-    c.rule("W078", |r| {
-        r.check(CheckKind::FieldValueConstraint)
-            .severity(ValidationSeverity::Warning)
-            .message_template("{kind} '{id}' has invalid priority '{value}' — expected one of: critical, high, medium, low")
-            .target_kind("milestone")
-            .field("priority");
-        r.constraint(|fc| {
-            fc.kind(ConstraintKind::OneOf)
-                .values(&["critical", "high", "medium", "low"]);
-        });
-    });
-    c.rule("W078", |r| {
-        r.check(CheckKind::FieldValueConstraint)
-            .severity(ValidationSeverity::Warning)
-            .message_template("{kind} '{id}' has invalid priority '{value}' — expected one of: critical, high, medium, low")
-            // `constraint` is governance's kind: product works without
-            // governance, so it names the extension instead of peering on it.
-            .target_kind("constraint")
-            .target_extension("@specforge/governance")
-            .field("priority");
-        r.constraint(|fc| {
-            fc.kind(ConstraintKind::OneOf)
-                .values(&["critical", "high", "medium", "low"]);
-        });
-    });
-    c.rule("W079", |r| {
-        r.check(CheckKind::FieldValueConstraint)
-            .severity(ValidationSeverity::Warning)
-            .message_template("milestone '{id}' has invalid status '{value}' — expected one of: planned, in_progress, completed, blocked")
-            .target_kind("milestone")
-            .field("status");
-        r.constraint(|fc| {
-            fc.kind(ConstraintKind::OneOf)
-                .values(&["planned", "in_progress", "completed", "blocked"]);
-        });
-    });
-    c.rule("W080", |r| {
-        r.check(CheckKind::FieldValueConstraint)
-            .severity(ValidationSeverity::Warning)
-            .message_template("deliverable '{id}' has invalid artifact_type '{value}' — expected one of: cli, service, library, web_app, mobile_app, api, extension, documentation, package")
-            .target_kind("deliverable")
-            .field("artifact_type");
-        r.constraint(|fc| {
-            fc.kind(ConstraintKind::OneOf)
-                .values(&["cli", "service", "library", "web_app", "mobile_app", "api", "extension", "documentation", "package"]);
-        });
-    });
-    c.rule("W083", |r| {
-        r.check(CheckKind::FieldValueConstraint)
-            .severity(ValidationSeverity::Warning)
-            .message_template(
-                "persona '{id}' has invalid status '{value}' — expected one of: active, deprecated",
-            )
-            .target_kind("persona")
-            .field("status");
-        r.constraint(|fc| {
-            fc.kind(ConstraintKind::OneOf)
-                .values(&["active", "deprecated"]);
-        });
-    });
-    c.rule("W084", |r| {
-        r.check(CheckKind::FieldValueConstraint)
-            .severity(ValidationSeverity::Warning)
-            .message_template(
-                "channel '{id}' has invalid status '{value}' — expected one of: active, deprecated",
-            )
-            .target_kind("channel")
-            .field("status");
-        r.constraint(|fc| {
-            fc.kind(ConstraintKind::OneOf)
-                .values(&["active", "deprecated"]);
-        });
-    });
-    c.rule("W085", |r| {
-        r.check(CheckKind::FieldValueConstraint)
-            .severity(ValidationSeverity::Warning)
-            .message_template("deliverable '{id}' has invalid status '{value}' — expected one of: draft, in_progress, shipped, deprecated")
-            .target_kind("deliverable")
-            .field("status");
-        r.constraint(|fc| {
-            fc.kind(ConstraintKind::OneOf)
-                .values(&["draft", "in_progress", "shipped", "deprecated"]);
-        });
-    });
-    c.rule("W095", |r| {
-        r.check(CheckKind::FieldValueConstraint)
-            .severity(ValidationSeverity::Warning)
-            .message_template(
-                "feature '{id}' has invalid effort '{value}' — expected one of: xs, s, m, l, xl",
-            )
-            .target_kind("feature")
-            .field("effort");
-        r.constraint(|fc| {
-            fc.kind(ConstraintKind::OneOf)
-                .values(&["xs", "s", "m", "l", "xl"]);
-        });
-    });
     c.rule("W041", |r| {
         r.check(CheckKind::NoIncomingEdges)
             .severity(ValidationSeverity::Warning)
@@ -854,12 +732,14 @@ fn rules(c: &mut ContributionsBuilder) {
     c.rule("I062", |r| {
         r.check(CheckKind::FieldValueConstraint)
             .severity(ValidationSeverity::Info)
-            .message_template("module '{id}' has non-standard family '{value}' — standard families: core, platform, extension, integration, advisory")
+            .message_template(
+                "module '{id}' has non-standard family '{value}' — standard families: {allowed}",
+            )
             .target_kind("module")
             .field("family");
         r.constraint(|fc| {
             fc.kind(ConstraintKind::OneOf)
-                .values(&["core", "platform", "extension", "integration", "advisory"]);
+                .values(MODULE_FAMILY.values());
         });
     });
     c.rule("I053", |r| {
@@ -894,105 +774,19 @@ fn rules(c: &mut ContributionsBuilder) {
             fc.kind(ConstraintKind::NonEmpty);
         });
     });
-    c.rule("I068", |r| {
-        r.check(CheckKind::FieldValueConstraint)
-            .severity(ValidationSeverity::Info)
-            .message_template("{kind} '{id}' has a tag that is not lowercase-hyphenated (2-50 of a-z, 0-9, -, not starting or ending with -): tags [{value}]")
-            .target_kind("feature")
-            .field("tags");
-        r.constraint(|fc| {
-            fc.kind(ConstraintKind::Matches)
-                .pattern("^(?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?(?:, (?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?)*$");
+    // One declaration per product kind, the same pattern for each.
+    for kind in PRODUCT_KINDS {
+        c.rule("I068", |r| {
+            r.check(CheckKind::FieldValueConstraint)
+                .severity(ValidationSeverity::Info)
+                .message_template("{kind} '{id}' has a tag that is not lowercase-hyphenated (2-50 of a-z, 0-9, -, not starting or ending with -): tags [{value}]")
+                .target_kind(kind)
+                .field("tags");
+            r.constraint(|fc| {
+                fc.kind(ConstraintKind::Matches).pattern(TAG_FORMAT);
+            });
         });
-    });
-    c.rule("I068", |r| {
-        r.check(CheckKind::FieldValueConstraint)
-            .severity(ValidationSeverity::Info)
-            .message_template("{kind} '{id}' has a tag that is not lowercase-hyphenated (2-50 of a-z, 0-9, -, not starting or ending with -): tags [{value}]")
-            .target_kind("journey")
-            .field("tags");
-        r.constraint(|fc| {
-            fc.kind(ConstraintKind::Matches)
-                .pattern("^(?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?(?:, (?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?)*$");
-        });
-    });
-    c.rule("I068", |r| {
-        r.check(CheckKind::FieldValueConstraint)
-            .severity(ValidationSeverity::Info)
-            .message_template("{kind} '{id}' has a tag that is not lowercase-hyphenated (2-50 of a-z, 0-9, -, not starting or ending with -): tags [{value}]")
-            .target_kind("deliverable")
-            .field("tags");
-        r.constraint(|fc| {
-            fc.kind(ConstraintKind::Matches)
-                .pattern("^(?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?(?:, (?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?)*$");
-        });
-    });
-    c.rule("I068", |r| {
-        r.check(CheckKind::FieldValueConstraint)
-            .severity(ValidationSeverity::Info)
-            .message_template("{kind} '{id}' has a tag that is not lowercase-hyphenated (2-50 of a-z, 0-9, -, not starting or ending with -): tags [{value}]")
-            .target_kind("milestone")
-            .field("tags");
-        r.constraint(|fc| {
-            fc.kind(ConstraintKind::Matches)
-                .pattern("^(?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?(?:, (?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?)*$");
-        });
-    });
-    c.rule("I068", |r| {
-        r.check(CheckKind::FieldValueConstraint)
-            .severity(ValidationSeverity::Info)
-            .message_template("{kind} '{id}' has a tag that is not lowercase-hyphenated (2-50 of a-z, 0-9, -, not starting or ending with -): tags [{value}]")
-            .target_kind("module")
-            .field("tags");
-        r.constraint(|fc| {
-            fc.kind(ConstraintKind::Matches)
-                .pattern("^(?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?(?:, (?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?)*$");
-        });
-    });
-    c.rule("I068", |r| {
-        r.check(CheckKind::FieldValueConstraint)
-            .severity(ValidationSeverity::Info)
-            .message_template("{kind} '{id}' has a tag that is not lowercase-hyphenated (2-50 of a-z, 0-9, -, not starting or ending with -): tags [{value}]")
-            .target_kind("term")
-            .field("tags");
-        r.constraint(|fc| {
-            fc.kind(ConstraintKind::Matches)
-                .pattern("^(?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?(?:, (?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?)*$");
-        });
-    });
-    c.rule("I068", |r| {
-        r.check(CheckKind::FieldValueConstraint)
-            .severity(ValidationSeverity::Info)
-            .message_template("{kind} '{id}' has a tag that is not lowercase-hyphenated (2-50 of a-z, 0-9, -, not starting or ending with -): tags [{value}]")
-            .target_kind("persona")
-            .field("tags");
-        r.constraint(|fc| {
-            fc.kind(ConstraintKind::Matches)
-                .pattern("^(?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?(?:, (?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?)*$");
-        });
-    });
-    c.rule("I068", |r| {
-        r.check(CheckKind::FieldValueConstraint)
-            .severity(ValidationSeverity::Info)
-            .message_template("{kind} '{id}' has a tag that is not lowercase-hyphenated (2-50 of a-z, 0-9, -, not starting or ending with -): tags [{value}]")
-            .target_kind("channel")
-            .field("tags");
-        r.constraint(|fc| {
-            fc.kind(ConstraintKind::Matches)
-                .pattern("^(?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?(?:, (?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?)*$");
-        });
-    });
-    c.rule("I068", |r| {
-        r.check(CheckKind::FieldValueConstraint)
-            .severity(ValidationSeverity::Info)
-            .message_template("{kind} '{id}' has a tag that is not lowercase-hyphenated (2-50 of a-z, 0-9, -, not starting or ending with -): tags [{value}]")
-            .target_kind("release")
-            .field("tags");
-        r.constraint(|fc| {
-            fc.kind(ConstraintKind::Matches)
-                .pattern("^(?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?(?:, (?:[a-z0-9][a-z0-9-]{0,48}[a-z0-9])?)*$");
-        });
-    });
+    }
     c.rule("I086", |r| {
         r.check(CheckKind::FieldValueConstraint)
             .severity(ValidationSeverity::Info)
@@ -1031,7 +825,7 @@ fn rules(c: &mut ContributionsBuilder) {
         r.constraint(|fc| {
             fc.kind(ConstraintKind::WhenFieldEquals)
                 .pattern("status")
-                .values(&["deferred"]);
+                .values(&[FEATURE_DEFERRED]);
         });
     });
     c.rule("W057", |r| {
@@ -1043,7 +837,7 @@ fn rules(c: &mut ContributionsBuilder) {
         r.constraint(|fc| {
             fc.kind(ConstraintKind::WhenFieldEquals)
                 .pattern("status")
-                .values(&["completed"]);
+                .values(&[MILESTONE_COMPLETED]);
         });
     });
     c.rule("I060", |r| {
@@ -1055,7 +849,7 @@ fn rules(c: &mut ContributionsBuilder) {
         r.constraint(|fc| {
             fc.kind(ConstraintKind::WhenFieldEquals)
                 .pattern("status")
-                .values(&["blocked"]);
+                .values(&[MILESTONE_BLOCKED]);
         });
     });
     c.rule("I066", |r| {
@@ -1067,7 +861,7 @@ fn rules(c: &mut ContributionsBuilder) {
         r.constraint(|fc| {
             fc.kind(ConstraintKind::WhenFieldEquals)
                 .pattern("status")
-                .values(&["deprecated"]);
+                .values(&[DELIVERABLE_DEPRECATED]);
         });
     });
     c.rule("I069", |r| {
@@ -1079,7 +873,7 @@ fn rules(c: &mut ContributionsBuilder) {
         r.constraint(|fc| {
             fc.kind(ConstraintKind::WhenFieldEquals)
                 .pattern("status")
-                .values(&["deprecated"]);
+                .values(&[PERSONA_DEPRECATED]);
         });
     });
     c.rule("I070", |r| {
@@ -1091,7 +885,7 @@ fn rules(c: &mut ContributionsBuilder) {
         r.constraint(|fc| {
             fc.kind(ConstraintKind::WhenFieldEquals)
                 .pattern("status")
-                .values(&["deprecated"]);
+                .values(&[CHANNEL_DEPRECATED]);
         });
     });
     c.rule("I057", |r| {
@@ -1103,7 +897,7 @@ fn rules(c: &mut ContributionsBuilder) {
         r.constraint(|fc| {
             fc.kind(ConstraintKind::WhenFieldEquals)
                 .pattern("status")
-                .values(&["blocked"]);
+                .values(&[MILESTONE_BLOCKED]);
         });
     });
     c.rule("I089", |r| {
@@ -1115,7 +909,7 @@ fn rules(c: &mut ContributionsBuilder) {
         r.constraint(|fc| {
             fc.kind(ConstraintKind::WhenFieldEquals)
                 .pattern("status")
-                .values(&["recalled"]);
+                .values(&[RELEASE_RECALLED]);
         });
     });
     c.rule("W043", |r| {
@@ -1174,34 +968,15 @@ fn rules(c: &mut ContributionsBuilder) {
             .target_kind("journey")
             .field("persona");
     });
-    c.rule("I080", |r| {
-        r.check(CheckKind::MissingRequiredField)
-            .severity(ValidationSeverity::Info)
-            .message_template("{kind} '{id}' has no owner")
-            .target_kind("feature")
-            .field("owner");
-    });
-    c.rule("I080", |r| {
-        r.check(CheckKind::MissingRequiredField)
-            .severity(ValidationSeverity::Info)
-            .message_template("{kind} '{id}' has no owner")
-            .target_kind("milestone")
-            .field("owner");
-    });
-    c.rule("I080", |r| {
-        r.check(CheckKind::MissingRequiredField)
-            .severity(ValidationSeverity::Info)
-            .message_template("{kind} '{id}' has no owner")
-            .target_kind("deliverable")
-            .field("owner");
-    });
-    c.rule("I080", |r| {
-        r.check(CheckKind::MissingRequiredField)
-            .severity(ValidationSeverity::Info)
-            .message_template("{kind} '{id}' has no owner")
-            .target_kind("release")
-            .field("owner");
-    });
+    for kind in ["feature", "milestone", "deliverable", "release"] {
+        c.rule("I080", |r| {
+            r.check(CheckKind::MissingRequiredField)
+                .severity(ValidationSeverity::Info)
+                .message_template("{kind} '{id}' has no owner")
+                .target_kind(kind)
+                .field("owner");
+        });
+    }
     c.rule("I081", |r| {
         r.check(CheckKind::MissingRequiredField)
             .severity(ValidationSeverity::Info)

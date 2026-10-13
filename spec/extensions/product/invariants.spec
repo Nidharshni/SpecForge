@@ -294,10 +294,10 @@ invariant pe_effort_weighted_completion "Effort-Weighted Completion" {
 invariant pe_effort_enum_validity "Effort Enum Validity" {
   guarantee """
     The effort field on features MUST contain a valid Effort enum
-    value (xs, s, m, l, xl). Invalid values produce W095.
+    value (xs, s, m, l, xl). Another value is E061.
   """
   risk      low
-  verify unit "invalid effort value produces W095"
+  verify unit "invalid effort value produces E061"
 }
 
 // ════════════════════════════════════════════════════════════════

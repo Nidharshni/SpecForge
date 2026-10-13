@@ -72,11 +72,11 @@ behavior pe_register_effort_field "Register Effort Field" {
   category command
   types    [Effort]
   contract """
-    The @specforge/product extension MUST register effort (string @optional)
-    on the feature entity kind; rule W095 restricts it to xs, s, m, l, xl.
+    The @specforge/product extension MUST register effort (an optional enum of
+    Effort) on the feature entity kind.
   """
   ensures {
-    effort_on_feature "FieldRegistry contains effort:string @optional for kind=feature"
+    effort_on_feature "FieldRegistry contains effort:enum (xs, s, m, l, xl) @optional for kind=feature"
   }
   verify unit "effort field is registered on feature kind"
 }

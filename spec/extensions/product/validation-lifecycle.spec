@@ -27,7 +27,7 @@ use "types/graph"
 // that want transition validation commit the cache file; pipelines
 // that want stateless builds simply omit it.
 //
-// Without cache: only enum validity is checked (W077-W080, W083-W085).
+// Without cache: only vocabulary validity is checked (E061).
 // With cache: transition validity is additionally checked (W087-W091).
 // ════════════════════════════════════════════════════════════════
 
@@ -47,7 +47,7 @@ behavior validate_feature_status_transition "Validate Feature Status Transition"
     Transition detection requires an explicit build cache file
     (specforge-cache.json) as a declared compiler input. The cache records
     entity statuses from the previous build. When no cache exists,
-    W087 is suppressed entirely — only enum validity (W077) is checked.
+    W087 is suppressed entirely — only vocabulary validity (E061) is checked.
   """
   ensures {
     fires_on_invalid    "feature transitioning to an unreachable status produces W087"

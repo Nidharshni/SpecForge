@@ -22,7 +22,7 @@ Deliverables have individual versions and statuses, but multiple deliverables of
 |-------|------|----------|-------------|
 | `description` | string | no | What this release delivers |
 | `version` | string | no | SemVer 2.0.0 version (W093 if non-conforming) |
-| `status` | ReleaseStatus | no | planned, in_progress, released, recalled |
+| `status` | ReleaseStatus | no | planned, in_progress, released, recalled; absent: planned; another value is E061 |
 | `deliverables` | EntityId[] | no | Deliverables shipping in this release |
 | `milestones` | EntityId[] | no | Milestones targeted by this release |
 | `release_date` | string | no | ISO 8601 date YYYY-MM-DD (not validated) |
@@ -37,10 +37,11 @@ Deliverables have individual versions and statuses, but multiple deliverables of
 
 ### Outgoing edges
 
-| Edge type | Target | Field | Description |
-|-----------|--------|-------|-------------|
-| `ReleaseDeliverable` | deliverable | `deliverables` | Ships this deliverable |
-| `ReleaseMilestone` | milestone | `milestones` | Targets this milestone |
+| To | Edge Type | Meaning |
+|----|-----------|---------|
+| `milestone` | `ReleaseCompletesMilestone` | "This release targets these milestones" (via `milestones` field) |
+| `release` | `ReleaseDependsOn` | "This release depends on these releases" (via `depends_on` field) |
+| `deliverable` | `ReleaseIncludesDeliverable` | "This release ships these deliverables" (via `deliverables` field) |
 
 ### Incoming edges
 

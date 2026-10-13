@@ -82,8 +82,9 @@ impl CoreTool for Tool {
         };
         let outcome = init::init(&request, runtime.as_ref()).map_err(Self::failed)?;
         let reply = outcome.document();
-        // With no project served, the server serves the one it created (ADR
-        // 0014 D5): `mutation::complete` does, once it wrote.
+        // In a handshake session with no project served, the server serves
+        // the one it created (ADR 0014 D5): `mutation::complete` does, once
+        // it wrote; a stateless request serves nothing it names.
         let event = MutationEvent::ProjectInitialized(ProjectInitialized {
             project_name: outcome.name.clone(),
             extension_count: outcome.extensions.len(),

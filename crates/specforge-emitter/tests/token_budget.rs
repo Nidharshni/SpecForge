@@ -254,10 +254,7 @@ fn no_max_tokens_skips_budget_enforcement() {
         );
     }
     // Unbudgeted graph export is the plain full export.
-    assert_eq!(
-        export(Json, None),
-        specforge_emitter::json::emit_json(&graph)
-    );
+    assert_eq!(export(Json, None), crate::support::emit_json(&graph));
 }
 
 // B:enforce_token_budget — verify unit "truncated_entities lists omitted entity IDs"

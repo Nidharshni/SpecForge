@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use specforge_common::{Diagnostic, ProjectConfig, ProjectRoot, read_project_config};
-use specforge_graph::{Applied, GraphDelta};
+use specforge_graph::{Applied, GraphDelta, NodeChange};
 
 use crate::buffers::{Buffer, Held};
 use crate::compiled::CompiledProject;
@@ -87,6 +87,10 @@ pub struct Update {
     /// adapter watches must follow [`ProjectSession::inputs`] (ADR 0030).
     pub inputs_changed: bool,
     pub delta: GraphDelta,
+    /// The nodes the update moved: [`Applied::moved`]. A move changes no
+    /// graph fact, so the delta does not list it; it changes what the graph
+    /// documents write.
+    pub moved: Vec<NodeChange>,
     /// The files re-parsed or dropped: exactly the changed ones (sorted).
     pub rebuilt_files: Vec<String>,
     /// Everything the session reports now ([`CompiledProject::diagnostics`],
@@ -114,12 +118,14 @@ impl Update {
         let Applied {
             files,
             delta,
+            moved,
             verification,
         } = applied;
         Update {
             kind,
             inputs_changed,
             delta,
+            moved,
             rebuilt_files: files,
             diagnostics,
             previous_diagnostics,
@@ -305,9 +311,10 @@ impl ProjectSession {
 
     /// Apply a change to the project's sources, then run every check. An
     /// update that changes no file runs no check (unless the checks were
-    /// skipped since they last ran: then it runs them). Files discovery
-    /// would not find (an `exclude` entry, a skipped directory, not `.spec`)
-    /// are ignored.
+    /// skipped since they last ran: then it runs them). A changed path that is
+    /// no source (an `exclude` entry, a skipped directory, not `.spec`,
+    /// inside a nested project) changes nothing, unless the project holds
+    /// it: then it leaves the graph.
     pub fn update(&mut self, change: SourceChange<'_>) -> Update {
         self.update_with(change, CheckMode::Full)
     }
@@ -317,19 +324,19 @@ impl ProjectSession {
         let mut moved = false;
         let reads: Vec<(String, Read)> = match change {
             SourceChange::Disk(paths) => {
-                let mut keys: Vec<String> = paths
-                    .iter()
-                    .filter(|path| !self.excludes(path))
-                    .cloned()
-                    .collect();
+                let mut keys: Vec<String> = paths.to_vec();
                 self.held.leave_out(&mut keys);
                 // Stamped before they are read again (crate::freshness).
                 self.snapshot.stamp_sources(&self.inputs, &keys);
                 moved = self.relink(&keys);
                 keys.into_iter()
                     .map(|key| {
-                        let read = self.project.read_source(&key);
+                        let read = self.read_disk(&key);
                         (key, read)
+                    })
+                    // A key that is no source and never was changes nothing.
+                    .filter(|(key, read)| {
+                        !(matches!(read, Read::Gone) && self.project.is_current(key, read))
                     })
                     .collect()
             }
@@ -349,6 +356,17 @@ impl ProjectSession {
         self.applied(reads, mode, moved)
     }
 
+    /// What `key` is on disk to this session: its file's read, or gone when
+    /// it is no source (an `exclude` entry, a skipped directory, or a nested
+    /// project took it since it was read).
+    fn read_disk(&self, key: &str) -> Read {
+        if self.excludes(key) {
+            Read::Gone
+        } else {
+            self.project.read_source(key)
+        }
+    }
+
     /// Read the links of `keys` again: whether the session's inputs moved
     /// (a source became or stopped being a symlink, or points elsewhere).
     fn relink(&mut self, keys: &[String]) -> bool {
@@ -361,8 +379,9 @@ impl ProjectSession {
     /// The editor no longer holds the buffers of `paths` (absolute): each
     /// file is the disk's again. A project source is stamped, then read
     /// through the session's one read: its text, its E025, or gone. Any
-    /// other file (outside the spec root, excluded, not `.spec`) was never
-    /// built and changes nothing. With no project the buffer was the file's
+    /// other file (outside the spec root, excluded, not `.spec`, inside a
+    /// nested project) was never built and changes nothing, unless the
+    /// project holds it (a nested project took it since): then it leaves. With no project the buffer was the file's
     /// only text, so the file leaves. One update for all of them. `None`
     /// when none changed (each source's disk text is the text the session
     /// built it from) and the checks are current: a release after the
@@ -376,16 +395,13 @@ impl ProjectSession {
             let read = if self.inputs.root().is_none() {
                 // No project: the buffer was the file's only text.
                 Read::Gone
-            } else if self.excludes(&key) {
-                // Never built: nothing to give back.
-                continue;
             } else {
                 // Stamped before it is read (crate::freshness): a saved
                 // buffer leaves nothing stale.
                 self.snapshot
                     .stamp_sources(&self.inputs, std::slice::from_ref(&key));
                 moved |= self.relink(std::slice::from_ref(&key));
-                self.project.read_source(&key)
+                self.read_disk(&key)
             };
             if !self.project.is_current(&key, &read) {
                 reads.push((key, read));

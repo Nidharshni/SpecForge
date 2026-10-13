@@ -2595,10 +2595,11 @@ fn field_only_edits_are_modified_nodes() {
 
 #[specforge_test(
     behavior = "notify_graph_delta_via_mcp",
-    verify = "moving an entity is not a modification"
+    verify = "moving an entity is not a modification: no graphChanged is sent"
 )]
 fn moving_an_entity_is_not_a_modification() {
     let (mut server, spec) = subscribed_graph_server();
+    let moved_graph = vec![updated("specforge://graph")];
 
     // Blank lines above alpha shift every span.
     std::fs::write(
@@ -2607,7 +2608,7 @@ fn moving_an_entity_is_not_a_modification() {
     )
     .unwrap();
     rebuild(&mut server);
-    assert!(server.take_notifications().is_empty());
+    assert_eq!(server.take_notifications(), moved_graph);
 
     // Swapping the two entities moves both.
     std::fs::write(
@@ -2616,7 +2617,7 @@ fn moving_an_entity_is_not_a_modification() {
     )
     .unwrap();
     rebuild(&mut server);
-    assert!(server.take_notifications().is_empty());
+    assert_eq!(server.take_notifications(), moved_graph);
 
     // Moving alpha to another file.
     std::fs::write(
@@ -2626,7 +2627,46 @@ fn moving_an_entity_is_not_a_modification() {
     .unwrap();
     std::fs::write(&spec, "feature beta \"Beta\" {\n    behaviors [alpha]\n}\n").unwrap();
     rebuild(&mut server);
+    assert_eq!(server.take_notifications(), moved_graph);
+    assert!(events(&server, "mcp_delta_notified").is_empty());
+}
+
+#[specforge_test(
+    behavior = "notify_graph_delta_via_mcp",
+    verify = "a moved entity updates the resources that write its place, and no graphChanged is sent"
+)]
+fn a_moved_entity_updates_the_graph_documents() {
+    let (mut server, spec) = project_server();
+    rebuild(&mut server);
+    subscribe(&mut server, "specforge://graph");
+    subscribe(&mut server, "specforge://context");
     assert!(server.take_notifications().is_empty());
+
+    // Three blank lines above alpha: the graph writes its line, the context does not.
+    std::fs::write(
+        &spec,
+        "\n\n\nbehavior alpha \"Alpha\" {\n}\nfeature beta \"Beta\" {\n    behaviors [alpha]\n}\n",
+    )
+    .unwrap();
+    rebuild(&mut server);
+    assert_eq!(
+        server.take_notifications(),
+        vec![updated("specforge://graph")]
+    );
+    assert!(events(&server, "mcp_delta_notified").is_empty());
+
+    // Alpha to another file.
+    std::fs::write(
+        spec.with_file_name("moved.spec"),
+        "behavior alpha \"Alpha\" {\n}\n",
+    )
+    .unwrap();
+    std::fs::write(&spec, "feature beta \"Beta\" {\n    behaviors [alpha]\n}\n").unwrap();
+    rebuild(&mut server);
+    assert_eq!(
+        server.take_notifications(),
+        vec![updated("specforge://graph")]
+    );
     assert!(events(&server, "mcp_delta_notified").is_empty());
 }
 

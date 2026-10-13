@@ -80,14 +80,16 @@ decision use_postgresql "PostgreSQL over MongoDB" {
 
 | To | Edge Type | Meaning |
 |----|-----------|---------|
-| `invariant` | `protects` | "This decision was made to protect these invariants" |
-| `ref` | `links_to` | "This decision links to these external references" |
+| `feature` | `DecisionAffectsFeature` | "This decision affects these features" (via `affects_features` field) |
+| `constraint` | `DecisionImposesConstraint` | "This decision imposes these constraints" (via `constraints` field) |
+| `invariant` | `DecisionProtectsInvariant` | "This decision protects these invariants" (via `invariants` field) |
+| `decision` | `DecisionSupersedesDecision` | "This decision supersedes these decisions" (via `superseded_by` field) |
 
 ### Incoming edges
 
 | From | Edge Type | Meaning |
 |------|-----------|---------|
-| `behavior` | `shaped_by` | "This behavior was shaped by these decisions" |
+| `decision` | `DecisionSupersedesDecision` | "Decisions that supersede this decision" (via `superseded_by` field) |
 
 ## Validation Rules
 
@@ -95,7 +97,7 @@ decision use_postgresql "PostgreSQL over MongoDB" {
 |------|------|
 | E003 | Every ID in `invariants` must resolve to a declared entity. |
 | E002 | No two decisions may share the same ID. |
-| W050 | `status` must be one of the recognized decision statuses. |
+| E061 | `status` must be one of the recognized decision statuses. |
 
 ## Design Guidance
 
@@ -126,9 +128,11 @@ Skip a decision for:
 
 | Direction | Entity | Edge | Meaning |
 |-----------|--------|------|---------|
-| outgoing | [invariant](invariant.md) | `protects` | Invariants this decision protects |
-| outgoing | [ref](ref.md) | `links_to` | External references linked to this decision |
-| incoming | [behavior](behavior.md) | `shaped_by` | Behaviors shaped by this decision |
+| outgoing | [feature](feature.md) | `DecisionAffectsFeature` | Features this decision affects |
+| outgoing | [constraint](constraint.md) | `DecisionImposesConstraint` | Constraints this decision imposes |
+| outgoing | [invariant](invariant.md) | `DecisionProtectsInvariant` | Invariants this decision protects |
+| outgoing | [decision](decision.md) | `DecisionSupersedesDecision` | Decisions this decision supersedes |
+| incoming | [decision](decision.md) | `DecisionSupersedesDecision` | Decisions that supersede this decision |
 
 ## Examples
 

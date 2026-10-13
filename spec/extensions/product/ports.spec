@@ -59,7 +59,7 @@ port ProductValidationPort {
     registries_populated "KindRegistry and FieldRegistry contain all 9 product entity kinds"
   }
   ensures {
-    all_rules_executed "all E007, E015, E052, W041-W046, W049, W057, W077-W080, W083-W085, W092, W093, W095, I010, I046-I048, I050, I053-I055, I057, I059-I062, I066-I070, I080-I083, I086, I087, I089 rules are evaluated"
+    all_rules_executed "all E007, E015, E052, W041-W046, W049, W057, W092, W093, I010, I046-I048, I050, I053-I055, I057, I059-I062, I066-I070, I080-I083, I086, I087, I089 rules are evaluated"
     deterministic      "same graph input always produces same diagnostic set"
     no_time_dependency "validation never depends on wall-clock time — overdue detection is query-time only"
   }

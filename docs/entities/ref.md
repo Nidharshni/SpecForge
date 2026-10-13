@@ -81,9 +81,7 @@ behavior create_user "Create User" {
 
 ### Incoming edges
 
-| From | Edge Type | Meaning |
-|------|-----------|---------|
-| any entity | `links_to` | "This entity links to this external reference" (via the `refs` field) |
+None. No extension declares an edge type that targets a `ref`; an entity's `refs` field names it without creating an edge.
 
 ### Outgoing edges
 
@@ -133,9 +131,7 @@ Skip refs for:
 
 ## Related Entities
 
-| Direction | Entity | Edge | Meaning |
-|-----------|--------|------|---------|
-| incoming | any entity | `links_to` | Entities that reference this external resource |
+Refs declare no edge types and no extension declares an edge type that targets one: entities reference a ref through their `refs` field, which creates no graph edge.
 
 ## Examples
 

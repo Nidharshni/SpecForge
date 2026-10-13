@@ -2,7 +2,7 @@ use crate::args::Arguments;
 use crate::refusal::ArgumentOf;
 use crate::reply::Answered;
 use crate::target::ProjectRef;
-use crate::target::{AnyUnlessCached, Project};
+use crate::target::{AnyProject, Project};
 use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
 use specforge_ops::Refusal;
 use specforge_ops::analyze::{AnalyzeField, AnalyzeOptions, ReportSource, analyze};
@@ -53,7 +53,7 @@ impl CoreTool for Tool {
     const SPEC: ReplySpec = ReplySpec::Type("McpAnalyzeResult");
     const OPEN_VALUES: &'static [&'static str] = &["$.passes[].summary"];
     type Args = Args;
-    type Input = Project<AnyUnlessCached>;
+    type Input = Project<AnyProject>;
     type Returns = Answered<Reply>;
 
     fn call(project: ProjectRef<'_>, args: Args) -> Answered<Reply> {

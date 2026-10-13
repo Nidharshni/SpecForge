@@ -597,7 +597,7 @@ expression: listing
           "type": "array"
         },
         "path": {
-          "description": "Project root path (uses initialized root if omitted)",
+          "description": "Project root path (the served project if omitted)",
           "type": "string"
         },
         "severity_filter": {
@@ -612,11 +612,6 @@ expression: listing
         "strict": {
           "default": false,
           "description": "Promote warnings to errors, before severity_filter applies",
-          "type": "boolean"
-        },
-        "use_cached": {
-          "default": false,
-          "description": "Use the last compile instead of bringing the project up to date with disk; with no project served, the path is compiled anyway",
           "type": "boolean"
         }
       },
@@ -645,7 +640,7 @@ expression: listing
           "type": "string"
         },
         "path": {
-          "description": "Project root path (uses initialized root if omitted)",
+          "description": "Project root path (the served project if omitted)",
           "type": "string"
         },
         "strict": {
@@ -656,11 +651,6 @@ expression: listing
         "test_results": {
           "description": "Path to a specforge-report.json for proof-level verdicts",
           "type": "string"
-        },
-        "use_cached": {
-          "default": false,
-          "description": "Use the last compile instead of bringing the project up to date with disk; with no project served, the path is compiled anyway",
-          "type": "boolean"
         }
       },
       "type": "object"
@@ -3062,7 +3052,7 @@ expression: listing
           "type": "boolean"
         },
         "path": {
-          "description": "Project root path (uses initialized root if omitted)",
+          "description": "Project root path (the served project if omitted)",
           "type": "string"
         },
         "paths": {
@@ -3492,7 +3482,7 @@ expression: listing
           "type": "string"
         },
         "path": {
-          "description": "Project root path (uses initialized root if omitted)",
+          "description": "Project root path (the served project if omitted)",
           "type": "string"
         }
       },
@@ -3953,7 +3943,7 @@ expression: listing
           "type": "boolean"
         },
         "path": {
-          "description": "Project root path (uses initialized root if omitted)",
+          "description": "Project root path (the served project if omitted)",
           "type": "string"
         },
         "specifiers": {
@@ -4212,7 +4202,7 @@ expression: listing
           "type": "string"
         },
         "path": {
-          "description": "Project root path (uses initialized root if omitted)",
+          "description": "Project root path (the served project if omitted)",
           "type": "string"
         }
       },
@@ -4300,7 +4290,7 @@ expression: listing
           "type": "boolean"
         },
         "path": {
-          "description": "Project root path (uses initialized root if omitted)",
+          "description": "Project root path (the served project if omitted)",
           "type": "string"
         },
         "target_version": {
@@ -5280,13 +5270,7 @@ expression: listing
     "description": "Run health checks",
     "inputSchema": {
       "additionalProperties": false,
-      "properties": {
-        "use_cached": {
-          "default": false,
-          "description": "Use the last compile instead of bringing the project up to date with disk; with no project served, the path is compiled anyway",
-          "type": "boolean"
-        }
-      },
+      "properties": {},
       "type": "object"
     },
     "outputSchema": {
@@ -5991,7 +5975,7 @@ expression: listing
       "additionalProperties": false,
       "properties": {
         "path": {
-          "description": "Project root path (uses initialized root if omitted)",
+          "description": "Project root path (the served project if omitted)",
           "type": "string"
         },
         "run": {

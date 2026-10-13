@@ -87,3 +87,8 @@ enhancement), sorted by name, typed by name.
 A field's type also decides which values it takes, how a written value is stored and the JSON written for it,
 through one field form (ADR 0064). D3's "published JSON Schema's field_type enum" is the derived `FieldType`
 shape.
+
+## Amendment (round 9, plan 01)
+
+D4's declared `default_value` is what an absent value counts as; for an enum it is one of the values (W021
+otherwise), and the guide and the hover show it too (ADR 0071).

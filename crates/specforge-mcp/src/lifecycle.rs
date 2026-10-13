@@ -1,6 +1,5 @@
 use serde::Serialize;
 use serde_json::Value;
-use specforge_common::ProjectRoot;
 use specforge_common::shape::Shape;
 use std::path::PathBuf;
 
@@ -152,9 +151,9 @@ pub fn handle_initialize(
         .or_else(|| params.get("project_root"))
         .and_then(|v| v.as_str())
         .map(PathBuf::from)
-        .or_else(|| state.default_project_root.clone());
+        .or_else(|| state.root.clone());
 
-    serve_project(state, project_root);
+    state.set_root(project_root);
     state.phase = ServerPhase::Initialized;
     state.protocol_version =
         negotiate_protocol_version(params.get("protocolVersion").and_then(Value::as_str));
@@ -188,26 +187,6 @@ pub fn handle_initialize(
             instructions: instructions(),
         },
     )
-}
-
-/// Serve the project at or above `start` (the server's PATH, or the
-/// client's `projectRoot`): the nearest directory holding `specforge.json`,
-/// `start` included (`ProjectRoot::enclosing`, canonical). Its
-/// registries, and the core tools, resources and prompts plus what its
-/// extensions contribute are served; the core surface alone when there is
-/// none. With none, nothing is served: what reads only the project view
-/// answers over the empty session, and a call's `path` or `init` may serve
-/// a project later (ADR 0014 D5). Subscribed clients learn what it
-/// changed (C9-01).
-pub fn serve_project(state: &mut McpState, start: Option<PathBuf>) {
-    if let Some(root) = start
-        .as_deref()
-        .and_then(ProjectRoot::enclosing)
-        .map(ProjectRoot::canonicalized)
-    {
-        state.serve(&root);
-    }
-    state.served = true;
 }
 
 /// The capabilities the server offers, in either era.

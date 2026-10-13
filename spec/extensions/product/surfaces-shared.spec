@@ -132,15 +132,16 @@ behavior surface_list_command_contract "Surface List Command Shared Contract" {
     MCP tool auto-promotion: specforge.product.{kind}s.
   """
   ensures {
-    filter_and_logic     "multiple filters combine with AND logic"
-    invalid_filter_error "invalid enum filter value returns INVALID_INPUT"
-    sort_deterministic   "tie-break sort by entity ID ascending"
-    sort_field_validated "invalid sort_by field returns INVALID_INPUT"
-    limit_clamped        "limit clamped to [1, 1000] range"
-    offset_beyond_total  "offset beyond total returns empty list with correct total"
-    pagination_correct   "total reflects filtered count; has_more == (offset + entities.length < total)"
-    empty_graph_ok       "empty graph returns no entries, total=0, has_more=false"
-    delegates_to_query   "each list command delegates to a common query pipeline"
+    filter_and_logic            "multiple filters combine with AND logic"
+    invalid_filter_error        "invalid enum filter value returns INVALID_INPUT"
+    sort_deterministic          "tie-break sort by entity ID ascending"
+    sort_field_validated        "invalid sort_by field returns INVALID_INPUT"
+    limit_clamped               "limit clamped to [1, 1000] range"
+    offset_beyond_total         "offset beyond total returns empty list with correct total"
+    pagination_correct          "total reflects filtered count; has_more == (offset + entities.length < total)"
+    empty_graph_ok              "empty graph returns no entries, total=0, has_more=false"
+    delegates_to_query          "each list command delegates to a common query pipeline"
+    filters_read_the_vocabulary "a closed filter takes exactly its field's declared vocabulary, and an entity without the field counts as the vocabulary's absent value"
   }
   features [pe_surface_contributions]
   verify unit "filter by status returns only matching entities"

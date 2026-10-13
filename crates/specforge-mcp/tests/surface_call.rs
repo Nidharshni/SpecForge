@@ -826,25 +826,8 @@ fn target_argument_descriptions() {
             .collect()
     };
 
-    // One description, declared by the target.
-    let use_cached: Vec<(String, String)> = described("use_cached");
-    let names: Vec<&str> = use_cached.iter().map(|(name, _)| name.as_str()).collect();
-    assert_eq!(
-        names,
-        [
-            "specforge.validate",
-            "specforge.analyze",
-            "specforge.doctor"
-        ],
-        "{use_cached:?}"
-    );
-    for (name, text) in &use_cached {
-        assert_eq!(
-            text,
-            "Use the last compile instead of bringing the project up to date with disk; with no project served, the path is compiled anyway",
-            "{name}"
-        );
-    }
+    // The target declares `path` only: no tool lists use_cached.
+    assert!(described("use_cached").is_empty());
 
     let paths = described("path");
     let (init, others): (Vec<_>, Vec<_>) =
@@ -852,7 +835,7 @@ fn target_argument_descriptions() {
     assert_eq!(others.len(), 8, "{paths:?}");
     for (name, text) in &others {
         assert_eq!(
-            text, "Project root path (uses initialized root if omitted)",
+            text, "Project root path (the served project if omitted)",
             "{name}"
         );
     }

@@ -24,7 +24,8 @@ pub fn default_watchers() -> Vec<FileSystemWatcher> {
 }
 
 /// The watchers that cover every file a session is built from, read from
-/// its `inputs`: the `.spec` files under its spec root, its config and
+/// its `inputs`: the `.spec` files and every `specforge.json` under its
+/// spec root (a nested project's marker), its config and
 /// lock, the module of each extension it loads, the build cache its check
 /// passes read, and each file the checks read. With `relative_patterns`
 /// (the client declared `relativePatternSupport`) each is a pattern
@@ -48,17 +49,27 @@ pub fn file_watchers(inputs: &SessionInputs, relative_patterns: bool) -> Vec<Fil
     inputs
         .watched()
         .iter()
-        .filter_map(|watched| match watched {
-            Watched::Sources(dir) => pattern(dir, "**/*.spec", WatchKind::all()),
-            Watched::Directories(dir) => {
-                pattern(dir, "**/*", WatchKind::Create | WatchKind::Delete)
+        .flat_map(|watched| -> Vec<FileSystemWatcher> {
+            match watched {
+                Watched::Sources(dir) => ["**/*.spec", "**/specforge.json"]
+                    .into_iter()
+                    .filter_map(|glob| pattern(dir, glob, WatchKind::all()))
+                    .collect(),
+                Watched::Directories(dir) => {
+                    pattern(dir, "**/*", WatchKind::Create | WatchKind::Delete)
+                        .into_iter()
+                        .collect()
+                }
+                Watched::File(path) => path
+                    .parent()
+                    .zip(path.file_name())
+                    .and_then(|(parent, name)| {
+                        pattern(parent, &name.to_string_lossy(), WatchKind::all())
+                    })
+                    .into_iter()
+                    .collect(),
+                Watched::Listing(dir) => pattern(dir, "*", WatchKind::all()).into_iter().collect(),
             }
-            Watched::File(path) => pattern(
-                path.parent()?,
-                &path.file_name()?.to_string_lossy(),
-                WatchKind::all(),
-            ),
-            Watched::Listing(dir) => pattern(dir, "*", WatchKind::all()),
         })
         .collect()
 }

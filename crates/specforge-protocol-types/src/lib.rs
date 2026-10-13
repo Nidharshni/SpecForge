@@ -116,7 +116,7 @@ pub struct HandshakeRequest {
 /// means the plugin declares no limits and the host holds it to its ceiling
 /// (`Limits::CEILING` in `specforge_wasm::sandbox`).
 /// All builtin fixtures and every SDK-built extension serialize all six
-/// fields (`ContributionsBuilder::handshake_json` never elides them).
+/// fields (`ExtensionDeclaration::handshake_json` never elides them).
 ///
 /// `starter_template` is optional metadata: the text of the starter `.spec`
 /// file `specforge init` writes for a project that enables this extension.
@@ -731,10 +731,10 @@ pub struct ValidatorRef {
     pub kind: Option<String>,
 }
 
-/// Verdict of a `validate__*` wasm export; the wire mirror of the host's
-/// `CustomVerdict`. Serializes as `{"verdict":"pass"}` or
-/// `{"verdict":"fail","field":...,"value":...}` (`field`/`value` omitted
-/// when `None`).
+/// Verdict of a `validate__*` wasm export; the wire form of the host's
+/// `Verdict` (`specforge_registry::rules::Verdict`). Serializes as
+/// `{"verdict":"pass"}` or `{"verdict":"fail","field":...,"value":...}`
+/// (`field`/`value` omitted when `None`).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "verdict", rename_all = "lowercase")]
 pub enum ValidatorVerdict {

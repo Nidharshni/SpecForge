@@ -1,5 +1,5 @@
+use crate::support::emit_json;
 use specforge_common::{SourceSpan, Sym};
-use specforge_emitter::json::emit_json;
 use specforge_emitter::{
     EmitFormat, EmitOptions, EmitterError, GraphProtocolSchema, SchemaEdgeType, SchemaEntityKind,
     SchemaExtensionInfo, SchemaField, SchemaVersion, generate_schema, publish,

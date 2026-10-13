@@ -25,9 +25,6 @@ pub struct McpState {
     /// The protocol revision `initialize` negotiated (the latest one the
     /// server speaks until then).
     pub(crate) protocol_version: &'static str,
-    /// Whether a project (or the empty default surface) is being served:
-    /// set by `initialize`, or by the first stateless request.
-    pub(crate) served: bool,
     /// The served project: its root, environment (config, spec root,
     /// registries, rules, manifests, surfaces), graph, diagnostics and
     /// extension runtime: always opened from disk (ADR 0025). Detached
@@ -39,9 +36,11 @@ pub struct McpState {
     /// What MCP serves from the served project's extensions, built from
     /// their declarations whenever its environment loads.
     surfaces: ExtensionSurfaceTable,
-    /// Project compiled when the client's `initialize` names no `projectRoot`
-    /// (the `specforge mcp <path>` argument).
-    pub(crate) default_project_root: Option<PathBuf>,
+    /// The server's root: the path `specforge mcp` was started with, replaced
+    /// by a handshake client's `initialize` `projectRoot`. What is served is
+    /// the nearest project at or above it; while none is served, every
+    /// request looks there again ([`Self::follow_root`], ADR 0077 D3).
+    pub(crate) root: Option<PathBuf>,
     /// Where the server's events go (ADR 0057): [`Discard`] unless the host
     /// gave another sink ([`crate::McpServer::with_events`]). Every module
     /// records through it.
@@ -65,16 +64,46 @@ impl McpState {
         Self {
             phase: ServerPhase::Uninitialized,
             protocol_version: crate::lifecycle::LATEST_PROTOCOL_VERSION,
-            served: false,
             session: ProjectSession::detached(),
             generation: 0,
             surfaces: ExtensionSurfaceTable::empty(),
-            default_project_root: None,
+            root: None,
             events: Box::new(Discard),
             subscriptions: Subscriptions::new(),
             extension_runtime: None,
             solver: Arc::new(Z3::default()),
         }
+    }
+
+    /// The server's root is `root` from now on (`initialize`): the project
+    /// at or above it is served, replacing what was (a fresh compile); with
+    /// none there, what is served stays.
+    pub(crate) fn set_root(&mut self, root: Option<PathBuf>) {
+        self.root = root;
+        if let Some(project) = self.root_project() {
+            self.serve(&project);
+        }
+    }
+
+    /// While no project is served, serve the one at or above the server's
+    /// root if one exists there now (a fresh compile): called before every
+    /// request reads what is served, so what it reads follows disk, not
+    /// which request came first (ADR 0077 D3). Nothing while a project is
+    /// served (bringing it up to date is [`Self::ensure_fresh`]'s).
+    pub(crate) fn follow_root(&mut self) {
+        if self.project_root().is_none()
+            && let Some(project) = self.root_project()
+        {
+            self.serve(&project);
+        }
+    }
+
+    /// The project at or above the server's root, canonical (ADR 0014 D6).
+    fn root_project(&self) -> Option<ProjectRoot> {
+        self.root
+            .as_deref()
+            .and_then(ProjectRoot::enclosing)
+            .map(ProjectRoot::canonicalized)
     }
 
     /// Who hears about what.
@@ -171,7 +200,7 @@ impl McpState {
     /// project's declarations, so nothing a previous load contributed
     /// survives, and nothing is listed twice.
     /// Subscribed clients learn what changed. The one place the served
-    /// project is replaced (initialize, adopting a call's path, the
+    /// project is replaced (the server's root, adopting a call's path, the
     /// directory `init` created). Only a project (a directory holding
     /// `specforge.json`) is ever served.
     pub(crate) fn serve(&mut self, root: &ProjectRoot) {

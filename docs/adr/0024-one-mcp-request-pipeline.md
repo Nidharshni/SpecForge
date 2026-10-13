@@ -69,6 +69,7 @@ are percent-decoded, and a count is read by ADR 0033 D2's rule. *(Amended, round
 **D5. The call target declares its arguments.** `TargetSpec` contributes `path` (by reach) and
 `use_cached` (by freshness) to the listed schema and to the field set the drift test reads; handlers
 no longer carry them; `init`'s missing `path` is refused by the target.
+*(ADR 0077: `use_cached` is gone; the target contributes `path` only.)*
 
 **D6. One subscription module, one rule.** *(Amended 2026-10-08.)* `specforge_mcp::subscriptions::Subscriptions`
 holds who hears about what: the resources the client subscribed to (`resources/subscribe`), its

@@ -492,22 +492,6 @@ impl ContributionsBuilder {
         };
         declaration
     }
-
-    /// The `__handshake` wire payload (pretty JSON, matching the format of the
-    /// existing builtin extensions).
-    pub fn handshake_json(&self) -> String {
-        self.declaration().handshake_json()
-    }
-
-    /// The `__describe` wire payload for `category`, or `None` when the
-    /// category is not one the protocol defines: a raw category as given,
-    /// else the declaration's items.
-    ///
-    /// For tests: a guest answers through [`Served`], which reads the
-    /// declaration once.
-    pub fn describe_response_json(&self, category: &str) -> Option<String> {
-        describe_answer(&self.raw, || Cow::Owned(self.declaration()), category)
-    }
 }
 
 /// The describe answer: a raw category as given, else `declaration`'s

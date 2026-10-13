@@ -64,7 +64,7 @@ to validate the work.
 **Do:** check the allowed set before inventing a status/priority/severity. (See the
 [quick reference](../quick-reference.md) or the tutorial's entity tour.)
 
-**Why:** invalid enum values raise warnings (`W077`/`W078`/`W079`/`W051`…) and degrade the
+**Why:** a value outside a field's vocabulary is an error (`E061`) and degrades the
 graph's queryability. `status wip` is not the same node-state as `status in_progress` to a
 consumer.
 

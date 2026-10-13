@@ -200,17 +200,15 @@ fn query_advertises_format_and_coverage() {
 }
 
 #[test]
-fn validate_advertises_severity_filter_and_cache() {
+fn validate_advertises_severity_filter() {
     let tools = advertised_properties();
     let validate = tools
         .get("specforge.validate")
         .expect("validate advertised");
-    for expected in ["severity_filter", "use_cached"] {
-        assert!(
-            validate.iter().any(|p| p == expected),
-            "specforge.validate reads '{expected}' (validate.rs) but does not advertise it"
-        );
-    }
+    assert!(
+        validate.iter().any(|p| p == "severity_filter"),
+        "specforge.validate reads 'severity_filter' (validate.rs) but does not advertise it"
+    );
 }
 
 #[test]

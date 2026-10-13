@@ -14,12 +14,12 @@ use "types/zero-entity-core"
 // Distinct from condition: conditions are point-in-time state,
 // properties are assertions about behavior over TIME.
 
-type PropertyKind = safety | liveness | fairness
+type PropertyType = safety | liveness | fairness
 
 type FormalProperty {
-  description string
-  kind        PropertyKind
-  references  EntityId[] @optional
+  description   string
+  property_type PropertyType
+  references    EntityId[] @optional
   verify property "FormalProperty"
 }
 

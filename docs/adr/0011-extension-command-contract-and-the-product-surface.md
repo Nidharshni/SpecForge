@@ -302,3 +302,10 @@ project view cannot give (ADR 0008's trigger).
   `CommandInput` and cursors).
 - A need to hide single contributions (then `surfaces.disabled` in `specforge.json`).
 - A host that can list a guest's routed exports (then presence is checked at load, E020).
+
+## Amendment (round 9, plan 01)
+
+"Only closed enums are validated" and the drift test: a closed filter's field is an `enum` of the same
+`Vocabulary` (ADR 0071), so `check` refuses (E061) what the filter refuses; the drift test now walks every declared
+vocabulary field and every closed filter. "An absent lifecycle status is its first value" is the status field's
+declared default. The closed filters' help no longer lists the values (clap and the MCP schema list them).

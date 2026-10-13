@@ -930,3 +930,36 @@ fn relinking_a_source_changes_the_inputs() {
     assert!(update.inputs_changed);
     assert!(!session.inputs().watch_roots().contains(&outside_root));
 }
+
+#[specforge_test(
+    behavior = "classify_project_changes",
+    verify = "a nested project's specforge.json appearing or going changes every source under its directory"
+)]
+fn a_nested_projects_marker_changes_the_sources_under_it() {
+    let (dir, mut session) = open(
+        plain(),
+        &[("a.spec", TERM), ("sub/c.spec", "term sub_only \"S\" {}\n")],
+    );
+    let root = fs::canonicalize(dir.path()).unwrap();
+    assert!(session.project().graph().node("sub_only").is_some());
+
+    write(&root, "sub/specforge.json", "{}");
+    let marker = root.join("sub/specforge.json");
+    let changes = session.changes([marker.as_path()]);
+    assert_eq!(changes.sources, vec!["sub/c.spec"]);
+    assert!(session.apply(&changes).is_some());
+    assert!(session.project().graph().node("sub_only").is_none());
+
+    fs::remove_file(&marker).unwrap();
+    let changes = session.changes([marker.as_path()]);
+    assert_eq!(changes.sources, vec!["sub/c.spec"]);
+    assert!(session.apply(&changes).is_some());
+    assert!(session.project().graph().node("sub_only").is_some());
+
+    // The project's own specforge.json stays an environment change.
+    write(&root, "specforge.json", r#"{"name":"c","version":"0.2.0"}"#);
+    let own = root.join("specforge.json");
+    let changes = session.changes([own.as_path()]);
+    assert!(changes.sources.is_empty(), "{changes:?}");
+    assert_eq!(changes.environment, vec![own]);
+}

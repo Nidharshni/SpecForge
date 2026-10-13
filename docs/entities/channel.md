@@ -35,7 +35,7 @@ channel web "Web Application" {
 | Field | Type | Description |
 |-------|------|-------------|
 | `description` | string or triple-string | What this channel is and how users access it. |
-| `interaction_model` | InteractionModel enum | The communication pattern: `request_response`, `event_driven`, `batch`, `streaming`, `bidirectional`, `manual`. |
+| `interaction_model` | InteractionModel enum | The communication pattern: `request_response`, `event_driven`, `batch`, `streaming`, `bidirectional`, `manual`. Another value is E061. |
 
 ### Optional
 
@@ -43,7 +43,7 @@ channel web "Web Application" {
 |-------|------|-------------|
 | `title` | string | Human-readable name (the string after the entity ID). |
 | `url` | string | Canonical documentation, API endpoint, or configuration URL for this channel. Informational only — no URL format validation in v1. |
-| `status` | ChannelStatus enum | Lifecycle state: `active`, `deprecated`. Validated by W084. Absent status treated as `active` for incremental adoption. |
+| `status` | ChannelStatus enum | Lifecycle state: `active`, `deprecated`. Another value is E061. Absent status treated as `active` for incremental adoption. |
 | `reason` | string | Rationale for deprecation (expected when `status=deprecated`, checked by I070). |
 | `tags` | string list | Free-form tags for categorization. |
 | `refs` | reference list | External references (issues, tickets, diagrams) linked to this channel. |
@@ -58,14 +58,14 @@ None. Channels are leaf nodes in the product graph.
 
 | From | Edge Type | Meaning |
 |------|-----------|---------|
-| `journey` | `JourneyChannel` | "This journey uses this channel" |
+| `journey` | `JourneyUsesChannel` | "Journeys that use this channel" (via `channels` field) |
 
 ## Validation Rules
 
 | Code | Level | Rule |
 |------|-------|------|
 | E003 | error | Journey `channels` entries must resolve to declared entities (E022 when the target isn't a channel). |
-| W084 | warning | Invalid `status` value (not in ChannelStatus enum). |
+| E061 | error | A value outside the field's vocabulary. |
 | I047 | info | Channel not referenced by any journey (unreferenced channel). |
 | I070 | info | Deprecated channel without a `reason`. |
 
@@ -101,7 +101,7 @@ Declare a channel when:
 
 | Direction | Entity | Edge | Meaning |
 |-----------|--------|------|---------|
-| incoming | [journey](journey.md) | `JourneyChannel` | Journeys that use this channel |
+| incoming | [journey](journey.md) | `JourneyUsesChannel` | Journeys that use this channel |
 
 ## Examples
 

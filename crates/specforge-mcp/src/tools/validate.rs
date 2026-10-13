@@ -2,7 +2,7 @@ use crate::args::Arguments;
 use crate::refusal::ArgumentOf;
 use crate::reply::{Answer, Answered, Text};
 use crate::target::ProjectRef;
-use crate::target::{AnyUnlessCached, Project};
+use crate::target::{AnyProject, Project};
 use crate::tool::{CoreTool, Effect, ToolGroup};
 use specforge_ops::Refusal;
 use specforge_ops::check::{CheckField, CheckOptions, check, parse_lint_profiles, parse_severity};
@@ -26,8 +26,8 @@ pub const VERDICT_META: &str = "specforge/check";
 
 /// `specforge.validate`: the check operation over what `specforge check`
 /// reports for the call's project (the target brought the served project
-/// up to date with disk unless `use_cached`, or compiled the project
-/// `path` names for this call). Finding errors is a successful call (ADR
+/// up to date with disk, or opened the project `path` names for this
+/// call). Finding errors is a successful call (ADR
 /// 0004 D4-a); whether the check passed is the `_meta` verdict. The tool
 /// never records the build cache.
 pub(crate) struct Tool;
@@ -48,7 +48,7 @@ impl CoreTool for Tool {
         group: ToolGroup::Core,
     };
     type Args = Args;
-    type Input = Project<AnyUnlessCached>;
+    type Input = Project<AnyProject>;
     type Returns = Answered<Text>;
 
     fn call(project: ProjectRef<'_>, args: Args) -> Answered<Text> {

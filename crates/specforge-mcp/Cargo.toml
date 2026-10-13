@@ -16,13 +16,10 @@ name = "heap"
 path = "tests/heap.rs"
 
 [dependencies]
-specforge-diagnostics = { path = "../specforge-diagnostics" }
 specforge-common = { workspace = true }
 specforge-graph = { path = "../specforge-graph" }
-specforge-emitter = { path = "../specforge-emitter" }
 specforge-component = { path = "../specforge-component" }
 specforge-registry = { workspace = true }
-specforge-formatter = { workspace = true }
 specforge-mcp-macros = { path = "../specforge-mcp-macros" }
 specforge-ops = { workspace = true }
 specforge-ops-registry = { path = "../specforge-ops-registry" }
@@ -54,3 +51,4 @@ specforge-test = { workspace = true }
 specforge-test-macros = { workspace = true }
 insta = { workspace = true }
 tempfile = { workspace = true }
+specforge-emitter = { path = "../specforge-emitter" }

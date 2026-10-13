@@ -85,7 +85,7 @@ type ProductFeature {
   solution     string        @optional
   priority     Priority      @optional
   // Absent status is treated as proposed (see FeatureStatus definition).
-  status       FeatureStatus @optional // default: proposed (when absent)
+  status       FeatureStatus @optional // absent: the declared default (proposed)
   acceptance   string[]      @optional
   depends_on   EntityId[]    @optional
   features     EntityId[]    @optional
@@ -113,7 +113,7 @@ type ProductDeliverable {
   description   string            @optional
   artifact_type ArtifactType
   // Absent status is treated as draft (see DeliverableStatus definition).
-  status        DeliverableStatus @optional // default: draft (when absent)
+  status        DeliverableStatus @optional // absent: the declared default (draft)
   journeys      EntityId[]        @optional
   modules       EntityId[]        @optional
   // Semantic Versioning 2.0.0 (semver.org). Core format: MAJOR.MINOR.PATCH.
@@ -132,7 +132,7 @@ type ProductDeliverable {
 type ProductMilestone {
   description   string          @optional
   // Absent status is treated as planned (see MilestoneStatus definition).
-  status        MilestoneStatus @optional // default: planned (when absent)
+  status        MilestoneStatus @optional // absent: the declared default (planned)
   features      EntityId[]      @optional
   // Each entry is a free-text criterion. Entries referencing entity IDs
   // (e.g., "all features in [some_feature] done") are "anchored" and
@@ -187,7 +187,7 @@ type ProductPersona {
   pain_points     string[]       @optional
   // Absent status is treated as active for all validation and query logic.
   // This supports incremental adoption — personas work without lifecycle fields.
-  status          PersonaStatus  @optional // default: active (when absent)
+  status          PersonaStatus  @optional // absent: the declared default (active)
   reason          string         @optional // required when status=deprecated (I069)
   key_features    EntityId[]     @optional
   tags            string[]       @optional
@@ -200,7 +200,7 @@ type ProductChannel {
   url               string           @optional
   // Absent status is treated as active for all validation and query logic.
   // This supports incremental adoption — channels work without lifecycle fields.
-  status            ChannelStatus    @optional // default: active (when absent)
+  status            ChannelStatus    @optional // absent: the declared default (active)
   reason            string           @optional // required when status=deprecated (I070)
   tags              string[]         @optional
   verify property "ProductChannel"
@@ -211,7 +211,7 @@ type ProductRelease {
   // SemVer 2.0.0 (semver.org). Non-conforming values produce W093.
   version      string
   // Absent status is treated as planned (see ReleaseStatus definition).
-  status       ReleaseStatus @optional // default: planned (when absent)
+  status       ReleaseStatus @optional // absent: the declared default (planned)
   deliverables EntityId[]    @optional
   milestones   EntityId[]    @optional
   target_date  string        @optional

@@ -1,12 +1,11 @@
 //! The project one MCP call acts on (CONTEXT.md "Call target", ADR 0014).
 //!
-//! A call's optional `path` and its entry's [`TargetSpec`] (reach and
-//! freshness) are resolved into one [`CallTarget`] before the handler runs:
-//! the served session, brought up to date with disk unless the call asks
-//! for the last compile; another project, opened as a session for this call
+//! A call's optional `path` and its entry's [`TargetSpec`] (reach) are
+//! resolved into one [`CallTarget`] before the handler runs: the served
+//! session, brought up to date with disk; another project, opened as a session for this call
 //! only; or the directory `init` creates. Handlers read their project as a
 //! [`ProjectRef`] and cannot tell which adapter answered it; they never
-//! resolve a root, pick a freshness rule or reload anything themselves.
+//! resolve a root or reload anything themselves.
 
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
@@ -19,6 +18,7 @@ use specforge_ops::view::ProjectView;
 use specforge_project::{ProjectSession, SharedRuntime};
 
 use crate::events::EventSink;
+use crate::lifecycle::Revision;
 use crate::state::McpState;
 use crate::tool::{ErrorCode, McpError};
 
@@ -40,43 +40,41 @@ impl Reach {
     }
 }
 
-/// Whether the target is brought up to date with disk before the handler.
+/// Whether a call may change the project the server serves: decided by the
+/// revision the request is made under (ADR 0077 D1). The one place that
+/// decision is made; [`resolve`] reads it, and the call carries it to
+/// `init`'s completion and to the no-project refusal.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Freshness {
-    /// Always (`ProjectSession::ensure_fresh`).
-    Fresh,
-    /// Unless the call passes `use_cached: true` (validate, analyze, doctor).
-    FreshUnlessCached,
+pub enum Serving {
+    /// A handshake revision (2025-03-26 to 2025-11-25): the session is the
+    /// client's, so while nothing is served a call's `path` naming a project
+    /// is adopted and the directory `init` created is served (ADR 0014 D5).
+    Adopts,
+    /// The stateless revision (MCP 2026-07-28): nothing a request names is
+    /// served. A `path` is opened for its call only, `init` serves nothing,
+    /// and what is served is the project at or above the server's root as
+    /// it is on disk ([`McpState::follow_root`]).
+    Fixed,
 }
 
-/// How a handler that reads a project reaches it.
+impl Serving {
+    /// The policy of a request made under `revision`.
+    pub fn of(revision: Revision) -> Self {
+        if revision.is_stateless() {
+            Serving::Fixed
+        } else {
+            Serving::Adopts
+        }
+    }
+}
+
+/// What a call with nothing served and no project named is told it can do:
+/// its entry's reach (whether a `path` would fix it) and whether a call may
+/// serve a project. The no-project refusal and the empty session carry it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct ProjectTarget {
+pub struct NoProject {
     pub reach: Reach,
-    pub freshness: Freshness,
-}
-
-impl ProjectTarget {
-    /// The served project, brought up to date.
-    pub const SERVED: Self = Self {
-        reach: Reach::Served,
-        freshness: Freshness::Fresh,
-    };
-    /// The served project, unless `use_cached` (doctor).
-    pub const SERVED_UNLESS_CACHED: Self = Self {
-        reach: Reach::Served,
-        freshness: Freshness::FreshUnlessCached,
-    };
-    /// The served project or the one `path` names, brought up to date.
-    pub const ANY: Self = Self {
-        reach: Reach::AnyProject,
-        freshness: Freshness::Fresh,
-    };
-    /// The same, unless `use_cached` (validate, analyze).
-    pub const ANY_UNLESS_CACHED: Self = Self {
-        reach: Reach::AnyProject,
-        freshness: Freshness::FreshUnlessCached,
-    };
+    pub serving: Serving,
 }
 
 /// What a call with nothing served, and no project named, gets.
@@ -92,11 +90,11 @@ pub enum WithoutProject {
 /// handler is given, never declared beside it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TargetSpec {
-    /// Reads no project (explain): no `path`, no `use_cached`.
+    /// Reads no project (explain): no `path`.
     Unscoped,
     /// Reads or acts on a project.
     Project {
-        target: ProjectTarget,
+        reach: Reach,
         without: WithoutProject,
     },
     /// `path` names the directory to create a project in (init): required,
@@ -108,14 +106,14 @@ impl TargetSpec {
     /// The served project, brought up to date, read over the empty session
     /// when nothing is served: every core prompt and resource.
     pub const SERVED_VIEW: TargetSpec = TargetSpec::Project {
-        target: ProjectTarget::SERVED,
+        reach: Reach::Served,
         without: WithoutProject::EmptySession,
     };
 
     /// The served project, brought up to date, refused when nothing is
     /// served: every extension tool and resource.
     pub const SERVED_PROJECT: TargetSpec = TargetSpec::Project {
-        target: ProjectTarget::SERVED,
+        reach: Reach::Served,
         without: WithoutProject::Refused,
     };
 
@@ -135,24 +133,15 @@ impl TargetSpec {
     pub fn takes_path(self) -> bool {
         match self {
             TargetSpec::Unscoped => false,
-            TargetSpec::Project { target, .. } => target.reach.takes_path(),
+            TargetSpec::Project { reach, .. } => reach.takes_path(),
             TargetSpec::NewProject => true,
         }
     }
 
-    /// Whether the call may ask for the last compile with `use_cached`.
-    fn takes_use_cached(self) -> bool {
-        matches!(
-            self,
-            TargetSpec::Project { target, .. } if target.freshness == Freshness::FreshUnlessCached
-        )
-    }
-
     /// The input-schema properties the target reads from a call: `path` for
     /// a reach that names a project by it (`AnyProject`: "Project root path
-    /// (uses initialized root if omitted)"; `NewProject`: "Directory for the
-    /// new project, outside the current one"), and `use_cached` for
-    /// `FreshUnlessCached`. A tool's listed schema is its own properties
+    /// (the served project if omitted)"; `NewProject`: "Directory for the
+    /// new project, outside the current one"). A tool's listed schema is its own properties
     /// plus these ([`ToolSpec::input_schema`]); its handler never reads
     /// them.
     pub fn properties(self) -> serde_json::Map<String, Value> {
@@ -160,21 +149,11 @@ impl TargetSpec {
         if self.takes_path() {
             let description = match self {
                 TargetSpec::NewProject => "Directory for the new project, outside the current one",
-                _ => "Project root path (uses initialized root if omitted)",
+                _ => "Project root path (the served project if omitted)",
             };
             properties.insert(
                 TargetArgument::Path.name().into(),
                 serde_json::json!({ "type": "string", "description": description }),
-            );
-        }
-        if self.takes_use_cached() {
-            properties.insert(
-                TargetArgument::UseCached.name().into(),
-                serde_json::json!({
-                    "type": "boolean",
-                    "description": "Use the last compile instead of bringing the project up to date with disk; with no project served, the path is compiled anyway",
-                    "default": false,
-                }),
             );
         }
         properties
@@ -192,44 +171,44 @@ impl TargetSpec {
     /// Every name the target reads from a call, listed or not: `path` for
     /// every target but `Unscoped` (a `Served` entry accepts its own
     /// project's root and refuses another's,
-    /// [`TargetError::OtherProjectRefused`]), and `use_cached` for
-    /// `FreshUnlessCached`. [`Self::fields`] stays the listed ones.
+    /// [`TargetError::OtherProjectRefused`]). [`Self::fields`] stays the
+    /// listed ones.
     pub fn accepted(self) -> &'static [TargetArgument] {
-        match (self != TargetSpec::Unscoped, self.takes_use_cached()) {
-            (true, true) => &[TargetArgument::Path, TargetArgument::UseCached],
-            (true, false) => &[TargetArgument::Path],
-            (false, true) => &[TargetArgument::UseCached],
-            (false, false) => &[],
+        if self == TargetSpec::Unscoped {
+            &[]
+        } else {
+            &[TargetArgument::Path]
         }
     }
 
     /// The names [`Self::properties`] declares, for the schema drift test.
     pub fn fields(self) -> &'static [TargetArgument] {
-        match (self.takes_path(), self.takes_use_cached()) {
-            (true, true) => &[TargetArgument::Path, TargetArgument::UseCached],
-            (true, false) => &[TargetArgument::Path],
-            (false, true) => &[TargetArgument::UseCached],
-            (false, false) => &[],
+        if self.takes_path() {
+            &[TargetArgument::Path]
+        } else {
+            &[]
         }
     }
 }
 
 /// The project a call acts on, resolved before its handler runs.
 pub enum CallTarget {
-    /// The served session (adopted if nothing was served).
+    /// The served session (in a handshake session, adopted if nothing was served).
     Served,
     /// Another project, opened as a session for this call; the server keeps
     /// serving its own.
     Other(Box<ProjectSession>),
-    /// The directory `init` creates a project in.
-    New(PathBuf),
+    /// The directory `init` creates a project in, and whether the call may
+    /// serve it once created.
+    New { dir: PathBuf, serving: Serving },
     /// The tool reads no project.
     Unscoped,
     /// Nothing is served and the call names no project, for a target read
     /// over the empty session (a `Refused` one never resolves to it). The
-    /// reach of the entry it was resolved for says what would fix a read
-    /// that names something ([`no_project`]).
-    EmptySession(Reach),
+    /// reach of the entry it was resolved for, and whether the call may
+    /// serve a project, say what would fix a read that names something
+    /// ([`no_project`]).
+    EmptySession(NoProject),
 }
 
 /// What every handler reads, from either adapter: the served session or the
@@ -291,7 +270,6 @@ impl<'a> ProjectRef<'a> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TargetArgument {
     Path,
-    UseCached,
 }
 
 impl TargetArgument {
@@ -299,7 +277,6 @@ impl TargetArgument {
     pub const fn name(self) -> &'static str {
         match self {
             Self::Path => "path",
-            Self::UseCached => "use_cached",
         }
     }
 }
@@ -319,16 +296,15 @@ pub enum TargetError {
     /// `init` was called without the `path` it creates: `invalid_input`
     /// "Missing required parameter: path" on argument `path`.
     PathRequired,
-    /// `path` or `use_cached` is not of its type (a string, a boolean):
-    /// `invalid_input` on that argument, as every argument of the wrong
-    /// type is refused.
+    /// `path` is not a string: `invalid_input` on that argument, as every
+    /// argument of the wrong type is refused.
     InvalidArgument {
         argument: TargetArgument,
         message: String,
     },
     /// Nothing is served and the call names no project, for a target that
-    /// refuses then: `no_project(reach)`.
-    NoProject(Reach),
+    /// refuses then: `no_project(no_project)`.
+    NoProject(NoProject),
 }
 
 impl TargetError {
@@ -365,7 +341,7 @@ impl From<TargetError> for McpError {
             TargetError::InvalidArgument { message, .. } => {
                 McpError::new(ErrorCode::InvalidInput, message)
             }
-            TargetError::NoProject(reach) => no_project(reach),
+            TargetError::NoProject(refusal) => no_project(refusal),
             TargetError::InsideServed { dir, served } => McpError::new(
                 ErrorCode::Conflict,
                 format!(
@@ -383,27 +359,34 @@ impl From<TargetError> for McpError {
 }
 
 /// What a client can do about a missing project, ending every no-project
-/// refusal: an entry that takes a `path` can pass one; one that serves only
-/// the served project (a `Served` tool, a resource, a prompt) refuses a
-/// `path`, so it says to start the server in a project.
-fn serve_a_project(reach: Reach) -> &'static str {
-    if reach.takes_path() {
-        "pass {\"path\": ...} or start the server in a project"
-    } else {
-        "start the server in a project (`specforge mcp <root>`), or call a tool that takes a `path` first (ADR 0014 D5)"
+/// refusal: an entry that takes a `path` can pass one (opened for the call,
+/// or adopted in a handshake session); one that serves only the served
+/// project says to start the server in a project, and, where a call may
+/// serve one, to call a tool that takes a `path` first.
+fn serve_a_project(no_project: NoProject) -> &'static str {
+    match (no_project.reach.takes_path(), no_project.serving) {
+        (true, _) => "pass {\"path\": ...} or start the server in a project",
+        (false, Serving::Adopts) => {
+            "start the server in a project (`specforge mcp <root>`), or call a tool that takes a `path` first (ADR 0014 D5)"
+        }
+        (false, Serving::Fixed) => {
+            "start the server in a project (`specforge mcp <root>`), or create one at its root"
+        }
     }
 }
 
-/// The refusal of a handler that needs a project when none is served, for
-/// an entry of this `reach`. It names `path` only where the entry takes one:
-/// the client can fix it, so a surface without `isError` answers it -32602;
-/// for any other entry no params fix it, and it is a -32603 (ADR 0024 D5).
-pub fn no_project(reach: Reach) -> McpError {
+/// The refusal of a handler that needs a project when none is served. It
+/// names `path` only where the entry takes one: the client can fix it, so a
+/// surface without `isError` answers it -32602; for any other entry no
+/// params fix it, and it is a -32603 (ADR 0024 D5). Its hint never names a
+/// call that would serve a project unless the call may
+/// ([`Serving::Adopts`]).
+pub fn no_project(no_project: NoProject) -> McpError {
     let error = McpError::new(
         ErrorCode::PreconditionFailed,
-        format!("no project is served: {}", serve_a_project(reach)),
+        format!("no project is served: {}", serve_a_project(no_project)),
     );
-    if reach.takes_path() {
+    if no_project.reach.takes_path() {
         error.with_argument(TargetArgument::Path.name())
     } else {
         error
@@ -420,7 +403,7 @@ pub fn no_project(reach: Reach) -> McpError {
 /// tools, prompts and resources call it on what their handler refused with
 /// (ADR 0025).
 pub(crate) fn without_project(target: &CallTarget, error: McpError) -> McpError {
-    let CallTarget::EmptySession(reach) = *target else {
+    let CallTarget::EmptySession(no_project) = *target else {
         return error;
     };
     let asked = match error.code {
@@ -438,10 +421,10 @@ pub(crate) fn without_project(target: &CallTarget, error: McpError) -> McpError 
         ErrorCode::PreconditionFailed,
         format!(
             "no project is served, so {asked}: {}",
-            serve_a_project(reach)
+            serve_a_project(no_project)
         ),
     );
-    if reach.takes_path() {
+    if no_project.reach.takes_path() {
         refused.argument = Some(TargetArgument::Path.name().to_string());
     }
     refused.entity_id = error.entity_id;
@@ -484,7 +467,7 @@ impl<'s> Call<'s> {
         match &self.target {
             CallTarget::Served => Some(self.state.session()),
             CallTarget::Other(session) => Some(session.as_ref()),
-            CallTarget::New(_) | CallTarget::Unscoped | CallTarget::EmptySession(_) => None,
+            CallTarget::New { .. } | CallTarget::Unscoped | CallTarget::EmptySession(_) => None,
         }
     }
 
@@ -509,7 +492,7 @@ impl<'s> Call<'s> {
                 let (Some(root), Some(runtime)) =
                     (session.project().project_root(), view.runtime())
                 else {
-                    return Err(no_project(Reach::Served));
+                    return Err(unreachable_no_project());
                 };
                 Ok(ProjectRef {
                     root,
@@ -526,7 +509,7 @@ impl<'s> Call<'s> {
                 let (Some(root), Some(runtime)) =
                     (session.project().project_root(), view.runtime())
                 else {
-                    return Err(no_project(Reach::AnyProject));
+                    return Err(unreachable_no_project());
                 };
                 Ok(ProjectRef {
                     root,
@@ -536,10 +519,10 @@ impl<'s> Call<'s> {
                     served: false,
                 })
             }
-            CallTarget::EmptySession(reach) => Err(no_project(*reach)),
+            CallTarget::EmptySession(refusal) => Err(no_project(*refusal)),
             // Only a project handler calls this, and its target never
             // resolves to these.
-            CallTarget::New(_) | CallTarget::Unscoped => Err(McpError::new(
+            CallTarget::New { .. } | CallTarget::Unscoped => Err(McpError::new(
                 ErrorCode::InternalError,
                 "this call has no project",
             )),
@@ -580,7 +563,7 @@ impl<'s> Call<'s> {
     /// The directory `init` creates its project in.
     pub(crate) fn new_project_dir(&self) -> Option<&Path> {
         match &self.target {
-            CallTarget::New(dir) => Some(dir),
+            CallTarget::New { dir, .. } => Some(dir),
             _ => None,
         }
     }
@@ -590,7 +573,7 @@ impl<'s> Call<'s> {
     /// ([`crate::mutation::complete`]).
     pub(crate) fn written_root(&self) -> Option<&Path> {
         match &self.target {
-            CallTarget::New(dir) => Some(dir),
+            CallTarget::New { dir, .. } => Some(dir),
             CallTarget::Served | CallTarget::Other(_) => self.session()?.project().root(),
             CallTarget::Unscoped | CallTarget::EmptySession(_) => None,
         }
@@ -601,7 +584,7 @@ impl<'s> Call<'s> {
     /// [`crate::mutation::complete`] (ADR 0022). The served project is
     /// brought up to date with disk; another project's session is brought up
     /// to date the same way (the server keeps serving its own); the directory `init` created is
-    /// served when nothing is (ADR 0014 D5).
+    /// served when nothing is, in a handshake session (ADR 0014 D5).
     pub(crate) fn bring_up_to_date(&mut self) -> Vec<Diagnostic> {
         match &mut self.target {
             CallTarget::Served => {
@@ -616,8 +599,13 @@ impl<'s> Call<'s> {
                 }
                 session.project().diagnostics()
             }
-            CallTarget::New(dir) => {
-                if self.state.project_root().is_none()
+            CallTarget::New { dir, serving } => {
+                // A handshake session serves the project init created when
+                // none is served (ADR 0014 D5); a stateless request serves
+                // nothing it names (ADR 0077 D2): a later request finds it
+                // only at the server's root.
+                if *serving == Serving::Adopts
+                    && self.state.project_root().is_none()
                     && let Ok(root) = ProjectRoot::of(dir)
                 {
                     self.state.serve(&root.canonicalized());
@@ -629,28 +617,30 @@ impl<'s> Call<'s> {
     }
 }
 
-/// Resolve the call's `path` (from `arguments`) under `spec`, then apply
-/// the freshness policy to a served target.
+/// Resolve the call's `path` (from `arguments`) under `spec` for a request
+/// made under `revision`, then bring a served target up to date with disk.
 ///
 /// A `path` names the project it is in (`ProjectRoot::of`, canonical: the
 /// nearest directory at or above it holding `specforge.json`, else the
 /// directory itself); one that does not exist is `file_not_found`. A path to a project while
-/// nothing is served is adopted: the server serves it, and the call acts on
-/// it as the served project. A path naming the served project (or a
-/// directory inside it) is the served project; any other, a directory that
-/// holds no project included, is opened as a session for this call only
-/// and never served.
-/// `init`'s path is used as given (it creates it), and may not lie inside
-/// the served project.
+/// nothing is served is adopted when the revision lets the call serve one
+/// ([`Serving::Adopts`]): the server serves it, and the call acts on it as
+/// the served project. A path naming the served project (or a directory
+/// inside it) is the served project; any other, a directory that holds no
+/// project included, and any path under [`Serving::Fixed`], is opened as a
+/// session for this call only and never served.
+/// `init`'s path is used as given (it creates it), may not lie inside the
+/// served project, and is served once created only under `Adopts`.
 pub fn resolve(
     state: &mut McpState,
+    revision: Revision,
     spec: TargetSpec,
     arguments: &Value,
 ) -> Result<CallTarget, TargetError> {
-    // The target's own arguments, read by their type as every argument
-    // is (ADR 0033 D4): a `path` that is not a string and a `use_cached`
-    // that is not a boolean are refused.
-    let (target, without) = match spec {
+    // The target's own argument, read by its type as every argument is
+    // (ADR 0033 D4): a `path` that is not a string is refused.
+    let serving = Serving::of(revision);
+    let (reach, without) = match spec {
         TargetSpec::Unscoped => return Ok(CallTarget::Unscoped),
         TargetSpec::NewProject => {
             let Some(path) = argument::<String>(arguments, TargetArgument::Path)? else {
@@ -663,26 +653,23 @@ pub fn resolve(
                     return Err(TargetError::InsideServed { dir, served: root });
                 }
             }
-            return Ok(CallTarget::New(dir));
+            return Ok(CallTarget::New { dir, serving });
         }
-        TargetSpec::Project { target, without } => (target, without),
+        TargetSpec::Project { reach, without } => (reach, without),
     };
     let path = argument::<String>(arguments, TargetArgument::Path)?;
     let path = path.as_deref();
-    let cached = spec.takes_use_cached()
-        && argument::<bool>(arguments, TargetArgument::UseCached)?.unwrap_or(false);
+    let no_project = NoProject { reach, serving };
     let served = |state: &mut McpState| {
         if state.project_root().is_none() {
             // Nothing is served and the call names no project: the target
             // says what that call gets.
             return match without {
-                WithoutProject::EmptySession => Ok(CallTarget::EmptySession(target.reach)),
-                WithoutProject::Refused => Err(TargetError::NoProject(target.reach)),
+                WithoutProject::EmptySession => Ok(CallTarget::EmptySession(no_project)),
+                WithoutProject::Refused => Err(TargetError::NoProject(no_project)),
             };
         }
-        if !cached {
-            state.ensure_fresh();
-        }
+        state.ensure_fresh();
         Ok(CallTarget::Served)
     };
     let Some(path) = path else {
@@ -690,20 +677,33 @@ pub fn resolve(
     };
     let root = project_at(Path::new(path))?;
     let served_root = state.project_root().map(absolute);
-    if served_root.is_none() && target.reach != Reach::Served && root.is_configured() {
-        // Nothing served: the call serves this project, as it is on disk
-        // now. A directory that is no project is never served; it is
-        // opened for this call below.
+    if served_root.is_none()
+        && serving == Serving::Adopts
+        && reach != Reach::Served
+        && root.is_configured()
+    {
+        // A handshake session serves the project its call names while none
+        // is served (ADR 0014 D5), as it is on disk now. A directory that
+        // is no project is never served; it is opened for this call below.
         state.serve(&root);
         return Ok(CallTarget::Served);
     }
     if served_root.as_deref() == Some(root.canonical()) {
         return served(state);
     }
-    if target.reach == Reach::Served {
+    if reach == Reach::Served {
         return Err(TargetError::OtherProjectRefused);
     }
     Ok(CallTarget::Other(Box::new(state.open(&root))))
+}
+
+/// The refusal of a served session or a session without a root or runtime:
+/// unreachable, since every session is opened from disk with both.
+fn unreachable_no_project() -> McpError {
+    McpError::new(
+        ErrorCode::InternalError,
+        "the call's project has no root or runtime",
+    )
 }
 
 /// The target argument `name` of the call, read as `T`: none when absent
@@ -766,32 +766,21 @@ pub trait Input {
     fn given<'c>(call: &'c Call<'_>) -> Result<Self::Given<'c>, Box<McpError>>;
 }
 
-/// How a handler given a project reaches it: one of four marker types.
+/// How a handler given a project reaches it: one of two marker types.
 pub trait Reaches {
-    const TARGET: ProjectTarget;
+    const REACH: Reach;
 }
 
-/// The served project, brought up to date ([`ProjectTarget::SERVED`]).
+/// The served project, brought up to date.
 pub struct Served;
-/// The served project, unless `use_cached` ([`ProjectTarget::SERVED_UNLESS_CACHED`]).
-pub struct ServedUnlessCached;
-/// The served project or the one `path` names, brought up to date
-/// ([`ProjectTarget::ANY`]).
+/// The served project or the one `path` names, brought up to date.
 pub struct AnyProject;
-/// The same, unless `use_cached` ([`ProjectTarget::ANY_UNLESS_CACHED`]).
-pub struct AnyUnlessCached;
 
 impl Reaches for Served {
-    const TARGET: ProjectTarget = ProjectTarget::SERVED;
-}
-impl Reaches for ServedUnlessCached {
-    const TARGET: ProjectTarget = ProjectTarget::SERVED_UNLESS_CACHED;
+    const REACH: Reach = Reach::Served;
 }
 impl Reaches for AnyProject {
-    const TARGET: ProjectTarget = ProjectTarget::ANY;
-}
-impl Reaches for AnyUnlessCached {
-    const TARGET: ProjectTarget = ProjectTarget::ANY_UNLESS_CACHED;
+    const REACH: Reach = Reach::AnyProject;
 }
 
 /// Given nothing: reads no project (explain). `TargetSpec::Unscoped`.
@@ -799,12 +788,12 @@ pub struct Unscoped;
 
 /// Given the project view of the project `R` reaches; with nothing served,
 /// the empty session's (ADR 0025).
-/// `TargetSpec::Project { R::TARGET, EmptySession }`.
+/// `TargetSpec::Project { R::REACH, EmptySession }`.
 pub struct View<R = Served>(PhantomData<R>);
 
 /// Given the project `R` reaches, on disk (its root, its runtime, its view):
 /// with nothing served and no project named, refused before it runs.
-/// `TargetSpec::Project { R::TARGET, Refused }`.
+/// `TargetSpec::Project { R::REACH, Refused }`.
 pub struct Project<R = Served>(PhantomData<R>);
 
 /// Given the directory init creates and the runtime its extensions'
@@ -831,7 +820,7 @@ impl Input for Unscoped {
 impl<R: Reaches> Input for View<R> {
     type Given<'c> = ProjectView<'c>;
     const TARGET: TargetSpec = TargetSpec::Project {
-        target: R::TARGET,
+        reach: R::REACH,
         without: WithoutProject::EmptySession,
     };
 
@@ -843,7 +832,7 @@ impl<R: Reaches> Input for View<R> {
 impl<R: Reaches> Input for Project<R> {
     type Given<'c> = ProjectRef<'c>;
     const TARGET: TargetSpec = TargetSpec::Project {
-        target: R::TARGET,
+        reach: R::REACH,
         without: WithoutProject::Refused,
     };
 
@@ -874,67 +863,49 @@ mod tests {
 
     #[specforge_test_macros::test(
         behavior = "list_mcp_tools",
-        verify = "a tool's path and use_cached are declared once, by its target"
+        verify = "a tool's path is declared once, by its target"
     )]
     fn each_input_makes_its_target() {
-        let project = |target, without| TargetSpec::Project { target, without };
+        let project = |reach, without| TargetSpec::Project { reach, without };
         assert_eq!(Unscoped::TARGET, TargetSpec::Unscoped);
         assert_eq!(NewProject::TARGET, TargetSpec::NewProject);
         assert_eq!(
             View::<Served>::TARGET,
-            project(ProjectTarget::SERVED, WithoutProject::EmptySession)
+            project(Reach::Served, WithoutProject::EmptySession)
         );
         assert_eq!(
             View::<AnyProject>::TARGET,
-            project(ProjectTarget::ANY, WithoutProject::EmptySession)
+            project(Reach::AnyProject, WithoutProject::EmptySession)
         );
         assert_eq!(
             Project::<Served>::TARGET,
-            project(ProjectTarget::SERVED, WithoutProject::Refused)
-        );
-        assert_eq!(
-            Project::<ServedUnlessCached>::TARGET,
-            project(ProjectTarget::SERVED_UNLESS_CACHED, WithoutProject::Refused)
+            project(Reach::Served, WithoutProject::Refused)
         );
         assert_eq!(
             Project::<AnyProject>::TARGET,
-            project(ProjectTarget::ANY, WithoutProject::Refused)
-        );
-        assert_eq!(
-            Project::<AnyUnlessCached>::TARGET,
-            project(ProjectTarget::ANY_UNLESS_CACHED, WithoutProject::Refused)
+            project(Reach::AnyProject, WithoutProject::Refused)
         );
     }
 
     #[specforge_test_macros::test(
         behavior = "list_mcp_tools",
-        verify = "a tool's path and use_cached are declared once, by its target"
+        verify = "a tool's path is declared once, by its target"
     )]
-    fn target_arguments_follow_reach_and_freshness() {
+    fn target_arguments_follow_reach() {
         let names =
             |spec: TargetSpec| -> Vec<String> { spec.properties().keys().cloned().collect() };
         let mut specs = vec![TargetSpec::Unscoped, TargetSpec::NewProject];
         for reach in [Reach::Served, Reach::AnyProject] {
-            for freshness in [Freshness::Fresh, Freshness::FreshUnlessCached] {
-                for without in [WithoutProject::EmptySession, WithoutProject::Refused] {
-                    specs.push(TargetSpec::Project {
-                        target: ProjectTarget { reach, freshness },
-                        without,
-                    });
-                }
+            for without in [WithoutProject::EmptySession, WithoutProject::Refused] {
+                specs.push(TargetSpec::Project { reach, without });
             }
         }
         for spec in specs {
             let takes_path = match spec {
                 TargetSpec::Unscoped => false,
                 TargetSpec::NewProject => true,
-                TargetSpec::Project { target, .. } => target.reach == Reach::AnyProject,
+                TargetSpec::Project { reach, .. } => reach == Reach::AnyProject,
             };
-            let takes_cached = matches!(
-                spec,
-                TargetSpec::Project { target, .. }
-                    if target.freshness == Freshness::FreshUnlessCached
-            );
             let mut declared = names(spec);
             declared.sort();
             let mut fields: Vec<String> = spec
@@ -949,12 +920,9 @@ mod tests {
                 takes_path,
                 "{spec:?}"
             );
-            assert_eq!(
-                declared
-                    .iter()
-                    .any(|n| n == TargetArgument::UseCached.name()),
-                takes_cached,
-                "{spec:?}"
+            assert!(
+                declared.iter().all(|n| n != "use_cached"),
+                "{spec:?} lists use_cached"
             );
             assert_eq!(
                 spec.required(),
@@ -979,11 +947,11 @@ mod tests {
         );
         assert_eq!(
             described(TargetSpec::Project {
-                target: ProjectTarget::ANY,
+                reach: Reach::AnyProject,
                 without: WithoutProject::Refused,
             })
             .as_deref(),
-            Some("Project root path (uses initialized root if omitted)")
+            Some("Project root path (the served project if omitted)")
         );
     }
 
@@ -992,24 +960,42 @@ mod tests {
         verify = "a no-project refusal names path only for an entry that takes one"
     )]
     fn no_project_names_path_only_where_the_entry_takes_one() {
-        let error = no_project(Reach::AnyProject);
+        let adopts = |reach| NoProject {
+            reach,
+            serving: Serving::Adopts,
+        };
+        let error = no_project(adopts(Reach::AnyProject));
         assert_eq!(error.code, ErrorCode::PreconditionFailed);
         assert_eq!(error.argument.as_deref(), Some("path"));
         assert!(error.message.contains("pass {\"path\": ...}"));
         // The client can fix it: -32602 where there is no `isError`.
         assert_eq!(error.into_rpc_error().code, -32602);
 
-        let error = no_project(Reach::Served);
+        let error = no_project(adopts(Reach::Served));
         assert_eq!(error.code, ErrorCode::PreconditionFailed);
         assert_eq!(error.argument, None);
         assert!(!error.message.contains("pass {"), "{}", error.message);
         assert!(error.message.contains("specforge mcp <root>"));
+        assert!(error.message.contains("call a tool that takes a `path`"));
         // No params fix it: a server-side -32603.
         assert_eq!(error.into_rpc_error().code, -32603);
 
+        // A stateless call may serve nothing: its hint names no call that would.
+        let error = no_project(NoProject {
+            reach: Reach::Served,
+            serving: Serving::Fixed,
+        });
+        assert_eq!(error.argument, None);
+        assert!(
+            error.message.contains("create one at its root"),
+            "{}",
+            error.message
+        );
+        assert!(!error.message.contains("call a tool"), "{}", error.message);
+
         // A read that named something refuses the same way, its hint the
         // entry's own.
-        let target = CallTarget::EmptySession(Reach::Served);
+        let target = CallTarget::EmptySession(adopts(Reach::Served));
         let refused = without_project(
             &target,
             crate::tool::entity_not_found(&specforge_graph::Graph::new(), "alpha"),
@@ -1018,7 +1004,7 @@ mod tests {
         assert_eq!(refused.argument, None);
         assert_eq!(refused.entity_id.as_deref(), Some("alpha"));
         assert!(!refused.message.contains("pass {"), "{}", refused.message);
-        let target = CallTarget::EmptySession(Reach::AnyProject);
+        let target = CallTarget::EmptySession(adopts(Reach::AnyProject));
         let refused = without_project(
             &target,
             crate::tool::entity_not_found(&specforge_graph::Graph::new(), "alpha"),
@@ -1031,6 +1017,10 @@ mod tests {
         verify = "a path that does not exist is a file_not_found error on path"
     )]
     fn each_target_refusal_names_its_argument() {
+        let adopts = |reach| NoProject {
+            reach,
+            serving: Serving::Adopts,
+        };
         let path = Some("path");
         for (error, argument) in [
             (TargetError::PathNotFound(PathBuf::from("x")), path),
@@ -1045,43 +1035,63 @@ mod tests {
             ),
             (
                 TargetError::InvalidArgument {
-                    argument: TargetArgument::UseCached,
-                    message: "not a boolean".into(),
+                    argument: TargetArgument::Path,
+                    message: "not a string".into(),
                 },
-                Some("use_cached"),
+                path,
             ),
             // `no_project` names `path` only where the entry takes one.
-            (TargetError::NoProject(Reach::Served), None),
-            (TargetError::NoProject(Reach::AnyProject), path),
+            (TargetError::NoProject(adopts(Reach::Served)), None),
+            (TargetError::NoProject(adopts(Reach::AnyProject)), path),
         ] {
             let refused = McpError::from(error.clone());
             assert_eq!(refused.argument.as_deref(), argument, "{error:?}");
         }
-        assert_eq!(TargetError::NoProject(Reach::AnyProject).argument(), None);
+        assert_eq!(
+            TargetError::NoProject(NoProject {
+                reach: Reach::AnyProject,
+                serving: Serving::Adopts
+            })
+            .argument(),
+            None
+        );
     }
 
     #[test]
     fn a_target_that_needs_a_project_refuses_when_none_is_served() {
         let mut state = McpState::new();
-        let mut refused = |spec| resolve(&mut state, spec, &serde_json::json!({}));
+        let revision = Revision::Negotiated(crate::lifecycle::LATEST_PROTOCOL_VERSION);
+        let mut refused = |spec| resolve(&mut state, revision, spec, &serde_json::json!({}));
 
         assert!(matches!(
             refused(TargetSpec::SERVED_PROJECT),
-            Err(TargetError::NoProject(Reach::Served))
+            Err(TargetError::NoProject(NoProject {
+                reach: Reach::Served,
+                serving: Serving::Adopts
+            }))
         ));
         let any = TargetSpec::Project {
-            target: ProjectTarget::ANY,
+            reach: Reach::AnyProject,
             without: WithoutProject::Refused,
         };
         let error = match refused(any) {
             Err(error) => error,
             Ok(_) => panic!("a project target resolved with nothing served"),
         };
-        assert_eq!(error, TargetError::NoProject(Reach::AnyProject));
+        assert_eq!(
+            error,
+            TargetError::NoProject(NoProject {
+                reach: Reach::AnyProject,
+                serving: Serving::Adopts
+            })
+        );
         assert_eq!(McpError::from(error).argument.as_deref(), Some("path"));
         assert!(matches!(
             refused(TargetSpec::SERVED_VIEW),
-            Ok(CallTarget::EmptySession(Reach::Served))
+            Ok(CallTarget::EmptySession(NoProject {
+                reach: Reach::Served,
+                serving: Serving::Adopts
+            }))
         ));
         assert!(matches!(
             refused(TargetSpec::Unscoped),
@@ -1090,8 +1100,26 @@ mod tests {
     }
 
     #[test]
+    fn serving_follows_the_revision() {
+        assert_eq!(
+            Serving::of(Revision::Stateless("2026-07-28")),
+            Serving::Fixed
+        );
+        for version in crate::lifecycle::PROTOCOL_VERSIONS {
+            assert_eq!(
+                Serving::of(Revision::Negotiated(version)),
+                Serving::Adopts,
+                "{version}"
+            );
+        }
+    }
+
+    #[test]
     fn without_project_names_the_file_from_the_refusal() {
-        let target = CallTarget::EmptySession(Reach::Served);
+        let target = CallTarget::EmptySession(NoProject {
+            reach: Reach::Served,
+            serving: Serving::Adopts,
+        });
 
         // The file is what the refusal says it is about, not what its
         // message happens to start with.

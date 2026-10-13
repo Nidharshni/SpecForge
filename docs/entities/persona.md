@@ -46,10 +46,10 @@ persona admin "System Administrator" {
 | Field | Type | Description |
 |-------|------|-------------|
 | `title` | string | Human-readable name (the string after the entity ID). |
-| `technical_level` | TechnicalLevel enum | Technical proficiency: `expert`, `advanced`, `intermediate`, `beginner`, `non_technical`. |
+| `technical_level` | TechnicalLevel enum | Technical proficiency: `expert`, `advanced`, `intermediate`, `beginner`, `non_technical`. Another value is E061. |
 | `goals` | string list | What this persona wants to achieve with the system. |
 | `pain_points` | string list | Frustrations or obstacles this persona faces. |
-| `status` | PersonaStatus enum | Lifecycle state: `active`, `deprecated`. Validated by W083. Absent status treated as `active` for incremental adoption. |
+| `status` | PersonaStatus enum | Lifecycle state: `active`, `deprecated`. Another value is E061. Absent status treated as `active` for incremental adoption. |
 | `reason` | string | Rationale for deprecation (expected when `status=deprecated`, checked by I069). |
 | `tags` | string list | Free-form tags for categorization. |
 | `refs` | reference list | External references (issues, tickets, diagrams) linked to this persona. |
@@ -58,20 +58,22 @@ persona admin "System Administrator" {
 
 ### Outgoing edges
 
-None. Personas are leaf nodes in the product graph.
+| To | Edge Type | Meaning |
+|----|-----------|---------|
+| `feature` | `PersonaPrioritizesFeature` | "This persona prioritizes these features" (via `key_features` field) |
 
 ### Incoming edges
 
 | From | Edge Type | Meaning |
 |------|-----------|---------|
-| `journey` | `JourneyPersona` | "This journey is performed by this persona" |
+| `journey` | `JourneyTargetsPersona` | "Journeys that are performed by this persona" (via `persona` field) |
 
 ## Validation Rules
 
 | Code | Level | Rule |
 |------|-------|------|
 | E003 | error | Journey `persona` field must resolve to a declared entity (E022 when the target isn't a persona). |
-| W083 | warning | Invalid `status` value (not in PersonaStatus enum). |
+| E061 | error | A value outside the field's vocabulary. |
 | I046 | info | Persona not referenced by any journey (unreferenced persona). |
 | I069 | info | Deprecated persona without a `reason`. |
 
@@ -116,7 +118,8 @@ Use `technical_level` to communicate UI/UX expectations:
 
 | Direction | Entity | Edge | Meaning |
 |-----------|--------|------|---------|
-| incoming | [journey](journey.md) | `JourneyPersona` | Journeys performed by this persona |
+| outgoing | [feature](feature.md) | `PersonaPrioritizesFeature` | Features this persona prioritizes |
+| incoming | [journey](journey.md) | `JourneyTargetsPersona` | Journeys that are performed by this persona |
 
 ## Examples
 
