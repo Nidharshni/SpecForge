@@ -457,3 +457,10 @@ file from a compile that had reported the E069.
 
 M11 is amended: `config_invalid` is also format's, migrate's and rename's refusal, decided by `blocks_rewrites`
 (a superset of `blocks_edits`).
+
+*(Amended, architecture round 9, plan 06, ADR 0076.)* `plan::check(&ProjectView, &AgentPlan) -> PlanOutcome` reads
+the graph and the entity snapshot, never the recorded report, and cannot fail. I1: `EntityFacts` no longer carries the
+coverage; `inspect::coverage(view, entity_id) -> Result<EntityCoverage, OpError>` is asked for by the surfaces that
+show it (MCP inspect, the hover), so the context prompt reads no report. I3 holds unchanged: the standing does not
+depend on the report, the coverage carries its error, MCP fails inspect on it, the hover shows it. `ProjectCoverage`
+holds what the recorded tests prove; standings are read through `ProjectView::entities`.

@@ -95,3 +95,7 @@ gone. What the round-8 amendment settled stays: refusals that shared a code have
 A second crate that needs the derive (it moves out of `specforge-mcp`'s namespace), an MCP revision
 whose argument model JSON Schema basics cannot state, or typed result structs for tools (then output
 schemas could be derived the same way).
+
+Amended by round 9 plan 06 (ADR 0076): the `AgentPlan` argument is `specforge_ops::plan::AgentPlan`, listed as its
+derived schema (the spec type `AgentPlan`), read from an object or a string holding its JSON, checked against that
+schema before it is decoded; its refusal names the argument and every place the value departs from the type.
