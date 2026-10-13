@@ -76,7 +76,6 @@ fn files_under(dir: &Path) -> Vec<PathBuf> {
     behavior = "record_test_via_drop_guard",
     verify = "without SPECFORGE_REPORT the report goes to the binary's cargo target directory, never the working directory"
 )]
-#[ignore = "fixed by T9"]
 fn the_report_goes_to_the_binarys_target_directory() {
     let tmp = tempfile::tempdir().unwrap();
     let target = tmp.path().join("build"); // a target directory with no `target` component
@@ -105,7 +104,6 @@ fn the_report_goes_to_the_binarys_target_directory() {
     behavior = "record_test_via_drop_guard",
     verify = "a binary outside any cargo target directory writes no report and says so"
 )]
-#[ignore = "fixed by T9"]
 fn a_binary_outside_a_target_directory_writes_no_report() {
     let tmp = tempfile::tempdir().unwrap();
     let project = tmp.path().join("project");

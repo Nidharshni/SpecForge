@@ -92,3 +92,30 @@ fn nextest_reports_are_per_test_and_prune_other_runs() {
     prune_superseded(dir.path(), "pkg--tests", None);
     assert_eq!(names(), vec!["other--tests.json", "pkg--tests_more.json"]);
 }
+
+/// Where a report goes without `SPECFORGE_REPORT`: the binary's cargo target
+/// directory, found by the markers cargo writes at its root.
+#[test]
+fn the_target_directory_is_the_nearest_marked_ancestor() {
+    use specforge_test::atexit::target_dir_of;
+
+    let tmp = tempfile::tempdir().unwrap();
+    let build = tmp.path().join("build");
+    std::fs::create_dir_all(&build).unwrap();
+    std::fs::write(
+        build.join("CACHEDIR.TAG"),
+        "Signature: 8a477f597d28d172789f06886806bc55\n",
+    )
+    .unwrap();
+    assert_eq!(target_dir_of(&build.join("debug/deps/x")), Some(build));
+
+    let other = tmp.path().join("other");
+    std::fs::create_dir_all(&other).unwrap();
+    std::fs::write(other.join(".rustc_info.json"), "{}").unwrap();
+    assert_eq!(
+        target_dir_of(&other.join("aarch64-apple-darwin/debug/deps/x")),
+        Some(other)
+    );
+
+    assert_eq!(target_dir_of(&tmp.path().join("loose/x")), None);
+}

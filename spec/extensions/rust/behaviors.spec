@@ -42,7 +42,11 @@ behavior record_test_via_drop_guard "Record Test via Drop Guard" {
     stays ignored and records nothing; run with `--ignored` it records its
     real result. Results MUST be written via an atexit handler
     to $SPECFORGE_REPORT when `specforge collect` sets it, else to
-    target/specforge/, one report per test target named
+    specforge/ in the cargo target directory the test binary was built
+    into (the nearest directory above it holding CACHEDIR.TAG or
+    .rustc_info.json), never to the working directory; a binary outside
+    any target directory writes none and says so. One report per test
+    target, named
     <package>--<target>.json so a rebuild replaces its predecessor.
     Each entry carries the test's module path, so a collector can match
     it to the test's line in libtest's output, and every report conforms

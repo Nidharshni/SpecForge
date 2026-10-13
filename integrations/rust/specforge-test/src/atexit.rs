@@ -1,5 +1,5 @@
 use crate::{registry, report};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Once;
 
 static INIT: Once = Once::new();
@@ -123,8 +123,13 @@ extern "C" fn on_exit() {
         return;
     }
 
-    let dir = report_dir();
-
+    let Some(dir) = report_dir() else {
+        eprintln!(
+            "[specforge-test] no report written: this test binary is not inside a cargo target \
+             directory; set SPECFORGE_REPORT to the directory to write it to"
+        );
+        return;
+    };
     let base = report_base();
     let nextest = nextest_run();
     prune_superseded(&dir, &base, nextest.as_ref().map(|(run, _)| run.as_str()));
@@ -139,25 +144,33 @@ extern "C" fn on_exit() {
     }
 }
 
-fn report_dir() -> PathBuf {
-    // `specforge collect` names the report directory when it runs the tests
-    // (`@specforge/cargo-test`), wherever the target directory lives.
+/// Files cargo writes only at a target directory's root: the cache-directory
+/// tag and the rustc-info cache. Two, because a target directory created
+/// before cargo first ran in it (`mkdir -p target/specforge`) gets
+/// `.rustc_info.json` but may lack the tag.
+const TARGET_MARKERS: [&str; 2] = ["CACHEDIR.TAG", ".rustc_info.json"];
+
+/// The cargo target directory `binary` was built into: its nearest ancestor
+/// holding a target marker. Test binaries live at
+/// `<target>/[<triple>/]<profile>/deps/`, and cargo exposes the target
+/// directory to them at run time only through that path. None for a binary
+/// outside any target directory.
+pub fn target_dir_of(binary: &Path) -> Option<PathBuf> {
+    binary
+        .ancestors()
+        .skip(1)
+        .find(|dir| TARGET_MARKERS.iter().any(|m| dir.join(m).is_file()))
+        .map(Path::to_path_buf)
+}
+
+/// Where this process's report goes: `$SPECFORGE_REPORT` when `specforge
+/// collect` set it, else `specforge/` in the binary's target directory. None
+/// when there is neither; the report is then not written, and never into the
+/// working directory.
+fn report_dir() -> Option<PathBuf> {
     if let Some(dir) = std::env::var_os("SPECFORGE_REPORT") {
-        return PathBuf::from(dir);
+        return Some(PathBuf::from(dir));
     }
-    // Walk up from the current exe to find target/, then use target/specforge/
-    std::env::current_exe()
-        .ok()
-        .and_then(|exe| {
-            let mut dir = exe.parent()?;
-            // exe is in target/debug/deps/ — walk up to target/
-            while dir.file_name().is_some() {
-                if dir.file_name().is_some_and(|n| n == "target") {
-                    return Some(dir.join("specforge"));
-                }
-                dir = dir.parent()?;
-            }
-            None
-        })
-        .unwrap_or_else(|| PathBuf::from("target/specforge"))
+    let exe = std::env::current_exe().ok()?;
+    target_dir_of(&exe).map(|target| target.join("specforge"))
 }
