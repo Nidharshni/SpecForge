@@ -14,6 +14,7 @@ use std::path::{Path, PathBuf};
 use serde_json::Value;
 use specforge_common::{Diagnostic, ProjectRoot};
 use specforge_graph::Graph;
+use specforge_ops::solver::Solver;
 use specforge_ops::view::ProjectView;
 use specforge_project::{ProjectSession, SharedRuntime};
 
@@ -242,6 +243,8 @@ pub struct ProjectRef<'a> {
     /// call never finds none (ADR 0017). For MCP's own extension adapters,
     /// which are not operations over the view.
     pub runtime: &'a SharedRuntime,
+    /// The host's SMT solver (the server's): what doctor checks.
+    pub solver: &'a dyn Solver,
     /// The project view, built once for the call: rooted at the project
     /// root, reporting what the server reports for the project.
     view: ProjectView<'a>,
@@ -476,6 +479,7 @@ impl<'s> Call<'s> {
                 Ok(ProjectRef {
                     root,
                     runtime,
+                    solver: &*self.state.solver,
                     view,
                     served: true,
                 })
@@ -492,6 +496,7 @@ impl<'s> Call<'s> {
                 Ok(ProjectRef {
                     root,
                     runtime,
+                    solver: &*self.state.solver,
                     view,
                     served: false,
                 })

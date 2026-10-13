@@ -1217,8 +1217,10 @@ fn analyze_prove_without_z3_is_one_w098_and_strict_fails() {
 }
 
 #[cfg(unix)]
-#[ignore = "fixed by T5"]
-#[test]
+#[specforge_test_macros::test(
+    behavior = "prove_declared_bounds_and_claims",
+    verify = "a solver call ends at its timeout, even when the solver leaves a child process"
+)]
 fn doctor_answers_within_the_probe_timeout_when_z3_hangs() {
     let dir = impossible_bounds();
     let started = std::time::Instant::now();
@@ -1248,4 +1250,49 @@ fn doctor_answers_within_the_probe_timeout_when_z3_hangs() {
             .contains("did not answer within 5s"),
         "{toolchain}"
     );
+}
+
+#[cfg(unix)]
+#[specforge_test_macros::test(
+    behavior = "run_doctor_check",
+    verify = "doctor's toolchain finding is the W098 specforge analyze --prove prints"
+)]
+fn doctor_states_the_w098_analyze_prints_when_z3_is_missing() {
+    let dir = impossible_bounds();
+    let absent = crate::toolchain::z3_absent();
+    let (prove, _) = prove_report(dir.path(), &absent, &[]);
+    let w098 = &prove["findings"][0];
+
+    let out = specforge_cmd()
+        .args(["doctor", "--format", "json", "--path"])
+        .arg(dir.path())
+        .env("PATH", &absent)
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(0));
+    let report: Value = serde_json::from_slice(&out.stdout).unwrap();
+    let toolchain = report["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["about"] == "toolchain")
+        .expect("a toolchain finding");
+    assert_eq!(toolchain["code"], "W098");
+    assert_eq!(toolchain["status"], "warn");
+    assert_eq!(toolchain["check"], w098["message"]);
+    assert_eq!(toolchain["remediation"], w098["suggestion"]);
+    assert_eq!(report["z3_available"], false);
+
+    let human = specforge_cmd()
+        .args(["doctor", "--path"])
+        .arg(dir.path())
+        .env("PATH", &absent)
+        .output()
+        .unwrap();
+    let text = String::from_utf8_lossy(&human.stdout);
+    assert!(
+        text.contains("Toolchain:\n  [WARN] [W098] the SMT solver z3 is not on PATH"),
+        "{text}"
+    );
+    assert!(!text.contains("z3 not on PATH \u{2014}"), "{text}");
 }

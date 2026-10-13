@@ -11,7 +11,7 @@
 //! diagnostic code to decide that. Beside them: the disk checks only doctor
 //! makes (the config file, the lock, installed binaries), the one source
 //! diagnostic about the setup (E013, an entity id that is a keyword) and
-//! whether the z3 solver is on PATH. The report's sections are filters of
+//! whether the SMT solver `analyze --prove` asks runs here (its W098). The report's sections are filters of
 //! that list ([`DoctorReport::about`]) and its verdict is
 //! [`DoctorReport::ok`].
 //!
@@ -28,6 +28,7 @@ use specforge_project::{Environment, SetupPart};
 use std::collections::BTreeMap;
 
 use crate::extension::Status;
+use crate::solver::{Availability, Solver};
 use crate::view::ProjectView;
 
 /// The finding code of a project root without `specforge.json`.
@@ -46,8 +47,6 @@ pub struct DoctorReport {
     pub enhancements: BTreeMap<String, Vec<EnhancementEntry>>,
     /// Lock entries whose binaries were checked.
     pub installed_count: usize,
-    /// Whether the z3 SMT solver is on PATH.
-    pub z3_available: bool,
     /// Every problem, once, in report order, each saying what it is about.
     pub findings: Vec<Finding>,
 }
@@ -189,7 +188,8 @@ pub enum About {
     /// An entity id that is a structural keyword or an extension's kind
     /// keyword (E013).
     Shadowing { keyword: String },
-    /// The z3 solver is not on PATH.
+    /// The SMT solver `specforge analyze --prove` asks does not run here: the
+    /// W098 it reports.
     Toolchain,
 }
 
@@ -277,6 +277,11 @@ impl DoctorReport {
         self.findings.iter().filter(move |f| f.about.part() == part)
     }
 
+    /// Whether the SMT solver runs here: no toolchain finding says otherwise.
+    pub fn z3_available(&self) -> bool {
+        self.about(Part::Toolchain).next().is_none()
+    }
+
     /// The findings where two contributions collide.
     pub fn conflicts(&self) -> impl Iterator<Item = &Finding> {
         self.about(Part::Conflict)
@@ -299,7 +304,7 @@ impl DoctorReport {
             extensions_ok: self.extensions_ok(),
             cache_status: self.cache_status(),
             installed_count: self.installed_count,
-            z3_available: self.z3_available,
+            z3_available: self.z3_available(),
             extensions: self.extensions.clone(),
             enhancements: self.enhancements.clone(),
             conflicts: self.conflicts().map(|f| f.check.clone()).collect(),
@@ -318,6 +323,8 @@ pub struct DoctorDocument {
     pub extensions_ok: bool,
     pub cache_status: CacheStatus,
     pub installed_count: usize,
+    /// Whether the SMT solver z3 runs here: false exactly when a toolchain
+    /// finding says why not.
     pub z3_available: bool,
     pub extensions: Vec<ExtensionHealth>,
     /// Entity enhancements keyed by the entity kind they target.
@@ -327,16 +334,10 @@ pub struct DoctorDocument {
     pub findings: Vec<Finding>,
 }
 
-/// The health report of the project the view was compiled from: its
-/// loaded declarations, the diagnostics its environment reports, and, with a
-/// root, its lock and installed binaries. Without a root the installation
-/// checks are skipped (`installed_count: 0`).
-pub fn diagnose(view: &ProjectView) -> DoctorReport {
-    diagnose_with(view, z3_on_path())
-}
-
-/// [`diagnose`] with the z3 probe supplied, so tests do not depend on PATH.
-pub fn diagnose_with(view: &ProjectView, z3_available: bool) -> DoctorReport {
+/// The health report of the project the view was compiled from: its loaded
+/// declarations, the diagnostics its environment reports, with a root its lock
+/// and installed binaries, and whether `solver` runs here.
+pub fn diagnose(view: &ProjectView, solver: &dyn Solver) -> DoctorReport {
     let declarations = view.registries().declarations();
     let env = view.env();
 
@@ -460,24 +461,15 @@ pub fn diagnose_with(view: &ProjectView, z3_available: bool) -> DoctorReport {
         findings.push(Finding::of(About::Shadowing { keyword }, diagnostic));
     }
 
-    // 4. The toolchain.
-    if !z3_available {
-        findings.push(Finding {
-            about: About::Toolchain,
-            check: "z3 on PATH".into(),
-            status: FindingStatus::Warn,
-            code: "z3_missing".into(),
-            remediation: "install z3; without it `specforge analyze --prove` skips SMT checks \
-                          (W098)"
-                .into(),
-        });
+    // 4. The toolchain: the solver `specforge analyze --prove` asks.
+    if let Availability::Unavailable(diagnostic) = solver.availability() {
+        findings.push(Finding::of(About::Toolchain, &diagnostic));
     }
 
     DoctorReport {
         extensions,
         enhancements,
         installed_count: view.lock().entries().len(),
-        z3_available,
         findings,
     }
 }
@@ -536,14 +528,6 @@ fn written_edge_types(fields: &[specforge_protocol_types::FieldDescriptor]) -> V
     edge_types
 }
 
-fn z3_on_path() -> bool {
-    std::process::Command::new("z3")
-        .arg("--version")
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
-}
-
 /// How to fix what `diag` reports: its own suggestion, else the
 /// catalogue's explanation of its code, else `fallback` (a code the
 /// catalogue doesn't have).
@@ -560,6 +544,7 @@ fn remediation(diag: &Diagnostic, fallback: impl FnOnce() -> String) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testing::ScriptedSolver;
     use crate::view::testing::Fixture;
     use specforge_test_macros::test as specforge_test;
 
@@ -612,7 +597,7 @@ mod tests {
         }];
         let fixture = Fixture::new().declarations(vec![declaration]);
 
-        let report = diagnose_with(&fixture.view(), true);
+        let report = diagnose(&fixture.view(), &ScriptedSolver::ready());
 
         let entry = &report.enhancements["behavior"][0];
         assert_eq!(entry.edge_types, ["Requires", "Ensures"]);
@@ -630,7 +615,7 @@ mod tests {
             declaring_kind("@acme/b", "memo"),
         ]);
 
-        let report = diagnose_with(&fixture.view(), true);
+        let report = diagnose(&fixture.view(), &ScriptedSolver::ready());
 
         assert_eq!(report.findings.len(), 1, "{:?}", report.findings);
         let finding = &report.findings[0];
@@ -666,7 +651,7 @@ mod tests {
             ])
             .reporting(vec![diag("W001", "unrelated", None)]);
 
-        let report = diagnose_with(&fixture.view(), true);
+        let report = diagnose(&fixture.view(), &ScriptedSolver::ready());
 
         let conflicts: Vec<&Finding> = report.conflicts().collect();
         assert_eq!(conflicts.len(), 1, "{:?}", report.findings);
@@ -746,7 +731,7 @@ mod tests {
             ]);
         let view = fixture.view();
 
-        let report = diagnose_with(&view, true);
+        let report = diagnose(&view, &ScriptedSolver::ready());
 
         let doctor: Vec<(&str, Option<&str>, &str, Status)> = report
             .extensions
@@ -812,7 +797,7 @@ mod tests {
             ])
             .lock(&[("@m/m", "1.0.0", "registry")]);
 
-        let report = diagnose_with(&fixture.view(), true);
+        let report = diagnose(&fixture.view(), &ScriptedSolver::ready());
 
         let names: Vec<&str> = report.extensions.iter().map(|e| e.name.as_str()).collect();
         assert_eq!(names, ["@a/a", "@m/m", "@z/z"]);
@@ -826,7 +811,7 @@ mod tests {
             failing_entry("@a/a", LoadProblem::NotInstalled),
         ]);
 
-        let report = diagnose_with(&fixture.view(), true);
+        let report = diagnose(&fixture.view(), &ScriptedSolver::ready());
 
         let checks: Vec<&str> = report.about(Part::Load).map(|f| f.check.as_str()).collect();
         assert_eq!(checks, ["@z/z did not load", "@a/a did not load"]);
@@ -859,7 +844,7 @@ mod tests {
             ),
         ]);
 
-        let report = diagnose_with(&fixture.view(), true);
+        let report = diagnose(&fixture.view(), &ScriptedSolver::ready());
 
         let remedies: Vec<&str> = report
             .about(Part::Load)
@@ -894,7 +879,7 @@ mod tests {
         let diagnostics = [e013];
 
         let fixture = Fixture::new().reporting(diagnostics.to_vec());
-        let report = diagnose_with(&fixture.view(), true);
+        let report = diagnose(&fixture.view(), &ScriptedSolver::ready());
 
         assert_eq!(report.about(Part::Conflict).count(), 0);
         let shadowed: Vec<&Finding> = report.about(Part::Shadowing).collect();
@@ -908,27 +893,25 @@ mod tests {
         assert!(report.findings.iter().any(|f| f.code == "E013"));
     }
 
-    #[test]
-    fn a_missing_z3_is_a_warning_not_an_error() {
-        let fixture = Fixture::new();
-        let report = diagnose_with(&fixture.view(), false);
+    #[specforge_test(
+        behavior = "run_doctor_check",
+        verify = "doctor reports a solver that does not run as the W098 analyze --prove reports, as a toolchain warning"
+    )]
+    fn a_solver_that_does_not_run_is_the_w098_prove_reports_as_a_toolchain_warning() {
+        let report = diagnose(&Fixture::new().view(), &ScriptedSolver::not_found());
         assert_eq!(
             finding_codes(&report),
-            [
-                ("I002", FindingStatus::Info),
-                ("z3_missing", FindingStatus::Warn)
-            ]
+            [("I002", FindingStatus::Info), ("W098", FindingStatus::Warn)]
         );
-        // Pins today's wording: T5 makes it the W098 `analyze --prove` reports.
+        let w098 = crate::solver::Z3::not_on_path();
         let toolchain: Vec<&Finding> = report.about(Part::Toolchain).collect();
         assert_eq!(toolchain.len(), 1);
-        assert_eq!(toolchain[0].check, "z3 on PATH");
+        assert_eq!(toolchain[0].check, w098.message);
         assert_eq!(
-            toolchain[0].remediation,
-            "install z3; without it `specforge analyze --prove` skips SMT checks (W098)"
+            Some(toolchain[0].remediation.as_str()),
+            w098.suggestion.as_deref()
         );
-        assert!(!report.document().z3_available);
-        assert!(report.ok());
+        assert!(report.ok() && !report.z3_available() && !report.document().z3_available);
         assert_eq!(report.cache_status(), CacheStatus::Ok);
     }
 
@@ -943,13 +926,13 @@ mod tests {
             specforge_installed::LoadProblem::NotInstalled,
             e028,
         )]);
-        let report = diagnose_with(&failing.view(), true);
+        let report = diagnose(&failing.view(), &ScriptedSolver::ready());
         let failures: Vec<&str> = report.about(Part::Load).map(|f| f.code.as_str()).collect();
         assert_eq!(failures, ["E028"]);
         assert!(!report.ok());
 
         let clean = Fixture::new();
-        let report = diagnose_with(&clean.view(), true);
+        let report = diagnose(&clean.view(), &ScriptedSolver::ready());
         assert_eq!(report.about(Part::Load).count(), 0);
         assert!(report.ok());
     }
@@ -960,7 +943,7 @@ mod tests {
             .declarations(vec![Fixture::declaration("@acme/loaded", "2.0.0")])
             .lock(&[("@acme/locked", "1.0.0", "registry")]);
 
-        let report = diagnose_with(&fixture.rootless_view(), true);
+        let report = diagnose(&fixture.rootless_view(), &ScriptedSolver::ready());
 
         assert_eq!(report.installed_count, 0);
         assert_eq!(report.cache_status(), CacheStatus::Ok);
@@ -969,7 +952,7 @@ mod tests {
         assert_eq!(report.extensions[0].status, Status::NotConfigured);
 
         // Rooted, the lock is read and its binary checked (missing here).
-        let report = diagnose_with(&fixture.view(), true);
+        let report = diagnose(&fixture.view(), &ScriptedSolver::ready());
         assert_eq!(report.installed_count, 1);
         assert_eq!(report.cache_status(), CacheStatus::Stale);
     }
@@ -989,7 +972,7 @@ mod tests {
     fn doctor_without_specforge_json_says_so() {
         let fixture = Fixture::new().without_config_file();
 
-        let report = diagnose_with(&fixture.view(), true);
+        let report = diagnose(&fixture.view(), &ScriptedSolver::ready());
 
         assert_eq!(
             finding_codes(&report),
@@ -1011,7 +994,7 @@ mod tests {
         // A project with specforge.json gets no such finding.
         let found = Fixture::new();
         assert_eq!(
-            finding_codes(&diagnose_with(&found.view(), true)),
+            finding_codes(&diagnose(&found.view(), &ScriptedSolver::ready())),
             [("I002", FindingStatus::Info)]
         );
     }
@@ -1023,7 +1006,7 @@ mod tests {
     fn a_rootless_view_has_no_config_missing_finding() {
         let fixture = Fixture::new().without_config_file();
 
-        let report = diagnose_with(&fixture.rootless_view(), true);
+        let report = diagnose(&fixture.rootless_view(), &ScriptedSolver::ready());
 
         assert_eq!(
             finding_codes(&report),
@@ -1079,7 +1062,7 @@ mod tests {
             Some(runtime.clone()),
         );
 
-        let report = diagnose_with(&ProjectView::of(&compiled), true);
+        let report = diagnose(&ProjectView::of(&compiled), &ScriptedSolver::ready());
 
         let about_greet: Vec<(&str, &str)> = report
             .findings
@@ -1133,7 +1116,7 @@ mod tests {
             &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
             Some(runtime),
         );
-        let report = diagnose_with(&ProjectView::of(&compiled), true);
+        let report = diagnose(&ProjectView::of(&compiled), &ScriptedSolver::ready());
         assert!(report.findings.is_empty(), "{:?}", report.findings);
     }
 
@@ -1149,7 +1132,7 @@ mod tests {
                 error: "expected value at line 1 column 41".into(),
             }]);
 
-        let report = diagnose_with(&fixture.view(), true);
+        let report = diagnose(&fixture.view(), &ScriptedSolver::ready());
 
         assert_eq!(
             finding_codes(&report),
@@ -1183,7 +1166,7 @@ mod tests {
             }])
             .declarations(vec![Fixture::declaration("@acme/x", "1.0.0")]);
 
-        let report = diagnose_with(&fixture.view(), true);
+        let report = diagnose(&fixture.view(), &ScriptedSolver::ready());
 
         assert_eq!(finding_codes(&report), [("W153", FindingStatus::Warn)]);
         assert_eq!(report.findings[0].about, About::Load);
@@ -1206,14 +1189,14 @@ mod tests {
         // With a root the lock's binary check states it (no lock entry here,
         // so nothing); without one nothing is checked on disk, so the
         // environment's own diagnostic is the finding.
-        let report = diagnose_with(&fixture.rootless_view(), true);
+        let report = diagnose(&fixture.rootless_view(), &ScriptedSolver::ready());
 
         assert_eq!(report.about(Part::Binary).count(), 0);
         let loads: Vec<&str> = report.about(Part::Load).map(|f| f.code.as_str()).collect();
         assert_eq!(loads, ["E028"]);
         assert!(!report.ok() && !report.extensions_ok());
 
-        let rooted = diagnose_with(&fixture.view(), true);
+        let rooted = diagnose(&fixture.view(), &ScriptedSolver::ready());
         assert_eq!(
             rooted.about(Part::Load).count(),
             0,

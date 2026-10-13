@@ -217,6 +217,16 @@ impl McpServer {
         self.state.extension_runtime = Some(runtime);
         self
     }
+
+    /// The same server, doctor checking `solver` instead of z3 from PATH: how a test fixes what
+    /// doctor's toolchain finding says (`specforge_ops::testing::ScriptedSolver`).
+    pub fn with_solver(
+        mut self,
+        solver: std::sync::Arc<dyn specforge_ops::solver::Solver>,
+    ) -> Self {
+        self.state.solver = solver;
+        self
+    }
 }
 
 fn serialize_response(response: &JsonRpcResponse) -> String {
