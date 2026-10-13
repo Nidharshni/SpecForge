@@ -11,9 +11,10 @@
 
 use crate::navigate;
 use crate::options::{Choice, OptionTable};
+use crate::schema_version::{VersionedSchema, negotiate_version};
 use crate::view::ProjectView;
 use crate::{OpError, OpErrorKind};
-use specforge_common::Diagnostic;
+use specforge_common::{Diagnostic, codes};
 use specforge_emitter::{
     EmitFormat, EmitOptions, EmitterError, GraphProtocolSchema, SchemaVersion, emit,
 };
@@ -143,6 +144,14 @@ impl Request<'_> {
 /// carries is the view's versioned schema (`specforge export`'s version,
 /// computed against the root's schema cache, which this only reads).
 pub fn export(view: &ProjectView, request: &Request) -> Result<String, OpError> {
+    export_versioned(view, &view.versioned_schema(), request)
+}
+
+fn export_versioned(
+    view: &ProjectView,
+    versioned: &VersionedSchema,
+    request: &Request,
+) -> Result<String, OpError> {
     if request.depth.is_some() && request.scope.is_none() {
         return Err(OpError::new(
             OpErrorKind::InvalidInput,
@@ -151,7 +160,10 @@ pub fn export(view: &ProjectView, request: &Request) -> Result<String, OpError> 
         ));
     }
     let schema = if request.attaches_schema() {
-        Some(negotiated(view.versioned_schema(), request.schema_version)?)
+        Some(negotiated(
+            versioned.schema().clone(),
+            request.schema_version,
+        )?)
     } else {
         None
     };
@@ -168,13 +180,13 @@ pub fn export(view: &ProjectView, request: &Request) -> Result<String, OpError> 
     emit(view.graph(), &options).map_err(|error| failure(view, error))
 }
 
-/// What `specforge export` did: the export, the schema's breaking changes
-/// against the view root's cache (W053, found before the export ran), and
-/// what became of the cache.
+/// What `specforge export` did: the export, what versioning reports against
+/// the view root's record (W053, found before the export ran), and what
+/// became of the record.
 #[derive(Debug)]
 pub struct RecordedExport {
     pub export: Result<String, OpError>,
-    pub breaking: Vec<Diagnostic>,
+    pub diagnostics: Vec<Diagnostic>,
     pub cache: CacheWrite,
 }
 
@@ -196,15 +208,11 @@ pub enum CacheWrite {
 /// carrying the cached version bumped by what changed, and record it after
 /// a successful export. MCP never calls it.
 pub fn export_recorded(view: &ProjectView, request: &Request) -> RecordedExport {
-    let cache = view.schema_cache();
-    let generated = view.versioned_schema();
-    let breaking = cache
-        .as_ref()
-        .map(|cache| cache.breaking_changes(&generated))
-        .unwrap_or_default();
-    let export = export(view, request);
-    let cache = match (&export, cache) {
-        (Ok(_), Some(cache)) => match cache.record(&generated) {
+    let versioned = view.versioned_schema();
+    let diagnostics = versioned.diagnostics();
+    let export = export_versioned(view, &versioned, request);
+    let cache = match (&export, view.schema_cache()) {
+        (Ok(_), Some(cache)) => match cache.record(&versioned) {
             Ok(()) => CacheWrite::Written,
             Err(error) => CacheWrite::WriteFailed {
                 dir: cache.dir().to_path_buf(),
@@ -215,7 +223,7 @@ pub fn export_recorded(view: &ProjectView, request: &Request) -> RecordedExport 
     };
     RecordedExport {
         export,
-        breaking,
+        diagnostics,
         cache,
     }
 }
@@ -255,8 +263,8 @@ fn negotiated(
     })?;
     let max = schema.schema_version.clone();
     let min = SchemaVersion::new(max.major, 0, 0);
-    specforge_emitter::negotiate_version(&requested, &min, &max)
-        .map_err(|e| OpError::coded(OpErrorKind::Conflict, e.code(), e.reason))?;
+    negotiate_version(&requested, &min, &max)
+        .map_err(|e| OpError::coded(OpErrorKind::Conflict, codes::E027, e.reason))?;
     schema.schema_version = requested;
     Ok(schema)
 }

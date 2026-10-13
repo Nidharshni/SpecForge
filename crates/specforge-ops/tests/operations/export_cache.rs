@@ -30,7 +30,7 @@ fn export_recorded_compares_then_records_on_success() {
     // No cache yet: nothing breaks, and the export records it.
     let first = export_recorded(&project.view(), &request);
     assert!(first.export.is_ok());
-    assert!(first.breaking.is_empty(), "{:?}", first.breaking);
+    assert!(first.diagnostics.is_empty(), "{:?}", first.diagnostics);
     assert_eq!(first.cache, CacheWrite::Written);
     assert!(
         cache_file(&project).is_file(),
@@ -51,15 +51,15 @@ fn export_recorded_compares_then_records_on_success() {
     let second = export_recorded(&project.view(), &request);
     assert!(second.export.is_ok());
     assert!(
-        second.breaking.iter().any(|d| d.code == "W053"),
+        second.diagnostics.iter().any(|d| d.code == "W053"),
         "{:?}",
-        second.breaking
+        second.diagnostics
     );
     assert_eq!(second.cache, CacheWrite::Written);
 
     // Recorded: the next export compares against what it found.
     let third = export_recorded(&project.view(), &request);
-    assert!(third.breaking.is_empty(), "{:?}", third.breaking);
+    assert!(third.diagnostics.is_empty(), "{:?}", third.diagnostics);
 }
 
 #[test]
