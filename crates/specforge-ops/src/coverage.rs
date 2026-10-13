@@ -1,7 +1,8 @@
 //! The coverage view: each entity's coverage under the one rule
 //! `analyze coverage` applies, over the project view (ADR 0015).
 //!
-//! The MCP coverage tool, inspect, query and the review prompt read it;
+//! The MCP coverage tool, inspect's coverage, query and the review prompt read
+//! it;
 //! with no entity named it lists exactly the entities stats counts as
 //! testable, so its rows and stats' numbers cannot disagree.
 

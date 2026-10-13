@@ -367,8 +367,11 @@ fn hover_shows_each_coverage_case() {
         if let Some(expected) = expected
             && !facts.standing.exempt()
         {
-            let status =
-                specforge_ops::coverage::STATUS.name_of(facts.coverage.as_ref().unwrap().status());
+            let status = specforge_ops::coverage::STATUS.name_of(
+                specforge_ops::inspect::coverage(&state.view(), id)
+                    .unwrap()
+                    .status(),
+            );
             assert!(expected.contains(&format!("`{status}`")), "{id}");
         }
     }
@@ -500,7 +503,8 @@ fn hover_lists_the_diagnostics_not_already_shown() {
     let view = ProjectView::new(&g, &env, None, &recorded).reporting(&reported);
     let facts = specforge_ops::inspect::inspect(&view, "beta").unwrap();
 
-    let text = specforge_lsp::hover::entity(&facts, &[], false);
+    let coverage = specforge_ops::inspect::coverage(&view, "beta");
+    let text = specforge_lsp::hover::entity(&facts, &coverage, &[], false);
     assert!(
         text.ends_with(
             "**Diagnostics** *(2)*\n\
@@ -512,13 +516,13 @@ fn hover_lists_the_diagnostics_not_already_shown() {
     );
 
     // What the cursor already shows is not listed again.
-    let text = specforge_lsp::hover::entity(&facts, &[&cycle], false);
+    let text = specforge_lsp::hover::entity(&facts, &coverage, &[&cycle], false);
     assert!(
         text.ends_with("**Diagnostics** *(1)*\n- **X900** acme says no"),
         "{text}"
     );
     let all = [&reported[0], &reported[1]];
-    let text = specforge_lsp::hover::entity(&facts, &all, false);
+    let text = specforge_lsp::hover::entity(&facts, &coverage, &all, false);
     assert!(!text.contains("**Diagnostics**"), "{text}");
 }
 

@@ -88,11 +88,9 @@ impl CoreTool for Tool {
         let facts =
             specforge_ops::inspect::inspect(&view, &args.entity_id).map_err(Self::refused)?;
         // A recorded report that cannot be read fails the call (ADR 0004 D2-e).
-        let coverage = facts
-            .coverage
-            .as_ref()
-            .map_err(|e| McpError::from(e.clone()))?;
-        Ok(Reply::of(&facts, coverage).into())
+        let coverage =
+            specforge_ops::inspect::coverage(&view, &args.entity_id).map_err(McpError::from)?;
+        Ok(Reply::of(&facts, &coverage).into())
     }
 }
 

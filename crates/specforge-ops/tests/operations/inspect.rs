@@ -87,7 +87,7 @@ fn coverage_is_the_coverage_rows_verdict() {
     project.record_passing(&[("done", "first")]);
     let view = project.view();
     let facts = inspect(&view, "done").unwrap();
-    let coverage = facts.coverage.clone().unwrap();
+    let coverage = specforge_ops::inspect::coverage(&view, "done").unwrap();
     let row = specforge_ops::coverage::row(&view, "done")
         .unwrap()
         .unwrap();
@@ -105,7 +105,7 @@ fn without_a_report_the_coverage_is_unrecorded() {
     let project = standings();
     let view = project.view();
     let facts = inspect(&view, "done").unwrap();
-    let coverage = facts.coverage.clone().unwrap();
+    let coverage = specforge_ops::inspect::coverage(&view, "done").unwrap();
     assert!(!coverage.recorded);
     assert_eq!(coverage.status(), Status::Uncovered);
     assert_eq!(coverage.verdict.tests, 0);
@@ -133,8 +133,7 @@ fn an_unreadable_report_is_the_coverage_error_not_the_inspects() {
     let view = project.view();
     for (id, readable) in IDS.iter().zip(readable) {
         let facts = inspect(&view, id).expect("inspect does not fail on the report");
-        let error = facts
-            .coverage
+        let error = specforge_ops::inspect::coverage(&view, id)
             .expect_err("the coverage is the report's error");
         assert_eq!(error.code, "E045", "{id}");
         assert_eq!(facts.standing, &readable, "{id}");
