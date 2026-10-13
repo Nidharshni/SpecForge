@@ -29,8 +29,11 @@ behavior watch_file_system_for_changes "Watch File System for Changes" {
     When specforge watch is active, the system MUST monitor all .spec files
     under the spec root for changes using the OS file watching API.
     File creation, modification, and deletion MUST each trigger
-    recompilation of affected files. Changed paths are classified by the
-    project session (classify_project_changes). After any update that
+    recompilation of affected files. A directory created, moved or
+    deleted under the spec root changes every source under it, and an edit
+    to a symlinked source's target changes that source: the project
+    session turns each batch of changed paths into changes
+    (classify_project_changes). After any update that
     changes the session's inputs (an environment reload, an edit that names
     a file the checks read) the watcher follows the session's watch roots
     and brings the session up to date with what was written meanwhile
@@ -64,23 +67,38 @@ behavior classify_project_changes "Classify Project Changes" {
   category   command
   ports      [FileSystem]
   contract   """
-    A project session MUST classify a changed path by what the project is
-    built from: a .spec file that discovery finds under the spec root is a
-    source change, keyed relative to the spec root; specforge.json,
+    A project session MUST turn a batch of changed paths into changes by
+    comparing what the paths reach with what it last read: the comparison
+    bring_session_up_to_date makes, narrowed to the paths. A path under
+    the spec root reaches the sources at or under it: for a directory,
+    every source discovery finds in it now and every source the session
+    read from it; for a file, itself. The spec root, or a directory above
+    it, reaches every source. A source is keyed by its path relative to
+    the spec root, a symlink by its own name; a symlinked source's target,
+    or a directory above it, reaches that source. specforge.json,
     specforge.lock and every extension module the environment loaded (an
     installed extension's extension.wasm, a local .wasm entry) are
-    environment changes; specforge-cache.json, which check-phase passes
+    environment inputs; specforge-cache.json, which check-phase passes
     read, and every file a file_reference field or a file_exists rule
-    names, which the checks look for, are check-input changes; any other
-    path changes nothing. A detached session (no project) has no inputs:
-    a .spec path is a source keyed by itself and nothing else is an input.
-    Watch, the LSP and MCP MUST classify through the session. What a
-    changed path is, which directories watch watches, which files the LSP
+    names, which the checks look for, are check inputs. Each is reached
+    by its own path or by a directory above it, and a missing check
+    input's directory also by any file in it. A reached source or input
+    is a change when it differs from what the session read (size and
+    modification time, and the content when it was read within the
+    timestamp granularity); a directory created on the way to a missing
+    input's directory outside the root is that input's change, whatever
+    the stamps say. Any other path changes nothing. A detached session
+    (no project) takes no change from disk: its sources are the buffers
+    it holds.
+    Watch, the LSP and MCP MUST take changes through the session. What a
+    path reaches, which directories watch watches, which files the LSP
     asks its client to report and what the session stamps MUST all derive
-    from one set of session inputs, renewed when the environment loads and
-    each time the checks run. Watch's watch roots and the LSP's watchers
-    MUST cover every path the session classifies as an input (the LSP
-    spelling each under the project root as opened), and MUST follow every
+    from one set of session inputs, renewed when the environment loads,
+    when sources are read and each time the checks run. Watch's watch
+    roots and the LSP's watchers MUST cover every input and every
+    symlinked source's target (the LSP spelling each under the project
+    root as opened), the LSP MUST ask its client to report every entry
+    created or deleted under the project root, and both MUST follow every
     update that changes the inputs.
   """
   verify unit "a discovered .spec file is a source change keyed relative to the spec root"
@@ -115,7 +133,8 @@ behavior bring_session_up_to_date "Bring a Session Up to Date with Disk" {
     without a file watcher: it compares every discovered source and every
     environment and check input with what it last built from (size and
     modification time; a file modified within the timestamp granularity of
-    the last build counts as changed unless its content is unchanged) and
+    the last build counts as changed unless its content is unchanged, a
+    symlinked source compared through its link) and
     applies exactly those changes: sources by an update, environment
     inputs by an environment reload, check inputs by re-running the
     checks. Afterwards its graph and diagnostics MUST be those a fresh

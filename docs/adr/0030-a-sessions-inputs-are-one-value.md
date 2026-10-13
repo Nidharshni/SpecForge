@@ -26,6 +26,9 @@ and five places.
   it, and the session stamps and discovers through it. `Environment::{inputs, check_inputs,
   named_files, referenced_files}`, `EnvironmentInputs`, the classifier and the session's own
   `classify`/`changes`/`watch_roots` are gone.
+  *(ADR 0073: `classify` and `SessionInputs::changes` are gone; `ProjectSession::changes(paths)` is
+  the stamp comparison narrowed by the paths. The value also holds each symlinked source's
+  target.)*
   *(ADR 0055: complete. Import resolution reads no file, so a `.spec` file discovery does not find is no
   input of any kind.)*
 - **D2. When it changes.** It is made when the environment loads and renewed each time the checks
@@ -43,6 +46,8 @@ and five places.
 - **D4. Spelling.** Classification compares canonical paths. Watch roots are canonical (what the file
   watcher reports). The LSP's watchers name each input as the checks read it (OS resolution of
   `..`), re-spelled under the project root as the editor gave it, absolute outside it.
+  *(ADR 0073: a source path is compared by its directory's canonical form and its own name, so a
+  symlink is keyed by itself.)*
 - **D5. Detached.** A detached session's inputs are empty: a `.spec` path is a buffer source keyed
   by itself, nothing is watched, stamped or stale. `Origin` is gone. ADR 0025 D4 stands.
 - **D6. Missing directories.** An input directory outside the root that does not exist is watched

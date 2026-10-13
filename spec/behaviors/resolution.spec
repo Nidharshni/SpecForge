@@ -63,7 +63,10 @@ behavior resolve_use_imports "Resolve Use Imports" {
     A file under a skipped directory (target, node_modules, .git, .hg,
     dist, build) inside the spec root is not compiled either, on every
     surface; the spec root itself is read whatever its own name. Only
-    files are sources: a directory named like a .spec file is none.
+    files are sources: a directory named like a .spec file is none, and
+    a symlink is a source only when it resolves to a file, read through
+    the link wherever it points and keyed by its own path; a symlinked
+    directory is never entered.
   """
   verify unit "a use path resolves to the project source it names"
   verify unit "missing import file produces E025"

@@ -64,9 +64,12 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   text; an automatic rollback restores the texts its own run read. Backups are never removed.
 - **Project session**: a compiled project kept current, plus what it is built from: its **session
   inputs**, the stamps of what it last read, and where each environment load gets its extension runtime
-  (ADR 0047). It classifies any changed path through them, applies changes as an
-  update, an environment reload or a re-check, and can bring itself up to date with disk without a
-  watcher (`ensure_fresh`). A session is opened from disk or detached (no project: what the LSP
+  (ADR 0047). It turns any batch of changed paths into **changes**
+  (`ProjectSession::changes`): the comparison with what it last read that bringing it up to date
+  makes (`stale`), narrowed to what the paths reach (a directory reaches every source and input
+  under it, a symlinked source's target reaches that source, and a reached file is a change only
+  when it differs from its stamp). It applies changes as an update, an environment reload or a
+  re-check, and can bring itself up to date with disk without a watcher (`ensure_fresh`, ADR 0073). A session is opened from disk or detached (no project: what the LSP
   holds with no workspace folder and MCP while nothing is served). Watch, the LSP and MCP each hold
   one (`specforge_project::ProjectSession`; MCP's served one is always opened from disk, ADR 0025);
   watch and the LSP feed it watcher events and follow every update that changes its inputs
@@ -82,9 +85,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   sources are discovered (the spec root and `exclude`), its **environment inputs**
   (`specforge.json`, `specforge.lock`, the extension modules it loaded) and its **check inputs**
   (`specforge-cache.json` when check-phase passes read it, each file a `file_reference` field or a
-  `file_exists` rule names, and the directory of each such file that is missing). One value per
+  `file_exists` rule names, and the directory of each such file that is missing, and where each symlinked source's text
+  lies (its target)). One value per
   environment load, renewed each time the checks run (`specforge_project::SessionInputs`,
-  `ProjectSession::inputs`). What a changed path is, which directories watch watches, which files
+  `ProjectSession::inputs`). What a changed path reaches, which directories watch watches, which files
   the LSP asks its client to report and what the session stamps for freshness are all read from it;
   a detached session's inputs are empty (ADR 0030). Nothing else: an import names one of the sources,
   never a file on disk (ADR 0055).
@@ -576,7 +580,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   keys alone (`specforge_resolver`, ADR 0055). An editor buffer the session holds for such a path is a
   source, saved or not.
   The walk is `specforge_common::walk_spec_files`: the spec root is read whatever its own name, no
-  skipped directory below it is entered, no symlink is followed, and only files are sources. Format's
+  skipped directory below it is entered, no symlinked directory is entered, and only files are sources: a symlink is one when it resolves
+  to a file, read through the link and keyed by its own path (ADR 0073). Format's
   directory walk is the same walk, stopping at nested projects.
   An **exclude entry** is a gitignore-style pattern over a source's path (`specforge_common::Exclude`): no
   `/` but a trailing one matches a name at any depth, a `/` at the start or in the middle anchors it at the
