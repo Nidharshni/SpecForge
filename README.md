@@ -181,7 +181,7 @@ Projects are configured via **`specforge.json`** (like `tsconfig.json`):
 
 - **Parser** — Tree-sitter grammar that parses any `keyword name { ... }` block generically, with error recovery (collects multiple diagnostics, never fails fast).
 - **Graph** — typed entity graph over interned symbols (custom node/edge indexes), with cycle detection and subgraph queries. Reference resolution is one shared code path used by the CLI, LSP, and watch mode.
-- **Extension runtime** — every extension (including the builtins) is a WIT-typed wasip2 component executed through a single wasmtime component engine, with deterministic per-extension fuel limits. No native tier: builtins and third-party extensions are the same kind of plugin. The builtin blobs are vendored under `extensions/<name>/wasm/` and embedded in the binary; after changing an extension or the SDK, rebuild and re-vendor them with `cargo run -p xtask --bin build-blobs -- --install` (CI's `--check` fails when vendored blobs drift from their sources). The blob is built in a staged workspace, so `--install` from any checkout gives the same bytes; `--verify` checks it.
+- **Extension runtime** — every extension (including the builtins) is a WIT-typed wasip2 component executed through a single wasmtime component engine, with deterministic per-extension fuel limits. No native tier: builtins and third-party extensions are the same kind of plugin. The builtin blobs are vendored under `extensions/<name>/wasm/` and embedded in the binary. A change to anything a blob compiles from is re-vendored with `cargo run -p xtask --bin revendor` ([docs/agents/revendor.md](docs/agents/revendor.md)); `cargo gate` names the blobs a change feeds, and CI's bootstrap job rebuilds every blob from a cold clone and compares it with the vendored bytes.
 - **Surfaces** — CLI (`specforge-cli`), LSP (`specforge-lsp`), and MCP (`specforge-mcp`) all consume the same graph.
 
 The implementation is a Rust workspace (edition 2024) under [`crates/`](crates/).
@@ -190,7 +190,7 @@ The implementation is a Rust workspace (edition 2024) under [`crates/`](crates/)
 
 ## Development
 
-Run `scripts/setup-hooks.sh` once per clone: it points git at the tracked pre-commit hook, which checks the staged files in seconds (no pending `.snap.new`, rustfmt, spec formatting, and that every test's `verify` text exists in its spec entity). Run `scripts/gate.sh quick` before a PR and `scripts/gate.sh full` before a merge.
+Run `scripts/setup-hooks.sh` once per clone: the tracked pre-commit hook runs the hook's share of the check list on the staged files in seconds. Run `cargo gate` (what the working tree changed) before a PR and `cargo gate full` before a merge; CI runs `cargo gate ci`, the same list. `cargo gate list` prints every check, the run it joins and the paths that trigger it.
 
 ## Documentation
 

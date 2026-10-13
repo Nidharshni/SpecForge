@@ -1,13 +1,14 @@
 # Re-vendoring the builtins
 
 The builtin extensions and the test fixtures ship as wasm blobs committed under `<crate>/wasm/`, with the hash of everything
-they compile from in `inputs.json`. A change to those inputs makes `build-blobs --check` (and the gate) fail until
+they compile from in `inputs.json`. A change to those inputs makes the check list's `builtins` check (`build-blobs --check`) fail until
 the tree is re-vendored.
 
 ## When
 
-A change to any of: `extensions/*/src`, `fixtures/*/src`, `crates/specforge-extension-sdk`, its macros, `specforge-protocol-types`,
-`specforge-coverage`, or anything else listed in an `inputs.json`.
+A change to any file an `inputs.json` records: the guests' sources, the SDK and its macros, protocol-types, coverage,
+the root manifest's inherited tables. `cargo gate` runs the `builtins` check exactly then, and `build-blobs --check`
+names each changed input.
 
 ## How
 
@@ -33,4 +34,4 @@ A new committed blob is listed in `crates/specforge-component/src/committed.rs` 
 Declaration snapshots should change only when the change meant to change a declaration; a snapshot diff nobody
 intended is a bug. The doctor and MCP snapshots (`cargo insta review`) follow the declarations.
 
-Run it once per round or change set, after the last input changed, then `scripts/gate.sh full`.
+Run it once per round or change set, after the last input changed, then `cargo gate full`.

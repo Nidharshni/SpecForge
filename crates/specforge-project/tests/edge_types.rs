@@ -415,9 +415,9 @@ fn a_field_outside_a_declared_end_does_not_write_the_edge_type() {
     );
 }
 
-// REGRESSION: the builtins' edge rules keep their meaning. The dogfood half
-// (`specforge check .`: I015 1, I048 129, I068 15, I080 137, I081 125, W003 1,
-// W004 2, W005 1) is the gate's. Never flipped.
+// REGRESSION: the builtins' edge rules keep their meaning on a fixture project.
+// This repository's own spec is the check list's `specs` check: no errors, and
+// warnings at gate/baseline.json; its info counts are pinned nowhere. Never flipped.
 #[test]
 fn the_builtins_edge_rules_keep_their_meaning() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/todo-app");
