@@ -1,8 +1,14 @@
 //! The real server in process (`specforge_registry_server::testing`), as the HTTP client sees it.
 
 use sha2::{Digest, Sha256};
+use specforge_package::{PackageName, Version};
 use specforge_registry_server::testing::LocalRegistry;
+use specforge_registry_wire::address::Call;
 use specforge_registry_wire::{PackageMetadata, VersionList};
+
+fn tool() -> PackageName {
+    PackageName::parse("@acme/tool").unwrap()
+}
 
 fn get(url: &str) -> reqwest::blocking::Response {
     reqwest::blocking::get(url).expect("the local registry answers")
@@ -25,21 +31,25 @@ fn a_stored_package_is_served_as_published() {
         wasm,
     );
 
-    let list: VersionList = get(&format!("{}/packages/@acme%2Ftool", registry.url()))
+    let list: VersionList = get(&registry.root().address(&Call::Package(&tool())))
         .json()
         .unwrap();
     assert_eq!(list.versions, ["1.0.0"]);
 
-    let metadata: PackageMetadata = get(&format!("{}/packages/@acme%2Ftool/1.0.0", registry.url()))
-        .json()
-        .unwrap();
+    let metadata: PackageMetadata = get(&registry
+        .root()
+        .address(&Call::Version(&tool(), &Version::new(1, 0, 0))))
+    .json()
+    .unwrap();
     assert_eq!(metadata.sha256, sha256);
-    assert_eq!(metadata.wasm_url, "/packages/@acme%2Ftool/1.0.0/download");
+    assert_eq!(
+        metadata.wasm_url,
+        "/v1/packages/@acme%2Ftool/1.0.0/download"
+    );
 
-    let download = get(&format!(
-        "{}/packages/@acme%2Ftool/1.0.0/download",
-        registry.url()
-    ))
+    let download = get(&registry
+        .root()
+        .address(&Call::Download(&tool(), &Version::new(1, 0, 0))))
     .bytes()
     .unwrap();
     assert_eq!(download.as_ref(), wasm);
@@ -67,7 +77,7 @@ fn versions_list_in_store_order() {
             b"\0asm",
         );
     }
-    let list: VersionList = get(&format!("{}/packages/@acme%2Ftool", registry.url()))
+    let list: VersionList = get(&registry.root().address(&Call::Package(&tool())))
         .json()
         .unwrap();
     assert_eq!(list.versions, ["2.0.0", "1.0.0", "1.5.0"]);
@@ -91,8 +101,10 @@ fn a_stored_signature_reads_back_typed() {
         },
         wasm,
     );
-    let metadata: PackageMetadata = get(&format!("{}/packages/@acme%2Ftool/1.0.0", registry.url()))
-        .json()
-        .unwrap();
+    let metadata: PackageMetadata = get(&registry
+        .root()
+        .address(&Call::Version(&tool(), &Version::new(1, 0, 0))))
+    .json()
+    .unwrap();
     assert_eq!(metadata.signature, Some(signature));
 }

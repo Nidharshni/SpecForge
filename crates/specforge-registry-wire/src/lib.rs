@@ -10,7 +10,6 @@
 pub mod address;
 pub mod code;
 pub mod form;
-pub mod path;
 pub mod reply;
 pub mod signature;
 
@@ -269,7 +268,7 @@ mod tests {
             keywords: vec!["tool".into()],
             publisher: "acct_1".into(),
             published_at: "2026-10-08T00:00:00+00:00".into(),
-            wasm_url: "/packages/@acme%2Ftool/1.0.0/download".into(),
+            wasm_url: "/v1/packages/@acme%2Ftool/1.0.0/download".into(),
             signature: Some(signature.clone()),
             manifest: "{}".into(),
         };
@@ -284,7 +283,7 @@ mod tests {
                 "keywords": ["tool"],
                 "publisher": "acct_1",
                 "published_at": "2026-10-08T00:00:00+00:00",
-                "wasm_url": "/packages/@acme%2Ftool/1.0.0/download",
+                "wasm_url": "/v1/packages/@acme%2Ftool/1.0.0/download",
                 "signature": serde_json::from_str::<serde_json::Value>(&signature.to_json()).unwrap(),
                 "manifest": "{}",
             }),

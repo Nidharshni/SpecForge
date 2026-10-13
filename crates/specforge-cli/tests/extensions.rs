@@ -1039,7 +1039,7 @@ fn add_validates_registry_specifier() {
     fs::write(
         dir.path().join("specforge.json"),
         r#"{"name":"t","version":"0.1.0","extensions":[],
-            "registries":[{"alias":"local","url":"http://127.0.0.1:9/v1","default_registry":true}]}"#,
+            "registries":[{"alias":"local","url":"http://127.0.0.1:9","default_registry":true}]}"#,
     )
     .unwrap();
     let output = specforge_cmd()

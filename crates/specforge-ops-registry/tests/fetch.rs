@@ -14,7 +14,9 @@ use specforge_registry_client::testing::MemoryClient;
 use specforge_registry_client::{
     KnownKeys, RegistryConfig, SigningKey, load_known_keys_at, save_known_keys_at,
 };
-use specforge_registry_wire::{PackageMetadata, PackageSignature, SignedContent, sha256_hex};
+use specforge_registry_wire::{
+    PackageMetadata, PackageSignature, RegistryRoot, SignedContent, sha256_hex,
+};
 use specforge_test_macros::test as specforge_test;
 use std::path::{Path, PathBuf};
 use tempfile::TempDir;
@@ -84,12 +86,12 @@ impl Reply {
     }
 }
 
-const REGISTRY_URL: &str = "memory://local";
+const REGISTRY_URL: &str = "https://local.invalid";
 
 fn registry_config() -> RegistryConfig {
     RegistryConfig {
         alias: "local".to_string(),
-        url: REGISTRY_URL.to_string(),
+        url: RegistryRoot::parse(REGISTRY_URL).unwrap(),
         scope_filter: None,
         default_registry: true,
     }

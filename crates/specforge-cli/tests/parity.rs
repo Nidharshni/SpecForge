@@ -103,7 +103,7 @@ const CONFIG: &str = r#"{
   "spec_root": "spec",
   "extensions": ["@specforge/software"],
   "registries": [
-    { "alias": "offline", "url": "http://127.0.0.1:9/v1", "default_registry": true }
+    { "alias": "offline", "url": "http://127.0.0.1:9", "default_registry": true }
   ]
 }
 "#;

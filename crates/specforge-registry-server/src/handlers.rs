@@ -8,11 +8,11 @@ use axum::{
 use sha2::{Digest, Sha256};
 use specforge_package::PackageName;
 use specforge_package::Version;
-use specforge_registry_wire::address::{Endpoint, HEALTH};
+use specforge_registry_wire::address::{Call, Endpoint, HEALTH};
 use specforge_registry_wire::{
     ErrorBody, ErrorCode, PackageMetadata, PackageSignature, PublishReceipt, SearchHit,
     SearchQuery, SearchResults, SignedContent, TokenIssued, TokenList, TokenRequest, TokenRevoked,
-    TokenSummary, TokenVerified, VersionList, Yanked, form, path,
+    TokenSummary, TokenVerified, VersionList, Yanked, form,
 };
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -101,9 +101,8 @@ async fn get_package_version(
         return Err(ApiError::not_found(format!("{name}@{version} not found")));
     };
 
-    // Relative to the API base: clients compose this with their configured
-    // registry URL, which already carries the /v1 prefix.
-    let wasm_url = path::download(&package, &parsed);
+    // A path at the registry's root, prefix included: the route this server mounts for the download.
+    let wasm_url = Call::Download(&package, &parsed).path();
     let keywords: Vec<String> = if pkg.keywords.is_empty() {
         vec![]
     } else {

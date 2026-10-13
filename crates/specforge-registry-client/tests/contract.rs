@@ -11,7 +11,7 @@ use specforge_registry_client::{
     HttpRegistryClient, RegistryClient, RegistryError, SigningKey, publish_to_registry,
 };
 use specforge_registry_server::testing::LocalRegistry;
-use specforge_registry_wire::SearchQuery;
+use specforge_registry_wire::{RegistryRoot, SearchQuery};
 
 #[specforge_test_macros::test(
     port = "RegistryClient",
@@ -21,7 +21,7 @@ fn the_http_client_keeps_the_client_contract() {
     let server = LocalRegistry::start();
     let registry = RegistryConfig {
         alias: "local".to_string(),
-        url: server.url().to_string(),
+        url: server.root().clone(),
         scope_filter: None,
         default_registry: true,
     };
@@ -36,7 +36,7 @@ fn the_http_client_keeps_the_client_contract() {
 fn the_memory_client_keeps_the_client_contract() {
     let registry = RegistryConfig {
         alias: "memory".to_string(),
-        url: "memory://registry/v1".to_string(),
+        url: RegistryRoot::parse("https://memory.invalid").unwrap(),
         scope_filter: None,
         default_registry: true,
     };
@@ -56,7 +56,7 @@ fn the_private_contract_holds_over_http() {
     let server = LocalRegistry::start_private();
     let registry = RegistryConfig {
         alias: "local".to_string(),
-        url: server.url().to_string(),
+        url: server.root().clone(),
         scope_filter: None,
         default_registry: true,
     };
@@ -71,7 +71,7 @@ fn the_private_contract_holds_over_http() {
 fn the_private_contract_holds_in_memory() {
     let registry = RegistryConfig {
         alias: "memory".to_string(),
-        url: "memory://registry/v1".to_string(),
+        url: RegistryRoot::parse("https://memory.invalid").unwrap(),
         scope_filter: None,
         default_registry: true,
     };
@@ -82,32 +82,6 @@ fn the_private_contract_holds_in_memory() {
     assert_private_client_contract(&client, &registry, &credential);
 }
 
-/// The registry's root: what `LocalRegistry::url` names without the protocol's version prefix.
-fn root_of(server: &LocalRegistry) -> String {
-    server
-        .url()
-        .strip_suffix("/v1")
-        .expect("the local registry's URL ends in /v1 today")
-        .to_string()
-}
-
-#[specforge_test_macros::test(
-    port = "RegistryClient",
-    verify = "RegistryClient contract is satisfied"
-)]
-#[ignore = "fixed by T3"]
-fn the_http_client_keeps_the_contract_at_a_registry_root() {
-    let server = LocalRegistry::start();
-    let registry = RegistryConfig {
-        alias: "local".to_string(),
-        url: root_of(&server),
-        scope_filter: None,
-        default_registry: true,
-    };
-    let credential = RegistryCredential::new("local", server.token());
-    assert_client_contract(&HttpRegistryClient::new(), &registry, &credential);
-}
-
 #[specforge_test_macros::test(
     behavior = "check_registry_reply",
     verify = "a reply that is not the protocol's JSON is refused with R009, even with --allow-unsigned"
@@ -115,10 +89,10 @@ fn the_http_client_keeps_the_contract_at_a_registry_root() {
 #[ignore = "fixed by T4"]
 fn an_address_no_registry_serves_is_not_a_registry() {
     let server = LocalRegistry::start();
-    let root = format!("{}/elsewhere", root_of(&server));
+    let root = format!("{}/elsewhere", server.root());
     let registry = RegistryConfig {
         alias: "local".to_string(),
-        url: root.clone(),
+        url: RegistryRoot::parse(&root).unwrap(),
         scope_filter: None,
         default_registry: true,
     };

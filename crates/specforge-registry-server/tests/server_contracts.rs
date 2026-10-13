@@ -800,7 +800,7 @@ async fn the_server_answers_in_these_json_shapes() {
     );
     assert_eq!(
         metadata["wasm_url"],
-        "/packages/@test%2Fsigned-ext/1.0.0/download"
+        "/v1/packages/@test%2Fsigned-ext/1.0.0/download"
     );
     round_trips::<PackageMetadata>(&metadata);
 

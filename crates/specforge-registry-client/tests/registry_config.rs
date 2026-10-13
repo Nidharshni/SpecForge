@@ -12,7 +12,7 @@ fn registry_config_deserializes_from_json() {
     }"#;
     let config: RegistryConfig = serde_json::from_str(json).unwrap();
     assert_eq!(config.alias, "main");
-    assert_eq!(config.url, "https://registry.example.com");
+    assert_eq!(config.url.as_str(), "https://registry.example.com");
     assert_eq!(config.scope_filter, Some("@specforge".to_string()));
     assert!(config.default_registry);
 }
@@ -26,7 +26,7 @@ fn registry_config_deserializes_with_defaults() {
     }"#;
     let config: RegistryConfig = serde_json::from_str(json).unwrap();
     assert_eq!(config.alias, "minimal");
-    assert_eq!(config.url, "https://minimal.example.com");
+    assert_eq!(config.url.as_str(), "https://minimal.example.com");
     assert_eq!(config.scope_filter, None);
     assert!(!config.default_registry);
 }
@@ -118,7 +118,7 @@ fn no_hardcoded_urls_all_from_config() {
         "registries": [
             {
                 "alias": "custom",
-                "url": "https://my-private-registry.example.com/v1",
+                "url": "https://my-private-registry.example.com",
                 "default_registry": true
             }
         ]
@@ -126,8 +126,8 @@ fn no_hardcoded_urls_all_from_config() {
     let (registries, _) = parse_registries_from_config(json);
     assert_eq!(registries.len(), 1);
     assert_eq!(
-        registries[0].url,
-        "https://my-private-registry.example.com/v1"
+        registries[0].url.as_str(),
+        "https://my-private-registry.example.com"
     );
 
     // Parse empty config - no URLs should appear
@@ -152,4 +152,44 @@ fn invalid_json_produces_error() {
         .find(|d| d.code == "E067")
         .expect("expected E067 diagnostic");
     assert_eq!(error.severity, Severity::Error);
+}
+
+#[specforge_test_macros::test(
+    behavior = "configure_registries",
+    verify = "a registry url is the registry's root, and one ending in the protocol's version prefix is refused with E067 naming the root"
+)]
+fn a_url_ending_in_the_version_prefix_is_refused_naming_the_root() {
+    let json = r#"{"registries": [
+        {"alias": "main", "url": "https://r.example/v1", "default_registry": true}
+    ]}"#;
+
+    let (registries, diagnostics) = parse_registries_from_config(json);
+
+    assert!(registries.is_empty());
+    let refused: Vec<_> = diagnostics.iter().filter(|d| d.code == "E067").collect();
+    assert_eq!(refused.len(), 1, "{diagnostics:?}");
+    assert_eq!(
+        refused[0].message,
+        "Failed to parse registry entry at index 0: 'https://r.example/v1' ends in the registry protocol's version prefix /v1; name the registry's root: 'https://r.example'"
+    );
+}
+
+#[specforge_test_macros::test(
+    behavior = "configure_registries",
+    verify = "a registry url is the registry's root, and one ending in the protocol's version prefix is refused with E067 naming the root"
+)]
+fn a_url_that_is_not_an_http_url_is_refused() {
+    for url in ["registry.example.com", "ftp://r.example"] {
+        let json = format!(r#"{{"registries": [{{"alias": "main", "url": "{url}"}}]}}"#);
+
+        let (registries, diagnostics) = parse_registries_from_config(&json);
+
+        assert!(registries.is_empty(), "{url}");
+        assert!(
+            diagnostics
+                .iter()
+                .any(|d| d.code == "E067" && d.message.contains("registry entry at index 0")),
+            "{url}: {diagnostics:?}"
+        );
+    }
 }

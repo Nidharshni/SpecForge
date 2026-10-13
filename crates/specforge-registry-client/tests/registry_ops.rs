@@ -7,7 +7,9 @@ use specforge_registry_client::testing::{Call, CallKind, MemoryClient, package};
 use specforge_registry_client::{
     RegistryClient, RegistryConfig, RegistryCredential, RegistryError, SigningKey,
 };
-use specforge_registry_wire::{PackageMetadata, PackageSignature, SignedContent, path};
+use specforge_registry_wire::{
+    PackageMetadata, PackageSignature, RegistryRoot, SignedContent, address::Call as WireCall,
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -16,7 +18,7 @@ use specforge_registry_wire::{PackageMetadata, PackageSignature, SignedContent, 
 fn default_registry() -> RegistryConfig {
     RegistryConfig {
         alias: "default".to_string(),
-        url: "https://registry.specforge.dev".to_string(),
+        url: RegistryRoot::parse("https://registry.specforge.dev").unwrap(),
         scope_filter: None,
         default_registry: true,
     }
@@ -148,14 +150,10 @@ fn publish_returns_registry_url_on_success() {
     let manifest = minimal_manifest();
     let client = client();
 
-    let expected = format!(
-        "{}{}",
-        registry.url,
-        path::version(
-            &PackageName::parse("@test/ext").unwrap(),
-            &Version::new(1, 0, 0)
-        )
-    );
+    let expected = registry.url.address(&WireCall::Version(
+        &PackageName::parse("@test/ext").unwrap(),
+        &Version::new(1, 0, 0),
+    ));
     let url = publish_to_registry(
         b"fake-wasm-bytes",
         &manifest,

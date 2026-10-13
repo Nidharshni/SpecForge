@@ -526,7 +526,7 @@ fn mcp_add_extension_without_registry_makes_no_network_call() {
 // show them on stderr; an entry that can't be read is skipped, and when
 // none can be read the command fails with E067 instead of E063.
 
-const UNREACHABLE: &str = "http://registry.invalid/v1";
+const UNREACHABLE: &str = "http://registry.invalid";
 
 /// A project whose specforge.json has `registries` set to `registries`.
 fn project_with_registries(registries: serde_json::Value) -> TempDir {
@@ -838,8 +838,8 @@ fn adding_an_installed_registry_package_shows_no_registry_configuration() {
         "version": "0.1.0",
         "extensions": ["@specforge/software"],
         "registries": [
-            {"alias": "local", "url": registry.url(), "default_registry": true},
-            {"alias": "local", "url": "http://registry.invalid/v1"},
+            {"alias": "local", "url": registry.root().as_str(), "default_registry": true},
+            {"alias": "local", "url": "http://registry.invalid"},
         ],
     });
     std::fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
@@ -1114,7 +1114,7 @@ fn login_with_an_unknown_registry_is_refused_before_any_request() {
 )]
 fn a_failed_registry_is_reported_once_and_search_fails_when_all_did() {
     let dir = project_with_registries(serde_json::json!([
-        {"alias": "down", "url": "http://127.0.0.1:9/v1", "default_registry": true}
+        {"alias": "down", "url": "http://127.0.0.1:9", "default_registry": true}
     ]));
     let home = TempDir::new().unwrap();
 
@@ -1733,13 +1733,11 @@ fn json_run(
     behavior = "search_registry",
     verify = "queries all configured registries"
 )]
-#[ignore = "fixed by T3"]
 fn a_registry_named_by_its_root_is_searched() {
     use crate::published::{Package, serve};
     let registry = serve(vec![Package::new("@sdk/greet", "0.1.0", greet_wasm())]);
-    let root = registry.url().strip_suffix("/v1").unwrap().to_string();
     let dir = project_with_registries(
-        serde_json::json!([{"alias": "local", "url": root, "default_registry": true}]),
+        serde_json::json!([{"alias": "local", "url": registry.root().as_str(), "default_registry": true}]),
     );
     let home = TempDir::new().unwrap();
 
@@ -1758,7 +1756,7 @@ fn a_registry_named_by_its_root_is_searched() {
 fn login_at_an_address_no_registry_serves_is_r009() {
     use crate::published::{Package, serve};
     let registry = serve(vec![Package::new("@sdk/greet", "0.1.0", greet_wasm())]);
-    let root = registry.url().strip_suffix("/v1").unwrap();
+    let root = registry.root().as_str();
     let dir = project_with_registries(serde_json::json!([
         {"alias": "local", "url": format!("{root}/elsewhere"), "default_registry": true}
     ]));
@@ -1768,4 +1766,33 @@ fn login_at_an_address_no_registry_serves_is_r009() {
 
     assert!(!ok, "{json}");
     assert_eq!(json["code"], "R009", "{json}");
+}
+
+#[specforge_test(
+    behavior = "configure_registries",
+    verify = "a registry url is the registry's root, and one ending in the protocol's version prefix is refused with E067 naming the root"
+)]
+fn a_registry_url_with_the_version_prefix_is_refused_before_any_request() {
+    let spy = NetSpy::start();
+    let dir = project_with_registries(serde_json::json!([
+        {"alias": "main", "url": "http://registry.invalid/v1", "default_registry": true}
+    ]));
+    let output = spy
+        .command(&["search", "greet", "--format", "json", "--path"])
+        .arg(dir.path())
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let json: serde_json::Value =
+        serde_json::from_str(&stdout).unwrap_or_else(|e| panic!("not JSON ({e}): {stdout}"));
+    assert_eq!(json["code"], "E067", "{json}");
+    assert!(
+        json["error"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("name the registry's root: 'http://registry.invalid'"),
+        "{json}"
+    );
+    // The `hits == 0` assertion lands with the whole array read before any request (T5).
 }

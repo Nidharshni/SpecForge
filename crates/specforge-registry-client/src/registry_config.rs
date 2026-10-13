@@ -1,10 +1,12 @@
 use serde::{Deserialize, Serialize};
 use specforge_common::{Diagnostic, codes};
+use specforge_registry_wire::RegistryRoot;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RegistryConfig {
     pub alias: String,
-    pub url: String,
+    /// The registry's root (an http or https URL without the protocol's `/v1`).
+    pub url: RegistryRoot,
     #[serde(default)]
     pub scope_filter: Option<String>,
     #[serde(default)]
