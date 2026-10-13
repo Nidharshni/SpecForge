@@ -992,3 +992,88 @@ fn watch_sees_an_edit_to_a_symlinked_sources_target() {
         "{event}"
     );
 }
+
+/// The `(code, line)` of each diagnostic in `list` that has a line.
+fn located(list: &serde_json::Value) -> Vec<(String, i64)> {
+    list.as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|d| Some((d["code"].as_str()?.to_string(), d["line"].as_i64()?)))
+        .collect()
+}
+
+/// The next event whose `diagnostics` hold an E025 at `line`.
+fn event_with_e025_at(rx: &mpsc::Receiver<String>, line: i64) -> serde_json::Value {
+    // Not `next_event`: a change that only moves a diagnostic leaves the
+    // graph delta empty, and `next_event` skips such an update.
+    let deadline = Instant::now() + Duration::from_secs(60);
+    while Instant::now() < deadline {
+        let Ok(text) = rx.recv_timeout(Duration::from_millis(200)) else {
+            continue;
+        };
+        let Ok(event) = serde_json::from_str::<serde_json::Value>(&text) else {
+            continue;
+        };
+        if event["event"] == "rebuilt"
+            && located(&event["diagnostics"]).contains(&("E025".to_string(), line))
+        {
+            return event;
+        }
+    }
+    panic!("no rebuilt event reported an E025 at line {line}");
+}
+
+#[specforge_test(
+    behavior = "notify_delta_subscribers",
+    verify = "watch --format json prints the diagnostics each update added and removed"
+)]
+#[ignore = "fixed by T4"]
+fn watch_prints_the_diagnostics_each_update_added_and_removed() {
+    let project = TempDir::new().unwrap();
+    fs::write(
+        project.path().join("specforge.json"),
+        r#"{"name":"w","version":"0.1.0"}"#,
+    )
+    .unwrap();
+    let alpha = "behavior alpha \"Alpha\" {\n}\n";
+    fs::write(project.path().join("main.spec"), alpha).unwrap();
+
+    let (rx, child) = spawn_watch(&project);
+    wait_for_line(&rx, "\"event\":\"ready\"", Duration::from_secs(60))
+        .expect("watch never reported ready");
+    std::thread::sleep(Duration::from_millis(300));
+
+    // An import that resolves to nothing adds an E025: a diagnostic the
+    // graph build does not report.
+    fs::write(
+        project.path().join("main.spec"),
+        format!("use \"missing\"\n{alpha}"),
+    )
+    .unwrap();
+    let added = event_with_e025_at(&rx, 1);
+    assert_eq!(
+        located(&added["diagnostics_delta"]["added"]),
+        [("E025".to_string(), 1)],
+        "{added}"
+    );
+    assert_eq!(added["diagnostics_delta"]["removed"], serde_json::json!([]));
+
+    // Moving it two lines down removes it where it was and adds it where it is.
+    fs::write(
+        project.path().join("main.spec"),
+        format!("\n\nuse \"missing\"\n{alpha}"),
+    )
+    .unwrap();
+    let moved = event_with_e025_at(&rx, 3);
+    drop(child);
+    assert_eq!(
+        located(&moved["diagnostics_delta"]["removed"]),
+        [("E025".to_string(), 1)],
+        "{moved}"
+    );
+    assert_eq!(
+        located(&moved["diagnostics_delta"]["added"]),
+        [("E025".to_string(), 3)],
+        "{moved}"
+    );
+}

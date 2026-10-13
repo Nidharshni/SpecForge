@@ -2721,6 +2721,81 @@ fn contract_diagnostics_notification() {
     assert_eq!(events(&server, "mcp_delta_notified").len(), 2);
 }
 
+/// Serve `before` as test.spec, subscribe to the diagnostics, rewrite the
+/// file to `after` and rebuild: the `(removed, added)` of the one
+/// `specforge/diagnosticsChanged` the subscriber hears, after the
+/// `resources/updated` that precedes it.
+fn diagnostics_heard_after(before: &str, after: &str) -> (Vec<Value>, Vec<Value>) {
+    let (mut server, spec) = project_server();
+    std::fs::write(&spec, before).unwrap();
+    rebuild(&mut server);
+    subscribe(&mut server, "specforge://diagnostics");
+    server.take_notifications();
+    std::fs::write(&spec, after).unwrap();
+    rebuild(&mut server);
+    let notifications = server.take_notifications();
+    assert_eq!(notifications.len(), 2, "{notifications:?}");
+    assert_eq!(notifications[0], updated("specforge://diagnostics"));
+    assert_eq!(notifications[1]["method"], "specforge/diagnosticsChanged");
+    let side = |name: &str| notifications[1]["params"][name].as_array().unwrap().clone();
+    (side("removed"), side("added"))
+}
+
+/// `(code, line)` of each diagnostic.
+fn located(diagnostics: &[Value]) -> Vec<(String, i64)> {
+    diagnostics
+        .iter()
+        .map(|d| {
+            (
+                d["code"].as_str().unwrap().to_string(),
+                d["line"].as_i64().unwrap(),
+            )
+        })
+        .collect()
+}
+
+#[specforge_test(
+    behavior = "notify_diagnostics_delta_via_mcp",
+    verify = "a diagnostic that moved is removed where it was and added where it is"
+)]
+#[ignore = "fixed by T3"]
+fn a_moved_diagnostic_is_notified() {
+    let text = "behavior alpha \"Alpha\" {\n}\nbogus thing\n";
+    let (removed, added) = diagnostics_heard_after(text, &format!("\n\n\n{text}"));
+    assert_eq!(located(&removed), [("E001".to_string(), 3)]);
+    assert_eq!(located(&added), [("E001".to_string(), 6)]);
+}
+
+#[specforge_test(
+    behavior = "notify_diagnostics_delta_via_mcp",
+    verify = "a diagnostic whose span changed is removed and added"
+)]
+#[ignore = "fixed by T3"]
+fn a_diagnostic_whose_span_changed_is_notified() {
+    let alpha = "behavior alpha \"Alpha\" {\n}\n";
+    let (removed, added) = diagnostics_heard_after(
+        &format!("{alpha}bogus thing\n\nbogus thing\n"),
+        &format!("{alpha}bogus thing\n"),
+    );
+    assert_eq!(located(&removed), [("E001".to_string(), 3)]);
+    assert_eq!(located(&added), [("E001".to_string(), 3)]);
+    assert_eq!(removed[0]["span"]["end_line"], 5);
+    assert_eq!(added[0]["span"]["end_line"], 3);
+}
+
+#[specforge_test(
+    behavior = "notify_diagnostics_delta_via_mcp",
+    verify = "removing one of two identical diagnostics is notified"
+)]
+#[ignore = "fixed by T3"]
+fn removing_one_of_two_identical_diagnostics_is_notified() {
+    let two = "behavior alpha \"Alpha\" {\n}\nbehavior alpha \"Again\" {\n}\n";
+    let (removed, added) =
+        diagnostics_heard_after(&format!("{two}behavior alpha \"Third\" {{\n}}\n"), two);
+    assert_eq!(located(&removed), [("E002".to_string(), 5)]);
+    assert!(added.is_empty(), "{added:?}");
+}
+
 #[specforge_test(
     behavior = "provide_mcp_add_extension_tool",
     verify = "Provide MCP Add Extension Tool: MCP add extension tool holds — filesystem_available, extension_installed, wasm_downloaded, extension_added_emitted, dry_run_safe, tool_invoked_emitted"

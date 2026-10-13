@@ -535,6 +535,7 @@ behavior notify_delta_subscribers "Notify Delta Subscribers" {
   """
   verify unit "an update reports its delta and the files it affects"
   verify unit "watch --format json prints each rebuild's GraphDelta, the one MCP notifies"
+  verify unit "watch --format json prints the diagnostics each update added and removed"
   verify contract "Notify Delta Subscribers: delta reporting holds — graph_delta_computed_fired, affected_files_delivered, delta_subscribers_notified_emitted"
 }
 
