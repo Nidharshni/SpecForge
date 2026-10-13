@@ -33,32 +33,3 @@ feature result_collection "Result Collection" {
     that don't use the proc macro.
   """
 }
-
-feature build_integration "Build Integration" {
-  problem  """
-    The graph export can become stale if developers edit .spec files
-    without re-exporting. Typos in entity ID strings are only caught
-    at collection time, not at compile time.
-  """
-  solution """
-    build.rs calls `specforge export` on every build, keeping the graph
-    fresh. It optionally generates entity ID constants so that typos
-    become compile errors. Graceful degradation when specforge is not
-    installed means no hard dependency on the tool.
-  """
-}
-
-feature coverage_summary "Coverage Summary" {
-  problem  """
-    Developers must run `specforge trace` as a separate step to see
-    which behaviors lack test coverage. This breaks the feedback loop
-    and delays awareness of gaps.
-  """
-  solution """
-    The atexit handler reads the graph export and prints a coverage
-    summary to stderr immediately after cargo test completes. Developers
-    see which entities are fully covered, partially covered, or missing
-    tests without leaving their terminal. The graph export timestamp
-    makes staleness visible.
-  """
-}
