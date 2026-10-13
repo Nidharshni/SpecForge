@@ -288,6 +288,100 @@ fn query_with_coverage_marks_each_node() {
     assert_eq!(status("login", false), Value::Null);
 }
 
+const COVERED_SOURCE: &str = "behavior login \"Login\" {\n  verify unit \"logs in\"\n}\n\nbehavior logout \"Logout\" {\n  verify unit \"logs out\"\n}\n";
+
+/// The `login`/`logout` project with `login`'s obligation proven.
+fn covered() -> Project {
+    let project = Project::new(COVERED_SOURCE, registries(&["behavior"], &[]));
+    project.record_passing(&[("login", "logs in")]);
+    project
+}
+
+/// The document `query` answers for `entity` at depth 0 in `format`.
+fn queried(project: &Project, entity: &str, format: Format, include_coverage: bool) -> String {
+    query(
+        &project.view(),
+        &QueryRequest {
+            entity_id: entity,
+            depth: Some(0),
+            format: Some(format),
+            include_coverage,
+            ..QueryRequest::default()
+        },
+    )
+    .unwrap()
+    .document
+}
+
+#[specforge_test(
+    behavior = "query_graph_multi_resolution",
+    verify = "a query with --include-coverage validates against the published schema of its format"
+)]
+#[ignore = "fixed by T2"]
+fn a_query_with_coverage_conforms_to_the_published_schema() {
+    use specforge_common::shape::{unchecked_keywords, violations};
+    let project = covered();
+    for format in [Format::Graph, Format::Context, Format::Brief] {
+        let published = specforge_ops::schema::json_schema(&project.view(), format).unwrap();
+        assert!(unchecked_keywords(&published).is_empty(), "{format:?}");
+        let document: Value =
+            serde_json::from_str(&queried(&project, "login", format, true)).unwrap();
+        assert_eq!(
+            violations(&published, &document),
+            Vec::<String>::new(),
+            "{format:?}"
+        );
+        assert_eq!(
+            document["nodes"][0]["coverage_status"], "covered",
+            "{format:?}"
+        );
+    }
+}
+
+#[specforge_test(
+    behavior = "query_graph_multi_resolution",
+    verify = "--include-coverage gives each entity its coverage status"
+)]
+#[ignore = "fixed by T2"]
+fn a_query_with_coverage_is_the_export_with_one_key_per_node() {
+    let project = covered();
+    for format in [Format::Graph, Format::Context, Format::Brief] {
+        for (entity, status) in [("login", "covered"), ("logout", "uncovered")] {
+            let without = queried(&project, entity, format, false);
+            let with = queried(&project, entity, format, true)
+                .replace(&format!(",\"coverage_status\":\"{status}\""), "");
+            assert_eq!(with, without, "{format:?} {entity}");
+        }
+    }
+}
+
+#[specforge_test(
+    behavior = "query_graph_multi_resolution",
+    verify = "a non-existent entity is E003 naming the closest entity"
+)]
+fn an_unknown_entity_is_refused_before_the_report_is_read() {
+    let project = Project::new(COVERED_SOURCE, registries(&["behavior"], &[]));
+    std::fs::write(project.dir.path().join("specforge-report.json"), "{").unwrap();
+    let ask = |entity_id| {
+        query(
+            &project.view(),
+            &QueryRequest {
+                entity_id,
+                include_coverage: true,
+                ..QueryRequest::default()
+            },
+        )
+        .unwrap_err()
+    };
+    let unknown = ask("logn");
+    assert_eq!(unknown.error.code, "E003");
+    assert_eq!(
+        unknown.error.suggestion.as_deref(),
+        Some("did you mean 'login'?")
+    );
+    assert_eq!(ask("login").error.code, "E045");
+}
+
 #[specforge_test(
     behavior = "provide_mcp_query_tool",
     verify = "an unknown format is an invalid-input error naming the expected formats"

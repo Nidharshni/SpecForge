@@ -1102,6 +1102,7 @@ behavior query_graph_multi_resolution "Query Graph at Multiple Resolutions" {
   verify unit "a non-existent entity is E003 naming the closest entity"
   verify unit "--include-coverage gives each entity its coverage status"
   verify unit "output conforms to Graph Protocol schema"
+  verify unit "a query with --include-coverage validates against the published schema of its format"
   verify unit "output includes schema_version field"
   verify property "querying same entity at same depth produces identical subgraph"
   verify unit "filter_nodes with field predicate"
