@@ -123,3 +123,13 @@ lock's key, and records pins through `pin`. The contract gains C8-C10, and C3 st
   a lost version race or a failed blob commit (`Database::withdraw`) leaves the scope as it was.
 - **An admin revokes a token by its id** (the 8 hex digits the listing shows); any other segment
   is refused (400), and an id two live tokens share revokes neither (409).
+
+## Amendment (architecture round 9, plan 05): addresses and answers are the contract's (ADR 0075)
+
+- **D1.** The crate also holds each call's address under a registry root (`address`: `RegistryRoot`, `Endpoint`,
+  `Call`) and the reading of an answer (`reply`). "The paths, the server's route patterns" is now one template per
+  endpoint; `path` is gone. It also depends on `url`.
+- **D2.** "404 is not found" is narrowed: a 404 is `NotFound` only with the protocol's `NOT_FOUND` error; a 404
+  without it is `InvalidReply` (R009) naming the address.
+- **D5.** E067 is no longer reported after the operation: an entry that can't be read refuses every registry
+  operation before any request. W140 and I003 are reported as before.
