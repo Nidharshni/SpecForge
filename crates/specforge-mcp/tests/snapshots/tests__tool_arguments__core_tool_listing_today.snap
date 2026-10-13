@@ -1154,7 +1154,36 @@ expression: listing
           "type": "string"
         },
         "plan": {
-          "description": "An agent plan, {\"entries\": [{\"entity_id\": ...}]}, to check for gaps against the graph instead of tracing one entity",
+          "additionalProperties": false,
+          "description": "An AgentPlan ({\"plan_id\", \"entries\": [{\"entity_id\", \"action\"}]}), or its JSON text, to check for gaps against the graph instead of tracing one entity",
+          "properties": {
+            "entries": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "action": {
+                    "type": "string"
+                  },
+                  "entity_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "entity_id",
+                  "action"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "plan_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "plan_id",
+            "entries"
+          ],
           "type": "object"
         }
       },
@@ -1296,6 +1325,11 @@ expression: listing
                     "type": "string"
                   },
                   "missing_link_type": {
+                    "enum": [
+                      "unresolved_entity",
+                      "missing_plan_entry",
+                      "ordering"
+                    ],
                     "type": "string"
                   },
                   "source_entity": {
@@ -1314,9 +1348,13 @@ expression: listing
                 "type": "object"
               },
               "type": "array"
+            },
+            "ok": {
+              "type": "boolean"
             }
           },
           "required": [
+            "ok",
             "affected_entities",
             "gaps"
           ],

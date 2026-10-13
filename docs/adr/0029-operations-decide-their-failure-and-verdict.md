@@ -132,3 +132,7 @@ code must say more than passed, failed or unjudged.
 - **D6a.** D6's rule is `specforge_common::ProjectRoot` (ADR 0053): every surface, not only format and
   migrate, opens the project a path is in, and the operations take the root, not a path. `project_root_of`
   and `enclosing_project_root` are deleted.
+
+*(Amended, architecture round 9, plan 06.)* D1: inspect's coverage is `inspect::coverage`'s
+`Result<EntityCoverage, OpError>`, no longer a field of `EntityFacts`. D2: `PlanError` is gone — the plan check reads
+no report and a plan is refused where it is read (ADR 0076 D3).

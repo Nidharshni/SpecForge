@@ -204,8 +204,9 @@ fn trace_today() {
         root,
         &[
             json!({"name": "specforge.trace", "arguments": {"entity_id": "login"}}),
-            json!({"name": "specforge.trace", "arguments": {"plan": {"entries": [
-                {"entity_id": "login"}, {"entity_id": "ghost"}]}}}),
+            json!({"name": "specforge.trace", "arguments": {"plan": {"plan_id": "p", "entries": [
+                {"entity_id": "login", "action": "implement"},
+                {"entity_id": "ghost", "action": "implement"}]}}}),
             json!({"name": "specforge.trace", "arguments": {"entity_id": "ghost"}}),
         ],
     );
@@ -242,6 +243,38 @@ fn assert_traces_agree(root: &Path) {
 fn cli_and_mcp_trace_are_the_same_chain() {
     assert_traces_agree(project("fx1").path());
     assert_traces_agree(rv1().path());
+}
+
+#[specforge_test_macros::test(
+    behavior = "validate_agent_plan",
+    verify = "specforge trace --plan and specforge.trace answer the same document for a plan"
+)]
+fn cli_and_mcp_plan_check_are_one_document() {
+    let tmp = project("fx1");
+    let root = tmp.path();
+    let plan = json!({"plan_id": "p", "entries": [
+        {"entity_id": "login", "action": "implement"},
+        {"entity_id": "ghost", "action": "implement"}]});
+    let file = tmp.path().join("agent-plan.json");
+    std::fs::write(&file, plan.to_string()).unwrap();
+
+    let run = cli(&[
+        "trace",
+        "--plan",
+        s(&file),
+        "--path",
+        s(root),
+        "--format",
+        "json",
+    ]);
+    assert_eq!(run.code, Some(1), "{}{}", run.stdout, run.stderr);
+    let printed: Value = serde_json::from_str(&run.stdout).unwrap();
+    let mcp = mcp_calls(
+        root,
+        &[json!({"name": "specforge.trace", "arguments": {"plan": plan}})],
+    );
+    assert_eq!(printed, mcp[0]);
+    assert_eq!(printed["ok"], false, "{printed}");
 }
 
 #[test]
@@ -287,7 +320,9 @@ fn coverage_views_today() {
             "prompt_trace_plan",
             prompt(
                 "trace",
-                json!({"plan": {"entries": [{"entity_id": "login"}, {"entity_id": "ghost"}]}}),
+                json!({"plan": {"plan_id": "p", "entries": [
+                    {"entity_id": "login", "action": "implement"},
+                    {"entity_id": "ghost", "action": "implement"}]}}),
             ),
         ),
     ];

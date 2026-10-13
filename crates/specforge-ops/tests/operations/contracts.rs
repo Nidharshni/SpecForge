@@ -252,6 +252,7 @@ fn plan_contract_validates_ids_coverage_ordering() {
     // Ensures: unresolvable IDs → errors, missing testable → warnings, wrong order → violations
     let graph = build_graph();
     let plan = serde_json::json!({
+        "plan_id": "p",
         "entries": [
             { "entity_id": "nonexistent", "action": "implement" },
             { "entity_id": "b", "action": "implement" },

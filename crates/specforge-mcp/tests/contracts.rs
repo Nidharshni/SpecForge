@@ -497,7 +497,7 @@ fn contract_trace() {
     let plan = tool(
         &mut server,
         "specforge.trace",
-        json!({"plan": {"entries": [{"entity_id": "alpha"}, {"entity_id": "ghost"}]}}),
+        json!({"plan": agent_plan(&["alpha", "ghost"])}),
     );
     assert_eq!(plan["affected_entities"], json!(["alpha"]));
     let gaps = plan["gaps"].as_array().unwrap();
@@ -1055,7 +1055,7 @@ fn contract_trace_prompt() {
     let trace = prompt_payload(&get_prompt(
         &mut server,
         "specforge://prompts/trace",
-        json!({"plan": {"entries": [{"entity_id": "alpha"}, {"entity_id": "ghost"}]}}),
+        json!({"plan": agent_plan(&["alpha", "ghost"])}),
     ));
     assert_eq!(trace["affected_entities"], json!(["alpha", "beta"]));
     // alpha counts toward coverage and is not proven; beta, a feature, is
@@ -1076,7 +1076,7 @@ fn contract_trace_prompt() {
     let again = prompt_payload(&get_prompt(
         &mut server,
         "specforge://prompts/trace",
-        json!({"plan": {"entries": [{"entity_id": "alpha"}, {"entity_id": "ghost"}]}}),
+        json!({"plan": agent_plan(&["alpha", "ghost"])}),
     ));
     assert_eq!(again, trace);
 

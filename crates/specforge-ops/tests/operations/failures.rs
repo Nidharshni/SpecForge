@@ -2,6 +2,7 @@
 //! report is one `OpError` on every view, a format run's verdict inputs,
 //! the project a migration compiles. The unlinked tests were pinned before
 //! ops decided any of it; the ticket that changed a pinned fact flipped it.
+//! The plan check reads no report (plan.rs `the_plan_check_reads_no_recorded_report`).
 
 use crate::view_support::{Project, registries};
 use specforge_ops::analyze::{AnalyzeError, AnalyzeOptions, ReportSource, analyze};
@@ -37,10 +38,6 @@ fn lock_report(project: &Project) -> bool {
     std::fs::read(&path).is_err()
 }
 
-fn plan() -> serde_json::Value {
-    serde_json::json!({"entries": []})
-}
-
 /// What every view that reads the recorded report answers for it.
 fn every_view(project: &Project) -> Vec<(&'static str, OpError)> {
     let view = project.view();
@@ -53,18 +50,8 @@ fn every_view(project: &Project) -> Vec<(&'static str, OpError)> {
         ),
         ("row", specforge_ops::coverage::row(&view, "b").unwrap_err()),
         (
-            "plan",
-            match specforge_ops::plan::check(&view, &plan()).unwrap_err() {
-                specforge_ops::plan::PlanError::Report(error) => error,
-                other => panic!("expected the report's failure: {other:?}"),
-            },
-        ),
-        (
             "inspect",
-            specforge_ops::inspect::inspect(&view, "b")
-                .unwrap()
-                .coverage
-                .unwrap_err(),
+            specforge_ops::inspect::coverage(&view, "b").unwrap_err(),
         ),
         (
             "analyze",
@@ -168,18 +155,6 @@ fn analyze_calls_a_missing_named_report_file_not_found() {
     };
     assert_eq!(error.kind, OpErrorKind::FileNotFound);
     assert_eq!(error.code, "E045");
-}
-
-#[test]
-fn plan_gives_a_report_failure_the_report_s_kind() {
-    let project = project();
-    report_is_a_directory(&project);
-    let report = project.view().test_report().unwrap_err();
-
-    let error = OpError::from(specforge_ops::plan::PlanError::Report(report.clone()));
-
-    assert_eq!(error, report);
-    assert_eq!(error.kind, OpErrorKind::Internal);
 }
 
 #[specforge_test(

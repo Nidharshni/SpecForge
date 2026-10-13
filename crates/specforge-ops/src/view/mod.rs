@@ -491,10 +491,14 @@ mod tests {
         );
         let view = ProjectView::of(&compiled);
         assert!(std::ptr::eq(view.entities(), compiled.entities()));
-        assert!(std::ptr::eq(
-            view.coverage().unwrap().entities(),
-            compiled.entities()
-        ));
+        let coverage = view.coverage().unwrap();
+        assert!(
+            coverage
+                .verdicts
+                .keys()
+                .eq(view.entities().records().iter().map(|r| &r.id)),
+            "the coverage scores the view's snapshot"
+        );
         assert_eq!(view.entities().kind_of("a"), Some("behavior"));
 
         // A graph assembled without a compile: the view takes one, once,
@@ -513,10 +517,14 @@ mod tests {
         assert!(view.entities().is_empty());
         assert!(std::ptr::eq(view.entities(), view.entities()));
         assert_eq!(view.entities().spec_root(), env.spec_root());
-        assert!(std::ptr::eq(
-            view.coverage().unwrap().entities(),
-            view.entities()
-        ));
+        let coverage = view.coverage().unwrap();
+        assert!(
+            coverage
+                .verdicts
+                .keys()
+                .eq(view.entities().records().iter().map(|r| &r.id)),
+            "the coverage scores the view's snapshot"
+        );
     }
 
     #[specforge_test(

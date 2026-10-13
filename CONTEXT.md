@@ -339,7 +339,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   - what exempts it (a union body, an exempting flag, a kind that accepts no `verify` statements);
   - how many obligations it declares.
 
-  It **owes** obligations when a rule applies and nothing exempts it. It **counts** toward coverage
+  It **declares** obligations when it has at least one (`Standing::declares_obligations`). It **owes** obligations when a rule applies and nothing exempts it. It **counts** toward coverage
   when testable and owing or declaring, and is **exempt** when testable and neither: the coverage
   rule's one counting rule (`specforge_coverage::Counting`), read with the standing's facts
   (`Standing::counting`). W004, stats, plan validation and the verify-stub fix read it. The pass
@@ -457,13 +457,14 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Read view**: an operation that only reads the project view: stats, trace, the coverage view, the
   model and outline diagrams, the versioned schema, inspect, query, list and search (the entities a
   selection over the view returns, `specforge_ops::query`), the exploration and the review
-  (`specforge_ops::{explore, review}`), and the inference guide and plan
+  (`specforge_ops::{explore, review}`), the plan check (`specforge_ops::plan::check`), and the inference guide and plan
   (`specforge_ops::infer::{guide, kind_guide, inference_plan}`). Each returns a typed outcome; the CLI,
   MCP (its tools and its prompts) and the LSP only render it.
 - **Entity facts**: what inspect returns for one entity: its node and kind entry, headline
   statement, standing and obligations (the snapshot's own, borrowed), references in both directions,
-  coverage, and the reported diagnostics about it (`specforge_ops::inspect::EntityFacts`). MCP
-  `specforge.inspect` renders it as JSON and the LSP hover as markdown, so the two cannot disagree.
+  and the reported diagnostics about it (`specforge_ops::inspect::EntityFacts`); its coverage is asked
+  for apart (`specforge_ops::inspect::coverage`) by the surfaces that show it. MCP `specforge.inspect`
+  renders both as JSON and the LSP hover as markdown, so the two cannot disagree.
 - **Known kind**: a kind a loaded extension declares, or that an entity is written with (an
   undeclared one is E024's). A kind filter (over entities, or the model's `kinds`) knows both and
   reports any other kind as I020; an argument that needs a kind's declaration (a schema entry, an
@@ -567,9 +568,17 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (I065). Its declarative rules check one entity at a time (ADR 0039).
 - **Missing link**: an expected edge, from the registries, that a traced entity lacks
   (`MissingLink`). The only gap a trace reports.
+- **Agent plan**: what an agent intends to do, entity by entity, in the order it will do it
+  (`specforge_ops::plan::AgentPlan`, spec type `AgentPlan`: a `plan_id` and entries of `entity_id` and `action`).
+  Its entry order is its dependency order; the graph's edges are the dependencies. Read from a JSON object or its
+  text, checked against the type's schema first (`AgentPlan::read`): a value that departs is refused naming every
+  place. The **plan check** (`specforge_ops::plan::check`) reads the graph and the entity snapshot, never the
+  recorded test report; it passes (`ok`) when no entry is unresolved and none comes before what it depends on.
 - **Plan gap**: how an agent plan falls short of the graph: an unresolved entry, a missing entry for
   a testable entity with obligations, or an entry ordered before what it depends on (`PlanGap`). An
-  edge to an entity that does not exist is neither: it is E003.
+  edge to an entity that does not exist is neither: it is E003. Written as an `McpTraceGap`
+  (`source_entity`, `target_entity`, `missing_link_type`, `gap_context`). A missing entry is a warning; an
+  unresolved or misordered entry fails the plan.
 - **Verdict**: an entity's obligations, the proven ones, and the tests that bear on them. It gives
   both "proven" (the gate) and the covered/partial/uncovered status (the MCP view)
   (`specforge_coverage::Verdict`).

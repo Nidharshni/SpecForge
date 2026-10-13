@@ -12,6 +12,7 @@
 
 use serde_json::{Map, Value, json};
 use specforge_ops::options::OptionTable;
+use specforge_ops::plan::AgentPlan;
 use specforge_protocol_types::command_args::normalize_arg;
 use specforge_protocol_types::{CommandArgDescriptor, CommandArgType};
 
@@ -303,15 +304,14 @@ impl Arg for Map<String, Value> {
     }
 }
 
-/// An agent plan argument: any JSON value, listed as an object; the
-/// operation reads it (an `AgentPlan` object or JSON text of one,
-/// `specforge_ops::plan::check`).
-#[derive(Debug, Clone)]
-pub struct AgentPlan(pub Value);
-
+/// An agent plan (`specforge_ops::plan::AgentPlan`): listed as the type's
+/// derived schema; read from an object, or from a string holding one's JSON
+/// (a prompt's arguments are strings, as ADR 0033 D2 reads a count from a
+/// string holding one), checked against that schema before it is decoded, so
+/// a value it does not admit is refused naming every place it departs.
 impl Arg for AgentPlan {
     fn schema() -> Value {
-        json!({ "type": "object" })
+        specforge_common::shape::build::<AgentPlan>()
     }
     fn absent() -> Option<Self> {
         None
@@ -319,8 +319,12 @@ impl Arg for AgentPlan {
     fn advertised(_: &Self) -> Option<Value> {
         None
     }
-    fn read(_: &str, value: &Value) -> Result<Self, String> {
-        Ok(AgentPlan(value.clone()))
+    fn read(name: &str, value: &Value) -> Result<Self, String> {
+        match value {
+            Value::String(text) => AgentPlan::parse(text),
+            other => AgentPlan::read(other),
+        }
+        .map_err(|error| error.message(name))
     }
 }
 

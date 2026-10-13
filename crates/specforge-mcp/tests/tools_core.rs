@@ -1574,11 +1574,9 @@ fn fix_unresolved_reference(root: &std::path::Path) {
     .unwrap();
 }
 
-#[specforge_test(
-    behavior = "provide_mcp_trace_tool",
-    verify = "plan parameter triggers gap analysis"
-)]
-fn trace_plan_gap_analysis() {
+/// A project of two testable behaviors and an invariant they lean on, served
+/// after one `specforge.validate`: the plan tests' graph.
+fn plan_project() -> (tempfile::TempDir, McpServer) {
     let project = tempfile::tempdir().unwrap();
     std::fs::write(
         project.path().join("specforge.json"),
@@ -1598,12 +1596,19 @@ fn trace_plan_gap_analysis() {
         "specforge.validate",
         json!({"path": project.path().to_str().unwrap()}),
     );
+    (project, server)
+}
+
+#[specforge_test(
+    behavior = "provide_mcp_trace_tool",
+    verify = "plan parameter triggers gap analysis"
+)]
+fn trace_plan_gap_analysis() {
+    let (_project, mut server) = plan_project();
 
     // act_one depends on inv_a but comes first; ghost doesn't exist;
     // act_two is testable and missing.
-    let plan = json!({"entries": [
-        {"entity_id": "act_one"}, {"entity_id": "inv_a"}, {"entity_id": "ghost"}
-    ]});
+    let plan = agent_plan(&["act_one", "inv_a", "ghost"]);
     let resp = call_tool(&mut server, "specforge.trace", json!({"plan": plan}));
     let parsed: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
     assert_eq!(parsed["affected_entities"], json!(["act_one", "inv_a"]));
@@ -1629,31 +1634,14 @@ fn trace_plan_gap_analysis() {
     );
     assert!(gaps.contains(&("act_one", "inv_a", "ordering")), "{gaps:?}");
     assert_eq!(gaps.len(), 3, "{gaps:?}");
+    assert_eq!(parsed["ok"], false, "{parsed}");
 }
 
 #[specforge_test(behavior = "validate_agent_plan", verify = "output is structured JSON")]
 fn trace_plan_reports_its_gaps_as_structured_json() {
-    let project = tempfile::tempdir().unwrap();
-    std::fs::write(
-        project.path().join("specforge.json"),
-        r#"{"name":"t","version":"0.1.0","extensions":["@specforge/software","@specforge/testing"]}"#,
-    )
-    .unwrap();
-    std::fs::write(
-        project.path().join("app.spec"),
-        "invariant inv_a \"A\" {\n  guarantee \"g\"\n  verify unit \"z\"\n}\n\n\
-         behavior act_one \"One\" {\n  invariants [inv_a]\n  verify unit \"x\"\n}\n\n\
-         behavior act_two \"Two\" {\n  verify unit \"y\"\n}\n",
-    )
-    .unwrap();
-    let mut server = serving_nothing();
-    call_tool(
-        &mut server,
-        "specforge.validate",
-        json!({"path": project.path().to_str().unwrap()}),
-    );
+    let (_project, mut server) = plan_project();
 
-    let plan = json!({"entries": [{"entity_id": "act_one"}, {"entity_id": "ghost"}]});
+    let plan = agent_plan(&["act_one", "ghost"]);
     let resp = call_tool(&mut server, "specforge.trace", json!({"plan": plan}));
     let parsed: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
 
@@ -1665,7 +1653,8 @@ fn trace_plan_reports_its_gaps_as_structured_json() {
         .map(String::as_str)
         .collect();
     keys.sort();
-    assert_eq!(keys, ["affected_entities", "gaps"], "{parsed}");
+    assert_eq!(keys, ["affected_entities", "gaps", "ok"], "{parsed}");
+    assert_eq!(parsed["ok"], false, "{parsed}");
     assert_eq!(parsed["affected_entities"], json!(["act_one"]));
     for gap in parsed["gaps"].as_array().unwrap() {
         let mut keys: Vec<&str> = gap
@@ -1700,6 +1689,76 @@ fn trace_plan_reports_its_gaps_as_structured_json() {
         ghost["gap_context"].as_str().unwrap().starts_with("E003"),
         "{ghost}"
     );
+}
+
+#[specforge_test(
+    behavior = "validate_agent_plan",
+    verify = "the plan check reads no recorded test report"
+)]
+fn a_report_the_plan_check_does_not_read_fails_no_plan() {
+    let (project, mut server) = plan_project();
+    std::fs::write(
+        project.path().join("specforge-report.json"),
+        r#"{"results":{"act_one":{"tests":[{"name":"t","status":"pass","verify":"x"}]}}}"#,
+    )
+    .unwrap();
+    let plan = agent_plan(&["act_one", "inv_a", "ghost"]);
+    let resp = call_tool(&mut server, "specforge.trace", json!({"plan": plan}));
+    assert_eq!(resp["result"]["isError"], false, "{resp}");
+    let parsed: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
+    assert_eq!(parsed["affected_entities"], json!(["act_one", "inv_a"]));
+    assert_eq!(parsed["gaps"].as_array().unwrap().len(), 3, "{parsed}");
+    // Stats still reads the report: it needs what the report decides.
+    let error = mcp_error(&call_tool(&mut server, "specforge.stats", json!({})));
+    assert_eq!(error["diagnostic"]["code"], "E045", "{error}");
+}
+
+#[specforge_test(
+    behavior = "validate_agent_plan",
+    verify = "a plan that is not an AgentPlan is refused, naming every place it departs from the type"
+)]
+fn trace_refuses_a_plan_that_is_not_an_agent_plan() {
+    let (_project, mut server) = plan_project();
+    let mut refused = |plan: Value| {
+        let error = mcp_error(&call_tool(
+            &mut server,
+            "specforge.trace",
+            json!({"plan": plan}),
+        ));
+        assert_eq!(error["code"], "invalid_input", "{error}");
+        assert_eq!(error["argument"], "plan", "{error}");
+        error["message"].as_str().unwrap().to_string()
+    };
+    assert_eq!(
+        refused(json!({"entries": [{"entity_id": "act_one"}]})),
+        "plan must be an AgentPlan: plan: missing required plan_id; plan.entries[0]: missing required action"
+    );
+    assert_eq!(
+        refused(json!([1, 2])),
+        "plan must be an AgentPlan: plan: expected object, got array"
+    );
+    assert_eq!(
+        refused(
+            json!({"plan_id": "p", "entries": [{"entity_id": "Task", "action": "implement", "dependencies": ["a"]}], "bogus": 1})
+        ),
+        "plan must be an AgentPlan: plan.entries[0].dependencies: undeclared key; plan.bogus: undeclared key"
+    );
+    assert_eq!(
+        refused(json!({"entries": [{"entity_id": "act_one", "action": 7, "weird": true}]})),
+        "plan must be an AgentPlan: plan: missing required plan_id; plan.entries[0].action: expected string, got integer; plan.entries[0].weird: undeclared key"
+    );
+    assert_eq!(
+        refused(json!({"plan_id": "p", "entries": [["act_one", "implement"]]})),
+        "plan must be an AgentPlan: plan.entries[0]: expected object, got array"
+    );
+    // The JSON text of a plan is read as the plan.
+    let resp = call_tool(
+        &mut server,
+        "specforge.trace",
+        json!({"plan": "{\"plan_id\":\"p\",\"entries\":[]}"}),
+    );
+    let parsed: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
+    assert_eq!(parsed["affected_entities"], json!([]), "{parsed}");
 }
 
 #[specforge_test(

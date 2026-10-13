@@ -327,6 +327,13 @@ impl Standing {
         self.rule.is_some() && self.exemption.is_none()
     }
 
+    /// It declares at least one obligation (`verify` statement) of its own,
+    /// whatever its kind owes: the plan check's, inspect's and the hover's
+    /// "declared".
+    pub fn declares_obligations(&self) -> bool {
+        self.declared > 0
+    }
+
     /// The facts the coverage rule counts it by.
     pub fn counting(&self) -> specforge_coverage::Counting {
         specforge_coverage::Counting {
@@ -1023,6 +1030,15 @@ mod tests {
                 .map(|(record, _)| record.id.clone())
                 .collect()
         };
+        // What an entity declares is its own, rule or not.
+        for (record, standing) in snapshot(source, &declared(&kinds, true, Vec::new())).iter() {
+            assert_eq!(
+                standing.declares_obligations(),
+                !record.obligations.is_empty(),
+                "{}",
+                record.id
+            );
+        }
         // No rule: nobody owes anything.
         assert!(owes(Vec::new()).is_empty());
         // A rule on `behavior`: its entities owe, unless a flag exempts.

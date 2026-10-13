@@ -43,6 +43,89 @@ fn once_each(list: &Links) -> BTreeSet<(String, u64)> {
     set
 }
 
+/// `specforge trace --plan <plan>` over `dir`: the exit code, stdout, stderr.
+fn trace_plan(dir: &std::path::Path, plan: &str, extra: &[&str]) -> (Option<i32>, String, String) {
+    std::fs::write(dir.join("plan.json"), plan).unwrap();
+    let output = specforge_cmd()
+        .args(["trace", "--plan"])
+        .arg(dir.join("plan.json"))
+        .arg("--path")
+        .arg(dir)
+        .args(extra)
+        .output()
+        .unwrap();
+    (
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout).into_owned(),
+        String::from_utf8_lossy(&output.stderr).into_owned(),
+    )
+}
+
+#[specforge_test(
+    behavior = "validate_agent_plan",
+    verify = "specforge trace --plan exits 1 when an entry names no entity or comes before what it depends on"
+)]
+fn trace_plan_exits_by_the_plan_verdict() {
+    let dir = setup_project(&[(
+        "main.spec",
+        r#"
+behavior alpha "A" { contract "first" }
+feature beta "B" { problem "p" solution "s" behaviors [alpha] }
+"#,
+    )]);
+    let entry = |id: &str| format!(r#"{{"entity_id":"{id}","action":"implement"}}"#);
+    let plan = |ids: &[&str]| {
+        let entries: Vec<String> = ids.iter().map(|id| entry(id)).collect();
+        format!(r#"{{"plan_id":"p","entries":[{}]}}"#, entries.join(","))
+    };
+
+    assert_eq!(trace_plan(dir.path(), &plan(&["alpha"]), &[]).0, Some(0));
+    assert_eq!(trace_plan(dir.path(), &plan(&["ghost"]), &[]).0, Some(1));
+    // beta depends on alpha: alpha first.
+    assert_eq!(
+        trace_plan(dir.path(), &plan(&["alpha", "beta"]), &[]).0,
+        Some(0)
+    );
+    assert_eq!(
+        trace_plan(dir.path(), &plan(&["beta", "alpha"]), &[]).0,
+        Some(1)
+    );
+
+    // The human text ends with the verdict.
+    let (_, stdout, _) = trace_plan(dir.path(), &plan(&["alpha"]), &["--format", "human"]);
+    assert_eq!(
+        stdout.lines().last(),
+        Some("plan check: passed"),
+        "{stdout}"
+    );
+
+    // A file that is not an AgentPlan, or is not there, is the command line's refusal.
+    let (code, _, stderr) = trace_plan(dir.path(), r#"{"entries": []}"#, &[]);
+    assert_eq!(code, Some(2));
+    assert!(
+        stderr.contains("plan must be an AgentPlan: plan: missing required plan_id"),
+        "{stderr}"
+    );
+    let output = specforge_cmd()
+        .args(["trace", "--plan"])
+        .arg(dir.path().join("missing.json"))
+        .arg("--path")
+        .arg(dir.path())
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("cannot read"));
+    // It conflicts with an entity.
+    let output = specforge_cmd()
+        .args(["trace", "alpha", "--plan"])
+        .arg(dir.path().join("plan.json"))
+        .arg("--path")
+        .arg(dir.path())
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(2));
+}
+
 // --- Trace depth tests ---
 
 #[specforge_test(

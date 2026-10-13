@@ -162,14 +162,13 @@ behavior provide_mcp_trace_prompt "Provide MCP Trace Prompt" {
   }
   contract   """
     In MCP server mode, the system MUST register a specforge://prompts/trace
-    prompt that accepts plan (inline JSON describing intended changes) or, in
-    its place, entity_id (trace that one entity's chain).
+    prompt that accepts plan (an AgentPlan's JSON text, types/graph.spec) or,
+    in its place, entity_id (trace that one entity's chain).
     The prompt MUST perform gap analysis against the current graph, identify
     entities affected by the plan, flag missing traceability links, and return
     identified gaps with deterministic gap context.
-    The plan parameter MUST conform to the AgentPlan type defined in
-    types/graph.spec. If the JSON does not conform, the prompt MUST
-    return an error with descriptive validation messages.
+    A plan that is not an AgentPlan MUST be refused as invalid input on plan,
+    naming every place it departs from the type (validate_agent_plan).
   """
   verify unit "specforge://prompts/trace identifies gaps in plan"
   verify unit "response returns identified gaps with gap context"

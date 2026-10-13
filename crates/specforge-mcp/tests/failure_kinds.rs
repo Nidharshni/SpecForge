@@ -64,10 +64,8 @@ fn report_readers() -> Vec<(&'static str, Value)> {
             "specforge.query",
             json!({"entity_id": "alpha", "include_coverage": true}),
         ),
-        (
-            "specforge.trace",
-            json!({"plan": {"entries": [{"entity_id": "alpha"}]}}),
-        ),
+        // `specforge.trace`'s plan check reads no report: tools_core
+        // `a_report_the_plan_check_does_not_read_fails_no_plan`.
         ("specforge.analyze", json!({})),
     ]
 }
@@ -87,10 +85,7 @@ fn an_unparsable_report_refuses_every_view() {
     }
     for (prompt, arguments) in [
         ("review", json!({})),
-        (
-            "trace",
-            json!({"plan": {"entries": [{"entity_id": "alpha"}]}}),
-        ),
+        ("trace", json!({"plan": agent_plan(&["alpha"])})),
     ] {
         let reply = get_prompt(
             &mut served,

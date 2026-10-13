@@ -86,7 +86,8 @@ fn coverage_is_the_coverage_rows_verdict() {
     let project = standings();
     project.record_passing(&[("done", "first")]);
     let view = project.view();
-    let coverage = inspect(&view, "done").unwrap().coverage.unwrap();
+    let facts = inspect(&view, "done").unwrap();
+    let coverage = specforge_ops::inspect::coverage(&view, "done").unwrap();
     let row = specforge_ops::coverage::row(&view, "done")
         .unwrap()
         .unwrap();
@@ -94,7 +95,8 @@ fn coverage_is_the_coverage_rows_verdict() {
     assert_eq!(coverage.verdict.obligations, 2);
     assert_eq!(coverage.verdict.proven, 1);
     assert_eq!(coverage.status(), Status::Partial);
-    assert!(coverage.declared());
+    assert!(facts.standing.declares_obligations());
+    assert_eq!(facts.standing.declares_obligations(), row.declared());
     assert!(coverage.recorded);
 }
 
@@ -102,13 +104,18 @@ fn coverage_is_the_coverage_rows_verdict() {
 fn without_a_report_the_coverage_is_unrecorded() {
     let project = standings();
     let view = project.view();
-    let coverage = inspect(&view, "done").unwrap().coverage.unwrap();
+    let facts = inspect(&view, "done").unwrap();
+    let coverage = specforge_ops::inspect::coverage(&view, "done").unwrap();
     assert!(!coverage.recorded);
     assert_eq!(coverage.status(), Status::Uncovered);
     assert_eq!(coverage.verdict.tests, 0);
-    assert!(coverage.declared());
-    let ob = inspect(&view, "ob").unwrap().coverage.unwrap();
-    assert!(!ob.declared());
+    assert!(facts.standing.declares_obligations());
+    assert!(
+        !inspect(&view, "ob")
+            .unwrap()
+            .standing
+            .declares_obligations()
+    );
 }
 
 #[specforge_test(
@@ -126,8 +133,7 @@ fn an_unreadable_report_is_the_coverage_error_not_the_inspects() {
     let view = project.view();
     for (id, readable) in IDS.iter().zip(readable) {
         let facts = inspect(&view, id).expect("inspect does not fail on the report");
-        let error = facts
-            .coverage
+        let error = specforge_ops::inspect::coverage(&view, id)
             .expect_err("the coverage is the report's error");
         assert_eq!(error.code, "E045", "{id}");
         assert_eq!(facts.standing, &readable, "{id}");

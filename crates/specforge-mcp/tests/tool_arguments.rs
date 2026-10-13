@@ -557,10 +557,11 @@ fn every_core_tool_lists_its_typed_arguments() {
 mod derived {
     use super::*;
     use specforge_mcp::args::{
-        AgentPlan, Arg, Argument, Arguments, EntityIds, choice_schema, input_schema, read,
+        Arg, Argument, Arguments, EntityIds, choice_schema, input_schema, read,
     };
     use specforge_mcp::target::TargetSpec;
     use specforge_ops::model::ModelFormat;
+    use specforge_ops::plan::AgentPlan;
     use specforge_project::coverage::Status;
     use specforge_protocol_types::command_args::normalize_arg;
     use specforge_protocol_types::{CommandArgDescriptor, CommandArgType};
@@ -823,6 +824,34 @@ mod derived {
         /// A required renderer
         #[arg(choice = specforge_ops::export::FORMAT)]
         renderer: String,
+    }
+
+    #[specforge_test(
+        behavior = "read_mcp_arguments_as_declared",
+        verify = "an agent plan is read as the AgentPlan type, from an object or a string holding its JSON"
+    )]
+    fn an_agent_plan_argument_is_read_from_an_object_or_its_text() {
+        let plan = AgentPlan {
+            plan_id: "p".into(),
+            entries: Vec::new(),
+        };
+        let object = json!({"plan": {"plan_id": "p", "entries": []}, "renderer": "markdown"});
+        let text = json!({"plan": "{\"plan_id\":\"p\",\"entries\":[]}", "renderer": "markdown"});
+        for given in [object, text] {
+            let raw: Raw = read(&given).expect("a read");
+            assert_eq!(raw.plan, Some(plan.clone()));
+        }
+        let refused = read::<Raw>(&json!({"plan": {"entries": []}, "renderer": "markdown"}))
+            .expect_err("a refusal");
+        assert_eq!(refused.argument.as_deref(), Some("plan"));
+        assert_eq!(
+            refused.message,
+            "plan must be an AgentPlan: plan: missing required plan_id"
+        );
+        let declared = Raw::declared();
+        let mut listed = specforge_common::shape::build::<AgentPlan>();
+        listed["description"] = json!("A plan");
+        assert_eq!(declared[1].schema, listed);
     }
 
     #[test]

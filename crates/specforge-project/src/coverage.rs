@@ -1,10 +1,12 @@
-//! The host's coverage: how the recorded test report is read and how the
-//! entity snapshot's standings (ADR 0019) score against it.
+//! The host's coverage: how the recorded test report is read and what it
+//! proves of the entity snapshot's entities (ADR 0019, ADR 0004 D2-f).
 //!
-//! Every surface that asks "does this entity count toward coverage" or
-//! "what does it promise to prove" (stats, plan validation, the context
-//! exports, the MCP coverage, inspect, review and trace views) reads it
-//! here, so they cannot disagree.
+//! Every surface that asks what an entity's recorded tests prove (stats,
+//! the coverage view, inspect's coverage, query with coverage, the review,
+//! the trace prompt's unverified entities, an extension command's
+//! evidence) reads it here, so they cannot disagree. Who is testable and
+//! what an entity declares are the snapshot's standing
+//! (`ProjectView::entities`), which reads no report.
 
 use crate::Environment;
 use crate::snapshot::{EntitySnapshot, Standing};
@@ -149,9 +151,8 @@ fn parse_report(path: &Path, bytes: &[u8]) -> Result<TestReport, ReportError> {
 }
 
 /// A project's coverage, computed by the one rule the `coverage` pass
-/// applies (ADR 0004, D2-f). Per-entity views (the MCP coverage, inspect,
-/// query and review surfaces) and stats read it, so none of them
-/// re-derives "testable", "proven" or "covered".
+/// applies (ADR 0004, D2-f). Per-entity views and stats read its verdicts
+/// and summary; standings are the snapshot's.
 ///
 /// Formal discharge needs the prove pass, which a per-entity view does not
 /// run: as `analyze coverage` without `--prove`, a `verify property`
@@ -184,12 +185,6 @@ impl ProjectCoverage {
         }
     }
 
-    /// The entity snapshot it was computed from: every entity with its
-    /// standing, in id order.
-    pub fn entities(&self) -> &EntitySnapshot {
-        &self.entities
-    }
-
     /// The entity's verdict, if the graph has it.
     pub fn verdict(&self, id: &str) -> Option<&Verdict> {
         self.verdicts.get(id)
@@ -200,17 +195,11 @@ impl ProjectCoverage {
         self.verdict(id).map_or(Status::Uncovered, Verdict::status)
     }
 
-    /// How the obligation rule sees the entity (its snapshot standing), if
-    /// the graph has it.
-    pub fn standing(&self, id: &str) -> Option<&Standing> {
-        self.entities.standing(id)
-    }
-
     /// Whether the entity counts toward coverage (ADR 0004 D2-b) and is not
     /// proven (D2-a): the one definition of "unverified". An entity the
     /// graph doesn't have is not.
     pub fn is_unverified(&self, id: &str) -> bool {
-        self.standing(id).is_some_and(Standing::counts)
+        self.entities.standing(id).is_some_and(Standing::counts)
             && !self.verdict(id).is_some_and(Verdict::is_proven)
     }
 }
@@ -435,7 +424,7 @@ mod tests {
         let none = at().unwrap();
         assert!(none.report.is_none());
         // The coverage scores the seeded snapshot, not one of its own.
-        assert!(std::ptr::eq(none.coverage.entities(), &*entities));
+        assert!(Arc::ptr_eq(&none.coverage.entities, &entities));
         assert!(!none.coverage.verdict("login").unwrap().is_proven());
 
         std::fs::write(dir.path().join(REPORT_FILE), report("passed")).unwrap();
@@ -479,9 +468,9 @@ mod tests {
         );
         let over = RecordedCoverage::over(&project.graph, &env);
         assert_eq!(over.entities().spec_root(), env.spec_root());
-        assert!(std::ptr::eq(
-            over.at(None).unwrap().coverage.entities(),
-            &**over.entities()
+        assert!(Arc::ptr_eq(
+            &over.at(None).unwrap().coverage.entities,
+            over.entities()
         ));
     }
 
@@ -526,7 +515,7 @@ mod tests {
         let project = Scored::new();
         let tests: TestReport = serde_json::from_str(&report("passed")).unwrap();
         let coverage = ProjectCoverage::compute(&project.entities(), Some(&tests));
-        let login = coverage.standing("login").unwrap();
+        let login = project.entities().standing("login").unwrap().clone();
         assert!(login.testable && login.counts() && !login.exempt());
         assert!(!coverage.is_unverified("login"), "proven");
         assert!(

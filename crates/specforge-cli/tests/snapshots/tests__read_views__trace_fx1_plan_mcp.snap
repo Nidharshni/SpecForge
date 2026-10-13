@@ -25,5 +25,6 @@ expression: "normalized(value, root)"
       "source_entity": "plan",
       "target_entity": "reset_password"
     }
-  ]
+  ],
+  "ok": false
 }

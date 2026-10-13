@@ -512,7 +512,7 @@ type SchemaVersionComputedPayload {
 // ── Agent & Schema Events ─────────────────────────────────────
 
 event plan_validated "Agent Plan Validated" {
-  payload PlanValidationResult
+  payload McpTracePlanResult
   channel compilation
   verify integration "Agent Plan Validated emitted correctly"
 }

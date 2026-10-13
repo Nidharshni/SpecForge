@@ -81,8 +81,7 @@ fn render(view: ProjectView<'_>, args: Args) -> Result<Prompted<Payload>, Box<Mc
     let graph = view.graph();
     let entity_id = args.entity_id.as_str();
     // The inspect read view, without the reported diagnostics (the prompt
-    // shows none) and whatever its coverage (a report that cannot be read
-    // does not fail the prompt).
+    // shows none); it shows no coverage, so it reads no report.
     let facts = specforge_ops::inspect::inspect(&view.reporting(&[]), entity_id)
         .map_err(|refusal| Box::new(Prompt::refused(refusal)))?;
     let node = facts.node;

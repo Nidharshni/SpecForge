@@ -274,7 +274,9 @@ behavior read_mcp_arguments_as_declared "Read MCP Arguments as Declared" {
     A value MUST be read by its declared type: a boolean is true or false or
     the string "true" or "false", a count a non-negative integer or a string
     holding one, a string a string, a list a list of strings; an enumerated
-    argument by its option table (name_enumerated_options_once). Any other
+    argument by its option table (name_enumerated_options_once). An agent plan
+    is read as the AgentPlan type, from an object or a string holding its JSON,
+    checked against the schema its listing states. Any other
     value MUST be refused as invalid input naming the argument, with the
     wording extension command tools use. An argument that neither the entry
     nor its call target declares MUST be refused as invalid input naming it,
@@ -295,6 +297,7 @@ behavior read_mcp_arguments_as_declared "Read MCP Arguments as Declared" {
   verify unit "a boolean or count sent as a string is read as one, as an extension command reads it; any other value of the wrong type is refused naming the argument"
   verify unit "an argument neither the tool nor its target declares is refused naming it, with the declared one it is close to"
   verify unit "a prompt reads its arguments by the same rule its listing states"
+  verify unit "an agent plan is read as the AgentPlan type, from an object or a string holding its JSON"
   verify unit "an operation's refusal of a core tool's call names the argument it is about"
   verify unit "a refusal a value the caller gave earns names that argument, whatever its kind"
   verify unit "a prompt's or a resource read's refusal names the argument or query key it is about"

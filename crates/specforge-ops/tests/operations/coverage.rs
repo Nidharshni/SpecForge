@@ -158,7 +158,7 @@ fn unverified_is_counted_and_not_proven() {
     let project = project();
     let view = project.view();
     let coverage = view.coverage().unwrap();
-    let ids: Vec<&str> = coverage
+    let ids: Vec<&str> = view
         .entities()
         .records()
         .iter()

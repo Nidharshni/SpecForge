@@ -78,7 +78,7 @@ pub const READS: &[(&str, &str)] = &[
     ("specforge.trace", r#"{"entity_id":"alpha"}"#),
     (
         "specforge.trace",
-        r#"{"plan":{"entries":[{"entity_id":"alpha"},{"entity_id":"nope"}]}}"#,
+        r#"{"plan":{"plan_id":"p","entries":[{"entity_id":"alpha","action":"implement"},{"entity_id":"nope","action":"implement"}]}}"#,
     ),
     ("specforge.search", r#"{"query":"a"}"#),
     ("specforge.search", r#"{"query":""}"#),
