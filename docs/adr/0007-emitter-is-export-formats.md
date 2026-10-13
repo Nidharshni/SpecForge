@@ -11,7 +11,8 @@ the compiler must not know (principle 2): union `variants`, `abstract`, the `inv
 
 ## Where things live
 
-- **specforge-emitter**: the export formats only (graph JSON, Graph Protocol V2 schema and
+- **specforge-emitter**: the export formats only (graph JSON, Graph Protocol V2 schema (the schema types,
+  their generation and content hash; not their versioning) and
   exports, context, brief, scoped and budgeted exports, DOT, the model and outline diagrams).
   It depends on the graph, the registry, serde and sha2; no Wasm runtime, no file I/O. The
   renderers draw different things and keep their layouts; how declared text is written into each
@@ -26,7 +27,7 @@ the compiler must not know (principle 2): union `variants`, `abstract`, the `inv
   `field_types`, `passes` (extension compiler passes), `coverage` (the host's coverage view and
   the test report format).
 - **specforge-ops**: the built-in `contracts` pass, `trace`, `plan`, `stats`, `scan`,
-  `schema_cache`.
+  `schema_version` (the versioned schema: record, diff, version, reader check; ADR 0067).
 - **specforge-common**: diagnostics JSON, the one-line form, the output cap and the exit code,
   beside `Diagnostic`. The catalog crate stays dependency-free (D6-d); common links it for the
   titles. The validator keeps the source-annotated rendering and the one summary line
