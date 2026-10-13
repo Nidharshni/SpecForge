@@ -237,6 +237,7 @@ behavior dispatch_surface_command "Dispatch Surface Command" {
   verify integration "a trapped command is E028 on both surfaces: one error object on the CLI's stderr under json, a structured MCP error over MCP"
   verify integration "the CLI and MCP send a command the same evidence for the same recorded report"
   verify unit "over MCP a failure's JSON error object is an isError result carrying it, and output that is not one object is text"
+  verify unit "the command line shows each declared arg by its shape, with its values, default and description, beside the host's --path and --format"
   verify contract "Dispatch Surface Command: surface command dispatch holds — command_declared, args_serialized, sandbox_restricted, traps_caught, output_returned, surface_command_dispatched_emitted, args_normalized_by_the_host, evidence_carried, one_operation"
 }
 
