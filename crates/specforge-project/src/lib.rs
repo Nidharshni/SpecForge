@@ -192,11 +192,7 @@ impl Environment {
     /// Reads nothing from disk. Its one effect is the probe's calls in the
     /// runtime it is given (the `WasmRuntime` port).
     pub fn assemble(read: ConfigRead, installed: Installed, load: ExtensionLoad) -> Self {
-        let config_diagnostics: Vec<Diagnostic> = read
-            .problems
-            .iter()
-            .map(config_problem_diagnostic)
-            .collect();
+        let config_diagnostics = read.diagnostics();
         let (loaded, runtime) = match load {
             ExtensionLoad::NoRuntime => (Loaded::unloaded(&read.config.extensions), None),
             ExtensionLoad::In { runtime, loaded } => (loaded, Some(runtime)),
@@ -449,20 +445,6 @@ pub(crate) struct SourceBuild {
     /// E025 for the unreadable sources, then the resolver's (E025, I004,
     /// W113, W027).
     pub imports: Vec<Diagnostic>,
-}
-
-/// E069: one way `specforge.json` is not used as written. An error: a
-/// config that loads nothing must not pass `check`.
-fn config_problem_diagnostic(problem: &ConfigProblem) -> Diagnostic {
-    let message = if problem.loads_nothing() {
-        format!("specforge.json can't be used: {problem}; no extension is loaded")
-    } else {
-        format!("specforge.json: {problem}; it is ignored")
-    };
-    Diagnostic::new(codes::E069, message).with_suggestion(format!(
-        "fix specforge.json; `specforge explain {}` says what it must be",
-        codes::E069
-    ))
 }
 
 /// I002: no extension loaded, so the compile checks structure only (no

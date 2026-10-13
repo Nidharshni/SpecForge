@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use crate::{Exclude, ExcludeEntry, ExcludeError};
+use crate::{Diagnostic, Exclude, ExcludeEntry, ExcludeError, codes};
 
 /// What one `specforge.json` `extensions` entry enables: the one reading
 /// of an entry that the runtime loading extensions, the environment
@@ -199,6 +199,39 @@ impl ConfigProblem {
     pub fn blocks_edits(&self) -> bool {
         self.loads_nothing()
     }
+
+    /// The file does not say which files are the project's sources, or which
+    /// extensions it loads: it could not be used at all, or `spec_root`,
+    /// `exclude` or `extensions` has the wrong type. A run that rewrites the
+    /// project's sources (`format`, `migrate`, `rename`) refuses
+    /// (`config_invalid`): it would rewrite files the config leaves out, or
+    /// migrate without the hooks of extensions it means to load. Every other
+    /// problem leaves an item or a name the run does not read, and the run
+    /// goes around it, reporting its E069.
+    pub fn blocks_rewrites(&self) -> bool {
+        self.loads_nothing()
+            || matches!(
+                self,
+                ConfigProblem::WrongType { key, .. } if *key == "spec_root" || *key == "exclude"
+            )
+    }
+
+    /// E069 for this problem: an error, "specforge.json can't be used: ...;
+    /// no extension is loaded" for one that
+    /// [`loads_nothing`](Self::loads_nothing), else "specforge.json: ...; it
+    /// is ignored", with the suggestion to fix the file. The one text the
+    /// compile, format and migrate report.
+    pub fn diagnostic(&self) -> Diagnostic {
+        let message = if self.loads_nothing() {
+            format!("specforge.json can't be used: {self}; no extension is loaded")
+        } else {
+            format!("specforge.json: {self}; it is ignored")
+        };
+        Diagnostic::new(codes::E069, message).with_suggestion(format!(
+            "fix specforge.json; `specforge explain {}` says what it must be",
+            codes::E069
+        ))
+    }
 }
 
 impl std::fmt::Display for ConfigProblem {
@@ -252,6 +285,16 @@ pub struct ConfigRead {
     /// `specforge.json` exists at the root (readable or not). No file is no
     /// problem: a project with the default config.
     pub found: bool,
+}
+
+impl ConfigRead {
+    /// One E069 per problem, in file order ([`ConfigProblem::diagnostic`]).
+    pub fn diagnostics(&self) -> Vec<Diagnostic> {
+        self.problems
+            .iter()
+            .map(ConfigProblem::diagnostic)
+            .collect()
+    }
 }
 
 /// Read `specforge.json` in `project_root`: the config it gives, and every
@@ -921,5 +964,98 @@ mod tests {
             ["z", "a", "m"]
         );
         assert!(keys_in_file_order("[1]").is_empty());
+    }
+
+    #[specforge_test(
+        behavior = "management_operations_over_the_project_view",
+        verify = "a config problem that leaves the sources or the extensions unknown blocks a rewrite"
+    )]
+    fn which_problems_block_a_rewrite() {
+        let path = PathBuf::from("specforge.json");
+        let wrong_type = |key| ConfigProblem::WrongType {
+            path: path.clone(),
+            key,
+            expected: "a string",
+        };
+        let not_a_string = |key| ConfigProblem::ItemNotAString {
+            path: path.clone(),
+            key,
+            index: 0,
+            json: "1".into(),
+        };
+        let table = [
+            (
+                ConfigProblem::Unreadable {
+                    path: path.clone(),
+                    error: "denied".into(),
+                },
+                true,
+            ),
+            (
+                ConfigProblem::NotJson {
+                    path: path.clone(),
+                    error: "eof".into(),
+                },
+                true,
+            ),
+            (ConfigProblem::NotAnObject { path: path.clone() }, true),
+            (wrong_type("name"), false),
+            (wrong_type("version"), false),
+            (wrong_type("spec_root"), true),
+            (wrong_type("exclude"), true),
+            (wrong_type("extensions"), true),
+            (not_a_string("extensions"), false),
+            (not_a_string("exclude"), false),
+            (
+                ConfigProblem::ExcludeEntry {
+                    path: path.clone(),
+                    index: 0,
+                    entry: "[".into(),
+                    error: ExcludeError::Empty,
+                },
+                false,
+            ),
+        ];
+        for (problem, blocks) in table {
+            assert_eq!(problem.blocks_rewrites(), blocks, "{problem:?}");
+            // An edit goes around fewer problems than a rewrite does.
+            assert!(
+                !problem.blocks_edits() || problem.blocks_rewrites(),
+                "{problem:?}"
+            );
+        }
+    }
+
+    #[specforge_test(
+        behavior = "load_extension_manifests",
+        verify = "E069 names why specforge.json can't be used"
+    )]
+    fn e069_text_is_the_problem_s() {
+        let path = PathBuf::from("specforge.json");
+        let not_json = ConfigProblem::NotJson {
+            path: path.clone(),
+            error: "eof".into(),
+        };
+        let name = ConfigProblem::WrongType {
+            path,
+            key: "name",
+            expected: "a string",
+        };
+        let (cannot, goes_around) = (not_json.diagnostic(), name.diagnostic());
+        assert!(cannot.is(codes::E069) && goes_around.is(codes::E069));
+        assert_eq!(cannot.severity, crate::Severity::Error);
+        assert_eq!(goes_around.severity, crate::Severity::Error);
+        assert_eq!(
+            cannot.message,
+            format!("specforge.json can't be used: {not_json}; no extension is loaded")
+        );
+        assert_eq!(
+            goes_around.message,
+            format!("specforge.json: {name}; it is ignored")
+        );
+        assert_eq!(
+            cannot.suggestion.as_deref(),
+            Some("fix specforge.json; `specforge explain E069` says what it must be")
+        );
     }
 }

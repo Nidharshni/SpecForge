@@ -568,6 +568,7 @@ behavior management_operations_over_the_project_view "Management Operations over
   verify integration "add, update and remove refuse an unusable specforge.json with one refusal, before they write"
   verify unit "collect maps test results to the entities of its view"
   verify contract "Management Operations over the Project View: management operations hold — project_compiled, one_project_read, root_for_disk"
+  verify unit "a config problem that leaves the sources or the extensions unknown blocks a rewrite"
 }
 
 // Called imperatively by validate_provider_refs (which consumes provider_schemes_registered).
