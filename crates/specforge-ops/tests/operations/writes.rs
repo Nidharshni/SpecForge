@@ -250,8 +250,7 @@ fn init(dir: &Path, extensions: &[String]) -> specforge_ops::init::Outcome {
         version: init::DEFAULT_VERSION,
         extensions,
     };
-    let plan = init::plan(&request, &candidates()).unwrap();
-    init::apply(dir, plan, &candidates()).unwrap()
+    init::init(&request, &candidates()).unwrap()
 }
 
 #[test]
@@ -299,17 +298,21 @@ fn the_starter_states_the_project_version() {
     // The structural starter, and the templates the software and product
     // builtins contribute (`{version}` in them is the project's version).
     let starter_of = |extensions: &[String], version: &str| {
+        let dir = scratch.path().join(format!(
+            "{}-{version}",
+            extensions.join("_").replace(['/', '@'], "-")
+        ));
         let request = init::Request {
-            dir: &scratch
-                .path()
-                .join(format!("{}-{version}", extensions.len())),
+            dir: &dir,
             name: Some("demo"),
             version,
             extensions,
         };
-        let plan = init::plan(&request, &runtime()).unwrap();
-        assert_eq!(plan.config["version"], version);
-        plan.starter
+        init::init(&request, &runtime()).unwrap();
+        let config: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(dir.join("specforge.json")).unwrap()).unwrap();
+        assert_eq!(config["version"], version);
+        std::fs::read_to_string(dir.join("spec/hello.spec")).unwrap()
     };
 
     let none: Vec<String> = Vec::new();
@@ -373,7 +376,7 @@ fn init_refuses_a_directory_whose_starter_file_exists() {
         extensions: &[],
     };
 
-    let error = init::plan(&request, &candidates()).unwrap_err();
+    let error = init::init(&request, &candidates()).unwrap_err();
 
     assert_eq!(error.code, init::STARTER_EXISTS, "{error:?}");
     assert_eq!(error.kind, OpErrorKind::Conflict);
@@ -400,7 +403,7 @@ fn init_refuses_local_extensions_over_an_unreadable_lock_before_writing() {
         extensions: &extensions,
     };
 
-    let error = init::plan(&request, &candidates()).unwrap_err();
+    let error = init::init(&request, &candidates()).unwrap_err();
 
     assert_eq!(error.code, "E033", "{error:?}");
     assert_eq!(files_under(&dir), before);
@@ -429,8 +432,7 @@ fn a_failed_init_puts_back_what_was_there() {
         extensions: &extensions,
     };
 
-    let plan = init::plan(&request, &candidates()).unwrap();
-    let error = init::apply(&dir, plan, &candidates()).unwrap_err();
+    let error = init::init(&request, &candidates()).unwrap_err();
 
     assert_eq!(error.code, "E032", "{error:?}");
     assert!(error.writes.is_empty(), "{:?}", error.writes);
@@ -448,6 +450,103 @@ fn a_failed_init_puts_back_what_was_there() {
     );
     for gone in ["spec", "specforge.json", ".gitignore"] {
         assert!(!dir.join(gone).exists(), "{gone} is removed again");
+    }
+}
+
+#[specforge_test_macros::test(
+    behavior = "scaffold_new_project",
+    verify = "a failed init leaves the directory as it was, files that were there included"
+)]
+fn a_failed_init_leaves_an_empty_directory_empty() {
+    use specforge_ops::init;
+    let blobs = Blobs::new();
+    let scratch = TempDir::new().unwrap();
+    let dir = scratch.path().join("victim");
+    std::fs::create_dir_all(&dir).unwrap();
+    // `.specforge` is a file: no module can be placed under it.
+    std::fs::write(dir.join(".specforge"), "not a directory\n").unwrap();
+    let extensions = [blobs.greet().display().to_string()];
+    let request = init::Request {
+        dir: &dir,
+        name: Some("demo"),
+        version: init::DEFAULT_VERSION,
+        extensions: &extensions,
+    };
+
+    let error = init::init(&request, &candidates()).unwrap_err();
+
+    assert_eq!(error.code, "E032", "{error:?}");
+    assert!(error.writes.is_empty(), "{:?}", error.writes);
+    let left: Vec<_> = std::fs::read_dir(&dir)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect();
+    assert_eq!(left, [std::ffi::OsString::from(".specforge")]);
+    assert_eq!(
+        std::fs::read_to_string(dir.join(".specforge")).unwrap(),
+        "not a directory\n"
+    );
+}
+
+#[specforge_test_macros::test(
+    behavior = "non_interactive_init",
+    verify = "init reads its extension specifiers as add reads them, with add's codes"
+)]
+fn init_reads_its_specifiers_as_add_reads_them() {
+    use specforge_ops::init;
+    let scratch = TempDir::new().unwrap();
+    let missing = scratch.path().join("missing.wasm").display().to_string();
+    let cases = [
+        ("Bad Name", "E054"),
+        ("@acme/x@>>1", "R-RES-003"),
+        (missing.as_str(), "E054"),
+        ("git+https://x/y", "E064"),
+        ("@acme/x", "E063"),
+    ];
+    for (specifier, code) in cases {
+        let existing = project(&[], &[]);
+        let before = files_under(existing.path());
+        let by_add = extension::specified(&[specifier]).and_then(|extensions| {
+            extension::add(
+                &AddRequest {
+                    root: &specforge_common::ProjectRoot::of(existing.path()).unwrap(),
+                    extensions,
+                    allow_unsigned: false,
+                    trust: Trust::Refuse,
+                    dry_run: false,
+                },
+                &specforge_ops::registry::Unconfigured("add"),
+                &candidates(),
+            )
+            .map(|_| ())
+        });
+        let by_add = by_add.unwrap_err();
+        assert_eq!(by_add.code, code, "{specifier}: add: {by_add:?}");
+        assert_eq!(files_under(existing.path()), before);
+
+        let dir = scratch.path().join("fresh");
+        let extensions = [specifier.to_string()];
+        let request = init::Request {
+            dir: &dir,
+            name: Some("demo"),
+            version: init::DEFAULT_VERSION,
+            extensions: &extensions,
+        };
+        let by_init = init::init(&request, &candidates()).unwrap_err();
+        assert_eq!(by_init.code, code, "{specifier}: init: {by_init:?}");
+        if code != "E063" {
+            assert_eq!(by_init.message, by_add.message, "{specifier}");
+            assert_eq!(by_init.suggestion, by_add.suggestion, "{specifier}");
+        } else {
+            assert!(
+                by_init
+                    .suggestion
+                    .as_deref()
+                    .is_some_and(|s| s.contains("specforge add @acme/x")),
+                "{by_init:?}"
+            );
+        }
+        assert!(!dir.exists(), "{specifier}: nothing written");
     }
 }
 
@@ -799,21 +898,18 @@ fn init_enables_a_builtin_after_the_builtins_it_requires() {
         extensions: &extensions,
     };
 
-    let plan = init::plan(&request, &runtime()).unwrap();
+    let outcome = init::init(&request, &runtime()).unwrap();
 
     assert_eq!(
-        plan.extensions,
+        outcome.extensions,
         [
             "@specforge/software",
             "@specforge/formal",
             "@specforge/testing"
         ]
     );
-    assert!(
-        plan.starter.contains("software specification"),
-        "{}",
-        plan.starter
-    );
+    let starter = std::fs::read_to_string(scratch.path().join("formal/spec/hello.spec")).unwrap();
+    assert!(starter.contains("software specification"), "{starter}");
 }
 
 #[specforge_test_macros::test(
@@ -833,13 +929,13 @@ fn init_enables_each_builtin_after_the_builtins_it_requires() {
             extensions: &extensions,
         };
 
-        let plan = init::plan(&request, &runtime).unwrap();
+        let extensions = init::init(&request, &runtime).unwrap().extensions;
 
-        for enabled in &plan.extensions {
+        for enabled in &extensions {
             let Some(enabled) = extension::builtin_name(enabled) else {
                 continue;
             };
-            let position = |name: &str| plan.extensions.iter().position(|e| e == name);
+            let position = |name: &str| extensions.iter().position(|e| e == name);
             for required in extension::Candidate::builtin(&runtime, enabled)
                 .unwrap()
                 .peers()
@@ -851,7 +947,7 @@ fn init_enables_each_builtin_after_the_builtins_it_requires() {
                         && position(&required.name).is_some(),
                     "{builtin}: {enabled} requires {} first: {:?}",
                     required.name,
-                    plan.extensions
+                    extensions
                 );
             }
         }
@@ -877,15 +973,13 @@ fn init_refuses_a_local_binary_that_claims_a_builtins_name_before_writing() {
         extensions: &extensions,
     };
 
-    let error = init::plan(&request, &impostor).unwrap_err();
+    let error = init::init(&request, &impostor).unwrap_err();
 
-    assert_eq!(error.code, "extension_not_found");
+    // As `add` refuses it: the extension conflicts with the builtin.
+    assert_eq!(error.code, "extension_conflict");
     assert_eq!(
         error.message,
-        format!(
-            "unresolvable extension '{}': the extension declares the name of the builtin '@specforge/product'",
-            wasm.display()
-        )
+        "the extension declares the name of the builtin '@specforge/product'"
     );
     assert!(!dir.exists());
 }
@@ -915,14 +1009,11 @@ fn init_reads_a_local_file_once() {
             .count()
     };
 
-    let plan = init::plan(&request, &runtime).unwrap();
-    assert_eq!(handshakes(&runtime), 1);
-
-    init::apply(&dir, plan, &runtime).unwrap();
+    init::init(&request, &runtime).unwrap();
     assert_eq!(
         handshakes(&runtime),
         1,
-        "apply installs without reading again"
+        "init reads the file once, then installs it"
     );
 }
 
@@ -970,12 +1061,16 @@ fn init_refuses_a_local_file_the_embedded_builtin_does_not_satisfy() {
         extensions: &extensions,
     };
 
-    let error = init::plan(&request, &testing::probes()).unwrap_err();
+    let error = init::init(&request, &testing::probes()).unwrap_err();
 
     assert_eq!(error.code, "E027", "{error:?}");
-    assert_eq!(
-        error.message,
-        "extension '@probe/needs-software' requires peer dependency '@specforge/software' ^9.0 but version 1.0.0 is installed"
+    // Named by the specifier that asked for it, as `add` names it among several.
+    assert!(
+        error.message.starts_with("adding '")
+            && error.message.ends_with(
+                "extension '@probe/needs-software' requires peer dependency '@specforge/software' ^9.0 but version 1.0.0 is installed"
+            ),
+        "{error:?}"
     );
     assert!(!dir.join("specforge.json").exists());
 }
@@ -999,17 +1094,16 @@ fn init_enables_the_builtins_a_local_file_requires() {
     };
     let runtime = testing::probes();
 
-    let plan = init::plan(&request, &runtime).unwrap();
+    let outcome = init::init(&request, &runtime).unwrap();
 
     assert_eq!(
-        plan.extensions,
+        outcome.extensions,
         [
             "@specforge/software",
             "@probe/needs-software",
             "@specforge/testing"
         ]
     );
-    init::apply(&dir, plan, &runtime).unwrap();
     let compiled = CompiledProject::compile(
         &specforge_common::ProjectRoot::of(&dir).unwrap(),
         Some(Arc::new(runtime)),

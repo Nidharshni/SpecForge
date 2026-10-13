@@ -425,13 +425,6 @@ pub(crate) mod testing {
             self.assembled()
         }
 
-        /// The compile read exactly `lock` (not written to disk), for a lock
-        /// a test edits after `lock(..)` built it.
-        pub fn with_lock_file(mut self, lock: specforge_installed::LockFile) -> Self {
-            self.installed = Installed::with_lock(self.dir.path(), LockState::Read(lock));
-            self.assembled()
-        }
-
         /// The compile read the lock at the root as it is on disk now.
         pub fn read_lock(mut self) -> Self {
             self.installed = Installed::at(self.dir.path());

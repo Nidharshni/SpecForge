@@ -410,9 +410,15 @@ behavior remove_extension "Remove Extension" {
     removal (config_invalid), changing nothing. A removal is all or
     nothing: a failure at any step leaves specforge.json, specforge.lock
     and the binary as they were.
-    Removing an extension that another loaded or installed extension
-    requires as a non-optional peer MUST fail with E027 naming the
-    dependents, unless --force is given. The CLI and the MCP
+    A removal is judged by the one peer rule over the project's peer set
+    as the removal leaves it (ADR 0041; the extensions its specforge.json
+    entries load), as add judges an install: removing an extension a
+    member of the set requires as a non-optional peer MUST fail with E027
+    ("removing '<name>' breaks '<dependent>': ...", its suggestion naming
+    every such dependent), unless --force is given; a locked extension no
+    entry enables is not judged and keeps nothing from being removed.
+    specforge remove --dry-run reports what the removal would do, the
+    same refusal included, and writes nothing. The CLI and the MCP
     remove_extension tool MUST run the same removal. This behavior is the
     user-facing CLI entry point; uninstall_wasm_extension handles the
     implementation. Existing .spec files using the extension's entities
@@ -442,6 +448,8 @@ behavior remove_extension "Remove Extension" {
   verify integration "a .wasm file entry is removed by the name it declares or by its entry as written, leaving its file in place"
   verify integration "a name more than one specforge.json entry enables is refused as ambiguous, naming the entries"
   verify integration "removing a .wasm file entry another extension requires fails with E027 unless --force"
+  verify unit "remove and check agree: a removal check would report E027 for is refused, and a removal that passes leaves none"
+  verify integration "a locked extension no specforge.json entry enables does not keep its peer from being removed"
   verify integration "a removal with an unreadable specforge.json is config_invalid and changes nothing"
 }
 
@@ -463,11 +471,13 @@ behavior list_installed_extensions "List Installed Extensions" {
     When specforge extensions is invoked, the system MUST list all installed
     extensions with their name, version, entity count, and registered entity types.
     The listing MUST query the KindRegistry to enumerate entity kinds per
-    extension. Each entry MUST carry its source, where the extension load
-    takes it from whatever order the entries are in: file:<path> when only
-    .wasm file entries of specforge.json enable it (listed under the name
-    its component declares), builtin for a builtin's name, else the lock
-    entry's source (registry, local:<path>), else unknown; its version: the
+    extension. Each entry MUST carry its source: where the extension load
+    loaded it from (the entry that loaded it, read by the load's one rule,
+    load_extension_manifests: builtin for a builtin's name, the lock
+    entry's source for an installed one, file:<path> for a .wasm file
+    entry, listed under the name it declares), else where its first entry
+    in load order would load it from, else its lock entry's source, else
+    unknown; its version: the
     loaded one, else an installed extension's locked one, else the version
     a legacy name@version entry writes; and its status (loaded, not_loaded,
     not_configured). The CLI and the MCP extensions tool MUST answer the same
@@ -1055,8 +1065,9 @@ behavior configure_registries "Configure Registries" {
     opt-in configuration, and first use is always local/offline per P8.
     The diagnostics of reading the registries array (E067, W140, I003) are
     shown by an operation only once it has asked a registry: an add of an
-    exact version already installed, or a dry run of an exact version,
-    asks none and shows none.
+    exact version already installed asks none and shows none; a dry run of
+    a registry package asks its registry for the package's manifest and
+    shows them.
   """
   verify unit "registries parsed from specforge.json"
   verify unit "scope_filter routes to correct registry"

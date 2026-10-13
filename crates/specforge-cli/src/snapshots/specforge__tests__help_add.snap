@@ -28,5 +28,8 @@ Options:
       --yes
           Accept key changes non-interactively (for CI)
 
+      --dry-run
+          Report what the add would do; write, pin and download nothing
+
   -h, --help
           Print help

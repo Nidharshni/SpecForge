@@ -237,17 +237,11 @@ fn lock_record(root: &Path, name: &str, version: &str, peers: &[(&str, &str)]) {
     std::fs::write(&path, lock.to_string()).unwrap();
 }
 
-#[specforge_test(
-    behavior = "add_extension_to_existing_project",
-    verify = "add and check agree: an add check would report E027 or E073 for is refused, and an add that passes leaves none"
-)]
-fn add_and_check_agree_on_the_project_peer_set() {
-    use specforge_ops::extension::{self, AddRequest, Source, Trust};
-    use specforge_ops::testing::{
-        BASE_1, BASE_2, DEP_1, NEEDS_SOFTWARE_1, NEEDS_SOFTWARE_9, probes,
-    };
+/// The table `add_and_check_agree_on_the_project_peer_set` and the dry run's twin walk.
+fn add_cases() -> Vec<Case> {
+    use specforge_ops::testing::{BASE_1, BASE_2, DEP_1, NEEDS_SOFTWARE_1, NEEDS_SOFTWARE_9};
 
-    let cases: Vec<Case> = vec![
+    vec![
         (
             "builtin out of range",
             &["@specforge/software"],
@@ -317,7 +311,18 @@ fn add_and_check_agree_on_the_project_peer_set() {
             Adds::Local(BASE_2),
             None,
         ),
-    ];
+    ]
+}
+
+#[specforge_test(
+    behavior = "add_extension_to_existing_project",
+    verify = "add and check agree: an add check would report E027 or E073 for is refused, and an add that passes leaves none"
+)]
+fn add_and_check_agree_on_the_project_peer_set() {
+    use specforge_ops::extension::{self, AddRequest, Source, Trust};
+    use specforge_ops::testing::probes;
+
+    let cases = add_cases();
 
     for (case, config, files, locked, adds, refused) in cases {
         let dir = project(config);
@@ -389,4 +394,211 @@ fn snapshot(root: &Path) -> std::collections::BTreeMap<std::path::PathBuf, Vec<u
         }
     }
     files
+}
+
+#[specforge_test(
+    behavior = "add_extension_to_existing_project",
+    verify = "a dry run answers what the add answers, refusals and the builtins it enables included, and writes nothing"
+)]
+fn a_dry_run_answers_what_the_add_answers() {
+    use specforge_ops::extension::{self, AddRequest, Source, Trust};
+    use specforge_ops::testing::probes;
+
+    for (case, config, files, locked, adds, _refused) in add_cases() {
+        let dir = project(config);
+        for (path, bytes) in files {
+            std::fs::write(dir.path().join(path), bytes).unwrap();
+        }
+        for (name, bytes, version, peers) in locked {
+            specforge_installed::testing::install_module(dir.path(), name, bytes);
+            lock_record(dir.path(), name, version, peers);
+        }
+        let outside = tempfile::tempdir().unwrap();
+        let source = match adds {
+            Adds::Local(bytes) => {
+                let file = outside.path().join("added.wasm");
+                std::fs::write(&file, bytes).unwrap();
+                Source::Local(file)
+            }
+            Adds::Builtin(name) => Source::Builtin(name),
+        };
+        let root = specforge_common::ProjectRoot::of(dir.path()).unwrap();
+        let ask = |dry_run| {
+            extension::add(
+                &AddRequest {
+                    root: &root,
+                    extensions: vec![source.clone().into()],
+                    allow_unsigned: false,
+                    trust: Trust::Refuse,
+                    dry_run,
+                },
+                &specforge_ops::registry::Unconfigured("test"),
+                &probes(),
+            )
+        };
+        let before = snapshot(dir.path());
+
+        let dry = ask(true);
+        assert_eq!(
+            snapshot(dir.path()),
+            before,
+            "{case}: a dry run writes nothing"
+        );
+        let real = ask(false);
+
+        match (dry, real) {
+            (Err(dry), Err(real)) => {
+                assert_eq!((dry.code, dry.message), (real.code, real.message), "{case}");
+            }
+            (Ok(dry), Ok(real)) => {
+                let peers = |added: &extension::Added| {
+                    let document = serde_json::to_value(added.document()).unwrap();
+                    document["added"][0]["peers_enabled"].clone()
+                };
+                assert_eq!(
+                    serde_json::to_value(dry.document()).unwrap()["added"][0]["action"],
+                    "planned",
+                    "{case}"
+                );
+                assert_eq!(peers(&dry), peers(&real), "{case}");
+            }
+            (dry, real) => panic!("{case}: dry run {dry:?}, real add {real:?}"),
+        }
+    }
+}
+
+/// The compiled project `config` and `files` describe, `locked` extensions installed by hand.
+fn removal_project(
+    config: &[&str],
+    files: &[(&str, &[u8])],
+    locked: &[Locked],
+) -> tempfile::TempDir {
+    let dir = project(config);
+    for (path, bytes) in files {
+        std::fs::write(dir.path().join(path), bytes).unwrap();
+    }
+    for (name, bytes, version, peers) in locked {
+        specforge_installed::testing::install_module(dir.path(), name, bytes);
+        lock_record(dir.path(), name, version, peers);
+    }
+    dir
+}
+
+#[specforge_test(
+    behavior = "remove_extension",
+    verify = "remove and check agree: a removal check would report E027 for is refused, and a removal that passes leaves none"
+)]
+fn remove_and_check_agree_on_the_project_peer_set() {
+    use specforge_ops::extension::{self, RemoveRequest};
+    use specforge_ops::testing::{BASE_1, DEP_1, NEEDS_SOFTWARE_1, NEEDS_SOFTWARE_9, probes};
+
+    let software_needs_9: Locked = (
+        "@probe/needs-software",
+        NEEDS_SOFTWARE_9,
+        "1.0.0",
+        &[("@specforge/software", "^9.0")],
+    );
+    let software_needs_1: Locked = (
+        "@probe/needs-software",
+        NEEDS_SOFTWARE_1,
+        "1.0.0",
+        &[("@specforge/software", "^1.0")],
+    );
+    let dep_needs_base: Locked = ("@probe/dep", DEP_1, "1.0.0", &[("@probe/base", "^1.0")]);
+    // name, config, files, locked, the argument, force, whether it is refused
+    #[allow(clippy::type_complexity)]
+    let cases: Vec<(
+        &str,
+        &[&str],
+        &[(&str, &[u8])],
+        Vec<Locked>,
+        &str,
+        bool,
+        bool,
+    )> = vec![
+        (
+            "a locked extension no entry enables keeps nothing",
+            &["@specforge/software"],
+            &[],
+            vec![software_needs_9],
+            "@specforge/software",
+            false,
+            false,
+        ),
+        (
+            "an enabled dependent refuses",
+            &["@specforge/software", "@probe/needs-software"],
+            &[],
+            vec![software_needs_1],
+            "@specforge/software",
+            false,
+            true,
+        ),
+        (
+            "a file entry another file entry requires refuses",
+            &["base.wasm", "dep.wasm"],
+            &[("base.wasm", BASE_1), ("dep.wasm", DEP_1)],
+            vec![],
+            "base.wasm",
+            false,
+            true,
+        ),
+        (
+            "a file entry only a disabled lock entry requires goes",
+            &["base.wasm"],
+            &[("base.wasm", BASE_1)],
+            vec![dep_needs_base],
+            "base.wasm",
+            false,
+            false,
+        ),
+        (
+            "force removes what is required",
+            &["@specforge/software", "@probe/needs-software"],
+            &[],
+            vec![software_needs_1],
+            "@specforge/software",
+            true,
+            false,
+        ),
+    ];
+
+    for (case, config, files, locked, name, force, refused) in cases {
+        let dir = removal_project(config, files, &locked);
+        let root = specforge_common::ProjectRoot::of(dir.path()).unwrap();
+        let compiled = CompiledProject::compile(&root, Some(Arc::new(probes())));
+        let before = snapshot(dir.path());
+
+        let result = extension::remove(
+            &ProjectView::of(&compiled),
+            &RemoveRequest {
+                name,
+                force,
+                dry_run: false,
+            },
+        );
+
+        if refused {
+            let error = result.unwrap_err();
+            assert_eq!(error.code, "E027", "{case}: {error:?}");
+            if name == "@specforge/software" {
+                assert!(
+                    error.message.contains("'@probe/needs-software'"),
+                    "{case}: {error:?}"
+                );
+            }
+            assert_eq!(snapshot(dir.path()), before, "{case}: nothing written");
+        } else {
+            result.unwrap_or_else(|error| panic!("{case}: {error:?}"));
+            if !force {
+                let recompiled = CompiledProject::compile(&root, Some(Arc::new(probes())));
+                let all = recompiled.diagnostics();
+                let peers: Vec<_> = all
+                    .iter()
+                    .filter(|d| matches!(d.code.as_str(), "E027" | "E073"))
+                    .collect();
+                assert!(peers.is_empty(), "{case}: {peers:?}");
+            }
+        }
+    }
 }

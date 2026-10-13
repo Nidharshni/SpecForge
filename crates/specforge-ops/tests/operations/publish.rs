@@ -97,7 +97,7 @@ fn publish_refuses_in_one_order() {
     );
     assert_eq!(refused(&e063).code, "E063", "{e063:?}");
 
-    assert!(registry.published().is_empty());
+    assert!(registry.accepted_publishes().is_empty());
     assert!(registry.asked().is_empty());
 }
 
@@ -126,7 +126,7 @@ fn a_declaration_with_errors_is_refused_before_the_registry_is_asked() {
         "{error:?}"
     );
     assert!(error.message.contains("ext_short"), "{error:?}");
-    assert!(registry.published().is_empty());
+    assert!(registry.accepted_publishes().is_empty());
     assert!(registry.asked().is_empty());
 
     // A required peer that is not installed is not an error.
@@ -174,7 +174,7 @@ fn an_unpublishable_name_or_version_is_refused_before_the_registry_is_asked() {
         assert_eq!(error.code, "E072", "{name}@{version}: {error:?}");
         assert!(error.message.contains(why), "{name}@{version}: {error:?}");
     }
-    assert!(registry.published().is_empty());
+    assert!(registry.accepted_publishes().is_empty());
     assert!(registry.asked().is_empty());
 }
 
@@ -218,7 +218,10 @@ fn a_publish_uploads_the_binary_and_the_declaration_read_from_it() {
     let outcome = published.result.expect("published");
     let name = PackageName::parse("@acme/x").unwrap();
     let version = Version::parse("1.0.0").unwrap();
-    assert_eq!(registry.published(), [(name.clone(), version.clone())]);
+    assert_eq!(
+        registry.accepted_publishes(),
+        [(name.clone(), version.clone())]
+    );
     assert_eq!(outcome.name, name);
     assert_eq!(outcome.version, version);
     assert_eq!(outcome.size_bytes, wasm.len());

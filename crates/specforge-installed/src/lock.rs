@@ -109,6 +109,23 @@ impl LockFile {
     pub fn new() -> Self {
         Self::default()
     }
+
+    /// `entry` as the lock's entry for its name: replaces the entry of that name, else appended.
+    /// The one rule for "the lock as an install leaves it" (`Change::install`, the lock plan's
+    /// preview).
+    pub fn put(&mut self, entry: LockFileEntry) {
+        match self.entries.iter_mut().find(|e| e.name == entry.name) {
+            Some(existing) => *existing = entry,
+            None => self.entries.push(entry),
+        }
+    }
+
+    /// Without `name`'s entry; `false` when it had none.
+    pub fn without(&mut self, name: &PackageName) -> bool {
+        let held = self.entries.len();
+        self.entries.retain(|e| e.name != *name);
+        self.entries.len() != held
+    }
 }
 
 /// Write a lock file to disk as JSON.

@@ -38,8 +38,8 @@ impl Args {
     }
 }
 
-/// `specforge init`: the shared scaffold (`specforge_ops::init`), planned
-/// and validated before anything is written, then presented.
+/// `specforge init`: the shared scaffold (`specforge_ops::init`), validated
+/// and judged before anything is written, then presented.
 fn init_at(
     path: &Path,
     name: Option<&str>,
@@ -57,8 +57,8 @@ fn init_at(
         extensions,
     };
     let runtime = specforge_component::ComponentRuntime::with_user_cache();
-    let plan = match init::plan(&request, &runtime) {
-        Ok(plan) => plan,
+    let outcome = match init::init(&request, &runtime) {
+        Ok(outcome) => outcome,
         Err(error) => return Refusal::of(format).report(terminal, &error),
     };
     if let Some(enclosing) = path.parent().and_then(ProjectRoot::enclosing)
@@ -71,10 +71,6 @@ fn init_at(
             enclosing.dir().display()
         );
     }
-    let outcome = match init::apply(path, plan, &runtime) {
-        Ok(outcome) => outcome,
-        Err(error) => return Refusal::of(format).report(terminal, &error),
-    };
 
     // Every file init wrote: .gitignore when it lacked an entry, the
     // config, the starter, and each installed module and lock.

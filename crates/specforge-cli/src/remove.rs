@@ -17,6 +17,10 @@ pub(crate) struct Args {
     #[arg(long)]
     force: bool,
 
+    /// Report what the removal would do; write nothing
+    #[arg(long)]
+    dry_run: bool,
+
     #[command(flatten)]
     output: OutputArg,
 }
@@ -36,7 +40,7 @@ impl Args {
         let request = RemoveRequest {
             name: &self.name,
             force: self.force,
-            dry_run: false,
+            dry_run: self.dry_run,
         };
         let outcome = match extension::remove(&ProjectView::of(&project), &request) {
             Ok(outcome) => outcome,
@@ -52,24 +56,29 @@ impl Args {
                 outcome.writes.names_under(path),
             )),
             OutputFormat::Human => {
+                let (removed, disabled) = if outcome.dry_run {
+                    ("Would remove", "Would disable")
+                } else {
+                    ("Removed", "Disabled")
+                };
                 match &outcome.origin {
                     Origin::Builtin => {
-                        outln!(terminal, "Disabled builtin extension '{}'", outcome.name)
+                        outln!(terminal, "{disabled} builtin extension '{}'", outcome.name)
                     }
                     Origin::File { path } => outln!(
                         terminal,
-                        "Disabled extension '{}' loaded from {path} (the file is left in place)",
+                        "{disabled} extension '{}' loaded from {path} (the file is left in place)",
                         outcome.name
                     ),
                     Origin::Installed { .. } => outln!(
                         terminal,
-                        "Removed extension '{}' (v{})",
+                        "{removed} extension '{}' (v{})",
                         outcome.name,
                         outcome.version.as_deref().unwrap_or("?")
                     ),
                     Origin::Unknown => outln!(
                         terminal,
-                        "Removed the specforge.json entry of '{}' (it was not installed)",
+                        "{removed} the specforge.json entry of '{}' (it was not installed)",
                         outcome.name
                     ),
                 }
