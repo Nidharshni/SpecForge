@@ -1,31 +1,83 @@
-//! `cargo gate`: the repository's check list. `cargo gate list` prints it.
+//! `cargo gate`: the repository's check list.
+//!
+//! ```text
+//! cargo gate                 quick (default): what the working tree changed
+//! cargo gate hook            what .githooks/pre-commit runs, on the staged files
+//! cargo gate full            every check but the bootstrap's
+//! cargo gate ci              what CI's main job runs
+//! cargo gate bootstrap       what CI's cold job runs
+//! cargo gate baseline        lower gate/baseline.json to today's warning counts (never raises one)
+//! cargo gate list            print the table: name, reach, trigger, proves
+//! cargo gate <mode> --only <check>
+//! ```
+//!
+//! Exit codes: 0 every selected check passed, 1 one failed or was blocked, 2 usage.
 
 use std::process::ExitCode;
 
-const USAGE: &str = "usage: cargo gate list";
+use gate::{Mode, Repo};
+
+const USAGE: &str =
+    "usage: cargo gate [hook|quick|full|ci|bootstrap] [--only <check>] | baseline | list";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    match args
-        .iter()
-        .map(String::as_str)
-        .collect::<Vec<_>>()
-        .as_slice()
-    {
-        ["list"] => {
-            print!("{}", gate::render_list());
-            ExitCode::SUCCESS
-        }
-        [
-            "hook" | "quick" | "full" | "ci" | "bootstrap" | "baseline",
-            ..,
-        ] => {
-            eprintln!("cargo gate {}: wired in the next ticket (T3)", args[0]);
-            ExitCode::from(2)
-        }
-        _ => {
-            eprintln!("{USAGE}");
-            ExitCode::from(2)
+    let (mut mode, mut only, mut word) = (Mode::Quick, None, None);
+    let mut rest = args.iter();
+    while let Some(arg) = rest.next() {
+        match arg.as_str() {
+            "--only" => match rest.next() {
+                Some(name) => only = Some(name.as_str()),
+                None => return usage("--only needs a check name"),
+            },
+            "list" | "baseline" if word.is_none() => word = Some(arg.as_str()),
+            name => match Mode::parse(name) {
+                Some(parsed) if word.is_none() => {
+                    mode = parsed;
+                    word = Some(name);
+                }
+                _ => return usage(&format!("unexpected `{name}`")),
+            },
         }
     }
+    if word == Some("list") {
+        print!("{}", gate::render_list());
+        return ExitCode::SUCCESS;
+    }
+    let repo = match Repo::discover() {
+        Ok(repo) => repo,
+        Err(e) => return fail(&e),
+    };
+    if word == Some("baseline") {
+        return match gate::baseline(&repo) {
+            Ok(lines) => {
+                lines.iter().for_each(|l| println!("{l}"));
+                ExitCode::SUCCESS
+            }
+            Err(e) => fail(&e),
+        };
+    }
+    let report = match gate::run(mode, &repo, only) {
+        Ok(report) => report,
+        Err(e) => return fail(&e),
+    };
+    let mut stdout = std::io::stdout();
+    if report.print(mode, &mut stdout).is_err() {
+        return ExitCode::from(1);
+    }
+    if report.passed() {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::from(1)
+    }
+}
+
+fn usage(why: &str) -> ExitCode {
+    eprintln!("cargo gate: {why}\n{USAGE}");
+    ExitCode::from(2)
+}
+
+fn fail(why: &str) -> ExitCode {
+    eprintln!("cargo gate: {why}");
+    ExitCode::from(1)
 }

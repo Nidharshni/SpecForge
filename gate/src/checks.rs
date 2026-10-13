@@ -6,6 +6,7 @@ use crate::change_set::{ChangeSet, Pattern};
 use crate::judge;
 use crate::repo::Repo;
 use crate::run::{Ctx, Mode};
+use crate::steps;
 
 /// The smallest run that reaches a check. Hook < Quick < Full; Bootstrap is the cold-clone job alone.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -89,10 +90,6 @@ impl Check {
     }
 }
 
-fn not_wired(_: &Ctx, _: &Selection) -> Result<(), String> {
-    Err("not wired".into())
-}
-
 /// Every check, in the order a run starts them.
 pub static CHECKS: &[Check] = &[
     Check {
@@ -103,7 +100,7 @@ pub static CHECKS: &[Check] = &[
         compiles: false,
         after: &[],
         fix: "cargo insta review, then unstage the `.snap.new` files",
-        run: not_wired,
+        run: steps::pending_snapshots,
     },
     Check {
         name: "rustfmt",
@@ -113,7 +110,7 @@ pub static CHECKS: &[Check] = &[
         compiles: false,
         after: &[],
         fix: "cargo fmt --all; a guest or fixture: cargo fmt --manifest-path <its Cargo.toml>",
-        run: not_wired,
+        run: steps::rustfmt,
     },
     Check {
         name: "spec-format",
@@ -126,7 +123,7 @@ pub static CHECKS: &[Check] = &[
         compiles: false,
         after: &[],
         fix: "cargo run -q -p specforge-cli -- format <the files it names>",
-        run: not_wired,
+        run: steps::spec_format,
     },
     Check {
         name: "grammar",
@@ -139,7 +136,7 @@ pub static CHECKS: &[Check] = &[
         compiles: false,
         after: &[],
         fix: "cd crates/tree-sitter-specforge && tree-sitter generate, then commit src/parser.c, src/grammar.json, src/node-types.json",
-        run: not_wired,
+        run: steps::grammar,
     },
     Check {
         name: "zero-entity",
@@ -149,7 +146,7 @@ pub static CHECKS: &[Check] = &[
         compiles: false,
         after: &[],
         fix: "name the kind through the registry, or mark the line `// zero-entity-core: exempt`",
-        run: not_wired,
+        run: steps::zero_entity,
     },
     Check {
         name: "links",
@@ -162,7 +159,7 @@ pub static CHECKS: &[Check] = &[
         compiles: false,
         after: &[],
         fix: "edit the test's verify text to match the spec entity (or the spec), then re-stage",
-        run: not_wired,
+        run: steps::links,
     },
     Check {
         name: "builtins",
@@ -172,7 +169,7 @@ pub static CHECKS: &[Check] = &[
         compiles: false,
         after: &[],
         fix: "cargo run -p xtask --bin revendor (docs/agents/revendor.md)",
-        run: not_wired,
+        run: steps::builtins,
     },
     Check {
         name: "guests",
@@ -187,7 +184,7 @@ pub static CHECKS: &[Check] = &[
         compiles: false,
         after: &[],
         fix: "read <target>/gate/guests.log",
-        run: not_wired,
+        run: steps::guests,
     },
     Check {
         name: "audit",
@@ -197,7 +194,7 @@ pub static CHECKS: &[Check] = &[
         compiles: false,
         after: &[],
         fix: "cargo update -p <crate> --manifest-path <the lockfile's manifest>, or bump the dependency",
-        run: not_wired,
+        run: steps::audit,
     },
     Check {
         name: "build",
@@ -210,7 +207,7 @@ pub static CHECKS: &[Check] = &[
         compiles: true,
         after: &[],
         fix: "read <target>/gate/build.log",
-        run: not_wired,
+        run: steps::build,
     },
     Check {
         name: "tests",
@@ -223,7 +220,7 @@ pub static CHECKS: &[Check] = &[
         compiles: false,
         after: &["build"],
         fix: "read <target>/gate/tests.log",
-        run: not_wired,
+        run: steps::tests,
     },
     Check {
         name: "clippy",
@@ -241,7 +238,7 @@ pub static CHECKS: &[Check] = &[
         compiles: true,
         after: &[],
         fix: "read <target>/gate/clippy.log",
-        run: not_wired,
+        run: steps::clippy,
     },
     Check {
         name: "doctests",
@@ -254,7 +251,7 @@ pub static CHECKS: &[Check] = &[
         compiles: false,
         after: &["build"],
         fix: "read <target>/gate/doctests.log",
-        run: not_wired,
+        run: steps::doctests,
     },
     Check {
         name: "specs",
@@ -271,7 +268,7 @@ pub static CHECKS: &[Check] = &[
         compiles: false,
         after: &[],
         fix: "fix the new errors and warnings; a count that fell: cargo gate baseline, in the same commit",
-        run: not_wired,
+        run: steps::specs,
     },
     Check {
         name: "dogfood",
@@ -281,7 +278,7 @@ pub static CHECKS: &[Check] = &[
         compiles: false,
         after: &["tests", "guests"],
         fix: "fix the test or the spec entity the finding names",
-        run: not_wired,
+        run: steps::dogfood,
     },
     Check {
         name: "builtins-verify",
@@ -291,7 +288,7 @@ pub static CHECKS: &[Check] = &[
         compiles: false,
         after: &[],
         fix: "cargo run -p xtask --bin revendor with this rustc",
-        run: not_wired,
+        run: steps::builtins_verify,
     },
 ];
 
@@ -420,6 +417,15 @@ fn doctest_packages(repo: &Repo, changes: &ChangeSet) -> Result<Selection, Strin
         })
         .collect();
     Ok(only(with_doctest))
+}
+
+/// Every member whose sources hold a runnable doctest.
+pub(crate) fn doctest_members(repo: &Repo) -> Vec<String> {
+    repo.members
+        .iter()
+        .filter(|m| member_has_doctest(repo, &m.dir))
+        .map(|m| m.name.clone())
+        .collect()
 }
 
 fn member_has_doctest(repo: &Repo, dir: &str) -> bool {

@@ -7,8 +7,9 @@ mod checks;
 pub mod judge;
 mod repo;
 mod run;
+mod steps;
 
 pub use change_set::{ChangeSet, Pattern};
 pub use checks::{CHECKS, Check, Reach, Selection, Trigger, render_list};
 pub use repo::{Member, OUTSIDE_WORKSPACE, PROJECTS, Project, Repo};
-pub use run::{Ctx, Mode};
+pub use run::{CARGO_AUDIT, Ctx, Mode, Outcome, Report, TREE_SITTER, Tool, baseline, run};
