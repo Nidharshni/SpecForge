@@ -2925,6 +2925,7 @@ dependencies = [
  "serde_json",
  "similar",
  "specforge-common",
+ "specforge-graph",
  "specforge-parser",
  "specforge-test",
  "specforge-test-macros",

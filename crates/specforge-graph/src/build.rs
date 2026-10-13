@@ -526,14 +526,14 @@ fn compare_graph_contents(incremental: &Graph, cold: &Graph) -> Result<(), Strin
             .iter()
             .map(|n| {
                 let sig = format!(
-                    "{} in {}:{}:{} title={:?} fields={} methods={}",
+                    "{} in {}:{}:{} title={:?} fields={:?} methods={:?}",
                     n.kind.raw,
                     n.source_span.file,
                     n.source_span.start_line,
                     n.source_span.start_col,
                     n.title,
-                    serde_json::to_string(&n.fields).unwrap_or_default(),
-                    serde_json::to_string(&n.methods).unwrap_or_default(),
+                    n.fields,
+                    n.methods,
                 );
                 (n.id.raw.to_string(), sig)
             })

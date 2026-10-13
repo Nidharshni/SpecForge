@@ -305,18 +305,16 @@ fn changes(
     (fields.into_iter().collect(), aspects.into_iter().collect())
 }
 
-/// Each field's values (a key may repeat), with positions stripped.
+/// Each field's values (a key may repeat) as every output writes them: the
+/// written form has no positions.
 fn field_contents(node: &Node) -> BTreeMap<String, Vec<Value>> {
     let mut fields: BTreeMap<String, Vec<Value>> = BTreeMap::new();
     for entry in node.fields.entries() {
         let value = serde_json::json!({
-            "value": serde_json::to_value(&entry.value).unwrap_or_default(),
+            "value": Value::from(crate::field_form::write(&entry.value)),
             "annotations": serde_json::to_value(&entry.annotations).unwrap_or_default(),
         });
-        fields
-            .entry(entry.key.to_string())
-            .or_default()
-            .push(without_spans(value));
+        fields.entry(entry.key.to_string()).or_default().push(value);
     }
     fields
 }
@@ -332,23 +330,4 @@ fn methods(node: &Node) -> Vec<Value> {
             })
         })
         .collect()
-}
-
-/// Drop the positions formal expressions carry: a serialized `SpannedExpr`
-/// (`{"expr": .., "span": ..}`) becomes its bare `expr`.
-fn without_spans(value: Value) -> Value {
-    match value {
-        Value::Object(mut map) => {
-            if map.len() == 2 && map.contains_key("span") && map.contains_key("expr") {
-                return without_spans(map.remove("expr").unwrap_or_default());
-            }
-            Value::Object(
-                map.into_iter()
-                    .map(|(k, v)| (k, without_spans(v)))
-                    .collect(),
-            )
-        }
-        Value::Array(items) => Value::Array(items.into_iter().map(without_spans).collect()),
-        other => other,
-    }
 }
