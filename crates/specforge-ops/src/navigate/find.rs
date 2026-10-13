@@ -212,7 +212,7 @@ fn rank<'g>(node: &'g Node, text: &str, scope: MatchScope) -> Option<EntityMatch
 /// its JSON) contains it, ignoring case.
 fn field_holds(node: &Node, field: &str, value: &str) -> bool {
     node.fields.get(field).is_some_and(|v| {
-        let text = match specforge_emitter::field_value_to_json(v) {
+        let text = match serde_json::Value::from(specforge_graph::field_form::write(v)) {
             serde_json::Value::String(text) => text,
             other => other.to_string(),
         };

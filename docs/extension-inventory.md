@@ -188,15 +188,13 @@ Load order: `product` first (no dependencies), then `software` (optionally depen
 | Refinement | `refinement` | no | Abstract-to-concrete behavior mapping with condition deltas |
 | Process | `process` | no | CSP-style communicating process with alphabet and composition |
 
-### Edge Types (12)
+### Edge Types (10)
 
 | Edge Type | Source | Target | Semantics |
 |-----------|--------|--------|-----------|
-| `BehaviorRequiresInvariant` | behavior (software) | invariant (software) | This behavior requires this invariant as precondition |
-| `BehaviorEnsuresInvariant` | behavior (software) | invariant (software) | This behavior ensures this invariant as postcondition |
-| `BehaviorMaintainsInvariant` | behavior (software) | invariant (software) | This behavior maintains this invariant as frame condition |
 | `AxiomAssumesInvariant` | axiom | invariant (software) | This axiom assumes this invariant |
 | `BehaviorSatisfiesProperty` | behavior (software) | property | This behavior satisfies this property |
+| `BehaviorRefinesBehavior` | behavior (software) | behavior (software) | This concrete behavior refines this abstract behavior |
 | `EventFollowsProtocol` | event (software) | protocol | This event follows this protocol |
 | `PropertyDependsOnInvariant` | property | invariant (software) | This property depends on this invariant |
 | `RefinementRefinesAbstract` | refinement | behavior (software) | This refinement maps from this abstract behavior |
@@ -209,7 +207,7 @@ Load order: `product` first (no dependencies), then `software` (optionally depen
 
 | Target Kind | Owner Extension | Added Fields |
 |-------------|----------------|-------------|
-| `behavior` | @specforge/software | `requires` (reference_list -> invariant), `ensures` (reference_list -> invariant), `maintains` (reference_list -> invariant), `satisfies` (reference_list -> property), `sync` (block) |
+| `behavior` | @specforge/software | `requires` (block), `ensures` (block), `maintains` (block), `satisfies` (reference_list -> property), `sync` (block) |
 | `event` | @specforge/software | `follows_protocol` (reference_list -> protocol), `participates_in` (reference_list -> process), `sync` (block) |
 
 ### Compiler Passes (4)

@@ -1,12 +1,9 @@
-use crate::emit::EmitFormat;
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::str::FromStr;
 
-use crate::error::EmitterError;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use sha2::{Digest, Sha256};
 use specforge_common::shape::Shape;
 use specforge_diagnostics::{Code, codes};
@@ -130,6 +127,15 @@ pub struct SchemaField {
 }
 
 impl SchemaField {
+    /// The field's declared type read once: what it takes, how a written
+    /// value is stored and the JSON Schema of what is written for it.
+    pub fn form(&self) -> specforge_graph::FieldForm {
+        specforge_graph::FieldForm::new(
+            self.field_type,
+            self.enum_values.clone().unwrap_or_default(),
+        )
+    }
+
     /// The schema's field for a registered one: everything its declaration
     /// says.
     fn of(entry: &FieldRegistryEntry) -> Self {
@@ -357,12 +363,22 @@ pub struct SchemaRefBlock {
 impl SchemaRefBlock {
     pub fn for_schema(schema: &GraphProtocolSchema) -> Self {
         Self {
-            url: format!(
-                "https://specforge.dev/schema/graph-protocol-v{}.json",
-                schema.schema_version
-            ),
+            url: schema_url(schema, None),
             content_hash: content_hash(schema),
         }
+    }
+}
+
+/// The identity of the published schema of `schema`: the graph document's,
+/// or, for `variant` (`context`, `brief`), that format's own.
+pub(crate) fn schema_url(schema: &GraphProtocolSchema, variant: Option<&str>) -> String {
+    let graph = format!(
+        "https://specforge.dev/schema/graph-protocol-v{}.json",
+        schema.schema_version
+    );
+    match variant {
+        None => graph,
+        Some(variant) => graph.replace(".json", &format!("-{variant}.json")),
     }
 }
 
@@ -660,313 +676,3 @@ pub fn content_hash(schema: &GraphProtocolSchema) -> String {
 // ---------------------------------------------------------------------------
 // Slice 6b: Version Negotiation — default to latest
 // ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
-// Slice 9: Publish JSON Schema
-// ---------------------------------------------------------------------------
-
-/// JSON Schema fragment for one field value, derived from the registry's
-/// declared field type (C6-04).
-fn json_field_schema(field_type: FieldType, enum_values: Option<&[String]>) -> Value {
-    match field_type {
-        FieldType::Integer => serde_json::json!({ "type": "integer" }),
-        FieldType::Bool => serde_json::json!({ "type": "boolean" }),
-        FieldType::Enum => match enum_values {
-            Some(values) if !values.is_empty() => serde_json::json!({ "enum": values }),
-            _ => serde_json::json!({ "type": "string" }),
-        },
-        t if t.is_list() => {
-            serde_json::json!({ "type": "array", "items": { "type": "string" } })
-        }
-        FieldType::Block => serde_json::json!({ "type": "object" }),
-        _ => serde_json::json!({ "type": "string" }),
-    }
-}
-
-/// Publish a JSON Schema describing an export of `format`.
-///
-/// Each format produces a different node shape (full / context / brief), so
-/// one schema cannot validate all exports. The `graph` (full) schema is the
-/// historical default.
-pub fn publish_json_schema_format(
-    schema: &GraphProtocolSchema,
-    format: EmitFormat,
-) -> Result<String, EmitterError> {
-    let kind_names: Vec<Value> = schema
-        .entity_kinds
-        .iter()
-        .map(|k| Value::String(k.name.clone()))
-        .collect();
-
-    let edge_labels: Vec<Value> = schema
-        .edge_types
-        .iter()
-        .map(|e| Value::String(e.label.clone()))
-        .collect();
-
-    let node_kind_schema = if kind_names.is_empty() {
-        serde_json::json!({ "type": "string" })
-    } else {
-        serde_json::json!({ "type": "string", "enum": kind_names })
-    };
-
-    // The embedded schema block lists the registered edge types by name.
-    let edge_type_label_schema = if edge_labels.is_empty() {
-        serde_json::json!({ "type": "string" })
-    } else {
-        serde_json::json!({ "type": "string", "enum": edge_labels })
-    };
-
-    // A graph edge is labelled with the name of the field that declared the
-    // reference (`invariants`, not `BehaviorEnforcesInvariant`). The label
-    // is open: any list field whose entries name entities yields an edge,
-    // including fields no extension declares, so it cannot be an enum. The
-    // fields that declare an edge type are listed as examples.
-    let edge_fields: std::collections::BTreeSet<&str> = schema
-        .entity_kinds
-        .iter()
-        .flat_map(|k| &k.fields)
-        .filter(|f| f.edge.is_some())
-        .map(|f| f.name.as_str())
-        .collect();
-    let mut edge_label_schema = serde_json::json!({
-        "type": "string",
-        "description": "Name of the field that declared the reference, for example `invariants`. Open: extensions add fields."
-    });
-    if !edge_fields.is_empty() {
-        edge_label_schema["examples"] = edge_fields.into_iter().collect();
-    }
-
-    let node_schema: serde_json::Value = match format {
-        // Every other key of a context node is a field its extension
-        // declares `headline`, written as text and never under one of the
-        // node's own keys (`context::headline_fields`), so the schema types
-        // them without naming them (ADR 0009, D).
-        EmitFormat::Context => serde_json::json!({
-            "type": "object",
-            "additionalProperties": { "type": "string" },
-            "required": ["id", "kind"],
-            "properties": {
-                "id": { "type": "string" },
-                "kind": node_kind_schema,
-                "title": { "type": "string" },
-                "verify": { "type": ["object", "array", "null"] },
-                "fields": { "type": "object" }
-            }
-        }),
-        EmitFormat::Brief => serde_json::json!({
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["id", "kind"],
-            "properties": {
-                "id": { "type": "string" },
-                "kind": node_kind_schema,
-                "title": { "type": "string" }
-            }
-        }),
-        _ => serde_json::json!({
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["id", "kind", "file", "line", "fields"],
-            "properties": {
-                "id": { "type": "string" },
-                "kind": node_kind_schema,
-                "title": { "type": "string" },
-                "file": { "type": "string" },
-                "line": { "type": "integer" },
-                "fields": { "type": "object" }
-            }
-        }),
-    };
-
-    // C6-04: per-kind field subschemas under $defs, selected by a `kind`
-    // discriminator, plus a shared entity_kind def for the embedded schema
-    // block. Full exports carry the per-node guards; brief/context nodes
-    // have no `fields` and skip them.
-    let mut defs = serde_json::Map::new();
-    defs.insert(
-        "entity_kind".to_string(),
-        serde_json::json!({
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["name", "source_extension", "testable", "fields"],
-            "properties": {
-                "name": { "type": "string" },
-                "source_extension": { "type": "string" },
-                "testable": { "type": "boolean" },
-                "dot_color": { "type": "string" },
-                "fields": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "additionalProperties": false,
-                        "required": ["name", "field_type", "required", "source_extension"],
-                        "properties": {
-                            "name": { "type": "string" },
-                            "field_type": { "enum": FieldType::ALL.iter().map(|t| t.as_str()).collect::<Vec<_>>() },
-                            "required": { "type": "boolean" },
-                            "enum_values": { "type": "array", "items": { "type": "string" } },
-                            "edge": { "type": "string" },
-                            "target_kind": { "type": "string" },
-                            "description": { "type": "string" },
-                            "default_value": { "type": "string" },
-                            "source_extension": { "type": "string" }
-                        }
-                    }
-                }
-            }
-        }),
-    );
-
-    let mut node_guards: Vec<Value> = Vec::new();
-    if matches!(format, EmitFormat::Json) {
-        for kind in &schema.entity_kinds {
-            let mut props = serde_json::Map::new();
-            let mut required: Vec<Value> = Vec::new();
-            for field in &kind.fields {
-                props.insert(
-                    field.name.clone(),
-                    json_field_schema(field.field_type, field.enum_values.as_deref()),
-                );
-                if field.required {
-                    required.push(Value::String(field.name.clone()));
-                }
-            }
-            let mut fields_def = serde_json::Map::new();
-            fields_def.insert("type".to_string(), Value::String("object".into()));
-            fields_def.insert("properties".to_string(), Value::Object(props));
-            if !required.is_empty() {
-                fields_def.insert("required".to_string(), Value::Array(required));
-            }
-            let def_name = format!("fields_{}", kind.name);
-            defs.insert(def_name.clone(), Value::Object(fields_def));
-            node_guards.push(serde_json::json!({
-                "if": { "properties": { "kind": { "const": kind.name } } },
-                "then": {
-                    "properties": { "fields": { "$ref": format!("#/$defs/{def_name}") } }
-                }
-            }));
-        }
-    }
-
-    let node_schema = if node_guards.is_empty() {
-        node_schema
-    } else {
-        let mut with_guards = node_schema;
-        with_guards["allOf"] = Value::Array(node_guards);
-        with_guards
-    };
-
-    let json_schema = serde_json::json!({
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
-        // C6-00: stable, versioned identity so the published schema can be
-        // referenced by URI and cached like the hand-written schema/ files.
-        "$id": format!(
-            "https://specforge.dev/schema/graph-protocol-v{}.json",
-            schema.schema_version
-        ),
-        "title": "SpecForge Graph Protocol",
-        "description": format!(
-            "Graph Protocol schema v{} — auto-generated from extension registries",
-            schema.schema_version
-        ),
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["format_version", "schema_version", "nodes", "edges"],
-        "properties": {
-            "format_version": {
-                "type": "string",
-                "const": "2.0"
-            },
-            "schema_version": {
-                "type": "string"
-            },
-            "schema": {
-                "type": "object",
-                "description": "Embedded Graph Protocol schema",
-                "additionalProperties": false,
-                "required": ["schema_version", "extensions", "entity_kinds", "edge_types"],
-                "properties": {
-                    "schema_version": {
-                        "type": "object",
-                        "additionalProperties": false,
-                        "required": ["major", "minor", "patch"],
-                        "properties": {
-                            "major": { "type": "integer", "minimum": 0 },
-                            "minor": { "type": "integer", "minimum": 0 },
-                            "patch": { "type": "integer", "minimum": 0 },
-                            "label": { "type": "string" }
-                        }
-                    },
-                    "extensions": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "additionalProperties": false,
-                            "required": ["name", "version"],
-                            "properties": {
-                                "name": { "type": "string" },
-                                "version": { "type": "string" }
-                            }
-                        }
-                    },
-                    "entity_kinds": {
-                        "type": "array",
-                        "items": { "$ref": "#/$defs/entity_kind" }
-                    },
-                    "edge_types": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "additionalProperties": false,
-                            "required": ["label", "source_extension"],
-                            "properties": {
-                                "label": edge_type_label_schema,
-                                "source_extension": { "type": "string" },
-                                "source_kinds": {
-                                    "type": "array",
-                                    "items": { "type": "string" }
-                                },
-                                "target_kinds": {
-                                    "type": "array",
-                                    "items": { "type": "string" }
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            "schema_ref": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": ["url", "content_hash"],
-                "properties": {
-                    "url": { "type": "string", "format": "uri" },
-                    "content_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
-                }
-            },
-            "token_budget": { "type": "object" },
-            "nodes": {
-                "type": "array",
-                "items": node_schema
-            },
-            "edges": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "required": ["source", "target", "label"],
-                    "properties": {
-                        "source": { "type": "string" },
-                        "target": { "type": "string" },
-                        "label": edge_label_schema
-                    }
-                }
-            }
-        },
-        "$defs": Value::Object(defs)
-    });
-
-    serde_json::to_string_pretty(&json_schema)
-        .map_err(|e| EmitterError::Serialization(e.to_string()))
-}

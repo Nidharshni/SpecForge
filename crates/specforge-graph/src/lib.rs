@@ -1,6 +1,6 @@
 mod build;
-mod coerce;
-pub use coerce::FieldCoercion;
+pub mod field_form;
+pub use field_form::{FieldForm, FieldJson, ValueShape};
 mod delta;
 pub use delta::{
     EdgeChange, GraphDelta, ModifiedNodeChange, NodeAspect, NodeChange, compute_graph_delta,

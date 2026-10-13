@@ -13,8 +13,38 @@ use crate::support::spec_files;
 /// A payload field as the spec declares it: name, type text, optional.
 type Declared = (String, String, bool);
 
+/// The members of the payload type `name` a file declares: its fields, but
+/// not its `verify` obligations.
+fn payload_members(file: &specforge_parser::SpecFile, name: &str) -> Vec<Declared> {
+    // A payload type declared elsewhere (a shared type) lists no members here.
+    let Some(entity) = file
+        .entities
+        .iter()
+        .find(|entity| entity.kind.raw.as_str() == "type" && entity.id.raw.as_str() == name)
+    else {
+        return Vec::new();
+    };
+    entity
+        .fields
+        .entries()
+        .iter()
+        .filter(|entry| !matches!(entry.value, FieldValue::VerifyList(_)))
+        .map(|entry| {
+            let ty = match &entry.value {
+                FieldValue::Identifier(text) => text.clone(),
+                other => panic!(
+                    "{name}.{}: a payload type is an identifier, not {other:?}",
+                    entry.key
+                ),
+            };
+            let optional = entry.annotations.iter().any(|a| a.name == "optional");
+            (entry.key.to_string(), ty, optional)
+        })
+        .collect()
+}
+
 /// Each event `spec/events/*.spec` declares: its file and its payload
-/// fields.
+/// fields (the members of the type its `payload` names, beside it).
 fn declared() -> BTreeMap<String, (String, Vec<Declared>)> {
     let mut events: BTreeMap<String, (String, Vec<Declared>)> = BTreeMap::new();
     for (path, file) in spec_files("events") {
@@ -24,21 +54,9 @@ fn declared() -> BTreeMap<String, (String, Vec<Declared>)> {
             .filter(|entity| entity.kind.raw.as_str() == "event")
         {
             let fields = match entity.fields.get("payload") {
-                Some(FieldValue::Block(payload)) => payload
-                    .entries()
-                    .iter()
-                    .map(|entry| {
-                        let ty = match &entry.value {
-                            FieldValue::Identifier(text) => text.clone(),
-                            other => panic!(
-                                "{}.{}: a payload type is an identifier, not {other:?}",
-                                entity.id.raw, entry.key
-                            ),
-                        };
-                        let optional = entry.annotations.iter().any(|a| a.name == "optional");
-                        (entry.key.to_string(), ty, optional)
-                    })
-                    .collect(),
+                Some(FieldValue::Identifier(name) | FieldValue::String(name)) => {
+                    payload_members(&file, name)
+                }
                 _ => Vec::new(),
             };
             let name = entity.id.raw.to_string();

@@ -53,6 +53,7 @@ behavior serialize_json_graph "Serialize JSON Graph" {
   verify unit "empty graph produces valid JSON with empty nodes and edges arrays"
   verify unit "schema is included even for empty graph"
   verify integration "structural-only graph (zero extensions) produces valid Graph Protocol JSON with raw keywords in kind field"
+  verify unit "an expression group is written as its conjuncts, one per line, never as a parse tree"
   verify contract "Serialize JSON Graph: JSON graph serialization holds — validation_complete_fired, all_nodes_serialized, all_edges_serialized, schema_version_present, valid_json_produced, render_complete_emitted"
 }
 

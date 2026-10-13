@@ -3,62 +3,88 @@ source: crates/specforge-parser/tests/snapshot_tests.rs
 expression: result.entities
 ---
 [
-  {
-    "kind": {
-      "raw": "behavior"
+    Entity {
+        kind: EntityKind {
+            raw: Sym("behavior"),
+        },
+        id: EntityId {
+            raw: Sym("good_before"),
+        },
+        title: Some(
+            "Before",
+        ),
+        fields: FieldMap {
+            entries: [
+                FieldEntry {
+                    key: Sym("status"),
+                    value: Identifier(
+                        "planned",
+                    ),
+                    annotations: [],
+                    value_span: Some(
+                        SourceSpan {
+                            file: Sym("test.spec"),
+                            start_line: 3,
+                            start_col: 12,
+                            end_line: 3,
+                            end_col: 19,
+                        },
+                    ),
+                },
+            ],
+        },
+        raw_body: Some(
+            "\n    status planned\n",
+        ),
+        span: SourceSpan {
+            file: Sym("test.spec"),
+            start_line: 2,
+            start_col: 1,
+            end_line: 4,
+            end_col: 2,
+        },
+        methods: [],
     },
-    "id": {
-      "raw": "good_before"
+    Entity {
+        kind: EntityKind {
+            raw: Sym("behavior"),
+        },
+        id: EntityId {
+            raw: Sym("good_after"),
+        },
+        title: Some(
+            "After",
+        ),
+        fields: FieldMap {
+            entries: [
+                FieldEntry {
+                    key: Sym("status"),
+                    value: Identifier(
+                        "done",
+                    ),
+                    annotations: [],
+                    value_span: Some(
+                        SourceSpan {
+                            file: Sym("test.spec"),
+                            start_line: 11,
+                            start_col: 12,
+                            end_line: 11,
+                            end_col: 16,
+                        },
+                    ),
+                },
+            ],
+        },
+        raw_body: Some(
+            "\n    status done\n",
+        ),
+        span: SourceSpan {
+            file: Sym("test.spec"),
+            start_line: 10,
+            start_col: 1,
+            end_line: 12,
+            end_col: 2,
+        },
+        methods: [],
     },
-    "title": "Before",
-    "fields": {
-      "entries": [
-        {
-          "key": "status",
-          "value": {
-            "Identifier": "planned"
-          },
-          "annotations": []
-        }
-      ]
-    },
-    "raw_body": "\n    status planned\n",
-    "span": {
-      "file": "test.spec",
-      "start_line": 2,
-      "start_col": 1,
-      "end_line": 4,
-      "end_col": 2
-    },
-    "methods": []
-  },
-  {
-    "kind": {
-      "raw": "behavior"
-    },
-    "id": {
-      "raw": "good_after"
-    },
-    "title": "After",
-    "fields": {
-      "entries": [
-        {
-          "key": "status",
-          "value": {
-            "Identifier": "done"
-          },
-          "annotations": []
-        }
-      ]
-    },
-    "raw_body": "\n    status done\n",
-    "span": {
-      "file": "test.spec",
-      "start_line": 10,
-      "start_col": 1,
-      "end_line": 12,
-      "end_col": 2
-    },
-    "methods": []
-  }
 ]

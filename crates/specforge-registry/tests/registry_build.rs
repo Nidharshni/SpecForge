@@ -5,7 +5,7 @@
 use specforge_test_macros::test as spec;
 
 use specforge_extension_sdk::prelude::*;
-use specforge_graph::{FieldCoercion, GraphInputs};
+use specforge_graph::{FieldForm, GraphInputs};
 use specforge_protocol_types::ExtensionDeclaration;
 use specforge_registry::build_registries;
 
@@ -150,23 +150,15 @@ fn derived_graph_inputs_match_the_manifests() {
         Some("team")
     );
     // A single reference is read as written; a reference list is a list.
-    assert!(
-        !inputs
-            .field_coercions
-            .contains_key(&("behavior".to_string(), "owner".to_string()))
-    );
-    assert_eq!(
+    let form = |field: &str| {
         inputs
-            .field_coercions
-            .get(&("behavior".to_string(), "contract".to_string())),
-        Some(&FieldCoercion::Text)
-    );
-    assert_eq!(
-        inputs
-            .field_coercions
-            .get(&("behavior".to_string(), "types".to_string())),
-        Some(&FieldCoercion::List)
-    );
+            .field_forms
+            .get(&("behavior".to_string(), field.to_string()))
+            .map(FieldForm::field_type)
+    };
+    assert_eq!(form("owner"), Some(FieldType::Reference));
+    assert_eq!(form("contract"), Some(FieldType::String));
+    assert_eq!(form("types"), Some(FieldType::ReferenceList));
 }
 
 #[test]

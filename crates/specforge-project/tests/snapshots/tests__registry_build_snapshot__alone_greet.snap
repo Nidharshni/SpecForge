@@ -38,8 +38,8 @@ expression: "digest(&load(&runtime, &[\"@sdk/greet\"]))"
     "absent_reference_targets": {},
     "bidirectional_pairs": [],
     "derived_references": [],
-    "field_coercions": {
-      "greeting.style": "Text"
+    "field_forms": {
+      "greeting.style": "enum (warm, formal)"
     },
     "single_reference_fields": []
   },

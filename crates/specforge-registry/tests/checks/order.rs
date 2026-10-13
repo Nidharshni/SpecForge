@@ -2,8 +2,9 @@
 //! same on every surface.
 
 use specforge_extension_sdk::prelude::*;
+use specforge_graph::ValueShape;
 use specforge_protocol_types::ExtensionDeclaration;
-use specforge_registry::entity::{EntityRecord, ValueShape};
+use specforge_registry::entity::EntityRecord;
 use specforge_test_macros::test as spec;
 
 use crate::support::{build, check, declare, span};

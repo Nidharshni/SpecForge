@@ -3,103 +3,106 @@ source: crates/specforge-parser/tests/snapshot_tests.rs
 expression: "parse_ok(source, \"test.spec\").entities"
 ---
 [
-  {
-    "kind": {
-      "raw": "type"
+    Entity {
+        kind: EntityKind {
+            raw: Sym("type"),
+        },
+        id: EntityId {
+            raw: Sym("FieldValue"),
+        },
+        title: None,
+        fields: FieldMap {
+            entries: [
+                FieldEntry {
+                    key: Sym("variants"),
+                    value: VariantList(
+                        [
+                            "StringValue",
+                            "ReferenceList",
+                            "Block",
+                        ],
+                    ),
+                    annotations: [],
+                    value_span: None,
+                },
+            ],
+        },
+        raw_body: None,
+        span: SourceSpan {
+            file: Sym("test.spec"),
+            start_line: 2,
+            start_col: 1,
+            end_line: 2,
+            end_col: 54,
+        },
+        methods: [],
     },
-    "id": {
-      "raw": "FieldValue"
+    Entity {
+        kind: EntityKind {
+            raw: Sym("type"),
+        },
+        id: EntityId {
+            raw: Sym("McpErrorCode"),
+        },
+        title: None,
+        fields: FieldMap {
+            entries: [
+                FieldEntry {
+                    key: Sym("variants"),
+                    value: VariantList(
+                        [
+                            "invalid_input",
+                            "compilation_failed",
+                            "entity_not_found",
+                        ],
+                    ),
+                    annotations: [],
+                    value_span: None,
+                },
+            ],
+        },
+        raw_body: None,
+        span: SourceSpan {
+            file: Sym("test.spec"),
+            start_line: 4,
+            start_col: 1,
+            end_line: 4,
+            end_col: 80,
+        },
+        methods: [],
     },
-    "title": null,
-    "fields": {
-      "entries": [
-        {
-          "key": "variants",
-          "value": {
-            "VariantList": [
-              "StringValue",
-              "ReferenceList",
-              "Block"
-            ]
-          },
-          "annotations": []
-        }
-      ]
+    Entity {
+        kind: EntityKind {
+            raw: Sym("type"),
+        },
+        id: EntityId {
+            raw: Sym("JsonRpcErrorCode"),
+        },
+        title: None,
+        fields: FieldMap {
+            entries: [
+                FieldEntry {
+                    key: Sym("variants"),
+                    value: VariantList(
+                        [
+                            "-32700",
+                            "-32600",
+                            "-32601",
+                        ],
+                    ),
+                    annotations: [],
+                    value_span: None,
+                },
+            ],
+        },
+        raw_body: None,
+        span: SourceSpan {
+            file: Sym("test.spec"),
+            start_line: 6,
+            start_col: 1,
+            end_line: 6,
+            end_col: 49,
+        },
+        methods: [],
     },
-    "raw_body": null,
-    "span": {
-      "file": "test.spec",
-      "start_line": 2,
-      "start_col": 1,
-      "end_line": 2,
-      "end_col": 54
-    },
-    "methods": []
-  },
-  {
-    "kind": {
-      "raw": "type"
-    },
-    "id": {
-      "raw": "McpErrorCode"
-    },
-    "title": null,
-    "fields": {
-      "entries": [
-        {
-          "key": "variants",
-          "value": {
-            "VariantList": [
-              "invalid_input",
-              "compilation_failed",
-              "entity_not_found"
-            ]
-          },
-          "annotations": []
-        }
-      ]
-    },
-    "raw_body": null,
-    "span": {
-      "file": "test.spec",
-      "start_line": 4,
-      "start_col": 1,
-      "end_line": 4,
-      "end_col": 80
-    },
-    "methods": []
-  },
-  {
-    "kind": {
-      "raw": "type"
-    },
-    "id": {
-      "raw": "JsonRpcErrorCode"
-    },
-    "title": null,
-    "fields": {
-      "entries": [
-        {
-          "key": "variants",
-          "value": {
-            "VariantList": [
-              "-32700",
-              "-32600",
-              "-32601"
-            ]
-          },
-          "annotations": []
-        }
-      ]
-    },
-    "raw_body": null,
-    "span": {
-      "file": "test.spec",
-      "start_line": 6,
-      "start_col": 1,
-      "end_line": 6,
-      "end_col": 49
-    },
-    "methods": []
-  }
 ]

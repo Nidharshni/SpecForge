@@ -4,7 +4,7 @@ use specforge_emitter::{
     EmitFormat, EmitOptions, EmitterError, GraphProtocolSchema, SchemaEdgeType, SchemaEntityKind,
     SchemaExtensionInfo, SchemaField, SchemaMigration, SchemaMigrationChange, SchemaVersion,
     SchemaVersionError, compute_schema_version, diff_schemas, diff_schemas_optional,
-    generate_schema, negotiate_version, publish_json_schema_format,
+    generate_schema, negotiate_version, publish,
 };
 use specforge_graph::{Edge, FieldValue, Graph, Node};
 use specforge_parser::{EntityId, EntityKind, FieldMap};
@@ -868,14 +868,40 @@ fn schema_version_error_display() {
 // Slice 9: Publish JSON Schema
 // ===========================================================================
 
+/// The kinds a published document describes: the `node_<kind>` branches of a
+/// graph document, the node `kind` enum of a context or brief document.
+fn published_kinds(document: &serde_json::Value) -> std::collections::BTreeSet<String> {
+    let items = &document["properties"]["nodes"]["items"];
+    if let Some(branches) = items["oneOf"].as_array() {
+        return branches
+            .iter()
+            .map(|branch| {
+                branch["$ref"]
+                    .as_str()
+                    .and_then(|r| r.strip_prefix("#/$defs/node_"))
+                    .unwrap_or_else(|| panic!("{branch}"))
+                    .to_string()
+            })
+            .collect();
+    }
+    items["properties"]["kind"]["enum"]
+        .as_array()
+        .map(|kinds| {
+            kinds
+                .iter()
+                .map(|kind| kind.as_str().unwrap().to_string())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 // Not linked: only a few top-level keys are checked here.
 // schema_publish_produces_json_schema_draft in specforge-cli's e2e_schema
 // tests checks every keyword of the published schema against draft 2020-12.
 #[test]
 fn publish_json_schema_valid() {
     let schema = sample_schema();
-    let json_schema_str = publish_json_schema_format(&schema, EmitFormat::Json).unwrap();
-    let parsed: serde_json::Value = serde_json::from_str(&json_schema_str).unwrap();
+    let parsed = publish(&schema, EmitFormat::Json).unwrap();
 
     assert_eq!(
         parsed["$schema"],
@@ -892,19 +918,14 @@ fn publish_json_schema_valid() {
 )]
 fn publish_json_schema_kinds_in_enum() {
     let schema = sample_schema();
-    let json_schema_str = publish_json_schema_format(&schema, EmitFormat::Json).unwrap();
-    let parsed: serde_json::Value = serde_json::from_str(&json_schema_str).unwrap();
+    let parsed = publish(&schema, EmitFormat::Json).unwrap();
 
-    let kind_enum = &parsed["properties"]["nodes"]["items"]["properties"]["kind"]["enum"];
-    assert!(kind_enum.is_array());
-    let kinds: Vec<&str> = kind_enum
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|v| v.as_str().unwrap())
-        .collect();
-    assert!(kinds.contains(&"behavior"));
-    assert!(kinds.contains(&"feature"));
+    let kinds = published_kinds(&parsed);
+    assert!(kinds.contains("behavior"));
+    assert!(kinds.contains("feature"));
+    // The kinds an export holds beyond the declared ones: the structural
+    // `spec` and `ref`.
+    assert!(kinds.contains("spec") && kinds.contains("ref"), "{kinds:?}");
 }
 
 // B:publish_schema_specification — verify unit "all edge labels in edge label enum"
@@ -925,17 +946,16 @@ fn publish_json_schema_edge_labels_in_enum() {
         default_value: None,
         source_extension: "@specforge/software".to_string(),
     });
-    let json_schema_str = publish_json_schema_format(&schema, EmitFormat::Json).unwrap();
-    let parsed: serde_json::Value = serde_json::from_str(&json_schema_str).unwrap();
+    let parsed = publish(&schema, EmitFormat::Json).unwrap();
 
     // The embedded schema block's edge types are the registered ones.
     assert_eq!(
-        parsed["properties"]["schema"]["properties"]["edge_types"]["items"]["properties"]["label"],
+        parsed["$defs"]["GraphProtocolSchema"]["properties"]["edge_types"]["items"]["properties"]["label"],
         serde_json::json!({ "type": "string", "enum": ["implements"] })
     );
     // A graph edge carries the declaring field's name: an open string whose
     // examples are the fields that declare an edge type.
-    let label = &parsed["properties"]["edges"]["items"]["properties"]["label"];
+    let label = &parsed["$defs"]["Edge"]["properties"]["label"];
     assert_eq!(label["type"], "string");
     assert!(label.get("enum").is_none(), "{label}");
     assert_eq!(label["examples"], serde_json::json!(["features"]));
@@ -948,31 +968,41 @@ fn publish_json_schema_edge_labels_in_enum() {
 )]
 fn publish_json_schema_required_properties() {
     let schema = sample_schema();
-    let json_schema_str = publish_json_schema_format(&schema, EmitFormat::Json).unwrap();
-    let parsed: serde_json::Value = serde_json::from_str(&json_schema_str).unwrap();
+    let parsed = publish(&schema, EmitFormat::Json).unwrap();
 
-    let required = parsed["required"].as_array().unwrap();
-    let required_strs: Vec<&str> = required.iter().map(|v| v.as_str().unwrap()).collect();
-    assert!(required_strs.contains(&"format_version"));
-    assert!(required_strs.contains(&"schema_version"));
-    assert!(required_strs.contains(&"nodes"));
-    assert!(required_strs.contains(&"edges"));
+    assert_eq!(
+        parsed["required"],
+        serde_json::json!(["format_version", "schema_version", "nodes", "edges"])
+    );
+    // Context and brief exports carry a format_version only with a schema.
+    for format in [EmitFormat::Context, EmitFormat::Brief] {
+        assert_eq!(
+            publish(&schema, format).unwrap()["required"],
+            serde_json::json!(["schema_version", "nodes", "edges"]),
+            "{format:?}"
+        );
+    }
 }
 
 #[test]
 fn publish_json_schema_empty_schema() {
     let schema = GraphProtocolSchema::empty();
-    let json_schema_str = publish_json_schema_format(&schema, EmitFormat::Json).unwrap();
-    let parsed: serde_json::Value = serde_json::from_str(&json_schema_str).unwrap();
+    let parsed = publish(&schema, EmitFormat::Json).unwrap();
 
     assert_eq!(
         parsed["$schema"],
         "https://json-schema.org/draft/2020-12/schema"
     );
-    // No enum for kind when no kinds registered
+    // The nodes stay as the export document derives them when no kind is
+    // registered: any kind, no per-kind branches.
     let kind_prop = &parsed["properties"]["nodes"]["items"]["properties"]["kind"];
     assert!(kind_prop.get("enum").is_none());
     assert_eq!(kind_prop["type"], "string");
+    assert!(
+        parsed["properties"]["nodes"]["items"]
+            .get("oneOf")
+            .is_none()
+    );
 }
 
 // Not linked: a title says nothing about validity (see
@@ -980,8 +1010,7 @@ fn publish_json_schema_empty_schema() {
 #[test]
 fn publish_json_schema_has_title() {
     let schema = sample_schema();
-    let json_schema_str = publish_json_schema_format(&schema, EmitFormat::Json).unwrap();
-    let parsed: serde_json::Value = serde_json::from_str(&json_schema_str).unwrap();
+    let parsed = publish(&schema, EmitFormat::Json).unwrap();
     assert_eq!(parsed["title"], "SpecForge Graph Protocol");
 }
 
@@ -1251,8 +1280,7 @@ fn diff_multiple_field_changes() {
 )]
 fn publish_json_schema_description_includes_version() {
     let schema = sample_schema();
-    let json_schema_str = publish_json_schema_format(&schema, EmitFormat::Json).unwrap();
-    let parsed: serde_json::Value = serde_json::from_str(&json_schema_str).unwrap();
+    let parsed = publish(&schema, EmitFormat::Json).unwrap();
     let desc = parsed["description"].as_str().unwrap();
     assert!(desc.contains("1.2.3"));
 }
@@ -1387,55 +1415,18 @@ fn schema_reflects_current_state() {
 #[test]
 fn published_schema_validates_known_good_export() {
     let schema = sample_schema();
-    let json_schema_str = publish_json_schema_format(&schema, EmitFormat::Json).unwrap();
-    let json_schema: serde_json::Value = serde_json::from_str(&json_schema_str).unwrap();
+    let json_schema = publish(&schema, EmitFormat::Json).unwrap();
 
     let mut graph = Graph::new();
     graph.add_node(node("alpha", "behavior", Some("Alpha")));
     let export = with_schema(&graph, EmitFormat::Json, None, &schema).unwrap();
     let export_val: serde_json::Value = serde_json::from_str(&export).unwrap();
 
-    // 1. Check required properties
-    let required = json_schema["required"].as_array().unwrap();
-    for req in required {
-        let key = req.as_str().unwrap();
-        assert!(
-            export_val.get(key).is_some(),
-            "required key '{}' missing from export",
-            key
-        );
-    }
-
-    // 2. Check format_version
     assert_eq!(export_val["format_version"], "2.0");
-
-    // 3. Check node required fields
-    let node_required = json_schema["properties"]["nodes"]["items"]["required"]
-        .as_array()
-        .unwrap();
-    for node_val in export_val["nodes"].as_array().unwrap() {
-        for req in node_required {
-            let key = req.as_str().unwrap();
-            assert!(
-                node_val.get(key).is_some(),
-                "node missing required key '{}'",
-                key
-            );
-        }
-    }
-
-    // 4. Check node kind is in enum
-    let kind_enum = json_schema["properties"]["nodes"]["items"]["properties"]["kind"]["enum"]
-        .as_array()
-        .unwrap();
-    for node_val in export_val["nodes"].as_array().unwrap() {
-        let kind = &node_val["kind"];
-        assert!(
-            kind_enum.contains(kind),
-            "node kind '{}' not in schema enum",
-            kind
-        );
-    }
+    assert_eq!(
+        specforge_common::shape::violations(&json_schema, &export_val),
+        Vec::<String>::new()
+    );
 }
 
 // B:publish_schema_specification — verify unit "published schema describes all registered entity kinds"
@@ -1445,15 +1436,12 @@ fn published_schema_validates_known_good_export() {
 )]
 fn published_schema_describes_all_kinds() {
     let schema = sample_schema();
-    let json_schema_str = publish_json_schema_format(&schema, EmitFormat::Json).unwrap();
-    let json_schema: serde_json::Value = serde_json::from_str(&json_schema_str).unwrap();
+    let json_schema = publish(&schema, EmitFormat::Json).unwrap();
 
-    let kind_enum = json_schema["properties"]["nodes"]["items"]["properties"]["kind"]["enum"]
-        .as_array()
-        .unwrap();
+    let kinds = published_kinds(&json_schema);
     for ek in &schema.entity_kinds {
         assert!(
-            kind_enum.contains(&serde_json::Value::String(ek.name.clone())),
+            kinds.contains(&ek.name),
             "entity kind '{}' not in published JSON Schema",
             ek.name
         );
@@ -1467,13 +1455,12 @@ fn published_schema_describes_all_kinds() {
 )]
 fn published_schema_describes_all_edge_types() {
     let schema = sample_schema();
-    let json_schema_str = publish_json_schema_format(&schema, EmitFormat::Json).unwrap();
-    let json_schema: serde_json::Value = serde_json::from_str(&json_schema_str).unwrap();
+    let json_schema = publish(&schema, EmitFormat::Json).unwrap();
 
     // Registered edge types appear where an export names them: the
     // embedded schema block's edge_types.
-    let label_enum = json_schema["properties"]["schema"]["properties"]["edge_types"]["items"]
-        ["properties"]["label"]["enum"]
+    let label_enum = json_schema["$defs"]["GraphProtocolSchema"]["properties"]["edge_types"]
+        ["items"]["properties"]["label"]["enum"]
         .as_array()
         .unwrap();
     assert_eq!(label_enum.len(), schema.edge_types.len());
@@ -1611,8 +1598,7 @@ fn compute_version_contract() {
 )]
 fn publish_schema_contract() {
     let schema = sample_schema();
-    let json_schema_str = publish_json_schema_format(&schema, EmitFormat::Json).unwrap();
-    let parsed: serde_json::Value = serde_json::from_str(&json_schema_str).unwrap();
+    let parsed = publish(&schema, EmitFormat::Json).unwrap();
 
     // ensures: valid_json_schema_produced
     assert_eq!(
@@ -1620,10 +1606,8 @@ fn publish_schema_contract() {
         "https://json-schema.org/draft/2020-12/schema"
     );
     // ensures: all_kinds_described
-    let kind_enum = parsed["properties"]["nodes"]["items"]["properties"]["kind"]["enum"]
-        .as_array()
-        .unwrap();
-    assert_eq!(kind_enum.len(), schema.entity_kinds.len());
+    let kinds = published_kinds(&parsed);
+    assert!(schema.entity_kinds.iter().all(|k| kinds.contains(&k.name)));
     // ensures: third_party_usable
     assert!(parsed["properties"].is_object());
     assert!(parsed["required"].is_array());
@@ -1823,13 +1807,12 @@ fn full_v2_export_still_embeds_schema() {
 fn published_schema_constrains_fields_per_kind() {
     let schema = sample_schema();
 
-    let json_schema_str = publish_json_schema_format(&schema, EmitFormat::Json).unwrap();
-    let parsed: serde_json::Value = serde_json::from_str(&json_schema_str).unwrap();
+    let parsed = publish(&schema, EmitFormat::Json).unwrap();
 
     assert_eq!(parsed["additionalProperties"], false, "root closed");
     assert!(
-        parsed["$defs"]["entity_kind"].is_object(),
-        "shared entity_kind def present"
+        parsed["$defs"]["GraphProtocolSchema"].is_object(),
+        "the embedded schema's shape is defined"
     );
     let behavior_fields = &parsed["$defs"]["fields_behavior"];
     assert_eq!(behavior_fields["type"], "object");
@@ -1842,27 +1825,36 @@ fn published_schema_constrains_fields_per_kind() {
         parsed["$defs"].get("fields_feature").is_some(),
         "per-kind def exists even when the kind declares no fields"
     );
+    // Any field a kind does not declare is still a field value.
+    assert_eq!(
+        behavior_fields["additionalProperties"],
+        serde_json::json!({ "$ref": "#/$defs/FieldJson" })
+    );
 
-    // Node items carry the kind discriminator guards.
-    let guards = parsed["properties"]["nodes"]["items"]["allOf"]
+    // Node items are one branch per kind; the branch names its kind and
+    // the kind's fields.
+    let branches = parsed["properties"]["nodes"]["items"]["oneOf"]
         .as_array()
         .unwrap();
-    assert_eq!(guards.len(), schema.entity_kinds.len());
-    assert_eq!(guards[0]["if"]["properties"]["kind"]["const"], "behavior");
+    assert_eq!(branches.len(), schema.entity_kinds.len() + 2);
+    let behavior = &parsed["$defs"]["node_behavior"];
     assert_eq!(
-        guards[0]["then"]["properties"]["fields"]["$ref"],
+        behavior["properties"]["kind"],
+        serde_json::json!({ "type": "string", "enum": ["behavior"] })
+    );
+    assert_eq!(
+        behavior["properties"]["fields"]["$ref"],
         "#/$defs/fields_behavior"
     );
 
-    // Brief nodes have no fields, so no per-kind defs or guards there.
-    let brief_str = publish_json_schema_format(&schema, EmitFormat::Brief).unwrap();
-    let brief: serde_json::Value = serde_json::from_str(&brief_str).unwrap();
+    // Brief nodes have no fields, so no per-kind defs or branches there.
+    let brief = publish(&schema, EmitFormat::Brief).unwrap();
     assert!(brief["$defs"].get("fields_behavior").is_none());
-    assert!(brief["properties"]["nodes"]["items"].get("allOf").is_none());
+    assert!(brief["properties"]["nodes"]["items"].get("oneOf").is_none());
 
     // schema_ref shape is published for scoped consumers.
     assert_eq!(
-        parsed["properties"]["schema_ref"]["required"]
+        parsed["$defs"]["SchemaRefBlock"]["required"]
             .as_array()
             .unwrap()
             .len(),
@@ -1911,9 +1903,7 @@ fn published_context_schema_admits_declared_headline_and_normative_fields() {
     )
     .unwrap();
     let export: serde_json::Value = serde_json::from_str(&export).unwrap();
-    let published: serde_json::Value =
-        serde_json::from_str(&publish_json_schema_format(&schema, EmitFormat::Context).unwrap())
-            .unwrap();
+    let published = publish(&schema, EmitFormat::Context).unwrap();
     let node_schema = &published["properties"]["nodes"]["items"];
     let properties = node_schema["properties"].as_object().unwrap();
     assert!(!properties.contains_key("contract"), "{node_schema}");
@@ -1997,10 +1987,9 @@ fn a_field_type_is_named_in_the_schema_as_declared() {
 fn the_published_schema_lists_the_field_types_the_host_reads() {
     let build = ticket_registries();
     let schema = generate_schema(&build);
-    let published: serde_json::Value =
-        serde_json::from_str(&publish_json_schema_format(&schema, EmitFormat::Json).unwrap())
-            .unwrap();
-    let compact = published.to_string();
+    let published = publish(&schema, EmitFormat::Json).unwrap();
+    let listed = &published["$defs"]["GraphProtocolSchema"]["properties"]["entity_kinds"]["items"]
+        ["properties"]["fields"]["items"]["properties"]["field_type"]["enum"];
     let names: Vec<&str> = FieldType::ALL.iter().map(|t| t.as_str()).collect();
     assert_eq!(
         names,
@@ -2015,8 +2004,7 @@ fn the_published_schema_lists_the_field_types_the_host_reads() {
             "block"
         ]
     );
-    let expected = format!(r#""field_type":{{"enum":{}}}"#, serde_json::json!(names));
-    assert!(compact.contains(&expected), "{compact}");
+    assert_eq!(listed, &serde_json::json!(names));
 }
 
 #[specforge_test(
@@ -2160,4 +2148,98 @@ fn an_undeclared_edge_two_kinds_write_names_every_writer() {
         Some(vec!["alpha".to_string(), "beta".to_string()])
     );
     assert_eq!(links.target_kinds, Some(vec!["gamma".to_string()]));
+}
+
+// ===========================================================================
+// The published schema is the export document's, narrowed by the project
+// (ADR-NEW-01)
+// ===========================================================================
+
+const AGENT_FORMATS: [EmitFormat; 3] = [EmitFormat::Json, EmitFormat::Context, EmitFormat::Brief];
+
+#[specforge_test(
+    behavior = "publish_schema_specification",
+    verify = "the published schema is the export document's schema narrowed by the project"
+)]
+fn the_published_schema_is_the_export_documents_narrowed() {
+    let schema = sample_schema();
+    for format in AGENT_FORMATS {
+        let mut defs = specforge_common::shape::Definitions::default();
+        let derived = specforge_emitter::document_schema(format, &mut defs).unwrap();
+        let derived = defs.finish(derived);
+        let published = publish(&schema, format).unwrap();
+
+        // Every named shape of the export document is in the published one.
+        for name in derived["$defs"].as_object().unwrap().keys() {
+            assert!(
+                published["$defs"].get(name).is_some(),
+                "{format:?}: {name} is not defined"
+            );
+        }
+        // The root says what the export document says.
+        let keys = |document: &serde_json::Value| -> Vec<String> {
+            document["properties"]
+                .as_object()
+                .unwrap()
+                .keys()
+                .cloned()
+                .collect()
+        };
+        assert_eq!(keys(&published), keys(&derived), "{format:?}");
+    }
+
+    // Each declared field's schema is its field form's.
+    let published = publish(&schema, EmitFormat::Json).unwrap();
+    let mut defs = specforge_common::shape::Definitions::default();
+    for kind in &schema.entity_kinds {
+        for field in &kind.fields {
+            assert_eq!(
+                published["$defs"][format!("fields_{}", kind.name)]["properties"][&field.name],
+                field.form().json_schema(&mut defs),
+                "{}.{}",
+                kind.name,
+                field.name
+            );
+        }
+    }
+}
+
+#[specforge_test(
+    behavior = "publish_schema_specification",
+    verify = "the published schema uses only keywords the in-repo checker reads"
+)]
+fn the_published_schema_uses_only_keywords_the_checker_reads() {
+    for schema in [sample_schema(), GraphProtocolSchema::empty()] {
+        for format in AGENT_FORMATS {
+            let published = publish(&schema, format).unwrap();
+            assert_eq!(
+                specforge_common::shape::unchecked_keywords(&published),
+                Vec::<String>::new(),
+                "{format:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn each_format_publishes_its_own_id() {
+    let schema = sample_schema();
+    let ids: Vec<String> = AGENT_FORMATS
+        .iter()
+        .map(|format| {
+            publish(&schema, *format).unwrap()["$id"]
+                .as_str()
+                .unwrap()
+                .to_string()
+        })
+        .collect();
+    assert_eq!(
+        ids,
+        [
+            "https://specforge.dev/schema/graph-protocol-v1.2.3.json",
+            "https://specforge.dev/schema/graph-protocol-v1.2.3-context.json",
+            "https://specforge.dev/schema/graph-protocol-v1.2.3-brief.json",
+        ]
+    );
+    assert!(publish(&schema, EmitFormat::Dot).is_none());
 }

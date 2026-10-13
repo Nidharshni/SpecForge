@@ -14,6 +14,10 @@ pub const DEFINE: &str = "define";
 /// an ID (E013).
 pub const KEYWORDS: [&str; 4] = [SPEC, REF, USE, DEFINE];
 
+/// The structural keywords that become graph nodes; `use` is an import and
+/// `define` is never a node (W143).
+pub const NODE_KINDS: [&str; 2] = [REF, SPEC];
+
 /// `keyword` is one of [`KEYWORDS`].
 pub fn is_structural(keyword: &str) -> bool {
     KEYWORDS.contains(&keyword)

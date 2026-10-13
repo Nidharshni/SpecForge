@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use specforge_extension_sdk::prelude::*;
-use specforge_graph::{DerivedFrom, FieldCoercion, GraphInputs};
+use specforge_graph::{DerivedFrom, FieldForm, GraphInputs};
 use specforge_protocol_types::ExtensionDeclaration;
 use specforge_test_macros::test as spec;
 
@@ -39,22 +39,35 @@ fn typed_fields() -> ExtensionDeclaration {
     behavior = "registry_build_graph_inputs",
     verify = "a field's value coercion follows its registered type"
 )]
-fn a_fields_coercion_follows_its_registered_type() {
+fn a_fields_form_follows_its_registered_type() {
     let inputs = build([typed_fields()]).graph_inputs();
 
-    let expected: HashMap<(String, String), FieldCoercion> = [
-        ("a_string", FieldCoercion::Text),
-        ("an_integer", FieldCoercion::Integer),
-        ("a_bool", FieldCoercion::Bool),
-        ("an_enum", FieldCoercion::Text),
-        ("a_string_list", FieldCoercion::List),
-        ("a_reference_list", FieldCoercion::List),
+    let expected: HashMap<(String, String), FieldForm> = [
+        ("a_string", FieldType::String),
+        ("an_integer", FieldType::Integer),
+        ("a_bool", FieldType::Bool),
+        ("an_enum", FieldType::Enum),
+        ("a_string_list", FieldType::StringList),
+        ("a_reference", FieldType::Reference),
+        ("a_reference_list", FieldType::ReferenceList),
+        ("a_block", FieldType::Block),
     ]
     .into_iter()
-    .map(|(field, coercion)| (("thing".to_string(), field.to_string()), coercion))
+    .map(|(field, field_type)| {
+        let values = if field_type == FieldType::Enum {
+            vec!["x".to_string(), "y".to_string()]
+        } else {
+            Vec::new()
+        };
+        (
+            ("thing".to_string(), field.to_string()),
+            FieldForm::new(field_type, values),
+        )
+    })
     .collect();
-    // A single reference and a block are read as written.
-    assert_eq!(inputs.field_coercions, expected);
+    // Every registered field has a form; a single reference and a block are
+    // stored as written (their form coerces nothing).
+    assert_eq!(inputs.field_forms, expected);
 }
 
 #[spec(
@@ -279,9 +292,10 @@ fn the_graph_inputs_contract_holds() {
     assert_eq!(inputs.derived_references.len(), 1);
     assert_eq!(
         inputs
-            .field_coercions
-            .get(&("thing".to_string(), "an_integer".to_string())),
-        Some(&FieldCoercion::Integer)
+            .field_forms
+            .get(&("thing".to_string(), "an_integer".to_string()))
+            .map(FieldForm::field_type),
+        Some(FieldType::Integer)
     );
     // deterministic: the same declarations give the same inputs.
     assert_eq!(crate::support::build(declared()).graph_inputs(), inputs);

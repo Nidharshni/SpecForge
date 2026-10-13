@@ -5,7 +5,9 @@ use std::collections::BTreeMap;
 
 use serde::Serialize;
 use serde_json::{Value, json};
-use specforge_common::shape::{Definitions, Object, Shape, build, document, violations};
+use specforge_common::shape::{
+    Definitions, Object, Shape, build, document, unchecked_keywords, violations,
+};
 use specforge_common::{DiagnosticJson, DiagnosticList, SourceSpan};
 
 fn schema<T: Shape>() -> Value {
@@ -720,4 +722,32 @@ fn a_document_is_built_once_per_type() {
     assert!(std::ptr::eq(document::<Named>(), document::<Named>()));
     assert_eq!(document::<Named>(), &build::<Named>());
     assert!(!std::ptr::eq(document::<Named>(), document::<NamedLeft>()));
+}
+
+#[test]
+fn unchecked_keywords_names_what_violations_ignores() {
+    let document = json!({
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "t",
+        "if": {"properties": {"kind": {"const": "a"}}},
+        "properties": {
+            "a": {"const": 1, "description": "d"},
+            "title": {"type": "string", "examples": ["x"]},
+        },
+        "$defs": {"B": {"allOf": [{"type": "string"}]}},
+        "oneOf": [{"type": "string", "format": "uri"}],
+    });
+    assert_eq!(
+        unchecked_keywords(&document),
+        [
+            "/$defs/B/allOf",
+            "/if",
+            "/oneOf/0/format",
+            "/properties/a/const"
+        ]
+    );
+    assert!(
+        unchecked_keywords(&json!({"type": "object", "required": ["const"], "enum": ["if"]}))
+            .is_empty()
+    );
 }

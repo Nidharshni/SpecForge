@@ -238,8 +238,8 @@ fn kinds(c: &mut ContributionsBuilder) {
                 .description("Risk Priority Number (severity x occurrence x detection)");
         });
         k.field("post_mitigation", |f| {
-            f.field_type(FieldType::String)
-                .description("Summary of the residual risk state after mitigation");
+            f.field_type(FieldType::Block)
+                .description("Residual risk after mitigation: severity, occurrence, detection and rpn");
         });
         k.field("threatens_features", |f| {
             f.field_type(FieldType::ReferenceList)

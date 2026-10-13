@@ -137,7 +137,7 @@ fn event_mcp_protocol_error_handled() {
         json!({
             "errorCode": -32602,
             "errorMessage": "Missing required parameter: name",
-            "method": "tools/call",
+            "requestMethod": "tools/call",
         })
     );
 }

@@ -103,8 +103,9 @@ impl Reply {
             source_span: node.source_span.clone(),
             contract: facts.headline.as_ref().map(ToString::to_string),
             fields: Value::Object(
-                specforge_emitter::field_map_to_json(&node.fields)
+                specforge_graph::field_form::write_fields(&node.fields)
                     .into_iter()
+                    .map(|(key, written)| (key, Value::from(written)))
                     .collect(),
             ),
             verify_declarations: declared

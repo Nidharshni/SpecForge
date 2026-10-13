@@ -1,6 +1,8 @@
 use specforge_common::{SourceSpan, Sym};
 use specforge_graph::{Edge, Graph, Node};
-use specforge_parser::{EntityId, EntityKind, FieldMap, FieldValue};
+use specforge_parser::{
+    EntityId, EntityKind, FieldMap, FieldValue, SpannedRef, VerifyStatement, parse_expression,
+};
 use specforge_test::prelude::*;
 
 fn span() -> SourceSpan {
@@ -303,5 +305,100 @@ fn references_between_generic_entities_produce_edges() {
             .iter()
             .any(|e| e["source"] == "a" && e["target"] == "b"),
         "expected edge from a to b, got: {edges:?}"
+    );
+}
+
+// -- The wire form of a field value (ADR-NEW-01, plan 01).
+
+fn exported_fields(fields: FieldMap) -> serde_json::Value {
+    let mut graph = Graph::new();
+    let mut n = node("alpha", "behavior", None);
+    n.fields = fields;
+    graph.add_node(n);
+    let json = specforge_emitter::json::emit_json(&graph);
+    let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+    parsed["nodes"][0]["fields"].clone()
+}
+
+#[specforge_test(
+    behavior = "serialize_json_graph",
+    verify = "an expression group is written as its conjuncts, one per line, never as a parse tree"
+)]
+fn an_expression_group_is_written_as_its_conjuncts_one_per_line() {
+    let mut fields = FieldMap::new();
+    fields.push(
+        Sym::new("metric"),
+        FieldValue::Expression(vec![
+            parse_expression("a < 1").unwrap(),
+            parse_expression("b >= 2ms").unwrap(),
+        ]),
+    );
+    let written = exported_fields(fields);
+    assert_eq!(written["metric"], serde_json::json!("a < 1\nb >= 2ms"));
+}
+
+#[test]
+fn every_other_value_is_written_as_today() {
+    let mut inner = FieldMap::new();
+    inner.push(Sym::new("m"), FieldValue::Integer(1));
+    let mut block = FieldMap::new();
+    block.push(Sym::new("k"), FieldValue::String("v".into()));
+    block.push(Sym::new("n"), FieldValue::Block(inner));
+
+    let reference = |id: &str| SpannedRef {
+        id: id.to_string(),
+        span: span(),
+    };
+    let mut fields = FieldMap::new();
+    fields.push(Sym::new("string"), FieldValue::String("s".into()));
+    fields.push(Sym::new("identifier"), FieldValue::Identifier("id".into()));
+    fields.push(Sym::new("date"), FieldValue::Date("2026-10-13".into()));
+    fields.push(
+        Sym::new("union"),
+        FieldValue::TypeUnion(vec!["a".into(), "b".into()]),
+    );
+    fields.push(Sym::new("integer"), FieldValue::Integer(3));
+    fields.push(Sym::new("boolean"), FieldValue::Boolean(true));
+    fields.push(
+        Sym::new("references"),
+        FieldValue::ReferenceList(vec![reference("x"), reference("y")]),
+    );
+    fields.push(
+        Sym::new("variants"),
+        FieldValue::VariantList(vec!["a".into(), "b".into()]),
+    );
+    fields.push(
+        Sym::new("strings"),
+        FieldValue::StringList(vec!["s".into()]),
+    );
+    fields.push(
+        Sym::new("verify"),
+        FieldValue::VerifyList(vec![VerifyStatement {
+            kind: "unit".into(),
+            description: "d".into(),
+        }]),
+    );
+    fields.push(Sym::new("block"), FieldValue::Block(block));
+    fields.push(
+        Sym::new("mixed"),
+        FieldValue::MixedList(vec![FieldValue::Integer(1), FieldValue::String("a".into())]),
+    );
+
+    assert_eq!(
+        exported_fields(fields),
+        serde_json::json!({
+            "string": "s",
+            "identifier": "id",
+            "date": "2026-10-13",
+            "union": "a | b",
+            "integer": 3,
+            "boolean": true,
+            "references": ["x", "y"],
+            "variants": ["a", "b"],
+            "strings": ["s"],
+            "verify": [{"kind": "unit", "description": "d"}],
+            "block": {"k": "v", "n": {"m": 1}},
+            "mixed": [1, "a"],
+        })
     );
 }
