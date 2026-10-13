@@ -75,3 +75,49 @@ fn schema_version_other_major_is_rejected_with_range() {
         "explains the failure: {stderr}"
     );
 }
+
+#[specforge_test_macros::test(
+    behavior = "negotiate_schema_version",
+    verify = "a requested version of another major, or a newer one, is refused as incompatible_schema_version naming the readable range"
+)]
+#[ignore = "fixed by T4"]
+fn a_refused_schema_version_is_not_a_peer_error() {
+    let tmp = TempDir::new().unwrap();
+    seed(tmp.path());
+    let root = tmp.path().join("src");
+    let root = root.to_str().unwrap();
+
+    let graph = specforge()
+        .args([
+            "export",
+            root,
+            "--format",
+            "graph",
+            "--schema-version",
+            "2.0.0",
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(graph.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&graph.stderr);
+    assert!(
+        stderr.starts_with("error[incompatible_schema_version]: requested schema version 2.0.0 has another major version"),
+        "{stderr}"
+    );
+
+    // The request is checked whatever the format.
+    let brief = specforge()
+        .args([
+            "export",
+            root,
+            "--format",
+            "brief",
+            "--schema-version",
+            "9.0.0",
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(brief.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&brief.stderr);
+    assert!(stderr.contains("incompatible_schema_version"), "{stderr}");
+}

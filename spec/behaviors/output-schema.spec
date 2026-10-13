@@ -319,6 +319,8 @@ behavior negotiate_schema_version "Negotiate Schema Version" {
   verify unit "no version requested defaults to latest"
   verify unit "--schema-version CLI flag selects requested version"
   verify unit "schema_version MCP query parameter selects requested version"
+  verify unit "a requested version of the same major, not newer, is admitted and the export carries the current version"
+  verify unit "a requested version of another major, or a newer one, is refused as incompatible_schema_version naming the readable range"
   verify contract "Negotiate Schema Version: schema version negotiation holds — validation_complete_fired, schema_breaking_change_detected_fired, compatible_version_resolved, incompatible_version_rejected, default_to_latest, schema_version_negotiated_emitted"
 }
 
@@ -387,6 +389,9 @@ behavior detect_breaking_schema_changes "Detect Breaking Schema Changes" {
   verify unit "removed edge type detected as breaking"
   verify unit "previous schema is read from .specforge/schema-cache.json"
   verify unit "missing schema cache yields no previous schema"
+  verify unit "a field's required flag changing either way is breaking"
+  verify unit "an edge type losing a source or target kind is breaking; gaining one is an addition"
+  verify unit "an unreadable schema cache restarts the version at 1.0.0 with I016"
   verify contract "Detect Breaking Schema Changes: breaking schema change detection holds — schema_generated_fired, filesystem_available, breaking_changes_classified, nonbreaking_changes_classified, migration_record_emitted, schema_breaking_change_detected_emitted"
   verify unit "identical schemas no changes"
   verify unit "removed field is breaking"
@@ -437,6 +442,8 @@ behavior compute_schema_version "Compute Schema Version" {
   verify unit "added optional field bumps minor"
   verify unit "no changes returns previous"
   verify unit "removed field bumps major"
+  verify unit "an extension's version changing is a patch"
+  verify unit "one schema version names one document: equal versions have equal content hashes"
 }
 
 behavior publish_schema_specification "Publish Schema Specification" {
