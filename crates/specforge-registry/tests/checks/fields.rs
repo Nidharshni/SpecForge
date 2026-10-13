@@ -1,6 +1,7 @@
 //! W020: a field no extension declares on the entity's kind.
 
 use specforge_common::{SourceSpan, Sym};
+use specforge_graph::ValueShape;
 use specforge_registry::entity::EntityRecord;
 use specforge_test_macros::test as spec;
 
@@ -98,8 +99,13 @@ fn expression_is_checked_like_any_other_field() {
     verify = "registered field name does not produce W020"
 )]
 fn registered_field_name_does_not_produce_w020() {
-    let entities =
-        vec![EntityRecord::new("behavior", "b1", span("test.spec")).with_fields(&["contract"])];
+    let entities = vec![
+        EntityRecord::new("behavior", "b1", span("test.spec")).with_value(
+            "contract",
+            ValueShape::Block,
+            "",
+        ),
+    ];
     let diags = check(&build([software()]), &entities);
     assert!(diags.is_empty(), "registered field should not produce W020");
 }
@@ -193,8 +199,13 @@ fn detect_unknown_entity_fields_contract() {
     ];
     assert!(check(&build, &e1).iter().any(|d| d.code == "W020"));
     // ensures: registered field → no W020
-    let e2 =
-        vec![EntityRecord::new("behavior", "b2", span("test.spec")).with_fields(&["contract"])];
+    let e2 = vec![
+        EntityRecord::new("behavior", "b2", span("test.spec")).with_value(
+            "contract",
+            ValueShape::Block,
+            "",
+        ),
+    ];
     assert!(check(&build, &e2).is_empty());
     // ensures: unregistered kind → skipped
     let e3 =
@@ -209,7 +220,8 @@ fn detect_unknown_entity_fields_contract() {
 fn field_validation_uses_the_field_registry() {
     let entities = vec![
         EntityRecord::new("behavior", "my_beh", span("test.spec"))
-            .with_fields(&["contract", "unknown_field"]),
+            .with_value("contract", ValueShape::Block, "")
+            .with_fields(&["unknown_field"]),
     ];
     let diags = check(&build([software()]), &entities);
     assert!(

@@ -845,40 +845,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "source_extension": "@specforge/software",
       "target_kind": "type"
     },
-    "type.fields": {
-      "derived_from": null,
-      "description": "Structured field definitions for this type",
-      "edge": null,
-      "exempts_obligations": false,
-      "field_name": "fields",
-      "field_type": "Block",
-      "file_reference": false,
-      "headline": false,
-      "inverse_of": null,
-      "kind_name": "type",
-      "normative": false,
-      "proof_role": null,
-      "required": false,
-      "source_extension": "@specforge/software",
-      "target_kind": null
-    },
-    "type.kind": {
-      "derived_from": null,
-      "description": "The type category (e.g. struct, enum, alias, opaque)",
-      "edge": null,
-      "exempts_obligations": false,
-      "field_name": "kind",
-      "field_type": "String",
-      "file_reference": false,
-      "headline": false,
-      "inverse_of": null,
-      "kind_name": "type",
-      "normative": false,
-      "proof_role": null,
-      "required": false,
-      "source_extension": "@specforge/software",
-      "target_kind": null
-    },
     "type.refs": {
       "derived_from": null,
       "description": "External references such as issue or document URIs",
@@ -950,8 +916,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "type.composed_types": "reference_list",
       "type.description": "string",
       "type.extends": "reference",
-      "type.fields": "block",
-      "type.kind": "string",
       "type.refs": "string_list"
     },
     "single_reference_fields": [

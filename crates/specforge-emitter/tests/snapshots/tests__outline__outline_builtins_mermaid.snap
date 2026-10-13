@@ -1,6 +1,6 @@
 ---
 source: crates/specforge-emitter/tests/outline.rs
-expression: "render(&outline, &opts)"
+expression: "drawn(&manifests, opts)"
 ---
 flowchart TB
 
@@ -23,7 +23,7 @@ flowchart TB
     class specforge_governance_card cls_specforge_governance
 
     subgraph specforge_formal["  @specforge/formal v1.0.0  "]
-        specforge_formal_card["<b>5 entities · 13 edges · 13 rules</b><br>─────────────────────────<br>property · axiom · protocol<br>refinement · process<br>─────────────────────────<br><i>enhances: behavior +7 · event +3 · invariant +1</i>"]
+        specforge_formal_card["<b>5 entities · 10 edges · 13 rules</b><br>─────────────────────────<br>property · axiom · protocol<br>refinement · process<br>─────────────────────────<br><i>enhances: behavior +7 · event +3 · invariant +1</i>"]
     end
     classDef cls_specforge_formal fill:#fff,stroke:#ab47bc,stroke-width:1.5px,color:#333
     class specforge_formal_card cls_specforge_formal

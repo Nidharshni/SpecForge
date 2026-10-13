@@ -378,3 +378,27 @@ fn quick_runs_the_builtins_check_when_a_recorded_input_changes() {
 fn the_list_is_pinned() {
     insta::assert_snapshot!(render_list());
 }
+
+#[test]
+fn published_schemas_run_when_a_writer_or_a_declaration_changes() {
+    for path in [
+        "crates/specforge-emitter/src/publish.rs",
+        "extensions/formal/src/declaration.rs",
+        "spec/behaviors/output-schema.spec",
+    ] {
+        assert_eq!(
+            selection("published-schemas", Mode::Quick, &[path]),
+            Selection::Everything,
+            "{path}"
+        );
+    }
+    assert_eq!(
+        selection("published-schemas", Mode::Quick, &["README.md"]),
+        Selection::Skip
+    );
+    assert_eq!(
+        selection("published-schemas", Mode::Hook, &["spec/x.spec"]),
+        Selection::Skip,
+        "a quick check is not a hook one"
+    );
+}

@@ -670,7 +670,7 @@ mod tests {
         behavior = "snapshot_entities_once",
         verify = "every written field keeps its value shape and value span beside its text"
     )]
-    fn field_shape_of_every_variant() {
+    fn every_variant_has_a_value_shape() {
         let source = r#"item x "X" {
   title "a title"
   owner alice

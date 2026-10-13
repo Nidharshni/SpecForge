@@ -72,25 +72,6 @@ expression: "digest(&load(&runtime, &all))"
         "@specforge/software behavior.invariants -> invariant"
       ]
     },
-    "BehaviorEnsuresInvariant": {
-      "description": "Behavior ensures an invariant as postcondition",
-      "edge_arrowhead": null,
-      "edge_color": "#1A237E",
-      "edge_style": "solid",
-      "label": "BehaviorEnsuresInvariant",
-      "source_extension": "@specforge/formal",
-      "source_kind": "behavior",
-      "sources": [
-        "behavior"
-      ],
-      "target_kind": "invariant",
-      "targets": [
-        "invariant"
-      ],
-      "writers": [
-        "@specforge/formal behavior.ensures -> invariant"
-      ]
-    },
     "BehaviorImplementsFeature": {
       "description": "Behavior implements a feature (cross-extension via peer_dependency @specforge/product)",
       "edge_arrowhead": null,
@@ -108,25 +89,6 @@ expression: "digest(&load(&runtime, &all))"
       ],
       "writers": [
         "@specforge/software behavior.features -> feature"
-      ]
-    },
-    "BehaviorMaintainsInvariant": {
-      "description": "Behavior maintains an invariant as frame invariant throughout execution",
-      "edge_arrowhead": null,
-      "edge_color": "#1A237E",
-      "edge_style": "dashed",
-      "label": "BehaviorMaintainsInvariant",
-      "source_extension": "@specforge/formal",
-      "source_kind": "behavior",
-      "sources": [
-        "behavior"
-      ],
-      "target_kind": "invariant",
-      "targets": [
-        "invariant"
-      ],
-      "writers": [
-        "@specforge/formal behavior.maintains -> invariant"
       ]
     },
     "BehaviorProducesEvent": {
@@ -184,25 +146,6 @@ expression: "digest(&load(&runtime, &all))"
       ],
       "writers": [
         "@specforge/formal behavior.refines -> behavior"
-      ]
-    },
-    "BehaviorRequiresInvariant": {
-      "description": "Behavior requires an invariant as precondition",
-      "edge_arrowhead": null,
-      "edge_color": "#1A237E",
-      "edge_style": "solid",
-      "label": "BehaviorRequiresInvariant",
-      "source_extension": "@specforge/formal",
-      "source_kind": "behavior",
-      "sources": [
-        "behavior"
-      ],
-      "target_kind": "invariant",
-      "targets": [
-        "invariant"
-      ],
-      "writers": [
-        "@specforge/formal behavior.requires -> invariant"
       ]
     },
     "BehaviorSatisfiesProperty": {
@@ -1362,11 +1305,11 @@ expression: "digest(&load(&runtime, &all))"
     },
     "behavior.ensures": {
       "derived_from": null,
-      "description": "Invariants guaranteed as postconditions after successful execution",
-      "edge": "BehaviorEnsuresInvariant",
+      "description": "Named postconditions: each condition's name and what it guarantees",
+      "edge": null,
       "exempts_obligations": false,
       "field_name": "ensures",
-      "field_type": "ReferenceList",
+      "field_type": "Block",
       "file_reference": false,
       "headline": false,
       "inverse_of": null,
@@ -1375,7 +1318,7 @@ expression: "digest(&load(&runtime, &all))"
       "proof_role": null,
       "required": false,
       "source_extension": "@specforge/formal",
-      "target_kind": "invariant"
+      "target_kind": null
     },
     "behavior.features": {
       "derived_from": null,
@@ -1413,11 +1356,11 @@ expression: "digest(&load(&runtime, &all))"
     },
     "behavior.maintains": {
       "derived_from": null,
-      "description": "Invariants preserved throughout execution",
-      "edge": "BehaviorMaintainsInvariant",
+      "description": "Named frame conditions that hold throughout execution",
+      "edge": null,
       "exempts_obligations": false,
       "field_name": "maintains",
-      "field_type": "ReferenceList",
+      "field_type": "Block",
       "file_reference": false,
       "headline": false,
       "inverse_of": null,
@@ -1426,7 +1369,7 @@ expression: "digest(&load(&runtime, &all))"
       "proof_role": null,
       "required": false,
       "source_extension": "@specforge/formal",
-      "target_kind": "invariant"
+      "target_kind": null
     },
     "behavior.ports": {
       "derived_from": null,
@@ -1498,11 +1441,11 @@ expression: "digest(&load(&runtime, &all))"
     },
     "behavior.requires": {
       "derived_from": null,
-      "description": "Invariants that must hold as preconditions before execution",
-      "edge": "BehaviorRequiresInvariant",
+      "description": "Named preconditions: each condition's name and what it requires",
+      "edge": null,
       "exempts_obligations": false,
       "field_name": "requires",
-      "field_type": "ReferenceList",
+      "field_type": "Block",
       "file_reference": false,
       "headline": false,
       "inverse_of": null,
@@ -1511,7 +1454,7 @@ expression: "digest(&load(&runtime, &all))"
       "proof_role": null,
       "required": false,
       "source_extension": "@specforge/formal",
-      "target_kind": "invariant"
+      "target_kind": null
     },
     "behavior.satisfies": {
       "derived_from": null,
@@ -1566,11 +1509,11 @@ expression: "digest(&load(&runtime, &all))"
     },
     "behavior.sync": {
       "derived_from": null,
-      "description": "Synchronization constraints for execution",
+      "description": "Synchronization bound: barrier, timeout or delivery",
       "edge": null,
       "exempts_obligations": false,
       "field_name": "sync",
-      "field_type": "StringList",
+      "field_type": "Block",
       "file_reference": false,
       "headline": false,
       "inverse_of": null,
@@ -2518,11 +2461,11 @@ expression: "digest(&load(&runtime, &all))"
     },
     "event.sync": {
       "derived_from": null,
-      "description": "Synchronization constraints for event processing",
+      "description": "Synchronization bound: barrier, timeout or delivery",
       "edge": null,
       "exempts_obligations": false,
       "field_name": "sync",
-      "field_type": "StringList",
+      "field_type": "Block",
       "file_reference": false,
       "headline": false,
       "inverse_of": null,
@@ -2688,11 +2631,11 @@ expression: "digest(&load(&runtime, &all))"
     },
     "failure_mode.post_mitigation": {
       "derived_from": null,
-      "description": "Summary of the residual risk state after mitigation",
+      "description": "Residual risk after mitigation: severity, occurrence, detection and rpn",
       "edge": null,
       "exempts_obligations": false,
       "field_name": "post_mitigation",
-      "field_type": "String",
+      "field_type": "Block",
       "file_reference": false,
       "headline": false,
       "inverse_of": null,
@@ -4726,40 +4669,6 @@ expression: "digest(&load(&runtime, &all))"
       "source_extension": "@specforge/software",
       "target_kind": "type"
     },
-    "type.fields": {
-      "derived_from": null,
-      "description": "Structured field definitions for this type",
-      "edge": null,
-      "exempts_obligations": false,
-      "field_name": "fields",
-      "field_type": "Block",
-      "file_reference": false,
-      "headline": false,
-      "inverse_of": null,
-      "kind_name": "type",
-      "normative": false,
-      "proof_role": null,
-      "required": false,
-      "source_extension": "@specforge/software",
-      "target_kind": null
-    },
-    "type.kind": {
-      "derived_from": null,
-      "description": "The type category (e.g. struct, enum, alias, opaque)",
-      "edge": null,
-      "exempts_obligations": false,
-      "field_name": "kind",
-      "field_type": "String",
-      "file_reference": false,
-      "headline": false,
-      "inverse_of": null,
-      "kind_name": "type",
-      "normative": false,
-      "proof_role": null,
-      "required": false,
-      "source_extension": "@specforge/software",
-      "target_kind": null
-    },
     "type.refs": {
       "derived_from": null,
       "description": "External references such as issue or document URIs",
@@ -4816,19 +4725,19 @@ expression: "digest(&load(&runtime, &all))"
       "behavior.contract": "string",
       "behavior.description": "string",
       "behavior.diagnostic": "string",
-      "behavior.ensures": "reference_list",
+      "behavior.ensures": "block",
       "behavior.features": "reference_list",
       "behavior.invariants": "reference_list",
-      "behavior.maintains": "reference_list",
+      "behavior.maintains": "block",
       "behavior.ports": "reference_list",
       "behavior.produces": "reference_list",
       "behavior.refines": "reference",
       "behavior.refs": "string_list",
-      "behavior.requires": "reference_list",
+      "behavior.requires": "block",
       "behavior.satisfies": "reference_list",
       "behavior.severity": "string",
       "behavior.status": "string",
-      "behavior.sync": "string_list",
+      "behavior.sync": "block",
       "behavior.types": "reference_list",
       "channel.description": "string",
       "channel.interaction_model": "string",
@@ -4884,7 +4793,7 @@ expression: "digest(&load(&runtime, &all))"
       "event.participates_in": "reference_list",
       "event.payload": "reference",
       "event.refs": "string_list",
-      "event.sync": "string_list",
+      "event.sync": "block",
       "failure_mode.affected_behaviors": "reference_list",
       "failure_mode.cause": "string",
       "failure_mode.description": "string",
@@ -4894,7 +4803,7 @@ expression: "digest(&load(&runtime, &all))"
       "failure_mode.mitigation": "string",
       "failure_mode.occurrence": "string",
       "failure_mode.post_detection": "string",
-      "failure_mode.post_mitigation": "string",
+      "failure_mode.post_mitigation": "block",
       "failure_mode.post_occurrence": "string",
       "failure_mode.post_severity": "string",
       "failure_mode.refs": "string_list",
@@ -5014,8 +4923,6 @@ expression: "digest(&load(&runtime, &all))"
       "type.composed_types": "reference_list",
       "type.description": "string",
       "type.extends": "reference",
-      "type.fields": "block",
-      "type.kind": "string",
       "type.refs": "string_list"
     },
     "single_reference_fields": [

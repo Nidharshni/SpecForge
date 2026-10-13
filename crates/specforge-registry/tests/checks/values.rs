@@ -95,6 +95,8 @@ fn values_of_the_declared_types_are_no_diagnostic() {
         ("labels", ValueShape::Strings, "one"),
         ("summary", ValueShape::String, "free text"),
         ("blocker", ValueShape::Identifier, "t2"),
+        ("details", ValueShape::Block, "k"),
+        ("summary", ValueShape::Expression, "a < 1"),
         ("undeclared", ValueShape::Block, "a"),
     ]);
     assert!(found.is_empty(), "{found:?}");
@@ -200,7 +202,6 @@ fn e061_points_at_the_value_else_the_entity() {
     behavior = "check_field_value_types",
     verify = "a value of a shape its declared type never takes is an error"
 )]
-#[ignore = "fixed by 01-T7"]
 fn a_value_of_a_shape_its_type_never_takes_is_an_error() {
     let refused: [(&str, ValueShape, &str, &str, Option<&str>); 7] = [
         (

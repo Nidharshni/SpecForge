@@ -11,19 +11,19 @@ Fields:
   contract  string  *  The behavioral contract this behavior guarantees
   description  string  -  Human-readable summary of this behavior
   diagnostic  string  -  Diagnostic message for validation tooling
-  ensures  reference_list  -  Invariants guaranteed as postconditions after successful execution
+  ensures  block  -  Named postconditions: each condition's name and what it guarantees
   features  reference_list  -  Product features this behavior implements
   invariants  reference_list  -  Invariants this behavior enforces
-  maintains  reference_list  -  Invariants preserved throughout execution
+  maintains  block  -  Named frame conditions that hold throughout execution
   ports  reference_list  -  Port interfaces this behavior interacts with
   produces  reference_list  -  Events produced as a result of this behavior
   refines  reference  -  Abstract behavior this concrete behavior refines; its ensures conditions must be kept (E031)
   refs  string_list  -  External references such as issue or document URIs
-  requires  reference_list  -  Invariants that must hold as preconditions before execution
+  requires  block  -  Named preconditions: each condition's name and what it requires
   satisfies  reference_list  -  Temporal properties this behavior satisfies
   severity  string  -  Impact level if this behavior fails
   status  string  -  Current lifecycle status of this behavior
-  sync  string_list  -  Synchronization constraints for execution
+  sync  block  -  Synchronization bound: barrier, timeout or delivery
   types  reference_list  -  Type definitions used by this behavior
 Existing: login, logout, reset_password
 Guide:

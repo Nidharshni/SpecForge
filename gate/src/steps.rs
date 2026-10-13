@@ -198,6 +198,21 @@ pub fn tests(ctx: &Ctx, selection: &Selection) -> Result<(), String> {
     ctx.sh(&mut cmd)
 }
 
+/// The exports of this repository, its examples and five fixtures against their published schemas
+/// (`e2e_schema.rs`): the one test file whose names carry the claim.
+pub fn published_schemas(ctx: &Ctx, _: &Selection) -> Result<(), String> {
+    ctx.sh(ctx.cmd("cargo").args([
+        "nextest",
+        "run",
+        "-p",
+        "specforge-cli",
+        "--profile",
+        ctx.mode.nextest_profile(),
+        "-E",
+        "test(/project_check_admits|repository_and_its_example/)",
+    ]))
+}
+
 pub fn clippy(ctx: &Ctx, _: &Selection) -> Result<(), String> {
     ctx.sh(ctx.cmd("cargo").args([
         "clippy",

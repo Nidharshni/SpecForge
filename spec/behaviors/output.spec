@@ -44,7 +44,12 @@ behavior serialize_json_graph "Serialize JSON Graph" {
     schema. The JSON MUST contain all nodes, edges, and metadata. The
     output MUST include a schema_version field identifying the Graph
     Protocol version. The output MUST be valid JSON parseable by
-    standard tools.
+    standard tools. Every field value MUST be written in its one wire form
+    (ADR 0064): text as a string, an expression group as its conjuncts in
+    their display form, one per line, an integer or boolean as a JSON
+    scalar, a list as an array, a block as an object of its entries, verify
+    statements as {kind, description} objects. No position and no parse tree
+    is ever written.
   """
   verify unit "JSON output contains all nodes"
   verify unit "JSON output contains all edges"

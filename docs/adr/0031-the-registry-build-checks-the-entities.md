@@ -99,3 +99,7 @@ Rejected:
 - A project that wants the identifier contract enforced with no extension loaded (D2).
 - A second producer of entity records that is not the snapshot (the record's fields then need a
   constructor that guarantees them).
+
+## Amendment (architecture round 8, plan 01)
+
+D3's `ValueShape` moved to `specforge_graph::ValueShape`, beside the field form that reads it (ADR 0064).

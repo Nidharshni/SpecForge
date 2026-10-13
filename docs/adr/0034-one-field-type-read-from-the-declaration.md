@@ -81,3 +81,9 @@ enhancement), sorted by name, typed by name.
   vocabulary of its own, as DBML has): that output maps the type, as DBML does. The vocabulary does not
   gain a second name.
 - An extension protocol major version: it may drop the older spellings.
+
+## Amendment (round 8, plan 01)
+
+A field's type also decides which values it takes, how a written value is stored and the JSON written for it,
+through one field form (ADR 0064). D3's "published JSON Schema's field_type enum" is the derived `FieldType`
+shape.

@@ -187,6 +187,13 @@ field with W019. Every host output names a field type by these names — the
 Graph Protocol schema and exports, the published JSON Schema, the model,
 hover and E061; the older spellings are read, never written (ADR 0034).
 
+What a field takes and what is written for it (ADR 0064): `string` takes text, a bare word, a date, a type
+union or an `expr { }` group, and is written as a string (a group as its conjuncts, one per line); `enum` one of
+its `enum_values`; `integer` and `bool` their JSON scalars; `reference` one id, written as a string;
+`string_list` and `reference_list` a list (a single value or a mixed list is stored as a list), written as an
+array of strings; `block` a block, written as an object of its entries. Anything else is E061. A command's
+`graph` input, the exports and MCP carry exactly these forms.
+
 ### Category: edges
 
 Returns edge type descriptors. Each descriptor declares a labeled relationship between entity kinds.
