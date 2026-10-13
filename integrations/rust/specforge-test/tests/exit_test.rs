@@ -14,7 +14,6 @@ const BUILD_SCRIPT_GRAPH: &str = r#"{"entities":[{"id":"record_test_via_drop_gua
     behavior = "record_test_via_drop_guard",
     verify = "the exit handler prints no coverage, even beside a graph export"
 )]
-#[ignore = "fixed by T2"]
 fn the_exit_handler_prints_no_coverage() {
     let reports = tempfile::tempdir().unwrap();
     std::fs::write(reports.path().join("graph.json"), BUILD_SCRIPT_GRAPH).unwrap();

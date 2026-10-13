@@ -21,7 +21,6 @@ constraint test_coverage_accuracy "Test Coverage Accuracy" {
   constrains  [ingest_collector_report, te_coverage_pass, te_coverage_gate]
   protects    [testable_entity_classification, traceability_chain_integrity]
   verify unit "coverage percentage and merge are accurate"
-  verify unit "a test binary's coverage summary proves an obligation only by its exact text, as analyze does"
 }
 
 constraint rust_collection_accuracy "Rust Collection Accuracy" {

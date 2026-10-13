@@ -1,6 +1,6 @@
 use crate::ports::RealFs;
-use crate::ports::{GraphReader, ReportWriter};
-use crate::{coverage, registry, report};
+use crate::ports::ReportWriter;
+use crate::{registry, report};
 use std::path::PathBuf;
 use std::sync::Once;
 
@@ -131,6 +131,10 @@ pub fn strip_build_hash(binary: &str) -> &str {
     }
 }
 
+/// Write this process's binary report: the one thing the exit handler does.
+/// It reads nothing and prints only a failed write. Which obligations the
+/// tests prove is scored by `specforge collect` and the coverage rule
+/// (ADR 0068).
 extern "C" fn on_exit() {
     let entries = registry::drain();
     if entries.is_empty() {
@@ -150,30 +154,6 @@ extern "C" fn on_exit() {
     );
     if let Err(e) = report::write_report(&dir, &name, &entries) {
         eprintln!("[specforge-test] failed to write report: {e}");
-    }
-
-    // Coverage summary: load graph through the port (C11-08), stamp verify
-    // kinds (C11-07), compute diff, print — including unmatched-test
-    // warnings (C11-02).
-    let graph_path = dir.join("graph.json");
-    let fs = RealFs;
-    if let Some(graph) = fs.read_graph(&graph_path) {
-        let stamped = coverage::stamp_verify_kinds(entries, &graph);
-        // Only the entities this binary's tests recorded: a binary exercises
-        // a slice of the project, so listing every other entity as
-        // uncovered is noise. Project-wide gaps are `specforge analyze
-        // coverage`'s job, after `specforge collect`.
-        let recorded: std::collections::HashSet<&str> =
-            stamped.iter().map(|e| e.entity_id.as_str()).collect();
-        let diffs: Vec<_> = coverage::compute_coverage_diff(&graph, &stamped)
-            .into_iter()
-            .filter(|d| recorded.contains(d.entity_id.as_str()))
-            .collect();
-        if let Err(e) =
-            coverage::format_coverage_summary(&mut std::io::stderr(), &diffs, &graph.timestamp)
-        {
-            eprintln!("[specforge-test] failed to write coverage summary: {e}");
-        }
     }
 }
 

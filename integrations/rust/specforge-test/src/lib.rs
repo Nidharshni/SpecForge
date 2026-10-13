@@ -1,5 +1,4 @@
 pub mod atexit;
-pub mod coverage;
 pub mod guard;
 pub mod ports;
 pub mod registry;

@@ -1,4 +1,3 @@
-use crate::coverage::GraphExport;
 use std::path::Path;
 
 pub trait ReportWriter {
@@ -7,10 +6,6 @@ pub trait ReportWriter {
     /// Append one line (no trailing newline handling beyond the caller's) —
     /// the durability channel for per-test JSONL records (C11-06).
     fn append_line(&self, path: &Path, line: &str) -> std::io::Result<()>;
-}
-
-pub trait GraphReader {
-    fn read_graph(&self, path: &Path) -> Option<GraphExport>;
 }
 
 pub struct RealFs;
@@ -31,12 +26,5 @@ impl ReportWriter for RealFs {
             .append(true)
             .open(path)?;
         writeln!(file, "{line}")
-    }
-}
-
-impl GraphReader for RealFs {
-    fn read_graph(&self, path: &Path) -> Option<GraphExport> {
-        let content = std::fs::read_to_string(path).ok()?;
-        serde_json::from_str(&content).ok()
     }
 }

@@ -45,7 +45,9 @@ behavior record_test_via_drop_guard "Record Test via Drop Guard" {
     target/specforge/, one report per test target named
     <package>--<target>.json so a rebuild replaces its predecessor.
     Each entry carries the test's module path, so a collector can match
-    it to the test's line in libtest's output.
+    it to the test's line in libtest's output. The exit handler prints
+    nothing: which obligations the tests prove is the coverage rule's,
+    after `specforge collect` (ADR 0068).
   """
   verify unit "successful test records pass via Drop"
   verify unit "panicking test records fail via Drop"
