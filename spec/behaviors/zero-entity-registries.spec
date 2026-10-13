@@ -445,6 +445,7 @@ behavior registry_build_fields "Registry Build Registers Fields" {
   verify unit "a field's declared descriptor reaches its registry entry whole"
   verify unit "a registry entry is built only from a descriptor whose type the host reads"
   verify unit "a registry entry names its type canonically, whatever spelling was declared"
+  verify unit "an enum field without values, or whose default_value is not one of its values, is W021 and still registered"
   verify contract "Registry Build Registers Fields: field registration holds — declarations_in_load_order, fields_registered, types_parsed, roles_checked"
 }
 

@@ -356,3 +356,31 @@ fn event_graph_flags_only_unconsumed_producers() {
         "consumed event spared"
     );
 }
+
+/// Pinned by plan 01 (fixed by T8): a property's type is a required enum of
+/// its three values, so another value is the core's E061 and no rule of the
+/// extension (W125) says so.
+#[specforge_test::prelude::specforge_test(
+    behavior = "fa_validate_property_type",
+    verify = "property_type is a declared enum of safety, liveness, fairness"
+)]
+#[ignore = "fixed by 01-T8"]
+fn a_propertys_type_is_a_declared_vocabulary() {
+    let declaration = specforge_extension_build().declaration();
+    let field = declaration
+        .entities
+        .iter()
+        .find(|k| k.keyword.as_deref() == Some("property"))
+        .and_then(|k| k.fields.iter().find(|f| f.name == "property_type"))
+        .expect("property.property_type is declared");
+    assert_eq!(field.field_type, "enum");
+    assert_eq!(field.enum_values, ["safety", "liveness", "fairness"]);
+    assert!(field.required);
+    assert!(
+        declaration
+            .validation_rules
+            .iter()
+            .all(|r| r.code != "W125"),
+        "no rule has code W125"
+    );
+}

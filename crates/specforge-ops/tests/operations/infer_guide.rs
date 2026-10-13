@@ -262,6 +262,44 @@ fn the_guide_lists_extensions_kinds_and_entities() {
 }
 
 #[specforge_test(
+    behavior = "compute_inference_guide",
+    verify = "a guide field lists an enum's values and what an absent value counts as"
+)]
+#[ignore = "fixed by 01-T4"]
+fn a_guide_field_lists_an_enums_values_and_its_default() {
+    let mut c = ContributionsBuilder::new(ExtensionMeta::new("@t/soft", "1.0.0"));
+    c.kind("gadget", |k| {
+        k.field("level", |f| {
+            f.field_type(FieldType::String);
+        });
+        k.field("note", |f| {
+            f.field_type(FieldType::String);
+        });
+    });
+    let mut declaration = c.declaration();
+    // The declared descriptor says what the builder of the day cannot.
+    let level = &mut declaration.entities[0].fields[0];
+    level.field_type = "enum".to_string();
+    level.enum_values = vec!["low".to_string(), "high".to_string()];
+    level.default_value = Some("high".to_string());
+    let project = project_of("", vec![declaration]);
+    let guide = kind_guide(&project.view(), "gadget").unwrap();
+
+    let document = serde_json::to_value(guide.document()).unwrap();
+    let fields = document["fields"].as_array().unwrap();
+    let field = |name: &str| fields.iter().find(|f| f["name"] == name).unwrap();
+    assert_eq!(field("level")["values"], json!(["low", "high"]));
+    assert_eq!(field("level")["default"], json!("high"));
+    assert!(field("note").get("values").is_none());
+    assert!(field("note").get("default").is_none());
+    assert!(
+        guide.example().contains("level high"),
+        "{}",
+        guide.example()
+    );
+}
+
+#[specforge_test(
     behavior = "read_views_over_the_project_view",
     verify = "an argument naming an undeclared kind is refused with unknown_kind naming the closest declared kind"
 )]

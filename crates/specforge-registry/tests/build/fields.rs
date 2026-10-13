@@ -324,6 +324,57 @@ fn a_proof_role_other_than_bound_or_claim_is_refused() {
 
 #[spec(
     behavior = "registry_build_fields",
+    verify = "an enum field without values, or whose default_value is not one of its values, is W021 and still registered"
+)]
+#[ignore = "fixed by 01-T3"]
+fn an_enum_without_values_or_with_a_default_outside_them_is_w021() {
+    let mut declaration = declare("@test/ext", |c| {
+        c.kind("Thing", |k| {
+            k.keyword("thing");
+            for name in ["bare", "defaulted", "fine"] {
+                k.field(name, |f| {
+                    f.field_type(FieldType::String);
+                });
+            }
+        });
+    });
+    // The builder cannot say an enum without values or with a stray default.
+    for field in &mut declaration.entities[0].fields {
+        field.field_type = "enum".to_string();
+        match field.name.as_str() {
+            "defaulted" => {
+                field.enum_values = vec!["a".to_string(), "b".to_string()];
+                field.default_value = Some("c".to_string());
+            }
+            "fine" => {
+                field.enum_values = vec!["a".to_string(), "b".to_string()];
+                field.default_value = Some("b".to_string());
+            }
+            _ => {}
+        }
+    }
+    let build = build([declaration]);
+
+    let messages: Vec<&str> = coded(&build, "W021")
+        .iter()
+        .map(|d| d.message.as_str())
+        .collect();
+    assert_eq!(
+        messages,
+        [
+            "extension '@test/ext': field 'bare' on kind 'thing' is an enum that declares no values",
+            "extension '@test/ext': field 'defaulted' on kind 'thing' declares default_value 'c', which is not one of its values: a, b",
+        ],
+        "{:?}",
+        diagnostics(&build)
+    );
+    for name in ["bare", "defaulted", "fine"] {
+        assert!(build.fields().contains("thing", name), "{name}");
+    }
+}
+
+#[spec(
+    behavior = "registry_build_fields",
     verify = "Registry Build Registers Fields: field registration holds — declarations_in_load_order, fields_registered, types_parsed, roles_checked"
 )]
 fn field_registration_holds() {

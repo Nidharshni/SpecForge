@@ -609,6 +609,40 @@ fn field_hover_unknown_kind_returns_none() {
 
 #[spec(
     behavior = "hover_information",
+    verify = "field help says what an absent value counts as"
+)]
+#[ignore = "fixed by 01-T4"]
+fn field_hover_says_what_an_absent_value_counts_as() {
+    let mut declaration = crate::registries::declaration("@t/x", |c| {
+        c.kind("ticket", |k| {
+            k.field("status", |f| {
+                f.field_type(FieldType::String)
+                    .description("Where it stands");
+            });
+            k.field("owner", |f| {
+                f.field_type(FieldType::String).description("Who has it");
+            });
+        });
+    });
+    // The declared descriptor says what the builder of the day cannot.
+    let status = &mut declaration.entities[0].fields[0];
+    status.field_type = "enum".to_string();
+    status.enum_values = vec!["draft".to_string(), "final".to_string()];
+    status.default_value = Some("draft".to_string());
+    let build = crate::registries::registries_of(vec![declaration]);
+    let reg = build.fields();
+
+    let status = specforge_lsp::hover_field_info("status", "ticket", reg).unwrap();
+    assert!(
+        status.contains("Where it stands  \nAbsent, it counts as `draft`."),
+        "{status}"
+    );
+    let owner = specforge_lsp::hover_field_info("owner", "ticket", reg).unwrap();
+    assert!(!owner.contains("Absent"), "{owner}");
+}
+
+#[spec(
+    behavior = "hover_information",
     verify = "field help names a field's type as E061 does, an enum's declared values included"
 )]
 fn field_hover_names_a_type_as_e061_does() {

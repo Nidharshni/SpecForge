@@ -64,6 +64,21 @@ behavior fa_validate_empty_property_description "W124: Empty Property Descriptio
   verify unit "property with non-empty description passes"
 }
 
+behavior fa_validate_property_type "Property Type Vocabulary" {
+  category query
+  types    [FormalProperty, PropertyKind]
+  contract """
+    A property's property_type (safety, liveness or fairness) classifies
+    the temporal assertion; it is required (E006 when missing) and declared
+    an enum of PropertyKind, so another value is the core's E061.
+  """
+  ensures {
+    declared_enum "property_type is a required enum of safety, liveness, fairness"
+  }
+  features [fa_temporal_properties]
+  verify unit "property_type is a declared enum of safety, liveness, fairness"
+}
+
 behavior fa_validate_property_without_kind "W125: Property Without Kind" {
   category query
   types    [FormalProperty, PropertyKind]
