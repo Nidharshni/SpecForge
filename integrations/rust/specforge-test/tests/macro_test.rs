@@ -1,4 +1,5 @@
-use specforge_test::registry::{self, TestOutcome};
+use specforge_protocol_types::TestStatus;
+use specforge_test::registry;
 use std::sync::Mutex;
 
 static SERIAL: Mutex<()> = Mutex::new(());
@@ -18,7 +19,7 @@ fn macro_injects_guard_that_records_to_registry() {
     );
     assert_eq!(entries[0].entity_kind, "behavior");
     assert_eq!(entries[0].entity_id, "create_user");
-    assert_eq!(entries[0].outcome, TestOutcome::Pass);
+    assert_eq!(entries[0].status, TestStatus::Passed);
 }
 
 #[test]
@@ -45,7 +46,7 @@ fn macro_accepts_custom_entity_kind() {
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].entity_kind, "constraint");
     assert_eq!(entries[0].entity_id, "naming_convention");
-    assert_eq!(entries[0].outcome, TestOutcome::Pass);
+    assert_eq!(entries[0].status, TestStatus::Passed);
 }
 
 #[test]
@@ -78,7 +79,7 @@ fn panicking_annotated_function_records_fail() {
     assert!(result.is_err());
     let entries = registry::drain();
     assert_eq!(entries.len(), 1);
-    assert_eq!(entries[0].outcome, TestOutcome::Fail);
+    assert_eq!(entries[0].status, TestStatus::Failed);
 }
 
 #[test]

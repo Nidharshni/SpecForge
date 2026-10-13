@@ -168,7 +168,7 @@ impl Project {
             results.insert(
                 entity.to_string(),
                 serde_json::json!({"tests": [
-                    {"name": format!("{entity}_test"), "status": "pass", "verify": obligation}
+                    {"name": format!("{entity}_test"), "status": "passed", "verify": obligation}
                 ]}),
             );
         }

@@ -326,10 +326,10 @@ fn hover_shows_each_coverage_case() {
     project.write(
         "specforge-report.json",
         r#"{"results": {
-            "done": {"tests": [{"name": "t", "status": "pass", "verify": "first"}]},
+            "done": {"tests": [{"name": "t", "status": "passed", "verify": "first"}]},
             "half": {"tests": [
-                {"name": "t1", "status": "pass", "verify": "first"},
-                {"name": "t2", "status": "fail", "verify": "second"}]},
+                {"name": "t1", "status": "passed", "verify": "first"},
+                {"name": "t2", "status": "failed", "verify": "second"}]},
             "doc": {"tests": []}
         }}"#,
     );
@@ -395,7 +395,7 @@ fn hover_says_coverage_is_unavailable_while_the_project_rebuilds() {
     let mut project = coverage_project(COVERAGE);
     project.write(
         "specforge-report.json",
-        r#"{"results": {"done": {"tests": [{"name": "t", "status": "pass", "verify": "first"}]}}}"#,
+        r#"{"results": {"done": {"tests": [{"name": "t", "status": "passed", "verify": "first"}]}}}"#,
     );
     let uri = project.uri("main.spec");
     let hover_while_rebuilding = |project: &mut Served, id: &str| {

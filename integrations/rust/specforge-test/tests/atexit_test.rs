@@ -3,7 +3,8 @@
 fn atexit_writes_report_on_process_exit() {
     let dir = tempfile::tempdir().unwrap();
     let report_dir = dir.path().join("specforge");
-    use specforge_test::registry::{TestOutcome, TestRecordEntry};
+    use specforge_protocol_types::TestStatus;
+    use specforge_test::registry::TestRecordEntry;
     use specforge_test::report;
 
     let entries = vec![TestRecordEntry {
@@ -14,7 +15,7 @@ fn atexit_writes_report_on_process_exit() {
         file: "test.rs".to_string(),
         verify: None,
         duration_ms: 0,
-        outcome: TestOutcome::Pass,
+        status: TestStatus::Passed,
     }];
 
     report::write_report(&report_dir, "test_binary", &entries).unwrap();

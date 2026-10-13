@@ -956,7 +956,11 @@ mod tests {
                 .with(coverage(tally(0, 0))),
             &[EXT, TESTING],
         );
-        std::fs::write(project.dir.path().join("specforge-report.json"), "{}").unwrap();
+        std::fs::write(
+            project.dir.path().join("specforge-report.json"),
+            r#"{"results":{}}"#,
+        )
+        .unwrap();
         let sub = project.dir.path().join("sub");
         std::fs::create_dir(&sub).unwrap();
         let view = project.view_at(Some(&sub));
@@ -998,7 +1002,11 @@ mod tests {
             AnalyzeError::UnknownPass { .. }
         ));
 
-        std::fs::write(project.dir.path().join("specforge-report.json"), "{}").unwrap();
+        std::fs::write(
+            project.dir.path().join("specforge-report.json"),
+            r#"{"results":{}}"#,
+        )
+        .unwrap();
         assert!(project.run(&min).is_ok());
     }
 
@@ -1037,7 +1045,11 @@ mod tests {
     /// testing extension reports `proven` of `total`.
     fn gate_of(pass_name: &str, min: Option<f64>, summary: Value) -> Gate {
         let project = Project::serving(InProcessRuntime::new().with(coverage(summary)), &[TESTING]);
-        std::fs::write(project.dir.path().join("specforge-report.json"), "{}").unwrap();
+        std::fs::write(
+            project.dir.path().join("specforge-report.json"),
+            r#"{"results":{}}"#,
+        )
+        .unwrap();
         let options = AnalyzeOptions {
             pass: pass_name.to_string(),
             min,
@@ -1169,7 +1181,11 @@ mod tests {
                 .with(coverage(tally(0, 0))),
             &[TESTING, EXT],
         );
-        std::fs::write(project.dir.path().join("specforge-report.json"), "{}").unwrap();
+        std::fs::write(
+            project.dir.path().join("specforge-report.json"),
+            r#"{"results":{}}"#,
+        )
+        .unwrap();
         let options = AnalyzeOptions {
             min: Some(10.0),
             ..pass("contracts")
@@ -1288,7 +1304,7 @@ mod tests {
             .map(|id| {
                 (
                     id.to_string(),
-                    json!({"tests": [{"name": "t", "status": "pass"}]}),
+                    json!({"tests": [{"name": "t", "status": "passed"}]}),
                 )
             })
             .collect();

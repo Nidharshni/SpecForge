@@ -40,7 +40,7 @@ impl Contributions for CargoTest {
                 .run(&["cargo", "test", "--workspace", "--no-fail-fast"])
                 .report("target/specforge")
                 .capture_stdout()
-                .collect(|input| Ok(collect(input)));
+                .collect(collect);
         });
     }
 }
@@ -62,7 +62,7 @@ struct Entry {
     verify: Option<String>,
     #[serde(default)]
     duration_ms: Option<f64>,
-    status: String,
+    status: TestStatus,
 }
 
 /// The tests the attribute recorded, by the name libtest prints for them.
@@ -98,32 +98,36 @@ impl Recorded {
 }
 
 /// Map `specforge-test` reports to entity results, and return the tests in
-/// libtest's output (the captured stdout, or a report file that isn't a
-/// binary report) that no report recorded as unlinked. Other files in the
-/// report directory, like the graph snapshot the integration keeps there,
-/// yield nothing.
-fn collect(input: &CollectInput) -> CollectOutput {
-    let mut by_entity: BTreeMap<String, Vec<CollectTestResult>> = BTreeMap::new();
+/// libtest's output (the captured stdout, or a report file that isn't JSON)
+/// that no report recorded as unlinked. A JSON object with an `entries` key
+/// is a binary report, and an entry that does not decode (a status outside the
+/// protocol's `TestStatus`, say) is the collector's error naming the file.
+/// Any other JSON document in the report directory yields nothing.
+fn collect(input: &CollectInput) -> Result<CollectOutput, String> {
+    let mut by_entity: BTreeMap<String, Vec<TestResult>> = BTreeMap::new();
     let mut recorded = Recorded::default();
     let mut outputs: Vec<&str> = input.stdout.as_deref().into_iter().collect();
     for file in &input.reports {
-        let Ok(report) = serde_json::from_str::<BinaryReport>(&file.content) else {
-            outputs.push(&file.content);
-            continue;
+        let value = match serde_json::from_str::<serde_json::Value>(&file.content) {
+            Ok(value @ serde_json::Value::Object(_)) => value,
+            _ => {
+                outputs.push(&file.content);
+                continue;
+            }
         };
+        if value.get("entries").is_none() {
+            continue;
+        }
+        let report: BinaryReport =
+            serde_json::from_value(value).map_err(|e| format!("{}: {e}", file.path))?;
         for entry in report.entries {
             recorded.add(&entry);
-            let status = match entry.status.as_str() {
-                "pass" => "passed",
-                "fail" => "failed",
-                _ => "skipped",
-            };
             by_entity
                 .entry(entry.entity_id)
                 .or_default()
-                .push(CollectTestResult {
+                .push(TestResult {
                     name: entry.test_name,
-                    status: status.to_string(),
+                    status: entry.status,
                     verify: entry.verify,
                     duration_ms: entry.duration_ms,
                 });
@@ -136,10 +140,10 @@ fn collect(input: &CollectInput) -> CollectOutput {
         .map(|(name, status)| CollectUnlinkedTest {
             path: name.split("::").map(str::to_string).collect(),
             name,
-            status: status.to_string(),
+            status,
         })
         .collect();
-    CollectOutput {
+    Ok(CollectOutput {
         entity_results: by_entity
             .into_iter()
             .map(|(entity_id, test_results)| CollectEntityResult {
@@ -148,14 +152,14 @@ fn collect(input: &CollectInput) -> CollectOutput {
             })
             .collect(),
         unlinked,
-    }
+    })
 }
 
 /// The test results in libtest's human-readable output: every
 /// `test <name> ... <result>` line, as `(name, status)`. Doc tests
 /// (`src/lib.rs - item (line 3)`) and benchmarks are skipped, as is the
 /// `failures:` section, where a failing test's own output is replayed.
-fn parse_libtest(output: &str) -> Vec<(String, &'static str)> {
+fn parse_libtest(output: &str) -> Vec<(String, TestStatus)> {
     let mut results = Vec::new();
     let mut in_failures = false;
     for line in output.lines() {
@@ -182,9 +186,9 @@ fn parse_libtest(output: &str) -> Vec<(String, &'static str)> {
             continue;
         }
         let status = match result {
-            "ok" => "passed",
-            "FAILED" => "failed",
-            r if r == "ignored" || r.starts_with("ignored, ") => "skipped",
+            "ok" => TestStatus::Passed,
+            "FAILED" => TestStatus::Failed,
+            r if r == "ignored" || r.starts_with("ignored, ") => TestStatus::Skipped,
             _ => continue,
         };
         results.push((name.to_string(), status));

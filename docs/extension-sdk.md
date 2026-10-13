@@ -163,22 +163,38 @@ impl Contributions for Greet {
             k.input_format("greet-lines")
                 .report("greet-report.txt")
                 .collect(|input: &CollectInput| {
-                    // One line per test: `<greeting id> <passed|failed>`.
+                    // One line per test: `<greeting id> <passed|failed|skipped>`.
                     let entity_results = input
                         .reports
                         .iter()
-                        .flat_map(|report| report.content.lines())
-                        .filter_map(|line| line.split_once(' '))
-                        .map(|(id, status)| CollectEntityResult {
-                            entity_id: id.to_string(),
-                            test_results: vec![CollectTestResult {
-                                name: format!("greets_{id}"),
-                                status: status.trim().to_string(),
-                                verify: None,
-                                duration_ms: None,
-                            }],
+                        .flat_map(|report| {
+                            report
+                                .content
+                                .lines()
+                                .filter_map(|line| line.split_once(' '))
+                                .map(move |(id, status)| (report, id, status.trim()))
                         })
-                        .collect();
+                        .map(|(report, id, status)| {
+                            let status = serde_json::from_value::<TestStatus>(
+                                serde_json::Value::String(status.to_string()),
+                            )
+                            .map_err(|_| {
+                                format!(
+                                    "{}: '{status}' is not passed, failed or skipped",
+                                    report.path
+                                )
+                            })?;
+                            Ok(CollectEntityResult {
+                                entity_id: id.to_string(),
+                                test_results: vec![TestResult {
+                                    name: format!("greets_{id}"),
+                                    status,
+                                    verify: None,
+                                    duration_ms: None,
+                                }],
+                            })
+                        })
+                        .collect::<Result<Vec<_>, String>>()?;
                     Ok(CollectOutput {
                         entity_results,
                         unlinked: Vec::new(),
@@ -385,8 +401,9 @@ the absolute report path. It then reads the report (the file, or every
 `collect__<name>` export (`-` becomes `_`), which the SDK routes to the
 handler declared with `k.collect`, a pure function from [`CollectInput`] to
 [`CollectOutput`] (or the reason it could not read the report): test results
-grouped by entity, with `status` `passed`,
-`failed` or `skipped`, plus the tests the report doesn't link
+([`TestResult`]) grouped by entity, each with a
+[`TestStatus`] (`passed`, `failed` or `skipped`; any other value cannot be built, and a handler that meets one
+in a report answers its `Err`), plus the tests the report doesn't link
 (`unlinked`), which the host links by naming convention when it can. With `capture_stdout()`, the command's output still
 reaches the user's terminal, and the host also keeps it (in
 `<name>.stdout.txt` inside a report directory) and passes it as
@@ -424,7 +441,7 @@ none, runs the pass only under `specforge analyze`, which skips check passes.
 
 A pass receives `PassInput`: `entities` (each with its field texts by name
 ([Field text](#field-text)), edge counts, span, `testable`, and `owes_none`: it
-owes no obligations of its own, decided by the host's one obligation rule), `edges`, `test_results` and `proved_claims` (always absent for a
+owes no obligations of its own, decided by the host's one obligation rule), `edges`, `test_results` (the recorded test report as [`TestResults`]; `TestResults::of(id)` lists an entity's tests) and `proved_claims` (always absent for a
 check pass), and `previous`: when
 `specforge-cache.json` exists, the statuses of the build that wrote it
 (`previous.statuses["<id>"].kind` / `.status`), else `None`. Give a

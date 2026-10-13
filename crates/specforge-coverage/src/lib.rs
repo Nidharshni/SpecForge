@@ -9,7 +9,8 @@
 //! re-implements the rule, and both are held to the golden vectors in
 //! `tests/fixtures/coverage-cases.json`.
 //!
-//! It reads a pass's entities through `Entity::from(&PassEntity)`, the one
+//! It reads a pass's entities through `Entity::from(&PassEntity)` and its
+//! recorded tests as the protocol's `TestResults` (ADR 0069), the one
 //! reading the host and the extensions share, and it states the counting rule
 //! once ([`Counting`]).
 //!
@@ -19,11 +20,9 @@
 //! makes all of them stale. It reads them; they never read it.
 
 use serde::{Deserialize, Serialize};
-use specforge_protocol_types::PassEntity;
+use specforge_protocol_types::{PassEntity, TestResult, TestResults, TestStatus};
 use std::collections::{BTreeMap, BTreeSet};
 
-/// How a recorded test's status names a passing test.
-pub const PASSING_STATUS: &str = "pass";
 /// The verify kind a formal claim the prove pass entailed discharges.
 pub const PROPERTY_VERIFY_KIND: &str = "property";
 /// The summary's name for obligations written without a kind (`verify "..."`).
@@ -151,32 +150,6 @@ impl From<&PassEntity> for Entity {
     }
 }
 
-/// One recorded test for an entity (a `specforge-report.json` entry).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RecordedTest {
-    #[serde(default)]
-    pub name: Option<String>,
-    pub status: String,
-    /// The obligation text the test names, when it names one.
-    #[serde(default)]
-    pub verify: Option<String>,
-}
-
-impl RecordedTest {
-    pub fn passed(&self) -> bool {
-        self.status == PASSING_STATUS
-    }
-}
-
-/// The project's recorded tests, per entity id.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct TestResults {
-    #[serde(default)]
-    pub runner: Option<String>,
-    #[serde(default)]
-    pub entities: BTreeMap<String, Vec<RecordedTest>>,
-}
-
 /// An entity's coverage at a glance, for per-entity views.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -202,20 +175,22 @@ pub struct Verdict {
     pub undeclared: Vec<String>,
     /// Recorded tests for the entity.
     pub tests: usize,
-    /// Recorded tests that did not pass (A014).
+    /// Recorded tests that failed (A014).
     pub failing: usize,
 }
 
 impl Verdict {
-    /// The proof rule. A test proves an obligation by naming its text; a
-    /// test that names none counts toward the entity but proves no
-    /// particular obligation. When the entity's formal claims were entailed
+    /// The proof rule. A passing test proves an obligation by naming its
+    /// text; a test that names none counts toward the entity but proves no
+    /// particular obligation; a failing test fails the entity (A014); a
+    /// skipped test is counted among its tests and proves and fails
+    /// nothing. When the entity's formal claims were entailed
     /// (`formally_proved`), its `verify property` obligations are
     /// discharged without a test.
-    pub fn of(entity: &Entity, tests: &[RecordedTest], formally_proved: bool) -> Self {
+    pub fn of(entity: &Entity, tests: &[TestResult], formally_proved: bool) -> Self {
         let passing: BTreeSet<&str> = tests
             .iter()
-            .filter(|t| t.passed())
+            .filter(|t| t.status == TestStatus::Passed)
             .filter_map(|t| t.verify.as_deref())
             .collect();
         let declared: BTreeSet<&str> = entity.verify_texts.iter().map(String::as_str).collect();
@@ -241,7 +216,10 @@ impl Verdict {
             unproven,
             undeclared: undeclared.into_iter().map(str::to_string).collect(),
             tests: tests.len(),
-            failing: tests.iter().filter(|t| !t.passed()).count(),
+            failing: tests
+                .iter()
+                .filter(|t| t.status == TestStatus::Failed)
+                .count(),
         }
     }
 
@@ -424,9 +402,7 @@ pub fn assess(
             funnel.entities_with_obligations += 1;
         }
 
-        let tests: &[RecordedTest] = results
-            .and_then(|r| r.entities.get(id))
-            .map_or(&[], Vec::as_slice);
+        let tests: &[TestResult] = results.map_or(&[], |r| r.of(id));
         let formally_proved = proved.is_some_and(|ids| ids.contains(id));
         let verdict = Verdict::of(entity, tests, formally_proved);
         if results.is_some() {
@@ -467,8 +443,8 @@ pub fn assess(
         }
         let failed: Vec<&str> = tests
             .iter()
-            .filter(|t| !t.passed())
-            .map(|t| t.name.as_deref().unwrap_or("<unnamed>"))
+            .filter(|t| t.status == TestStatus::Failed)
+            .map(|t| t.name.as_str())
             .collect();
         if !failed.is_empty() {
             funnel.report_failures += failed.len();
@@ -550,12 +526,12 @@ pub fn assess(
 
     let invariant_total: usize = invariants.values().map(|(total, _)| total).sum();
     let test_results = results.map(|report| {
-        let tests = report.entities.values().flatten();
+        let tests = report.results.values().flat_map(|recorded| &recorded.tests);
         TestResultsSummary {
             runner: report.runner.clone(),
-            entities_recorded: report.entities.len(),
+            entities_recorded: report.results.len(),
             tests_recorded: tests.clone().count(),
-            tests_failed: tests.filter(|t| !t.passed()).count(),
+            tests_failed: tests.filter(|t| t.status == TestStatus::Failed).count(),
             entities_proven: funnel.entities_proven,
             obligations_proven,
         }

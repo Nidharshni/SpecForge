@@ -103,7 +103,7 @@ behavior te_coverage_pass "Coverage Analysis Pass" {
     `specforge collect`): a test proves an obligation by naming its text.
     An obligation no passing test names is A015, a test naming an
     obligation its entity doesn't declare is A016, and a failing test is
-    A014. An entity is proven when it declares at least one obligation,
+    A014. A skipped test proves nothing and fails nothing. An entity is proven when it declares at least one obligation,
     every obligation is proven, and none of its recorded tests fails: a
     test that proves nothing declared is not proof, so an entity with no
     obligations is never proven, whatever its tests. A formal claim the
@@ -124,6 +124,7 @@ behavior te_coverage_pass "Coverage Analysis Pass" {
   verify unit "invariant references count as enforcement"
   verify unit "recorded test results prove entities and failing tests are A014"
   verify unit "an obligation no passing test names is A015 and a test naming an undeclared obligation is A016"
+  verify unit "a skipped test neither proves an obligation nor fails its entity"
   verify unit "a proved formal claim discharges verify property obligations"
   verify unit "an entity with no obligations is never proven, even by passing tests"
   verify unit "an entity whose obligations are all formally discharged is proven without tests"

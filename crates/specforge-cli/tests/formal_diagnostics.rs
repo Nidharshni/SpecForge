@@ -669,11 +669,11 @@ fn an_item_every_test_proves_is_i008_naming_the_tests() {
         &dir,
         serde_json::json!({"runner": "manual", "results": {
             "proven": {"tests": [
-                {"name": "works", "status": "pass", "verify": "it works"},
-                {"name": "fails_safely", "status": "pass", "verify": "it fails safely"}
+                {"name": "works", "status": "passed", "verify": "it works"},
+                {"name": "fails_safely", "status": "passed", "verify": "it fails safely"}
             ]},
             "halfway": {"tests": [
-                {"name": "works", "status": "pass", "verify": "it works"}
+                {"name": "works", "status": "passed", "verify": "it works"}
             ]}
         }}),
     );
@@ -723,7 +723,7 @@ behavior proven "Proven" {
 
 fn depth_results() -> serde_json::Value {
     serde_json::json!({"runner": "manual", "results": {
-        "proven": {"tests": [{"name": "works", "status": "pass", "verify": "it works"}]}
+        "proven": {"tests": [{"name": "works", "status": "passed", "verify": "it works"}]}
     }})
 }
 

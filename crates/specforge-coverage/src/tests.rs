@@ -1,49 +1,7 @@
 use super::*;
 use serde_json::{Value, json};
+use specforge_protocol_types::PassInput;
 use specforge_test_macros::test as specforge_test;
-
-/// A case's input, in the `coverage` pass's input shape (the SDK's
-/// `PassInput`), so the extension's native tests read the same file.
-#[derive(Deserialize)]
-struct PassInput {
-    entities: Vec<PassEntity>,
-    #[serde(default)]
-    test_results: Option<PassTestResults>,
-    #[serde(default)]
-    proved_claims: Option<BTreeSet<String>>,
-}
-
-#[derive(Deserialize)]
-struct PassEntity {
-    id: String,
-    kind: String,
-    #[serde(default)]
-    fields: BTreeMap<String, String>,
-    #[serde(default)]
-    incoming_edge_count: usize,
-    #[serde(default)]
-    testable: bool,
-    #[serde(default)]
-    owes_none: bool,
-    #[serde(default)]
-    verify_kinds: Vec<String>,
-    #[serde(default)]
-    verify_texts: Vec<String>,
-}
-
-#[derive(Deserialize)]
-struct PassTestResults {
-    #[serde(default)]
-    runner: Option<String>,
-    #[serde(default)]
-    results: BTreeMap<String, PassEntityResults>,
-}
-
-#[derive(Deserialize)]
-struct PassEntityResults {
-    #[serde(default)]
-    tests: Vec<RecordedTest>,
-}
 
 /// `@specforge/testing`'s grading: invariants, an error at high risk.
 fn testing_grading() -> RiskGrading {
@@ -58,32 +16,27 @@ fn assess_input(input: Value) -> (Vec<Entity>, Assessment) {
 }
 
 /// As the testing pass does: the risk field is read for the graded kind only.
+/// A case's input is the `coverage` pass's input, the protocol's `PassInput`,
+/// so the extension's native tests read the same file.
 fn assess_graded(input: Value, grading: Option<&RiskGrading>) -> (Vec<Entity>, Assessment) {
     let input: PassInput = serde_json::from_value(input).unwrap();
     let entities: Vec<Entity> = input
         .entities
-        .into_iter()
+        .iter()
         .map(|e| Entity {
             risk: grading
                 .filter(|g| g.kind == e.kind)
                 .and_then(|_| e.fields.get("risk").cloned()),
-            referenced: e.incoming_edge_count > 0,
-            id: e.id,
-            kind: e.kind,
-            testable: e.testable,
-            owes_none: e.owes_none,
-            verify_kinds: e.verify_kinds,
-            verify_texts: e.verify_texts,
+            ..Entity::from(e)
         })
         .collect();
-    let results = input.test_results.map(|r| TestResults {
-        runner: r.runner,
-        entities: r.results.into_iter().map(|(id, e)| (id, e.tests)).collect(),
-    });
+    let proved: Option<BTreeSet<String>> = input
+        .proved_claims
+        .map(|claims| claims.into_iter().collect());
     let assessment = assess(
         &entities,
-        results.as_ref(),
-        input.proved_claims.as_ref(),
+        input.test_results.as_ref(),
+        proved.as_ref(),
         grading,
     );
     (entities, assessment)
@@ -110,8 +63,8 @@ fn create_user(tests: Value) -> Value {
 )]
 fn an_obligation_is_proven_by_a_passing_test_that_names_it() {
     let (_, out) = assess_input(create_user(json!([
-        {"name": "dup", "status": "pass", "verify": "rejects a duplicate email"},
-        {"name": "hash", "status": "pass", "verify": "stores a hashed password"}
+        {"name": "dup", "status": "passed", "verify": "rejects a duplicate email"},
+        {"name": "hash", "status": "passed", "verify": "stores a hashed password"}
     ])));
     assert!(out.findings.is_empty(), "{:?}", codes(&out));
     assert_eq!(out.summary.discharge_funnel.entities_proven, 1);
@@ -125,8 +78,8 @@ fn an_obligation_is_proven_by_a_passing_test_that_names_it() {
 )]
 fn unnamed_and_failing_tests_leave_obligations_unproven() {
     let (_, out) = assess_input(create_user(json!([
-        {"name": "any", "status": "pass"},
-        {"name": "hash", "status": "fail", "verify": "stores a hashed password"}
+        {"name": "any", "status": "passed"},
+        {"name": "hash", "status": "failed", "verify": "stores a hashed password"}
     ])));
     assert_eq!(codes(&out), vec!["A015", "A014"]);
     assert!(out.findings[0].message.contains(
@@ -138,12 +91,27 @@ fn unnamed_and_failing_tests_leave_obligations_unproven() {
 
 #[specforge_test(
     behavior = "te_coverage_pass",
+    verify = "a skipped test neither proves an obligation nor fails its entity"
+)]
+fn a_skipped_test_neither_proves_nor_fails() {
+    let (_, out) = assess_input(create_user(json!([
+        {"name": "dup", "status": "skipped", "verify": "rejects a duplicate email"},
+        {"name": "hash", "status": "skipped", "verify": "stores a hashed password"}
+    ])));
+    assert_eq!(codes(&out), vec!["A015"]);
+    let verdict = &out.verdicts["create_user"];
+    assert_eq!((verdict.tests, verdict.failing, verdict.proven), (2, 0, 0));
+    assert!(!verdict.is_proven());
+}
+
+#[specforge_test(
+    behavior = "te_coverage_pass",
     verify = "an obligation no passing test names is A015 and a test naming an undeclared obligation is A016"
 )]
 fn a_test_naming_an_undeclared_obligation_is_reported() {
     let (_, out) = assess_input(create_user(json!([
-        {"name": "dup", "status": "pass", "verify": "rejects a duplicate email"},
-        {"name": "hash", "status": "pass", "verify": "stores a hashed pasword"}
+        {"name": "dup", "status": "passed", "verify": "rejects a duplicate email"},
+        {"name": "hash", "status": "passed", "verify": "stores a hashed pasword"}
     ])));
     assert_eq!(codes(&out), vec!["A015", "A016"]);
     assert!(
@@ -210,8 +178,8 @@ fn only_testable_entities_count_toward_the_gate() {
              "verify_kinds": ["unit"], "verify_texts": ["no login is lost"]}
         ],
         "test_results": {"results": {
-            "login": {"tests": [{"name": "t", "status": "pass", "verify": "a known user logs in"}]},
-            "no_lost_login": {"tests": [{"name": "u", "status": "pass", "verify": "no login is lost"}]}
+            "login": {"tests": [{"name": "t", "status": "passed", "verify": "a known user logs in"}]},
+            "no_lost_login": {"tests": [{"name": "u", "status": "passed", "verify": "no login is lost"}]}
         }}
     }));
     // Both proven entities are in the funnel; only the testable one is
@@ -230,7 +198,7 @@ fn passing_tests_do_not_prove_an_entity_with_no_obligations() {
     let (_, out) = assess_input(json!({
         "entities": [{"id": "logout", "kind": "behavior", "testable": true}],
         "test_results": {"results": {
-            "logout": {"tests": [{"name": "logout works", "status": "pass"}]}
+            "logout": {"tests": [{"name": "logout works", "status": "passed"}]}
         }}
     }));
     let verdict = &out.verdicts["logout"];

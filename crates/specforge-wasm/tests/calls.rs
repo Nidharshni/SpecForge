@@ -97,9 +97,9 @@ fn collect_answer() -> CollectOutput {
     CollectOutput {
         entity_results: vec![CollectEntityResult {
             entity_id: "a".into(),
-            test_results: vec![CollectTestResult {
+            test_results: vec![TestResult {
                 name: "a_works".into(),
-                status: "passed".into(),
+                status: TestStatus::Passed,
                 verify: Some("a works".into()),
                 duration_ms: Some(1.5),
             }],
@@ -107,7 +107,7 @@ fn collect_answer() -> CollectOutput {
         unlinked: vec![CollectUnlinkedTest {
             name: "m::t".into(),
             path: vec!["m".into(), "t".into()],
-            status: "failed".into(),
+            status: TestStatus::Failed,
         }],
     }
 }

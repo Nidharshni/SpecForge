@@ -812,14 +812,14 @@ fn coverage_of_two(server: &mut McpServer) -> Value {
     verify = "an entity with an unproven obligation is partial, not covered"
 )]
 fn coverage_with_an_unproven_obligation_is_partial() {
-    let mut server = server_with_report(&[("a", "pass")]);
+    let mut server = server_with_report(&[("a", "passed")]);
     let two = coverage_of_two(&mut server);
     assert_eq!(two["status"], "partial", "{two}");
     assert_eq!(two["obligations"], 2);
     assert_eq!(two["proven"], 1);
     assert_eq!(two["unproven"], json!(["b"]));
 
-    let mut server = server_with_report(&[("a", "pass"), ("b", "pass")]);
+    let mut server = server_with_report(&[("a", "passed"), ("b", "passed")]);
     let two = coverage_of_two(&mut server);
     assert_eq!(two["status"], "covered", "{two}");
     assert_eq!(two["unproven"], json!([]));
@@ -831,13 +831,13 @@ fn coverage_with_an_unproven_obligation_is_partial() {
 )]
 fn coverage_with_a_failing_test_is_partial() {
     // Both obligations are proven, but a third test fails (A014).
-    let mut server = server_with_report(&[("a", "pass"), ("b", "pass"), ("a", "fail")]);
+    let mut server = server_with_report(&[("a", "passed"), ("b", "passed"), ("a", "failed")]);
     let two = coverage_of_two(&mut server);
     assert_eq!(two["status"], "partial", "{two}");
     assert_eq!(two["proven"], 2);
 
     // A failing test proves nothing, even when it names an obligation.
-    let mut server = server_with_report(&[("a", "fail")]);
+    let mut server = server_with_report(&[("a", "failed")]);
     let two = coverage_of_two(&mut server);
     assert_eq!(two["status"], "partial", "{two}");
     assert_eq!(two["unproven"], json!(["a", "b"]));
@@ -907,7 +907,7 @@ fn analyze_reads_the_project_report_by_default() {
     .unwrap();
     std::fs::write(
         root.join("specforge-report.json"),
-        r#"{"results":{"two":{"tests":[{"name":"t","verify":"a","status":"pass"}]}}}"#,
+        r#"{"results":{"two":{"tests":[{"name":"t","verify":"a","status":"passed"}]}}}"#,
     )
     .unwrap();
 
@@ -1839,7 +1839,7 @@ fn coverage_kind_filter() {
 )]
 fn coverage_status_filter_restricts_status() {
     // `two` has one of its two obligations proven; alpha has none.
-    let mut server = server_with_report(&[("a", "pass")]);
+    let mut server = server_with_report(&[("a", "passed")]);
     let ids = |server: &mut McpServer, status: &str| {
         let resp = call_tool(
             server,
@@ -1988,7 +1988,7 @@ fn query_include_coverage() {
     // Declared obligations with no recorded test: as specforge.coverage says.
     assert_eq!(alpha["coverage_status"], "uncovered");
 
-    let mut server = server_with_report(&[("a", "pass"), ("b", "pass")]);
+    let mut server = server_with_report(&[("a", "passed"), ("b", "passed")]);
     let resp = call_tool(
         &mut server,
         "specforge.query",

@@ -254,6 +254,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "specforge-protocol-types"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "specforge-test"
 version = "0.1.0"
 dependencies = [
@@ -261,6 +269,7 @@ dependencies = [
  "libc",
  "serde",
  "serde_json",
+ "specforge-protocol-types",
  "specforge-test-macros",
  "tempfile",
 ]

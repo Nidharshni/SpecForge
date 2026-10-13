@@ -183,25 +183,6 @@ fn pass_coverage(input: &PassInput) -> PassOutput {
             ..coverage::Entity::from(e)
         })
         .collect();
-    let results = input.test_results.as_ref().map(|r| coverage::TestResults {
-        runner: r.runner.clone(),
-        entities: r
-            .results
-            .iter()
-            .map(|(id, recorded)| {
-                let tests = recorded
-                    .tests
-                    .iter()
-                    .map(|t| coverage::RecordedTest {
-                        name: t.name.clone(),
-                        status: t.status.clone(),
-                        verify: t.verify.clone(),
-                    })
-                    .collect();
-                (id.clone(), tests)
-            })
-            .collect(),
-    });
     let proved: Option<BTreeSet<String>> = input
         .proved_claims
         .as_ref()
@@ -209,7 +190,7 @@ fn pass_coverage(input: &PassInput) -> PassOutput {
 
     let assessment = coverage::assess(
         &entities,
-        results.as_ref(),
+        input.test_results.as_ref(),
         proved.as_ref(),
         grading.as_ref(),
     );

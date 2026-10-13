@@ -364,7 +364,8 @@ a command, an MCP tool, an MCP resource, a compiler pass, a collector, a custom
 validator, a scanner and the migration hook. Each call fails when the export
 traps (a limit of its sandbox included: its time, its fuel or its memory, the
 trap naming which), when the extension does not route it, or when it answers
-output that is not the protocol type the operation owes; the message names the
+output that is not the protocol type the operation owes (a collector's test
+whose status is not `passed`, `failed` or `skipped`, say); the message names the
 operation, the export and the extension (`command cmd__x() of '@acme/x' trapped:
 ...`). What the failure costs is the operation's: a check pass's is the
 compile's error, an analyze pass's a finding of that pass, a scanner's makes
@@ -518,11 +519,13 @@ location (often because the tests didn't build), `--no-run` found no existing
 report, or a report file couldn't be read. Check the runner's output above the
 error and the report path. `specforge stats`, `specforge analyze` and every MCP
 tool that reads coverage report the same code when `specforge-report.json`
-exists but can't be read or parsed, or when a `--test-results` (`test_results`)
-file can't be read or doesn't exist (over MCP: `schema_mismatch`,
-`permission_denied`, `file_not_found` or `internal_error`), rather than scoring
-the project as if no test ran: run `specforge collect` again to rewrite it, or
-fix or remove the file.
+exists but can't be read or parsed (a recorded test's status is `passed`,
+`failed` or `skipped`, and every test has a name: a report in another
+vocabulary, such as one written before 1.4, is not usable), or when a
+`--test-results` (`test_results`) file can't be read or doesn't exist (over MCP:
+`schema_mismatch`, `permission_denied`, `file_not_found` or `internal_error`),
+rather than scoring the project as if no test ran: run `specforge collect` again
+to rewrite it, or fix or remove the file.
 
 Owner: core
 Level: error
@@ -2781,9 +2784,8 @@ Level: warning
 W115: Invalid collector report
 
 A collector reported tests for an entity ID that no spec declares (usually a
-renamed entity or a typo in the test's annotation), or its
-`total`/`passed`/`failed`/`skipped` stats are inconsistent. `specforge collect`
-drops those results; fix the test annotation so it names a declared entity.
+renamed entity or a typo in the test's annotation). `specforge collect` drops
+those results; fix the test annotation so it names a declared entity.
 
 Owner: core
 Level: warning
