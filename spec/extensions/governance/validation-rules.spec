@@ -9,6 +9,30 @@ use "invariants/core"
 use "invariants/validation"
 use "types/diagnostics"
 
+behavior ge_declare_vocabularies "Declare Governance Vocabularies" {
+  features [ge_validation_suite]
+  category validation
+  types    [
+    GovernanceDecision,
+    GovernanceConstraint,
+    GovernanceFailureMode,
+    DecisionStatus,
+    ConstraintPriority,
+    Diagnostic,
+  ]
+  contract """
+    The @specforge/governance extension MUST declare decision status,
+    constraint priority and every failure mode rating (severity,
+    occurrence, detection, before and after mitigation) as enums of their
+    vocabularies. The core refuses another value with E061, naming the
+    closest one; the extension declares no value rule of its own.
+  """
+  ensures {
+    off_vocabulary_e061 "a governance vocabulary field with a value outside its vocabulary produces E061"
+  }
+  verify unit "decision status, constraint priority and every failure mode rating are declared enums of their vocabularies"
+}
+
 behavior validate_rpn_arithmetic "Validate RPN Arithmetic" {
   features   [ge_validation_suite]
   invariants [rpn_arithmetic_integrity]

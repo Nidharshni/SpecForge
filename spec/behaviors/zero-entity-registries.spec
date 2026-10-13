@@ -415,6 +415,7 @@ behavior registry_build_fields "Registry Build Registers Fields" {
     fields_registered "Every kind's declared fields, and its extension's shared fields, are in the build's FieldRegistry for that kind, embedding their descriptor"
     types_parsed      "Each registered field has one of the protocol's field types; a field of any other type is W019 and not registered"
     roles_checked     "A field's proof_role is bound or claim; any other value is W021 and the field has no role"
+    enums_checked     "An enum field declares its values, and a declared default is one of them; otherwise W021, and the field is still registered"
   }
   contract   """
     The registry build MUST register, for every kind a declaration
@@ -429,7 +430,9 @@ behavior registry_build_fields "Registry Build Registers Fields" {
     core knowing any field's name. A field's proof_role (bound or claim)
     MUST reach its entry so the prove pass reads declared roles and no
     field name; any other role value MUST be refused with W021 and the
-    field registered without a role. `verify` is not a field type and the
+    field registered without a role. An enum field MUST declare its values,
+    and a default_value it declares MUST be one of them; otherwise W021, and
+    the field is registered as declared. `verify` is not a field type and the
     entity title is not a field: both are grammar.
     A field's registry entry is built from its descriptor alone and only
     through that build's one constructor: its type, enum values and proof
@@ -445,7 +448,9 @@ behavior registry_build_fields "Registry Build Registers Fields" {
   verify unit "a field's declared descriptor reaches its registry entry whole"
   verify unit "a registry entry is built only from a descriptor whose type the host reads"
   verify unit "a registry entry names its type canonically, whatever spelling was declared"
-  verify contract "Registry Build Registers Fields: field registration holds — declarations_in_load_order, fields_registered, types_parsed, roles_checked"
+  verify unit "an enum field without values, or whose default_value is not one of its values, is W021 and still registered"
+  verify unit "a field declared with a vocabulary registers as an enum of its values, its absent value as its default"
+  verify contract "Registry Build Registers Fields: field registration holds — declarations_in_load_order, fields_registered, types_parsed, roles_checked, enums_checked"
 }
 
 behavior registry_build_edges "Registry Build Registers Edge Types" {

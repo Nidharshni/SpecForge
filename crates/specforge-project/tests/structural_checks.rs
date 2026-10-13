@@ -54,7 +54,7 @@ fn shapes() -> InProcessRuntime {
                 f.field_type(FieldType::Integer);
             });
             k.field("mode", |f| {
-                f.field_type(FieldType::Enum).enum_values(&["fast", "slow"]);
+                f.vocabulary(&Vocabulary::new(&["fast", "slow"]));
             });
             k.field("parts", |f| {
                 f.field_type(FieldType::ReferenceList).target_kind("gadget");

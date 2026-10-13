@@ -292,7 +292,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   variant lists and type unions by `" | "`; expressions by `", "`; verify statements by `"; "`; a
   block's keys by `", "`. An empty value is `""`. Every written field has one, and none is null.
 - **Field type**: how the host reads a field's value, one of eight names an extension declares:
-  `string`, `integer`, `bool`, `enum` (its values are the declaration's `enum_values`), `string_list`,
+  `string`, `integer`, `bool`, `enum` (its values are the declaration's `enum_values`, its absent value its `default_value`: a field
+  vocabulary; an enum without values, or a default outside them, is W021), `string_list`,
   `reference`, `reference_list`, `block` (`specforge_protocol_types::FieldType`). The registry build
   reads a declared type once, into the field's registry entry (`FieldRegistryEntry::new`, the only way
   to make one); every output names it by that one name — the schema and exports, the published JSON
@@ -300,6 +301,14 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   are read, never written; any other name is W019. What a field's type takes, how a written value is
   stored as it, the JSON every output writes for it and that JSON's schema are its field form
   (ADR 0064).
+- **Field vocabulary**: the closed set of values an enum field takes, in their order, and the value an absent one
+  counts as (its declared `default_value`), declared once by the extension that declares the field, as a `const`
+  (`specforge_extension_sdk::Vocabulary`, through `FieldBuilder::vocabulary`, the only way to declare an enum).
+  The host reads it from the field's declaration: a written value outside it is E061, the editor completes it, the
+  schema and the published JSON Schema list it, the guide and the hover show it and its default; the host never
+  writes the default into the graph. The extension's own readers (a list filter and its help, a sort, a lifecycle
+  pass, a rollup, a conditional rule's value) read the same constant. An open set of standard values (a module's
+  family) is not one: its field is a string, and an info rule names the standard values (`{allowed}`) (ADR 0071).
 - **Field form**: a field's declared type with an enum's values, read once
   (`specforge_graph::FieldForm`, from `FieldRegistryEntry::form`): which
   stored values the field takes (E061 reads it), how the graph build stores a
@@ -459,7 +468,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   render it.
 - **Inference guide**: what an agent is told to look for to infer a kind's entities from code
   (`specforge_ops::infer::KindGuide`): the kind's description and extension, every field the registry build
-  registered on it, the extension's `inference_guide` followed by the project's own guide for the kind
+  registered on it (with, for an enum, its values and its default), the extension's `inference_guide` followed by the project's own guide for the kind
   (`inference.<kind>` in `specforge.json`, under **Project-specific:**), an example entity writing each field
   the way its type is written, and the kind's entities. A project's guide is every declared kind's, its
   global conventions (`inference.global`) and its spec directory. The infer prompt, `specforge infer-guide`

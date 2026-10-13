@@ -2,6 +2,6 @@
 
 channel cli "Command-line interface" {
   description       "A terminal CLI for managing tasks."
-  interaction_model sync
+  interaction_model request_response
   status            active
 }

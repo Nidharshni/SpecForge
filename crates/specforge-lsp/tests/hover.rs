@@ -17,7 +17,7 @@ use tower_lsp::lsp_types::Position;
 
 use crate::registries::{kind, obligating, registries};
 use crate::served::Served;
-use specforge_extension_sdk::prelude::{ContributionsBuilder, FieldType};
+use specforge_extension_sdk::prelude::{ContributionsBuilder, FieldType, Vocabulary};
 
 /// A graph node for the tests of the renderer, which hand it facts.
 fn node(id: &str, kind: &str, title: Option<&str>) -> Node {
@@ -234,7 +234,7 @@ fn hover_shows_field_values() {
     .extension("@t/fields", |c| {
         c.kind("behavior", |k| {
             k.field("status", |f| {
-                f.field_type(FieldType::Enum).enum_values(&["draft", "final"]);
+                f.vocabulary(&Vocabulary::new(&["draft", "final"]));
             });
             references(k, "invariants");
             k.field("contract", |f| {
@@ -609,6 +609,34 @@ fn field_hover_unknown_kind_returns_none() {
 
 #[spec(
     behavior = "hover_information",
+    verify = "field help says what an absent value counts as"
+)]
+fn field_hover_says_what_an_absent_value_counts_as() {
+    let declaration = crate::registries::declaration("@t/x", |c| {
+        c.kind("ticket", |k| {
+            k.field("status", |f| {
+                f.vocabulary(&Vocabulary::new(&["draft", "final"]).absent_as("draft"))
+                    .description("Where it stands");
+            });
+            k.field("owner", |f| {
+                f.field_type(FieldType::String).description("Who has it");
+            });
+        });
+    });
+    let build = crate::registries::registries_of(vec![declaration]);
+    let reg = build.fields();
+
+    let status = specforge_lsp::hover_field_info("status", "ticket", reg).unwrap();
+    assert!(
+        status.contains("Where it stands  \nAbsent, it counts as `draft`."),
+        "{status}"
+    );
+    let owner = specforge_lsp::hover_field_info("owner", "ticket", reg).unwrap();
+    assert!(!owner.contains("Absent"), "{owner}");
+}
+
+#[spec(
+    behavior = "hover_information",
     verify = "field help names a field's type as E061 does, an enum's declared values included"
 )]
 fn field_hover_names_a_type_as_e061_does() {
@@ -618,7 +646,7 @@ fn field_hover_names_a_type_as_e061_does() {
                 f.field_type(FieldType::Bool);
             });
             k.field("priority", |f| {
-                f.field_type(FieldType::Enum).enum_values(&["low", "high"]);
+                f.vocabulary(&Vocabulary::new(&["low", "high"]));
             });
         });
     });

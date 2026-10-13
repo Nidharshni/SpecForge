@@ -290,6 +290,7 @@ behavior hover_information "Hover Information" {
   verify unit "hover returns markdown-formatted content"
   verify unit "field help answers only on a field's name"
   verify unit "field help names a field's type as E061 does, an enum's declared values included"
+  verify unit "field help says what an absent value counts as"
   verify contract "Hover Information: hover information holds — graph_available, kind_registry_available, hover_delegated, markdown_produced"
 }
 

@@ -17,8 +17,7 @@ fn tickets() -> ExtensionDeclaration {
         c.kind("Ticket", |k| {
             k.keyword("ticket");
             k.field("priority", |f| {
-                f.field_type(FieldType::Enum)
-                    .enum_values(&["low", "medium", "high"]);
+                f.vocabulary(&Vocabulary::new(&["low", "medium", "high"]));
             });
             k.field("urgent", |f| {
                 f.field_type(FieldType::Bool);

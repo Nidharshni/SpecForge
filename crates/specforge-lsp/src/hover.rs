@@ -317,6 +317,9 @@ pub fn hover_field_info(
     if let Some(ref desc) = entry.declared().description {
         parts.push(desc.clone());
     }
+    if let Some(ref default) = entry.declared().default_value {
+        parts.push(format!("Absent, it counts as `{default}`."));
+    }
 
     // Edge and required on same line
     match (&entry.declared().edge, entry.declared().required) {
