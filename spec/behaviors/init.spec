@@ -203,19 +203,22 @@ behavior non_interactive_init "Non-Interactive Init" {
     When --version is specified, it MUST override the default version
     (0.1.0) in the generated specforge.json.
     --extensions takes builtins and local .wasm files, several to a flag
-    separated by commas: init enables, before each extension it enables or
+    separated by commas, each read as add reads a specifier
+    (parse_extension_specifier: E054, R-RES-003, E040, the same messages
+    and suggestions): init enables, before each extension it enables or
     installs, the builtins that extension requires (its non-optional peers
-    that are builtins, and theirs), as add does, and judges the project's
-    peer set through the lock plan add uses (ADR 0004 D3-e, ADR 0041), its
-    local files installed as one change without reading them again, so it
-    never writes an entry specforge check cannot load or a project whose
-    check reports an E027 for an extension it enabled; the set is judged
-    before any file is written. Any other extension (a registry package,
-    which needs a registry a new project has not configured yet) MUST be
-    rejected with a diagnostic naming it and exit code 1. A project name
-    whose starter spec ID would break the identifier contract (2-60
-    characters) MUST be rejected the same way. Everything is validated
-    before any file is written.
+    that are builtins, and theirs), as add does. Init is one lock-plan
+    change (ADR 0041): the project's peer set is judged once, before any
+    file is written, so it never writes an entry specforge check cannot
+    load or a project whose check reports an E027 for an extension it
+    enabled; then its modules, specforge.lock, specforge.json, .gitignore
+    and starter are written as one change, put back together on failure.
+    A registry package MUST be rejected with E063 (a new project has no
+    registry configured; the suggestion names the specforge add to run
+    once one is), a git source with E064, both with exit code 1 and before
+    anything is written. A project name whose starter spec ID would break
+    the identifier contract (2-60 characters) MUST be rejected the same
+    way. Everything is validated before any file is written.
   """
   verify unit "non-interactive init creates valid specforge.json"
   verify unit "non-interactive init skips all prompts"

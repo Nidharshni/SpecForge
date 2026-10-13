@@ -18,7 +18,7 @@
 //! 0059). A refused or failed plan writes and pins nothing. Refusals and outcomes are answered per
 //! ask.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::view::ProjectView;
 use specforge_common::{Diagnostic, codes};
@@ -262,15 +262,15 @@ impl Staged<'_> {
 
 /// An entry the change appends to `specforge.json`'s `extensions`.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct Appended {
-    pub(crate) name: String,
+struct Appended {
+    name: String,
     /// The ask it is charged to: the one that asked for it, or, for a builtin the plan enabled
     /// because an extension requires it, the ask of that extension.
     ask: Ask,
     /// For a builtin the plan enabled because an extension the change asked for requires it, that
     /// extension (the root of the chain: `formal` for `software` and for `product` under it);
     /// `None` for an entry asked for.
-    pub(crate) required_by: Option<String>,
+    required_by: Option<String>,
 }
 
 /// The lock and the `extensions` entries as the operation leaves them, staged in memory.
@@ -293,6 +293,11 @@ pub(crate) struct LockPlan<'a> {
     purpose: Purpose,
     /// A removal is not judged (`remove --force`).
     force: bool,
+    /// Whether the change edits an existing `specforge.json`; `init` writes its own.
+    edits_config: bool,
+    /// `(trigger, companion)`: the companion is enabled whenever the change leaves the trigger
+    /// enabled.
+    companions: Vec<(&'static str, &'static str)>,
     /// The entries a removal drops, and the packages it uninstalls, each for its ask.
     disabled: Vec<(Ask, Disabled)>,
     uninstalled: Vec<(Ask, PackageName)>,
@@ -349,24 +354,26 @@ impl<'a> LockPlan<'a> {
         )
     }
 
-    /// `init`'s plan: it installs local files only (no registry); `installs` as in
-    /// [`Self::adding`].
+    /// `init`'s plan: a project with no `specforge.json` yet, whose config the caller's [`Also`]
+    /// writes from [`Checked::entries`]. It installs local files only (no registry); `installs` as
+    /// in [`Self::adding`].
     pub(crate) fn initializing(
         installed: &'a Installed,
-        entries: &[String],
         runtime: &'a dyn WasmRuntime,
         installs: bool,
     ) -> Result<LockPlan<'a>, OpError> {
-        LockPlan::open(
+        let mut plan = LockPlan::open(
             installed,
-            entries,
+            &[],
             Some(runtime),
             Declarations::through(runtime),
             Verb::Install,
             None,
             "init",
             installs,
-        )
+        )?;
+        plan.edits_config = false;
+        Ok(plan)
     }
 
     /// `remove`'s plan over the compiled project `view`: its lock as the compile read it, its
@@ -432,6 +439,8 @@ impl<'a> LockPlan<'a> {
             verb,
             purpose: Purpose::Commit,
             force: false,
+            edits_config: true,
+            companions: Vec::new(),
             disabled: Vec::new(),
             uninstalled: Vec::new(),
             fetching,
@@ -566,9 +575,11 @@ impl<'a> LockPlan<'a> {
         }
     }
 
-    /// The entries the change appends, in order: dependencies first once [`Self::close`] ran.
-    pub(crate) fn appended(&self) -> &[Appended] {
-        &self.appended
+    /// Enable `companion` whenever the change leaves `trigger` enabled (`init`: `@specforge/testing`
+    /// beside `@specforge/software`, a test runner's extension beside `@specforge/testing`).
+    /// Charged to the ask that enabled `trigger`.
+    pub(crate) fn accompany(&mut self, trigger: &'static str, companion: &'static str) {
+        self.companions.push((trigger, companion));
     }
 
     /// The project's installed extensions as the change leaves them.
@@ -604,7 +615,7 @@ impl<'a> LockPlan<'a> {
     ///
     /// A cycle among required builtins ends it too: its builtins are enabled once, and the cycle's
     /// E027 stays the compile's (ADR 0041 D4).
-    pub(crate) fn close(&mut self) -> Result<(), OpError> {
+    fn close(&mut self) -> Result<(), OpError> {
         if !self.verb.enables() {
             return Ok(());
         }
@@ -627,6 +638,9 @@ impl<'a> LockPlan<'a> {
                 }
             }
             if wanted.is_empty() {
+                if self.accompany_enabled() {
+                    continue;
+                }
                 self.dependencies_first(&set);
                 return Ok(());
             }
@@ -658,6 +672,41 @@ impl<'a> LockPlan<'a> {
                 });
             }
         }
+    }
+
+    /// Append each companion whose trigger the change leaves enabled and that no entry enables:
+    /// whether it appended any.
+    fn accompany_enabled(&mut self) -> bool {
+        let mut added = false;
+        for (trigger, companion) in self.companions.clone() {
+            let after = self.entries_after();
+            let enabled = |name: &str| {
+                after
+                    .iter()
+                    .any(|entry| specforge_common::extension_entry_name(entry) == name)
+            };
+            if enabled(trigger) && !enabled(companion) {
+                let ask = self
+                    .appended
+                    .iter()
+                    .find(|appended| appended.name == trigger)
+                    .map(|appended| appended.ask)
+                    .or_else(|| {
+                        self.staged
+                            .iter()
+                            .find(|staged| staged.name.as_str() == trigger)
+                            .map(|staged| staged.ask)
+                    })
+                    .unwrap_or(Ask(0));
+                self.appended.push(Appended {
+                    name: companion.to_string(),
+                    ask,
+                    required_by: None,
+                });
+                added = true;
+            }
+        }
+        added
     }
 
     /// The appended entries, each after the appended builtins it requires (its non-optional
@@ -769,6 +818,7 @@ impl<'a> LockPlan<'a> {
             purpose,
             disabled,
             uninstalled,
+            edits_config,
             ..
         } = self;
         for (i, s) in staged.iter().enumerate() {
@@ -796,6 +846,7 @@ impl<'a> LockPlan<'a> {
             uninstalls: uninstalled.into_iter().map(|(_, name)| name).collect(),
             disabled: disabled.into_iter().map(|(_, disabled)| disabled).collect(),
             purpose,
+            edits_config,
             pins: fetching.map(|fetching| (fetching.registry, pins)),
             entries,
             appended,
@@ -909,6 +960,7 @@ pub(crate) struct Checked<'a> {
     /// The `specforge.json` entries to drop.
     disabled: Vec<Disabled>,
     purpose: Purpose,
+    edits_config: bool,
     /// The pins its registry installs call for, and the registry port that pins them; none for a
     /// plan that fetches nothing.
     pins: Option<(&'a dyn Registry, Vec<KeyPin>)>,
@@ -916,6 +968,14 @@ pub(crate) struct Checked<'a> {
     entries: Vec<String>,
     appended: Vec<Appended>,
     wanted: Vec<(Ask, String)>,
+}
+
+/// A file the change's last step writes after `specforge.json`'s edit and before the pins (`init`'s
+/// config, `.gitignore` and starter). Put back, or removed when it was not there, when the change
+/// fails.
+pub(crate) struct Also<'f> {
+    pub(crate) path: PathBuf,
+    pub(crate) write: Box<dyn FnOnce() -> Result<(), OpError> + 'f>,
 }
 
 /// What a finished plan did, or for a preview would do.
@@ -978,7 +1038,7 @@ impl Checked<'_> {
     /// module writes no lock. A failure at any step, the pins' included (R-TRUST-006), puts every
     /// file back and pins nothing. The error's writes name what could not be put back (normally
     /// nothing).
-    pub(crate) fn finish(self, root: &Path) -> Result<Done, OpError> {
+    pub(crate) fn finish(self, root: &Path, also: Vec<Also<'_>>) -> Result<Done, OpError> {
         let final_entries = self.entries();
         let Checked {
             installed,
@@ -987,6 +1047,7 @@ impl Checked<'_> {
             uninstalls,
             disabled,
             purpose,
+            edits_config,
             pins,
             appended,
             wanted,
@@ -996,12 +1057,14 @@ impl Checked<'_> {
             .iter()
             .map(|appended| appended.name.as_str())
             .collect();
+        let edited_config = edits_config && (!names.is_empty() || !disabled.is_empty());
+        let also_paths: Vec<PathBuf> = also.iter().map(|also| also.path.clone()).collect();
         let mut enabled = None;
         let mut writes = Writes::none();
         if purpose == Purpose::Commit {
             let config_path = root.join(crate::config::CONFIG_FILE);
             let last = || -> Result<(), OpError> {
-                if !names.is_empty() {
+                if edits_config && !names.is_empty() {
                     enabled = Some(crate::config::enable(root, &names)?);
                 }
                 for dropped in &disabled {
@@ -1009,6 +1072,9 @@ impl Checked<'_> {
                         Disabled::Named(name) => crate::config::remove_extension(root, name),
                         Disabled::Entry(entry) => crate::config::remove_entry(root, entry),
                     })?;
+                }
+                for file in also {
+                    (file.write)()?;
                 }
                 record(pins)
             };
@@ -1026,13 +1092,19 @@ impl Checked<'_> {
                 change.uninstall(name);
             }
             let committed = change
-                .files((!names.is_empty() || !disabled.is_empty()).then(|| config_path.clone()))
+                .files(
+                    edited_config
+                        .then(|| config_path.clone())
+                        .into_iter()
+                        .chain(also_paths),
+                )
                 .commit_with(last, |why| OpError::of(OpErrorKind::Internal, why))
                 .map_err(|failed| failed.error.with_writes(Writes::of(failed.left)))?;
             writes = Writes::of(committed.changed);
         }
 
         let written = |name: &str| match purpose {
+            Purpose::Commit if !edits_config => names.contains(&name),
             Purpose::Commit => enabled
                 .as_ref()
                 .is_some_and(|enabled| enabled.appended.iter().any(|a| a == name)),
@@ -1373,29 +1445,6 @@ fn shown_path(root: &Path, path: &Path) -> String {
         .unwrap_or(&path)
         .display()
         .to_string()
-}
-
-/// Install `locals`, read once by `init`'s plan, into the project at `root` whose `specforge.json`
-/// enables `entries`, as one change, judged again (only a `Checked` finishes). No writes when
-/// `locals` is empty.
-pub(crate) fn install_local(
-    root: &Path,
-    entries: &[String],
-    locals: Vec<LocalFile>,
-    runtime: &dyn WasmRuntime,
-) -> Result<Writes, OpError> {
-    if locals.is_empty() {
-        return Ok(Writes::none());
-    }
-    let installed = Installed::at(root);
-    let mut plan = LockPlan::initializing(&installed, entries, runtime, true)?;
-    for (at, local) in locals.into_iter().enumerate() {
-        plan.install(Ask(at), Install::local(root, local)?);
-    }
-    plan.check()
-        .map_err(|refused| refused.decisive().1)?
-        .finish(root)
-        .map(|done| done.writes)
 }
 
 #[cfg(test)]
@@ -2042,7 +2091,7 @@ mod tests {
 
         // Committed: pinned.
         let checked = stage_app(&registry, &runtime, &installed).check().unwrap();
-        checked.finish(dir.path()).unwrap();
+        checked.finish(dir.path(), Vec::new()).unwrap();
         assert_eq!(registry.pins(), [(app(), "k1".to_string())].into());
     }
 
@@ -2058,7 +2107,7 @@ mod tests {
         stage_app(&registry, &runtime, &installed)
             .check()
             .unwrap()
-            .finish(dir.path())
+            .finish(dir.path(), Vec::new())
             .unwrap();
 
         let lock = specforge_installed::read_lock_file(&specforge_installed::lock_path(dir.path()))
@@ -2095,7 +2144,7 @@ mod tests {
         let error = stage_app(&registry, &runtime, &installed)
             .check()
             .unwrap()
-            .finish(dir.path())
+            .finish(dir.path(), Vec::new())
             .unwrap_err();
 
         assert!(error.is(codes::R_TRUST_006), "{error:?}");
@@ -2116,7 +2165,7 @@ mod tests {
         stage_app(&registry, &runtime, &installed)
             .check()
             .unwrap()
-            .finish(dir.path())
+            .finish(dir.path(), Vec::new())
             .unwrap();
         assert_eq!(registry.pins(), [(app(), "k1".to_string())].into());
 
@@ -2127,7 +2176,7 @@ mod tests {
         stage_app(&registry, &runtime, &installed)
             .check()
             .unwrap()
-            .finish(dir.path())
+            .finish(dir.path(), Vec::new())
             .unwrap();
         assert!(registry.pins().is_empty());
     }
@@ -2451,7 +2500,7 @@ mod tests {
         plan.close().unwrap();
 
         let appended: Vec<(&str, Option<&str>)> = plan
-            .appended()
+            .appended
             .iter()
             .map(|a| (a.name.as_str(), a.required_by.as_deref()))
             .collect();
@@ -2465,7 +2514,7 @@ mod tests {
             "the optional product is not enabled"
         );
         plan.close().unwrap();
-        assert_eq!(plan.appended().len(), 3, "idempotent");
+        assert_eq!(plan.appended.len(), 3, "idempotent");
 
         // Asked in the wrong order, a builtin still comes after the builtin it requires.
         let mut plan = LockPlan::adding(
@@ -2480,7 +2529,7 @@ mod tests {
         plan.enable(Ask(0), "@specforge/formal");
         plan.enable(Ask(0), "@specforge/software");
         plan.close().unwrap();
-        let names: Vec<&str> = plan.appended().iter().map(|a| a.name.as_str()).collect();
+        let names: Vec<&str> = plan.appended.iter().map(|a| a.name.as_str()).collect();
         assert_eq!(names, ["@specforge/software", "@specforge/formal"]);
     }
 
@@ -2537,7 +2586,11 @@ mod tests {
             for (at, name) in asked.iter().enumerate() {
                 plan.enable(Ask(at), name);
             }
-            plan.check().ok().unwrap().finish(dir.path()).unwrap()
+            plan.check()
+                .ok()
+                .unwrap()
+                .finish(dir.path(), Vec::new())
+                .unwrap()
         };
 
         // software first: formal's requirement is already met by the earlier ask.

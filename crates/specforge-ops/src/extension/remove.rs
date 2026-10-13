@@ -269,7 +269,7 @@ fn change(
     let done = plan
         .check()
         .map_err(|refused| refused.decisive().1)?
-        .finish(req.root)?;
+        .finish(req.root, Vec::new())?;
     Ok(done.writes)
 }
 

@@ -384,7 +384,7 @@ pub fn update(
     if let Some(checked) =
         checked.filter(|_| outcome.applied() && outcome.updated().next().is_some())
     {
-        checked.finish(req.root.dir())?;
+        checked.finish(req.root.dir(), Vec::new())?;
     }
     Ok(outcome)
 }

@@ -132,7 +132,7 @@ impl std::fmt::Display for Source {
 
 impl Source {
     /// Whether adding it installs a module under `.specforge/extensions/` and locks it.
-    fn installs(&self) -> bool {
+    pub(crate) fn installs(&self) -> bool {
         matches!(self, Source::Local(_) | Source::Registry(_))
     }
 }
@@ -158,6 +158,15 @@ pub fn specified<S: AsRef<str>>(specifiers: &[S]) -> Result<Vec<Specified>, OpEr
         .collect()
 }
 
+/// E064: a git source is not installable yet.
+pub(crate) fn git_not_supported(url: &str) -> OpError {
+    OpError::coded(
+        crate::OpErrorKind::InvalidInput,
+        codes::E064,
+        format!("git source '{url}' not yet supported"),
+    )
+}
+
 /// E054: an add with nothing to add.
 fn no_specifier() -> OpError {
     OpError::coded(
@@ -169,7 +178,7 @@ fn no_specifier() -> OpError {
 }
 
 /// `error`, naming the specifier it refuses when the add has several.
-fn named(several: bool, specifier: &str, error: OpError) -> OpError {
+pub(crate) fn named(several: bool, specifier: &str, error: OpError) -> OpError {
     if several {
         error.prefixed(format!("adding '{specifier}': "))
     } else {
@@ -584,11 +593,7 @@ impl<'a> Resolver<'_, 'a> {
                 self.local(wanted, Install::local(self.req.root.dir(), local)?)
             }
             Source::Registry(package) => self.package(before, wanted, package),
-            Source::Git { url } => Err(Resolved::Refused(OpError::coded(
-                crate::OpErrorKind::InvalidInput,
-                codes::E064,
-                format!("git source '{url}' not yet supported"),
-            ))),
+            Source::Git { url } => Err(Resolved::Refused(git_not_supported(url))),
         }
     }
 
@@ -830,7 +835,7 @@ fn apply<'a>(
             let (Ask(at), error) = refused.decisive();
             named(several, specifier(at), error)
         })?
-        .finish(req.root.dir())?;
+        .finish(req.root.dir(), Vec::new())?;
     for (at, wanted) in asked {
         outcomes[at] = Some(wanted.outcome(done.asked(Ask(at)), req.dry_run));
     }
@@ -1569,7 +1574,7 @@ mod tests {
         // init refuses the same way, before it writes anything.
         let target = tempfile::tempdir().unwrap();
         let extensions = vec!["@specforge/formal".to_string()];
-        let error = crate::init::plan(
+        let error = crate::init::init(
             &crate::init::Request {
                 dir: &target.path().join("demo"),
                 name: Some("demo"),

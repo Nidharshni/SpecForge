@@ -18,6 +18,7 @@ pub use add::{
     DuplicateSpecifier, EnabledBuiltin, InstalledPackage, PlannedAdd, PresentExtension, Source,
     Specified, Trust, add, parse, specified,
 };
+pub(crate) use add::{git_not_supported, named};
 pub use candidate::{Candidate, Installable, LocalFile, binary_at};
 pub use inventory::{Inventory, ProjectExtension, Selection, Status, inventory};
 pub use list::{
@@ -33,7 +34,7 @@ pub use update::{
     UpdateOutcome, UpdateRequest, UpdateRow, UpdateStatus, UpgradeCompleted, update,
 };
 
-pub(crate) use lock_plan::{Appended, Ask, Install, LockPlan, install_local};
+pub(crate) use lock_plan::{Also, Ask, Install, LockPlan};
 
 use specforge_installed::LockSource;
 

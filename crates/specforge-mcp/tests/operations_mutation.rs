@@ -954,7 +954,9 @@ fn init_rejects_an_unknown_extension() {
                "extensions": ["@specforge/software", "@specforge/nonexistent"]}),
     );
 
-    assert_eq!(error["code"], "extension_not_found", "{error}");
+    // A new project has no registry: refused as `add` refuses a registry package with none
+    // configured (E063), naming the specifier.
+    assert_eq!(error["code"], "precondition_failed", "{error}");
     assert!(
         error["message"]
             .as_str()
@@ -962,7 +964,8 @@ fn init_rejects_an_unknown_extension() {
             .contains("@specforge/nonexistent"),
         "{error}"
     );
-    assert!(error["data"]["suggestion"].is_string(), "{error}");
+    assert_eq!(error["diagnostic"]["code"], "E063", "{error}");
+    assert!(error["diagnostic"]["suggestion"].is_string(), "{error}");
     assert!(
         !dir.path().join("specforge.json").exists(),
         "nothing is written"
@@ -1044,7 +1047,7 @@ fn init_contract() {
         json!({"path": other.path().to_str().unwrap(), "name": "other",
                "extensions": ["@specforge/nonexistent"]}),
     );
-    assert_eq!(error["code"], "extension_not_found", "{error}");
+    assert_eq!(error["code"], "precondition_failed", "{error}");
     assert!(!other.path().join("specforge.json").exists());
 
     // project_initialized_emitted (once: only for the created project),
