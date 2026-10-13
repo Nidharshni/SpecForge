@@ -20,7 +20,9 @@ invariant mcp_structured_error_responses "MCP Structured Error Responses" {
     An operation's failure kind decides the McpError code. An operation
     states the kind where it raises the failure; no table maps a code to a
     kind, and a package the registry or its trust check refuses is never
-    internal_error.
+    internal_error. An operation states which field of its request a
+    refusal is about; a refusal of the project or the environment is about
+    none.
   """
   risk      medium
   verify unit "error response includes error code and message fields"

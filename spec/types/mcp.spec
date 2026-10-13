@@ -46,7 +46,10 @@ type McpError "MCP Structured Error Response" {
   prompt     string     @optional
   /// The URI of the resource whose read failed (the URI read).
   uri        string     @optional
-  /// The argument the tool could not use, for invalid_input.
+  /// The argument (a resource read: the query key) the refusal is about: the
+  /// one whose value it rejects, names something that is not there, or
+  /// conflicts with what is there; none for a refusal of the project or the
+  /// environment.
   argument   string     @optional
   /// The diagnostic behind the failure: its code (E003, E059, ...) is
   /// diagnostic.code, never only text in the message.
