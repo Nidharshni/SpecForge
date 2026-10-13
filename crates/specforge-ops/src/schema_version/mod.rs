@@ -10,6 +10,7 @@
 
 mod diff;
 
+use std::fmt;
 use std::io;
 use std::path::{Path, PathBuf};
 
@@ -17,7 +18,6 @@ use serde::{Deserialize, Serialize};
 use specforge_common::{Diagnostic, codes};
 use specforge_emitter::{GraphProtocolSchema, SchemaVersion, content_hash};
 
-pub(crate) use diff::negotiate_version;
 pub use diff::{AttributeChange, Bump, Members, Scalar, SchemaChange};
 
 const CACHE_FILE: &str = "schema-cache.json";
@@ -139,6 +139,36 @@ pub struct VersionedSchema {
     since: Since,
 }
 
+/// A requested schema version whose readers do not read this schema: another
+/// major, or a newer version.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NotAdmitted {
+    pub requested: SchemaVersion,
+    pub current: SchemaVersion,
+}
+
+impl NotAdmitted {
+    /// The refusal's code: `incompatible_schema_version` (an operation code,
+    /// not a catalogued diagnostic).
+    pub const CODE: &'static str = "incompatible_schema_version";
+}
+
+impl fmt::Display for NotAdmitted {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let NotAdmitted { requested, current } = self;
+        let why = if requested.major != current.major {
+            format!("has another major version: this project's schema is {current}")
+        } else {
+            format!("is newer than this project's schema {current}")
+        };
+        write!(
+            f,
+            "requested schema version {requested} {why}, which readers of {}.0.0 to {current} read",
+            current.major
+        )
+    }
+}
+
 /// What the versioning was against.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Since {
@@ -214,6 +244,21 @@ impl VersionedSchema {
         match &self.since {
             Since::NoRecord | Since::Unreadable { .. } => &[],
             Since::Recorded { changes, .. } => changes,
+        }
+    }
+
+    /// Whether a reader of `requested` reads this schema's documents: the
+    /// same major version, and not newer (`requested <= version`, pre-release
+    /// labels ordered as [`SchemaVersion`]'s `Ord`).
+    pub fn admits(&self, requested: &SchemaVersion) -> Result<(), NotAdmitted> {
+        let current = self.version();
+        if requested.major == current.major && requested <= current {
+            Ok(())
+        } else {
+            Err(NotAdmitted {
+                requested: requested.clone(),
+                current: current.clone(),
+            })
         }
     }
 

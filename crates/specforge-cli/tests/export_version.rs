@@ -45,7 +45,7 @@ fn schema_version_within_same_major_is_accepted() {
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(
         stdout.contains("\"schema_version\":\"1.0.0\""),
-        "label applied (compact)"
+        "the project's own version (compact)"
     );
 }
 
@@ -71,7 +71,11 @@ fn schema_version_other_major_is_rejected_with_range() {
         "names the rejected version: {stderr}"
     );
     assert!(
-        stderr.contains("incompatible major"),
+        stderr.starts_with("error[incompatible_schema_version]"),
+        "{stderr}"
+    );
+    assert!(
+        stderr.contains("another major version"),
         "explains the failure: {stderr}"
     );
 }
@@ -80,7 +84,6 @@ fn schema_version_other_major_is_rejected_with_range() {
     behavior = "negotiate_schema_version",
     verify = "a requested version of another major, or a newer one, is refused as incompatible_schema_version naming the readable range"
 )]
-#[ignore = "fixed by T4"]
 fn a_refused_schema_version_is_not_a_peer_error() {
     let tmp = TempDir::new().unwrap();
     seed(tmp.path());

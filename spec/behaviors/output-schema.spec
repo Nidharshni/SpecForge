@@ -292,7 +292,7 @@ behavior negotiate_schema_version "Negotiate Schema Version" {
     zero_domain_knowledge_core,
   ]
   category   command
-  types      [SchemaVersion, SchemaCompatibility, GraphProtocolSchema, ExportResult]
+  types      [SchemaVersion, SchemaCompatibility, GraphProtocolSchema, ExportResult, VersionedSchema]
   ports      [CompilerApi]
   consumes   [validation_complete, schema_breaking_change_detected]
   produces   [schema_version_negotiated]
@@ -301,29 +301,29 @@ behavior negotiate_schema_version "Negotiate Schema Version" {
     schema_breaking_change_detected_fired "schema_breaking_change_detected event has fired, confirming breaking change classification is complete"
   }
   ensures {
-    compatible_version_resolved       "Requested version within supported range is resolved to nearest compatible version"
-    incompatible_version_rejected     "Incompatible version request produces E027 diagnostic with supported range"
-    default_to_latest                 "When no version is requested, the latest supported version is used"
+    compatible_version_resolved       "A requested version whose readers read the current schema (the same major version, not newer) is admitted, and the export carries the current schema at its own version"
+    incompatible_version_rejected     "A requested version of another major, or newer than the current schema, is refused as incompatible_schema_version naming the range of versions whose readers read the current schema"
+    default_to_latest                 "When no version is requested, the export carries the current schema version"
     schema_version_negotiated_emitted "schema_version_negotiated event is emitted after negotiation completes"
   }
   contract   """
-    When an agent requests a specific Graph Protocol schema version, the
-    system MUST check the requested version against the supported compatibility
-    range (supported_min to supported_max). If compatible, the system MUST
-    resolve the nearest compatible version and use it for the export. If
-    incompatible, the system MUST emit an E027 diagnostic with the supported
-    range and reject the request. The default behavior when no version is
-    requested MUST use the latest supported version. Consumers MAY request
-    a specific schema version via the --schema-version CLI flag or the
-    schema_version query parameter in MCP resource URIs.
+    A consumer MAY name the schema version it reads, with --schema-version
+    on specforge export or schema_version on the specforge.export tool. The
+    system MUST admit it when a reader of that version reads the current
+    schema's documents: the same major version and not newer than the
+    current version. An admitted request changes nothing in the export: it
+    carries the current schema at its own version, never relabelled, so a
+    schema version names one document. A request of another major version
+    or a newer one MUST be refused as incompatible_schema_version, naming
+    the current version and the readable range (MAJOR.0.0 to the current
+    version); a version that does not parse is invalid_schema_version. The
+    request is checked whatever the format, including formats that carry no
+    schema.
   """
-  verify unit "compatible version within range is resolved"
-  verify unit "incompatible version produces E027 with supported range"
-  verify unit "no version requested defaults to latest"
-  verify unit "--schema-version CLI flag selects requested version"
-  verify unit "schema_version MCP query parameter selects requested version"
   verify unit "a requested version of the same major, not newer, is admitted and the export carries the current version"
   verify unit "a requested version of another major, or a newer one, is refused as incompatible_schema_version naming the readable range"
+  verify unit "no version requested defaults to latest"
+  verify unit "--schema-version and the export tool's schema_version are checked whatever the format"
   verify contract "Negotiate Schema Version: schema version negotiation holds — validation_complete_fired, schema_breaking_change_detected_fired, compatible_version_resolved, incompatible_version_rejected, default_to_latest, schema_version_negotiated_emitted"
 }
 

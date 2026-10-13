@@ -833,21 +833,19 @@ decision graph_protocol_version_management "Graph Protocol Version Management" {
     managed, error-prone, and inconsistent.
   """
   decision     """
-    Schema version is derived automatically from registry state.
-    Major = incremented when detect_breaking_schema_changes finds breaking
-    changes compared to the previous schema cache. Minor = incremented when
-    new entity kinds or edge types are added. Patch = incremented for
-    non-structural changes (field metadata updates). supported_min and
-    supported_max are configuration values in specforge.json (defaulting to
-    current major range). First compilation without cache = version 1.0.0.
-    Version is deterministic from graph content, not manually managed.
+    Schema version is derived automatically from registry state, against
+    the schema the last export recorded. Major = something a reader of the
+    recorded schema relies on was removed or reshaped; minor = something
+    was added; patch = documentation or provenance changed (ADR 0067).
+    First export without a cache = version 1.0.0. A requested version is
+    admitted when its readers read the current schema (same major, not
+    newer); there is no configured supported range.
   """
   consequences [
-    "Schema version is deterministic — same registry state always produces same version",
-    "No manual version bumping required — version derives from graph content",
-    "Breaking change detection drives major version increments automatically",
-    "supported_min and supported_max are user-configurable in specforge.json",
-    "First compilation always starts at 1.0.0",
+    "Schema version is deterministic — the same registry state against the same record always produces the same version",
+    "No manual version bumping required",
+    "Every attribute of the schema is compared, so one version names one document",
+    "First export always starts at 1.0.0",
   ]
   invariants   [schema_version_backward_compatibility]
 }

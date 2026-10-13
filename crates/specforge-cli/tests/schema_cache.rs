@@ -181,12 +181,16 @@ fn every_export_format_updates_the_cache() {
 
 #[test]
 fn schema_version_negotiation_does_not_change_the_cached_schema() {
-    // --schema-version relabels the embedded schema; the cache keeps the
-    // schema the extensions produce.
+    // --schema-version admits a reader's version and relabels nothing: the
+    // embedded schema is the one the cache keeps.
     let dir = software_project();
     let output = export(&dir, &["--schema-version", "1.0.0"]);
     assert!(output.status.success());
     assert_eq!(read_cache(&dir)["schema"], generated_schema(&dir));
+    assert_eq!(
+        exported_version(&output),
+        read_cache(&dir)["schema"]["schema_version"]
+    );
 }
 
 #[test]
@@ -723,7 +727,6 @@ fn an_extension_version_change_bumps_the_patch_version() {
     behavior = "negotiate_schema_version",
     verify = "a requested version of the same major, not newer, is admitted and the export carries the current version"
 )]
-#[ignore = "fixed by T4"]
 fn a_requested_version_does_not_relabel_the_export() {
     let dir = software_project();
     export_ok(&dir);

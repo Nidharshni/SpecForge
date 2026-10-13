@@ -11,13 +11,11 @@
 
 use crate::navigate;
 use crate::options::{Choice, OptionTable};
-use crate::schema_version::{VersionedSchema, negotiate_version};
+use crate::schema_version::{NotAdmitted, VersionedSchema};
 use crate::view::ProjectView;
 use crate::{OpError, OpErrorKind};
-use specforge_common::{Diagnostic, codes};
-use specforge_emitter::{
-    EmitFormat, EmitOptions, EmitterError, GraphProtocolSchema, SchemaVersion, emit,
-};
+use specforge_common::Diagnostic;
+use specforge_emitter::{EmitFormat, EmitOptions, EmitterError, SchemaVersion, emit};
 use std::path::PathBuf;
 
 /// An export format.
@@ -115,7 +113,9 @@ pub struct Request<'a> {
     /// Token budget: keep the most central entities that fit.
     pub max_tokens: Option<usize>,
     pub schema: Schema,
-    /// A schema version to negotiate (same major as the produced schema).
+    /// A schema version whose readers must read the export: the same major
+    /// version as the project's schema, not newer. Checked whatever the
+    /// format; never applied (the export carries the schema's own version).
     pub schema_version: Option<&'a str>,
 }
 
@@ -159,20 +159,30 @@ fn export_versioned(
             "depth limits a scoped export: give a scope too",
         ));
     }
-    let schema = if request.attaches_schema() {
-        Some(negotiated(
-            versioned.schema().clone(),
-            request.schema_version,
-        )?)
-    } else {
-        None
-    };
+    // A requested version is checked whatever the format, and never applied:
+    // the export carries the schema at its own version.
+    if let Some(requested) = request.schema_version {
+        let requested = requested.parse::<SchemaVersion>().map_err(|e| {
+            OpError::new(
+                OpErrorKind::InvalidInput,
+                "invalid_schema_version",
+                format!("invalid schema version: {e}"),
+            )
+        })?;
+        versioned.admits(&requested).map_err(|refusal| {
+            OpError::new(
+                OpErrorKind::Conflict,
+                NotAdmitted::CODE,
+                refusal.to_string(),
+            )
+        })?;
+    }
     let options = EmitOptions {
         format: request.format().emit_format(),
         scope: request.scope,
         depth: request.depth,
         kind_filter: request.kinds.clone(),
-        schema: schema.as_ref(),
+        schema: request.attaches_schema().then(|| versioned.schema()),
         token_budget: request.max_tokens,
         kind_registry: Some(view.registries().kinds()),
         field_registry: Some(view.registries().fields()),
@@ -243,30 +253,6 @@ fn failure(view: &ProjectView, error: EmitterError) -> OpError {
         Some(code) => OpError::coded(kind, code, error.to_string()),
         None => OpError::new(kind, "export_failed", error.to_string()),
     }
-}
-
-/// `schema`, at `requested` when one is asked for: the same major as the
-/// produced schema, minor and patch from 0 up to the produced version.
-fn negotiated(
-    mut schema: GraphProtocolSchema,
-    requested: Option<&str>,
-) -> Result<GraphProtocolSchema, OpError> {
-    let Some(requested) = requested else {
-        return Ok(schema);
-    };
-    let requested = requested.parse::<SchemaVersion>().map_err(|e| {
-        OpError::new(
-            OpErrorKind::SchemaMismatch,
-            "invalid_schema_version",
-            format!("invalid schema version: {e}"),
-        )
-    })?;
-    let max = schema.schema_version.clone();
-    let min = SchemaVersion::new(max.major, 0, 0);
-    negotiate_version(&requested, &min, &max)
-        .map_err(|e| OpError::coded(OpErrorKind::Conflict, codes::E027, e.reason))?;
-    schema.schema_version = requested;
-    Ok(schema)
 }
 
 #[cfg(test)]

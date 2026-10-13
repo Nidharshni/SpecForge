@@ -45,7 +45,7 @@ pub(crate) struct Args {
     #[arg(long, conflicts_with = "no_schema")]
     with_schema: bool,
 
-    /// Request a specific schema version for the export
+    /// Fail unless a reader of this schema version reads the export: the same major version, not newer than the project's schema
     #[arg(long)]
     schema_version: Option<String>,
 

@@ -158,12 +158,9 @@ type SchemaChange {
 }
 
 type SchemaCompatibility {
-  requested     SchemaVersion @readonly
-  supported_min SchemaVersion @readonly
-  supported_max SchemaVersion @readonly
-  compatible    boolean
-  // Sourced from CompilerConfig.supported_schema_min / .supported_schema_max (see ADR graph_protocol_version_management)
-  source        string        @readonly
+  requested SchemaVersion @readonly
+  current   SchemaVersion @readonly
+  admitted  boolean
   verify unit "SchemaCompatibility schema is valid"
 }
 

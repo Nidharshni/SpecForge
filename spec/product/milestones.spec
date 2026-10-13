@@ -369,7 +369,7 @@ milestone schema_versioning "Phase 12: Graph Protocol Schema Versioning" {
     "The schema is embedded in graph exports by default (opt out with --no-schema; opt in for context, brief or budgeted exports with --with-schema)",
     "Schema version is computed by diffing every attribute against the last export's cached schema (major for breaking, minor for additions, patch for documentation and provenance; 1.0.0 with no cache)",
     "Breaking changes warn W053 with the versions they move between",
-    "--schema-version accepts a version within the current major (relabelling the export) and rejects others with E027",
+    "--schema-version admits a version whose readers read the current schema and refuses others; the export is never relabelled",
     "specforge schema --publish emits a JSON Schema (draft 2020-12) for graph, context and brief exports",
   ]
 }

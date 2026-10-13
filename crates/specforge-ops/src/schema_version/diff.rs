@@ -15,7 +15,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
-use specforge_common::codes;
 use specforge_emitter::{
     GraphProtocolSchema, SchemaEdgeType, SchemaEntityKind, SchemaExtensionInfo, SchemaField,
     SchemaVersion,
@@ -647,46 +646,4 @@ pub(super) fn bumped(previous: &SchemaVersion, changes: &[SchemaChange]) -> Sche
         Some(Bump::Minor) => SchemaVersion::new(previous.major, previous.minor + 1, 0),
         Some(Bump::Patch) => SchemaVersion::new(previous.major, previous.minor, previous.patch + 1),
     }
-}
-
-/// A requested schema version no reader of the current one reads.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct SchemaVersionError {
-    pub(crate) requested: SchemaVersion,
-    pub(crate) min: SchemaVersion,
-    pub(crate) max: SchemaVersion,
-    pub(crate) reason: String,
-}
-
-impl fmt::Display for SchemaVersionError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}: {}", codes::E027, self.reason)
-    }
-}
-
-/// Whether `requested` is a version of the same major as `max`, not below
-/// `min` and not above `max`.
-pub(crate) fn negotiate_version(
-    requested: &SchemaVersion,
-    min: &SchemaVersion,
-    max: &SchemaVersion,
-) -> Result<(), SchemaVersionError> {
-    let refuse = |reason: String| SchemaVersionError {
-        requested: requested.clone(),
-        min: min.clone(),
-        max: max.clone(),
-        reason,
-    };
-    if requested.major != max.major {
-        return Err(refuse(format!(
-            "requested schema version {requested} has incompatible major version \
-             (supported range [{min}, {max}])"
-        )));
-    }
-    if requested < min || requested > max {
-        return Err(refuse(format!(
-            "requested schema version {requested} is out of range [{min}, {max}]"
-        )));
-    }
-    Ok(())
 }
