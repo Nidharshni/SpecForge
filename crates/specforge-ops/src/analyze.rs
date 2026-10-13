@@ -373,7 +373,7 @@ impl From<AnalyzeError> for OpError {
 }
 
 /// Run the selected passes over `view`; the extension passes in the view's
-/// runtime, when it has one and a root. With `options.prove`, the prove step
+/// runtime, when it has one. With `options.prove`, the prove step
 /// first, over that solver.
 pub fn analyze(
     view: &ProjectView,
@@ -386,8 +386,7 @@ pub fn analyze(
         }
         let coverage_runs = selection.runs(COVERAGE_PASS)
             && declared_pass_names(view).iter().any(|n| n == COVERAGE_PASS)
-            && view.runtime().is_some()
-            && view.root().is_some();
+            && view.runtime().is_some();
         if !coverage_runs {
             return Err(AnalyzeError::MinWithoutCoveragePass);
         }
@@ -433,9 +432,7 @@ pub fn analyze(
             });
         }
     }
-    if view.root().is_some()
-        && let Some(runtime) = view.runtime()
-    {
+    if let Some(runtime) = view.runtime() {
         // Declared `after` constraints order a single extension's passes;
         // across extensions they are advisory.
         passes_run.extend(
@@ -563,9 +560,6 @@ fn select(view: &ProjectView, requested: &str) -> Result<Selection, AnalyzeError
 
 /// `<extension>:<pass>` of every analyze-phase pass the extensions declare.
 fn declared_pass_names(view: &ProjectView) -> Vec<String> {
-    if view.root().is_none() {
-        return Vec::new();
-    }
     view.registries()
         .analyze_passes()
         .map(DeclaredPass::full_name)
@@ -847,12 +841,17 @@ mod tests {
         }
     }
 
-    #[test]
-    fn extension_passes_are_skipped_without_a_root() {
+    #[specforge_test(
+        behavior = "call_extension_exports",
+        verify = "an analyze pass runs in the view's runtime whether or not the view has a root"
+    )]
+    fn extension_passes_run_without_a_root() {
         let project = Project::new();
-        let view = project.view_at(None);
-        let outcome = analyze(&view, &AnalyzeOptions::default()).unwrap();
-        assert_eq!(names(&outcome), vec!["contracts"]);
+        let options = AnalyzeOptions::default();
+        let rooted = project.run(&options).unwrap();
+        let rootless = analyze(&project.view_at(None), &options).unwrap();
+        assert_eq!(names(&rootless), names(&rooted));
+        assert!(names(&rooted).contains(&"@t/x:scan"));
     }
 
     #[test]
