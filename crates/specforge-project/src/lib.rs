@@ -34,6 +34,8 @@ mod session;
 mod setup;
 pub mod snapshot;
 mod sources;
+#[cfg(feature = "testing")]
+pub mod testing;
 mod verdicts;
 
 use std::collections::BTreeMap;

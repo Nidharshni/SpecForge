@@ -13,6 +13,7 @@ mod entity_snapshot;
 mod environment;
 mod extension_calls;
 mod field_types;
+mod fixture;
 mod policy;
 mod providers;
 mod registered_fields;
