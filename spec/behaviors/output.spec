@@ -675,16 +675,21 @@ behavior validate_agent_plan "Validate Agent Implementation Plan" {
     plan_validated_emitted     "plan_validated event is emitted after validation completes"
   }
   contract   """
-    When specforge trace --plan plan.json is invoked, the system MUST parse
-    the plan file and validate it against the current spec graph. Every entity
-    ID referenced in the plan MUST resolve to a declared entity in the graph;
-    unresolvable IDs MUST produce an E003 diagnostic. Every testable entity
-    in the graph MUST have a corresponding planned action in the plan; missing
-    entries MUST be reported as warnings. Dependency order declared in the plan
-    MUST be validated against the graph's edge structure; any ordering that
-    contradicts the graph MUST produce a diagnostic. The output MUST be a
-    structured JSON report listing validated entries, gaps, and ordering
-    violations.
+    specforge trace --plan <file> and the plan argument of specforge.trace
+    and of the specforge://prompts/trace prompt MUST check an agent plan
+    against the current spec graph. The plan MUST be an AgentPlan
+    (types/graph.spec): a value that is not one MUST be refused, naming
+    every place it departs from the type. Every entity ID referenced in the
+    plan MUST resolve to a declared entity in the graph; an unresolvable ID
+    MUST produce an E003 gap. Every testable entity that declares
+    obligations MUST have an entry in the plan; a missing entry MUST be
+    reported as a warning gap. The plan's entry order is its dependency
+    order: an entry ordered before an entity it depends on in the graph
+    MUST produce an ordering gap. The check reads the graph and the entity
+    snapshot, never the recorded test report. The outcome MUST be one JSON
+    document on every surface (McpTracePlanResult): ok (no unresolved entry
+    and no ordering gap), the entries that name an entity, and the gaps;
+    specforge trace --plan exits 1 when ok is false.
   """
   verify unit "plan with all valid entity IDs passes validation"
   verify unit "plan referencing nonexistent entity ID produces E003"
@@ -694,6 +699,8 @@ behavior validate_agent_plan "Validate Agent Implementation Plan" {
   verify unit "the plan check reads no recorded test report"
   verify unit "a plan that is not an AgentPlan is refused, naming every place it departs from the type"
   verify unit "a plan passes when every entry names an entity and none comes before what it depends on; a missing entry is a warning"
+  verify integration "specforge trace --plan and specforge.trace answer the same document for a plan"
+  verify integration "specforge trace --plan exits 1 when an entry names no entity or comes before what it depends on"
   verify contract "Validate Agent Implementation Plan: agent plan validation holds — validation_complete_fired, unresolvable_ids_diagnosed, missing_entries_warned, ordering_validated, structured_report_produced, plan_validated_emitted"
 }
 

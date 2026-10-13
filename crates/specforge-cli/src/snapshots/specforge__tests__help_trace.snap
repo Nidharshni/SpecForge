@@ -11,6 +11,9 @@ Arguments:
           Entity ID to trace (omit to trace every entity)
 
 Options:
+      --plan <FILE>
+          An agent plan file (an AgentPlan's JSON) to check against the graph instead of tracing
+
       --path <PATH>
           A path inside the project (the nearest directory at or above it holding specforge.json; none: the directory itself, with the default configuration)
           
