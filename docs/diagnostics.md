@@ -679,14 +679,15 @@ Level: error
 E061: Field value is not the declared type
 
 The extension that registers a field declares its type, and the value given
-can't be that type: an integer field got something other than an integer, a bool
-field something other than true or false, an enum field a value outside its
-declared values (the suggestion names the closest one), or a field declared as a
-single value got a list. Values that can be read as the declared type are
-converted without a diagnostic: a single string or reference on a list field
-becomes a one-item list, and a quoted integer or boolean becomes the number or
-boolean. Fix the value, or check the field's type with `specforge schema --kind
-<kind>`.
+can't be that type. A string field takes text, a bare word, a date, a type union
+or an `expr { }` group; an enum one of its declared values (the suggestion names
+the closest one); an integer field an integer; a bool field true or false; a
+reference field one id; a string_list or reference_list field a list; a block
+field a block. Values that can be read as the declared type are converted
+without a diagnostic: a single string, id, integer, boolean or date on a list
+field becomes a one-item list, a mixed list the list of its items' text, a
+quoted integer or boolean the number or boolean. Fix the value, or check the
+field's type with `specforge schema --kind <kind>`.
 
 Owner: core
 Level: error

@@ -354,7 +354,7 @@ fn conditioned_behaviors_are_noted_once_per_check_as_i015() {
 /// `pong`; `sync` is written on `pong` when given.
 fn ping_pong(sync: Option<&str>) -> TempDir {
     let pong_sync = sync
-        .map(|s| format!("  sync [\"{s}\"]\n"))
+        .map(|s| format!("  sync {{\n    bound \"{s}\"\n  }}\n"))
         .unwrap_or_default();
     project(&format!(
         concat!(
@@ -709,14 +709,18 @@ behavior kept "Kept" {
   ensures {
     done "it is done"
   }
-  maintains [unique_ids]
+  maintains {
+    unique_ids "ids stay unique"
+  }
 }
 behavior proven "Proven" {
   contract  "c"
   ensures {
     done "it is done"
   }
-  maintains [unique_ids]
+  maintains {
+    unique_ids "ids stay unique"
+  }
   verify unit "it works"
 }
 "#;
