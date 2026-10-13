@@ -696,6 +696,8 @@ behavior validate_agent_plan "Validate Agent Implementation Plan" {
   verify unit "testable entity missing from plan produces warning"
   verify unit "plan dependency order contradicting graph produces diagnostic"
   verify unit "output is structured JSON"
+  verify unit "the plan check reads no recorded test report"
+  verify unit "a plan that is not an AgentPlan is refused, naming every place it departs from the type"
   verify contract "Validate Agent Implementation Plan: agent plan validation holds — validation_complete_fired, unresolvable_ids_diagnosed, missing_entries_warned, ordering_validated, structured_report_produced, plan_validated_emitted"
 }
 

@@ -4,7 +4,7 @@ use specforge_ops::plan::PlanGapKind;
 use specforge_parser::{EntityId, EntityKind, FieldMap, FieldValue, VerifyStatement};
 use specforge_test::prelude::*;
 
-use crate::view_support::gap_texts;
+use crate::view_support::{Project, gap_texts, registries};
 
 fn span() -> SourceSpan {
     SourceSpan {
@@ -246,4 +246,35 @@ fn plan_validation_contract_consistency() {
     }
     assert_eq!(records[0]["kind"], "unresolved_entity", "{report}");
     assert_eq!(records[1]["kind"], "missing_plan_entry", "{report}");
+}
+
+// B:validate_agent_plan — verify unit "the plan check reads no recorded test report"
+#[specforge_test(
+    behavior = "validate_agent_plan",
+    verify = "the plan check reads no recorded test report"
+)]
+#[ignore = "fixed by T1"]
+fn the_plan_check_reads_no_recorded_report() {
+    let project = Project::new(
+        "behavior a \"A\" {\n  verify unit \"a works\"\n}\n\nbehavior b \"B\" {\n  verify unit \"b works\"\n}\n",
+        registries(&["behavior"], &[]),
+    );
+    let plan =
+        serde_json::json!({"plan_id": "p", "entries": [{"entity_id": "a", "action": "implement"}]});
+    let unreported = specforge_ops::plan::check(&project.view(), &plan).unwrap();
+    assert_eq!(
+        gap_texts(&unreported, PlanGapKind::MissingPlanEntry),
+        ["testable entity 'b' (behavior) is not covered by the plan"]
+    );
+    for report in [
+        "{",
+        r#"{"results":{"a":{"tests":[{"name":"t","status":"pass","verify":"a works"}]}}}"#,
+    ] {
+        std::fs::write(project.dir.path().join("specforge-report.json"), report).unwrap();
+        assert_eq!(
+            specforge_ops::plan::check(&project.view(), &plan).unwrap(),
+            unreported,
+            "{report}"
+        );
+    }
 }
