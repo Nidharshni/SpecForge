@@ -619,6 +619,12 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   what it alone knows, typed and flattened beside it (MCP's `note` on an add, a mutation's
   `files_written`, the CLI's credential health on doctor), and never renames, drops or re-derives a
   key. It carries no `null`. Its spec type is the tool's `Mcp*` reply type (ADR 0052).
+- **Graph export**: the project's graph, or the subgraph of a scope, written in one export format by
+  `specforge_emitter::emit` through `specforge_ops::export::export`: graph (the Graph Protocol), context and brief (JSON
+  documents whose schema the emitter derives from the types that write them, published by `specforge schema
+  --publish`), or DOT. It is text: the CLI prints it, MCP sends it as text or a file, an extension command receives it
+  spliced in its input; only `specforge.query` reads it back, into its structured result. A node carries its coverage
+  status (`coverage_status`) when the export is given the verdicts, as a query with coverage is (ADR 0007).
 - **Project sources**: the `.spec` files under the spec root (`spec_root`, else the project root) that
   discovery keeps — no skipped directory, no `exclude` entry. What a compile reads, what format and migrate
   rewrite (`specforge_common::SourceRoot`, built by `ProjectConfig::sources` from a config read through
