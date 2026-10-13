@@ -9,10 +9,6 @@ name = "build-builtins"
 path = "src/build_builtins.rs"
 
 [[bin]]
-name = "snapshot-builtins"
-path = "src/snapshot_builtins.rs"
-
-[[bin]]
 name = "revendor"
 path = "src/revendor.rs"
 

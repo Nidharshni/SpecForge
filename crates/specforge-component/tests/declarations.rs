@@ -5,7 +5,7 @@
 //! `tests/declarations/<dir>/`.
 //!
 //! A change that is meant to change a declaration re-vendors the blobs,
-//! then regenerates the files (`cargo run -p xtask --bin snapshot-builtins`)
+//! and rewrites the files (`cargo run -p xtask --bin revendor` does both)
 //! and shows the diff for review. Byte identity also guards against a
 //! dependency enabling `serde_json/preserve_order` in a guest, which would
 //! reorder every key.
