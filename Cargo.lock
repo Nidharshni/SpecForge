@@ -3054,7 +3054,6 @@ dependencies = [
  "serde_json",
  "sha2",
  "specforge-common",
- "specforge-emitter",
  "specforge-formatter",
  "specforge-graph",
  "specforge-parser",

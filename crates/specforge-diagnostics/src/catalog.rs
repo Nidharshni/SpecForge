@@ -609,7 +609,7 @@ catalog! {
         "A `failure_mode` entity's `occurrence` or `post_occurrence` field is not one of the recognized values (`certain`, `likely`, `occasional`, `unlikely`, `rare`). Set the field to one of these values.";
     W053: Warning core,
         "Breaking schema change",
-        "A graph protocol schema change classified as breaking: a removed entity kind, edge type or field, a new required field, or a field whose type changed. `specforge export` compares the schema against the one the previous export cached in `.specforge/schema-cache.json`, so an extension upgrade or removal that breaks the schema warns on the next export; the export is still written and the cache updated. `specforge migrate` compares the schema before and after a migration. Update the agents and tools that read the export, keep the extension versions that produced the old schema, or review the migration to preserve backward compatibility.";
+        "A graph protocol schema change classified as breaking: a removed entity kind, edge type or field, a new required field, or a field whose type changed. `specforge export` compares the schema against the one the previous export cached in `.specforge/schema-cache.json`, so an extension upgrade or removal that breaks the schema warns on the next export; the export is still written and the cache updated. Update the agents and tools that read the export, or keep the extension versions that produced the old schema.";
     W054: Warning core,
         "Migration structural drift",
         "Comparing the entity graph before and after a migration found entities or edges that appeared, disappeared, or changed unexpectedly. Review the migration logic to ensure it preserves the entities and edges it did not intend to change.";

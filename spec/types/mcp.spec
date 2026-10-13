@@ -884,8 +884,6 @@ type McpMigrateResult "A migration: what it ran or previewed, or that nothing wa
   hooks_invoked            string[]
   /// Why each failing hook failed.
   hook_failures            string[]
-  /// Breaking Graph Protocol schema changes (W053).
-  schema_warnings          Diagnostic[]
   /// How the migrated graph differs from the one before (W054).
   structural_differences   Diagnostic[]
   rolled_back              boolean

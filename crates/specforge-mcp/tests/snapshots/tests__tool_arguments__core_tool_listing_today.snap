@@ -4745,12 +4745,6 @@ expression: listing
         "rolled_back": {
           "type": "boolean"
         },
-        "schema_warnings": {
-          "items": {
-            "$ref": "#/$defs/Diagnostic"
-          },
-          "type": "array"
-        },
         "structural_differences": {
           "items": {
             "$ref": "#/$defs/Diagnostic"
@@ -4777,7 +4771,6 @@ expression: listing
         "backups",
         "hooks_invoked",
         "hook_failures",
-        "schema_warnings",
         "structural_differences",
         "rolled_back",
         "post_migration_validated",

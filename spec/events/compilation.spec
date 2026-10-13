@@ -386,20 +386,6 @@ type MigrationStartingPayload {
   verify unit "MigrationStartingPayload schema is valid"
 }
 
-event pre_migration_snapshot_captured "Pre-Migration Snapshot Captured" {
-  channel "compiler.pre_migration_snapshot_captured"
-  payload PreMigrationSnapshotCapturedPayload
-  verify integration "emits pre_migration_snapshot_captured after schema snapshot is taken"
-}
-
-type PreMigrationSnapshotCapturedPayload {
-  nodeKindCount integer
-  edgeTypeCount integer
-  fieldCount    integer
-  timestamp     timestamp
-  verify unit "PreMigrationSnapshotCapturedPayload schema is valid"
-}
-
 event migration_complete "Migration Complete" {
   channel "compiler.migration_complete"
   payload MigrationCompletePayload
@@ -728,17 +714,4 @@ type SchemaBreakingChangeDetectedPayload {
   nonBreakingCount integer
   timestamp        timestamp
   verify unit "SchemaBreakingChangeDetectedPayload schema is valid"
-}
-
-event graph_protocol_compatibility_verified "Graph Protocol Compatibility Verified" {
-  channel "compiler.graph_protocol_compatibility_verified"
-  payload GraphProtocolCompatibilityVerifiedPayload
-  verify integration "emits graph_protocol_compatibility_verified after post-migration schema comparison"
-}
-
-type GraphProtocolCompatibilityVerifiedPayload {
-  breakingChanges    integer
-  nonBreakingChanges integer
-  timestamp          timestamp
-  verify unit "GraphProtocolCompatibilityVerifiedPayload schema is valid"
 }

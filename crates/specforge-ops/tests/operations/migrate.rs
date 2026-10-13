@@ -28,7 +28,7 @@ fn files_under(root: &Path) -> std::collections::BTreeMap<std::path::PathBuf, Ve
     files
 }
 use specforge_parser::CURRENT_FORMAT_VERSION;
-use specforge_protocol_types::{ExtensionDeclaration, FieldType, PeerDependency, SandboxPolicy};
+use specforge_protocol_types::{ExtensionDeclaration, PeerDependency, SandboxPolicy};
 use specforge_registry::build_registries;
 use specforge_test_macros::test as specforge_test;
 use specforge_wasm::runtime::{WasmCallResult, WasmTrapInfo};
@@ -757,103 +757,6 @@ fn a_trapping_hook_is_recorded_and_the_next_one_still_runs() {
     assert_eq!(called, ["@acme/a:migrate_a", "@acme/b:migrate_b"]);
 }
 
-/// `@acme/base` (a kind `Thing`, a hook that rewrites `specforge.json` to
-/// enable only itself) and `@acme/extra`, which peers on it and adds a kind
-/// `Gizmo`, an edge `gizmo_links` and an enhancement field `badge` on
-/// `Thing`: what a project loses when the hook drops `@acme/extra`.
-fn schema_runtime() -> InProcessRuntime {
-    InProcessRuntime::new()
-        .with(|| {
-            let mut c = ContributionsBuilder::new(ExtensionMeta::new("@acme/base", "1.0.0"));
-            c.kind("Thing", |k| {
-                k.keyword("thing");
-            });
-            c.migration_hook_handler("migrate_base", |input| {
-                let root = Path::new(&input.files[0]).parent().unwrap().to_path_buf();
-                std::fs::write(
-                    root.join("specforge.json"),
-                    r#"{"name": "p", "version": "0.1.0", "extensions": ["@acme/base"]}"#,
-                )
-                .map_err(|e| e.to_string())
-            });
-            c
-        })
-        .with(|| {
-            let mut meta = ExtensionMeta::new("@acme/extra", "1.0.0");
-            meta.peer_dependencies = vec![PeerDependency {
-                name: "@acme/base".into(),
-                version: "^1".into(),
-                optional: false,
-            }];
-            let mut c = ContributionsBuilder::new(meta);
-            c.kind("Gizmo", |k| {
-                k.keyword("gizmo");
-            });
-            c.edge("gizmo_links", |e| {
-                e.source_kind("gizmo").target_kind("thing");
-            });
-            c.enhance("thing", "@acme/base", |e| {
-                e.field("badge", |f| {
-                    f.field_type(FieldType::String);
-                });
-            });
-            c
-        })
-}
-
-fn schema_project() -> tempfile::TempDir {
-    let dir = tempfile::TempDir::new().unwrap();
-    std::fs::write(
-        dir.path().join("specforge.json"),
-        r#"{"name": "p", "version": "0.1.0", "extensions": ["@acme/base", "@acme/extra"]}"#,
-    )
-    .unwrap();
-    specforge_installed::testing::install(dir.path(), &["@acme/base", "@acme/extra"]);
-    std::fs::write(
-        dir.path().join("old.spec"),
-        "// specforge-format: 0.9\nthing t \"T\" {\n}\n",
-    )
-    .unwrap();
-    dir
-}
-
-#[specforge_test(
-    behavior = "capture_pre_migration_schema_snapshot",
-    verify = "snapshot includes node kinds, edge types, and field definitions"
-)]
-fn the_schema_before_the_hooks_holds_their_kinds_edges_and_fields() {
-    let dir = schema_project();
-    let runtime = Arc::new(schema_runtime());
-
-    let outcome = run(
-        &request(&specforge_common::ProjectRoot::of(dir.path()).unwrap()),
-        Some(runtime.clone()),
-    );
-
-    assert!(outcome.validated, "{outcome:?}");
-    assert!(outcome.rollback.is_none(), "{outcome:?}");
-    // Only a pre-migration schema holding all three can name each as lost.
-    let warnings: Vec<String> = outcome
-        .schema_warnings
-        .iter()
-        .map(|d| format!("{}: {}", d.code, d.message).to_lowercase())
-        .collect();
-    for lost in ["kindremoved", "edgeremoved", "fieldremoved"] {
-        assert!(
-            warnings
-                .iter()
-                .any(|w| w.starts_with("w053") && w.contains(lost)),
-            "{lost} not in {warnings:?}"
-        );
-    }
-    for name in ["gizmo", "gizmo_links", "badge"] {
-        assert!(
-            warnings.iter().any(|w| w.contains(name)),
-            "{name} not in {warnings:?}"
-        );
-    }
-}
-
 /// `name`, declaring the migration hook `hook` answered by `handler`, and
 /// peer-depending on `peers`.
 fn extension(
@@ -984,26 +887,6 @@ fn a_diagnostic_the_migration_introduces_is_reported() {
     );
     // `extra` appeared: the graph changed structure, so the run is undone.
     assert!(outcome.rollback.is_some(), "{outcome:?}");
-}
-
-#[specforge_test(
-    behavior = "verify_graph_protocol_compatibility_after_migration",
-    verify = "comparison runs once after extension_migration_hooks_complete"
-)]
-fn the_schema_is_compared_once_after_the_hooks() {
-    let dir = schema_project();
-    let runtime = Arc::new(schema_runtime());
-
-    let outcome = run(
-        &request(&specforge_common::ProjectRoot::of(dir.path()).unwrap()),
-        Some(runtime.clone()),
-    );
-
-    // The comparison saw the hook's change to the enabled extensions...
-    assert!(!outcome.schema_warnings.is_empty(), "{outcome:?}");
-    // ...from the two compiles of the run: before the files, after the hooks.
-    assert_eq!(handshakes_of(&runtime, "@acme/base"), 2);
-    assert_eq!(handshakes_of(&runtime, "@acme/extra"), 1);
 }
 
 #[specforge_test(

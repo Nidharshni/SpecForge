@@ -2502,10 +2502,8 @@ edge type or field, a new required field, or a field whose type changed.
 `specforge export` compares the schema against the one the previous export
 cached in `.specforge/schema-cache.json`, so an extension upgrade or removal
 that breaks the schema warns on the next export; the export is still written and
-the cache updated. `specforge migrate` compares the schema before and after a
-migration. Update the agents and tools that read the export, keep the extension
-versions that produced the old schema, or review the migration to preserve
-backward compatibility.
+the cache updated. Update the agents and tools that read the export, or keep the
+extension versions that produced the old schema.
 
 Owner: core
 Level: warning

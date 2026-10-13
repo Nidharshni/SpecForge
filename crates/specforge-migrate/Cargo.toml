@@ -10,7 +10,6 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 specforge-common = { workspace = true }
-specforge-emitter = { path = "../specforge-emitter" }
 specforge-formatter = { workspace = true }
 specforge-graph = { path = "../specforge-graph" }
 specforge-parser = { workspace = true }

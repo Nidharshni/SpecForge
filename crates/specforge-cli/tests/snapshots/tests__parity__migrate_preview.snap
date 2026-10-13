@@ -75,7 +75,6 @@ expression: snapshot
         }
       ],
       "rolled_back": false,
-      "schema_warnings": [],
       "structural_differences": [],
       "to_version": "1.0"
     },

@@ -107,15 +107,11 @@ fn each_named_shape_is_defined_once_per_document() {
         .find(|(name, _)| *name == "specforge.migrate")
         .expect("migrate lists a schema")
         .1;
-    let lists: Vec<&Value> = [
-        "post_migration_errors",
-        "schema_warnings",
-        "structural_differences",
-    ]
-    .iter()
-    .map(|key| &migrate["properties"][key])
-    .collect();
-    assert_eq!(lists.len(), 3, "{migrate}");
+    let lists: Vec<&Value> = ["post_migration_errors", "structural_differences"]
+        .iter()
+        .map(|key| &migrate["properties"][key])
+        .collect();
+    assert_eq!(lists.len(), 2, "{migrate}");
     for list in lists {
         assert_eq!(
             list["items"],
