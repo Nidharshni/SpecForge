@@ -21,7 +21,7 @@ use tempfile::TempDir;
 
 use crate::coverage_corpus::{copy_tree, mcp_calls, project};
 use crate::parity::normalized;
-use crate::surface_parity::lsp::Client;
+use crate::support::lsp::Client;
 
 /// The entities of fx1 the views are pinned on.
 const FX1: [&str; 6] = [

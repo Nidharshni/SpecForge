@@ -7,7 +7,7 @@ use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
 
-use crate::child_guard::{ChildGuard, guarded_command};
+use crate::support::child::{ChildGuard, guarded_command};
 
 #[test]
 fn watch_reloads_extension_environment_on_config_change() {

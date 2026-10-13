@@ -2,6 +2,8 @@ use assert_cmd::Command;
 use specforge_test_macros::test as specforge_test;
 use tempfile::TempDir;
 
+use crate::support::registry::{greet_named, greet_wasm};
+
 fn specforge_cmd() -> Command {
     assert_cmd::cargo_bin_cmd!("specforge")
 }
@@ -368,24 +370,6 @@ fn publish_with_no_credential_makes_no_network_call() {
     assert_eq!(spy.hits(), 0, "publish reached the network");
 }
 
-/// The greet blob with its declared name (`@sdk/greet`, 10 bytes) replaced
-/// by another name of the same length.
-pub(crate) fn greet_named(name: &str) -> Vec<u8> {
-    let (from, to) = (b"@sdk/greet".as_slice(), name.as_bytes());
-    assert_eq!(from.len(), to.len());
-    let mut wasm = greet_wasm();
-    let mut at = 0;
-    while at + from.len() <= wasm.len() {
-        if &wasm[at..at + from.len()] == from {
-            wasm[at..at + from.len()].copy_from_slice(to);
-            at += from.len();
-        } else {
-            at += 1;
-        }
-    }
-    wasm
-}
-
 #[specforge_test(
     behavior = "resolve_registry_source",
     verify = "a name no registry serves is refused with R-OPS-001 before any request"
@@ -686,11 +670,6 @@ fn builtins_and_local_wasm_install_without_registry() {
 // Registry installs against a local fake registry
 // ---------------------------------------------------------------
 
-pub(crate) fn greet_wasm() -> Vec<u8> {
-    std::fs::read(specforge_component::committed::GREET.path())
-        .expect("the greet fixture is vendored")
-}
-
 /// A project whose only registry is `registry`.
 pub(crate) fn project_on(registry: &specforge_registry_server::testing::LocalRegistry) -> TempDir {
     let dir = TempDir::new().unwrap();
@@ -709,7 +688,7 @@ pub(crate) fn project_on(registry: &specforge_registry_server::testing::LocalReg
     verify = "add extension without version resolves to latest compatible version"
 )]
 fn add_without_a_version_installs_the_latest() {
-    use crate::published::{Package, serve};
+    use crate::support::registry::{Package, serve};
     let registry = serve(vec![
         Package::new("@sdk/greet", "0.0.1", greet_wasm()),
         Package::new("@sdk/greet", "0.1.0", greet_wasm()),
@@ -776,7 +755,7 @@ fn known_keys(home: &TempDir) -> std::path::PathBuf {
     verify = "specforge add pins the publisher key and records it in specforge.lock"
 )]
 fn add_installs_a_signed_package_and_pins_its_key() {
-    use crate::published::{Package, serve};
+    use crate::support::registry::{Package, serve};
     let key = specforge_registry_client::SigningKey::generate();
     let registry = serve(vec![
         Package::new("@sdk/greet", "0.1.0", greet_wasm()).signed_by(&key),
@@ -805,7 +784,7 @@ fn add_installs_a_signed_package_and_pins_its_key() {
     verify = "specforge add refuses a package signed by another key than the pinned one"
 )]
 fn add_refuses_a_package_signed_by_another_key_than_the_pinned_one() {
-    use crate::published::{Package, serve};
+    use crate::support::registry::{Package, serve};
     let pinned = specforge_registry_client::SigningKey::generate();
     let other = specforge_registry_client::SigningKey::generate();
     let registry = serve(vec![
@@ -829,7 +808,7 @@ fn add_refuses_a_package_signed_by_another_key_than_the_pinned_one() {
     verify = "specforge add refuses an unsigned package without --allow-unsigned"
 )]
 fn add_refuses_an_unsigned_package_without_allow_unsigned() {
-    use crate::published::{Package, serve};
+    use crate::support::registry::{Package, serve};
     let registry = serve(vec![Package::new("@sdk/greet", "0.1.0", greet_wasm())]);
     let dir = project_on(&registry);
     let home = TempDir::new().unwrap();
@@ -845,7 +824,7 @@ fn add_refuses_an_unsigned_package_without_allow_unsigned() {
     verify = "an operation shows the registry configuration's diagnostics once it has asked a registry"
 )]
 fn adding_an_installed_registry_package_shows_no_registry_configuration() {
-    use crate::published::{Package, serve};
+    use crate::support::registry::{Package, serve};
     let registry = serve(vec![Package::new("@sdk/greet", "0.1.0", greet_wasm())]);
     // The served registry is the default; a second entry repeats an alias (W140).
     let dir = TempDir::new().unwrap();
@@ -1153,7 +1132,7 @@ fn a_failed_registry_is_reported_once_and_search_fails_when_all_did() {
 
 #[test]
 fn search_names_the_registry_of_each_hit() {
-    use crate::published::{Package, serve};
+    use crate::support::registry::{Package, serve};
     let registry = serve(vec![Package::new("@sdk/greet", "0.1.0", greet_wasm())]);
     let dir = project_on(&registry);
     let home = TempDir::new().unwrap();
@@ -1174,7 +1153,7 @@ fn search_names_the_registry_of_each_hit() {
 
 #[test]
 fn an_unknown_category_is_refused_before_any_request() {
-    use crate::published::serve;
+    use crate::support::registry::serve;
     let registry = serve(vec![]);
     let dir = project_on(&registry);
     let home = TempDir::new().unwrap();
@@ -1197,7 +1176,7 @@ fn an_unknown_category_is_refused_before_any_request() {
     verify = "an unsigned package accepted with --allow-unsigned is reported as W155"
 )]
 fn an_unsigned_add_reports_w155_in_both_formats() {
-    use crate::published::{Package, serve};
+    use crate::support::registry::{Package, serve};
     let registry = serve(vec![Package::new("@sdk/greet", "0.1.0", greet_wasm())]);
 
     let add = |format: &str| {
@@ -1254,7 +1233,7 @@ fn an_unsigned_add_reports_w155_in_both_formats() {
     verify = "valid credentials stored as RegistryCredential reference"
 )]
 fn login_with_a_token_variable_keeps_the_reference() {
-    use crate::published::serve;
+    use crate::support::registry::serve;
     let registry = serve(vec![]);
     let dir = project_on(&registry);
     let home = TempDir::new().unwrap();
@@ -1297,7 +1276,7 @@ fn login_with_a_token_variable_keeps_the_reference() {
     verify = "login with a token file keeps the file's path, not its content"
 )]
 fn login_with_a_token_file_keeps_the_path() {
-    use crate::published::serve;
+    use crate::support::registry::serve;
     let registry = serve(vec![]);
     let dir = project_on(&registry);
     let home = TempDir::new().unwrap();
@@ -1330,7 +1309,7 @@ fn login_with_a_token_file_keeps_the_path() {
     verify = "login takes exactly one token source"
 )]
 fn login_with_two_token_sources_is_refused() {
-    use crate::published::serve;
+    use crate::support::registry::serve;
     let registry = serve(vec![]);
     let dir = project_on(&registry);
     let home = TempDir::new().unwrap();
@@ -1364,7 +1343,7 @@ fn login_with_two_token_sources_is_refused() {
     verify = "a registry that requires a token to read is read with the stored credential"
 )]
 fn add_from_a_private_registry_with_a_stored_credential() {
-    use crate::published::Package;
+    use crate::support::registry::Package;
     let registry = specforge_registry_server::testing::LocalRegistry::start_private();
     let package = Package::new("@sdk/greet", "0.1.0", greet_wasm());
     registry.store(
@@ -1415,7 +1394,7 @@ struct TrustingSetup {
     /// The project locks `@x/a` (which needs greet `^0.1`).
     lock_app: bool,
     /// More packages the registry serves.
-    more: Vec<crate::published::Package>,
+    more: Vec<crate::support::registry::Package>,
 }
 
 /// Plan 09's trust scenario. The registry serves `@sdk/greet` 0.1.0 (the greet binary) signed by `k1`,
@@ -1431,7 +1410,7 @@ struct Trusting {
 }
 
 fn trusting(setup: TrustingSetup) -> Trusting {
-    use crate::published::{Package, serve};
+    use crate::support::registry::{Package, serve};
     let k1 = specforge_registry_client::SigningKey::generate();
     let k2 = specforge_registry_client::SigningKey::generate();
     let greet_signer = if setup.greet_signed_by_k2 { &k2 } else { &k1 };
@@ -1686,7 +1665,7 @@ fn an_install_refused_at_the_load_pins_no_key() {
     verify = "a refused add of several specifiers pins no key"
 )]
 fn a_refused_add_of_several_specifiers_pins_no_key() {
-    use crate::published::Package;
+    use crate::support::registry::Package;
     let t = trusting(TrustingSetup {
         more: vec![Package::new("@x/plain", "1.0.0", b"\0asm plain".to_vec())],
         ..setup(true)
@@ -1750,7 +1729,7 @@ fn json_run(
     verify = "queries all configured registries"
 )]
 fn a_registry_named_by_its_root_is_searched() {
-    use crate::published::{Package, serve};
+    use crate::support::registry::{Package, serve};
     let registry = serve(vec![Package::new("@sdk/greet", "0.1.0", greet_wasm())]);
     let dir = project_with_registries(
         serde_json::json!([{"alias": "local", "url": registry.root().as_str(), "default_registry": true}]),
@@ -1769,7 +1748,7 @@ fn a_registry_named_by_its_root_is_searched() {
     verify = "every registry call reads an answer's status as one error"
 )]
 fn login_at_an_address_no_registry_serves_is_r009() {
-    use crate::published::{Package, serve};
+    use crate::support::registry::{Package, serve};
     let registry = serve(vec![Package::new("@sdk/greet", "0.1.0", greet_wasm())]);
     let root = registry.root().as_str();
     let dir = project_with_registries(serde_json::json!([

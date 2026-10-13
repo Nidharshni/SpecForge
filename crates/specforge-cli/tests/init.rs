@@ -1435,7 +1435,7 @@ fn one_character_name_is_rejected() {
         .success();
 }
 
-use crate::written::{changed_since, files_written};
+use crate::support::written::{changed_since, files_written};
 
 #[specforge_test(
     behavior = "scaffold_new_project",
@@ -1465,7 +1465,7 @@ fn init_lists_every_file_it_wrote() {
     let dir = TempDir::new().unwrap();
     let blob = TempDir::new().unwrap();
     let wasm = blob.path().join("greet.wasm");
-    fs::write(&wasm, crate::registry::greet_wasm()).unwrap();
+    fs::write(&wasm, crate::support::registry::greet_wasm()).unwrap();
     let output = specforge_cmd()
         .args([
             "init",

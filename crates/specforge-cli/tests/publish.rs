@@ -1,7 +1,7 @@
 //! `specforge publish` uploads an extension binary with the declaration it
 //! reads from it, against the real registry server running in process.
 
-use crate::registry::{greet_named, greet_wasm};
+use crate::support::registry::{greet_named, greet_wasm};
 use specforge_registry_client::{HttpRegistryClient, RegistryClient, RegistryConfig};
 use specforge_registry_server::testing::LocalRegistry;
 use specforge_test::prelude::*;

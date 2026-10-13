@@ -10,7 +10,7 @@ use assert_cmd::cargo::CommandCargoExt;
 use specforge_test::prelude::*;
 use tempfile::TempDir;
 
-use crate::child_guard::{ChildGuard, guarded_command};
+use crate::support::child::{ChildGuard, guarded_command};
 
 #[allow(deprecated)]
 fn specforge_cmd() -> Command {

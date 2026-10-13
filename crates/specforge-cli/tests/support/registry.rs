@@ -91,3 +91,27 @@ pub fn serve(packages: Vec<Package>) -> LocalRegistry {
     }
     registry
 }
+
+/// The greet extension, vendored.
+pub(crate) fn greet_wasm() -> Vec<u8> {
+    std::fs::read(specforge_component::committed::GREET.path())
+        .expect("the greet fixture is vendored")
+}
+
+/// The greet blob with its declared name (`@sdk/greet`, 10 bytes) replaced
+/// by another name of the same length.
+pub(crate) fn greet_named(name: &str) -> Vec<u8> {
+    let (from, to) = (b"@sdk/greet".as_slice(), name.as_bytes());
+    assert_eq!(from.len(), to.len());
+    let mut wasm = greet_wasm();
+    let mut at = 0;
+    while at + from.len() <= wasm.len() {
+        if &wasm[at..at + from.len()] == from {
+            wasm[at..at + from.len()].copy_from_slice(to);
+            at += from.len();
+        } else {
+            at += 1;
+        }
+    }
+    wasm
+}

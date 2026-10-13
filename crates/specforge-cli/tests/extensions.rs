@@ -1190,7 +1190,7 @@ fn a_module_whose_declared_name_is_not_a_package_name_is_refused() {
     .unwrap();
 
     let (from, to) = (b"@sdk/greet".as_slice(), b"../../../x".as_slice());
-    let mut wasm = crate::registry::greet_wasm();
+    let mut wasm = crate::support::registry::greet_wasm();
     let mut replaced = 0;
     let mut at = 0;
     while at + from.len() <= wasm.len() {
@@ -1209,7 +1209,7 @@ fn a_module_whose_declared_name_is_not_a_package_name_is_refused() {
     let outside = root.path().join("a/b/x");
     fs::create_dir_all(&outside).unwrap();
     fs::write(outside.join("other.txt"), "keep").unwrap();
-    let before = crate::written::files_under(root.path());
+    let before = crate::support::written::files_under(root.path());
     let config_before = fs::read_to_string(project.join("specforge.json")).unwrap();
 
     let output = specforge_cmd()
@@ -1228,7 +1228,7 @@ fn a_module_whose_declared_name_is_not_a_package_name_is_refused() {
         "{json}"
     );
     // Nothing was written: not the module, not the lock, not the config.
-    assert_eq!(crate::written::files_under(root.path()), before);
+    assert_eq!(crate::support::written::files_under(root.path()), before);
     assert_eq!(
         fs::read_to_string(project.join("specforge.json")).unwrap(),
         config_before
@@ -1270,7 +1270,7 @@ fn add_validates_local_specifier() {
     .unwrap();
     // A real extension at the local path.
     let wasm_path = dir.path().join("my-extension.wasm");
-    std::fs::write(&wasm_path, crate::registry::greet_wasm()).unwrap();
+    std::fs::write(&wasm_path, crate::support::registry::greet_wasm()).unwrap();
 
     let output = specforge_cmd()
         .args(["add", wasm_path.to_str().unwrap(), "--path"])
@@ -1868,7 +1868,7 @@ fn add_update_and_remove_refuse_an_unusable_config_alike() {
             r#"{"lockfile_version":1,"entries":[{"name":"@acme/x","version":"1.0.0","source":"registry","wasm_hash":"h"}]}"#,
         )
         .unwrap();
-        let before = crate::written::files_under(dir.path());
+        let before = crate::support::written::files_under(dir.path());
         // What the compile reports as E069 for it.
         let check = specforge_cmd()
             .args(["check", "--format", "json"])
@@ -1905,7 +1905,7 @@ fn add_update_and_remove_refuse_an_unusable_config_alike() {
                 "{config}: {args:?}: E069 says `{reason}`, the refusal `{json}`"
             );
             assert_eq!(
-                crate::written::files_under(dir.path()),
+                crate::support::written::files_under(dir.path()),
                 before,
                 "{config}: {args:?} wrote"
             );
@@ -2092,7 +2092,7 @@ fn an_unusable_config_fails_check_with_e069() {
     );
 }
 
-use crate::written::{changed_since, files_under, files_written};
+use crate::support::written::{changed_since, files_under, files_written};
 
 /// `specforge <args> --path <dir> --format json`: its JSON output.
 fn json_of(args: &[&str], dir: &std::path::Path) -> serde_json::Value {
@@ -2117,7 +2117,7 @@ fn empty_project() -> (TempDir, TempDir, String) {
     .unwrap();
     let blobs = TempDir::new().unwrap();
     let wasm = blobs.path().join("greet.wasm");
-    fs::write(&wasm, crate::registry::greet_wasm()).unwrap();
+    fs::write(&wasm, crate::support::registry::greet_wasm()).unwrap();
     let wasm = wasm.to_str().unwrap().to_string();
     (dir, blobs, wasm)
 }

@@ -999,7 +999,7 @@ fn format_refuses_a_config_that_does_not_say_which_files_are_its_sources() {
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
         project_with_config(root, config);
-        let before = crate::written::files_under(root);
+        let before = crate::support::written::files_under(root);
         // `add` refuses what it cannot edit (a subset of these) with the
         // very same document: one refusal. It runs on a copy, since it
         // writes where it does not refuse.
@@ -1021,7 +1021,7 @@ fn format_refuses_a_config_that_does_not_say_which_files_are_its_sources() {
                 );
             }
             assert_eq!(
-                crate::written::files_under(root),
+                crate::support::written::files_under(root),
                 before,
                 "{config} {args:?}: nothing is written"
             );

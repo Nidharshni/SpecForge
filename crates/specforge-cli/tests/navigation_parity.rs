@@ -29,7 +29,7 @@ use specforge_test::prelude::*;
 use tempfile::TempDir;
 use tower_lsp::lsp_types::Url;
 
-use crate::surface_parity::lsp::Client;
+use crate::support::lsp::Client;
 
 // ── Fixtures ────────────────────────────────────────────────────────────
 

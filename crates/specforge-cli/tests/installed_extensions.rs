@@ -3,8 +3,9 @@
 //! loaded through `check`: the loader keyed modules by file stem while
 //! compile looked them up by name, and nothing read the lock.
 
-use crate::published::{Package, serve};
-use crate::registry::{greet_wasm, project_on};
+use crate::registry::project_on;
+use crate::support::registry::greet_wasm;
+use crate::support::registry::{Package, serve};
 use serde_json::{Value, json};
 use specforge_test_macros::test as specforge_test;
 use std::path::Path;

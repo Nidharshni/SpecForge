@@ -1337,7 +1337,7 @@ fn dry_run_failure_isolation() {
         "bad.spec",
         "// specforge-format: 9.0\nbehavior bad \"Bad\" {\n  contract \"ok\"\n}\n",
     );
-    let before = crate::written::files_under(root);
+    let before = crate::support::written::files_under(root);
 
     let output = Command::cargo_bin("specforge")
         .unwrap()
@@ -1363,7 +1363,7 @@ fn dry_run_failure_isolation() {
     );
     assert_eq!(json["files_failed"], 1, "{json}");
     assert_eq!(
-        crate::written::changed_since(root, &before),
+        crate::support::written::changed_since(root, &before),
         Vec::<String>::new(),
         "a dry run writes nothing"
     );
@@ -1600,7 +1600,7 @@ fn rollback_contract() {
 // Phase Q: Remaining uncovered verify statements
 // ===================================================================
 
-use crate::written::{changed_since, files_under, files_written};
+use crate::support::written::{changed_since, files_under, files_written};
 
 #[specforge_test(
     behavior = "migrate_spec_files_in_place",
@@ -1814,14 +1814,14 @@ fn migrate_refuses_a_config_that_does_not_say_which_files_are_its_sources() {
         crate::format::project_with_config(root, config);
         fs::write(root.join("spec/a.spec"), OLD).unwrap();
         fs::write(root.join("vendor/v.spec"), OLD.replace("alpha", "vend")).unwrap();
-        let before = crate::written::files_under(root);
+        let before = crate::support::written::files_under(root);
 
         for args in [&["migrate"][..], &["migrate", "--dry-run"][..]] {
             let (code, json) = crate::format::json_of(root, args);
             assert_eq!(code, Some(1), "{config} {args:?}: {json}");
             assert_eq!(json["code"], "config_invalid", "{config} {args:?}: {json}");
             assert_eq!(
-                crate::written::files_under(root),
+                crate::support::written::files_under(root),
                 before,
                 "{config} {args:?}: no rewrite, no .bak, no migration record"
             );

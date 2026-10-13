@@ -470,8 +470,8 @@ fn watch_writes_no_schema_cache() {
     watch
         .args(["watch", "--format", "json", "--path"])
         .arg(dir.path());
-    let mut child = crate::child_guard::ChildGuard::spawn(
-        crate::child_guard::guarded_command(&watch)
+    let mut child = crate::support::child::ChildGuard::spawn(
+        crate::support::child::guarded_command(&watch)
             .stdout(Stdio::piped())
             .stderr(Stdio::null()),
     )

@@ -18,7 +18,7 @@ use std::time::Duration;
 use specforge_test_macros::test as specforge_test;
 use tempfile::TempDir;
 
-use crate::child_guard::{ChildGuard, guarded_command};
+use crate::support::child::{ChildGuard, guarded_command};
 
 /// The project every row runs in: software and product enabled, a provider
 /// configured, an offline registry (nothing listens on port 9), and a spec

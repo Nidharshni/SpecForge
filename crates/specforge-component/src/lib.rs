@@ -496,8 +496,9 @@ impl WasmRuntime for ComponentRuntime {
 ///
 /// `$SPECFORGE_WASMTIME_CACHE` overrides; setting it to `off` disables the
 /// cache. Default: `$HOME/.cache/specforge/wasmtime` (no cache when `HOME`
-/// is unset).
-fn user_compile_cache_dir() -> Option<PathBuf> {
+/// is unset). The test drivers read it, so a child running under another `HOME` shares the cache of the test process
+/// (a cache of its own would compile every builtin again).
+pub fn user_compile_cache_dir() -> Option<PathBuf> {
     match std::env::var_os("SPECFORGE_WASMTIME_CACHE") {
         Some(v) if v == "off" => None,
         Some(v) => Some(PathBuf::from(v)),

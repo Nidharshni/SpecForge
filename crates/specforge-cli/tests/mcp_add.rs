@@ -2,7 +2,7 @@
 //! O4.3): builtins offline, the ADR-0001 diamond gate, and a config
 //! `specforge check` accepts.
 
-use crate::published::{Package, serve};
+use crate::support::registry::{Package, serve};
 use serde_json::{Value, json};
 use specforge_mcp::McpServer;
 use specforge_test_macros::test as specforge_test;
@@ -133,7 +133,7 @@ fn mcp_local_add_then_check_loads_the_extension() {
     )
     .unwrap();
     let wasm = dir.path().join("greet.wasm");
-    std::fs::write(&wasm, crate::registry::greet_wasm()).unwrap();
+    std::fs::write(&wasm, crate::support::registry::greet_wasm()).unwrap();
 
     // It used to write `greet@0.0.0`, which check failed with E028.
     let reply = mcp_add(dir.path(), json!({"specifiers": [wasm.to_str().unwrap()]}));
@@ -201,7 +201,7 @@ fn mcp_add_refuses_an_install_a_locked_extension_does_not_accept() {
     let registry = serve(vec![Package::new(
         "@sdk/greet",
         "0.1.0",
-        crate::registry::greet_wasm(),
+        crate::support::registry::greet_wasm(),
     )]);
     let dir = project(
         &["@specforge/software", "@acme/app"],
