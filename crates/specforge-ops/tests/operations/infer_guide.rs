@@ -265,7 +265,6 @@ fn the_guide_lists_extensions_kinds_and_entities() {
     behavior = "compute_inference_guide",
     verify = "a guide field lists an enum's values and what an absent value counts as"
 )]
-#[ignore = "fixed by 01-T4"]
 fn a_guide_field_lists_an_enums_values_and_its_default() {
     let mut c = ContributionsBuilder::new(ExtensionMeta::new("@t/soft", "1.0.0"));
     c.kind("gadget", |k| {

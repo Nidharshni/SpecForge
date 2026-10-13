@@ -611,7 +611,6 @@ fn field_hover_unknown_kind_returns_none() {
     behavior = "hover_information",
     verify = "field help says what an absent value counts as"
 )]
-#[ignore = "fixed by 01-T4"]
 fn field_hover_says_what_an_absent_value_counts_as() {
     let declaration = crate::registries::declaration("@t/x", |c| {
         c.kind("ticket", |k| {

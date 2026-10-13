@@ -464,7 +464,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   render it.
 - **Inference guide**: what an agent is told to look for to infer a kind's entities from code
   (`specforge_ops::infer::KindGuide`): the kind's description and extension, every field the registry build
-  registered on it, the extension's `inference_guide` followed by the project's own guide for the kind
+  registered on it (with, for an enum, its values and its default), the extension's `inference_guide` followed by the project's own guide for the kind
   (`inference.<kind>` in `specforge.json`, under **Project-specific:**), an example entity writing each field
   the way its type is written, and the kind's entities. A project's guide is every declared kind's, its
   global conventions (`inference.global`) and its spec directory. The infer prompt, `specforge infer-guide`
