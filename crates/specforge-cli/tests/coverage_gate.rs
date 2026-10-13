@@ -478,11 +478,9 @@ fn a_gate_without_the_coverage_pass_is_refused_before_the_analysis() {
     assert!(stderr.is_empty(), "{stderr}");
 }
 
-// ADR-NEW-08 (plan 08, T0): the committed example report must be what
-// `collect` writes from the committed runner fixture. It does not today (no
-// names, no `verify`, a `total` key), so it is ignored until T5 fixes it.
+// ADR 0069: the committed example report is what `collect` writes from the
+// committed runner fixture (and `schemas_test` holds it to its schema).
 #[test]
-#[ignore = "fixed by T5"]
 fn the_example_report_is_what_collect_writes() {
     fn copy(from: &Path, to: &Path) {
         std::fs::create_dir_all(to).unwrap();

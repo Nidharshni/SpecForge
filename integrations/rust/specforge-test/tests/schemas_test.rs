@@ -70,20 +70,29 @@ fn validate(value: &Value, schema: &Value, root: &Value, path: &str, errors: &mu
         return;
     }
 
-    if let (Some(props), Some(obj)) = (schema.get("properties"), value.as_object()) {
-        for (key, sub) in props.as_object().unwrap() {
+    if let Some(obj) = value.as_object() {
+        let props = schema.get("properties").and_then(|p| p.as_object());
+        for (key, sub) in props.into_iter().flatten() {
             if let Some(v) = obj.get(key) {
                 validate(v, sub, root, &format!("{path}.{key}"), errors);
             }
         }
-        if schema.get("additionalProperties") == Some(&Value::Bool(false)) {
-            for key in obj.keys() {
-                if !props.get(key).is_some() {
+        let declared = |key: &String| props.is_some_and(|p| p.contains_key(key));
+        match schema.get("additionalProperties") {
+            Some(Value::Bool(false)) => {
+                for key in obj.keys().filter(|k| !declared(k)) {
                     errors.push(format!(
                         "{path}: unexpected property '{key}' (additionalProperties: false)"
                     ));
                 }
             }
+            // A schema: it validates every property no `properties` entry names.
+            Some(extra @ Value::Object(_)) => {
+                for (key, v) in obj.iter().filter(|(k, _)| !declared(k)) {
+                    validate(v, extra, root, &format!("{path}.{key}"), errors);
+                }
+            }
+            _ => {}
         }
         for key in schema
             .get("required")
@@ -225,10 +234,12 @@ fn schema_rejects_unknown_fields_and_bad_statuses() {
     );
 }
 
+/// The recorded test report (`specforge-report.json`) is what `--test-results`
+/// accepts from an external writer, so its schema is held to the report
+/// `collect` writes: the committed example validates, and a report in another
+/// vocabulary or with a nameless test does not (ADR 0069).
 #[test]
-fn adapter_report_schema_is_self_consistent() {
-    // specforge-report.schema.json is consumed by external adapters; at
-    // minimum it must parse and its internal $refs must resolve.
+fn the_recorded_report_example_matches_its_schema() {
     let schema = load_schema("specforge-report.schema.json");
     let defs = schema.get("$defs").and_then(|d| d.as_object()).unwrap();
     for (name, def) in defs {
@@ -240,6 +251,43 @@ fn adapter_report_schema_is_self_consistent() {
             );
         }
     }
+
+    let example = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../../examples/todo-app/specforge-report.json");
+    let report: Value = serde_json::from_str(&std::fs::read_to_string(&example).unwrap()).unwrap();
+    let mut errors = Vec::new();
+    validate(&report, &schema, &schema, "$", &mut errors);
+    assert!(errors.is_empty(), "{errors:?}");
+
+    let first = report["results"]
+        .as_object()
+        .unwrap()
+        .keys()
+        .next()
+        .unwrap()
+        .clone();
+    let mut old_status = report.clone();
+    old_status["results"][&first]["tests"][0]["status"] = Value::from("pass");
+    let mut errors = Vec::new();
+    validate(&old_status, &schema, &schema, "$", &mut errors);
+    assert!(
+        errors.iter().any(|e| e.contains("not in enum")),
+        "a report saying `pass` must be flagged: {errors:?}"
+    );
+
+    let mut nameless = report.clone();
+    nameless["results"][&first]["tests"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("name");
+    let mut errors = Vec::new();
+    validate(&nameless, &schema, &schema, "$", &mut errors);
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.contains("missing required property 'name'")),
+        "a test without a name must be flagged: {errors:?}"
+    );
 }
 
 fn find_refs(value: &Value) -> Vec<String> {
