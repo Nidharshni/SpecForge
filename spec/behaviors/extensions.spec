@@ -142,6 +142,7 @@ behavior load_extension_declaration "Load Extension Declaration" {
   """
   verify integration "every committed SDK blob's handshake and describe answers match their pinned snapshot byte for byte"
   verify integration "the declaration snapshots are exactly the committed SDK blobs'"
+  verify integration "every committed SDK blob's declaration round-trips through the typed declaration byte for byte, but for the legacy keys it declares"
   verify integration "every committed SDK blob answers the host's protocol version; a bridge component answers the version it declares"
   verify unit "a declaration round-trips through its wire answers unchanged"
   verify unit "a describe category that does not parse fails the load naming the category"

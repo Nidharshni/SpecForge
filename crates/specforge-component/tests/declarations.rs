@@ -14,7 +14,10 @@ use std::collections::BTreeSet;
 
 use specforge_component::ComponentRuntime;
 use specforge_component::committed::{COMMITTED, CommittedBlob, Guest, snapshots, wire_answers};
-use specforge_protocol_types::{DeclaredCategory, HandshakeRequest, PROTOCOL_VERSION};
+use specforge_protocol_types::{
+    DeclaredCategory, DescribeResponse, ExtensionDeclaration, HandshakeRequest, HandshakeResponse,
+    PROTOCOL_VERSION,
+};
 use specforge_wasm::runtime::{WasmCallResult, WasmRuntime};
 
 fn sdk_blobs() -> impl Iterator<Item = &'static CommittedBlob> {
@@ -103,6 +106,64 @@ fn the_snapshots_are_the_sdk_blobs() {
             .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
             .collect();
         assert_eq!(held, files, "{dir}: snapshot files");
+    }
+}
+
+#[specforge_test_macros::test(
+    behavior = "load_extension_declaration",
+    verify = "every committed SDK blob's declaration round-trips through the typed declaration byte for byte, but for the legacy keys it declares"
+)]
+fn every_sdk_declaration_round_trips_through_the_typed_declaration() {
+    let runtime = ComponentRuntime::new();
+    for blob in sdk_blobs() {
+        let Guest::Sdk { legacy_keys } = blob.guest else {
+            unreachable!("sdk_blobs lists SDK blobs");
+        };
+        runtime
+            .load(blob.name, &blob.read())
+            .unwrap_or_else(|e| panic!("{}: {e}", blob.name));
+        let answers = wire_answers(&runtime, blob).unwrap();
+        let text = |file: &str| -> String {
+            let answer = answers.iter().find(|a| a.file == file).unwrap();
+            String::from_utf8(answer.bytes.clone()).unwrap()
+        };
+        let handshake: HandshakeResponse = serde_json::from_str(&text("handshake.json")).unwrap();
+        let mut unknown = BTreeSet::new();
+        let declaration = ExtensionDeclaration::from_wire(
+            handshake,
+            |category| {
+                let file = format!("describe_{}.json", category.name());
+                Ok(serde_json::from_str::<DescribeResponse>(&text(&file)).unwrap())
+            },
+            |key| {
+                unknown.insert((key.category.to_string(), key.key));
+            },
+        )
+        .unwrap_or_else(|e| panic!("{}: {e}", blob.name));
+
+        let declared: BTreeSet<(String, String)> = legacy_keys
+            .iter()
+            .map(|(category, key)| (category.to_string(), key.to_string()))
+            .collect();
+        assert_eq!(unknown, declared, "{}: unknown keys", blob.name);
+        assert_eq!(
+            declaration.handshake_json(),
+            text("handshake.json"),
+            "{}: handshake",
+            blob.name
+        );
+        for category in DeclaredCategory::ALL {
+            let name = category.name();
+            if legacy_keys.iter().any(|(held, _)| *held == name) {
+                continue;
+            }
+            assert_eq!(
+                declaration.describe_json(category),
+                text(&format!("describe_{name}.json")),
+                "{}: describe {name}",
+                blob.name
+            );
+        }
     }
 }
 
