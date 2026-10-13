@@ -1638,6 +1638,7 @@ fn trace_plan_gap_analysis() {
     );
     assert!(gaps.contains(&("act_one", "inv_a", "ordering")), "{gaps:?}");
     assert_eq!(gaps.len(), 3, "{gaps:?}");
+    assert_eq!(parsed["ok"], false, "{parsed}");
 }
 
 #[specforge_test(behavior = "validate_agent_plan", verify = "output is structured JSON")]
@@ -1656,7 +1657,8 @@ fn trace_plan_reports_its_gaps_as_structured_json() {
         .map(String::as_str)
         .collect();
     keys.sort();
-    assert_eq!(keys, ["affected_entities", "gaps"], "{parsed}");
+    assert_eq!(keys, ["affected_entities", "gaps", "ok"], "{parsed}");
+    assert_eq!(parsed["ok"], false, "{parsed}");
     assert_eq!(parsed["affected_entities"], json!(["act_one"]));
     for gap in parsed["gaps"].as_array().unwrap() {
         let mut keys: Vec<&str> = gap

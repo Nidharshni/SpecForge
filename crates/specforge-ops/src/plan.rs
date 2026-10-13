@@ -10,15 +10,48 @@ use std::collections::{HashMap, HashSet};
 
 use crate::view::ProjectView;
 
-/// How a plan falls short of the graph.
-#[derive(Debug, Clone, PartialEq)]
+/// How a plan falls short of the graph: the `McpTracePlanResult` document
+/// that `specforge trace --plan` prints and `specforge.trace` answers
+/// (ADR 0052).
+#[derive(Debug, Clone, PartialEq, Serialize, Shape)]
 pub struct PlanOutcome {
+    /// The plan passes: no entry names no entity and none comes before an
+    /// entity it depends on. A missing entry is a warning
+    /// (`PlanGapKind::fails`).
+    pub ok: bool,
     /// Plan entries that name an entity in the graph, in plan order.
+    #[serde(rename = "affected_entities")]
     pub entries: Vec<String>,
-    /// How the plan falls short: entries naming no entity (E003 in their
-    /// context), testable entities with obligations it has no entry for,
-    /// entries before what they depend on.
+    /// Unresolved entries (in entry order), then testable entities that
+    /// declare obligations and have no entry (in id order), then ordering
+    /// gaps (in graph edge order).
     pub gaps: Vec<PlanGap>,
+}
+
+impl PlanOutcome {
+    /// The outcome as `specforge trace --plan --format human` prints it.
+    pub fn to_human(&self) -> String {
+        let mut text = String::new();
+        if self.entries.is_empty() {
+            text.push_str("affected: none\n");
+        } else {
+            text.push_str(&format!("affected: {}\n", self.entries.join(", ")));
+        }
+        if self.gaps.is_empty() {
+            text.push_str("gaps: none\n");
+        } else {
+            text.push_str(&format!("gaps ({}):\n", self.gaps.len()));
+            for gap in &self.gaps {
+                text.push_str(&format!("  - {}: {}\n", gap.kind.as_str(), gap.context));
+            }
+        }
+        text.push_str(if self.ok {
+            "plan check: passed\n"
+        } else {
+            "plan check: failed\n"
+        });
+        text
+    }
 }
 
 /// What an agent intends to do, entity by entity, in the order it will do it
@@ -105,18 +138,22 @@ impl AgentPlan {
     }
 }
 
-/// One way a plan falls short of the graph. `source` is `"plan"` when the
+/// One way a plan falls short (`McpTraceGap`): `source` is `plan` when the
 /// plan itself is at fault rather than one of its entries.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Shape)]
 pub struct PlanGap {
+    #[serde(rename = "source_entity")]
     pub source: String,
+    #[serde(rename = "target_entity")]
     pub target: String,
+    #[serde(rename = "missing_link_type")]
     pub kind: PlanGapKind,
-    /// The diagnostic text of the gap (an unresolved entry's starts with E003).
+    /// The gap in a sentence (an unresolved entry's starts with E003).
+    #[serde(rename = "gap_context")]
     pub context: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Shape)]
 #[serde(rename_all = "snake_case")]
 pub enum PlanGapKind {
     /// An entry names no entity in the graph.
@@ -134,6 +171,12 @@ impl PlanGapKind {
             PlanGapKind::MissingPlanEntry => "missing_plan_entry",
             PlanGapKind::Ordering => "ordering",
         }
+    }
+
+    /// It fails the plan: an unresolved entry (E003) or an ordering gap. A
+    /// missing entry is a warning (validate_agent_plan).
+    pub fn fails(self) -> bool {
+        !matches!(self, PlanGapKind::MissingPlanEntry)
     }
 }
 
@@ -226,6 +269,7 @@ pub fn check(view: &ProjectView, plan: &AgentPlan) -> PlanOutcome {
     }
 
     PlanOutcome {
+        ok: !gaps.iter().any(|gap| gap.kind.fails()),
         entries: validated_entries,
         gaps,
     }

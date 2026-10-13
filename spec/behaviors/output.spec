@@ -660,15 +660,7 @@ behavior validate_agent_plan "Validate Agent Implementation Plan" {
   features   [traceability_serialization]
   invariants [graph_traversal_integrity, diagnostic_determinism, zero_domain_knowledge_core]
   category   validation
-  types      [
-    Graph,
-    TraceChain,
-    TraceLink,
-    AgentPlan,
-    AgentPlanEntry,
-    PlanValidationResult,
-    PlanValidationEntry,
-  ]
+  types      [Graph, AgentPlan, AgentPlanEntry, McpTracePlanResult, McpTraceGap]
   ports      [CompilerApi]
   consumes   [validation_complete]
   produces   [plan_validated]
@@ -701,6 +693,7 @@ behavior validate_agent_plan "Validate Agent Implementation Plan" {
   verify unit "output is structured JSON"
   verify unit "the plan check reads no recorded test report"
   verify unit "a plan that is not an AgentPlan is refused, naming every place it departs from the type"
+  verify unit "a plan passes when every entry names an entity and none comes before what it depends on; a missing entry is a warning"
   verify contract "Validate Agent Implementation Plan: agent plan validation holds — validation_complete_fired, unresolvable_ids_diagnosed, missing_entries_warned, ordering_validated, structured_report_produced, plan_validated_emitted"
 }
 

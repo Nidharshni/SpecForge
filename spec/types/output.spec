@@ -37,22 +37,6 @@ type TokenBudgetResult {
 
 // Entity embedding types moved to spec/extensions/embeddings/types.spec
 
-type PlanValidationResult "Agent Plan Validation Result" {
-  valid_entries       integer
-  invalid_entries     integer
-  gap_count           integer
-  ordering_violations integer
-  details             PlanValidationEntry[]
-  verify unit "Agent Plan Validation Result conforms to schema"
-}
-
-type PlanValidationEntry "Single Plan Entry Validation" {
-  entity_id string
-  status    "valid" | "invalid" | "not_found"
-  reason    string @optional
-  verify unit "Single Plan Entry Validation conforms to schema"
-}
-
 type DiagnosticSummary "Diagnostic Count Summary" {
   error_count integer
   warn_count  integer

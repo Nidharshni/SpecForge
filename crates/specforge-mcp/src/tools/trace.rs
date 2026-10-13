@@ -2,7 +2,7 @@ use crate::target::View;
 use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
 use serde::Serialize;
 use specforge_common::shape::Shape;
-use specforge_ops::plan::AgentPlan;
+use specforge_ops::plan::{AgentPlan, PlanOutcome};
 use specforge_ops::trace::{ChainDocument, Target, TraceChain};
 use specforge_ops::view::ProjectView;
 
@@ -28,15 +28,7 @@ pub struct Args {
 #[serde(untagged)]
 pub enum Reply {
     Chain(ChainDocument<TraceChain>),
-    Plan(PlanReply),
-}
-
-/// A plan's check (`McpTracePlanResult`).
-#[derive(Debug, Serialize, Shape)]
-pub struct PlanReply {
-    /// Plan entries that name an entity in the graph, in plan order.
-    affected_entities: Vec<String>,
-    gaps: Vec<Gap>,
+    Plan(PlanOutcome),
 }
 
 /// A gap as MCP spells it (`McpTraceGap`).
@@ -85,7 +77,7 @@ impl CoreTool for Tool {
 
     fn call(view: ProjectView<'_>, args: Args) -> Answered<Reply> {
         if let Some(plan) = &args.plan {
-            return plan_gaps(&view, plan);
+            return Ok(Reply::Plan(specforge_ops::plan::check(&view, plan)).into());
         }
         let Some(entity_id) = args.entity_id.as_deref() else {
             return Err(Box::new(McpError::invalid_input(
@@ -104,37 +96,5 @@ impl CoreTool for Tool {
                 "trace of one entity answered no chain",
             ))),
         }
-    }
-}
-
-/// Gap analysis of an agent plan against the graph, as an
-/// `McpTracePlanResult`.
-fn plan_gaps(view: &ProjectView, plan: &AgentPlan) -> Answered<Reply> {
-    let analysis = analyze_plan(view, plan);
-    Ok(Reply::Plan(PlanReply {
-        affected_entities: analysis.entries,
-        gaps: analysis.gaps,
-    })
-    .into())
-}
-
-/// An agent plan checked against the graph (`specforge_ops::plan::check`).
-pub(crate) struct PlanAnalysis {
-    /// Plan entries that name an entity in the graph, in plan order.
-    pub entries: Vec<String>,
-    /// Unresolved entries, missing entries, bad ordering.
-    pub gaps: Vec<Gap>,
-}
-
-/// Check `plan` against the view's graph.
-pub(crate) fn analyze_plan(view: &ProjectView, plan: &AgentPlan) -> PlanAnalysis {
-    let outcome = specforge_ops::plan::check(view, plan);
-    PlanAnalysis {
-        entries: outcome.entries,
-        gaps: outcome
-            .gaps
-            .into_iter()
-            .map(|gap| Gap::of(&specforge_ops::trace::Gap::Plan(gap)))
-            .collect(),
     }
 }

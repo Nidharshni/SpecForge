@@ -1335,6 +1335,11 @@ expression: listing
                     "type": "string"
                   },
                   "missing_link_type": {
+                    "enum": [
+                      "unresolved_entity",
+                      "missing_plan_entry",
+                      "ordering"
+                    ],
                     "type": "string"
                   },
                   "source_entity": {
@@ -1353,9 +1358,13 @@ expression: listing
                 "type": "object"
               },
               "type": "array"
+            },
+            "ok": {
+              "type": "boolean"
             }
           },
           "required": [
+            "ok",
             "affected_entities",
             "gaps"
           ],

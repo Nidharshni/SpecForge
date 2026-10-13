@@ -237,6 +237,9 @@ fn plan_validation_contract_consistency() {
         fine.gaps
     );
 
+    assert!(!result.ok, "an unresolved entry fails the plan");
+    assert!(fine.ok, "{:?}", fine.gaps);
+
     // structured_report_produced: every gap is a record of its source, target,
     // kind and context.
     let report = serde_json::to_value(&result.gaps).unwrap();
@@ -250,10 +253,25 @@ fn plan_validation_contract_consistency() {
             .map(String::as_str)
             .collect();
         keys.sort();
-        assert_eq!(keys, ["context", "kind", "source", "target"], "{record}");
+        assert_eq!(
+            keys,
+            [
+                "gap_context",
+                "missing_link_type",
+                "source_entity",
+                "target_entity"
+            ],
+            "{record}"
+        );
     }
-    assert_eq!(records[0]["kind"], "unresolved_entity", "{report}");
-    assert_eq!(records[1]["kind"], "missing_plan_entry", "{report}");
+    assert_eq!(
+        records[0]["missing_link_type"], "unresolved_entity",
+        "{report}"
+    );
+    assert_eq!(
+        records[1]["missing_link_type"], "missing_plan_entry",
+        "{report}"
+    );
 }
 
 // B:validate_agent_plan — verify unit "the plan check reads no recorded test report"
@@ -344,4 +362,94 @@ fn an_agent_plan_is_read_against_its_schema() {
             }],
         }
     );
+}
+
+// B:validate_agent_plan — verify unit "a plan passes when every entry names an entity and none comes before what it depends on; a missing entry is a warning"
+#[specforge_test(
+    behavior = "validate_agent_plan",
+    verify = "a plan passes when every entry names an entity and none comes before what it depends on; a missing entry is a warning"
+)]
+fn a_missing_entry_warns_and_an_unresolved_or_misordered_entry_fails() {
+    let graph = build_graph();
+    let check = |ids: &[&str]| {
+        let plan = serde_json::json!({
+            "plan_id": "p",
+            "entries": ids
+                .iter()
+                .map(|id| serde_json::json!({"entity_id": id, "action": "implement"}))
+                .collect::<Vec<_>>(),
+        });
+        crate::view_support::plan_check(&graph, &["behavior"], &plan)
+    };
+    // c is missing: a warning.
+    assert!(check(&["b"]).ok);
+    // An entry that names no entity fails the plan.
+    assert!(!check(&["nonexistent", "b", "c"]).ok);
+    // b before c, which it depends on, fails it.
+    assert!(!check(&["b", "c"]).ok);
+    let fine = check(&["c", "b"]);
+    assert!(fine.ok && fine.gaps.is_empty(), "{:?}", fine.gaps);
+}
+
+// B:validate_agent_plan — verify unit "output is structured JSON"
+#[specforge_test(behavior = "validate_agent_plan", verify = "output is structured JSON")]
+fn the_plan_outcome_is_one_document() {
+    let graph = build_graph();
+    let plan = serde_json::json!({"plan_id": "p", "entries": [
+        {"entity_id": "b", "action": "implement"},
+        {"entity_id": "nonexistent", "action": "implement"},
+    ]});
+    let outcome = crate::view_support::plan_check(&graph, &["behavior"], &plan);
+    let value = serde_json::to_value(&outcome).unwrap();
+    let mut keys: Vec<&str> = value
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(String::as_str)
+        .collect();
+    keys.sort();
+    assert_eq!(keys, ["affected_entities", "gaps", "ok"]);
+    let schema = specforge_common::shape::build::<specforge_ops::plan::PlanOutcome>();
+    assert_eq!(
+        specforge_common::shape::violations(&schema, &value),
+        Vec::<String>::new()
+    );
+}
+
+// B:validate_agent_plan — verify unit "output is structured JSON"
+#[specforge_test(behavior = "validate_agent_plan", verify = "output is structured JSON")]
+fn the_plan_outcome_reads_as_human_text() {
+    let graph = build_graph();
+    let plan = serde_json::json!({"plan_id": "p", "entries": [
+        {"entity_id": "b", "action": "implement"},
+        {"entity_id": "ghost", "action": "implement"},
+        {"entity_id": "c", "action": "implement"},
+    ]});
+    let outcome = crate::view_support::plan_check(&graph, &["behavior"], &plan);
+    assert_eq!(
+        outcome.to_human(),
+        "affected: b, c\n\
+         gaps (2):\n  \
+         - unresolved_entity: E003: unresolved entity 'ghost' in plan — not found in graph\n  \
+         - ordering: 'b' depends on 'c' (via depends_on), but 'c' appears later in the plan\n\
+         plan check: failed\n"
+    );
+    let ok = crate::view_support::plan_check(
+        &graph,
+        &["behavior"],
+        &serde_json::json!({"plan_id": "p", "entries": [
+            {"entity_id": "c", "action": "implement"},
+            {"entity_id": "b", "action": "implement"},
+        ]}),
+    );
+    assert_eq!(
+        ok.to_human(),
+        "affected: c, b\ngaps: none\nplan check: passed\n"
+    );
+    let none = crate::view_support::plan_check(
+        &graph,
+        &["behavior"],
+        &serde_json::json!({"plan_id": "p", "entries": []}),
+    );
+    assert!(none.to_human().starts_with("affected: none\ngaps (2):"));
 }
