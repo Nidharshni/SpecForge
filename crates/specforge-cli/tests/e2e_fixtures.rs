@@ -121,14 +121,14 @@ decision use_treesitter "Use Tree-Sitter" {
 
 constraint sub_second_check "Sub-Second Check" {
     category performance
-    priority must
+    priority high
     description "Check must complete in under 1 second for 100 files"
 }
 
 failure_mode parser_crash "Parser Crash" {
-    severity 8
-    occurrence 2
-    detection 3
+    severity high
+    occurrence unlikely
+    detection likely
     cause "Malformed input"
     effect "CLI exits with panic"
     mitigations [parse_input]
@@ -198,14 +198,14 @@ decision use_treesitter "Use Tree-Sitter" {
 
 constraint sub_second_check "Sub-Second Check" {
     category performance
-    priority must
+    priority high
     description "Check must complete in under 1 second for 100 files"
 }
 
 failure_mode parser_crash "Parser Crash" {
-    severity 8
-    occurrence 2
-    detection 3
+    severity high
+    occurrence unlikely
+    detection likely
     cause "Malformed input"
     effect "CLI exits with panic"
     mitigations [parse_input]
@@ -383,9 +383,9 @@ event validation_complete "Validation Complete" {
 }
 
 failure_mode unresolved_ref "Unresolved Reference" {
-    severity 5
-    occurrence 4
-    detection 7
+    severity medium
+    occurrence occasional
+    detection moderate
     cause "Typo in entity ID"
     effect "Broken graph edges"
     mitigations [resolve_refs]

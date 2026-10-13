@@ -7,7 +7,7 @@ use crate::{
 use specforge_common::{Diagnostic, DiagnosticData, codes};
 use specforge_protocol_types::{
     EdgeTypeDescriptor, EntityEnhancementDescriptor, EntityKindDescriptor, ExtensionDeclaration,
-    FieldDescriptor,
+    FieldDescriptor, FieldType,
 };
 
 /// The keyword a kind's entities are written with: its declared keyword,
@@ -220,6 +220,37 @@ fn register_single_field(
                         ),
                     ),
                 ));
+            }
+            if entry.field_type() == FieldType::Enum {
+                if entry.enum_values().is_empty() {
+                    diagnostics.push(Reported::new(
+                        BuildPart::Registries,
+                        Diagnostic::new(
+                            codes::W021,
+                            format!(
+                                "extension '{}': field '{}' on kind '{}' is an enum that declares no values",
+                                source_extension, field.name, kind_name
+                            ),
+                        ),
+                    ));
+                } else if let Some(default) = field.default_value.as_deref()
+                    && !entry.enum_values().iter().any(|v| v == default)
+                {
+                    diagnostics.push(Reported::new(
+                        BuildPart::Registries,
+                        Diagnostic::new(
+                            codes::W021,
+                            format!(
+                                "extension '{}': field '{}' on kind '{}' declares default_value '{}', which is not one of its values: {}",
+                                source_extension,
+                                field.name,
+                                kind_name,
+                                default,
+                                entry.enum_values().join(", ")
+                            ),
+                        ),
+                    ));
+                }
             }
             registry.register(entry);
         }

@@ -29,3 +29,6 @@ impl Contributions for Governance {
 }
 
 specforge_extension_sdk::component_guest!(build = specforge_extension_build);
+
+#[cfg(test)]
+mod tests;

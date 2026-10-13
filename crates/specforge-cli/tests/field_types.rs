@@ -245,3 +245,342 @@ decision d2 "E" {
         serde_json::json!(["a", "7"])
     );
 }
+
+// -- the builtins' field vocabularies (plan 01) --
+
+const VOCABULARY_CONFIG: &str = r#"{"name":"t","version":"0.1.0","spec_root":"spec","extensions":["@specforge/software","@specforge/product","@specforge/governance","@specforge/formal"]}"#;
+
+/// A project of the four builtins that declare vocabularies, over `spec`.
+fn vocabulary_project(spec: &str) -> tempfile::TempDir {
+    setup_project_with_config(VOCABULARY_CONFIG, &[("main.spec", spec)])
+}
+
+/// One entity of every kind with a vocabulary, each field written with a
+/// value outside its vocabulary (22 of them).
+const OFF_VOCABULARY: &str = r#"feature feat "F" {
+  problem  "p"
+  status   finished
+  priority urgent
+  effort   huge
+}
+
+journey jour "J" {
+  flow     ["a"]
+  priority urgent
+}
+
+deliverable deli "D" {
+  artifact_type binary
+  status        released
+}
+
+milestone mile "M" {
+  status   done
+  priority urgent
+}
+
+persona pers "P" {
+  description     "d"
+  technical_level novice
+  status          retired
+}
+
+channel chan "C" {
+  description       "d"
+  interaction_model sync
+  status            retired
+}
+
+release rele "R" {
+  version "1.0.0"
+  status  shipped
+}
+
+invariant inva "I" {
+  guarantee "g"
+}
+
+decision decn "Dc" {
+  status   open
+  context  "c"
+  decision "x"
+}
+
+constraint cons "Co" {
+  priority must
+  metric   "a < 1"
+  description "d"
+}
+
+failure_mode fail "Fm" {
+  invariant       inva
+  cause           "c"
+  effect          "e"
+  severity        8
+  occurrence      often
+  detection       never
+  post_severity   9
+  post_occurrence often
+  post_detection  never
+}
+
+property prop "Pr" {
+  expression    "always ok"
+  property_type eventual
+}
+"#;
+
+/// The `field/entity` of an E061 message: `field 'status' of feature 'f' is
+/// declared enum (...), but was given ...` is `status/f`.
+fn refused_field(message: &str) -> String {
+    let mut quoted = message.split('\'').skip(1).step_by(2);
+    let field = quoted.next().unwrap();
+    let _kind = quoted.next().unwrap();
+    let id = quoted.next().unwrap();
+    format!("{field}/{id}")
+}
+
+#[specforge_test(
+    behavior = "check_field_value_types",
+    verify = "a value outside a builtin vocabulary is E061"
+)]
+#[ignore = "fixed by 01-T9"]
+fn every_builtin_vocabulary_refuses_a_value_outside_it() {
+    let dir = vocabulary_project(OFF_VOCABULARY);
+
+    let (code, diags) = check(&dir);
+    assert_eq!(code, Some(1), "{diags:?}");
+    let mut refused: Vec<String> = diags
+        .iter()
+        .filter(|d| d["code"] == "E061")
+        .map(|d| refused_field(d["message"].as_str().unwrap()))
+        .collect();
+    refused.sort();
+    let mut expected: Vec<String> = [
+        "status/feat",
+        "priority/feat",
+        "effort/feat",
+        "priority/jour",
+        "artifact_type/deli",
+        "status/deli",
+        "status/mile",
+        "priority/mile",
+        "technical_level/pers",
+        "status/pers",
+        "interaction_model/chan",
+        "status/chan",
+        "status/rele",
+        "status/decn",
+        "priority/cons",
+        "severity/fail",
+        "occurrence/fail",
+        "detection/fail",
+        "post_severity/fail",
+        "post_occurrence/fail",
+        "post_detection/fail",
+        "property_type/prop",
+    ]
+    .map(String::from)
+    .to_vec();
+    expected.sort();
+    assert_eq!(refused, expected, "{diags:?}");
+    // The warnings these values drew are retired: the core says it once.
+    let retired = [
+        "W050", "W051", "W052", "W077", "W078", "W079", "W080", "W083", "W084", "W085", "W095",
+        "W121", "W125",
+    ];
+    for d in &diags {
+        let code = d["code"].as_str().unwrap();
+        assert!(!retired.contains(&code), "{d}");
+    }
+}
+
+#[specforge_test(
+    behavior = "check_field_value_types",
+    verify = "an enum value suggests the closest declared value"
+)]
+#[ignore = "fixed by 01-T9"]
+fn an_off_vocabulary_value_suggests_the_closest_value() {
+    let dir = setup_project_with_config(
+        r#"{"name":"t","version":"0.1.0","spec_root":"spec","extensions":["@specforge/product"]}"#,
+        &[(
+            "main.spec",
+            "feature feat \"F\" {\n  problem \"p\"\n  status dne\n}\n",
+        )],
+    );
+
+    let (code, diags) = check(&dir);
+    assert_eq!(code, Some(1), "{diags:?}");
+    let e061: Vec<_> = diags.iter().filter(|d| d["code"] == "E061").collect();
+    assert_eq!(e061.len(), 1, "{diags:?}");
+    assert_eq!(
+        e061[0]["message"],
+        "field 'status' of feature 'feat' is declared enum (proposed, accepted, in_progress, done, deferred, deprecated), but was given dne"
+    );
+    assert_eq!(e061[0]["suggestion"], "did you mean 'done'?");
+}
+
+/// The twelve closed filters of the product lists: (kind, field, values).
+/// Written out here, not read from the extension: this is what the lists
+/// take today and what `check` must keep admitting.
+const CLOSED_FILTERS: [(&str, &str, &[&str]); 12] = [
+    (
+        "feature",
+        "status",
+        &[
+            "proposed",
+            "accepted",
+            "in_progress",
+            "done",
+            "deferred",
+            "deprecated",
+        ],
+    ),
+    (
+        "feature",
+        "priority",
+        &["critical", "high", "medium", "low"],
+    ),
+    (
+        "journey",
+        "priority",
+        &["critical", "high", "medium", "low"],
+    ),
+    (
+        "deliverable",
+        "artifact_type",
+        &[
+            "cli",
+            "service",
+            "library",
+            "web_app",
+            "mobile_app",
+            "api",
+            "extension",
+            "documentation",
+            "package",
+        ],
+    ),
+    (
+        "deliverable",
+        "status",
+        &["draft", "in_progress", "shipped", "deprecated"],
+    ),
+    (
+        "milestone",
+        "status",
+        &["planned", "in_progress", "completed", "blocked"],
+    ),
+    (
+        "milestone",
+        "priority",
+        &["critical", "high", "medium", "low"],
+    ),
+    (
+        "persona",
+        "technical_level",
+        &[
+            "expert",
+            "advanced",
+            "intermediate",
+            "beginner",
+            "non_technical",
+        ],
+    ),
+    ("persona", "status", &["active", "deprecated"]),
+    (
+        "channel",
+        "interaction_model",
+        &[
+            "request_response",
+            "event_driven",
+            "batch",
+            "streaming",
+            "bidirectional",
+            "manual",
+        ],
+    ),
+    ("channel", "status", &["active", "deprecated"]),
+    (
+        "release",
+        "status",
+        &["planned", "in_progress", "released", "recalled"],
+    ),
+];
+
+/// The plural a kind's list command goes by.
+fn plural(kind: &str) -> String {
+    format!("{kind}s")
+}
+
+/// An entity per (kind, closed field, value): `<kind>_<field>_<value>`,
+/// writing that value, every other closed field of the kind its first one,
+/// and the fields the kind requires.
+fn every_closed_value() -> String {
+    let mut spec = String::new();
+    for (kind, field, values) in CLOSED_FILTERS {
+        for value in values {
+            spec.push_str(&format!("{kind} {kind}_{field}_{value} \"E\" {{\n"));
+            spec.push_str(match kind {
+                "feature" => "  problem \"p\"\n",
+                "journey" => "  flow [\"a\"]\n",
+                "persona" | "channel" => "  description \"d\"\n",
+                "release" => "  version \"1.0.0\"\n",
+                _ => "",
+            });
+            for (other_kind, other, other_values) in CLOSED_FILTERS {
+                if other_kind != kind {
+                    continue;
+                }
+                let written = if other == field {
+                    value
+                } else {
+                    &other_values[0]
+                };
+                spec.push_str(&format!("  {other} {written}\n"));
+            }
+            if kind == "feature" {
+                spec.push_str("  effort xs\n");
+            }
+            spec.push_str("}\n\n");
+        }
+    }
+    spec
+}
+
+#[specforge_test(
+    behavior = "validate_product_vocabularies",
+    verify = "check admits every value the list filters take, and the lists find it"
+)]
+fn the_lists_take_every_value_check_admits() {
+    let dir = vocabulary_project(&every_closed_value());
+
+    let (_code, diags) = check(&dir);
+    let refused: Vec<&serde_json::Value> = diags.iter().filter(|d| d["code"] == "E061").collect();
+    assert!(refused.is_empty(), "{refused:?}");
+
+    for (kind, field, values) in CLOSED_FILTERS {
+        let last = values.last().unwrap();
+        let output = specforge_cmd()
+            .args([
+                "product",
+                &plural(kind),
+                &format!("--{}", field.replace('_', "-")),
+                last,
+            ])
+            .args(["--format", "json"])
+            .arg("--path")
+            .arg(dir.path())
+            .output()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(0), "{kind} --{field} {last}");
+        let listed = parse_json_stdout(&output);
+        let ids: Vec<&str> = listed[plural(kind)]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|e| e["id"].as_str().unwrap())
+            .collect();
+        assert_eq!(ids, [format!("{kind}_{field}_{last}")], "{kind} --{field}");
+    }
+}

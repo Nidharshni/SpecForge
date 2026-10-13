@@ -130,6 +130,72 @@ fn an_absent_persona_or_channel_status_is_active() {
     assert_eq!(listed_channels, ["c1", "c2"]);
 }
 
+/// Pinned by plan 01 (fixed by T6, which rewrites it against
+/// `vocabulary::fields()`): every closed list filter, `priority` and `effort`
+/// are declared as the enum of the vocabulary they read, and a status filter's
+/// absent value is the declared default.
+#[specforge_test::prelude::specforge_test(
+    behavior = "validate_product_vocabularies",
+    verify = "every vocabulary field is declared an enum of its vocabulary, with its absent value as default, and every closed list filter reads the same vocabulary"
+)]
+#[ignore = "fixed by 01-T6"]
+fn every_vocabulary_field_is_declared_with_its_vocabulary() {
+    let declaration = crate::specforge_extension_build().declaration();
+    let declared = |kind: &str, field: &str| {
+        declaration
+            .entities
+            .iter()
+            .filter(|k| k.keyword.as_deref() == Some(kind))
+            .flat_map(|k| &k.fields)
+            .find(|f| f.name == field)
+            .unwrap_or_else(|| panic!("{kind}.{field} is not declared"))
+            .clone()
+    };
+    let kinds = [
+        &FEATURES,
+        &JOURNEYS,
+        &DELIVERABLES,
+        &MILESTONES,
+        &PERSONAS,
+        &CHANNELS,
+        &RELEASES,
+    ];
+    let mut checked = 0;
+    for kind in kinds {
+        for filter in kind.filters {
+            let Some(values) = filter.values else {
+                continue;
+            };
+            let field = declared(kind.kind, filter.arg);
+            assert_eq!(field.field_type, "enum", "{}.{}", kind.kind, filter.arg);
+            assert_eq!(field.enum_values, values, "{}.{}", kind.kind, filter.arg);
+            assert_eq!(
+                field.default_value.as_deref(),
+                filter.absent_as,
+                "{}.{}",
+                kind.kind,
+                filter.arg
+            );
+            checked += 1;
+        }
+    }
+    assert_eq!(checked, 12, "twelve closed filters");
+    for (kind, field, values) in [
+        ("feature", "priority", PRIORITY),
+        ("journey", "priority", PRIORITY),
+        ("milestone", "priority", PRIORITY),
+        (
+            "feature",
+            "effort",
+            closed_values(&FEATURES, "effort").unwrap(),
+        ),
+    ] {
+        let declared = declared(kind, field);
+        assert_eq!(declared.field_type, "enum", "{kind}.{field}");
+        assert_eq!(declared.enum_values, values, "{kind}.{field}");
+    }
+}
+
 #[test]
 fn a_closed_enum_is_the_one_its_validation_rule_checks() {
     // Every `one_of` value constraint a product kind's field is checked

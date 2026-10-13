@@ -2209,10 +2209,11 @@ appropriate peer dependency (a validation rule on another extension's kind that
 this one works without names that extension as its `target_extension` instead).
 The same code reports a declaration the registry refuses: a `derived_from` that
 derives nothing, a `proof_role` other than `bound` or `claim`, or a
-`lifecycle_field` that is not one of the kind's fields. A field that writes a
-declared edge type from a kind outside its declared `source_kind`, or to a kind
-outside its declared `target_kind`, is W021 too, and its edges are of no edge
-type.
+`lifecycle_field` that is not one of the kind's fields, an `enum` field that
+declares no values, or a `default_value` an enum field does not take. A field
+that writes a declared edge type from a kind outside its declared `source_kind`,
+or to a kind outside its declared `target_kind`, is W021 too, and its edges are
+of no edge type.
 
 Owner: core
 Level: warning
