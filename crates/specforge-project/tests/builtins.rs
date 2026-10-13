@@ -173,7 +173,7 @@ fn formal_extension_loads_via_protocol() {
     assert_eq!(manifest.name(), "@specforge/formal");
     assert_eq!(manifest.version(), "1.0.0");
     assert_eq!(manifest.entities.len(), 5);
-    assert_eq!(manifest.edges.len(), 13);
+    assert_eq!(manifest.edges.len(), 10);
     assert!(
         manifest.validation_rules.len() >= 6,
         "formal needs at least 6 validation rules, got {}",

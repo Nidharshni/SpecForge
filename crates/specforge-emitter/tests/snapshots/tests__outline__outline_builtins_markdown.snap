@@ -1,6 +1,6 @@
 ---
 source: crates/specforge-emitter/tests/outline.rs
-expression: "render(&outline, &opts)"
+expression: "drawn(&manifests, opts)"
 ---
 # Extension Architecture
 
@@ -11,7 +11,7 @@ expression: "render(&outline, &opts)"
 | @specforge/product | 1.0.0 | 9 | 20 | 61 | — |
 | @specforge/software | 1.0.0 | 5 | 15 | 11 | module (+2), milestone (+1) |
 | @specforge/governance | 1.0.0 | 3 | 11 | 7 | — |
-| @specforge/formal | 1.0.0 | 5 | 13 | 13 | behavior (+7), event (+3), invariant (+1) |
+| @specforge/formal | 1.0.0 | 5 | 10 | 13 | behavior (+7), event (+3), invariant (+1) |
 
 ## Dependencies
 
@@ -41,9 +41,6 @@ expression: "render(&outline, &opts)"
 - DecisionAffectsFeature (@specforge/governance.decision → @specforge/product.feature)
 - FailureModeThreatensFeature (@specforge/governance.failure_mode → @specforge/product.feature)
 - FailureModeAffectsBehavior (@specforge/governance.failure_mode → @specforge/software.behavior)
-- BehaviorRequiresInvariant (@specforge/formal.behavior → @specforge/software.invariant)
-- BehaviorEnsuresInvariant (@specforge/formal.behavior → @specforge/software.invariant)
-- BehaviorMaintainsInvariant (@specforge/formal.behavior → @specforge/software.invariant)
 - AxiomAssumesInvariant (@specforge/formal.axiom → @specforge/software.invariant)
 - PropertyDependsOnInvariant (@specforge/formal.property → @specforge/software.invariant)
 - BehaviorRefinesBehavior (@specforge/formal.behavior → @specforge/software.behavior)
@@ -256,8 +253,6 @@ expression: "render(&outline, &opts)"
 
 | Field | Type | Required | Source | Edge | Target |
 |-------|------|----------|--------|------|--------|
-| kind | string | no | @specforge/software | — | — |
-| fields | block | no | @specforge/software | — | — |
 | composed_types | reference_list | no | @specforge/software | TypeComposesType | type |
 | extends | reference | no | @specforge/software | TypeExtendsType | type |
 | description | string | no | @specforge/software | — | — |
@@ -338,11 +333,11 @@ expression: "render(&outline, &opts)"
 | description | string | no | @specforge/governance | — | — |
 | risk | string | no | @specforge/governance | — | — |
 | rpn | integer | no | @specforge/governance | — | — |
-| post_mitigation | string | no | @specforge/governance | — | — |
+| post_mitigation | block | no | @specforge/governance | — | — |
 | threatens_features | reference_list | no | @specforge/governance | FailureModeThreatensFeature | feature |
 | affected_behaviors | reference_list | no | @specforge/governance | FailureModeAffectsBehavior | behavior |
 
-### @specforge/formal (5 entities, 13 edges, 13 rules)
+### @specforge/formal (5 entities, 10 edges, 13 rules)
 
 **Entity kinds**: property, axiom, protocol, refinement, process
 
@@ -412,5 +407,5 @@ expression: "render(&outline, &opts)"
 
 ## Summary
 
-- **4** extensions, **22** entity kinds, **59** edge types
-- **92** validation rules, **18** cross-extension edges, **5** enhancements
+- **4** extensions, **22** entity kinds, **56** edge types
+- **92** validation rules, **15** cross-extension edges, **5** enhancements
