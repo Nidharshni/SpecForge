@@ -1,5 +1,6 @@
 mod buffers;
 mod builtins;
+mod changes;
 mod check_passes;
 mod classify;
 mod compile;

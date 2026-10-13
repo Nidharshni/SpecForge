@@ -231,6 +231,30 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
+    #[specforge_test(
+        behavior = "resolve_use_imports",
+        verify = "a symlink is a source only when it resolves to a file"
+    )]
+    #[ignore = "fixed by T1"]
+    fn a_symlink_is_a_source_only_when_it_resolves_to_a_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("root");
+        let sibling = tmp.path().join("sibling");
+        fs::create_dir_all(root.join("realdir")).unwrap();
+        fs::create_dir_all(&sibling).unwrap();
+        fs::write(root.join("a.spec"), "").unwrap();
+        fs::write(sibling.join("other.spec"), "").unwrap();
+        std::os::unix::fs::symlink(root.join("realdir"), root.join("d.spec")).unwrap();
+        std::os::unix::fs::symlink("nowhere.spec", root.join("dangling.spec")).unwrap();
+        std::os::unix::fs::symlink(sibling.join("other.spec"), root.join("link.spec")).unwrap();
+
+        assert_eq!(
+            discover_spec_files(&root, &Exclude::default()),
+            vec![root.join("a.spec"), root.join("link.spec")]
+        );
+    }
+
     #[test]
     fn a_walk_stops_where_told_and_lists_where() {
         let tmp = tempfile::tempdir().unwrap();

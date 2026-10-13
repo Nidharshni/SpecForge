@@ -380,3 +380,58 @@ fn applied_says_what_the_update_left() {
     );
     assert_eq!(left.changed, ["b.spec"]);
 }
+
+#[spec(
+    behavior = "watch_file_system_for_changes",
+    verify = "a directory event reaches every source under it"
+)]
+#[ignore = "fixed by T3"]
+fn a_directory_event_reaches_every_source_under_it() {
+    let fixture = Fixture::new(PLAIN);
+    fixture.write(
+        "spec/old/b.spec",
+        &PLAIN.replace("gadget_one", "gadget_two"),
+    );
+    let (mut watch, _recorder) = fixture.watch();
+
+    fs::rename(fixture.root.join("spec/old"), fixture.root.join("spec/new")).unwrap();
+    let events = watch.changed(&[fixture.root.join("spec/new"), fixture.root.join("spec/old")]);
+
+    assert_eq!(events.len(), 1, "{events:?}");
+    let moved = applied(&events[0]);
+    assert_eq!(moved.changed, ["new/b.spec", "old/b.spec"]);
+    assert_eq!(moved.update.rebuilt_files, ["new/b.spec", "old/b.spec"]);
+    assert!(watch.session().stale().is_empty());
+}
+
+#[cfg(unix)]
+#[spec(
+    behavior = "classify_project_changes",
+    verify = "a session's watch roots and the LSP's watchers cover every symlinked source's target"
+)]
+#[ignore = "fixed by T4"]
+fn a_symlinked_sources_target_is_watched() {
+    let fixture = Fixture::new(PLAIN);
+    let outside = fixture.parent.join("outside");
+    let target = outside.join("real.spec");
+    fs::write(&target, PLAIN.replace("gadget_one", "gadget_three")).unwrap();
+    std::os::unix::fs::symlink(&target, fixture.root.join("spec/link.spec")).unwrap();
+    let (mut watch, recorder) = fixture.watch();
+
+    assert!(
+        recorder.armed()[0].contains(&WatchRoot {
+            dir: outside,
+            recursive: true
+        }),
+        "{:?}",
+        recorder.armed()
+    );
+    fs::write(
+        &target,
+        format!("{}\n", PLAIN.replace("gadget_one", "gadget_three")),
+    )
+    .unwrap();
+    let events = watch.changed(&[target]);
+    assert_eq!(events.len(), 1, "{events:?}");
+    assert_eq!(applied(&events[0]).changed, ["link.spec"]);
+}

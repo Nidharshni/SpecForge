@@ -53,6 +53,9 @@ behavior watch_file_system_for_changes "Watch File System for Changes" {
   verify unit "after the watchers move, the session catches up on what changed while they did"
   verify unit "a failed move of the watchers is reported and the session still catches up"
   verify unit "what was written between the open and the watchers is applied before ready"
+  verify integration "a directory moved inside the spec root leaves watch reporting what check reports"
+  verify integration "an edit to a symlinked source's target is seen"
+  verify unit "a directory event reaches every source under it"
 }
 
 behavior classify_project_changes "Classify Project Changes" {
@@ -93,6 +96,14 @@ behavior classify_project_changes "Classify Project Changes" {
   verify integration "the LSP watches a missing referenced file and its directory, spelled under the project root"
   verify unit "an update that names a new file the checks read changes the session's inputs"
   verify integration "the LSP's watchers follow an edit that names a new file the checks read"
+  verify unit "a directory created, moved or deleted under the spec root changes every source under it"
+  verify unit "a symlinked source is keyed by its link and changes when its target does"
+  verify unit "a path whose file is as the session last read it changes nothing"
+  verify unit "a detached session takes no change from disk"
+  verify unit "a directory moved above an environment or check input changes that input"
+  verify unit "a session's watch roots and the LSP's watchers cover every symlinked source's target"
+  verify integration "the LSP asks its client to report every directory created or deleted under the project root"
+  verify property "the changes of a batch naming every changed path are what the session finds stale"
 }
 
 behavior bring_session_up_to_date "Bring a Session Up to Date with Disk" {

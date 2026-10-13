@@ -2737,3 +2737,129 @@ fn a_symlinked_directory_is_no_source() {
         ["import target not found among the project's sources: escape/secret"]
     );
 }
+
+/// Whatever a watcher reports for a step (a file, both directories of a
+/// rename, a directory created or removed, a symlink target), the changes
+/// of that batch are what the session finds stale: the batch comparison is
+/// the full comparison narrowed to what the paths reach, so naming every
+/// changed path loses nothing.
+#[specforge_test(
+    behavior = "classify_project_changes",
+    verify = "the changes of a batch naming every changed path are what the session finds stale"
+)]
+#[ignore = "fixed by T4"]
+fn a_batch_naming_every_changed_path_changes_what_is_stale() {
+    use std::path::PathBuf;
+
+    const PATHS: &[&str] = &[
+        "a.spec",
+        "b.spec",
+        "sub/c.spec",
+        "sub/deep/e.spec",
+        "drafts/d.spec",
+    ];
+    let config = |exclude: bool| {
+        let exclude = if exclude {
+            r#","exclude":["drafts/"]"#
+        } else {
+            ""
+        };
+        format!(
+            r#"{{"name":"s","version":"0.1.0","extensions":["@specforge/software","@specforge/testing"],"spec_root":"spec"{exclude}}}"#
+        )
+    };
+    for seed in [
+        0x9E37_79B9_7F4A_7C15_u64,
+        0xD1B5_4A32_D192_ED03,
+        0x2545_F491_4F6C_DD1D,
+        0x1F83_D9AB_FB41_BD6B,
+    ] {
+        let mut rng = Rng(seed);
+        let dir = project(&config(false), &[]);
+        let root = fs::canonicalize(dir.path()).unwrap();
+        let spec = root.join("spec");
+        let outside = TempDir::new().unwrap();
+        let outside_dir = fs::canonicalize(outside.path()).unwrap();
+        for path in &PATHS[..3] {
+            write(&spec, path, &random_spec(&mut rng));
+        }
+        let mut session = ProjectSession::open(&specforge_common::ProjectRoot::of(&root).unwrap());
+        let mut excluding = false;
+        #[cfg_attr(not(unix), allow(unused_mut, unused_variables))]
+        let mut links = 0;
+
+        for step in 0..30 {
+            let mut paths: Vec<PathBuf> = Vec::new();
+            match rng.below(8) {
+                0 => {
+                    let path = rng.pick(PATHS);
+                    write(&spec, path, &random_spec(&mut rng));
+                    paths.push(spec.join(path));
+                }
+                1 => {
+                    let path = rng.pick(PATHS);
+                    if spec.join(path).is_file() {
+                        fs::remove_file(spec.join(path)).unwrap();
+                        paths.push(spec.join(path));
+                    }
+                }
+                2 => {
+                    let (from, to) = if spec.join("sub").is_dir() {
+                        ("sub", "sub2")
+                    } else {
+                        ("sub2", "sub")
+                    };
+                    if spec.join(from).is_dir() && !spec.join(to).exists() {
+                        fs::rename(spec.join(from), spec.join(to)).unwrap();
+                        paths.extend([spec.join(from), spec.join(to)]);
+                    }
+                }
+                3 => {
+                    for file in ["made/x.spec", "made/y.spec"] {
+                        write(&spec, file, &random_spec(&mut rng));
+                    }
+                    paths.push(spec.join("made"));
+                }
+                4 => {
+                    if spec.join("made").is_dir() {
+                        fs::remove_dir_all(spec.join("made")).unwrap();
+                        paths.push(spec.join("made"));
+                    }
+                }
+                #[cfg(unix)]
+                5 => {
+                    links += 1;
+                    let target = outside_dir.join(format!("t{links}.spec"));
+                    fs::write(&target, random_spec(&mut rng)).unwrap();
+                    let link = spec.join(format!("l{links}.spec"));
+                    std::os::unix::fs::symlink(&target, &link).unwrap();
+                    paths.push(link);
+                }
+                #[cfg(unix)]
+                6 => {
+                    if links > 0 {
+                        let target = outside_dir.join(format!("t{}.spec", 1 + rng.below(links)));
+                        fs::write(&target, random_spec(&mut rng)).unwrap();
+                        paths.push(target);
+                    }
+                }
+                _ => {
+                    excluding = !excluding;
+                    fs::write(root.join("specforge.json"), config(excluding)).unwrap();
+                    paths.push(root.join("specforge.json"));
+                }
+            }
+            let context = format!("seed {seed:#x} step {step}");
+            let changes = session.changes(paths.iter().map(PathBuf::as_path));
+            let stale = session.stale();
+            assert_eq!(changes.sources, stale.sources, "{context}");
+            // Bools until the changes name their paths (T3).
+            assert_eq!(changes.environment, stale.environment, "{context}");
+            assert_eq!(changes.check_inputs, stale.check_inputs, "{context}");
+
+            session.apply(&changes);
+            assert!(session.stale().is_empty(), "{context}");
+            assert_matches_a_fresh_compile(&session, &root);
+        }
+    }
+}

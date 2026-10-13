@@ -552,3 +552,76 @@ fn a_debug_build_of_the_lsp_verifies_each_rebuild() {
         assert_eq!(update.verification, Some(Ok(())), "after {path}");
     }
 }
+
+/// A symlinked source's target lies outside the project: a client that is
+/// asked to report only the root never sees it change.
+#[cfg(unix)]
+#[spec(
+    behavior = "classify_project_changes",
+    verify = "a session's watch roots and the LSP's watchers cover every symlinked source's target"
+)]
+#[ignore = "fixed by T4"]
+fn the_watchers_cover_a_symlinked_sources_target() {
+    use tower_lsp::lsp_types::GlobPattern;
+
+    let outside = tempfile::TempDir::new().unwrap();
+    let outside_dir = std::fs::canonicalize(outside.path()).unwrap();
+    std::fs::write(outside_dir.join("real.spec"), "").unwrap();
+    let dir = tempfile::TempDir::new().unwrap();
+    std::fs::write(
+        dir.path().join("specforge.json"),
+        r#"{"name":"w","version":"0.1.0"}"#,
+    )
+    .unwrap();
+    std::os::unix::fs::symlink(outside_dir.join("real.spec"), dir.path().join("link.spec"))
+        .unwrap();
+    let session = specforge_project::ProjectSession::open_with_runtime(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        None,
+    );
+
+    let target = outside_dir.join("real.spec").display().to_string();
+    let globs: Vec<String> = specforge_lsp::watchers::file_watchers(session.inputs(), false)
+        .into_iter()
+        .map(|w| match w.glob_pattern {
+            GlobPattern::String(glob) => glob,
+            other => panic!("expected an absolute glob, got {other:?}"),
+        })
+        .collect();
+    assert!(
+        globs.iter().any(|glob| glob_matches(glob, &target)),
+        "{target} is matched by none of {globs:?}"
+    );
+}
+
+/// A folder moved or deleted sends no event for a `**/*.spec` glob: the
+/// client is asked for every entry created or deleted under the root.
+#[spec(
+    behavior = "classify_project_changes",
+    verify = "the LSP asks its client to report every directory created or deleted under the project root"
+)]
+#[ignore = "fixed by T5"]
+fn the_client_reports_directories_under_the_root() {
+    use tower_lsp::lsp_types::{GlobPattern, WatchKind};
+
+    let dir = tempfile::TempDir::new().unwrap();
+    std::fs::write(
+        dir.path().join("specforge.json"),
+        r#"{"name":"w","version":"0.1.0"}"#,
+    )
+    .unwrap();
+    let session = specforge_project::ProjectSession::open_with_runtime(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        None,
+    );
+    let root = dir.path().to_string_lossy().into_owned();
+
+    let watchers = specforge_lsp::watchers::file_watchers(session.inputs(), false);
+    assert!(
+        watchers.iter().any(|w| {
+            matches!(&w.glob_pattern, GlobPattern::String(glob) if *glob == format!("{root}/**/*"))
+                && w.kind == Some(WatchKind::Create | WatchKind::Delete)
+        }),
+        "{watchers:?}"
+    );
+}
