@@ -99,7 +99,8 @@ wire accepts, and the SDK's raw categories and the host's load parse a category 
   guests, the SDK and its macros, the protocol types, coverage) is declared out of line
   (`#[cfg(test)] mod tests;`), which a release build never reads; the SDK's test helpers
   (`testing`: `MockHost`, `call_every_command`) are behind its `testing` feature, which a guest
-  enables only in `[dev-dependencies]`. `build-builtins`' `a_builtin_compiles_no_test_code`
+  enables only in `[dev-dependencies]`. The builder carries no test helper either: the handshake and describe
+  wire answers a test pins are `MockHost`'s (`handshake_json`, `describe_json`; round 9, plan 12). `build-builtins`' `a_builtin_compiles_no_test_code`
   holds it. A test-only edit therefore re-vendors nothing.
 - **`component_guest!` carries its own bindings** (`wit-bindgen` through the SDK, its
   `runtime_path` set), so a guest's only protocol dependency is the SDK.

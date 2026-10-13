@@ -56,14 +56,14 @@ impl CoverageRow {
     }
 
     /// One row as every surface writes it (`McpCoverageResult`):
-    /// `entity_id`, `kind`, `status` (a [`STATUS`] name), `declared`,
+    /// `entity_id`, `kind`, `status`, `declared`,
     /// `linked`, `evidence_collected`, `obligations`, `proven`, `unproven`,
     /// `exempt`.
     pub fn document(&self) -> CoverageRowDocument {
         CoverageRowDocument {
             entity_id: self.entity_id.clone(),
             kind: self.kind.clone(),
-            status: STATUS.name_of(self.status()).to_string(),
+            status: self.status(),
             declared: self.declared(),
             linked: self.linked(),
             evidence_collected: self.linked(),
@@ -96,8 +96,7 @@ impl CoverageRow {
 pub struct CoverageRowDocument {
     pub entity_id: String,
     pub kind: String,
-    #[shape(names = STATUS)]
-    pub status: String,
+    pub status: Status,
     pub declared: bool,
     pub linked: bool,
     /// Always equals `linked`.
@@ -184,6 +183,21 @@ pub const STATUS: OptionTable<Status> = OptionTable {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use specforge_test_macros::test as specforge_test;
+
+    #[specforge_test(
+        behavior = "read_views_over_the_project_view",
+        verify = "a coverage row is one JSON document on every surface"
+    )]
+    fn the_filter_names_are_the_written_statuses() {
+        for status in [Status::Covered, Status::Partial, Status::Uncovered] {
+            assert_eq!(
+                serde_json::to_value(status).unwrap(),
+                serde_json::Value::from(STATUS.name_of(status)),
+                "the filter table and the document agree on {status:?}"
+            );
+        }
+    }
 
     #[test]
     fn status_names_parse_and_others_are_refused_with_the_closest() {

@@ -57,8 +57,7 @@ pub struct Reply {
     verify_declarations: Option<Vec<String>>,
     referenced_by: Vec<String>,
     refers_to: Vec<String>,
-    #[shape(names = specforge_ops::coverage::STATUS)]
-    coverage_status: String,
+    coverage_status: specforge_project::coverage::Status,
     /// The diagnostics about the entity, in the shape `specforge.validate`
     /// reports them.
     diagnostics: DiagnosticList,
@@ -117,9 +116,7 @@ impl Reply {
                 .then(|| facts.obligations.iter().map(obligation_text).collect()),
             referenced_by: refs.referenced_by().into_iter().map(String::from).collect(),
             refers_to: refs.refers_to().into_iter().map(String::from).collect(),
-            coverage_status: specforge_ops::coverage::STATUS
-                .name_of(coverage.status())
-                .to_string(),
+            coverage_status: coverage.status(),
             // The diagnostics about the entity: those its data names it in,
             // else those inside its block (ADR 0016); never by its message.
             diagnostics: DiagnosticList(facts.diagnostics.iter().map(|d| (*d).clone()).collect()),

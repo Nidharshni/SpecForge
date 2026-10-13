@@ -71,7 +71,8 @@ has one coverage-row presenter (`tools::coverage::row_json`) and one gap present
 - **D4. "Unverified" has one definition**: counts toward coverage and is not proven
   (`ProjectCoverage::is_unverified`, `CoverageRow::unverified`). Rejected: "declares no `verify`"
   (ignores proof, flags non-testable kinds) and "testable kind and not covered" (flags exempt unions).
-  The trace prompt adopts it with plan 07.
+  The trace prompt adopts it with plan 07, through `trace::reach` (round 9, plan 12: the prompt computed
+  the reach itself, against P1).
 - **D5. The gap vocabulary.** A **missing link** is an expected edge (from the registries) a traced
   entity lacks: `missing` in every trace document, the only gap a trace reports. A **plan gap** is
   how an agent plan falls short (`unresolved_entity`, `missing_plan_entry`, `ordering`). A dangling
