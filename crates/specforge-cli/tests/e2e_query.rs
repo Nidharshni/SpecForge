@@ -339,6 +339,7 @@ fn query_nodes_have_required_fields() {
     // node and an edge (`specforge schema --publish`).
     let published = specforge_cmd()
         .args(["schema", "--publish"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();

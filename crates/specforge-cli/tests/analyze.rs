@@ -245,6 +245,7 @@ fn check_reports_an_unreferenced_invariant_as_w003() {
     .unwrap();
     let output = specforge_cmd()
         .args(["check", "--format=json"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -595,7 +596,12 @@ fn refines_and_abstract_fields_drive_layering_end_to_end() {
     .unwrap();
 
     let check = specforge_cmd()
-        .args(["check", dir.path().to_str().unwrap(), "--format=json"])
+        .args([
+            "check",
+            "--path",
+            dir.path().to_str().unwrap(),
+            "--format=json",
+        ])
         .output()
         .unwrap();
     let diagnostics: Vec<serde_json::Value> = serde_json::from_slice(&check.stdout).unwrap();
@@ -915,7 +921,13 @@ invariant responsive "System Stays Responsive" {
     .unwrap();
 
     let output = specforge_cmd()
-        .args(["check", dir.path().to_str().unwrap(), "--format", "json"])
+        .args([
+            "check",
+            "--path",
+            dir.path().to_str().unwrap(),
+            "--format",
+            "json",
+        ])
         .output()
         .unwrap();
     let diagnostics: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();

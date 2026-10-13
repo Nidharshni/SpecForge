@@ -84,7 +84,7 @@ fn specforge_json_with_inference_and_registries_loads() {
 
     let bin = env!("CARGO_BIN_EXE_specforge");
     let out = std::process::Command::new(bin)
-        .args(["check", root.join("src").to_str().unwrap()])
+        .args(["check", "--path", root.join("src").to_str().unwrap()])
         .output()
         .unwrap();
     assert!(

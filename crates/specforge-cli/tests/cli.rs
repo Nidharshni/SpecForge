@@ -47,6 +47,7 @@ fn self_check_runs_without_crashing() {
             .write_stdin("")
             .arg("check")
             .args(args)
+            .arg("--path")
             .arg(path)
             .output()
             .unwrap()
@@ -117,6 +118,7 @@ fn check_without_extensions_exits_cleanly_with_i002() {
     let output = specforge_cmd()
         .arg("check")
         .arg("--format=json")
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -145,6 +147,7 @@ fn check_with_every_extension_unavailable_exits_cleanly() {
     let output = specforge_cmd()
         .arg("check")
         .arg("--format=json")
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -181,6 +184,7 @@ fn check_reports_a_missing_required_peer() {
     let output = specforge_cmd()
         .arg("check")
         .arg("--format=json")
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -212,6 +216,7 @@ fn check_clean_project_exits_zero() {
 
     specforge_cmd()
         .arg("check")
+        .arg("--path")
         .arg(dir.path())
         .assert()
         .success();
@@ -234,6 +239,7 @@ feature gamma "G" { behaviors [alpha, nonexistent] }
 
     specforge_cmd()
         .arg("check")
+        .arg("--path")
         .arg(dir.path())
         .assert()
         .code(1);
@@ -256,6 +262,7 @@ ref gh.issue:42 "Orphan ref"
     // Without --strict: exit 0 (only warnings)
     specforge_cmd()
         .arg("check")
+        .arg("--path")
         .arg(dir.path())
         .assert()
         .success();
@@ -264,6 +271,7 @@ ref gh.issue:42 "Orphan ref"
     specforge_cmd()
         .arg("check")
         .arg("--strict")
+        .arg("--path")
         .arg(dir.path())
         .assert()
         .code(1);
@@ -287,6 +295,7 @@ feature gamma "G" { behaviors [alpha, nonexistent] }
     let output = specforge_cmd()
         .arg("check")
         .arg("--format=json")
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -334,6 +343,7 @@ feature gamma "G" { behaviors [alpha, nonexistent] }
 
     let output = specforge_cmd()
         .arg("check")
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -362,6 +372,7 @@ feature gamma "G" { behaviors [alpha, nonexistent] }
 
     let output = specforge_cmd()
         .arg("check")
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -408,6 +419,7 @@ feature gamma "G" { behaviors [alpha_parsr] }
 
     let output = specforge_cmd()
         .arg("check")
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -437,6 +449,7 @@ fn check_mode_produces_no_output_files() {
 
     specforge_cmd()
         .arg("check")
+        .arg("--path")
         .arg(dir.path())
         .assert()
         .success();
@@ -465,6 +478,7 @@ feature gamma "G" { behaviors [alpha, nonexistent] }
 
     let output = specforge_cmd()
         .arg("check")
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -502,6 +516,7 @@ feature gamma "G" { behaviors [alpha, nonexistent] }
     let output = specforge_cmd()
         .arg("check")
         .arg("--format=json")
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -572,7 +587,12 @@ fn check_stderr(dir: &TempDir, no_color: Option<&str>, force: Option<&str>) -> S
     if let Some(v) = force {
         cmd.env("CLICOLOR_FORCE", v);
     }
-    let output = cmd.arg("check").arg(dir.path()).output().unwrap();
+    let output = cmd
+        .arg("check")
+        .arg("--path")
+        .arg(dir.path())
+        .output()
+        .unwrap();
     assert_eq!(output.status.code(), Some(1));
     String::from_utf8(output.stderr).unwrap()
 }
@@ -683,6 +703,7 @@ fn diagnostics_plain_when_not_a_terminal() {
         .env_remove("NO_COLOR")
         .env("CLICOLOR_FORCE", "1")
         .args(["check", "--format=json"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -721,6 +742,7 @@ fn exit_code_contract_consistency() {
     let clean_dir = setup_project(&[("main.spec", r#"behavior alpha "A" { contract "first" }"#)]);
     specforge_cmd()
         .arg("check")
+        .arg("--path")
         .arg(clean_dir.path())
         .assert()
         .success();
@@ -728,6 +750,7 @@ fn exit_code_contract_consistency() {
     let error_dir = setup_project(&[("main.spec", r#"feature g "G" { behaviors [nonexistent] }"#)]);
     specforge_cmd()
         .arg("check")
+        .arg("--path")
         .arg(error_dir.path())
         .assert()
         .code(1);
@@ -752,6 +775,7 @@ feature gamma "G" { behaviors [alpha, nonexistent] }
 
     let output = specforge_cmd()
         .arg("check")
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -784,6 +808,7 @@ feature gamma "G" { behaviors [alpha, nonexistent] }
     let output = specforge_cmd()
         .arg("check")
         .arg("--format=json")
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -811,12 +836,14 @@ feature gamma "G" { behaviors [alpha, nonexistent] }
 
     let human_output = specforge_cmd()
         .args(["check", "--format=human"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
 
     let json_output = specforge_cmd()
         .args(["check", "--format=json"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -845,6 +872,7 @@ feature gamma "G" { behaviors [alpha, nonexistent] }
 
     let output = specforge_cmd()
         .args(["check", "--format=json"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -878,6 +906,7 @@ feature gamma "G" { behaviors [alpha_parsr] }
 
     let output = specforge_cmd()
         .args(["check", "--format=json"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -918,6 +947,7 @@ fn check_json(dir: &TempDir, args: &[&str]) -> (Option<i32>, Vec<String>, String
     let output = specforge_cmd()
         .args(["check", "--format", "json"])
         .args(args)
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();
@@ -988,6 +1018,7 @@ fn check_severity_shows_one_severity_and_keeps_the_exit_code() {
     // everything and says what it shows.
     let output = specforge_cmd()
         .args(["check", "--severity", "info"])
+        .arg("--path")
         .arg(dir.path())
         .env("NO_COLOR", "1")
         .output()
@@ -1038,6 +1069,7 @@ fn unknown_format_value_is_rejected_by_clap() {
 
     let output = specforge_cmd()
         .args(["stats", "--format=yaml"])
+        .arg("--path")
         .arg(dir.path())
         .env("COLUMNS", "100")
         .output()
@@ -1080,6 +1112,7 @@ fn infer_status_refuses_an_unusable_manifest_with_e071() {
     // `check --lint inferred` fails on it too, instead of passing over it.
     let output = specforge_cmd()
         .args(["check", "--lint", "inferred"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();

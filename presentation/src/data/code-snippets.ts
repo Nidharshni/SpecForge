@@ -332,7 +332,7 @@ process order_lifecycle "Order State Machine" {
 
 // ─── Compiler output ────────────────────────────────────────────────────────
 
-export const compilerErrorsExample = `$ specforge check spec/
+export const compilerErrorsExample = `$ specforge check --path spec/
 error[E001]: unresolved reference
  ╭─[spec/auth/login.spec:3:17]
  │ invariants [auth_token_expiry, rate_limit_per_ip]

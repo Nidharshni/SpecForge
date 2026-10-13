@@ -4,13 +4,12 @@ use crate::terminal::{Terminal, errln, outln};
 use specforge_ops::export;
 use specforge_ops::schema::SchemaRequest;
 use specforge_ops::view::ProjectView;
-use std::path::PathBuf;
 
 // `specforge export`'s command line.
 #[derive(clap::Args)]
 pub(crate) struct Args {
-    #[arg(default_value = ".", help = crate::project::PATH_HELP)]
-    path: PathBuf,
+    #[command(flatten)]
+    project: crate::project::ProjectArg,
 
     /// Output format
     #[arg(
@@ -88,7 +87,7 @@ impl Args {
     /// export that schema replaces the cache, so the next export compares
     /// against it. The export is written whatever the comparison finds.
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
-        let project = match crate::project::compile(&self.path) {
+        let project = match self.project.compile() {
             Ok(project) => project,
             Err(error) => return Refusal::of(OutputFormat::Human).report(terminal, &error),
         };
@@ -122,8 +121,8 @@ impl Args {
 // `specforge schema`'s command line.
 #[derive(clap::Args)]
 pub(crate) struct SchemaArgs {
-    #[arg(default_value = ".", help = crate::project::PATH_HELP)]
-    path: PathBuf,
+    #[command(flatten)]
+    project: crate::project::ProjectArg,
 
     /// That entity kind and the edge types that can start or end at it
     #[arg(long, conflicts_with = "publish")]
@@ -168,7 +167,7 @@ impl SchemaArgs {
     /// format conforms to. An unknown kind is refused with the closest one
     /// (exit 1).
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
-        let project = match crate::project::compile(&self.path) {
+        let project = match self.project.compile() {
             Ok(project) => project,
             Err(error) => return Refusal::of(OutputFormat::Human).report(terminal, &error),
         };

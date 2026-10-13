@@ -98,7 +98,7 @@ specforge, baseline_path, write = sys.argv[1], sys.argv[2], sys.argv[3] == "--wr
 baseline = json.load(open(baseline_path))
 counts, failed = {}, False
 for project in sys.argv[4:]:
-    out = subprocess.run([specforge, "check", project, "--format", "json"],
+    out = subprocess.run([specforge, "check", "--path", project, "--format", "json"],
                          capture_output=True, text=True)
     try:
         diagnostics = json.loads(out.stdout)

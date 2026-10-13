@@ -50,7 +50,7 @@ export const theCompilerSlides: JSX.Element[] = [
   // ─── Slide 30: What the Compiler Catches ──────────────────────────────
   <FullBleedCode
     key="compiler-errors"
-    filename="$ specforge check spec/"
+    filename="$ specforge check --path spec/"
     language="rust"
     badge="compiler errors"
     badgeColor={colors.accent.red}

@@ -306,6 +306,7 @@ fn init_starter_passes_check() {
     // Run specforge check on the newly created project
     specforge_cmd()
         .args(["check", "--format", "json"])
+        .arg("--path")
         .arg(dir.path().join("spec"))
         .assert()
         .success();
@@ -434,6 +435,7 @@ fn zero_ext_starter_passes_check() {
 
     specforge_cmd()
         .args(["check", "--format", "json"])
+        .arg("--path")
         .arg(dir.path().join("spec"))
         .assert()
         .success();
@@ -454,6 +456,7 @@ fn zero_ext_export_produces_valid_graph() {
 
     let output = specforge_cmd()
         .args(["export", "--format", "graph"])
+        .arg("--path")
         .arg(dir.path().join("spec"))
         .output()
         .unwrap();
@@ -716,6 +719,7 @@ fn init_check_export_cycle() {
     // check
     specforge_cmd()
         .args(["check", "--format", "json"])
+        .arg("--path")
         .arg(dir.path().join("spec"))
         .assert()
         .success();
@@ -723,6 +727,7 @@ fn init_check_export_cycle() {
     // export
     let output = specforge_cmd()
         .args(["export", "--format", "graph"])
+        .arg("--path")
         .arg(dir.path().join("spec"))
         .output()
         .unwrap();
@@ -749,12 +754,14 @@ fn init_check_export_performance() {
 
     specforge_cmd()
         .args(["check"])
+        .arg("--path")
         .arg(dir.path().join("spec"))
         .assert()
         .success();
 
     specforge_cmd()
         .args(["export", "--format", "graph"])
+        .arg("--path")
         .arg(dir.path().join("spec"))
         .assert()
         .success();
@@ -835,6 +842,7 @@ fn zero_ext_full_cycle_performance() {
     // check
     specforge_cmd()
         .args(["check"])
+        .arg("--path")
         .arg(dir.path().join("spec"))
         .assert()
         .success();
@@ -842,6 +850,7 @@ fn zero_ext_full_cycle_performance() {
     // export
     specforge_cmd()
         .args(["export", "--format", "graph"])
+        .arg("--path")
         .arg(dir.path().join("spec"))
         .assert()
         .success();
@@ -914,12 +923,14 @@ fn non_interactive_full_cycle_performance() {
 
     specforge_cmd()
         .args(["check"])
+        .arg("--path")
         .arg(dir.path().join("spec"))
         .assert()
         .success();
 
     specforge_cmd()
         .args(["export", "--format", "graph"])
+        .arg("--path")
         .arg(dir.path().join("spec"))
         .assert()
         .success();
@@ -1172,6 +1183,7 @@ fn scaffold_starter_spec_file_contract() {
     // Must pass check with zero diagnostics
     specforge_cmd()
         .args(["check", "--format", "json"])
+        .arg("--path")
         .arg(dir.path().join("spec"))
         .assert()
         .success();
@@ -1288,6 +1300,7 @@ fn graceful_zero_extension_init_contract_in_init() {
     // Check passes
     specforge_cmd()
         .args(["check", "--format", "json"])
+        .arg("--path")
         .arg(dir.path().join("spec"))
         .assert()
         .success();
@@ -1295,6 +1308,7 @@ fn graceful_zero_extension_init_contract_in_init() {
     // Export produces valid graph
     let export_output = specforge_cmd()
         .args(["export", "--format", "graph"])
+        .arg("--path")
         .arg(dir.path().join("spec"))
         .output()
         .unwrap();
@@ -1386,6 +1400,7 @@ fn extensions_flag_splits_a_comma_separated_list() {
     );
     specforge_cmd()
         .args(["check"])
+        .arg("--path")
         .arg(dir.path())
         .assert()
         .success();
@@ -1414,6 +1429,7 @@ fn one_character_name_is_rejected() {
         .success();
     specforge_cmd()
         .args(["check"])
+        .arg("--path")
         .arg(dir.path())
         .assert()
         .success();

@@ -298,7 +298,10 @@ mod tests {
             }
             assert_eq!(
                 argument.get_help().map(ToString::to_string).as_deref(),
-                Some(crate::project::PATH_HELP),
+                crate::project::ProjectArg::arg()
+                    .get_help()
+                    .map(ToString::to_string)
+                    .as_deref(),
                 "`specforge {command}`'s path says something else"
             );
         }

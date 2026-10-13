@@ -6,14 +6,13 @@ use specforge_ops::check::{CacheRecord, CheckOptions, check};
 use specforge_ops::view::ProjectView;
 use specforge_ops::{OpError, OpErrorKind};
 use specforge_project::{LintProfile, SharedRuntime};
-use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 // `specforge check`'s command line.
 #[derive(clap::Args)]
 pub(crate) struct Args {
-    #[arg(default_value = ".", help = crate::project::PATH_HELP)]
-    path: PathBuf,
+    #[command(flatten)]
+    project: crate::project::ProjectArg,
 
     /// Promote warnings to errors
     #[arg(long)]
@@ -64,7 +63,7 @@ impl Args {
         let runtime: SharedRuntime =
             Arc::new(specforge_component::ComponentRuntime::with_user_cache());
         run_in(
-            &self.path,
+            &self.project,
             runtime,
             self.output.format,
             &self.options(),
@@ -80,7 +79,7 @@ impl Args {
 /// lifecycle states (the fields kinds declare as `lifecycle_field`) in
 /// `specforge-cache.json`.
 fn run_in(
-    path: &Path,
+    project: &crate::project::ProjectArg,
     runtime: SharedRuntime,
     format: OutputFormat,
     options: &CheckOptions,
@@ -92,7 +91,7 @@ fn run_in(
             "note: --lint pedantic is the default: info diagnostics are always reported"
         );
     }
-    let compiled = match crate::project::compile_in(path, runtime) {
+    let compiled = match project.compile_in(runtime) {
         Ok(compiled) => compiled,
         Err(error) => return Refusal::of(format).report(terminal, &error),
     };
@@ -222,7 +221,7 @@ mod tests {
         let human = |dir: &tempfile::TempDir| {
             let (terminal, capture) = Terminal::captured("", Facts::PIPED);
             let exit = run_in(
-                dir.path(),
+                &crate::project::ProjectArg::at(dir.path()),
                 std::sync::Arc::new(audit_extension()),
                 OutputFormat::Human,
                 &CheckOptions::default(),

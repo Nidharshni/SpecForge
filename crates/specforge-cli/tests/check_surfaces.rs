@@ -58,6 +58,7 @@ fn check(root: &Path, args: &[&str]) -> (i32, Value, String) {
         .env("HOME", std::env::temp_dir().join("specforge-parity-home"))
         .arg("check")
         .args(args)
+        .arg("--path")
         .arg(root)
         .current_dir(root)
         .output()

@@ -121,12 +121,14 @@ fn graceful_zero_extension_init_contract() {
     // Project must still be functional: check + export succeed
     specforge_cmd()
         .args(["check", "--format", "json"])
+        .arg("--path")
         .arg(dir.path().join("spec"))
         .assert()
         .success();
 
     let export_output = specforge_cmd()
         .args(["export", "--format", "graph"])
+        .arg("--path")
         .arg(dir.path().join("spec"))
         .output()
         .unwrap();

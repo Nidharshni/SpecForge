@@ -717,7 +717,10 @@ mod tests {
             .unwrap();
         assert_eq!(
             path.get_help().map(ToString::to_string).as_deref(),
-            Some(crate::project::PATH_HELP)
+            ProjectArg::arg()
+                .get_help()
+                .map(ToString::to_string)
+                .as_deref()
         );
     }
 

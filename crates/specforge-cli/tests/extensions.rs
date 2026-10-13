@@ -1864,6 +1864,7 @@ fn add_update_and_remove_refuse_an_unusable_config_alike() {
         // What the compile reports as E069 for it.
         let check = specforge_cmd()
             .args(["check", "--format", "json"])
+            .arg("--path")
             .arg(dir.path())
             .output()
             .unwrap();
@@ -2047,7 +2048,10 @@ fn an_unusable_config_fails_check_with_e069() {
 
         for strict in [false, true] {
             let mut command = specforge_cmd();
-            command.args(["check", "--format", "json"]).arg(dir.path());
+            command
+                .args(["check", "--format", "json"])
+                .arg("--path")
+                .arg(dir.path());
             if strict {
                 command.arg("--strict");
             }
@@ -2077,6 +2081,7 @@ fn an_unusable_config_fails_check_with_e069() {
     fs::write(dir.path().join("specforge.json"), UNUSABLE_CONFIGS[0]).unwrap();
     let output = specforge_cmd()
         .args(["check", "--format", "json"])
+        .arg("--path")
         .arg(dir.path())
         .output()
         .unwrap();

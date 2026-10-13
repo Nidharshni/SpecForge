@@ -11,8 +11,8 @@ use specforge_component::ComponentRuntime;
 use specforge_ops::OpError;
 use specforge_project::{CompiledProject, SharedRuntime};
 
-/// The help of every path argument that names a project.
-pub(crate) const PATH_HELP: &str = "A path inside the project (the nearest directory at or above it holding specforge.json; none: the directory itself, with the default configuration)";
+/// The help of `--path`.
+const PATH_HELP: &str = "A path inside the project (the nearest directory at or above it holding specforge.json; none: the directory itself, with the default configuration)";
 
 /// `--path <PATH>`: the project a command acts on, named by any path inside
 /// it, `.` by default. Flatten it (`#[command(flatten)] project: ProjectArg`)
@@ -83,24 +83,20 @@ impl ProjectArg {
     pub(crate) fn compile(&self) -> Result<CompiledProject, OpError> {
         Ok(compile_at(&self.root()?))
     }
+
+    /// [`Self::compile`] with the extensions in `runtime` (`check`'s tests give theirs).
+    pub(crate) fn compile_in(&self, runtime: SharedRuntime) -> Result<CompiledProject, OpError> {
+        Ok(CompiledProject::compile(&self.root()?, Some(runtime)))
+    }
+
+    /// The project at `path` (tests that hold a path already).
+    #[cfg(test)]
+    pub(crate) fn at(path: impl Into<PathBuf>) -> Self {
+        Self { path: path.into() }
+    }
 }
 
-/// The project `path` is in; `file_not_found` when it does not exist.
-pub(crate) fn root(path: &Path) -> Result<ProjectRoot, OpError> {
-    ProjectRoot::of(path).map_err(OpError::from)
-}
-
-/// The project `path` is in, compiled (see [`ProjectArg::compile`]).
-pub(crate) fn compile(path: &Path) -> Result<CompiledProject, OpError> {
-    Ok(compile_at(&root(path)?))
-}
-
-/// [`compile`] with the extensions in `runtime` (`check`'s tests give theirs).
-pub(crate) fn compile_in(path: &Path, runtime: SharedRuntime) -> Result<CompiledProject, OpError> {
-    Ok(CompiledProject::compile(&root(path)?, Some(runtime)))
-}
-
-/// [`compile`] for a root already resolved.
+/// [`ProjectArg::compile`] for a root already resolved.
 pub(crate) fn compile_at(root: &ProjectRoot) -> CompiledProject {
     CompiledProject::compile(root, Some(Arc::new(ComponentRuntime::with_user_cache())))
 }
