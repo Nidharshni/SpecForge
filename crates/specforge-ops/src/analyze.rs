@@ -115,28 +115,29 @@ pub struct StrayRecord {
 pub struct AnalyzeOutcome {
     /// Built-in passes, extension passes in their declared order, `prove` last.
     pub passes: Vec<PassOutcome>,
-    /// The `min` proof-coverage gate: part of the run's verdict.
-    pub gate: Gate,
+    /// The `min` proof-coverage gate, `None` when `min` was not set: part of
+    /// the run's verdict.
+    pub gate: Option<Gate>,
     /// Stray test records, outside the pass reports.
     pub stray_records: Vec<StrayRecord>,
 }
 
-/// Where the proof-coverage gate landed.
-#[derive(Debug, Clone, PartialEq)]
+/// Where the proof-coverage gate landed, when `min` was set: part of the
+/// run's verdict, and the document's `gate` (`McpAnalyzeGate`).
+#[derive(Debug, Clone, PartialEq, Serialize, Shape)]
+#[serde(tag = "status", rename_all = "lowercase")]
 pub enum Gate {
-    /// `min` was not set.
-    NotRequested,
     /// Proof coverage is at or above `min` (nothing testable always is).
     Met {
-        pct: f64,
         min: f64,
+        pct: f64,
         proven: usize,
         total: usize,
     },
     /// Proof coverage is under `min`: the run fails (E048).
     Below {
-        pct: f64,
         min: f64,
+        pct: f64,
         proven: usize,
         total: usize,
     },
@@ -147,77 +148,42 @@ pub enum Gate {
 }
 
 impl Gate {
-    fn of(min: Option<f64>, passes: &[PassOutcome]) -> Gate {
-        let Some(min) = min else {
-            return Gate::NotRequested;
-        };
+    /// The gate at `min` over `passes`; `None` without a minimum.
+    fn of(min: Option<f64>, passes: &[PassOutcome]) -> Option<Gate> {
+        let min = min?;
         let Some(pass) = passes.iter().find(|r| r.name == COVERAGE_PASS) else {
-            return Gate::Unjudged {
+            return Some(Gate::Unjudged {
                 min,
                 reason: "the coverage pass did not run".to_string(),
-            };
+            });
         };
         // A missing or renamed key is an error, never a silent 0.
         let summary: coverage::Summary = match serde_json::from_value(pass.summary.clone()) {
             Ok(summary) => summary,
             Err(e) => {
-                return Gate::Unjudged {
+                return Some(Gate::Unjudged {
                     min,
                     reason: format!("the summary is not the shape this specforge reads ({e})"),
-                };
+                });
             }
         };
         let pct = summary.proof_pct();
         let (proven, total) = (summary.testable_proven, summary.testable_total);
-        if pct + f64::EPSILON < min {
+        Some(if pct + f64::EPSILON < min {
             Gate::Below {
-                pct,
                 min,
+                pct,
                 proven,
                 total,
             }
         } else {
             Gate::Met {
-                pct,
                 min,
+                pct,
                 proven,
                 total,
             }
-        }
-    }
-
-    /// `{status, min, pct?, proven?, total?, reason?}`; `None` when no
-    /// minimum was requested.
-    fn document(&self) -> Option<GateDocument> {
-        match self {
-            Gate::NotRequested => None,
-            Gate::Met {
-                pct,
-                min,
-                proven,
-                total,
-            } => Some(GateDocument::Met {
-                min: *min,
-                pct: *pct,
-                proven: *proven,
-                total: *total,
-            }),
-            Gate::Below {
-                pct,
-                min,
-                proven,
-                total,
-            } => Some(GateDocument::Below {
-                min: *min,
-                pct: *pct,
-                proven: *proven,
-                total: *total,
-            }),
-            Gate::Unjudged { min, reason } => Some(GateDocument::Unjudged {
-                min: *min,
-                reason: reason.clone(),
-            }),
-        }
+        })
     }
 }
 
@@ -235,9 +201,9 @@ impl AnalyzeOutcome {
     /// returns `ok` (`verdict() == Passed`) and the gate.
     pub fn verdict(&self) -> RunVerdict {
         match &self.gate {
-            Gate::Unjudged { .. } => RunVerdict::Unjudged,
-            Gate::Below { .. } => RunVerdict::Failed,
-            Gate::NotRequested | Gate::Met { .. } => RunVerdict::of(self.findings_ok()),
+            Some(Gate::Unjudged { .. }) => RunVerdict::Unjudged,
+            Some(Gate::Below { .. }) => RunVerdict::Failed,
+            None | Some(Gate::Met { .. }) => RunVerdict::of(self.findings_ok()),
         }
     }
 
@@ -251,22 +217,22 @@ impl AnalyzeOutcome {
     /// when below, E068 when unjudged; `None` otherwise.
     pub fn gate_failure(&self) -> Option<OpError> {
         match &self.gate {
-            Gate::NotRequested | Gate::Met { .. } => None,
+            None | Some(Gate::Met { .. }) => None,
             // The kind is never mapped: MCP returns the outcome, not an
             // error, and the CLI prints the lines only (ADR 0029 D3a).
-            Gate::Below {
+            Some(Gate::Below {
                 pct,
                 min,
                 proven,
                 total,
-            } => Some(OpError::coded(
+            }) => Some(OpError::coded(
                 OpErrorKind::InvalidInput,
                 codes::E048,
                 format!(
                     "proof coverage {pct:.1}% is below the required minimum {min:.1}% ({proven}/{total} testable entities proven)"
                 ),
             )),
-            Gate::Unjudged { reason, .. } => Some(
+            Some(Gate::Unjudged { reason, .. }) => Some(
                 OpError::coded(
                     OpErrorKind::SchemaMismatch,
                     codes::E068,
@@ -291,7 +257,7 @@ impl AnalyzeOutcome {
                     summary: r.summary.clone(),
                 })
                 .collect(),
-            gate: self.gate.document(),
+            gate: self.gate.clone(),
             stray_records: self.stray_records.clone(),
         }
     }
@@ -306,7 +272,7 @@ pub struct AnalyzeDocument {
     pub passes: Vec<PassDocument>,
     /// Where the `min` proof-coverage gate landed; absent without `min`.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub gate: Option<GateDocument>,
+    pub gate: Option<Gate>,
     /// Stray test records; absent when there are none.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub stray_records: Vec<StrayRecord>,
@@ -319,28 +285,6 @@ pub struct PassDocument {
     pub findings: DiagnosticList,
     /// What the pass summarizes: an open value, the pass's own.
     pub summary: Value,
-}
-
-/// Where the proof-coverage gate landed.
-#[derive(Debug, Clone, PartialEq, Serialize, Shape)]
-#[serde(tag = "status", rename_all = "lowercase")]
-pub enum GateDocument {
-    /// Proof coverage is at or above `min`.
-    Met {
-        min: f64,
-        pct: f64,
-        proven: usize,
-        total: usize,
-    },
-    /// Proof coverage is under `min`.
-    Below {
-        min: f64,
-        pct: f64,
-        proven: usize,
-        total: usize,
-    },
-    /// The coverage pass gave no figure the gate reads.
-    Unjudged { min: f64, reason: String },
 }
 
 /// Why no analysis ran. Raised before any pass runs, in this order.
@@ -1049,7 +993,7 @@ mod tests {
 
     /// A project with a (blank) recorded report, gated at `min`, whose
     /// testing extension reports `proven` of `total`.
-    fn gate_of(pass_name: &str, min: Option<f64>, summary: Value) -> Gate {
+    fn gate_of(pass_name: &str, min: Option<f64>, summary: Value) -> Option<Gate> {
         let project = Project::serving(InProcessRuntime::new().with(coverage(summary)), &[TESTING]);
         std::fs::write(
             project.dir.path().join("specforge-report.json"),
@@ -1078,7 +1022,7 @@ mod tests {
         verify = "the analysis's ok is the run verdict, the gate included, and its JSON says where the gate landed"
     )]
     fn the_gate_is_not_requested_without_min() {
-        assert_eq!(gate_of("all", None, tally(0, 4)), Gate::NotRequested);
+        assert_eq!(gate_of("all", None, tally(0, 4)), None);
     }
 
     #[specforge_test(
@@ -1088,21 +1032,21 @@ mod tests {
     fn the_gate_is_met_at_or_above_the_minimum() {
         assert_eq!(
             gate_of("all", Some(50.0), tally(2, 4)),
-            Gate::Met {
+            Some(Gate::Met {
                 pct: 50.0,
                 min: 50.0,
                 proven: 2,
                 total: 4
-            }
+            })
         );
         assert_eq!(
             gate_of("coverage", Some(50.0), tally(3, 4)),
-            Gate::Met {
+            Some(Gate::Met {
                 pct: 75.0,
                 min: 50.0,
                 proven: 3,
                 total: 4
-            }
+            })
         );
     }
 
@@ -1113,7 +1057,7 @@ mod tests {
     fn nothing_testable_satisfies_any_minimum() {
         assert!(matches!(
             gate_of("all", Some(100.0), tally(0, 0)),
-            Gate::Met { .. }
+            Some(Gate::Met { .. })
         ));
     }
 
@@ -1124,12 +1068,12 @@ mod tests {
     fn the_gate_is_below_with_the_numbers_to_print() {
         assert_eq!(
             gate_of("all", Some(75.0), tally(1, 4)),
-            Gate::Below {
+            Some(Gate::Below {
                 pct: 25.0,
                 min: 75.0,
                 proven: 1,
                 total: 4
-            }
+            })
         );
     }
 
@@ -1138,42 +1082,42 @@ mod tests {
         verify = "the analysis's ok is the run verdict, the gate included, and its JSON says where the gate landed"
     )]
     fn the_verdict_folds_the_gate_in() {
-        let outcome = |gate: Gate| AnalyzeOutcome {
+        let outcome = |gate: Option<Gate>| AnalyzeOutcome {
             passes: Vec::new(),
             gate,
             stray_records: Vec::new(),
         };
         let landed = |pct: f64| (pct, 50.0, 1, 4);
         let (pct, min, proven, total) = landed(25.0);
-        let below = outcome(Gate::Below {
+        let below = outcome(Some(Gate::Below {
             pct,
             min,
             proven,
             total,
-        });
+        }));
         assert!(below.findings_ok(), "the findings are fine");
         assert_eq!(below.verdict(), RunVerdict::Failed);
         assert!(!below.ok());
         assert_eq!(json_of(&below)["ok"], false);
         assert_eq!(below.gate_failure().unwrap().code, "E048");
 
-        let unjudged = outcome(Gate::Unjudged {
+        let unjudged = outcome(Some(Gate::Unjudged {
             min: 50.0,
             reason: "no figure".into(),
-        });
+        }));
         assert_eq!(unjudged.verdict(), RunVerdict::Unjudged);
         assert_eq!(json_of(&unjudged)["gate"]["status"], "unjudged");
         assert_eq!(unjudged.gate_failure().unwrap().code, "E068");
 
-        let met = outcome(Gate::Met {
+        let met = outcome(Some(Gate::Met {
             pct: 80.0,
             min: 50.0,
             proven: 4,
             total: 5,
-        });
+        }));
         assert_eq!(met.verdict(), RunVerdict::Passed);
         assert!(met.gate_failure().is_none());
-        assert!(json_of(&outcome(Gate::NotRequested)).get("gate").is_none());
+        assert!(json_of(&outcome(None)).get("gate").is_none());
     }
 
     #[specforge_test(
@@ -1181,7 +1125,7 @@ mod tests {
         verify = "the analysis's ok is the run verdict, the gate included, and its JSON says where the gate landed"
     )]
     fn the_gate_document_is_byte_stable() {
-        let written = |gate: Gate| {
+        let written = |gate: Option<Gate>| {
             serde_json::to_string(
                 &AnalyzeOutcome {
                     passes: Vec::new(),
@@ -1193,31 +1137,31 @@ mod tests {
             .unwrap()
         };
         assert!(
-            written(Gate::Below {
+            written(Some(Gate::Below {
                 pct: 25.0,
                 min: 75.0,
                 proven: 1,
                 total: 4
-            })
+            }))
             .contains(r#""gate":{"status":"below","min":75.0,"pct":25.0,"proven":1,"total":4}"#)
         );
         assert!(
-            written(Gate::Unjudged {
+            written(Some(Gate::Unjudged {
                 min: 50.0,
                 reason: "r".into()
-            })
+            }))
             .contains(r#""gate":{"status":"unjudged","min":50.0,"reason":"r"}"#)
         );
         assert!(
-            written(Gate::Met {
+            written(Some(Gate::Met {
                 pct: 100.0,
                 min: 50.0,
                 proven: 2,
                 total: 2
-            })
+            }))
             .contains(r#""gate":{"status":"met","min":50.0,"pct":100.0,"proven":2,"total":2}"#)
         );
-        assert!(!written(Gate::NotRequested).contains(r#""gate""#));
+        assert!(!written(None).contains(r#""gate""#));
     }
 
     #[specforge_test(
@@ -1286,10 +1230,10 @@ mod tests {
     fn a_summary_of_another_shape_is_unreadable_not_zero() {
         assert_eq!(
             gate_of("all", Some(10.0), json!({"testable_total": "many"})),
-            Gate::Unjudged {
+            Some(Gate::Unjudged {
                 min: 10.0,
                 reason: "the summary is not the shape this specforge reads (invalid type: string \"many\", expected usize)".into()
-            }
+            })
         );
     }
 
