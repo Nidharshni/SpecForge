@@ -421,11 +421,11 @@ expression: "digest(&load(&runtime, &[name]))"
     },
     "channel.interaction_model": {
       "derived_from": null,
-      "description": "How users interact through this channel (e.g., sync, async, push, pull)",
+      "description": "How users interact through this channel",
       "edge": null,
       "exempts_obligations": false,
       "field_name": "interaction_model",
-      "field_type": "String",
+      "field_type": "Enum([\"request_response\", \"event_driven\", \"batch\", \"streaming\", \"bidirectional\", \"manual\"])",
       "file_reference": false,
       "headline": false,
       "inverse_of": null,
@@ -455,11 +455,11 @@ expression: "digest(&load(&runtime, &[name]))"
     },
     "channel.status": {
       "derived_from": null,
-      "description": "Whether this channel is active or deprecated",
+      "description": "Lifecycle state",
       "edge": null,
       "exempts_obligations": false,
       "field_name": "status",
-      "field_type": "String",
+      "field_type": "Enum([\"active\", \"deprecated\"])",
       "file_reference": false,
       "headline": true,
       "inverse_of": null,
@@ -506,11 +506,11 @@ expression: "digest(&load(&runtime, &[name]))"
     },
     "deliverable.artifact_type": {
       "derived_from": null,
-      "description": "Kind of artifact produced: cli, service, library, web_app, mobile_app, api, extension, documentation, or package",
+      "description": "Kind of artifact produced",
       "edge": null,
       "exempts_obligations": false,
       "field_name": "artifact_type",
-      "field_type": "String",
+      "field_type": "Enum([\"cli\", \"service\", \"library\", \"web_app\", \"mobile_app\", \"api\", \"extension\", \"documentation\", \"package\"])",
       "file_reference": false,
       "headline": false,
       "inverse_of": null,
@@ -659,11 +659,11 @@ expression: "digest(&load(&runtime, &[name]))"
     },
     "deliverable.status": {
       "derived_from": null,
-      "description": "Lifecycle state: draft, in_progress, shipped, or deprecated",
+      "description": "Lifecycle state",
       "edge": null,
       "exempts_obligations": false,
       "field_name": "status",
-      "field_type": "String",
+      "field_type": "Enum([\"draft\", \"in_progress\", \"shipped\", \"deprecated\"])",
       "file_reference": false,
       "headline": true,
       "inverse_of": null,
@@ -778,11 +778,11 @@ expression: "digest(&load(&runtime, &[name]))"
     },
     "feature.effort": {
       "derived_from": null,
-      "description": "T-shirt size estimate: xs, s, m, l, or xl",
+      "description": "T-shirt size estimate",
       "edge": null,
       "exempts_obligations": false,
       "field_name": "effort",
-      "field_type": "String",
+      "field_type": "Enum([\"xs\", \"s\", \"m\", \"l\", \"xl\"])",
       "file_reference": false,
       "headline": false,
       "inverse_of": null,
@@ -829,11 +829,11 @@ expression: "digest(&load(&runtime, &[name]))"
     },
     "feature.priority": {
       "derived_from": null,
-      "description": "Importance level: critical, high, medium, or low",
+      "description": "Importance level",
       "edge": null,
       "exempts_obligations": false,
       "field_name": "priority",
-      "field_type": "String",
+      "field_type": "Enum([\"critical\", \"high\", \"medium\", \"low\"])",
       "file_reference": false,
       "headline": false,
       "inverse_of": null,
@@ -914,11 +914,11 @@ expression: "digest(&load(&runtime, &[name]))"
     },
     "feature.status": {
       "derived_from": null,
-      "description": "Lifecycle state: proposed, accepted, in_progress, done, deferred, or deprecated",
+      "description": "Lifecycle state",
       "edge": null,
       "exempts_obligations": false,
       "field_name": "status",
-      "field_type": "String",
+      "field_type": "Enum([\"proposed\", \"accepted\", \"in_progress\", \"done\", \"deferred\", \"deprecated\"])",
       "file_reference": false,
       "headline": true,
       "inverse_of": null,
@@ -1050,11 +1050,11 @@ expression: "digest(&load(&runtime, &[name]))"
     },
     "journey.priority": {
       "derived_from": null,
-      "description": "Importance level: critical, high, medium, or low",
+      "description": "Importance level",
       "edge": null,
       "exempts_obligations": false,
       "field_name": "priority",
-      "field_type": "String",
+      "field_type": "Enum([\"critical\", \"high\", \"medium\", \"low\"])",
       "file_reference": false,
       "headline": false,
       "inverse_of": null,
@@ -1220,11 +1220,11 @@ expression: "digest(&load(&runtime, &[name]))"
     },
     "milestone.priority": {
       "derived_from": null,
-      "description": "Importance level: critical, high, medium, or low",
+      "description": "Importance level",
       "edge": null,
       "exempts_obligations": false,
       "field_name": "priority",
-      "field_type": "String",
+      "field_type": "Enum([\"critical\", \"high\", \"medium\", \"low\"])",
       "file_reference": false,
       "headline": false,
       "inverse_of": null,
@@ -1288,11 +1288,11 @@ expression: "digest(&load(&runtime, &[name]))"
     },
     "milestone.status": {
       "derived_from": null,
-      "description": "Lifecycle state: planned, in_progress, completed, or blocked",
+      "description": "Lifecycle state",
       "edge": null,
       "exempts_obligations": false,
       "field_name": "status",
-      "field_type": "String",
+      "field_type": "Enum([\"planned\", \"in_progress\", \"completed\", \"blocked\"])",
       "file_reference": false,
       "headline": true,
       "inverse_of": null,
@@ -1373,7 +1373,7 @@ expression: "digest(&load(&runtime, &[name]))"
     },
     "module.family": {
       "derived_from": null,
-      "description": "Category or family this module belongs to",
+      "description": "Category or family this module belongs to; the standard ones are core, platform, extension, integration, advisory",
       "edge": null,
       "exempts_obligations": false,
       "field_name": "family",
@@ -1526,11 +1526,11 @@ expression: "digest(&load(&runtime, &[name]))"
     },
     "persona.status": {
       "derived_from": null,
-      "description": "Whether this persona is active or deprecated",
+      "description": "Lifecycle state",
       "edge": null,
       "exempts_obligations": false,
       "field_name": "status",
-      "field_type": "String",
+      "field_type": "Enum([\"active\", \"deprecated\"])",
       "file_reference": false,
       "headline": true,
       "inverse_of": null,
@@ -1560,11 +1560,11 @@ expression: "digest(&load(&runtime, &[name]))"
     },
     "persona.technical_level": {
       "derived_from": null,
-      "description": "Technical proficiency of this persona (e.g., beginner, intermediate, expert)",
+      "description": "Technical proficiency of this persona",
       "edge": null,
       "exempts_obligations": false,
       "field_name": "technical_level",
-      "field_type": "String",
+      "field_type": "Enum([\"expert\", \"advanced\", \"intermediate\", \"beginner\", \"non_technical\"])",
       "file_reference": false,
       "headline": false,
       "inverse_of": null,
@@ -1751,7 +1751,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "edge": null,
       "exempts_obligations": false,
       "field_name": "status",
-      "field_type": "String",
+      "field_type": "Enum([\"planned\", \"in_progress\", \"released\", \"recalled\"])",
       "file_reference": false,
       "headline": true,
       "inverse_of": null,
@@ -1922,12 +1922,12 @@ expression: "digest(&load(&runtime, &[name]))"
     "derived_references": [],
     "field_forms": {
       "channel.description": "string",
-      "channel.interaction_model": "string",
+      "channel.interaction_model": "enum (request_response, event_driven, batch, streaming, bidirectional, manual)",
       "channel.reason": "string",
-      "channel.status": "string",
+      "channel.status": "enum (active, deprecated)",
       "channel.tags": "string_list",
       "channel.url": "string",
-      "deliverable.artifact_type": "string",
+      "deliverable.artifact_type": "enum (cli, service, library, web_app, mobile_app, api, extension, documentation, package)",
       "deliverable.contributors": "string_list",
       "deliverable.depends_on": "reference_list",
       "deliverable.description": "string",
@@ -1936,22 +1936,22 @@ expression: "digest(&load(&runtime, &[name]))"
       "deliverable.modules": "reference_list",
       "deliverable.owner": "string",
       "deliverable.reason": "string",
-      "deliverable.status": "string",
+      "deliverable.status": "enum (draft, in_progress, shipped, deprecated)",
       "deliverable.tags": "string_list",
       "deliverable.version": "string",
       "feature.acceptance": "string_list",
       "feature.contributors": "string_list",
       "feature.depends_on": "reference_list",
       "feature.description": "string",
-      "feature.effort": "string",
+      "feature.effort": "enum (xs, s, m, l, xl)",
       "feature.features": "reference_list",
       "feature.owner": "string",
-      "feature.priority": "string",
+      "feature.priority": "enum (critical, high, medium, low)",
       "feature.problem": "string",
       "feature.reason": "string",
       "feature.refs": "string_list",
       "feature.solution": "string",
-      "feature.status": "string",
+      "feature.status": "enum (proposed, accepted, in_progress, done, deferred, deprecated)",
       "feature.tags": "string_list",
       "feature.tests": "string_list",
       "journey.channels": "reference_list",
@@ -1959,7 +1959,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "journey.features": "reference_list",
       "journey.flow": "string_list",
       "journey.persona": "reference",
-      "journey.priority": "string",
+      "journey.priority": "enum (critical, high, medium, low)",
       "journey.tags": "string_list",
       "milestone.blockers": "string_list",
       "milestone.contributors": "string_list",
@@ -1969,11 +1969,11 @@ expression: "digest(&load(&runtime, &[name]))"
       "milestone.features": "reference_list",
       "milestone.modules": "reference_list",
       "milestone.owner": "string",
-      "milestone.priority": "string",
+      "milestone.priority": "enum (critical, high, medium, low)",
       "milestone.reason": "string",
       "milestone.refs": "string_list",
       "milestone.start_date": "string",
-      "milestone.status": "string",
+      "milestone.status": "enum (planned, in_progress, completed, blocked)",
       "milestone.tags": "string_list",
       "milestone.target_date": "string",
       "module.depends_on": "reference_list",
@@ -1987,9 +1987,9 @@ expression: "digest(&load(&runtime, &[name]))"
       "persona.key_features": "reference_list",
       "persona.pain_points": "string_list",
       "persona.reason": "string",
-      "persona.status": "string",
+      "persona.status": "enum (active, deprecated)",
       "persona.tags": "string_list",
-      "persona.technical_level": "string",
+      "persona.technical_level": "enum (expert, advanced, intermediate, beginner, non_technical)",
       "release.changelog": "string",
       "release.contributors": "string_list",
       "release.deliverables": "reference_list",
@@ -2000,7 +2000,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "release.reason": "string",
       "release.refs": "string_list",
       "release.release_date": "string",
-      "release.status": "string",
+      "release.status": "enum (planned, in_progress, released, recalled)",
       "release.tags": "string_list",
       "release.target_date": "string",
       "release.version": "string",
@@ -2216,7 +2216,7 @@ expression: "digest(&load(&runtime, &[name]))"
                   }
                 },
                 "default_value": null,
-                "description": "Only features with this status: proposed (also a feature without one), accepted, in_progress, done, deferred or deprecated",
+                "description": "Only features with this status; a feature without one counts as proposed",
                 "name": "status",
                 "required": false
               },
@@ -2232,7 +2232,7 @@ expression: "digest(&load(&runtime, &[name]))"
                   }
                 },
                 "default_value": null,
-                "description": "Only features with this priority: critical, high, medium, low",
+                "description": "Only features with this priority",
                 "name": "priority",
                 "required": false
               },
@@ -2299,7 +2299,7 @@ expression: "digest(&load(&runtime, &[name]))"
                   }
                 },
                 "default_value": null,
-                "description": "Only journeys with this priority: critical, high, medium, low",
+                "description": "Only journeys with this priority",
                 "name": "priority",
                 "required": false
               },
@@ -2373,7 +2373,7 @@ expression: "digest(&load(&runtime, &[name]))"
                   }
                 },
                 "default_value": null,
-                "description": "Only deliverables with this status: draft (also a deliverable without one), in_progress, shipped or deprecated",
+                "description": "Only deliverables with this status; a deliverable without one counts as draft",
                 "name": "status",
                 "required": false
               },
@@ -2394,7 +2394,7 @@ expression: "digest(&load(&runtime, &[name]))"
                   }
                 },
                 "default_value": null,
-                "description": "Only deliverables of this artifact type: cli, service, library, web_app, mobile_app, api, extension, documentation or package",
+                "description": "Only deliverables with this artifact type",
                 "name": "artifact_type",
                 "required": false
               },
@@ -2461,7 +2461,7 @@ expression: "digest(&load(&runtime, &[name]))"
                   }
                 },
                 "default_value": null,
-                "description": "Only milestones with this status: planned (also a milestone without one), in_progress, completed or blocked",
+                "description": "Only milestones with this status; a milestone without one counts as planned",
                 "name": "status",
                 "required": false
               },
@@ -2477,7 +2477,7 @@ expression: "digest(&load(&runtime, &[name]))"
                   }
                 },
                 "default_value": null,
-                "description": "Only milestones with this priority: critical, high, medium, low",
+                "description": "Only milestones with this priority",
                 "name": "priority",
                 "required": false
               },
@@ -2535,7 +2535,7 @@ expression: "digest(&load(&runtime, &[name]))"
               {
                 "arg_type": "string",
                 "default_value": null,
-                "description": "Only modules of this family (core, platform, extension, integration, advisory, or another)",
+                "description": "Only modules of this family, standard or not",
                 "name": "family",
                 "required": false
               },
@@ -2651,7 +2651,7 @@ expression: "digest(&load(&runtime, &[name]))"
                   }
                 },
                 "default_value": null,
-                "description": "Only personas with this status: active (also a persona without one) or deprecated",
+                "description": "Only personas with this status; a persona without one counts as active",
                 "name": "status",
                 "required": false
               },
@@ -2668,7 +2668,7 @@ expression: "digest(&load(&runtime, &[name]))"
                   }
                 },
                 "default_value": null,
-                "description": "Only personas with this technical level: expert, advanced, intermediate, beginner or non_technical",
+                "description": "Only personas with this technical level",
                 "name": "technical_level",
                 "required": false
               },
@@ -2733,7 +2733,7 @@ expression: "digest(&load(&runtime, &[name]))"
                   }
                 },
                 "default_value": null,
-                "description": "Only channels with this status: active (also a channel without one) or deprecated",
+                "description": "Only channels with this status; a channel without one counts as active",
                 "name": "status",
                 "required": false
               },
@@ -2751,7 +2751,7 @@ expression: "digest(&load(&runtime, &[name]))"
                   }
                 },
                 "default_value": null,
-                "description": "Only channels with this interaction model: request_response, event_driven, batch, streaming, bidirectional or manual",
+                "description": "Only channels with this interaction model",
                 "name": "interaction_model",
                 "required": false
               },
@@ -2818,7 +2818,7 @@ expression: "digest(&load(&runtime, &[name]))"
                   }
                 },
                 "default_value": null,
-                "description": "Only releases with this status: planned (also a release without one), in_progress, released or recalled",
+                "description": "Only releases with this status; a release without one counts as planned",
                 "name": "status",
                 "required": false
               },
@@ -3628,7 +3628,7 @@ expression: "digest(&load(&runtime, &[name]))"
       },
       "edge_type": null,
       "field": "family",
-      "message_template": "module '{id}' has non-standard family '{value}' — standard families: core, platform, extension, integration, advisory",
+      "message_template": "module '{id}' has non-standard family '{value}' — standard families: {allowed}",
       "owner": "@specforge/product",
       "severity": "Info",
       "target_kind": "module",
@@ -4099,198 +4099,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "wasm_function": null
     },
     {
-      "check": "field_value_constraint",
-      "code": "W077",
-      "constraint": {
-        "kind": "one_of",
-        "pattern": null,
-        "values": [
-          "proposed",
-          "accepted",
-          "in_progress",
-          "done",
-          "deferred",
-          "deprecated"
-        ]
-      },
-      "edge_type": null,
-      "field": "status",
-      "message_template": "feature '{id}' has invalid status '{value}' — expected one of: proposed, accepted, in_progress, done, deferred, deprecated",
-      "owner": "@specforge/product",
-      "severity": "Warning",
-      "target_kind": "feature",
-      "wasm_function": null
-    },
-    {
-      "check": "field_value_constraint",
-      "code": "W078",
-      "constraint": {
-        "kind": "one_of",
-        "pattern": null,
-        "values": [
-          "critical",
-          "high",
-          "medium",
-          "low"
-        ]
-      },
-      "edge_type": null,
-      "field": "priority",
-      "message_template": "{kind} '{id}' has invalid priority '{value}' — expected one of: critical, high, medium, low",
-      "owner": "@specforge/product",
-      "severity": "Warning",
-      "target_kind": "feature",
-      "wasm_function": null
-    },
-    {
-      "check": "field_value_constraint",
-      "code": "W078",
-      "constraint": {
-        "kind": "one_of",
-        "pattern": null,
-        "values": [
-          "critical",
-          "high",
-          "medium",
-          "low"
-        ]
-      },
-      "edge_type": null,
-      "field": "priority",
-      "message_template": "{kind} '{id}' has invalid priority '{value}' — expected one of: critical, high, medium, low",
-      "owner": "@specforge/product",
-      "severity": "Warning",
-      "target_kind": "journey",
-      "wasm_function": null
-    },
-    {
-      "check": "field_value_constraint",
-      "code": "W078",
-      "constraint": {
-        "kind": "one_of",
-        "pattern": null,
-        "values": [
-          "critical",
-          "high",
-          "medium",
-          "low"
-        ]
-      },
-      "edge_type": null,
-      "field": "priority",
-      "message_template": "{kind} '{id}' has invalid priority '{value}' — expected one of: critical, high, medium, low",
-      "owner": "@specforge/product",
-      "severity": "Warning",
-      "target_kind": "milestone",
-      "wasm_function": null
-    },
-    {
-      "check": "field_value_constraint",
-      "code": "W079",
-      "constraint": {
-        "kind": "one_of",
-        "pattern": null,
-        "values": [
-          "planned",
-          "in_progress",
-          "completed",
-          "blocked"
-        ]
-      },
-      "edge_type": null,
-      "field": "status",
-      "message_template": "milestone '{id}' has invalid status '{value}' — expected one of: planned, in_progress, completed, blocked",
-      "owner": "@specforge/product",
-      "severity": "Warning",
-      "target_kind": "milestone",
-      "wasm_function": null
-    },
-    {
-      "check": "field_value_constraint",
-      "code": "W080",
-      "constraint": {
-        "kind": "one_of",
-        "pattern": null,
-        "values": [
-          "cli",
-          "service",
-          "library",
-          "web_app",
-          "mobile_app",
-          "api",
-          "extension",
-          "documentation",
-          "package"
-        ]
-      },
-      "edge_type": null,
-      "field": "artifact_type",
-      "message_template": "deliverable '{id}' has invalid artifact_type '{value}' — expected one of: cli, service, library, web_app, mobile_app, api, extension, documentation, package",
-      "owner": "@specforge/product",
-      "severity": "Warning",
-      "target_kind": "deliverable",
-      "wasm_function": null
-    },
-    {
-      "check": "field_value_constraint",
-      "code": "W083",
-      "constraint": {
-        "kind": "one_of",
-        "pattern": null,
-        "values": [
-          "active",
-          "deprecated"
-        ]
-      },
-      "edge_type": null,
-      "field": "status",
-      "message_template": "persona '{id}' has invalid status '{value}' — expected one of: active, deprecated",
-      "owner": "@specforge/product",
-      "severity": "Warning",
-      "target_kind": "persona",
-      "wasm_function": null
-    },
-    {
-      "check": "field_value_constraint",
-      "code": "W084",
-      "constraint": {
-        "kind": "one_of",
-        "pattern": null,
-        "values": [
-          "active",
-          "deprecated"
-        ]
-      },
-      "edge_type": null,
-      "field": "status",
-      "message_template": "channel '{id}' has invalid status '{value}' — expected one of: active, deprecated",
-      "owner": "@specforge/product",
-      "severity": "Warning",
-      "target_kind": "channel",
-      "wasm_function": null
-    },
-    {
-      "check": "field_value_constraint",
-      "code": "W085",
-      "constraint": {
-        "kind": "one_of",
-        "pattern": null,
-        "values": [
-          "draft",
-          "in_progress",
-          "shipped",
-          "deprecated"
-        ]
-      },
-      "edge_type": null,
-      "field": "status",
-      "message_template": "deliverable '{id}' has invalid status '{value}' — expected one of: draft, in_progress, shipped, deprecated",
-      "owner": "@specforge/product",
-      "severity": "Warning",
-      "target_kind": "deliverable",
-      "wasm_function": null
-    },
-    {
       "check": "cycle_detection",
       "code": "W092",
       "constraint": null,
@@ -4319,28 +4127,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "owner": "@specforge/product",
       "severity": "Warning",
       "target_kind": "release",
-      "wasm_function": null
-    },
-    {
-      "check": "field_value_constraint",
-      "code": "W095",
-      "constraint": {
-        "kind": "one_of",
-        "pattern": null,
-        "values": [
-          "xs",
-          "s",
-          "m",
-          "l",
-          "xl"
-        ]
-      },
-      "edge_type": null,
-      "field": "effort",
-      "message_template": "feature '{id}' has invalid effort '{value}' — expected one of: xs, s, m, l, xl",
-      "owner": "@specforge/product",
-      "severity": "Warning",
-      "target_kind": "feature",
       "wasm_function": null
     },
     {

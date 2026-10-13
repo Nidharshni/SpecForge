@@ -76,12 +76,21 @@ fn test_pipeline_with_product_extension_runs_validation() {
     let ctx = compile(&dir);
     let diagnostics = ctx.diagnostics();
 
-    // Should have W077 for invalid feature status
-    let w077_diags: Vec<_> = diagnostics.iter().filter(|d| d.code == "W077").collect();
+    // The closed vocabulary is checked by the host: one E061, no retired W077
+    let e061: Vec<_> = diagnostics.iter().filter(|d| d.code == "E061").collect();
+    assert_eq!(
+        e061.len(),
+        1,
+        "expected one E061, diagnostics: {diagnostics:?}"
+    );
     assert!(
-        !w077_diags.is_empty(),
-        "expected W077 for invalid status, diagnostics: {:?}",
-        diagnostics
+        e061[0].message.contains("'status'") && e061[0].message.contains("invalid_status"),
+        "{:?}",
+        e061[0]
+    );
+    assert!(
+        diagnostics.iter().all(|d| d.code != "W077"),
+        "{diagnostics:?}"
     );
 }
 
@@ -96,12 +105,21 @@ fn test_pipeline_with_product_extension_validates_priority() {
     let ctx = compile(&dir);
     let diagnostics = ctx.diagnostics();
 
-    // W078 should fire for invalid priority
-    let w078_diags: Vec<_> = diagnostics.iter().filter(|d| d.code == "W078").collect();
+    // The closed vocabulary is checked by the host: one E061, no retired W078
+    let e061: Vec<_> = diagnostics.iter().filter(|d| d.code == "E061").collect();
+    assert_eq!(
+        e061.len(),
+        1,
+        "expected one E061, diagnostics: {diagnostics:?}"
+    );
     assert!(
-        !w078_diags.is_empty(),
-        "expected W078 for invalid priority, diagnostics: {:?}",
-        diagnostics
+        e061[0].message.contains("'priority'") && e061[0].message.contains("invalid_priority"),
+        "{:?}",
+        e061[0]
+    );
+    assert!(
+        diagnostics.iter().all(|d| d.code != "W078"),
+        "{diagnostics:?}"
     );
 }
 
@@ -137,7 +155,7 @@ fn test_pipeline_without_extension_no_extension_validation() {
     let ctx = compile(&dir);
     let diagnostics = ctx.diagnostics();
 
-    // No W077/W041 since no extension is loaded to provide those rules
+    // No W041 since no extension is loaded to provide those rules
     let extension_diags: Vec<_> = diagnostics
         .iter()
         .filter(|d| d.code.starts_with("W0") && d.code.len() == 4)
@@ -145,12 +163,7 @@ fn test_pipeline_without_extension_no_extension_validation() {
     // Extension-specific warnings should not fire without the extension
     let product_codes: Vec<_> = extension_diags
         .iter()
-        .filter(|d| {
-            matches!(
-                d.code.as_str(),
-                "W041" | "W042" | "W044" | "W077" | "W078" | "W079" | "W080"
-            )
-        })
+        .filter(|d| matches!(d.code.as_str(), "W041" | "W042" | "W044"))
         .collect();
     assert!(
         product_codes.is_empty(),
