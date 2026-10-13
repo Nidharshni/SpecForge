@@ -731,10 +731,10 @@ pub struct ValidatorRef {
     pub kind: Option<String>,
 }
 
-/// Verdict of a `validate__*` wasm export; the wire mirror of the host's
-/// `CustomVerdict`. Serializes as `{"verdict":"pass"}` or
-/// `{"verdict":"fail","field":...,"value":...}` (`field`/`value` omitted
-/// when `None`).
+/// Verdict of a `validate__*` wasm export; the wire form of the host's
+/// `Verdict` (`specforge_registry::rules::Verdict`). Serializes as
+/// `{"verdict":"pass"}` or `{"verdict":"fail","field":...,"value":...}`
+/// (`field`/`value` omitted when `None`).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "verdict", rename_all = "lowercase")]
 pub enum ValidatorVerdict {
