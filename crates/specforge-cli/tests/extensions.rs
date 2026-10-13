@@ -1066,7 +1066,11 @@ fn add_rejects_invalid_specifier() {
     let config = r#"{"name":"t","version":"0.1.0","extensions":[]}"#;
     fs::write(dir.path().join("specforge.json"), config).unwrap();
 
-    for specifier in ["not-valid", "@scope"] {
+    // A package reference that is not one; a bare word that is no `@scope/name` is a path.
+    for (specifier, prefix) in [
+        ("@scope", "invalid extension specifier: "),
+        ("not-valid", "file not found: "),
+    ] {
         let output = specforge_cmd()
             .args(["add", specifier, "--path"])
             .arg(dir.path())
@@ -1078,8 +1082,7 @@ fn add_rejects_invalid_specifier() {
         assert_eq!(json["code"], "E054", "{json}");
         let message = json["error"].as_str().unwrap();
         assert!(
-            message.starts_with("invalid extension specifier: ")
-                && message.contains(&format!("'{specifier}'")),
+            message.starts_with(prefix) && message.contains(specifier),
             "{message}"
         );
     }
@@ -1091,7 +1094,7 @@ fn add_rejects_invalid_specifier() {
         .assert()
         .code(1)
         .stderr(predicates::str::contains(
-            "error[E054]: invalid extension specifier: 'not-valid' is not a registry package name",
+            "error[E054]: file not found: not-valid",
         ))
         .stderr(predicates::str::contains(
             "use a builtin's name, './local/path.wasm', 'git+https://...', or '@scope/name[@version]'",

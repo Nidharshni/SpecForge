@@ -27,10 +27,13 @@ pub enum Source {
     Git { url: String },
 }
 
-/// Read an `add` argument once (ADR 0036): a builtin name, a `.wasm` path
-/// (or any `./`, `../` or `/` path), a `git+<url>`, or a package reference
-/// `@scope/name[@requirement]`. Anything else is E054; a requirement that
-/// is none is R-RES-003. No registry is asked for either.
+/// Read an `add` argument once (ADR 0036): a builtin name, a `git+<url>`, a
+/// package reference `@scope/name[@requirement]` (it starts with `@` and does
+/// not end in `.wasm`), or else a local path (a `.wasm` file or an extension's
+/// crate directory, with or without `./`). A package reference that is not one
+/// is E054, a requirement that is none R-RES-003, and a path that names
+/// nothing is E054 when it is read ([`LocalFile::read`]). No registry is
+/// asked for either.
 pub fn parse(specifier: &str) -> Result<Source, OpError> {
     let specifier = specifier.trim();
     if specifier.is_empty() {
@@ -51,10 +54,12 @@ pub fn parse(specifier: &str) -> Result<Source, OpError> {
             url: url.to_string(),
         });
     }
+    // Registry packages are always `@scope/name` (ADR 0036): nothing else names one.
     if specifier.ends_with(".wasm")
         || ["./", "../", "/"]
             .iter()
             .any(|prefix| specifier.starts_with(prefix))
+        || !specifier.starts_with('@')
     {
         return Ok(Source::Local(PathBuf::from(specifier)));
     }
@@ -62,7 +67,7 @@ pub fn parse(specifier: &str) -> Result<Source, OpError> {
 }
 
 /// What an `add` argument may be, as the suggestion of E054.
-const SPECIFIER_FORMS: &str =
+pub(crate) const SPECIFIER_FORMS: &str =
     "use a builtin's name, './local/path.wasm', 'git+https://...', or '@scope/name[@version]'";
 
 /// E054 for a package reference that is not one, R-RES-003 for a
@@ -907,7 +912,8 @@ mod tests {
             })
         );
         assert_eq!(parse("").unwrap_err().code, "E054");
-        assert_eq!(parse("not-scoped").unwrap_err().code, "E054");
+        // Registry packages are always `@scope/name`: anything else names a path.
+        assert_eq!(parse("not-scoped"), Ok(Source::Local("not-scoped".into())));
         assert_eq!(parse("@acme/").unwrap_err().code, "E054");
     }
 
@@ -922,6 +928,9 @@ mod tests {
         fn registry(reference: &str) -> Result<Source, String> {
             Ok(Source::Registry(PackageRef::parse(reference).unwrap()))
         }
+        fn local(path: &str) -> Result<Source, String> {
+            Ok(Source::Local(PathBuf::from(path)))
+        }
         let cases: Vec<(&str, Result<Source, String>)> = vec![
             ("@acme/tool", registry("@acme/tool")),                 // I1
             ("@acme/tool@", Err("E054".into())),                    // I2
@@ -931,15 +940,15 @@ mod tests {
             ("@acme/tool@1.2", registry("@acme/tool@1.2")),         // I6
             ("@acme/tool@1.0.0/x", Err("R-RES-003".into())),        // I7
             ("@acme/tool@1.0.0?x=1", Err("R-RES-003".into())),      // I8
-            ("foo@/bar", Err("E054".into())),                       // I9
-            ("tool@1.0.0", Err("E054".into())),                     // I10
-            ("tool", Err("E054".into())),                           // I11
+            ("foo@/bar", local("foo@/bar")),                        // I9
+            ("tool@1.0.0", local("tool@1.0.0")),                    // I10
+            ("tool", local("tool")),                                // I11
             ("@acme/..", Err("E054".into())),                       // I12
             ("@acme/aa/bb", Err("E054".into())),                    // I13
             ("@acme/a/b", Err("E054".into())),                      // I14
             ("@a/x", registry("@a/x")),                             // I15
             ("@acme/T ool", Err("E054".into())),                    // I16
-            ("Acme@1", Err("E054".into())),                         // I17
+            ("Acme@1", local("Acme@1")),                            // I17
             ("@acme/tool@latest", registry("@acme/tool")),          // I18
             ("@acme/tool@*", registry("@acme/tool")),               // I18
             ("@acme/tool@>=1, <2", registry("@acme/tool@>=1, <2")), // I19
@@ -2530,15 +2539,15 @@ mod tests {
             ]
         );
 
-        let error = specified(&["@specforge/product", "tool", "@acme/"]).unwrap_err();
+        let error = specified(&["@specforge/product", "@acme/tool@", "@acme/"]).unwrap_err();
         assert_eq!(error.code, "E054");
         assert!(
             error
                 .message
-                .starts_with("adding 'tool': invalid extension specifier: "),
+                .starts_with("adding '@acme/tool@': invalid extension specifier: "),
             "{error:?}"
         );
-        let alone = specified(&["tool"]).unwrap_err();
+        let alone = specified(&["@acme/"]).unwrap_err();
         assert!(
             alone.message.starts_with("invalid extension specifier: "),
             "{alone:?}"
@@ -2942,7 +2951,6 @@ mod tests {
         behavior = "parse_extension_specifier",
         verify = "a specifier that is no builtin's name, git+ URL or @scope/name reference is a local path, a bare crate directory included"
     )]
-    #[ignore = "fixed by T9"]
     fn a_bare_path_is_a_local_source() {
         assert_eq!(parse("ext").unwrap(), Source::Local("ext".into()));
         assert_eq!(

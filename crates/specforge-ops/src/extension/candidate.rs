@@ -176,7 +176,8 @@ impl LocalFile {
                 crate::OpErrorKind::FileNotFound,
                 codes::E054,
                 format!("file not found: {}", path.display()),
-            ));
+            )
+            .with_suggestion(super::add::SPECIFIER_FORMS));
         }
         let path = binary_at(path)?;
         let module = Module::read(&path).map_err(|e| {

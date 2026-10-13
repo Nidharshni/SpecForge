@@ -739,13 +739,15 @@ behavior parse_extension_specifier "Parse Extension Specifier" {
   }
   contract   """
     The system MUST read an add argument once into one source: a builtin's
-    name, a local path (ending in .wasm, or starting with ./, ../ or /), a
-    git+ URL, or a package reference @scope/name[@requirement], where the
-    name is a PackageName and the requirement a VersionRequirement (latest
-    when absent). An argument that is none of these MUST be refused with
-    E054 before any registry is asked; a requirement that is not one MUST be
-    refused with R-RES-003 before any registry is asked. No other code may
-    split name@requirement.
+    name, a git+ URL, a package reference @scope/name[@requirement] (it
+    starts with @ and does not end in .wasm), where the name is a
+    PackageName and the requirement a VersionRequirement (latest when
+    absent), or else a local path (a .wasm file or an extension's crate
+    directory, with or without ./). A package reference that is not one,
+    and a path that names nothing, MUST be refused with E054 before any
+    registry is asked; a requirement that is not one MUST be refused with
+    R-RES-003 before any registry is asked. No other code may split
+    name@requirement.
   """
   produces   [extension_specifier_parsed]
   verify unit "@scope/name@version parsed as registry source"

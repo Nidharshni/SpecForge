@@ -289,7 +289,7 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
     source "registry", or "local:<path>" for a local .wasm file, so peer
     and diamond checks compare real versions and update never replaces a
     local build from a registry.
-    A local path may name an extension's crate directory: the component its
+    A local path may name an extension's crate directory, with or without ./: the component its
     crate builds (target/wasm32-wasip2/release/<crate>.wasm) is installed
     and locked by its own path, as publish reads it; a directory with no
     built component is E040.
