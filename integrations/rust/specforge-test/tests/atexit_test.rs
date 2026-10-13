@@ -13,7 +13,6 @@ fn atexit_writes_report_on_process_exit() {
         module_path: None,
         file: "test.rs".to_string(),
         verify: None,
-        verify_kind: None,
         duration_ms: 0,
         outcome: TestOutcome::Pass,
     }];

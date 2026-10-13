@@ -10,7 +10,6 @@ fn entry(id: &str, outcome: TestOutcome) -> TestRecordEntry {
         module_path: None,
         file: "test.rs".to_string(),
         verify: None,
-        verify_kind: None,
         duration_ms: 0,
         outcome,
     }

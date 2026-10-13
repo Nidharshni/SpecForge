@@ -122,7 +122,6 @@ impl Drop for TestGuard {
             module_path: Some(self.module_path.to_string()),
             file: self.file.to_string(),
             verify: self.verify.map(|s| s.to_string()),
-            verify_kind: None, // stamped at finalize from the exported graph (C11-07)
             duration_ms: u64::try_from(self.started.elapsed().as_millis()).unwrap_or(u64::MAX),
             outcome,
         };

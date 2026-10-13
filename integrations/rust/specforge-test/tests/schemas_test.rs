@@ -109,10 +109,9 @@ fn make_entry(id: &str, outcome: TestOutcome) -> TestRecordEntry {
         entity_kind: "behavior".to_string(),
         entity_id: id.to_string(),
         test_name: format!("test_{id}"),
-        module_path: None,
+        module_path: Some("specforge_test::cases".to_string()),
         file: "tests/x.rs".to_string(),
         verify: Some("rejects invalid input".to_string()),
-        verify_kind: Some("unit".to_string()),
         duration_ms: 3,
         outcome,
     }
@@ -126,7 +125,6 @@ fn binary_report_conforms_to_published_schema() {
         make_entry("auth_logout", TestOutcome::Fail),
         {
             let mut e = make_entry("auth_locked", TestOutcome::Skipped);
-            e.verify_kind = None;
             e.verify = None;
             e
         },
@@ -144,7 +142,7 @@ fn binary_report_conforms_to_published_schema() {
         "serialized report violates schema: {errors:?}"
     );
 
-    // C11-04/C11-07 fields are actually producible end-to-end. Reports are
+    // C11-04 fields are actually producible end-to-end. Reports are
     // sorted by (entity_id, test_name) — look entries up by id.
     let by_id = |id: &str| {
         report_json["entries"]
@@ -157,21 +155,16 @@ fn binary_report_conforms_to_published_schema() {
     };
     let passing = by_id("auth_login");
     assert_eq!(passing["status"], "pass");
-    assert_eq!(passing["verify_kind"], "unit");
+    assert_eq!(passing["module_path"], "specforge_test::cases");
     assert_eq!(passing["duration_ms"], 3);
     let skipped = by_id("auth_locked");
     assert_eq!(skipped["status"], "skipped");
-    assert!(
-        skipped.get("verify_kind").is_none(),
-        "optional kind omitted when unknown"
-    );
 }
 
 #[specforge_test_macros::test(
     behavior = "record_test_via_drop_guard",
     verify = "a recorded entry conforms to the published binary report schema"
 )]
-#[ignore = "fixed by T3"]
 fn a_recorded_report_conforms_to_the_published_schema() {
     let reports = tempfile::tempdir().unwrap();
     support::run_fixture(&["--include-ignored"], reports.path());

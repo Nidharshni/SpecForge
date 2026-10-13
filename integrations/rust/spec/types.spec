@@ -16,10 +16,10 @@ type TestRecordEntry {
   entity_kind        string  @readonly
   entity_id          string  @readonly
   test_name          string  @readonly
+  module_path        string  @optional
   file               string  @readonly
   // serialized as `verify` (reserved statement keyword in .spec files)
   verify_description string  @optional
-  verify_kind        string  @optional
   duration_ms        integer @readonly
   status             TestOutcome
 }
