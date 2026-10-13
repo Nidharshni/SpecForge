@@ -40,6 +40,16 @@ pub(crate) struct Args {
     #[arg(long, default_value_t = false)]
     prove: bool,
 
+    /// Seconds one solver call may take before it is stopped (with --prove)
+    #[arg(
+        long,
+        value_name = "SECONDS",
+        default_value_t = 30,
+        requires = "prove",
+        value_parser = clap::value_parser!(u64).range(1..)
+    )]
+    prove_timeout: u64,
+
     /// Fail with a non-zero exit when proof coverage falls below this
     /// percentage (needs test results)
     #[arg(long)]
@@ -49,7 +59,7 @@ pub(crate) struct Args {
 impl Args {
     /// The solver `--prove` asks.
     fn solver(&self) -> Z3 {
-        Z3::default()
+        Z3::with_timeout(std::time::Duration::from_secs(self.prove_timeout))
     }
 
     /// The analysis the flags ask for: any pass name (the passes are the
@@ -195,7 +205,7 @@ fn summary_lines(value: &serde_json::Value, prefix: &str, out: &mut Vec<String>)
 
 #[cfg(test)]
 mod summary_tests {
-    use super::{Args, ReportSource, summary_lines};
+    use super::{Args, ReportSource, Z3, summary_lines};
     use clap::Parser;
 
     #[derive(Parser)]
@@ -234,6 +244,24 @@ mod summary_tests {
         );
         assert!(asked.prove.is_some() && asked.strict);
         assert_eq!(asked.min, Some(80.0));
+    }
+
+    #[test]
+    fn the_prove_timeout_is_the_solvers_and_needs_prove() {
+        use std::time::Duration;
+        // One number: the flag's default is the adapter's.
+        assert_eq!(args(&["--prove"]).solver().timeout(), Z3::DEFAULT_TIMEOUT);
+        assert_eq!(Z3::DEFAULT_TIMEOUT, Duration::from_secs(30));
+        assert_eq!(
+            args(&["--prove", "--prove-timeout", "5"])
+                .solver()
+                .timeout(),
+            Duration::from_secs(5)
+        );
+        assert!(
+            Line::try_parse_from(["analyze", "--prove-timeout", "5"]).is_err(),
+            "--prove-timeout needs --prove"
+        );
     }
 
     #[test]

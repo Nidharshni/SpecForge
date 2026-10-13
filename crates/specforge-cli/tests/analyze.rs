@@ -1296,3 +1296,49 @@ fn doctor_states_the_w098_analyze_prints_when_z3_is_missing() {
     );
     assert!(!text.contains("z3 not on PATH \u{2014}"), "{text}");
 }
+
+#[cfg(unix)]
+#[specforge_test_macros::test(
+    behavior = "prove_declared_bounds_and_claims",
+    verify = "specforge analyze --prove-timeout sets the solver's timeout and needs --prove"
+)]
+fn prove_timeout_stops_a_slow_solve() {
+    let dir = impossible_bounds();
+    let started = std::time::Instant::now();
+    let (prove, code) = prove_report(
+        dir.path(),
+        &crate::toolchain::z3_slow(),
+        &["--prove-timeout", "1"],
+    );
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(10),
+        "{:?}",
+        started.elapsed()
+    );
+    assert_eq!(code, Some(0));
+    let findings = prove["findings"].as_array().unwrap();
+    assert_eq!(findings.len(), 1, "{prove}");
+    assert_eq!(findings[0]["code"], "W098");
+    assert!(
+        findings[0]["message"]
+            .as_str()
+            .unwrap()
+            .starts_with("the SMT solver timed out after 1s"),
+        "{prove}"
+    );
+    assert!(
+        findings[0]["suggestion"]
+            .as_str()
+            .unwrap()
+            .contains("--prove-timeout"),
+        "{prove}"
+    );
+
+    let refused = specforge_cmd()
+        .args(["analyze", "--prove-timeout", "1", "--path"])
+        .arg(dir.path())
+        .env("PATH", crate::toolchain::z3_slow())
+        .output()
+        .unwrap();
+    assert_eq!(refused.status.code(), Some(2));
+}

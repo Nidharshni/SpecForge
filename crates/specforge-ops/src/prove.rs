@@ -320,9 +320,13 @@ fn conjuncts_from_field(name: &str, value: &specforge_graph::FieldValue) -> (Vec
     (out, skipped)
 }
 
-fn note_failure(failure: SolveFailure, runtime_failure: &mut bool, timed_out: &mut bool) {
+fn note_failure(
+    failure: SolveFailure,
+    runtime_failure: &mut bool,
+    timed_out: &mut Option<std::time::Duration>,
+) {
     match failure {
-        SolveFailure::TimedOut { .. } => *timed_out = true,
+        SolveFailure::TimedOut { after } => *timed_out = Some(after),
         SolveFailure::Failed => *runtime_failure = true,
     }
 }
@@ -402,7 +406,7 @@ pub(crate) fn run(ctx: &AnalysisContext, solver: &dyn Solver) -> ProveReport {
     // mid-run (hardening-plan D3): analysis output must never silently
     // depend on machine state.
     let mut solver_runtime_failure = false;
-    let mut solver_timed_out = false;
+    let mut solver_timed_out: Option<std::time::Duration> = None;
     findings.extend(unavailable);
 
     if solver_available {
@@ -537,13 +541,15 @@ pub(crate) fn run(ctx: &AnalysisContext, solver: &dyn Solver) -> ProveReport {
         }
     }
 
-    if solver_timed_out {
+    if let Some(after) = solver_timed_out {
         findings.push(
             Diagnostic::new(
                 codes::W098,
-                "the SMT solver timed out; some formal checks were skipped".to_string(),
+                format!("the SMT solver timed out after {after:?}; some formal checks were skipped"),
             )
-            .with_suggestion("simplify the declared bounds or claims, or raise the z3 timeout"),
+            .with_suggestion(
+                "simplify the declared bounds or claims, or raise `specforge analyze --prove-timeout`",
+            ),
         );
     }
     if solver_runtime_failure {
@@ -934,11 +940,15 @@ mod tests {
             .iter()
             .find(|f| f.code == "W098")
             .expect("W098 expected");
-        assert!(w098.message.contains("timed out"), "{}", w098.message);
-        // T7 names the flag.
+        assert_eq!(
+            w098.message,
+            "the SMT solver timed out after 30s; some formal checks were skipped"
+        );
         assert_eq!(
             w098.suggestion.as_deref(),
-            Some("simplify the declared bounds or claims, or raise the z3 timeout")
+            Some(
+                "simplify the declared bounds or claims, or raise `specforge analyze --prove-timeout`"
+            )
         );
     }
 
