@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 300" width="880" height="300" role="img" aria-labelledby="t d">
+  <title id="t">Hard skills are extensions</title>
+  <desc id="d">The SpecForge core parses, links and checks, and knows no domain. Extensions plug into it, each a vocabulary plus the rules that judge it: software, product, governance, formal, test runners, and your own, for example pharma quality, medical devices or safety.</desc>
+  <style>
+    svg { --bg:#ffffff; --panel:#f6f8fa; --line:#d0d7de; --text:#1f2328; --muted:#59636e;
+          --forge:#d94f00; --forgeSoft:#fff1e5;
+          --c1:#8250df; --c2:#1a7f37; --c3:#0969da; --c4:#bf3989; --c5:#9a6700; }
+    @media (prefers-color-scheme: dark) {
+      svg { --bg:#0d1117; --panel:#161b22; --line:#30363d; --text:#e6edf3; --muted:#9198a1;
+            --forge:#ff7a2e; --forgeSoft:#2b1a0e;
+            --c1:#ab7df8; --c2:#3fb950; --c3:#4493f8; --c4:#f778ba; --c5:#d29922; }
+    }
+    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; fill: var(--text); }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .muted { fill: var(--muted); }
+    .blk { fill: var(--bg); stroke: var(--line); }
+    .peg { fill: var(--line); }
+
+    .drop { animation: drop 10s ease-out infinite both; }
+    @keyframes drop { 0% { opacity: 0; transform: translateY(-34px); } 5% { opacity: 1; transform: translateY(3px); }
+      7% { transform: translateY(0); } 88% { opacity: 1; transform: translateY(0); } 93%, 100% { opacity: 0; transform: translateY(0); } }
+    .k1 { animation-delay: .3s; } .k2 { animation-delay: .8s; } .k3 { animation-delay: 1.3s; }
+    .k4 { animation-delay: 1.8s; } .k5 { animation-delay: 2.3s; } .k6 { animation-delay: 2.8s; }
+    .glow { animation: glow 10s ease-in-out infinite; opacity: 0; }
+    @keyframes glow { 0%, 34% { opacity: 0; } 38% { opacity: 1; } 46%, 100% { opacity: 0; } }
+    .y0, .y1, .y2, .y3 { animation: 10s infinite step-end; }
+    .y0 { animation-name: y0; } @keyframes y0 { 0%, 40% { opacity: 1; } 41%, 100% { opacity: 0; } }
+    .y1 { animation-name: y1; opacity: 0; } @keyframes y1 { 0%, 40% { opacity: 0; } 41%, 56% { opacity: 1; } 57%, 100% { opacity: 0; } }
+    .y2 { animation-name: y2; opacity: 0; } @keyframes y2 { 0%, 56% { opacity: 0; } 57%, 72% { opacity: 1; } 73%, 100% { opacity: 0; } }
+    .y3 { animation-name: y3; opacity: 0; } @keyframes y3 { 0%, 72% { opacity: 0; } 73%, 100% { opacity: 1; } }
+    @media (prefers-reduced-motion: reduce) { .drop, .glow, .y0, .y1, .y2, .y3 { animation: none; } }
+  </style>
+
+  <text x="40" y="44" font-size="18" font-weight="700">Every word and every rule comes from an extension</text>
+  <text class="muted" x="40" y="68" font-size="13.5">An extension is a hard skill: a vocabulary, plus the rules that judge it. Install the ones you need.</text>
+
+  <!-- the blocks -->
+  <g class="drop k1">
+    <rect class="blk" x="40" y="100" width="125" height="92" rx="10"/>
+    <rect x="40" y="100" width="125" height="6" rx="3" fill="var(--c1)"/>
+    <text class="mono" x="52" y="130" font-size="13" font-weight="700">software</text>
+    <text class="muted" x="52" y="154" font-size="11">behaviors, rules,</text>
+    <text class="muted" x="52" y="170" font-size="11">events, types</text>
+    <rect class="peg" x="92" y="192" width="22" height="12" rx="2"/>
+  </g>
+  <g class="drop k2">
+    <rect class="blk" x="175" y="100" width="125" height="92" rx="10"/>
+    <rect x="175" y="100" width="125" height="6" rx="3" fill="var(--c2)"/>
+    <text class="mono" x="187" y="130" font-size="13" font-weight="700">product</text>
+    <text class="muted" x="187" y="154" font-size="11">features, personas,</text>
+    <text class="muted" x="187" y="170" font-size="11">journeys, releases</text>
+    <rect class="peg" x="227" y="192" width="22" height="12" rx="2"/>
+  </g>
+  <g class="drop k3">
+    <rect class="blk" x="310" y="100" width="125" height="92" rx="10"/>
+    <rect x="310" y="100" width="125" height="6" rx="3" fill="var(--c3)"/>
+    <text class="mono" x="322" y="130" font-size="13" font-weight="700">governance</text>
+    <text class="muted" x="322" y="154" font-size="11">decisions,</text>
+    <text class="muted" x="322" y="170" font-size="11">constraints, risks</text>
+    <rect class="peg" x="362" y="192" width="22" height="12" rx="2"/>
+  </g>
+  <g class="drop k4">
+    <rect class="blk" x="445" y="100" width="125" height="92" rx="10"/>
+    <rect x="445" y="100" width="125" height="6" rx="3" fill="var(--c4)"/>
+    <text class="mono" x="457" y="130" font-size="13" font-weight="700">formal</text>
+    <text class="muted" x="457" y="154" font-size="11">claims an SMT</text>
+    <text class="muted" x="457" y="170" font-size="11">solver proves</text>
+    <rect class="peg" x="497" y="192" width="22" height="12" rx="2"/>
+  </g>
+  <g class="drop k5">
+    <rect class="blk" x="580" y="100" width="125" height="92" rx="10"/>
+    <rect x="580" y="100" width="125" height="6" rx="3" fill="var(--c5)"/>
+    <text class="mono" x="592" y="130" font-size="13" font-weight="700">test runners</text>
+    <text class="muted" x="592" y="154" font-size="11">cargo test, vitest:</text>
+    <text class="muted" x="592" y="170" font-size="11">what proves what</text>
+    <rect class="peg" x="632" y="192" width="22" height="12" rx="2"/>
+  </g>
+  <g class="drop k6">
+    <rect x="715" y="100" width="125" height="92" rx="10" fill="none" stroke="var(--forge)" stroke-width="1.5" stroke-dasharray="6 5"/>
+    <text class="mono" x="727" y="130" font-size="13" font-weight="700" fill="var(--forge)">your own</text>
+    <text class="muted y0" x="727" y="154" font-size="11">your team's rules</text>
+    <text class="muted y1" x="727" y="154" font-size="11">pharma quality</text>
+    <text class="muted y2" x="727" y="154" font-size="11">medical devices</text>
+    <text class="muted y3" x="727" y="154" font-size="11">safety cases</text>
+    <text class="muted" x="727" y="170" font-size="11">write and share it</text>
+    <rect x="767" y="192" width="22" height="12" rx="2" fill="none" stroke="var(--forge)" stroke-dasharray="3 3"/>
+  </g>
+
+  <!-- the core -->
+  <rect x="40" y="204" width="800" height="72" rx="12" fill="var(--panel)" stroke="var(--line)"/>
+  <rect class="glow" x="40" y="204" width="800" height="72" rx="12" fill="var(--forgeSoft)" stroke="var(--forge)" stroke-width="2"/>
+  <rect x="40" y="204" width="8" height="72" rx="4" fill="var(--forge)"/>
+  <text x="66" y="236" font-size="16" font-weight="700">SpecForge core</text>
+  <text class="muted" x="66" y="258" font-size="13">parses, links and checks · knows no domain · same verdict every time</text>
+  <text class="mono muted" x="820" y="246" font-size="12" text-anchor="end">specforge add @specforge/product</text>
+</svg>

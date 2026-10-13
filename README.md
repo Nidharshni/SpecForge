@@ -1,53 +1,150 @@
-# SpecForge
+<p align="center">
+  <img src="assets/readme/hero.svg" width="100%" alt="SpecForge. Turn your team's expertise into rules your AI can't skip. AI drafts, SpecForge checks, you sign.">
+</p>
 
-**Compile human intent into a validated, typed entity graph that AI agents can actually consume.**
+<p align="center">
+  <a href="#try-it-in-5-minutes">Try it in 5 minutes</a> ·
+  <a href="#how-it-works">How it works</a> ·
+  <a href="#see-it-catch-something">See it catch something</a> ·
+  <a href="docs/guides/authoring-spec-files.md">Docs</a>
+</p>
 
-Intent is trapped in prose — scattered across docs, comments, tickets, and tribal knowledge. AI agents waste most of their token budget rediscovering what should have been specified. SpecForge gives them a structured, validated, machine-readable representation of what your team means.
+## The problem
 
-**The graph is the product.** Not the compiler, not the DSL — the typed graph, exported as an open JSON schema (the Graph Protocol), is what makes agents reliable. SpecForge is *not* a code generator and *not* a test framework: it provides context, agents produce output. The compiler never executes anything; test-runner extensions declare how your tests run, and `specforge collect` runs them with your consent to record which entities they prove.
+You ask an AI agent to add refunds to your payment service. It writes clean code, the tests pass, the pull request looks fine. Two weeks later, finance finds a refund larger than the payment it refunded.
 
-## Quick Example
+The rule was written down: in a design doc, in `CLAUDE.md`, in a comment. The agent read it three sessions ago, or never found it. Nothing failed, so nobody noticed.
+
+This isn't a problem with the model. It's a problem with where your rules live. Today, the knowledge that matters sits in places that nothing enforces:
+
+- **Prompts and context files** (`CLAUDE.md`, `AGENTS.md`, skill files) are advice. An agent can misread them or skip them, silently.
+- **Docs and wikis** drift away from the code, and nothing breaks when they do.
+- **Traceability** (which requirement has a test, which rule is enforced where) is a spreadsheet someone updates by hand, until they stop.
+- **Every session starts from zero.** The agent re-reads dozens of files to rediscover what you meant, and still guesses.
+
+The more work you give to AI, the worse this gets. It writes faster than anyone can review.
+
+## The idea: hard skills, not soft skills
+
+There are two ways to teach an AI how your team works.
+
+A **soft skill** is advice placed in the AI's context: a prompt, a `CLAUDE.md`, a skill file. It helps, but it's prose. The AI may follow it, or not.
+
+A **hard skill** is a rule that a program enforces. The AI can't skip it, because the check fails.
+
+<p align="center">
+  <img src="assets/readme/soft-vs-hard.svg" width="100%" alt="Left, soft skill: a rule written in CLAUDE.md is advice; the AI's refund code passes it by and ships with the rule skipped, found two weeks later. Right, hard skill: the same rule in a spec file; specforge check --strict stops the draft with W003, rule not enforced; the agent links the rule, the check passes, and it ships with the rule enforced.">
+</p>
+
+|  | Soft skill<br>prompt, `CLAUDE.md`, skill file | Hard skill<br>SpecForge extension |
+|---|---|---|
+| Lives in | The AI's context window, as prose | A compiler, as code |
+| Can the AI ignore it? | Yes, silently | No: the check fails |
+| Same verdict twice? | Not always | Always. There's no AI inside |
+| Knows what's missing? | No | Yes: broken links, unenforced rules, unproven promises |
+| Shared how? | Copied between files | Versioned and installed, like a library |
+
+**SpecForge is a tool for hard skills.** You (or more often, your agent) write down what must be true in small, structured `.spec` files. SpecForge checks them the way a compiler checks code: every reference must point to something real, every rule must be enforced by something, every promise must be proven by a test. Then it gives the checked result to your agent as context.
+
+Think of it as **a type checker for what you mean**.
+
+## How it works
+
+<p align="center">
+  <img src="assets/readme/loop.svg" width="100%" alt="A loop of six steps around the checked spec: 1 describe (you), 2 draft (your agent), 3 check (SpecForge, which sends errors and fixes back to the draft), 4 build (your agent), 5 prove (your tests, via collect), 6 review (you).">
+</p>
+
+1. **You describe what you want**, in conversation, as you do today.
+2. **Your agent drafts the spec**: the operations, the rules that must always hold, the events, and for each one, what proves it.
+3. **SpecForge checks the draft.** Typos, rules nobody enforces, missing pieces: the check fails with the exact line and a fix hint, and the agent corrects it. No AI is involved in this step. Same input, same verdict, every time.
+4. **Your agent builds against the checked spec.** It asks SpecForge for the exact slice it needs, instead of re-reading your repository.
+5. **Your tests prove the spec.** Each test names what it proves. `specforge collect` runs them and records what is proven and what isn't.
+6. **You review.** Instead of reading every line the agent wrote, you read what was promised, what is proven, and what is still open.
+
+## See it catch something
+
+Your agent drafts this for the refund feature:
 
 ```spec
-spec "payments" {
-  version "0.1.0"
+invariant refund_within_capture "Refunds never exceed the captured amount" {
+  risk high
+  verify unit "rejects a refund larger than the captured amount"
 }
 
-type user "User account" {
-  status draft
-  verify "rejects an empty email"
+invariant refund_needs_reason "Every refund records a reason" {
+  guarantee "A refund without a reason is rejected"
+  risk      medium
+  verify unit "rejects a refund with no reason"
 }
 
-behavior authenticate_user "Authenticate a user with credentials" {
-  status   draft
-  category "auth"
-  contract "Given valid credentials, returns an auth token"
-  produces [user_logged_in]
-
-  verify "rejects invalid password"
-  verify "returns token on success"
+behavior issue_refund "Refund a captured payment" {
+  category   command
+  invariants [refund_within_capture]
+  produces   [refund_isued]
+  contract   "Given a captured payment, refunds up to the captured amount"
+  verify unit "refunds the requested amount"
 }
 
-event user_logged_in "User successfully logged in" {
-  payload user
-  verify "is emitted once per successful login"
+event refund_issued "A refund was issued" {
+  verify unit "is emitted once per refund"
 }
 ```
 
-```bash
-specforge init --extensions @specforge/software   # scaffold a project
-specforge check       # validate all .spec files and report diagnostics
-specforge export      # emit the typed graph for an agent to consume
+It reads fine. Here is what `specforge check` says:
+
+<p align="center">
+  <img src="assets/readme/check.svg" width="100%" alt="specforge check on the draft reports E003 unresolved reference 'refund_isued' with the hint did you mean 'refund_issued', W003 invariant 'refund_needs_reason' is not enforced by any behavior, W007 event 'refund_issued' is not produced by any behavior, and E006 invariant 'refund_within_capture' is missing required field 'guarantee'. After the agent applies the fixes, the second run reports 0 errors, 0 warnings, 0 infos.">
+</p>
+
+<details>
+<summary>The same output as text</summary>
+
+```text
+[E003] Error: unresolved reference 'refund_isued' in entity 'issue_refund'
+    ╭─[ refunds.spec:15:15 ]
+ 15 │   produces   [refund_isued]
+    │ Help: did you mean 'refund_issued'?
+
+[W003] Warning: invariant 'refund_needs_reason' is not enforced by any behavior
+[W007] Warning: event 'refund_issued' is not produced by any behavior
+[E006] Error: invariant 'refund_within_capture' is missing required field 'guarantee'
+
+2 errors, 2 warnings, 0 infos
 ```
 
-## Install
+</details>
 
-SpecForge is a single self-contained binary. Pick one:
+Four problems a human reviewer would probably miss:
+
+| Code | What it found | Why it matters |
+|---|---|---|
+| `E003` | A one-letter typo in an event name | The refund code would publish an event nobody listens to |
+| `W003` | A rule that nothing enforces | In a doc, this rule would just sit there. Here, it's a warning until something enforces it |
+| `W007` | An event that nothing produces | The same typo, seen from the other side |
+| `E006` | A rule with a name but no guarantee | "Refunds never exceed the captured amount" isn't checkable until it says *what* never exceeds *what* |
+
+Errors always fail the check. Warnings fail it too with `specforge check --strict`, which is what you run in CI.
+
+The agent fixes all four and runs the check again: `0 errors, 0 warnings, 0 infos`. The spec is now consistent, but nothing is *proven* yet. That's the tests' job: each test names the promise it proves, `specforge collect` runs them, and `specforge review` shows what's covered and what's still open.
+
+<p align="center">
+  <img src="assets/readme/proof.svg" width="100%" alt="specforge collect runs the tests: three pass, so issue_refund, refund_within_capture and refund_needs_reason become covered 1/1. refund_issued has no test for 'is emitted once per refund', so it stays uncovered 0/1: 3 of 4 covered, one promise still has no test.">
+</p>
+
+Every rule you just saw came from an extension, not from SpecForge itself (see [Hard skills are extensions](#hard-skills-are-extensions)).
+
+## Try it in 5 minutes
+
+**1. Install.** SpecForge is a single binary with no dependencies.
 
 ```bash
-# macOS / Linux — prebuilt binary, checksum-verified
 curl -fsSL https://raw.githubusercontent.com/leaderiop/SpecForge/main/install.sh | sh
+```
 
+<details>
+<summary>Other ways to install</summary>
+
+```bash
 # Homebrew (once the tap is published)
 brew install leaderiop/tap/specforge
 
@@ -56,20 +153,29 @@ cargo binstall --git https://github.com/leaderiop/SpecForge specforge-cli
 
 # From source (stable Rust toolchain)
 git clone https://github.com/leaderiop/SpecForge && cd SpecForge
-cargo install --path crates/specforge-cli     # installs `specforge` into ~/.cargo/bin
+cargo install --path crates/specforge-cli
 ```
 
-Prebuilt archives for macOS, Linux and Windows are on the [Releases page](https://github.com/leaderiop/SpecForge/releases). Formal proofs (`@specforge/formal`) additionally need the [`z3`](https://github.com/Z3Prover/z3) solver on your `PATH`; everything else works without it.
+Prebuilt archives for macOS, Linux and Windows are on the [Releases page](https://github.com/leaderiop/SpecForge/releases). Formal proofs (`@specforge/formal`) also need the [`z3`](https://github.com/Z3Prover/z3) solver on your `PATH`; everything else works without it.
 
-The builtin extensions are embedded in the binary; no extra toolchain is needed to install it.
+</details>
 
-### Connect an agent (MCP)
+**2. Create a project** in your repository:
 
-`specforge mcp <project>` serves the graph over MCP (JSON-RPC on stdio). Point your client at an absolute project path:
+```bash
+specforge init --extensions @specforge/software
+```
+
+This writes a `specforge.json` and a first file in `spec/`. In a Cargo or vitest project, it also turns on the matching test runner.
+
+**3. Connect your agent.** SpecForge speaks [MCP](https://modelcontextprotocol.io), so any MCP client can read and check your spec. Use an absolute path:
 
 ```bash
 claude mcp add specforge -- specforge mcp /path/to/your/project
 ```
+
+<details>
+<summary>Other MCP clients</summary>
 
 ```json
 {
@@ -79,145 +185,105 @@ claude mcp add specforge -- specforge mcp /path/to/your/project
 }
 ```
 
-## Zero-Domain-Knowledge Core + Extensions
+</details>
 
-The compiler is a **pure typed-graph engine**. It knows how to parse `keyword name { fields }` blocks, resolve references, detect orphans and cycles, and emit a validated graph — but it carries **no domain vocabulary**. Every entity kind, edge type, and validation rule comes from an extension. If a new domain required a compiler change, the architecture would have failed.
+**4. Ask your agent for a spec.** For example:
 
-Nine extensions ship as builtins, embedded in the binary. Enable one with `specforge add @specforge/<name>` (or `specforge init --extensions ...`); it is recorded in `specforge.json`, with nothing to download:
+> Write a spec in `spec/` for the refund feature: the behavior, the rules it must never break, the events it emits, and what proves each one. Validate it with the SpecForge tools and fix every error before you show it to me.
 
-| Extension | Entity kinds | Purpose |
-|-----------|-------------|---------|
-| **`@specforge/software`** | behavior · invariant · event · type · port | The universal specification chain: contracts, guarantees, data, interfaces. |
-| **`@specforge/product`** | journey · deliverable · milestone · module · term · feature · persona · channel · release | Product planning, roadmaps, and ubiquitous language. |
-| **`@specforge/governance`** | decision · constraint · failure_mode | Architecture decisions, non-functional requirements, FMEA risk. |
-| **`@specforge/formal`** | property · axiom · protocol · refinement · process | Formal methods: temporal properties, specification layering, event-graph linting. Enhances software entities. |
-| **`@specforge/testing`** | — | Test vocabulary: which kinds accept `verify` obligations and of which kinds (W004/W009). Enabled with `@specforge/software`; test-runner extensions build on it ([ADR 0002](docs/adr/0002-test-runner-extensions.md)). |
-| **`@specforge/cargo-test`** | — | Rust test runner: `specforge collect` runs `cargo test` (after you approve the command once per project) and records which entities the `#[specforge_test]`-annotated tests prove. Enabled by `init` in a Cargo project; `specforge add` also enables `@specforge/testing`. |
-| **`@specforge/vitest`** | — | vitest runner: `specforge collect` runs the project's own vitest (after you approve the command once per project) and records which entities tests name in their `meta.specforge`. Enabled by `init` in a vitest project; `specforge add` also enables `@specforge/testing`. |
-| **`@specforge/rust`** | — | Source analyzer used by inference: maps Rust code to spec entities. |
-| **`@specforge/typescript`** | — | Source analyzer used by inference: maps TypeScript/JavaScript code to spec entities. |
-
-Start with one extension and a single spec file — that already improves agent output. Add more as your project grows. Anyone can author and publish their own extension; the open Graph Protocol is the moat, not the implementation.
-
-## Why SpecForge? — The AI Agent Cost Problem
-
-AI coding agents spend most of their token budget on exploration and disambiguation — reading files, guessing requirements, making wrong assumptions, and reworking failed attempts. SpecForge replaces that exploration with a structured query:
-
-| Without SpecForge | With SpecForge |
-|-------------------|----------------|
-| Agent reads 20–50 files to reconstruct intent | Agent queries the spec graph in a few KB |
-| Agent guesses requirements, asks questions | Contracts, types, and ports are explicit |
-| 30–50% of tasks need rework | Rework drops sharply on first attempt |
-
-The goal: lift AI agent first-attempt accuracy from ~30% (prose) toward 70–85% (graph). The most expensive token is the one spent discovering what should have been specified.
-
-> See **[RES-18: AI Agent Token Economics](spec/research/RES-18-ai-agent-token-economics.md)** for the full analysis with industry data and citations.
-
-## Agents Are First-Class Consumers
-
-- **Multi-resolution queries** — `specforge query <id> --depth N` exposes the graph at multiple zoom levels.
-- **Agent-optimized exports** — `specforge export --format=context|brief|graph|dot`.
-- **Stable, open schema** — `specforge schema` emits the Graph Protocol (JSON Schema draft 2020-12).
-- **MCP server** — `specforge mcp` exposes the graph and tools to agents over JSON-RPC.
-- **Plan validation** — trace tests and entities end to end (Intent → Linkage → Proof).
-
-## CLI Commands
+**5. Read the result yourself.**
 
 ```bash
-# Project lifecycle
-specforge init                       # scaffold a new project
-specforge check                      # validate .spec files
-specforge check --strict             # promote warnings to errors
-specforge check --severity error     # show only errors (the exit code still counts everything)
-specforge check --cache              # record statuses in specforge-cache.json (history rules)
-
-# Graph access (for agents and humans)
-specforge export --format=context    # token-efficient context for an agent
-specforge query <id> --depth 2       # multi-resolution neighborhood query
-specforge query <id> --format context --include-coverage   # an agent's slice with coverage
-specforge trace <id>                 # traceability chain for an entity
-specforge schema                     # emit the Graph Protocol schema
-specforge model                      # render the logical data model
-specforge outline                    # render the extension architecture
-specforge stats                      # project statistics
-specforge explore [<id>]             # starting points, hubs and unconnected entities
-specforge review [<id>]              # coverage gaps around an entity (or the whole project)
-specforge infer-guide [<kind>]       # what to look for in code to write a kind's entities
-
-# Extensions & registry
-specforge extensions                 # list enabled builtins and installed extensions
-specforge add @specforge/product     # enable a builtin, or install @scope/name@version from a registry
-specforge add <spec> <spec>...       # several at once: one change, all or nothing
-specforge remove <name>              # disable a builtin, drop an entry, or uninstall an extension
-specforge search <query>             # search registries
-specforge publish                    # publish an extension to a registry
-# There is no built-in registry: list yours under "registries" in specforge.json
-# (see docs/registry-trust.md); without one, add/update/search/publish fail with E063.
-
-# Tooling
-specforge format                     # format .spec files
-specforge collect                    # run the test runners (with your approval) and record what they prove
-specforge doctor                     # health-check installed extensions
-specforge mcp                        # start the MCP server (stdio)
-specforge explain E001               # explain a diagnostic code
+specforge check     # is the spec consistent?
+specforge review    # what is still unproven?
 ```
 
-## Configuration
+**6. Link your tests.** Each test says which entity it proves. In Rust (with the [`specforge-test`](docs/guides/rust-test-tracing.md) crate):
 
-Projects are configured via **`specforge.json`** (like `tsconfig.json`):
+```rust
+use specforge_test::prelude::*;
 
-```json
-{
-  "name": "payments",
-  "version": "0.1.0",
-  "spec_root": "spec",
-  "extensions": ["@specforge/software"]
+#[specforge_test(behavior = "issue_refund", verify = "refunds the requested amount")]
+fn refunds_the_requested_amount() { /* ... */ }
+```
+
+In vitest:
+
+```ts
+test('refunds the requested amount',
+  { meta: { specforge: { behavior: 'issue_refund', verify: 'refunds the requested amount' } } },
+  () => { /* ... */ })
+```
+
+Then run `specforge collect`. It asks once before running your test command, and records what each test proves. See the [Rust](docs/guides/rust-test-tracing.md) and [vitest](docs/guides/vitest-test-tracing.md) guides.
+
+## Do I have to learn a new language?
+
+You'll want to **read** it, because the spec is what you approve. You rarely need to **write** it: your agent writes and fixes the files, and the check tells it when it's wrong.
+
+It's built to be easy to read. Each block is one thing, with a kind, a name, a title, and fields, like a filled-in form:
+
+```spec
+invariant refund_within_capture "Refunds never exceed the captured amount" {
+  guarantee "The sum of refunds on a payment never exceeds the captured amount"
+  risk      high
 }
 ```
 
-`specforge init --extensions @specforge/software` creates this for you; `specforge add` / `specforge remove` edit the `extensions` list afterwards.
+To write specs by hand, start with the [authoring tutorial](docs/guides/authoring-spec-files.md) and the [worked example](examples/todo-app/).
 
-## Architecture
+## How is this different from…
 
-- **Parser** — Tree-sitter grammar that parses any `keyword name { ... }` block generically, with error recovery (collects multiple diagnostics, never fails fast).
-- **Graph** — typed entity graph over interned symbols (custom node/edge indexes), with cycle detection and subgraph queries. Reference resolution is one shared code path used by the CLI, LSP, and watch mode.
-- **Extension runtime** — every extension (including the builtins) is a WIT-typed wasip2 component executed through a single wasmtime component engine, with deterministic per-extension fuel limits. No native tier: builtins and third-party extensions are the same kind of plugin. The builtin blobs are vendored under `extensions/<name>/wasm/` and embedded in the binary. A change to anything a blob compiles from is re-vendored with `cargo run -p xtask --bin revendor` ([docs/agents/revendor.md](docs/agents/revendor.md)); `cargo gate` names the blobs a change feeds, and CI's bootstrap job rebuilds every blob from a cold clone and compares it with the vendored bytes.
-- **Surfaces** — CLI (`specforge-cli`), LSP (`specforge-lsp`), and MCP (`specforge-mcp`) all consume the same graph.
+| You already use | It's good at | What SpecForge adds |
+|---|---|---|
+| `CLAUDE.md`, `AGENTS.md`, skill files | Telling an agent how to behave | Rules a program checks, not advice the agent may skip |
+| Specs and PRDs in Markdown | Describing intent for people and agents | Structure that is validated: broken references, missing pieces and unproven promises fail the check |
+| Tests | Proving the code does something | Saying *which* promise each test proves, and which promises have no test at all |
+| Issue trackers | Tracking work in progress | Tracking what the system must do, and whether that's proven |
+| Requirements tools (DOORS, Polarion) | Traceability for regulated teams | Plain text in your repository, checked in CI, readable by agents, extensible by you |
+| Code generators | Writing code from a model | Nothing. SpecForge never writes your code. Your agent does, from intent SpecForge has checked |
 
-The implementation is a Rust workspace (edition 2024) under [`crates/`](crates/).
+## Hard skills are extensions
 
-> Building the CLI uses the committed builtin blobs, so it needs no wasm target. Rebuilding the builtins after changing an extension needs `rustup target add wasm32-wasip2`.
+SpecForge itself knows nothing about payments, software, or any other field. Every word in a spec (`behavior`, `invariant`, `event`) and every rule ("an invariant must be enforced by a behavior") comes from an **extension**. An extension is a hard skill packaged as code: a vocabulary, plus the rules that judge it.
 
-## Development
+<p align="center">
+  <img src="assets/readme/extensions.svg" width="100%" alt="Extensions plug into the SpecForge core, which parses, links and checks and knows no domain: software, product, governance, formal, test runners, and your own, such as pharma quality, medical devices or safety cases.">
+</p>
 
-Run `scripts/setup-hooks.sh` once per clone: the tracked pre-commit hook runs the hook's share of the check list on the staged files in seconds. Run `cargo gate` (what the working tree changed) before a PR and `cargo gate full` before a merge; CI runs `cargo gate ci`, the same list. `cargo gate list` prints every check, the run it joins and the paths that trigger it.
+These ship inside the binary:
 
-## Documentation
+| Extension | What it lets you describe |
+|---|---|
+| `@specforge/software` | Behaviors, the rules they must keep (invariants), events, types, and interfaces (ports) |
+| `@specforge/product` | Features, personas, journeys, milestones, releases, and your team's vocabulary |
+| `@specforge/governance` | Decisions, constraints, and failure modes |
+| `@specforge/formal` | Properties and axioms that an SMT solver proves or refutes |
+| `@specforge/cargo-test`, `@specforge/vitest` | Which of your tests prove which entities |
 
-- **[Authoring Tutorial](docs/guides/authoring-spec-files.md)** — zero-to-hero guide to writing `.spec` files, with a complete [worked example](examples/todo-app/). Companions: [cookbook](docs/guides/spec-cookbook.md), [best practices](docs/guides/spec-best-practices.md), [troubleshooting](docs/guides/spec-troubleshooting.md).
-- **[Vision](vision/README.md)** — the manifesto, [principles](vision/principles.md), and [north star](vision/north-star.md). The source of truth for every product decision.
-- **[Documentation Hub](docs/README.md)** — entity reference tables, traceability chain, validation codes.
-- **[Rust Test Tracing](docs/guides/rust-test-tracing.md)** — link Rust tests to the entities they prove with `#[specforge_test]`, then `specforge collect` and `specforge analyze coverage`.
-- **[vitest Test Tracing](docs/guides/vitest-test-tracing.md)** — link vitest tests to the entities they prove through test metadata, then `specforge collect`.
-- **[Formal Verification](docs/guides/formal-verification.md)** — SMT-proven specs: declare machine-checkable bounds and claims, get contradictions and counterexamples with exact locations.
-- **[Entity Model](docs/entity-model.md)** — full architecture: core engine, extensions, edges, validation rules.
-- **[Quick Reference](docs/quick-reference.md)** — single-page cheat sheet.
-- **[Extension Protocol](docs/extension-protocol.md)** — how to author and publish your own extension.
+Turn one on with `specforge add @specforge/product`. The full list is in the [extension inventory](docs/extension-inventory.md). To write your own hard skill, see [Extending SpecForge](docs/guides/extending-specforge.md).
 
-## Business Plan
+## Where this is going
 
-A comprehensive business plan lives in **[business/](business/README.md)**.
+Software comes first because it's where AI writes the most today. But the engine has no built-in domain, on purpose. It's built for any field where expertise has rules and mistakes are expensive: regulated software (IEC 62304, GAMP 5), pharmaceutical quality (batch release, deviations), safety engineering. In those fields, "AI drafts, the hard skill checks, a qualified person signs" isn't a slogan. It's how the work has to be done. Extensions for these domains are in development; they aren't builtins yet.
 
-## Research Specs
+Also planned: agents that edit the spec through typed operations, so nobody (human or AI) writes `.spec` text by hand.
 
-| ID | Title |
-|----|-------|
-| [RES-11a](spec/research/RES-11a-spec-dsl-core-compiler.md) | Core compiler architecture |
-| [RES-18](spec/research/RES-18-ai-agent-token-economics.md) | AI agent token economics — cost reduction analysis |
-| [RES-19](spec/research/RES-19-market-position-success-estimation.md) | Market position & success estimation |
-| [RES-25](spec/research/RES-25-formal-methods-integration.md) | Formal methods integration |
-| [RES-26](spec/research/RES-26-zero-entity-core-architecture.md) | Zero-entity core architecture |
-| [RES-27](spec/research/RES-27-software-eng-entity-redesign.md) | Software engineering entity redesign |
+## What SpecForge is not
+
+- **Not an AI.** It makes no model calls. It's a deterministic compiler, written in Rust.
+- **Not a code generator.** It checks intent. Your agent writes the code.
+- **Not a test framework.** Your tests stay in `cargo test` or vitest. SpecForge runs them only after you approve the command, and records what they prove.
+
+## Learn more
+
+- **[Authoring tutorial](docs/guides/authoring-spec-files.md)**: writing `.spec` files from zero, with a [worked example](examples/todo-app/), a [cookbook](docs/guides/spec-cookbook.md), [best practices](docs/guides/spec-best-practices.md) and [troubleshooting](docs/guides/spec-troubleshooting.md).
+- **[Test tracing for Rust](docs/guides/rust-test-tracing.md)** and **[for vitest](docs/guides/vitest-test-tracing.md)**: link tests to the entities they prove.
+- **[Formal verification](docs/guides/formal-verification.md)**: specs an SMT solver checks, with counterexamples at exact locations.
+- **[Quick reference](docs/quick-reference.md)**: every command, entity kind and diagnostic code on one page.
+- **[Vision](vision/README.md)**: the manifesto, [principles](vision/principles.md) and [north star](vision/north-star.md).
+- **[Architecture](ARCHITECTURE.md)** and **[Contributing](CONTRIBUTING.md)**: how SpecForge is built, and how to work on it.
+- **[Documentation hub](docs/README.md)**: entity reference, traceability chain, research, and the business plan.
 
 ## License
 

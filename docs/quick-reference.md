@@ -1,6 +1,64 @@
 # Quick Reference
 
-Single-page lookup for every entity kind, edge type, and validation code (provided by the four builtin extensions). For full details, see the [entity model](entity-model.md) or individual [entity docs](entities/).
+Single-page lookup for the CLI, the configuration file, and every entity kind, edge type, and validation code (provided by the four builtin extensions). For full details, see the [entity model](entity-model.md) or individual [entity docs](entities/).
+
+---
+
+## CLI Commands
+
+```bash
+# Project lifecycle
+specforge init                       # scaffold a new project
+specforge check                      # validate .spec files
+specforge check --strict             # promote warnings to errors
+specforge check --severity error     # show only errors (the exit code still counts everything)
+specforge check --cache              # record statuses in specforge-cache.json (history rules)
+
+# Graph access (for agents and humans)
+specforge export --format=context    # token-efficient context for an agent
+specforge query <id> --depth 2       # multi-resolution neighborhood query
+specforge query <id> --format context --include-coverage   # an agent's slice with coverage
+specforge trace <id>                 # traceability chain for an entity
+specforge schema                     # emit the Graph Protocol schema
+specforge model                      # render the logical data model
+specforge outline                    # render the extension architecture
+specforge stats                      # project statistics
+specforge explore [<id>]             # starting points, hubs and unconnected entities
+specforge review [<id>]              # coverage gaps around an entity (or the whole project)
+specforge infer-guide [<kind>]       # what to look for in code to write a kind's entities
+
+# Extensions & registry
+specforge extensions                 # list enabled builtins and installed extensions
+specforge add @specforge/product     # enable a builtin, or install @scope/name@version from a registry
+specforge add <spec> <spec>...       # several at once: one change, all or nothing
+specforge remove <name>              # disable a builtin, drop an entry, or uninstall an extension
+specforge search <query>             # search registries
+specforge publish                    # publish an extension to a registry
+# There is no built-in registry: list yours under "registries" in specforge.json
+# (see registry-trust.md); without one, add/update/search/publish fail with E063.
+
+# Tooling
+specforge format                     # format .spec files
+specforge collect                    # run the test runners (with your approval) and record what they prove
+specforge doctor                     # health-check installed extensions
+specforge mcp                        # start the MCP server (stdio)
+specforge explain E001               # explain a diagnostic code
+```
+
+## Configuration
+
+Projects are configured via **`specforge.json`** (like `tsconfig.json`):
+
+```json
+{
+  "name": "payments",
+  "version": "0.1.0",
+  "spec_root": "spec",
+  "extensions": ["@specforge/software"]
+}
+```
+
+`specforge init --extensions @specforge/software` creates this for you; `specforge add` / `specforge remove` edit the `extensions` list afterwards.
 
 ---
 

@@ -138,6 +138,9 @@ The industry has independently converged on structured context files (CLAUDE.md,
 | [RES-13](../spec/research/RES-13-README.md) | Market landscape 2026 |
 | [RES-18](../spec/research/RES-18-ai-agent-token-economics.md) | **AI agent token economics — cost reduction analysis** |
 | [RES-19](../spec/research/RES-19-market-position-success-estimation.md) | **Market position & success estimation** |
+| [RES-25](../spec/research/RES-25-formal-methods-integration.md) | Formal methods integration |
+| [RES-26](../spec/research/RES-26-zero-entity-core-architecture.md) | Zero-entity core architecture |
+| [RES-27](../spec/research/RES-27-software-eng-entity-redesign.md) | Software engineering entity redesign |
 | [Extension Model](extension-model.md) | Extensions, providers, and generators architecture |
 
 ## Business Plan
