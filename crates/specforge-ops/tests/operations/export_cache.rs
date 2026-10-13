@@ -63,6 +63,29 @@ fn export_recorded_compares_then_records_on_success() {
 }
 
 #[test]
+fn an_export_reads_the_record_once() {
+    use specforge_ops::export::{CacheWrite, Request, export_recorded};
+    let project = recorded_project();
+    std::fs::create_dir_all(cache_file(&project).parent().unwrap()).unwrap();
+    std::fs::write(cache_file(&project), r#"{"schema": {"#).unwrap();
+
+    let recorded = export_recorded(&project.view(), &Request::default());
+
+    // One generation, one read: an unreadable record is reported once, and
+    // the export records a new one.
+    let codes: Vec<&str> = recorded
+        .diagnostics
+        .iter()
+        .map(|d| d.code.as_str())
+        .collect();
+    assert_eq!(codes, ["I016"], "{:?}", recorded.diagnostics);
+    assert_eq!(recorded.cache, CacheWrite::Written);
+    let record: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(cache_file(&project)).unwrap()).unwrap();
+    assert_eq!(record["schema"]["schema_version"]["major"], 1);
+}
+
+#[test]
 fn a_failed_export_leaves_the_cache() {
     use specforge_ops::export::{CacheWrite, Request, export_recorded};
     let project = recorded_project();

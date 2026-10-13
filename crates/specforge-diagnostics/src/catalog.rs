@@ -293,8 +293,8 @@ catalog! {
         "Formal analysis available",
         "Behaviors in the project declare `requires` or `ensures`, which the formal passes of `specforge analyze` (condition_check, layering_verify, event_graph_analyze, coverage_tracking) check. Reported once per compile by @specforge/formal's `analysis_available` pass. Run `specforge analyze`.";
     I016: Info core,
-        "Schema cache missing",
-        "Prior exports exist but `.specforge/schema-cache.json` is missing, so breaking-change detection was skipped for this compilation. Run a full compilation to regenerate the schema cache.";
+        "Schema cache unreadable",
+        "`.specforge/schema-cache.json` exists but cannot be read: it is not JSON, not a recorded schema, or names a field type this host does not read. The schema is versioned as if no export had been made, at 1.0.0, and the export records a new cache. Agents that read earlier exports must not take the version as continuing theirs.";
     I017: Info core,
         "Extension surface not served under its name",
         "MCP serves each name once (ADR 0017): the core tools and resources first, then each extension's explicit MCP tools and resources in extension load order, then its commands as the tools `specforge.<ext>.<command>`. A contribution not served under its name is reported here, with why: an explicit tool named as a core tool or an earlier extension's tool; a resource whose URIs a core resource or an earlier extension resource already serves; a command whose tool name an explicit tool (or a core tool) already has; a command the host refuses (an arg taking `--path`, `--format` or `--help`, two args spelling one option, or a default its declaration contradicts); a command another extension of the same short name routes first. Only MCP reports it, so `specforge check` does not. Rename the contribution if the collision is unintended; otherwise no action is needed.";
@@ -609,7 +609,7 @@ catalog! {
         "A `failure_mode` entity's `occurrence` or `post_occurrence` field is not one of the recognized values (`certain`, `likely`, `occasional`, `unlikely`, `rare`). Set the field to one of these values.";
     W053: Warning core,
         "Breaking schema change",
-        "A graph protocol schema change classified as breaking: a removed entity kind, edge type or field, a new required field, or a field whose type changed. `specforge export` compares the schema against the one the previous export cached in `.specforge/schema-cache.json`, so an extension upgrade or removal that breaks the schema warns on the next export; the export is still written and the cache updated. Update the agents and tools that read the export, or keep the extension versions that produced the old schema.";
+        "A graph protocol schema change classified as breaking since the last export: something a reader of the recorded schema relies on was removed or reshaped — a removed entity kind, edge type or field, a field added as required, a field whose type, required flag, edge type or target kind changed, an enum value lost, or an edge type that lost a source or target kind. `specforge export` compares every attribute of the schema against the one the previous export recorded in `.specforge/schema-cache.json`, bumps the major version, and names the versions in the warning; the export is still written and the cache updated. Update the agents and tools that read the export, or keep the extension versions that produced the old schema.";
     W054: Warning core,
         "Migration structural drift",
         "Comparing the entity graph before and after a migration found entities or edges that appeared, disappeared, or changed unexpectedly. Review the migration logic to ensure it preserves the entities and edges it did not intend to change.";

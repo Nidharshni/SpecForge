@@ -133,20 +133,21 @@ feature graph_protocol_versioning "Graph Protocol Versioning" {
     cannot negotiate compatible versions, and breaking changes are undetectable.
   """
   solution """
-    Semantic versioning for the Graph Protocol schema. Agents request a
-    specific version via --schema-version or MCP query parameter; the system
-    negotiates the nearest compatible version within supported_min..supported_max.
-    When no version is requested, the latest supported version is used.
-    Breaking changes (removed kinds, changed edge semantics, new required fields)
-    are detected automatically and only allowed on major version increments.
-    Non-breaking changes (added optional fields, new entity kinds) are allowed
-    on minor increments. specforge schema --publish exports the schema as a
-    standalone JSON Schema (draft 2020-12) for third-party validation.
-    Breaking change detection reads the previous schema from
-    .specforge/schema-cache.json (persisted in the prior compilation)
-    and compares against the freshly generated schema. The cache is
-    updated after comparison completes.
-    See also: spec_file_migration feature for migration tooling.
+    Semantic versioning for the Graph Protocol schema, derived from the
+    extensions: each export versions the schema against the one the last
+    export recorded in .specforge/schema-cache.json, comparing every
+    attribute. Additions bump the minor version, documentation and
+    provenance the patch version, and anything a reader of the recorded
+    schema relies on that is removed or reshaped (removed kinds, edge types
+    or fields, a new required field, a changed field type, required flag,
+    edge type or target kind, a lost enum value or edge end) the major
+    version, warned as W053. One version names one document. A consumer
+    may name the version it reads (--schema-version, the export tool's
+    schema_version): it is admitted when a reader of that version reads the
+    current schema, and refused otherwise. specforge schema --publish
+    exports the schema as a standalone JSON Schema (draft 2020-12) for
+    third-party validation. See also: spec_file_migration feature for
+    migration tooling.
   """
 }
 

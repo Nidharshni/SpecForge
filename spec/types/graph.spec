@@ -131,21 +131,30 @@ type SchemaVersion {
   verify unit "SchemaVersion schema is valid"
 }
 
-type SchemaMigration {
-  from_version SchemaVersion           @readonly
-  to_version   SchemaVersion           @readonly
-  breaking     boolean
-  changes      SchemaMigrationChange[] @optional
-  verify unit "SchemaMigration schema is valid"
+type VersionedSchema {
+  schema           GraphProtocolSchema @readonly
+  // Absent with no cache, or one that could not be read
+  previous_version SchemaVersion       @optional @readonly
+  changes          SchemaChange[]      @readonly
+  // SHA-256 of the schema's JSON; what a scoped export's schema_ref names
+  content_hash     string              @readonly
+  verify unit "VersionedSchema schema is valid"
 }
 
-type SchemaMigrationChange {
-  change_type string @readonly // "kind_added" | "kind_removed" | "edge_added" | "edge_removed" | "field_added" | "field_removed"
+type SchemaChangeBump = "patch" | "minor" | "major"
+
+type SchemaChange {
+  // "extension" | "load_order" | "kind" | "field" | "edge_type"
+  subject     string @readonly
   entity_kind string @optional
-  edge_type   string @optional
   field_name  string @optional
-  breaking    boolean
-  verify unit "SchemaMigrationChange schema is valid"
+  edge_type   string @optional
+  extension   string @optional
+  // "added" | "removed" | "changed" | "gained" | "lost" | "reordered"
+  change      string @readonly
+  attribute   string @optional
+  bump        SchemaChangeBump
+  verify unit "SchemaChange schema is valid"
 }
 
 type SchemaCompatibility {

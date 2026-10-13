@@ -140,7 +140,7 @@ fn first_export_of_a_project_reports_nothing() {
 
 #[specforge_test(
     behavior = "detect_breaking_schema_changes",
-    verify = "missing cache without prior exports emits no diagnostic"
+    verify = "a missing schema cache emits no diagnostic"
 )]
 fn export_without_a_cache_emits_no_diagnostic() {
     let dir = software_project();
@@ -653,7 +653,6 @@ fn export_version_string(output: &Output) -> String {
     behavior = "detect_breaking_schema_changes",
     verify = "a field's required flag changing either way is breaking"
 )]
-#[ignore = "fixed by T3"]
 fn a_changed_required_flag_bumps_the_major_version_and_warns() {
     let dir = software_project();
     export_ok(&dir);
@@ -682,7 +681,6 @@ fn a_changed_required_flag_bumps_the_major_version_and_warns() {
     behavior = "detect_breaking_schema_changes",
     verify = "an edge type losing a source or target kind is breaking; gaining one is an addition"
 )]
-#[ignore = "fixed by T3"]
 fn an_edge_type_that_loses_a_target_kind_bumps_the_major_version() {
     let dir = software_project();
     export_ok(&dir);
@@ -708,7 +706,6 @@ fn an_edge_type_that_loses_a_target_kind_bumps_the_major_version() {
     behavior = "compute_schema_version",
     verify = "an extension's version changing is a patch"
 )]
-#[ignore = "fixed by T3"]
 fn an_extension_version_change_bumps_the_patch_version() {
     let dir = software_project();
     export_ok(&dir);
@@ -764,7 +761,6 @@ fn a_requested_version_does_not_relabel_the_export() {
     behavior = "detect_breaking_schema_changes",
     verify = "an unreadable schema cache restarts the version at 1.0.0 with I016"
 )]
-#[ignore = "fixed by T3"]
 fn an_unreadable_cache_restarts_the_version_with_i016() {
     let dir = software_project();
     export_ok(&dir);

@@ -17,8 +17,8 @@ use serde::{Deserialize, Serialize};
 use specforge_common::{Diagnostic, codes};
 use specforge_emitter::{GraphProtocolSchema, SchemaVersion, content_hash};
 
-pub use diff::SchemaChange;
 pub(crate) use diff::negotiate_version;
+pub use diff::{AttributeChange, Bump, Members, Scalar, SchemaChange};
 
 const CACHE_FILE: &str = "schema-cache.json";
 
@@ -58,19 +58,38 @@ impl SchemaCache {
     /// `generated`, versioned against the record: the recorded version
     /// bumped by the changes since (major for a breaking change, minor for
     /// an addition, patch for anything else; unchanged when nothing
-    /// changed). With no record, or one that cannot be read, it is 1.0.0.
-    /// Reads the record once; writes nothing.
+    /// changed). With no record it is 1.0.0 with no changes; with a record
+    /// that cannot be read it is 1.0.0 and [`VersionedSchema::diagnostics`]
+    /// holds I016. Kinds, fields and edge types are compared by name,
+    /// whatever order the file holds them in. Reads the record once; writes
+    /// nothing.
     pub fn version(&self, mut generated: GraphProtocolSchema) -> VersionedSchema {
-        let previous = self.load().ok().flatten().map(|record| record.schema);
-        let since = match previous {
-            None => {
+        let since = match self.load() {
+            Ok(None) => {
                 generated.schema_version = SchemaVersion::new(1, 0, 0);
                 Since::NoRecord
             }
-            Some(recorded) => {
+            Err(error) => {
+                generated.schema_version = SchemaVersion::new(1, 0, 0);
+                Since::Unreadable {
+                    path: self.dir.join(CACHE_FILE),
+                    reason: error.to_string(),
+                }
+            }
+            Ok(Some(Record {
+                schema: recorded, ..
+            })) => {
                 let changes = diff::diff(&recorded, &generated);
+                debug_assert_eq!(
+                    changes.is_empty(),
+                    canonical(&recorded) == canonical(&generated),
+                    "the diff compares every attribute: {changes:?}"
+                );
                 generated.schema_version = diff::bumped(&recorded.schema_version, &changes);
-                Since::Recorded { changes }
+                Since::Recorded {
+                    previous: recorded.schema_version,
+                    changes,
+                }
             }
         };
         VersionedSchema::new(generated, since)
@@ -124,7 +143,34 @@ pub struct VersionedSchema {
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Since {
     NoRecord,
-    Recorded { changes: Vec<SchemaChange> },
+    Unreadable {
+        path: PathBuf,
+        reason: String,
+    },
+    Recorded {
+        previous: SchemaVersion,
+        changes: Vec<SchemaChange>,
+    },
+}
+
+/// `schema` as the diff sees it: no version, kinds, fields and edge types in
+/// name order, an empty set as an absent one.
+fn canonical(schema: &GraphProtocolSchema) -> GraphProtocolSchema {
+    let mut schema = schema.clone();
+    schema.schema_version = SchemaVersion::new(0, 0, 0);
+    schema.entity_kinds.sort_by(|a, b| a.name.cmp(&b.name));
+    for kind in &mut schema.entity_kinds {
+        kind.fields.sort_by(|a, b| a.name.cmp(&b.name));
+        for field in &mut kind.fields {
+            field.enum_values = field.enum_values.take().filter(|v| !v.is_empty());
+        }
+    }
+    schema.edge_types.sort_by(|a, b| a.label.cmp(&b.label));
+    for edge in &mut schema.edge_types {
+        edge.source_kinds = edge.source_kinds.take().filter(|v| !v.is_empty());
+        edge.target_kinds = edge.target_kinds.take().filter(|v| !v.is_empty());
+    }
+    schema
 }
 
 impl VersionedSchema {
@@ -162,32 +208,56 @@ impl VersionedSchema {
         &self.content_hash
     }
 
-    /// Each change since the recorded schema; empty with no record.
+    /// Each change since the recorded schema, in schema order; empty with no
+    /// record or an unreadable one.
     pub fn changes(&self) -> &[SchemaChange] {
         match &self.since {
-            Since::NoRecord => &[],
-            Since::Recorded { changes } => changes,
+            Since::NoRecord | Since::Unreadable { .. } => &[],
+            Since::Recorded { changes, .. } => changes,
         }
     }
 
-    /// What versioning reports before an export writes: one W053 per
-    /// breaking change. Empty otherwise.
+    /// What versioning reports before an export writes: one W053 per change
+    /// whose [`Bump`] is major, in [`Self::changes`] order, or the one I016
+    /// of an unreadable record. Empty otherwise.
     pub fn diagnostics(&self) -> Vec<Diagnostic> {
-        self.changes()
-            .iter()
-            .filter(|change| change.is_breaking())
-            .map(|change| {
+        match &self.since {
+            Since::NoRecord => Vec::new(),
+            Since::Unreadable { path, reason } => vec![
                 Diagnostic::new(
-                    codes::W053,
-                    format!("breaking schema change since the last export: {change}"),
+                    codes::I016,
+                    format!(
+                        "the schema cache {} could not be read ({reason}): the schema version \
+                         starts again at 1.0.0",
+                        path.display()
+                    ),
                 )
                 .with_suggestion(
-                    "Agents and tools that read the previous export may not accept this one: \
-                     update them, or keep the extension versions that produced the old schema."
+                    "This export records a new cache; agents that read earlier exports must not \
+                     take the version as continuing theirs."
                         .to_string(),
-                )
-            })
-            .collect()
+                ),
+            ],
+            Since::Recorded { previous, changes } => {
+                let current = self.version();
+                changes
+                    .iter()
+                    .filter(|change| change.bump() == Bump::Major)
+                    .map(|change| {
+                        Diagnostic::new(
+                            codes::W053,
+                            format!("breaking schema change since the last export: {change}"),
+                        )
+                        .with_suggestion(format!(
+                            "The schema version goes from {previous} to {current}: agents and \
+                             tools that read {}.x exports may not read this one. Update them, or \
+                             keep the extension versions that produced {previous}.",
+                            previous.major
+                        ))
+                    })
+                    .collect()
+            }
+        }
     }
 }
 
