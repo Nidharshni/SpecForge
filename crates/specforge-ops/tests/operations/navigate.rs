@@ -455,7 +455,6 @@ const FIELD_TEXTS: &str = "invariant fast \"Fast\" {\n  guarantee \"responds qui
     behavior = "provide_mcp_search_tool",
     verify = "the field filter reads a field's text: a list by its items, an expression by its written form, a block by its keys; never the export's JSON"
 )]
-#[ignore = "fixed by T4"]
 fn the_field_filter_reads_the_field_text() {
     let p = compile(
         &["@specforge/software", "@specforge/formal"],
