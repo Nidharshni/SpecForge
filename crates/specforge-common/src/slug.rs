@@ -1,10 +1,8 @@
 //! The one slug algorithm for obligation texts.
 //!
-//! A `verify` text becomes a slug when a test is linked to it by name
-//! (`add_item__rejects_a_duplicate_item`) and when the graph export lists
-//! the slugs a test may use. `specforge-test` carries a copy of this
-//! algorithm; both are held to `tests/fixtures/slug-cases.json`, so they
-//! can't drift.
+//! A `verify` text becomes a slug when `specforge collect` links a test to
+//! it by name (`add_item__rejects_a_duplicate_item`). Held to
+//! `tests/fixtures/slug-cases.json`.
 
 /// The slug of an obligation text: comparison operators become words
 /// (`<=` → `lte`, `>=` → `gte`, `<` → `lt`, `>` → `gt`), spaces become

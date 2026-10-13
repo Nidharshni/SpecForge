@@ -2,7 +2,6 @@ pub mod atexit;
 pub mod guard;
 pub mod registry;
 pub mod report;
-pub mod slugify;
 
 /// Re-export the proc macro so users can write `#[specforge_test(...)]`
 /// when they `use specforge_test::prelude::*`.
@@ -35,5 +34,4 @@ pub mod prelude {
 #[doc(hidden)]
 pub mod __private {
     pub use crate::guard::{assert_registered_once, TestGuard};
-    pub use crate::slugify::slugify_verify_description;
 }
