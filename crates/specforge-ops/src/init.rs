@@ -8,9 +8,7 @@
 //! doesn't exist yet can't have, so it is added afterwards with `specforge
 //! add`.
 
-use crate::extension::{
-    self, Appended, Candidate, Install, LocalFile, LockPlan, Refused, Source, Verb,
-};
+use crate::extension::{self, Appended, Ask, Candidate, Install, LocalFile, LockPlan, Source};
 use crate::{OpError, OpErrorKind, Writes};
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -159,16 +157,12 @@ pub fn plan(req: &Request, runtime: &dyn WasmRuntime) -> Result<Plan, OpError> {
     // The lock plan the installs will be, `add`'s: an unreadable lock refuses here (E033), and the
     // project's peer set is judged before anything is written.
     let installed = Installed::at(req.dir);
-    let mut lock_plan = if installs.is_empty() {
-        LockPlan::enabling(&installed, &[], runtime)
-    } else {
-        LockPlan::new(&installed, &[], runtime, Verb::Install)?
-    };
-    for local in &installs {
-        lock_plan.stage(Install::local(req.dir, local.clone())?);
+    let mut lock_plan = LockPlan::initializing(&installed, &[], runtime, !installs.is_empty())?;
+    for (at, local) in installs.iter().enumerate() {
+        lock_plan.install(Ask(at), Install::local(req.dir, local.clone())?);
     }
-    for name in &requested {
-        lock_plan.enable(name);
+    for (at, name) in requested.iter().enumerate() {
+        lock_plan.enable(Ask(installs.len() + at), name);
     }
     // Each extension is enabled after the builtins it requires, as `add` does.
     lock_plan.close()?;
@@ -177,14 +171,10 @@ pub fn plan(req: &Request, runtime: &dyn WasmRuntime) -> Result<Plan, OpError> {
     // the project's test runners get the extensions that collect their
     // results.
     for extra in init_extras(lock_plan.appended(), req.dir) {
-        lock_plan.enable(&extra);
+        lock_plan.enable(Ask(0), &extra);
     }
-    let checked = lock_plan.check().map_err(Refused::first)?;
-    let extensions: Vec<String> = checked
-        .appended()
-        .iter()
-        .map(|appended| appended.name.clone())
-        .collect();
+    let checked = lock_plan.check().map_err(|refused| refused.decisive().1)?;
+    let extensions = checked.entries();
 
     let starter = match starter_template(&extensions, &installs, runtime)? {
         Some(template) => template

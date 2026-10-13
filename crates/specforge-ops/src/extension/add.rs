@@ -1,7 +1,7 @@
 //! `specforge add` and `specforge.add_extension`.
 
 use super::candidate::LocalFile;
-use super::lock_plan::{Appended, Fetch, Install, LockPlan, Verb};
+use super::lock_plan::{Ask, Asked, Fetching, Install, LockPlan};
 use super::{Origin, builtin_name};
 use crate::registry::{Acceptance, Publisher, Registry};
 use crate::{OpError, OpErrorKind, Writes};
@@ -481,11 +481,17 @@ pub fn add(
     let several = req.extensions.len() > 1;
     let installed = Installed::at(req.root.dir());
     // A specforge.lock that can't be read refuses before a file is read or a registry asked.
-    let plan = if req.extensions.iter().any(|e| e.source.installs()) {
-        LockPlan::new(&installed, &config.extensions, runtime, Verb::Install)?
-    } else {
-        LockPlan::enabling(&installed, &config.extensions, runtime)
-    };
+    let plan = LockPlan::adding(
+        &installed,
+        &config.extensions,
+        runtime,
+        Fetching {
+            registry,
+            allow_unsigned: req.allow_unsigned,
+            trust: req.trust,
+        },
+        req.extensions.iter().any(|e| e.source.installs()),
+    )?;
     let mut resolver = Resolver {
         req,
         config: &config,
@@ -504,14 +510,7 @@ pub fn add(
             })?;
         steps.push(step);
     }
-    let fetch = Fetch {
-        installed: &installed,
-        registry,
-        runtime,
-        allow_unsigned: req.allow_unsigned,
-        trust: req.trust,
-    };
-    apply(req, &config, plan, &fetch, steps)
+    apply(req, &config, plan, steps)
 }
 
 /// What the add does for one specifier, once it is resolved.
@@ -722,58 +721,93 @@ fn already_present(
     })
 }
 
-/// What an install did, before it is staged.
-fn installed_outcome(install: &Install<'_>) -> AddOutcome {
-    AddOutcome::Installed {
-        name: install.name().to_string(),
-        version: install.version().to_string(),
-        sha256: install.sha256().to_string(),
-        publisher: install.publisher().cloned(),
-        origin: Origin::Installed {
-            source: install.source().clone(),
-        },
-        peers_enabled: Vec::new(),
+/// What a specifier asks the plan for, to turn the plan's answer for its ask into an outcome.
+enum Wanted {
+    Builtin(&'static str),
+    Package {
+        name: String,
+        version: String,
+        sha256: String,
+        publisher: Option<Publisher>,
+        origin: Origin,
+    },
+}
+
+impl Wanted {
+    fn of(install: &Install<'_>) -> Wanted {
+        Wanted::Package {
+            name: install.name().to_string(),
+            version: install.version().to_string(),
+            sha256: install.sha256().to_string(),
+            publisher: install.publisher().cloned(),
+            origin: Origin::Installed {
+                source: install.source().clone(),
+            },
+        }
+    }
+
+    /// What the add did for it, given what the plan did for its ask.
+    fn outcome(self, asked: Asked) -> AddOutcome {
+        match self {
+            Wanted::Builtin(name) => AddOutcome::Builtin {
+                name,
+                changed: asked.appended,
+                peers_enabled: asked.peers_enabled,
+            },
+            Wanted::Package {
+                name,
+                version,
+                sha256,
+                publisher,
+                origin,
+            } => AddOutcome::Installed {
+                name,
+                version,
+                sha256,
+                publisher,
+                origin,
+                peers_enabled: asked.peers_enabled,
+            },
+        }
     }
 }
 
-/// Fetch what `steps` install from a registry, stage every install and enable every entry in
-/// `plan`, check it once and commit it with the `specforge.json` entries (each builtin after the
-/// builtins it requires, each install by its bare name): one change that puts everything back
-/// when a step fails. A plan the peer rule refuses writes nothing, its refusal naming the
-/// specifier when there are several (ADR 0041).
+/// Ask `plan` for what `steps` name, check it once and commit it with the `specforge.json`
+/// entries (each builtin after the builtins it requires, each install by its bare name): one
+/// change that puts everything back when a step fails. A plan the peer rule refuses writes
+/// nothing, its refusal naming the specifier when there are several (ADR 0041).
 fn apply<'a>(
     req: &AddRequest,
     config: &specforge_common::ProjectConfig,
     mut plan: LockPlan<'a>,
-    fetch: &Fetch<'a>,
     steps: Vec<Step<'a>>,
 ) -> Result<Added, OpError> {
     let several = req.extensions.len() > 1;
     let specifier = |at: usize| req.extensions[at].specifier.as_str();
     let mut outcomes: Vec<Option<AddOutcome>> = Vec::with_capacity(steps.len());
-    // Each specifier that adds something: its position and the extension it enables.
-    let mut asked: Vec<(usize, String)> = Vec::new();
+    // Each specifier that adds something, and what it asked for.
+    let mut asked: Vec<(usize, Wanted)> = Vec::new();
     for (at, step) in steps.into_iter().enumerate() {
         outcomes.push(None);
-        let install = match step {
-            Step::Unchanged(outcome) => {
-                outcomes[at] = Some(outcome);
-                continue;
-            }
+        let ask = Ask(at);
+        match step {
+            Step::Unchanged(outcome) => outcomes[at] = Some(outcome),
             Step::Enable { name } => {
-                plan.enable(name);
-                asked.push((at, name.to_string()));
-                continue;
+                plan.enable(ask, name);
+                asked.push((at, Wanted::Builtin(name)));
             }
-            Step::Local(install) => install,
-            Step::Fetch(name, version) => fetch
-                .install(&name, &version)
-                .map_err(|error| named(several, specifier(at), error))?,
-        };
-        outcomes[at] = Some(installed_outcome(&install));
-        asked.push((at, install.name().to_string()));
-        plan.enable(install.name().as_str());
-        plan.stage(install);
+            Step::Local(install) => {
+                asked.push((at, Wanted::of(&install)));
+                plan.install(ask, install);
+            }
+            Step::Fetch(name, version) => {
+                let install = plan
+                    .fetch(&name, &version)
+                    .map_err(|error| named(several, specifier(at), error))?;
+                asked.push((at, Wanted::of(&install)));
+                plan.install(ask, install);
+            }
+        }
     }
     if asked.is_empty() {
         return Ok(Added {
@@ -783,82 +817,21 @@ fn apply<'a>(
         });
     }
 
-    // The builtins the add requires are enabled first; a builtin that does not load refuses.
-    plan.close()?;
-    let appended = plan.appended().to_vec();
-    let checked = plan.check().map_err(|refused| {
-        let (name, error) = refused.decisive();
-        named(
-            several,
-            specifier(specifier_of(name.as_str(), &asked, &appended)),
-            error,
-        )
-    })?;
-    let applied = checked.commit(req.root.dir())?;
-    let written = |name: &str| {
-        applied
-            .enabled
-            .as_ref()
-            .is_some_and(|enabled| enabled.appended.iter().any(|a| a == name))
-    };
-
-    // The required builtins an extension asked for enabled with it, dependencies first; each is
-    // reported once, by the extension that first required it.
-    let peers_enabled = |root: &str| -> Vec<&'static str> {
-        appended
-            .iter()
-            .filter(|entry| entry.required_by.as_deref() == Some(root) && written(&entry.name))
-            .filter_map(|entry| super::builtin_name(&entry.name))
-            .collect()
-    };
-    for (at, name) in &asked {
-        let peers = peers_enabled(name);
-        outcomes[*at] = Some(match outcomes[*at].take() {
-            Some(AddOutcome::Installed {
-                name,
-                version,
-                sha256,
-                publisher,
-                origin,
-                ..
-            }) => AddOutcome::Installed {
-                name,
-                version,
-                sha256,
-                publisher,
-                origin,
-                peers_enabled: peers,
-            },
-            _ => AddOutcome::Builtin {
-                name: super::builtin_name(name).expect("an enabled builtin"),
-                changed: written(name),
-                peers_enabled: peers,
-            },
-        });
+    let done = plan
+        .check()
+        .map_err(|refused| {
+            let (Ask(at), error) = refused.decisive();
+            named(several, specifier(at), error)
+        })?
+        .finish(req.root.dir())?;
+    for (at, wanted) in asked {
+        outcomes[at] = Some(wanted.outcome(done.asked(Ask(at))));
     }
     Ok(Added {
         added: added(req, outcomes),
-        extensions_enabled: applied
-            .enabled
-            .as_ref()
-            .map_or(config.extensions.len(), |enabled| enabled.total),
-        writes: applied.writes,
+        extensions_enabled: done.enabled,
+        writes: done.writes,
     })
-}
-
-/// The specifier a refusal of the extension `name` belongs to: the one that asked for it, or, for
-/// a builtin the plan enabled because an extension requires it, the one that asked for that
-/// extension.
-fn specifier_of(name: &str, asked: &[(usize, String)], appended: &[Appended]) -> usize {
-    let root = appended
-        .iter()
-        .find(|entry| entry.name == name)
-        .and_then(|entry| entry.required_by.as_deref())
-        .unwrap_or(name);
-    asked
-        .iter()
-        .find(|(_, asked)| asked == root)
-        .map_or(0, |(at, _)| *at)
 }
 
 /// Each specifier of `req` with its outcome.

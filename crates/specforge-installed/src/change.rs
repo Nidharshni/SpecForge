@@ -33,6 +33,20 @@ pub struct Pin {
     pub peers: Vec<PeerDependency>,
 }
 
+impl Pin {
+    /// The lock entry this pin records for a module whose SHA-256 is `sha256`.
+    pub fn entry(&self, sha256: &str) -> LockFileEntry {
+        LockFileEntry {
+            name: self.name.clone(),
+            version: self.version.clone(),
+            source: self.source.clone(),
+            wasm_hash: sha256.to_string(),
+            key_id: self.key_id.clone(),
+            peer_dependencies: self.peers.clone(),
+        }
+    }
+}
+
 /// One staged step.
 enum Step {
     Install { name: PackageName, module: Module },
@@ -71,23 +85,26 @@ impl Installed {
     /// read (empty when absent). Refused with E033 when `specforge.lock` is
     /// there but can't be read: writing one now would drop what it records.
     pub fn change(&self) -> Result<Change<'_>, Diagnostic> {
-        let lock = match &self.lock {
-            LockState::Read(lock) => lock.clone(),
-            LockState::Absent => LockFile::default(),
-            LockState::Unreadable(problem) => {
-                return Err(problem.clone().with_suggestion(
-                    "fix specforge.lock, or delete it and install the extensions again; \
-                     nothing was changed"
-                        .to_string(),
-                ));
-            }
-        };
         Ok(Change {
             installed: self,
-            lock: Some(lock),
+            lock: Some(self.writable_lock()?),
             steps: Vec::new(),
             files: Vec::new(),
         })
+    }
+
+    /// The lock a change starts from: the lock as read, empty when absent. E033 when
+    /// `specforge.lock` is there but can't be read: writing one now would drop what it records.
+    pub fn writable_lock(&self) -> Result<LockFile, Diagnostic> {
+        match &self.lock {
+            LockState::Read(lock) => Ok(lock.clone()),
+            LockState::Absent => Ok(LockFile::default()),
+            LockState::Unreadable(problem) => Err(problem.clone().with_suggestion(
+                "fix specforge.lock, or delete it and install the extensions again; \
+                 nothing was changed"
+                    .to_string(),
+            )),
+        }
     }
 
     /// A change that installs nothing and writes no lock: only its last step's files. It accepts
@@ -106,41 +123,13 @@ impl Installed {
 }
 
 impl Change<'_> {
-    /// The project's installed extensions as this change leaves them: the same root, and the lock
-    /// it will write (what the lock plan's peer set resolves entries against).
-    pub fn installed(&self) -> Installed {
-        Installed::with_lock(
-            self.installed.root(),
-            LockState::Read(self.staged_lock().clone()),
-        )
-    }
-
-    /// The lock as the change will write it (the diamond gate and the
-    /// dependents check read it).
-    pub fn lock(&self) -> &LockFile {
-        self.staged_lock()
-    }
-
-    fn staged_lock(&self) -> &LockFile {
-        self.lock
-            .as_ref()
-            .expect("a change that installs reads the lock")
-    }
-
     /// Install `module` as `pin.name`: its binary and its lock entry,
     /// replacing what it had.
     ///
     /// # Panics
     /// On a change made by [`Installed::change_entries`].
     pub fn install(&mut self, module: Module, pin: Pin) {
-        let entry = LockFileEntry {
-            name: pin.name.clone(),
-            version: pin.version,
-            source: pin.source,
-            wasm_hash: module.digest().to_string(),
-            key_id: pin.key_id,
-            peer_dependencies: pin.peers,
-        };
+        let entry = pin.entry(module.digest());
         self.lock
             .as_mut()
             .expect("a change that installs reads the lock")

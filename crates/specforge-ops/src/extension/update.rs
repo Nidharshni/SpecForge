@@ -11,7 +11,7 @@
 //! update that is not applied pins nothing (ADR 0059).
 
 use super::Trust;
-use super::lock_plan::{Fetch, Install, LockPlan, Verb};
+use super::lock_plan::{Ask, Fetching, Install, LockPlan};
 use crate::registry::{Acceptance, NO_REGISTRY, Publisher, Registry};
 use crate::{OpError, OpErrorKind};
 use serde::Serialize;
@@ -321,14 +321,16 @@ pub fn update(
 
     // Every newer package is fetched and staged; every upgrade is then judged against the lock as
     // the whole update leaves it, whatever order the lock lists the extensions in.
-    let mut plan = LockPlan::new(&installed, &config.extensions, runtime, Verb::Update)?;
-    let fetch = Fetch {
-        installed: &installed,
-        registry,
+    let mut plan = LockPlan::updating(
+        &installed,
+        &config.extensions,
         runtime,
-        allow_unsigned: req.allow_unsigned,
-        trust: req.trust,
-    };
+        Fetching {
+            registry,
+            allow_unsigned: req.allow_unsigned,
+            trust: req.trust,
+        },
+    )?;
     let mut extensions = Vec::new();
     for entry in lock
         .entries
@@ -340,7 +342,7 @@ pub fn update(
                 source: entry.source.to_string(),
             }
         } else {
-            match newer(req.reach, &fetch, &entry.name, &entry.version) {
+            match newer(req.reach, registry, &plan, &entry.name, &entry.version) {
                 Ok(None) => UpdateStatus::UpToDate {
                     version: entry.version.clone(),
                 },
@@ -354,7 +356,7 @@ pub fn update(
                             .cloned()
                             .expect("a fetched install has a publisher"),
                     };
-                    plan.stage(install);
+                    plan.install(Ask(extensions.len()), install);
                     status
                 }
                 Err(error) if error.is(NO_REGISTRY) => return Err(error),
@@ -370,10 +372,8 @@ pub fn update(
     let checked = match plan.check() {
         Ok(checked) => Some(checked),
         Err(refused) => {
-            for (name, error) in refused.failures {
-                if let Some(e) = extensions.iter_mut().find(|e| e.name == name.as_str()) {
-                    e.status = UpdateStatus::Failed(error);
-                }
+            for (Ask(row), error) in refused.failures() {
+                extensions[row].status = UpdateStatus::Failed(error);
             }
             None
         }
@@ -384,7 +384,7 @@ pub fn update(
     if let Some(checked) =
         checked.filter(|_| outcome.applied() && outcome.updated().next().is_some())
     {
-        checked.commit(req.root.dir())?;
+        checked.finish(req.root.dir())?;
     }
     Ok(outcome)
 }
@@ -393,15 +393,15 @@ pub fn update(
 /// its upgrade target within `reach` ([`super::upgrade`]).
 fn newer<'a>(
     reach: Reach,
-    fetch: &Fetch<'a>,
+    registry: &dyn Registry,
+    plan: &LockPlan<'a>,
     name: &PackageName,
     locked: &str,
 ) -> Result<Option<Install<'a>>, OpError> {
-    let Some(target) = super::upgrade(fetch.registry, name, &LockedVersion::read(locked), reach)?
-    else {
+    let Some(target) = super::upgrade(registry, name, &LockedVersion::read(locked), reach)? else {
         return Ok(None);
     };
-    fetch.install(name, &target).map(Some)
+    plan.fetch(name, &target).map(Some)
 }
 
 #[cfg(test)]

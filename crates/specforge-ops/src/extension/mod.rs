@@ -33,7 +33,7 @@ pub use update::{
     UpdateOutcome, UpdateRequest, UpdateRow, UpdateStatus, UpgradeCompleted, update,
 };
 
-pub(crate) use lock_plan::{Appended, Install, LockPlan, Refused, Verb, install_local};
+pub(crate) use lock_plan::{Appended, Ask, Install, LockPlan, install_local};
 
 use specforge_installed::LockSource;
 
