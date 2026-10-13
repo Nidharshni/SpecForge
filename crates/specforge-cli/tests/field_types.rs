@@ -335,7 +335,6 @@ property prop "Pr" {
 fn refused_field(message: &str) -> String {
     let mut quoted = message.split('\'').skip(1).step_by(2);
     let field = quoted.next().unwrap();
-    let _kind = quoted.next().unwrap();
     let id = quoted.next().unwrap();
     format!("{field}/{id}")
 }
@@ -344,7 +343,6 @@ fn refused_field(message: &str) -> String {
     behavior = "check_field_value_types",
     verify = "a value outside a builtin vocabulary is E061"
 )]
-#[ignore = "fixed by 01-T9"]
 fn every_builtin_vocabulary_refuses_a_value_outside_it() {
     let dir = vocabulary_project(OFF_VOCABULARY);
 
@@ -399,7 +397,6 @@ fn every_builtin_vocabulary_refuses_a_value_outside_it() {
     behavior = "check_field_value_types",
     verify = "an enum value suggests the closest declared value"
 )]
-#[ignore = "fixed by 01-T9"]
 fn an_off_vocabulary_value_suggests_the_closest_value() {
     let dir = setup_project_with_config(
         r#"{"name":"t","version":"0.1.0","spec_root":"spec","extensions":["@specforge/product"]}"#,

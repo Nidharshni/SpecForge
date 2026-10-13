@@ -8,10 +8,10 @@ expression: "drawn(&manifests, opts)"
 
 | Extension | Version | Entities | Edges | Rules | Enhances |
 |-----------|---------|----------|-------|-------|----------|
-| @specforge/product | 1.0.0 | 9 | 20 | 61 | — |
+| @specforge/product | 1.0.0 | 9 | 20 | 50 | — |
 | @specforge/software | 1.0.0 | 5 | 15 | 11 | module (+2), milestone (+1) |
-| @specforge/governance | 1.0.0 | 3 | 11 | 7 | — |
-| @specforge/formal | 1.0.0 | 5 | 10 | 13 | behavior (+7), event (+3), invariant (+1) |
+| @specforge/governance | 1.0.0 | 3 | 11 | 0 | — |
+| @specforge/formal | 1.0.0 | 5 | 10 | 12 | behavior (+7), event (+3), invariant (+1) |
 
 ## Dependencies
 
@@ -49,14 +49,14 @@ expression: "drawn(&manifests, opts)"
 
 ## Extensions
 
-### @specforge/product (9 entities, 20 edges, 61 rules)
+### @specforge/product (9 entities, 20 edges, 50 rules)
 
 **Entity kinds**: feature, journey, deliverable, milestone, module, term, persona, channel, release
 
 **Contributes**: entities, edges, shared_fields, validation_rules, surfaces, passes
 
-**Validation rules**: W077, W078, W078, W078, W078, W079, W080, W083, W084, W085, W095, W041, W042, W044, I010, I046, I047, E007, E015, E052, W045, W092, W093, I048, I062, I053, I061, I050, I068, I068, I068, I068, I068, I068, I068, I068, I068, I086, I087, W049, I059, W057, I060, I066, I069, I070, I057, I089, W043, W046, I067, I055, I082, I083, I048, I054, I080, I080, I080, I080, I081 (61 total)
-  Severity breakdown: 3 errors, 21 warnings, 37 info
+**Validation rules**: W041, W042, W044, I010, I046, I047, E007, E015, E052, W045, W092, W093, I048, I062, I053, I061, I050, I068, I068, I068, I068, I068, I068, I068, I068, I068, I086, I087, W049, I059, W057, I060, I066, I069, I070, I057, I089, W043, W046, I067, I055, I082, I083, I048, I054, I080, I080, I080, I080, I081 (50 total)
+  Severity breakdown: 3 errors, 10 warnings, 37 info
 
 **Surfaces**: 40 CLI commands, 0 MCP tools, 0 MCP resources
 
@@ -69,8 +69,8 @@ expression: "drawn(&manifests, opts)"
 | description | string | no | @specforge/product | — | — |
 | problem | string | yes | @specforge/product | — | — |
 | solution | string | no | @specforge/product | — | — |
-| priority | string | no | @specforge/product | — | — |
-| status | string | no | @specforge/product | — | — |
+| priority | enum | no | @specforge/product | — | — |
+| status | enum | no | @specforge/product | — | — |
 | acceptance | string_list | no | @specforge/product | — | — |
 | depends_on | reference_list | no | @specforge/product | FeatureDependsOn | feature |
 | features | reference_list | no | @specforge/product | FeatureRelatesTo | feature |
@@ -78,7 +78,7 @@ expression: "drawn(&manifests, opts)"
 | reason | string | no | @specforge/product | — | — |
 | owner | string | no | @specforge/product | — | — |
 | contributors | string_list | no | @specforge/product | — | — |
-| effort | string | no | @specforge/product | — | — |
+| effort | enum | no | @specforge/product | — | — |
 | tests | string_list | no | @specforge/product | — | — |
 
 #### journey (Journey)
@@ -90,15 +90,15 @@ expression: "drawn(&manifests, opts)"
 | channels | reference_list | no | @specforge/product | JourneyUsesChannel | channel |
 | features | reference_list | no | @specforge/product | JourneyExercisesFeature | feature |
 | flow | string_list | yes | @specforge/product | — | — |
-| priority | string | no | @specforge/product | — | — |
+| priority | enum | no | @specforge/product | — | — |
 
 #### deliverable (Deliverable)
 
 | Field | Type | Required | Source | Edge | Target |
 |-------|------|----------|--------|------|--------|
 | description | string | no | @specforge/product | — | — |
-| artifact_type | string | yes | @specforge/product | — | — |
-| status | string | no | @specforge/product | — | — |
+| artifact_type | enum | yes | @specforge/product | — | — |
+| status | enum | no | @specforge/product | — | — |
 | journeys | reference_list | no | @specforge/product | DeliverableSupportsJourney | journey |
 | modules | reference_list | no | @specforge/product | DeliverableContainsModule | module |
 | version | string | no | @specforge/product | — | — |
@@ -113,7 +113,7 @@ expression: "drawn(&manifests, opts)"
 | Field | Type | Required | Source | Edge | Target |
 |-------|------|----------|--------|------|--------|
 | description | string | no | @specforge/product | — | — |
-| status | string | no | @specforge/product | — | — |
+| status | enum | no | @specforge/product | — | — |
 | features | reference_list | no | @specforge/product | MilestoneDeliversFeature | feature |
 | exit_criteria | string_list | no | @specforge/product | — | — |
 | target_date | string | no | @specforge/product | — | — |
@@ -121,7 +121,7 @@ expression: "drawn(&manifests, opts)"
 | modules | reference_list | no | @specforge/product | MilestoneScopesModule | module |
 | depends_on | reference_list | no | @specforge/product | MilestoneDependsOn | milestone |
 | blockers | string_list | no | @specforge/product | — | — |
-| priority | string | no | @specforge/product | — | — |
+| priority | enum | no | @specforge/product | — | — |
 | reason | string | no | @specforge/product | — | — |
 | owner | string | no | @specforge/product | — | — |
 | contributors | string_list | no | @specforge/product | — | — |
@@ -156,10 +156,10 @@ expression: "drawn(&manifests, opts)"
 | Field | Type | Required | Source | Edge | Target |
 |-------|------|----------|--------|------|--------|
 | description | string | yes | @specforge/product | — | — |
-| technical_level | string | no | @specforge/product | — | — |
+| technical_level | enum | no | @specforge/product | — | — |
 | goals | string_list | no | @specforge/product | — | — |
 | pain_points | string_list | no | @specforge/product | — | — |
-| status | string | no | @specforge/product | — | — |
+| status | enum | no | @specforge/product | — | — |
 | reason | string | no | @specforge/product | — | — |
 | key_features | reference_list | no | @specforge/product | PersonaPrioritizesFeature | feature |
 
@@ -168,9 +168,9 @@ expression: "drawn(&manifests, opts)"
 | Field | Type | Required | Source | Edge | Target |
 |-------|------|----------|--------|------|--------|
 | description | string | yes | @specforge/product | — | — |
-| interaction_model | string | no | @specforge/product | — | — |
+| interaction_model | enum | no | @specforge/product | — | — |
 | url | string | no | @specforge/product | — | — |
-| status | string | no | @specforge/product | — | — |
+| status | enum | no | @specforge/product | — | — |
 | reason | string | no | @specforge/product | — | — |
 
 #### release (Release)
@@ -179,7 +179,7 @@ expression: "drawn(&manifests, opts)"
 |-------|------|----------|--------|------|--------|
 | description | string | no | @specforge/product | — | — |
 | version | string | yes | @specforge/product | — | — |
-| status | string | no | @specforge/product | — | — |
+| status | enum | no | @specforge/product | — | — |
 | deliverables | reference_list | no | @specforge/product | ReleaseIncludesDeliverable | deliverable |
 | milestones | reference_list | no | @specforge/product | ReleaseCompletesMilestone | milestone |
 | target_date | string | no | @specforge/product | — | — |
@@ -269,20 +269,17 @@ expression: "drawn(&manifests, opts)"
 | description | string | no | @specforge/software | — | — |
 | refs | string_list | no | @specforge/software | — | — |
 
-### @specforge/governance (3 entities, 11 edges, 7 rules)
+### @specforge/governance (3 entities, 11 edges, 0 rules)
 
 **Entity kinds**: decision, constraint, failure_mode
 
-**Contributes**: entities, edges, validation_rules
-
-**Validation rules**: W050, W051, W051, W052, W052, W121, W121 (7 total)
-  Severity breakdown: 7 warnings
+**Contributes**: entities, edges
 
 #### decision (Decision)
 
 | Field | Type | Required | Source | Edge | Target |
 |-------|------|----------|--------|------|--------|
-| status | string | yes | @specforge/governance | — | — |
+| status | enum | yes | @specforge/governance | — | — |
 | context | string | yes | @specforge/governance | — | — |
 | decision | string | yes | @specforge/governance | — | — |
 | consequences | string_list | no | @specforge/governance | — | — |
@@ -304,7 +301,7 @@ expression: "drawn(&manifests, opts)"
 | Field | Type | Required | Source | Edge | Target |
 |-------|------|----------|--------|------|--------|
 | category | string | no | @specforge/governance | — | — |
-| priority | string | no | @specforge/governance | — | — |
+| priority | enum | no | @specforge/governance | — | — |
 | metric | string | no | @specforge/governance | — | — |
 | threshold | string | no | @specforge/governance | — | — |
 | description | string | yes | @specforge/governance | — | — |
@@ -319,15 +316,15 @@ expression: "drawn(&manifests, opts)"
 
 | Field | Type | Required | Source | Edge | Target |
 |-------|------|----------|--------|------|--------|
-| severity | string | yes | @specforge/governance | — | — |
-| occurrence | string | no | @specforge/governance | — | — |
-| detection | string | no | @specforge/governance | — | — |
+| severity | enum | yes | @specforge/governance | — | — |
+| occurrence | enum | no | @specforge/governance | — | — |
+| detection | enum | no | @specforge/governance | — | — |
 | cause | string | yes | @specforge/governance | — | — |
 | effect | string | yes | @specforge/governance | — | — |
 | mitigation | string | no | @specforge/governance | — | — |
-| post_severity | string | no | @specforge/governance | — | — |
-| post_occurrence | string | no | @specforge/governance | — | — |
-| post_detection | string | no | @specforge/governance | — | — |
+| post_severity | enum | no | @specforge/governance | — | — |
+| post_occurrence | enum | no | @specforge/governance | — | — |
+| post_detection | enum | no | @specforge/governance | — | — |
 | invariant | reference | no | @specforge/governance | FailureModeTargetsInvariant | invariant |
 | refs | string_list | no | @specforge/governance | — | — |
 | description | string | no | @specforge/governance | — | — |
@@ -337,14 +334,14 @@ expression: "drawn(&manifests, opts)"
 | threatens_features | reference_list | no | @specforge/governance | FailureModeThreatensFeature | feature |
 | affected_behaviors | reference_list | no | @specforge/governance | FailureModeAffectsBehavior | behavior |
 
-### @specforge/formal (5 entities, 10 edges, 13 rules)
+### @specforge/formal (5 entities, 10 edges, 12 rules)
 
 **Entity kinds**: property, axiom, protocol, refinement, process
 
 **Contributes**: entities, edges, enhancements, validation_rules, passes
 
-**Validation rules**: W125, W123, W126, W128, W131, W134, W124, W127, W129, W132, W135, W136, W133 (13 total)
-  Severity breakdown: 13 warnings
+**Validation rules**: W123, W126, W128, W131, W134, W124, W127, W129, W132, W135, W136, W133 (12 total)
+  Severity breakdown: 12 warnings
 
 **Enhances**:
 - @specforge/software/behavior: +7 fields (requires, ensures, maintains, satisfies, sync, abstract, refines)
@@ -356,7 +353,7 @@ expression: "drawn(&manifests, opts)"
 | Field | Type | Required | Source | Edge | Target |
 |-------|------|----------|--------|------|--------|
 | expression | string | yes | @specforge/formal | — | — |
-| property_type | string | yes | @specforge/formal | — | — |
+| property_type | enum | yes | @specforge/formal | — | — |
 | scope | string | no | @specforge/formal | — | — |
 | description | string | no | @specforge/formal | — | — |
 | refs | string_list | no | @specforge/formal | — | — |
@@ -408,4 +405,4 @@ expression: "drawn(&manifests, opts)"
 ## Summary
 
 - **4** extensions, **22** entity kinds, **56** edge types
-- **92** validation rules, **15** cross-extension edges, **5** enhancements
+- **73** validation rules, **15** cross-extension edges, **5** enhancements

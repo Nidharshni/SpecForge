@@ -154,7 +154,7 @@ behavior fa_declare_manifest "Declare @specforge/formal Manifest" {
   verify unit "EventParticipatesInProcess edge: event -> process"
   verify unit "ProcessComposesProcess edge: process -> process"
   verify unit "manifest declares 5 passes in dependency order"
-  verify unit "manifest declares the 13 formal validation rules"
+  verify unit "manifest declares the 12 formal validation rules"
   verify unit "manifest declares 3 feature flags"
   verify unit "layering flag requires conditions flag"
   verify unit "requires/ensures/maintains are block fields of named conditions"

@@ -798,6 +798,7 @@ behavior complete_field_names "Complete Field Names" {
   verify unit "a bracket inside a string opens no reference list"
   verify unit "nothing is suggested inside a string, a comment or a nested block"
   verify unit "an enum field's value suggests its declared values"
+  verify unit "a builtin vocabulary's field completes its values"
   verify unit "a boolean field's value suggests true and false"
   verify contract "Complete Field Names: field name completion holds — field_registry_available, cursor_inside_entity, fields_suggested, snippets_informed"
 }

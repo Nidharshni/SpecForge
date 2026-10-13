@@ -334,7 +334,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "edge": null,
       "exempts_obligations": false,
       "field_name": "priority",
-      "field_type": "String",
+      "field_type": "Enum([\"critical\", \"high\", \"medium\", \"low\"])",
       "file_reference": false,
       "headline": false,
       "inverse_of": null,
@@ -636,11 +636,11 @@ expression: "digest(&load(&runtime, &[name]))"
     },
     "decision.status": {
       "derived_from": null,
-      "description": "Current lifecycle status of the decision (e.g. proposed, accepted, deprecated)",
+      "description": "Current lifecycle status of the decision",
       "edge": null,
       "exempts_obligations": false,
       "field_name": "status",
-      "field_type": "String",
+      "field_type": "Enum([\"proposed\", \"accepted\", \"deprecated\", \"superseded\"])",
       "file_reference": false,
       "headline": true,
       "inverse_of": null,
@@ -742,7 +742,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "edge": null,
       "exempts_obligations": false,
       "field_name": "detection",
-      "field_type": "String",
+      "field_type": "Enum([\"certain\", \"likely\", \"moderate\", \"unlikely\", \"undetectable\"])",
       "file_reference": false,
       "headline": false,
       "inverse_of": null,
@@ -810,7 +810,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "edge": null,
       "exempts_obligations": false,
       "field_name": "occurrence",
-      "field_type": "String",
+      "field_type": "Enum([\"certain\", \"likely\", \"occasional\", \"unlikely\", \"rare\"])",
       "file_reference": false,
       "headline": false,
       "inverse_of": null,
@@ -827,7 +827,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "edge": null,
       "exempts_obligations": false,
       "field_name": "post_detection",
-      "field_type": "String",
+      "field_type": "Enum([\"certain\", \"likely\", \"moderate\", \"unlikely\", \"undetectable\"])",
       "file_reference": false,
       "headline": false,
       "inverse_of": null,
@@ -861,7 +861,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "edge": null,
       "exempts_obligations": false,
       "field_name": "post_occurrence",
-      "field_type": "String",
+      "field_type": "Enum([\"certain\", \"likely\", \"occasional\", \"unlikely\", \"rare\"])",
       "file_reference": false,
       "headline": false,
       "inverse_of": null,
@@ -878,7 +878,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "edge": null,
       "exempts_obligations": false,
       "field_name": "post_severity",
-      "field_type": "String",
+      "field_type": "Enum([\"critical\", \"high\", \"medium\", \"low\"])",
       "file_reference": false,
       "headline": false,
       "inverse_of": null,
@@ -942,11 +942,11 @@ expression: "digest(&load(&runtime, &[name]))"
     },
     "failure_mode.severity": {
       "derived_from": null,
-      "description": "Impact severity rating before mitigation (e.g. critical, high, medium, low)",
+      "description": "Impact severity rating before mitigation",
       "edge": null,
       "exempts_obligations": false,
       "field_name": "severity",
-      "field_type": "String",
+      "field_type": "Enum([\"critical\", \"high\", \"medium\", \"low\"])",
       "file_reference": false,
       "headline": false,
       "inverse_of": null,
@@ -996,7 +996,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "constraint.enforced_by": "reference_list",
       "constraint.governs_features": "reference_list",
       "constraint.metric": "string",
-      "constraint.priority": "string",
+      "constraint.priority": "enum (critical, high, medium, low)",
       "constraint.protects": "reference_list",
       "constraint.refs": "string_list",
       "constraint.scope": "string",
@@ -1014,25 +1014,25 @@ expression: "digest(&load(&runtime, &[name]))"
       "decision.invariants": "reference_list",
       "decision.reason": "string",
       "decision.refs": "string_list",
-      "decision.status": "string",
+      "decision.status": "enum (proposed, accepted, deprecated, superseded)",
       "decision.superseded_by": "reference",
       "decision.tags": "string_list",
       "failure_mode.affected_behaviors": "reference_list",
       "failure_mode.cause": "string",
       "failure_mode.description": "string",
-      "failure_mode.detection": "string",
+      "failure_mode.detection": "enum (certain, likely, moderate, unlikely, undetectable)",
       "failure_mode.effect": "string",
       "failure_mode.invariant": "reference",
       "failure_mode.mitigation": "string",
-      "failure_mode.occurrence": "string",
-      "failure_mode.post_detection": "string",
+      "failure_mode.occurrence": "enum (certain, likely, occasional, unlikely, rare)",
+      "failure_mode.post_detection": "enum (certain, likely, moderate, unlikely, undetectable)",
       "failure_mode.post_mitigation": "block",
-      "failure_mode.post_occurrence": "string",
-      "failure_mode.post_severity": "string",
+      "failure_mode.post_occurrence": "enum (certain, likely, occasional, unlikely, rare)",
+      "failure_mode.post_severity": "enum (critical, high, medium, low)",
       "failure_mode.refs": "string_list",
       "failure_mode.risk": "string",
       "failure_mode.rpn": "integer",
-      "failure_mode.severity": "string",
+      "failure_mode.severity": "enum (critical, high, medium, low)",
       "failure_mode.threatens_features": "reference_list"
     },
     "single_reference_fields": [
@@ -1107,157 +1107,6 @@ expression: "digest(&load(&runtime, &[name]))"
   },
   "manifest_surfaces": [],
   "rules": [
-    {
-      "check": "field_value_constraint",
-      "code": "W050",
-      "constraint": {
-        "kind": "one_of",
-        "pattern": null,
-        "values": [
-          "proposed",
-          "accepted",
-          "deprecated",
-          "superseded"
-        ]
-      },
-      "edge_type": null,
-      "field": "status",
-      "message_template": "decision '{id}' has invalid status '{value}' — expected one of: proposed, accepted, deprecated, superseded",
-      "owner": "@specforge/governance",
-      "severity": "Warning",
-      "target_kind": "decision",
-      "wasm_function": null
-    },
-    {
-      "check": "field_value_constraint",
-      "code": "W051",
-      "constraint": {
-        "kind": "one_of",
-        "pattern": null,
-        "values": [
-          "critical",
-          "high",
-          "medium",
-          "low"
-        ]
-      },
-      "edge_type": null,
-      "field": "severity",
-      "message_template": "failure_mode '{id}' has invalid severity '{value}' — expected one of: critical, high, medium, low",
-      "owner": "@specforge/governance",
-      "severity": "Warning",
-      "target_kind": "failure_mode",
-      "wasm_function": null
-    },
-    {
-      "check": "field_value_constraint",
-      "code": "W051",
-      "constraint": {
-        "kind": "one_of",
-        "pattern": null,
-        "values": [
-          "critical",
-          "high",
-          "medium",
-          "low"
-        ]
-      },
-      "edge_type": null,
-      "field": "post_severity",
-      "message_template": "failure_mode '{id}' has invalid post_severity '{value}' — expected one of: critical, high, medium, low",
-      "owner": "@specforge/governance",
-      "severity": "Warning",
-      "target_kind": "failure_mode",
-      "wasm_function": null
-    },
-    {
-      "check": "field_value_constraint",
-      "code": "W052",
-      "constraint": {
-        "kind": "one_of",
-        "pattern": null,
-        "values": [
-          "certain",
-          "likely",
-          "occasional",
-          "unlikely",
-          "rare"
-        ]
-      },
-      "edge_type": null,
-      "field": "occurrence",
-      "message_template": "failure_mode '{id}' has invalid occurrence '{value}' — expected one of: certain, likely, occasional, unlikely, rare",
-      "owner": "@specforge/governance",
-      "severity": "Warning",
-      "target_kind": "failure_mode",
-      "wasm_function": null
-    },
-    {
-      "check": "field_value_constraint",
-      "code": "W052",
-      "constraint": {
-        "kind": "one_of",
-        "pattern": null,
-        "values": [
-          "certain",
-          "likely",
-          "occasional",
-          "unlikely",
-          "rare"
-        ]
-      },
-      "edge_type": null,
-      "field": "post_occurrence",
-      "message_template": "failure_mode '{id}' has invalid post_occurrence '{value}' — expected one of: certain, likely, occasional, unlikely, rare",
-      "owner": "@specforge/governance",
-      "severity": "Warning",
-      "target_kind": "failure_mode",
-      "wasm_function": null
-    },
-    {
-      "check": "field_value_constraint",
-      "code": "W121",
-      "constraint": {
-        "kind": "one_of",
-        "pattern": null,
-        "values": [
-          "certain",
-          "likely",
-          "moderate",
-          "unlikely",
-          "undetectable"
-        ]
-      },
-      "edge_type": null,
-      "field": "detection",
-      "message_template": "failure_mode '{id}' has invalid detection '{value}' — expected one of: certain, likely, moderate, unlikely, undetectable",
-      "owner": "@specforge/governance",
-      "severity": "Warning",
-      "target_kind": "failure_mode",
-      "wasm_function": null
-    },
-    {
-      "check": "field_value_constraint",
-      "code": "W121",
-      "constraint": {
-        "kind": "one_of",
-        "pattern": null,
-        "values": [
-          "certain",
-          "likely",
-          "moderate",
-          "unlikely",
-          "undetectable"
-        ]
-      },
-      "edge_type": null,
-      "field": "post_detection",
-      "message_template": "failure_mode '{id}' has invalid post_detection '{value}' — expected one of: certain, likely, moderate, unlikely, undetectable",
-      "owner": "@specforge/governance",
-      "severity": "Warning",
-      "target_kind": "failure_mode",
-      "wasm_function": null
-    },
     {
       "check": "missing_required_field",
       "code": "E006",
