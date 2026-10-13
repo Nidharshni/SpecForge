@@ -834,7 +834,7 @@ fn one_runtime_serves_extension_calls_until_the_next_compile() {
 
     // analyze runs the extensions' passes in it, call after call, and a
     // validate of the unchanged project keeps it.
-    let analyze = json!({"use_cached": true});
+    let analyze = json!({});
     call_tool(&mut server, "specforge.analyze", analyze.clone());
     call_tool(&mut server, "specforge.analyze", analyze);
     call_tool(&mut server, "specforge.validate", json!({}));

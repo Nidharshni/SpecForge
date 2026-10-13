@@ -1527,12 +1527,12 @@ fn validate_verdict_in_meta_counts_everything_reported() {
     assert_eq!(verdict["errors"], 0, "{resp}");
 }
 
-// B:provide_mcp_validate_tool — verify unit "use_cached=false triggers fresh compilation"
+// B:provide_mcp_validate_tool — verify unit "validate reports files changed on disk since the last call"
 #[specforge_test(
     behavior = "provide_mcp_validate_tool",
-    verify = "validate with use_cached=false triggers fresh compilation"
+    verify = "validate reports files changed on disk since the last call"
 )]
-fn validate_use_cached_false() {
+fn validate_reports_files_changed_since_the_last_call() {
     let project = project_with_errors_and_warnings();
     let mut server = serving_nothing();
     // The first call serves the project its path names.
@@ -1545,14 +1545,10 @@ fn validate_use_cached_false() {
 
     // Fix the unresolved reference on disk.
     fix_unresolved_reference(project.path());
-    let second = codes_of(&call_tool(
-        &mut server,
-        "specforge.validate",
-        json!({"use_cached": false}),
-    ));
+    let second = codes_of(&call_tool(&mut server, "specforge.validate", json!({})));
     assert!(
         !second.contains(&"E003".to_string()),
-        "use_cached=false must recompile: {second:?}"
+        "validate must report the files on disk: {second:?}"
     );
     assert!(server.state().graph().node("fixed").is_some());
 }
@@ -2175,38 +2171,6 @@ fn trace_flags_the_missing_links() {
     assert!(parsed.get("gaps").is_none(), "{parsed}");
 }
 
-// B:provide_mcp_validate_tool — verify unit "use_cached returns existing diagnostics"
-#[specforge_test(
-    behavior = "provide_mcp_validate_tool",
-    verify = "validate with use_cached=true returns existing diagnostics without recompilation"
-)]
-fn validate_use_cached_true() {
-    let project = project_with_errors_and_warnings();
-    let mut server = serving_nothing();
-    // The first call serves the project its path names.
-    let first = codes_of(&call_tool(
-        &mut server,
-        "specforge.validate",
-        json!({"path": project.path().to_str().unwrap()}),
-    ));
-    assert!(first.contains(&"E003".to_string()), "{first:?}");
-
-    // The spec changes on disk, but a cached validate does not recompile:
-    // the old diagnostics come back and the graph is the old one.
-    fix_unresolved_reference(project.path());
-    let cached = codes_of(&call_tool(
-        &mut server,
-        "specforge.validate",
-        json!({"use_cached": true}),
-    ));
-    assert_eq!(cached, first);
-    assert!(server.state().graph().node("fixed").is_none());
-
-    // Proof the change on disk is visible to a fresh compile.
-    let fresh = codes_of(&call_tool(&mut server, "specforge.validate", json!({})));
-    assert!(!fresh.contains(&"E003".to_string()), "{fresh:?}");
-}
-
 // B:provide_mcp_validate_tool — verify unit "validate recompiles and updates graph"
 #[specforge_test(
     behavior = "provide_mcp_validate_tool",
@@ -2241,23 +2205,6 @@ fn validate_updates_graph() {
         assert!(d["file"].as_str().unwrap().ends_with("app.spec"), "{d}");
         assert!(d["line"].as_u64().unwrap() >= 1, "{d}");
     }
-}
-
-#[test]
-fn validate_use_cached_false_triggers_fresh() {
-    let mut server = test_server();
-    // First compile
-    let _resp1 = call_tool(&mut server, "specforge.validate", json!({}));
-    // Second call with use_cached=false should recompile
-    let resp2 = call_tool(
-        &mut server,
-        "specforge.validate",
-        json!({"use_cached": false}),
-    );
-    assert!(
-        resp2["result"].is_object() || resp2["error"].is_object(),
-        "use_cached=false should trigger fresh compilation"
-    );
 }
 
 #[test]

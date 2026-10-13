@@ -16,7 +16,7 @@ validate | {"strict":"yes"} | refused invalid_input argument=strict: strict must
 export | {"format":"brief","scop":"alpha"} | refused invalid_input argument=scop: unknown argument 'scop' | wrote []
 stats | {"use_cached":true} | refused invalid_input argument=use_cached: unknown argument 'use_cached' | wrote []
 stats | {"path":"<served root>"} | ok | wrote []
-doctor | {"use_cached":"true"} | ok | wrote []
+doctor | {"use_cached":"true"} | refused invalid_input argument=use_cached: unknown argument 'use_cached' | wrote []
 infer_session | {} | refused invalid_input argument=action: Missing required parameter: action | wrote []
 prompt context | {"entity_id":42} | refused -32602 argument=entity_id: entity_id must be a string, got 42
 prompt review | {"depth":"two","entity_id":"alpha"} | refused -32602 argument=depth: depth must be a non-negative integer, got 'two'

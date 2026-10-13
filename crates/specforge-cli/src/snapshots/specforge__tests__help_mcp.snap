@@ -8,7 +8,7 @@ Usage: specforge mcp [ROOT]
 
 Arguments:
   [ROOT]
-          Where to find the project to serve: the nearest directory at or above it holding specforge.json (none: nothing is served until a call names a project or init creates one)
+          Where to find the project to serve: the nearest directory at or above it holding specforge.json (none yet: served once one exists there; in a handshake session a call may also serve the project its path names or init creates)
           
           [default: .]
 
