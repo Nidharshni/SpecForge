@@ -752,7 +752,7 @@ fn graph_changed_sends_the_whole_delta() {
         }],
         affected_files: vec!["test.spec".to_string()],
     };
-    subscriptions.updated(&Changes::new(&delta, false, None), &mut events);
+    subscriptions.updated(&Changes::new(&delta, false, false, None), &mut events);
     let sent = drained(&mut subscriptions);
     assert_eq!(
         sent[1],
@@ -786,6 +786,7 @@ fn diagnostics_changed_sends_whole_diagnostics() {
     subscriptions.updated(
         &Changes::new(
             &delta,
+            false,
             false,
             Some(DiagnosticsDelta::between(
                 &[],
@@ -846,6 +847,7 @@ fn a_notified_diagnostic_is_presented_as_check_presents_it() {
             &Changes::new(
                 &delta,
                 false,
+                false,
                 Some(DiagnosticsDelta::between(before, after)),
             ),
             &mut events,
@@ -866,7 +868,7 @@ fn a_diagnostics_change_is_a_delta_that_is_not_empty() {
     let graph = GraphDelta::default();
     let error = Diagnostic::new(specforge_common::codes::E001, "test error");
     let touched = |delta: Option<DiagnosticsDelta>| {
-        Changes::new(&graph, false, delta).touched(Watched::Diagnostics)
+        Changes::new(&graph, false, false, delta).touched(Watched::Diagnostics)
     };
 
     assert!(!touched(None), "not read");
@@ -938,7 +940,7 @@ fn reopening_a_listen_id_ends_the_old_stream() {
         added_nodes: vec![node_change("alpha")],
         ..GraphDelta::default()
     };
-    subscriptions.updated(&Changes::new(&delta, false, None), &mut events);
+    subscriptions.updated(&Changes::new(&delta, false, false, None), &mut events);
     assert!(drained(&mut subscriptions).is_empty());
 }
 
@@ -966,6 +968,7 @@ fn one_update_is_heard_in_one_order() {
     subscriptions.updated(
         &Changes::new(
             &delta,
+            false,
             false,
             Some(DiagnosticsDelta::between(&[], std::slice::from_ref(&added))),
         ),
@@ -1011,8 +1014,9 @@ fn one_update_is_heard_in_one_order() {
 #[test]
 fn an_environment_reload_touches_the_graph_views_and_the_schema() {
     let none = GraphDelta::default();
-    let reload = Changes::new(&none, true, None);
+    let reload = Changes::new(&none, false, true, None);
     assert!(reload.touched(Watched::Graph));
+    assert!(reload.touched(Watched::Content));
     assert!(reload.touched(Watched::Schema));
     assert!(!reload.touched(Watched::Diagnostics));
 
@@ -1035,6 +1039,6 @@ fn a_schema_subscriber_hears_no_graph_delta() {
         added_nodes: vec![node_change("alpha")],
         ..GraphDelta::default()
     };
-    subscriptions.updated(&Changes::new(&delta, false, None), &mut events);
+    subscriptions.updated(&Changes::new(&delta, false, false, None), &mut events);
     assert!(drained(&mut subscriptions).is_empty());
 }

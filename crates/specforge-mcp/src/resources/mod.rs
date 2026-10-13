@@ -8,6 +8,7 @@ use crate::lifecycle::Revision;
 use crate::protocol::{JsonRpcError, JsonRpcResponse};
 use crate::registry::Listed;
 use crate::state::McpState;
+use crate::subscriptions::Watched;
 use crate::surface_call::{Found, Invocation, Surface};
 use crate::surface_table::ResourceEntry;
 use crate::target::{Call, TargetSpec};
@@ -182,6 +183,9 @@ pub struct ResourceSpec {
     pub name: &'static str,
     pub description: &'static str,
     pub mime_type: &'static str,
+    /// What its content changes with (`subscriptions::Watched`): which
+    /// updates notify its subscribers.
+    pub changes_with: Watched,
     /// Read the resource at a URI it [matches](Self::matches), over the
     /// project view it is given: the served project's, brought up to date,
     /// or the empty session's when nothing is served.
@@ -217,6 +221,7 @@ pub static CORE_RESOURCES: &[ResourceSpec] = &[
         name: "graph",
         description: "Full spec graph in JSON format",
         mime_type: "application/json",
+        changes_with: Watched::Graph,
         read: |view, uri| views::export_view(view, uri, Format::Graph, None),
     },
     ResourceSpec {
@@ -224,6 +229,7 @@ pub static CORE_RESOURCES: &[ResourceSpec] = &[
         name: "schema",
         description: "Graph schema definition",
         mime_type: "application/json",
+        changes_with: Watched::Schema,
         read: |view, uri| views::schema_view(view, uri),
     },
     ResourceSpec {
@@ -231,6 +237,7 @@ pub static CORE_RESOURCES: &[ResourceSpec] = &[
         name: "context",
         description: "Context-optimized graph (contract, status, verify fields)",
         mime_type: "application/json",
+        changes_with: Watched::Content,
         read: |view, uri| views::export_view(view, uri, Format::Context, None),
     },
     ResourceSpec {
@@ -238,6 +245,7 @@ pub static CORE_RESOURCES: &[ResourceSpec] = &[
         name: "context_entity",
         description: "Context-optimized subgraph rooted at an entity",
         mime_type: "application/json",
+        changes_with: Watched::Content,
         read: |view, uri| {
             views::export_view(view, uri, Format::Context, Some("specforge://context/"))
         },
@@ -247,6 +255,7 @@ pub static CORE_RESOURCES: &[ResourceSpec] = &[
         name: "brief",
         description: "Brief graph (id, kind, title, edges only)",
         mime_type: "application/json",
+        changes_with: Watched::Content,
         read: |view, uri| views::export_view(view, uri, Format::Brief, None),
     },
     ResourceSpec {
@@ -254,6 +263,7 @@ pub static CORE_RESOURCES: &[ResourceSpec] = &[
         name: "diagnostics",
         description: "Current compilation diagnostics",
         mime_type: "application/json",
+        changes_with: Watched::Diagnostics,
         read: |view, uri| views::diagnostics_view(view, uri),
     },
     ResourceSpec {
@@ -261,6 +271,7 @@ pub static CORE_RESOURCES: &[ResourceSpec] = &[
         name: "entity",
         description: "Subgraph rooted at a specific entity",
         mime_type: "application/json",
+        changes_with: Watched::Graph,
         read: |view, uri| views::entity_view(view, uri),
     },
     ResourceSpec {
@@ -268,6 +279,7 @@ pub static CORE_RESOURCES: &[ResourceSpec] = &[
         name: "entities_by_kind",
         description: "All entities of a specific kind (e.g. feature, behavior)",
         mime_type: "application/json",
+        changes_with: Watched::Content,
         read: |view, uri| views::entities_view(view, uri),
     },
 ];

@@ -568,7 +568,11 @@ behavior notify_graph_delta_via_mcp "Notify Graph Delta via MCP" {
     the update's GraphDelta, whole: each added and removed node with its
     kind, file and line, each modified node with its changed fields and
     changed aspects, the added and removed edges and the affected files:
-    the delta watch --format json prints. A subscription is to one resource: unsubscribing one keeps the
+    the delta watch --format json prints. An entity that only moved
+    (another file or line) changes the resources that write its place
+    (specforge://graph and specforge://graph/{entity_id}), which are
+    notified, and no other; no specforge/graphChanged is sent for it: the
+    graph did not change. A subscription is to one resource: unsubscribing one keeps the
     others, and the client's subscriptions end with its connection.
     resources/subscribe to a URI the server does not serve is refused as
     resources/read refuses it (not found: -32002, Unknown resource URI);
@@ -578,7 +582,8 @@ behavior notify_graph_delta_via_mcp "Notify Graph Delta via MCP" {
   verify unit "graph_changed notification sent after incremental rebuild"
   verify unit "notification includes GraphDelta payload"
   verify unit "a field-only edit is reported as a modified node"
-  verify unit "moving an entity is not a modification"
+  verify unit "moving an entity is not a modification: no graphChanged is sent"
+  verify unit "a moved entity updates the resources that write its place, and no graphChanged is sent"
   verify unit "unsubscribed clients do not receive notifications"
   verify unit "no notification when no clients subscribed"
   verify unit "clients can subscribe and unsubscribe from delta notifications"

@@ -25,11 +25,13 @@ use crate::events::{EventSink, McpEvent};
 /// What a resource's content changes with: the one rule both eras read.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Watched {
-    /// The graph or the environment: every graph view (`graph`, `context`,
-    /// `brief`, an entity's subgraph, a kind's entities), whose export is
-    /// shaped by the schema, and every extension resource, which its module
-    /// computes.
+    /// The graph as the graph documents write it, each node's place
+    /// included: `specforge://graph` and `specforge://graph/{entity_id}`.
     Graph,
+    /// The graph's content, no position written: `context`, `brief`,
+    /// `context/{entity_id}`, `entities/{kind}`, and every extension
+    /// resource (its module reads a graph that carries no position).
+    Content,
     /// The environment alone: `specforge://schema`.
     Schema,
     /// What the server reports: `specforge://diagnostics`.
@@ -37,14 +39,15 @@ pub enum Watched {
 }
 
 impl Watched {
-    /// What `uri`'s content changes with. `uri` is one the server serves
-    /// (the requests check it first).
+    /// What `uri`'s content changes with: the core resource that names it
+    /// says ([`crate::resources::ResourceSpec::changes_with`]); an extension resource changes
+    /// with the graph's content. `uri` is one the server serves (the
+    /// requests check it first).
     pub fn of(uri: &str) -> Self {
-        match uri {
-            "specforge://diagnostics" => Watched::Diagnostics,
-            "specforge://schema" => Watched::Schema,
-            _ => Watched::Graph,
-        }
+        crate::resources::CORE_RESOURCES
+            .iter()
+            .find(|spec| spec.names(uri))
+            .map_or(Watched::Content, |spec| spec.changes_with)
     }
 }
 
@@ -52,6 +55,8 @@ impl Watched {
 /// both eras.
 pub struct Changes<'u> {
     graph: &'u GraphDelta,
+    /// Some node changed place (`Update::moved` is not empty).
+    moved: bool,
     environment: bool,
     diagnostics: Option<DiagnosticsDelta>,
 }
@@ -64,33 +69,38 @@ impl<'u> Changes<'u> {
     pub fn of(update: &'u Update, diagnostics: Option<DiagnosticsDelta>) -> Self {
         Self::new(
             &update.delta,
+            !update.moved.is_empty(),
             update.kind == UpdateKind::Environment,
             diagnostics,
         )
     }
 
-    /// The same from its parts: the graph delta, whether the environment
-    /// loaded again (or another project was served), and the diagnostics
-    /// delta.
+    /// The same from its parts: the graph delta, whether a node only moved,
+    /// whether the environment loaded again (or another project was
+    /// served), and the diagnostics delta.
     pub fn new(
         graph: &'u GraphDelta,
+        moved: bool,
         environment: bool,
         diagnostics: Option<DiagnosticsDelta>,
     ) -> Self {
         Changes {
             graph,
+            moved,
             environment,
             diagnostics,
         }
     }
 
-    /// Whether what `watched` names changed: the graph delta is not empty
-    /// or the environment loaded again (`Graph`); the environment loaded
-    /// again (`Schema`); a diagnostic was added or removed, compared
+    /// Whether what `watched` names changed: the graph delta is not empty,
+    /// a node moved or the environment loaded again (`Graph`); the delta is
+    /// not empty or the environment loaded again (`Content`); the
+    /// environment loaded again (`Schema`); a diagnostic was added or removed, compared
     /// whole (`Diagnostics`, [`DiagnosticsDelta`]).
     pub fn touched(&self, watched: Watched) -> bool {
         match watched {
-            Watched::Graph => !self.graph.is_empty() || self.environment,
+            Watched::Graph => !self.graph.is_empty() || self.moved || self.environment,
+            Watched::Content => !self.graph.is_empty() || self.environment,
             Watched::Schema => self.environment,
             Watched::Diagnostics => self
                 .diagnostics
@@ -236,7 +246,8 @@ impl Subscriptions {
         }
         let subscribed =
             |watched: Watched| self.resources.iter().any(|uri| Watched::of(uri) == watched);
-        if !changes.graph.is_empty() && subscribed(Watched::Graph) {
+        if !changes.graph.is_empty() && (subscribed(Watched::Graph) || subscribed(Watched::Content))
+        {
             self.outbox
                 .push(Notification::GraphChanged(changes.graph.clone()));
             events.record(McpEvent::graph_delta(changes.graph));
@@ -283,15 +294,50 @@ mod tests {
         verify = "both eras decide what a change touches by one rule"
     )]
     fn watched_follows_the_uri() {
-        assert_eq!(Watched::of("specforge://diagnostics"), Watched::Diagnostics);
-        assert_eq!(Watched::of("specforge://schema"), Watched::Schema);
-        for uri in [
-            "specforge://graph",
-            "specforge://graph/alpha",
-            "specforge://context?scope=alpha",
-            "acme://doc/1",
-        ] {
-            assert_eq!(Watched::of(uri), Watched::Graph, "{uri}");
+        let expected = [
+            ("specforge://graph", Watched::Graph),
+            ("specforge://graph/alpha", Watched::Graph),
+            ("specforge://graph?depth=1", Watched::Graph),
+            ("specforge://schema", Watched::Schema),
+            ("specforge://context", Watched::Content),
+            ("specforge://context/alpha", Watched::Content),
+            ("specforge://brief", Watched::Content),
+            ("specforge://entities/behavior", Watched::Content),
+            ("specforge://diagnostics", Watched::Diagnostics),
+            ("specforge://context?scope=alpha", Watched::Content),
+            ("acme://doc/1", Watched::Content),
+        ];
+        for (uri, watched) in expected {
+            assert_eq!(Watched::of(uri), watched, "{uri}");
+        }
+    }
+
+    #[specforge_test_macros::test(
+        behavior = "listen_for_mcp_resource_updates",
+        verify = "both eras decide what a change touches by one rule"
+    )]
+    fn a_move_touches_what_writes_a_place_and_a_delta_touches_both() {
+        use specforge_project::NodeChange;
+        let none = GraphDelta::default();
+        let some = GraphDelta {
+            added_nodes: vec![NodeChange {
+                id: "a".into(),
+                kind: "behavior".into(),
+                file: "a.spec".into(),
+                line: 1,
+            }],
+            ..GraphDelta::default()
+        };
+        for (delta, moved) in [(&none, false), (&none, true), (&some, false), (&some, true)] {
+            let changes = Changes::new(delta, moved, false, None);
+            let graph = !delta.is_empty() || moved;
+            let content = !delta.is_empty();
+            assert_eq!(changes.touched(Watched::Graph), graph, "{moved} {delta:?}");
+            assert_eq!(
+                changes.touched(Watched::Content),
+                content,
+                "{moved} {delta:?}"
+            );
         }
     }
 }
