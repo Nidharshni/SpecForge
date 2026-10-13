@@ -39,6 +39,7 @@ pub mod review;
 mod scan;
 pub mod schema;
 pub mod schema_version;
+pub mod solver;
 pub mod stats;
 #[cfg(feature = "testing")]
 pub mod testing;

@@ -45,6 +45,7 @@ specforge-project = { workspace = true }
 specforge-registry-client = { path = "../specforge-registry-client" }
 
 [dev-dependencies]
+specforge-ops = { workspace = true, features = ["testing"] }
 sha2 = { workspace = true }
 hex = "0.4.3"
 specforge-parser = { workspace = true }

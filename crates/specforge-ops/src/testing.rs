@@ -4,11 +4,18 @@
 //! embedded bytes (`InProcessRuntime::binary` serves whatever name the
 //! candidate is loaded under).
 //!
+//! It also holds `ScriptedSolver`, the SMT solver tests script (ADR 0079).
+//!
 //! Behind the `testing` feature; no production code reads it.
+
+use std::collections::VecDeque;
+use std::sync::Mutex;
 
 use specforge_extension_sdk::{ContributionsBuilder, ExtensionMeta};
 use specforge_protocol_types::PeerDependency;
 use specforge_wasm::testing::InProcessRuntime;
+
+use crate::solver::{Availability, SolveFailure, Solver, Z3};
 
 #[path = "../../../fixtures/greet-extension/src/contributions.rs"]
 #[allow(dead_code, reason = "the fixture's own source: only `build` is served")]
@@ -119,4 +126,63 @@ pub fn probes() -> InProcessRuntime {
         "@specforge/testing",
         declaring("@specforge/testing", "1.0.0", &[]),
     )
+}
+
+/// A solver that answers what a test scripts: its availability, then each
+/// solve's stdout (or failure) in order. It keeps every script it was asked.
+pub struct ScriptedSolver {
+    availability: Availability,
+    answers: Mutex<VecDeque<Result<String, SolveFailure>>>,
+    scripts: Mutex<Vec<String>>,
+}
+
+impl ScriptedSolver {
+    fn with(availability: Availability, answers: VecDeque<Result<String, SolveFailure>>) -> Self {
+        Self {
+            availability,
+            answers: Mutex::new(answers),
+            scripts: Mutex::new(Vec::new()),
+        }
+    }
+
+    /// z3 runs (`Z3 version 4.13.0 - scripted`) and is asked nothing.
+    pub fn ready() -> Self {
+        Self::answering([])
+    }
+
+    /// z3 runs and answers `answers`, one per solve, in order.
+    pub fn answering(answers: impl IntoIterator<Item = Result<String, SolveFailure>>) -> Self {
+        Self::with(
+            Availability::Ready {
+                version: "Z3 version 4.13.0 - scripted".into(),
+            },
+            answers.into_iter().collect(),
+        )
+    }
+
+    /// z3 is not on PATH: the W098 the z3 adapter gives for it.
+    pub fn not_found() -> Self {
+        Self::with(
+            Availability::Unavailable(Z3::not_on_path()),
+            VecDeque::new(),
+        )
+    }
+
+    /// The scripts it was asked, in order.
+    pub fn scripts(&self) -> Vec<String> {
+        self.scripts.lock().unwrap().clone()
+    }
+}
+
+impl Solver for ScriptedSolver {
+    fn availability(&self) -> Availability {
+        self.availability.clone()
+    }
+
+    fn solve(&self, script: &str) -> Result<String, SolveFailure> {
+        self.scripts.lock().unwrap().push(script.to_string());
+        self.answers.lock().unwrap().pop_front().unwrap_or_else(|| {
+            panic!("the scripted solver was asked more than it was scripted to answer:\n{script}")
+        })
+    }
 }
