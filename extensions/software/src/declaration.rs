@@ -174,16 +174,8 @@ fn kinds(c: &mut ContributionsBuilder) {
             .dot_shape("rectangle")
             .dot_color("#2E7D32")
             .dot_fillcolor("#E8F5E9")
-            .inference_guide("Look for domain model structs, data transfer objects, API request/response shapes, database entities, and enum definitions that carry business meaning. Signals: struct/class definitions in models/ or domain/ directories; TypeScript interfaces/types for API contracts; protobuf/GraphQL/JSON Schema type definitions; ORM model classes; enum types with business variants. Use open_fields to list the type's fields. Set kind field to 'struct', 'enum', 'alias', or 'opaque'. Reference composed_types for nested or referenced types. Skip: internal implementation structs, builder patterns, framework-generated types, test fixtures.")
+            .inference_guide("Look for domain model structs, data transfer objects, API request/response shapes, database entities, and enum definitions that carry business meaning. Signals: struct/class definitions in models/ or domain/ directories; TypeScript interfaces/types for API contracts; protobuf/GraphQL/JSON Schema type definitions; ORM model classes; enum types with business variants. List the type's members in its body, one `name Type` per line (with `@optional` where it may be absent). Reference composed_types for nested or referenced types. Skip: internal implementation structs, builder patterns, framework-generated types, test fixtures.")
             .declares_types();
-        k.field("kind", |f| {
-            f.field_type(FieldType::String)
-                .description("The type category (e.g. struct, enum, alias, opaque)");
-        });
-        k.field("fields", |f| {
-            f.field_type(FieldType::Block)
-                .description("Structured field definitions for this type");
-        });
         k.field("composed_types", |f| {
             f.field_type(FieldType::ReferenceList)
                 .description("Types composed or referenced by this type (derived from its field types)")
