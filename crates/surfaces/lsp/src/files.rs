@@ -1,6 +1,6 @@
 //! What the server and the editor share about each file, by the file's session key
 //! (ADR 0056): the open document (the editor's buffer), the URI the client names the file
-//! by, and the diagnostics last published for it in two layers, each labelled with the buffer
+//! by, and the diagnostics last published for it in two parts, each labelled with the buffer
 //! version it belongs to. Everything is found by the key ([`Files::key_of`] is the one rule from a URI to
 //! it); the URI is kept only to name the file back to the client. It is the one writer of what
 //! the editor is shown: a publish is what one of its writes answers.
@@ -35,15 +35,15 @@ struct Entry {
     /// The editor's buffer, while the document is open.
     open: Option<Document>,
     /// What the project reports for the file, as last published.
-    compile: Layer,
+    compile: Part,
     /// What formatting the open document reported, at the version it formatted.
-    formatter: Option<Layer>,
+    formatter: Option<Part>,
 }
 
 /// One writer's diagnostics for a file, labelled with the version of the buffer they are
 /// positions in (`None`: the file as compiled from disk).
 #[derive(Debug, Clone, Default, PartialEq)]
-struct Layer {
+struct Part {
     /// As hover and code actions read them back (a spanless one placed).
     placed: Vec<Diagnostic>,
     /// As the client receives them.
@@ -133,8 +133,8 @@ impl Files {
         }
     }
 
-    /// The client closed `uri`. Its buffer and its formatter layer go; the file keeps the URI
-    /// it was opened with, and its compile layer, until a publish clears it.
+    /// The client closed `uri`. Its buffer and its formatter part go; the file keeps the URI
+    /// it was opened with, and its compile part, until a publish clears it.
     pub(crate) fn close(&mut self, uri: &Url) {
         let key = self.key_of(uri);
         if let Some(entry) = self.by_key.get_mut(&key) {
@@ -178,9 +178,9 @@ impl Files {
         match self.by_key.get(key) {
             Some(Entry {
                 open: Some(document),
-                formatter: Some(layer),
+                formatter: Some(part),
                 ..
-            }) if layer.version == document.version() => &layer.placed,
+            }) if part.version == document.version() => &part.placed,
             _ => &[],
         }
     }
@@ -208,9 +208,9 @@ impl Files {
             .filter(|key| self.document(key).is_some())
     }
 
-    /// Record what the project reports now as each file's compile layer, and answer what to
-    /// send, in key order. Each file's whole list is its compile layer, plus its formatter
-    /// layer when that belongs to the same version (a formatter layer of another version is
+    /// Record what the project reports now as each file's compile part, and answer what to
+    /// send, in key order. Each file's whole list is its compile part, plus its formatter
+    /// part when that belongs to the same version (a formatter part of another version is
     /// dropped: the buffer moved since it was formatted). It goes under the URI the client
     /// names the file by. A file that is not open and was sent an empty list is forgotten.
     pub(crate) fn publish_compile(&mut self, publication: Publication) -> Vec<Publish> {
@@ -221,7 +221,7 @@ impl Files {
                 .by_key
                 .entry(key.clone())
                 .or_insert_with(|| Entry::named(uri::uri_of(&path), path));
-            entry.compile = Layer {
+            entry.compile = Part {
                 placed: file.placed,
                 sent: file.diagnostics,
                 version: file.version,
@@ -242,31 +242,31 @@ impl Files {
         sends
     }
 
-    /// Record `findings` as its open document's formatter layer, and answer what to send now.
+    /// Record `findings` as its open document's formatter part, and answer what to send now.
     /// `None` when the document is no longer at `findings.version` (it moved since it was
-    /// formatted), when the layer did not change, or when the compile layer belongs to another
+    /// formatted), when the part did not change, or when the compile part belongs to another
     /// version: the publish of that version's compile then sends both.
     pub(crate) fn publish_formatter(&mut self, findings: Findings) -> Option<Publish> {
         let entry = self.by_key.get_mut(&findings.key)?;
         if entry.open.as_ref()?.version() != findings.version {
             return None;
         }
-        let layer = (!findings.sent.is_empty()).then_some(Layer {
+        let part = (!findings.sent.is_empty()).then_some(Part {
             placed: findings.placed,
             sent: findings.sent,
             version: findings.version,
         });
-        if entry.formatter == layer {
+        if entry.formatter == part {
             return None;
         }
-        entry.formatter = layer;
+        entry.formatter = part;
         (entry.compile.version == findings.version).then(|| entry.publish())
     }
 
     // ---- environment loads -------------------------------------------------------------
 
     /// Key every file anew under `spec_root` (an environment load moved it): each keeps its
-    /// URI, its path, its document and its layers. Nothing when the keys are under it already.
+    /// URI, its path, its document and its parts. Nothing when the keys are under it already.
     pub(crate) fn rekey(&mut self, spec_root: &Path) {
         if self.spec_root == spec_root {
             return;
@@ -297,12 +297,12 @@ impl Entry {
             uri,
             path,
             open: None,
-            compile: Layer::default(),
+            compile: Part::default(),
             formatter: None,
         }
     }
 
-    /// The whole list the client is shown: the compile layer, then the formatter layer of the
+    /// The whole list the client is shown: the compile part, then the formatter part of the
     /// same version.
     fn listed(&self) -> Vec<lsp::Diagnostic> {
         let mut list = self.compile.sent.clone();
@@ -386,7 +386,7 @@ mod tests {
     }
 
     #[test]
-    fn rekey_keeps_each_file_its_uri_document_and_layers() {
+    fn rekey_keeps_each_file_its_uri_document_and_parts() {
         let mut files = Files::default();
         let uri = url("file:///proj/spec/%40acme/a.spec");
         files.open(&uri, "text", 3);

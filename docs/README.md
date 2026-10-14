@@ -1,6 +1,6 @@
 # SpecForge Documentation
 
-This directory contains the entity model reference and design documentation for SpecForge. For a project overview, see the [root README](../README.md). For the full architecture — core + plugins, edge types, validation rules, and design principles — see [entity-model.md](entity-model.md).
+This directory contains the entity model reference and design documentation for SpecForge. For a project overview, see the [root README](../README.md). For how the code is built, see [ARCHITECTURE.md](../ARCHITECTURE.md). For the entity model — core + plugins, edge types, validation rules, and design principles — see [entity-model.md](entity-model.md).
 
 ## Entity Reference
 

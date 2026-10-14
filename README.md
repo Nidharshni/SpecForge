@@ -282,7 +282,7 @@ Also planned: agents that edit the spec through typed operations, so nobody (hum
 - **[Formal verification](docs/guides/formal-verification.md)**: specs an SMT solver checks, with counterexamples at exact locations.
 - **[Quick reference](docs/quick-reference.md)**: every command, entity kind and diagnostic code on one page.
 - **[Vision](docs/vision/README.md)**: the manifesto, [principles](docs/vision/principles.md) and [north star](docs/vision/north-star.md).
-- **[Architecture](ARCHITECTURE.md)** and **[Contributing](CONTRIBUTING.md)**: how SpecForge is built, and how to work on it.
+- **[Architecture](ARCHITECTURE.md)**, **[the crate map](crates/README.md)** and **[Contributing](CONTRIBUTING.md)**: how SpecForge is built, what each crate owns, and how to work on it.
 - **[Documentation hub](docs/README.md)**: entity reference, traceability chain and research.
 
 ## License
