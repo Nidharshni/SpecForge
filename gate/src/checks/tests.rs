@@ -505,3 +505,24 @@ fn the_crate_map_runs_when_what_it_is_drawn_from_changes() {
         Selection::Skip
     );
 }
+
+#[test]
+fn spec_modules_runs_when_the_module_file_or_a_manifest_changes() {
+    let repo = this_repo();
+    let manifest = crate::crate_map::manifest_of(&repo.members[0]);
+    for path in ["spec/product/modules.spec", "Cargo.toml", manifest.as_str()] {
+        assert_eq!(
+            selection("spec-modules", Mode::Quick, &[path]),
+            Selection::Everything,
+            "{path}"
+        );
+    }
+    assert_eq!(
+        selection("spec-modules", Mode::Quick, &["spec/product/features.spec"]),
+        Selection::Skip
+    );
+    assert_eq!(
+        selection("spec-modules", Mode::Hook, &["spec/product/modules.spec"]),
+        Selection::Skip
+    );
+}

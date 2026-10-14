@@ -145,6 +145,12 @@ pub fn crate_map(ctx: &Ctx, _: &Selection) -> Result<(), String> {
     })
 }
 
+pub fn spec_modules(ctx: &Ctx, _: &Selection) -> Result<(), String> {
+    ctx.sh(ctx
+        .cmd("cargo")
+        .args(["run", "-q", "-p", "xtask", "--bin", "check-modules"]))
+}
+
 pub fn doc_links(ctx: &Ctx, _: &Selection) -> Result<(), String> {
     let tracked = tracked_paths(ctx)?;
     let root = &ctx.repo.root;

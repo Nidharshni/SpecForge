@@ -1,6 +1,6 @@
 [package]
 name = "xtask"
-description = "Repository tasks that link the workspace: build-blobs, revendor and check-links"
+description = "Repository tasks that link the workspace: build-blobs, revendor, check-links and check-modules"
 edition = "2024"
 version = "0.1.0"
 publish = false
@@ -16,6 +16,10 @@ path = "src/revendor.rs"
 [[bin]]
 name = "check-links"
 path = "src/check_links.rs"
+
+[[bin]]
+name = "check-modules"
+path = "src/check_modules.rs"
 
 [dependencies]
 specforge-repo-root = { path = "../crates/leaf/repo-root" }
