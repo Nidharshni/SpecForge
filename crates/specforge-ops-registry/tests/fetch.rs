@@ -10,6 +10,7 @@ use specforge_ops::registry::{Publisher, Registry, TrustPolicy};
 use specforge_ops_registry::{ConfiguredRegistry, User};
 use specforge_package::PackageName;
 use specforge_package::Version;
+use specforge_project::testing::TestProject;
 use specforge_registry_client::testing::MemoryClient;
 use specforge_registry_client::{
     KnownKeys, RegistryConfig, SigningKey, load_known_keys_at, save_known_keys_at,
@@ -19,7 +20,6 @@ use specforge_registry_wire::{
 };
 use specforge_test_macros::test as specforge_test;
 use std::path::{Path, PathBuf};
-use tempfile::TempDir;
 
 const NAME: &str = "@acme/tool";
 const VERSION: &str = "1.0.0";
@@ -100,7 +100,7 @@ fn registry_config() -> RegistryConfig {
 /// A project whose only registry serves `served`, and a known-keys store
 /// path inside it.
 struct Project {
-    dir: TempDir,
+    dir: TestProject,
     client: MemoryClient,
 }
 
@@ -108,18 +108,16 @@ impl Project {
     fn on(served: Reply) -> Self {
         let client = MemoryClient::new();
         served.store(&client);
-        let dir = TempDir::new().unwrap();
-        let config = serde_json::json!({
-            "name": "p",
-            "version": "0.1.0",
-            "registries": [{ "alias": "local", "url": REGISTRY_URL, "default_registry": true }],
+        let dir = TestProject::new().config(|c| {
+            c["name"] = "p".into();
+            c["registries"] =
+                serde_json::json!([{ "alias": "local", "url": REGISTRY_URL, "default_registry": true }]);
         });
-        std::fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
         Project { dir, client }
     }
 
     fn known_keys(&self) -> PathBuf {
-        self.dir.path().join("home").join("known-keys.json")
+        self.dir.home().join("known-keys.json")
     }
 
     fn pin(&self, key: &SigningKey) {
@@ -129,12 +127,9 @@ impl Project {
     }
 
     fn registry(&self) -> ConfiguredRegistry {
-        ConfiguredRegistry::for_project(
-            &specforge_common::ProjectRoot::of(self.dir.path()).unwrap(),
-            "add",
-        )
-        .with_client(self.client.clone())
-        .as_user(User::at(self.dir.path().join("home"), None))
+        ConfiguredRegistry::for_project(&self.dir.project_root(), "add")
+            .with_client(self.client.clone())
+            .as_user(User::at(self.dir.home(), None))
     }
 
     fn fetch(
@@ -675,8 +670,8 @@ fn a_download_that_misses_is_refused_and_pins_nothing() {
 
 /// `home` with `credentials.json` holding `json`.
 fn store_credentials(project: &Project, json: &str) {
-    let home = project.dir.path().join("home");
-    std::fs::create_dir_all(&home).unwrap();
+    let home = project.dir.home();
+    std::fs::create_dir_all(home).unwrap();
     std::fs::write(home.join("credentials.json"), json).unwrap();
 }
 
@@ -748,15 +743,9 @@ fn an_expired_stored_credential_refuses_a_read() {
 #[test]
 fn the_environment_token_is_not_sent_on_a_read() {
     let project = Project::on(Reply::unsigned());
-    let registry = ConfiguredRegistry::for_project(
-        &specforge_common::ProjectRoot::of(project.dir.path()).unwrap(),
-        "add",
-    )
-    .with_client(project.client.clone())
-    .as_user(User::at(
-        project.dir.path().join("home"),
-        Some("env".to_string()),
-    ));
+    let registry = ConfiguredRegistry::for_project(&project.dir.project_root(), "add")
+        .with_client(project.client.clone())
+        .as_user(User::at(project.dir.home(), Some("env".to_string())));
 
     registry
         .versions(&PackageName::parse(NAME).unwrap())
