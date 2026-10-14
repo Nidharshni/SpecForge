@@ -136,3 +136,10 @@ code must say more than passed, failed or unjudged.
 *(Amended, architecture round 9, plan 06.)* D1: inspect's coverage is `inspect::coverage`'s
 `Result<EntityCoverage, OpError>`, no longer a field of `EntityFacts`. D2: `PlanError` is gone — the plan check reads
 no report and a plan is refused where it is read (ADR 0076 D3).
+
+## Amendment (architecture round 9, plan 08)
+
+- **D9a.** D9's process-level tests are the binary contract only: clap, the exit table, the streams, human
+  rendering, the environment, process life, and comparisons across surfaces. A test whose assertions are all facts
+  of the compiled project or of an operation's document lives in the crate that owns that behaviour (ADR 0078
+  D3). Every process test runs through `specforge-cli/tests/support::Cli`, under the project's own HOME.
