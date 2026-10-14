@@ -162,6 +162,16 @@ pub static CHECKS: &[Check] = &[
         run: steps::links,
     },
     Check {
+        name: "doc-links",
+        proves: "every relative link in a tracked Markdown file names a tracked file or directory",
+        reach: Reach::Hook,
+        trigger: Trigger::Always,
+        compiles: false,
+        after: &[],
+        fix: "point the link at the path the file has now, or remove it; after a move, rg -n '<old path>' finds every link to rewrite",
+        run: steps::doc_links,
+    },
+    Check {
         name: "builtins",
         proves: "every committed blob was built from the sources it recorded",
         reach: Reach::Quick,

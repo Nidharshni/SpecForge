@@ -15,6 +15,8 @@ zero-entity       hook       crates/*/src/**, scripts/check-zero-entity-core.sh
                              the core crates name no entity kind of an extension
 links             hook       computed: a .spec file; a test file or one with a `verify =` attribute
                              every test's verify text and entity is declared by the spec (A016, static)
+doc-links         hook       always
+                             every relative link in a tracked Markdown file names a tracked file or directory
 builtins          quick      computed: a file some blob's inputs.json records
                              every committed blob was built from the sources it recorded
 guests            quick      extensions/**, crates/**, integrations/rust/**, Cargo.toml
