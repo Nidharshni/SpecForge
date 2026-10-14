@@ -5,7 +5,8 @@
 
 use specforge_parser::parse;
 
-const GUIDE: &str = "../../docs/guides/authoring-spec-files.md";
+/// The guide, from the repository root.
+const GUIDE: &str = "docs/guides/authoring-spec-files.md";
 
 /// Extract the contents of every fenced block tagged ```spec.
 fn spec_blocks(markdown: &str) -> Vec<(usize, String)> {
@@ -33,7 +34,7 @@ fn spec_blocks(markdown: &str) -> Vec<(usize, String)> {
 
 #[test]
 fn every_guide_spec_block_parses() {
-    let markdown = std::fs::read_to_string(GUIDE)
+    let markdown = std::fs::read_to_string(specforge_repo_root::repo_root().join(GUIDE))
         .unwrap_or_else(|e| panic!("guide must exist at {GUIDE}: {e}"));
     let blocks = spec_blocks(&markdown);
     assert!(

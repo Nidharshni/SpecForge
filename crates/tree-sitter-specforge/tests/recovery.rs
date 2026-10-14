@@ -179,7 +179,7 @@ fn indented_forms_end_an_unclosed_body() {
     verify = "the grammar resumes at every top-level form of the repository's spec after an unclosed body"
 )]
 fn the_grammar_resumes_after_every_unclosed_body_of_the_corpora() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let root = specforge_repo_root::repo_root();
     let mut files = Vec::new();
     for corpus in ["spec", "integrations/rust/spec", "examples"] {
         spec_files(&root.join(corpus), &mut files);
@@ -231,7 +231,7 @@ fn the_grammar_resumes_after_every_unclosed_body_of_the_corpora() {
     verify = "a body member left half-typed ends where the next top-level form starts"
 )]
 fn the_grammar_resumes_after_every_half_typed_body_of_the_corpora() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let root = specforge_repo_root::repo_root();
     let mut files = Vec::new();
     for corpus in ["spec", "integrations/rust/spec", "examples"] {
         spec_files(&root.join(corpus), &mut files);

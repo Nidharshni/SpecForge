@@ -10,13 +10,8 @@ use std::fs;
     verify = "check mode works in CI environment"
 )]
 fn self_check_runs_without_crashing() {
-    // Find the project's spec/ directory relative to the crate manifest
-    let spec_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap() // crates/
-        .parent()
-        .unwrap() // project root
-        .join("spec");
+    // The repository's own spec/ directory
+    let spec_dir = specforge_repo_root::repo_root().join("spec");
 
     if !spec_dir.exists() {
         panic!("spec/ directory not found at {:?}", spec_dir);

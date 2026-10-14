@@ -150,7 +150,7 @@
   <p class="kicker" style="margin-top:48px">CONTENTS</p>
   <div class="toc">
     <div><a href="#context"><span class="no">01</span>Context — where inference could live</a></div>
-    <div><a href="#constraints"><span class="no">02</span>Governing constraints from vision/principles</a></div>
+    <div><a href="#constraints"><span class="no">02</span>Governing constraints from docs/vision/principles</a></div>
     <div><a href="#evidence"><span class="no">03</span>vLLM technology evidence</a></div>
     <div><a href="#kpis"><span class="no">04</span>KPI framework &amp; measurement contract</a></div>
     <div><a href="#surface1"><span class="no">05</span>Surface 1 — EmbeddingProvider adapter</a></div>
@@ -265,7 +265,7 @@
 <section id="constraints" class="wrap reveal">
   <p class="kicker">SECTION 02 · DECISION FRAME</p>
   <h2>Three principles decide this before benchmarks do</h2>
-  <p class="sup">vision/principles.md states each principle has a concrete test; ambiguous decisions resolve by principle <span class="ev">[E17.3]</span>. Applied to "should SpecForge adopt vLLM":</p>
+  <p class="sup">docs/vision/principles.md states each principle has a concrete test; ambiguous decisions resolve by principle <span class="ev">[E17.3]</span>. Applied to "should SpecForge adopt vLLM":</p>
 
   <table>
     <thead><tr><th style="width:22%">Principle</th><th style="width:40%">What it forbids / permits</th><th>Consequence for vLLM</th></tr></thead>
@@ -735,12 +735,12 @@ $ specforge check   <span class="c"># semantic gate: refs, orphans, cycles</span
     <li><span class="id">E16</span> — vLLM homepage — PyTorch Foundation project; hardware matrix (CUDA/ROCm/TPU/CPU/Ascend/…, macOS via community vllm-metal); Python 3.10+; OpenAI-compatible API · <a href="https://vllm.ai">vllm.ai</a></li>
     <li><span class="id">E17.1</span> — <strong>Repo:</strong> spec/extensions/embeddings/ports.spec#8F40 — <code>EmbeddingProvider</code> port (generateEmbeddings, computeSimilarity)</li>
     <li><span class="id">E17.2</span> — <strong>Repo:</strong> spec/extensions/embeddings/features.spec#A913 — "SpecForge does not bundle or invoke any AI/ML model… deterministic infrastructure"</li>
-    <li><span class="id">E17.3</span> — <strong>Repo:</strong> vision/principles.md#CFB1 — §7 extensions-over-built-ins; §8 zero-config/60s test</li>
+    <li><span class="id">E17.3</span> — <strong>Repo:</strong> docs/vision/principles.md#CFB1 — §7 extensions-over-built-ins; §8 zero-config/60s test</li>
     <li><span class="id">E17.4</span> — <strong>Repo:</strong> spec/extensions/embeddings/behaviors.spec#4320 — cache-by-content-hash + E028 semantics</li>
     <li><span class="id">E17.5</span> — <strong>Repo:</strong> spec/features/infer.spec#68D3 + spec/types/infer.spec#107F — infer manifest, plan mode, gap analysis, resume-by-hash</li>
     <li><span class="id">E17.6</span> — <strong>Repo:</strong> crates/tree-sitter-specforge/grammar.js#C5E2 — 4 dedicated constructs + generic entity_block; full rule set</li>
     <li><span class="id">E17.7</span> — <strong>Repo:</strong> spec/research/RES-29-extension-defined-grammars.md — extension-defined grammars (parsing side)</li>
-    <li><span class="id">E17.8</span> — <strong>Repo:</strong> README.md#DE2D, vision/north-star.md — "the graph is the product"; agent-first surfaces</li>
+    <li><span class="id">E17.8</span> — <strong>Repo:</strong> README.md#DE2D, docs/vision/north-star.md — "the graph is the product"; agent-first surfaces</li>
     <li><span class="id">E18</span> — "A Performance Study of vLLM and HuggingFace TGI", arXiv (Nov 2025) — up to 24× vs TGI at high concurrency · <a href="https://arxiv.org">arxiv.org</a></li>
     <li><span class="id">E19</span> — Weighted decision matrix, this dossier §08 — methodology and per-cell rationale in-repo; weights SpecForge-specific</li>
   </ul>

@@ -13,5 +13,6 @@ print_stdout = "deny"
 # No dependencies: every surface (CLI, MCP, LSP, doctor) reads it.
 
 [dev-dependencies]
+specforge-repo-root = { path = "../specforge-repo-root" }
 specforge-test = { workspace = true }
 specforge-test-macros = { workspace = true }

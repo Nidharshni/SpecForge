@@ -1261,11 +1261,10 @@ mod tests {
 
     #[test]
     fn the_ci_gate_paths_reach_only_their_sources() {
-        let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let workspace = workspace.canonicalize().unwrap();
+        let workspace = specforge_repo_root::repo_root();
         let paths: Vec<PathBuf> = CI_GATE.iter().map(|(p, _)| workspace.join(p)).collect();
 
-        let found = targets(&workspace, &paths).unwrap().files;
+        let found = targets(workspace, &paths).unwrap().files;
 
         let sources: Vec<PathBuf> = CI_GATE
             .iter()
@@ -1286,7 +1285,7 @@ mod tests {
         }
         assert_eq!(found.len(), sources.len());
         let outcome = run(&Request {
-            root: &specforge_common::ProjectRoot::of(&workspace).unwrap(),
+            root: &specforge_common::ProjectRoot::of(workspace).unwrap(),
             paths: &paths,
             mode: Mode::Check,
         });

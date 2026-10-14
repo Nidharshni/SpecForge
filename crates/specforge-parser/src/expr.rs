@@ -944,7 +944,7 @@ mod tests {
         verify = "the expression tokenizer, the lexer and the grammar agree on every expression of the repository's spec"
     )]
     fn the_tokenizer_agrees_with_the_lexer_and_the_grammar_on_the_corpus() {
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let root = specforge_repo_root::repo_root();
         let mut files = Vec::new();
         for dir in ["spec", "extensions", "examples", "integrations/rust/spec"] {
             spec_files(&root.join(dir), &mut files);

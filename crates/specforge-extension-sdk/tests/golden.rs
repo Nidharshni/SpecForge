@@ -79,8 +79,8 @@ fn software_builder() -> ContributionsBuilder {
 /// (`crates/specforge-component/tests/declarations/software/`, generated from the
 /// vendored blob by `xtask revendor`).
 fn pinned(dir: &str, file: &str) -> String {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../specforge-component/tests/declarations")
+    let path = specforge_repo_root::repo_root()
+        .join("crates/specforge-component/tests/declarations")
         .join(dir)
         .join(file);
     std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))

@@ -281,9 +281,9 @@ Also planned: agents that edit the spec through typed operations, so nobody (hum
 - **[Test tracing for Rust](docs/guides/rust-test-tracing.md)** and **[for vitest](docs/guides/vitest-test-tracing.md)**: link tests to the entities they prove.
 - **[Formal verification](docs/guides/formal-verification.md)**: specs an SMT solver checks, with counterexamples at exact locations.
 - **[Quick reference](docs/quick-reference.md)**: every command, entity kind and diagnostic code on one page.
-- **[Vision](vision/README.md)**: the manifesto, [principles](vision/principles.md) and [north star](vision/north-star.md).
+- **[Vision](docs/vision/README.md)**: the manifesto, [principles](docs/vision/principles.md) and [north star](docs/vision/north-star.md).
 - **[Architecture](ARCHITECTURE.md)** and **[Contributing](CONTRIBUTING.md)**: how SpecForge is built, and how to work on it.
-- **[Documentation hub](docs/README.md)**: entity reference, traceability chain, research, and the business plan.
+- **[Documentation hub](docs/README.md)**: entity reference, traceability chain and research.
 
 ## License
 

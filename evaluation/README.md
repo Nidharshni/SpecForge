@@ -41,7 +41,7 @@ falsifiable.
 
 ## Status
 
-Unrecorded. The claim in `vision/north-star.md` stays an unverified
+Unrecorded. The claim in `docs/vision/north-star.md` stays an unverified
 hypothesis until a labeled pair of run files covers all tasks — which is
 exactly the point: the number is now checkable by anyone with an API key
 and an afternoon.

@@ -40,6 +40,7 @@ sha2 = { workspace = true }
 strsim = { workspace = true }
 
 [dev-dependencies]
+specforge-repo-root = { path = "../specforge-repo-root" }
 # The production adapter, in the tests that load the builtins.
 specforge-component = { workspace = true, features = ["testing"] }
 specforge-ops = { path = ".", features = ["testing"] }

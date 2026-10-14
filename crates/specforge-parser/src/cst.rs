@@ -344,7 +344,7 @@ mod tests {
     fn no_string_of_the_corpora_runs_into_text() {
         let mut files = Vec::new();
         for corpus in CORPORA {
-            collect_specs(&root().join(corpus), &mut files);
+            collect_specs(&repo_root().join(corpus), &mut files);
         }
         assert!(files.len() > 20, "found only {} corpus files", files.len());
         for file in files {
@@ -370,10 +370,7 @@ mod tests {
     }
 
     const CORPORA: [&str; 3] = ["spec", "integrations/rust/spec", "examples"];
-
-    fn root() -> std::path::PathBuf {
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
-    }
+    use specforge_repo_root::repo_root;
 
     fn collect_specs(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
         let Ok(entries) = std::fs::read_dir(dir) else {

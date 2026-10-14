@@ -164,8 +164,7 @@ fn assert_stats_agree(tmp: &mut Served) {
 fn cli_and_mcp_stats_report_the_same_numbers() {
     assert_stats_agree(&mut served(project("fx1")));
     assert_stats_agree(&mut served(rv1()));
-    let example =
-        TestProject::copy_of(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/todo-app"));
+    let example = TestProject::copy_of(specforge_repo_root::repo_root().join("examples/todo-app"));
     assert_stats_agree(&mut served(example));
 }
 

@@ -747,6 +747,6 @@ Projects with both Rust and TypeScript (e.g., Tauri apps) will have multiple ana
 - **RES-17:** `spec/research/RES-17-specforge-rust-plugin-design.md` -- Original Rust plugin design (test collection focus)
 - **RES-26:** `spec/research/RES-26-zero-entity-core-architecture.md` -- Zero-entity core architecture
 - **RES-27:** `spec/research/RES-27-software-eng-entity-redesign.md` -- Software entity validation
-- **Vision:** `vision/README.md`, `vision/principles.md`, `vision/north-star.md`
+- **Vision:** `docs/vision/README.md`, `docs/vision/principles.md`, `docs/vision/north-star.md`
 - **Manifest v2:** `spec/types/zero-entity-core.spec`
 - **TypeScript extension specs:** `spec/extensions/typescript/*.spec` (created by TS expert)

@@ -314,7 +314,7 @@ fn a_form_indented_like_the_open_one_ends_it() {
     verify = "the document resumes at every top-level form of the repository's spec after an unclosed body"
 )]
 fn every_top_level_form_of_the_corpora_ends_an_unclosed_body() {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let root = specforge_repo_root::repo_root();
     let mut files = Vec::new();
     for corpus in ["spec", "integrations/rust/spec", "examples"] {
         crate::spec_files(&root.join(corpus), &mut files);

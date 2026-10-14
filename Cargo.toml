@@ -32,6 +32,7 @@ members = [
     "crates/specforge-project",
     "crates/specforge-cli",
     "crates/specforge-registry-server",
+    "crates/specforge-repo-root",
     "xtask",
     "gate",
 ]

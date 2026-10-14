@@ -53,23 +53,16 @@ fn main() {
             std::process::exit(2);
         }
     };
-    let root = std::env::var("CARGO_MANIFEST_DIR")
-        .map(|m| {
-            Path::new(&m)
-                .join("..")
-                .canonicalize()
-                .expect("repo root resolves")
-        })
-        .expect("CARGO_MANIFEST_DIR is set when run via cargo xtask");
+    let root = specforge_repo_root::repo_root();
 
     let mut failed = false;
     for blob in COMMITTED {
         let ok = match mode {
-            Mode::Check => check(&root, blob),
-            Mode::Verify => verify(&root, blob),
-            Mode::Missing | Mode::Force => build(&root, blob, mode == Mode::Force).is_some(),
+            Mode::Check => check(root, blob),
+            Mode::Verify => verify(root, blob),
+            Mode::Missing | Mode::Force => build(root, blob, mode == Mode::Force).is_some(),
             Mode::Install => {
-                build(&root, blob, true).is_some_and(|built| install(&root, blob, &built))
+                build(root, blob, true).is_some_and(|built| install(root, blob, &built))
             }
         };
         failed |= !ok;
@@ -740,10 +733,10 @@ mod tests {
 
     #[test]
     fn a_builtin_compiles_only_its_own_sources_and_the_guest_crates() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let root = specforge_repo_root::repo_root();
         for builtin in builtins() {
             let name = builtin.crate_dir;
-            let record = BlobRecord::read(&root, name).unwrap();
+            let record = BlobRecord::read(root, name).unwrap();
             let own = format!("{name}/");
             let inputs = &record.inputs;
             for key in inputs.keys() {
@@ -768,10 +761,10 @@ mod tests {
     /// the SDK's test helpers are behind its `testing` feature (ADR 0050).
     #[test]
     fn a_builtin_compiles_no_test_code() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let root = specforge_repo_root::repo_root();
         for builtin in builtins() {
             let name = builtin.crate_dir;
-            let record = BlobRecord::read(&root, name).unwrap();
+            let record = BlobRecord::read(root, name).unwrap();
             for key in record.inputs.keys() {
                 assert_ne!(
                     key, "crates/specforge-extension-sdk/src/testing.rs",

@@ -5,7 +5,7 @@
 //! flipped the ones that pinned a bug.
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use serde_json::{Value, json};
 use specforge_ops::collect::{Collector, dispatch};
@@ -18,7 +18,7 @@ use specforge_wasm::{CallFailure, WasmCallResult, WasmTrapInfo};
 const EXT: &str = "@pin/ext";
 
 fn wire_dir() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../specforge-wasm/tests/wire")
+    specforge_repo_root::repo_root().join("crates/specforge-wasm/tests/wire")
 }
 
 fn sorted(value: &Value) -> Value {

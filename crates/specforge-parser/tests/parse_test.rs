@@ -1236,13 +1236,7 @@ fn spec_files_without_extension_syntax_parse_cleanly() {
     // no term sub-blocks) should parse with ZERO errors.
     // This catches grammar regressions on the ~90% of spec files that
     // use standard entity_block / spec / ref / define / union syntax.
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let project_root = manifest_dir.parent().unwrap().parent().unwrap();
-    let spec_dir = project_root.join("spec");
-
-    if !spec_dir.exists() {
-        return;
-    }
+    let spec_dir = specforge_repo_root::repo_root().join("spec");
 
     // Files with known extension-specific body syntax that the core grammar
     // correctly cannot parse — these will be handled by body parsers.

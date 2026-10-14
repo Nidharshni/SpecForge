@@ -40,7 +40,7 @@ pub(crate) fn project(name: &str) -> TestProject {
 
 /// A scratch copy of the shipped `examples/todo-app`.
 fn todo_app() -> TestProject {
-    TestProject::copy_of(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/todo-app"))
+    TestProject::copy_of(specforge_repo_root::repo_root().join("examples/todo-app"))
 }
 
 /// The project as `specforge mcp <root>` serves it, its `initialize` negotiating MCP 2025-03-26.

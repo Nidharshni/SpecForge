@@ -3,7 +3,8 @@
 One round is: explore the code with `/improve-codebase-architecture`, write one plan per candidate, implement the plans
 in parallel worktrees, merge them, re-vendor, gate, open the PR. The coordinator is the session that runs the steps;
 the agents it launches follow a brief in `docs/agents/briefs/`. Plans live in `.planning/architecture-<date>/`
-(gitignored; keep a copy outside the repo).
+(gitignored); the coordinator commits the folder to the planning repository (`../SpecForge-planning/`, private)
+when the plans are written and again when the round merges.
 
 Every step has a done condition. Do not start the next step before it holds.
 
