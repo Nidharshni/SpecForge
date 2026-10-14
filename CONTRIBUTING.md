@@ -37,8 +37,36 @@ tests ([ADR 0078](docs/adr/0078-a-tests-project-is-one-fixture.md)).
 
 ## Where things are
 
-- [`crates/`](crates/) — the Rust workspace: compiler, graph, extension runtime, CLI, LSP, MCP.
-- [`extensions/`](extensions/) — the builtin extensions and their vendored blobs.
-- [`spec/`](spec/) — SpecForge's own specification, written in SpecForge.
-- [`docs/adr/`](docs/adr/) — architecture decision records.
-- [`docs/agents/`](docs/agents/) — conventions for AI agents working in this repository.
+The repository tracks what ships and what builds, tests or documents it, and nothing else
+([ADR 0082](docs/adr/0082-the-repository-tracks-what-ships-and-what-builds-it.md)). `cargo gate`'s `root-layout` check keeps the top level to this list
+(`gate/src/root_layout.rs`); planning rounds, strategy, archived plans and experiments live in the private planning
+repository, `leaderiop/SpecForge-planning`.
+
+What ships:
+
+- [`crates/`](crates/): the Rust workspace: compiler, graph, extension runtime, CLI, LSP, MCP.
+- [`extensions/`](extensions/): the builtin extensions and their vendored blobs, embedded in the binary.
+- [`integrations/`](integrations/): the Rust test-tracing crates and the VS Code extension.
+- [`schema/`](schema/): the JSON Schemas `specforge.json` and the test reports name.
+- [`install.sh`](install.sh): the installer the README's `curl` line fetches from `main`.
+- `README.md`, `LICENSE-APACHE`, `LICENSE-MIT`: packaged in every release archive; [`assets/`](assets/) holds the
+  README's images.
+
+What documents it:
+
+- [`docs/`](docs/): guides, references, [ADRs](docs/adr/), the [vision](docs/vision/README.md),
+  [agent conventions](docs/agents/) and the round reports in `docs/research/`.
+- [`spec/`](spec/): SpecForge's own specification, written in SpecForge; `specforge.json` is its project file.
+- [`examples/`](examples/): worked example projects, checked by the gate.
+- [`ARCHITECTURE.md`](ARCHITECTURE.md), [`CONTEXT.md`](CONTEXT.md) (the domain glossary), this file and
+  [`AGENTS.md`](AGENTS.md).
+
+What builds and checks it:
+
+- [`gate/`](gate/) (`cargo gate`, the check list), [`xtask/`](xtask/) (build-blobs, revendor, check-links),
+  [`scripts/`](scripts/) (shell helpers the gate and the release run).
+- [`fixtures/`](fixtures/): extension fixtures the tests load; [`evaluation/`](evaluation/): the first-attempt
+  accuracy eval.
+- `Cargo.toml`, `Cargo.lock`, `rust-toolchain.toml`, `clippy.toml`, `.cargo/`, `.config/` (nextest),
+  `.github/` (CI, release), `.githooks/` (the pre-commit hook).
+- `.claude/`, `.codex/`, `.mcp.json`: agent configuration for working on this repository.

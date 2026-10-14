@@ -41,6 +41,6 @@ tests/spec/
 /docs/research/*
 !/docs/research/architecture-review-*.html
 
-# Planning notes from planning sessions: their decisions live in docs/adr/
+# Planning rounds in progress; each is committed to the planning repository (docs/agents/architecture-rounds.md)
 /.planning/
 *.snap.new
