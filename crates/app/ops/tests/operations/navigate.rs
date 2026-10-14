@@ -1,9 +1,11 @@
-//! Navigation (`specforge_ops::navigate`) over compiled projects: every
+//! Navigation (`specforge_ops::read::navigate`) over compiled projects: every
 //! position comes from the parser, as the LSP and MCP see it.
 
 use specforge_common::SourceSpan;
 use specforge_extension_sdk::prelude::*;
-use specforge_ops::navigate::{Direction, Navigator, Occurrence, Precision, ReferenceQuery, Role};
+use specforge_ops::read::navigate::{
+    Direction, Navigator, Occurrence, Precision, ReferenceQuery, Role,
+};
 use specforge_ops::view::ProjectView;
 use specforge_project::testing::compile_at;
 use specforge_project::{CompiledProject, Environment};
@@ -430,7 +432,7 @@ fn the_occurrence_at_a_position_is_the_token_there() {
 
 // ── One ranking: completion, workspace symbols and search ───────────────
 
-use specforge_ops::navigate::{EntityQuery, MatchScope, MatchedOn, Tier, find_entities};
+use specforge_ops::read::navigate::{EntityQuery, MatchScope, MatchedOn, Tier, find_entities};
 
 const USERS: &str = "behavior user_login \"User Login\" {\n  contract \"x\"\n}\n\
                      behavior user_logout \"User Logout\" {\n  contract \"y\"\n}\n\
@@ -653,7 +655,7 @@ fn the_referencing_filter_keeps_the_entities_that_reference_the_target() {
 // ── Attribution: which entities a diagnostic is about ──────────────────
 
 use specforge_common::{Diagnostic, DiagnosticData, Severity, Sym};
-use specforge_ops::navigate::{is_about, subjects};
+use specforge_ops::read::navigate::{is_about, subjects};
 
 fn ids(nodes: &[&specforge_graph::Node]) -> Vec<String> {
     nodes.iter().map(|n| n.id.raw.to_string()).collect()
@@ -757,7 +759,7 @@ fn the_message_is_never_read() {
 
 // ── Fixes: the edits a diagnostic's data or the graph names ─────────────
 
-use specforge_ops::navigate::{Fix, FixKind, FixQuery, FixSource, TextEdit};
+use specforge_ops::read::navigate::{Fix, FixKind, FixQuery, FixSource, TextEdit};
 use specforge_project::coverage::RecordedCoverage;
 use specforge_registry::{RegistryBuild, build_registries};
 
@@ -1412,7 +1414,7 @@ fn the_replacement_is_read_from_the_data() {
 
 // ── Files: the file rule and the outline ────────────────────────────────
 
-use specforge_ops::navigate::{FileMatch, anchors_of_file, match_file, outline};
+use specforge_ops::read::navigate::{FileMatch, anchors_of_file, match_file, outline};
 
 #[test]
 fn match_file_is_component_wise() {
@@ -1442,21 +1444,23 @@ fn match_file_is_component_wise() {
 }
 
 /// An anchors manifest anchoring each `(entity, file)`.
-fn anchored(anchors: &[(&str, &str)]) -> specforge_ops::navigate::AnchorManifest {
-    specforge_ops::navigate::AnchorManifest {
+fn anchored(anchors: &[(&str, &str)]) -> specforge_ops::read::navigate::AnchorManifest {
+    specforge_ops::read::navigate::AnchorManifest {
         version: 1,
         anchors: anchors
             .iter()
-            .map(|(entity, file)| specforge_ops::navigate::SourceAnchor {
-                entity_id: entity.to_string(),
-                file: file.to_string(),
-                line: 1,
-                symbol_name: entity.to_string(),
-                item_kind: "fn".into(),
-                scanner: "manual".into(),
-                mapping_strategy: None,
-                confidence: None,
-            })
+            .map(
+                |(entity, file)| specforge_ops::read::navigate::SourceAnchor {
+                    entity_id: entity.to_string(),
+                    file: file.to_string(),
+                    line: 1,
+                    symbol_name: entity.to_string(),
+                    item_kind: "fn".into(),
+                    scanner: "manual".into(),
+                    mapping_strategy: None,
+                    confidence: None,
+                },
+            )
             .collect(),
     }
 }
@@ -1468,7 +1472,7 @@ fn anchored(anchors: &[(&str, &str)]) -> specforge_ops::navigate::AnchorManifest
     verify = "an entity with no anchor has no implementations, and no anchors manifest is none"
 )]
 fn anchors_of_an_entity_are_in_manifest_order() {
-    use specforge_ops::navigate::{anchors_of_entity, source_anchors};
+    use specforge_ops::read::navigate::{anchors_of_entity, source_anchors};
 
     let manifest = anchored(&[
         ("alpha", "src/lib.rs"),
@@ -1499,7 +1503,7 @@ fn the_tightest_match_wins() {
         ("other", "sub/b.rs"),
         ("cache", "src/cache.rs"),
     ]);
-    let ids = |found: &specforge_ops::navigate::FileAnchors| -> Vec<String> {
+    let ids = |found: &specforge_ops::read::navigate::FileAnchors| -> Vec<String> {
         found.anchors.iter().map(|a| a.entity_id.clone()).collect()
     };
     let exact = anchors_of_file(&manifest, "a.rs");
@@ -1578,7 +1582,7 @@ fn the_outline_shows_kind_id_title_and_name() {
 
 // ── The reference list without tokens ───────────────────────────────────
 
-use specforge_ops::navigate::{Reference, References};
+use specforge_ops::read::navigate::{Reference, References};
 use std::sync::Arc;
 
 const CYCLE: &str = "behavior alpha \"A\" {\n  depends_on [beta]\n}\n\
@@ -1715,28 +1719,31 @@ fn a_read_view_about_one_entity_names_it() {
         about
     );
     assert_eq!(
-        specforge_ops::inspect::inspect(&view, "ghost")
+        specforge_ops::read::inspect::inspect(&view, "ghost")
             .unwrap_err()
             .subject,
         about
     );
-    let explored = specforge_ops::explore::explore(
+    let explored = specforge_ops::read::explore::explore(
         &view,
-        &specforge_ops::explore::ExplorationRequest {
+        &specforge_ops::read::explore::ExplorationRequest {
             entity_id: Some("ghost"),
             ..Default::default()
         },
     );
     assert_eq!(explored.unwrap_err().subject, about);
-    let reviewed = specforge_ops::review::review(
+    let reviewed = specforge_ops::read::review::review(
         &view,
-        &specforge_ops::review::ReviewRequest {
+        &specforge_ops::read::review::ReviewRequest {
             entity_id: Some("ghost"),
             ..Default::default()
         },
     );
     assert_eq!(reviewed.unwrap_err().subject, about);
-    let traced = specforge_ops::trace::trace(&view, specforge_ops::trace::Target::Entity("ghost"));
+    let traced = specforge_ops::read::trace::trace(
+        &view,
+        specforge_ops::read::trace::Target::Entity("ghost"),
+    );
     assert_eq!(
         specforge_ops::Refusal::<EntityField>::from(traced.unwrap_err()).subject,
         about

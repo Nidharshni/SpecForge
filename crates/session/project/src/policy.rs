@@ -97,7 +97,7 @@ impl DiagnosticPolicy {
     /// policy names (once, in [`LintProfile::ALL`] order), the diagnostics
     /// `lint` answers for it are added; then strict promotes warnings, the
     /// added ones too. A profile's diagnostics are its caller's to compute
-    /// (`specforge_ops::check` answers `Inferred` from the inference
+    /// (`specforge_ops::analysis::check` answers `Inferred` from the inference
     /// manifest); the policy reads no file.
     pub fn apply(
         &self,

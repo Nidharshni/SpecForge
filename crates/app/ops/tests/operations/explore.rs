@@ -1,7 +1,7 @@
 //! The exploration (plan 04, ADR 0015 "Prompt read views"): where to start
 //! reading a project's graph.
 
-use specforge_ops::explore::{Exploration, ExplorationRequest, explore};
+use specforge_ops::read::explore::{Exploration, ExplorationRequest, explore};
 use specforge_registry::RegistryBuild;
 use specforge_test::prelude::*;
 

@@ -2,7 +2,7 @@ use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use crate::terminal::{Terminal, err, errln};
 use clap::builder::{PossibleValuesParser, TypedValueParser};
 use specforge_common::{Diagnostic, Severity, diagnostic_summary, render_diagnostics};
-use specforge_ops::check::{CacheRecord, CheckOptions, check};
+use specforge_ops::analysis::check::{CacheRecord, CheckOptions, check};
 use specforge_ops::view::ProjectView;
 use specforge_ops::{OpError, OpErrorKind};
 use specforge_project::{LintProfile, SharedRuntime};
@@ -36,8 +36,8 @@ pub(crate) struct Args {
     #[arg(
         long,
         ignore_case = true,
-        value_parser = PossibleValuesParser::new(specforge_ops::check::SEVERITY_NAMES)
-            .try_map(|name| specforge_ops::check::parse_severity(&name))
+        value_parser = PossibleValuesParser::new(specforge_ops::analysis::check::SEVERITY_NAMES)
+            .try_map(|name| specforge_ops::analysis::check::parse_severity(&name))
     )]
     severity: Option<Severity>,
 

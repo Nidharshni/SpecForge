@@ -1,11 +1,11 @@
-//! Inspect (`specforge_ops::inspect`): one entity's facts, read once over
+//! Inspect (`specforge_ops::read::inspect`): one entity's facts, read once over
 //! the project view, as MCP inspect, the context prompt and the LSP hover
 //! render them (ADR 0015, section "Inspect").
 
 use specforge_common::{Diagnostic, DiagnosticData, Severity, SourceSpan, Sym};
 use specforge_extension_sdk::prelude::FieldType;
-use specforge_ops::inspect::inspect;
-use specforge_ops::navigate::Reference;
+use specforge_ops::read::inspect::inspect;
+use specforge_ops::read::navigate::Reference;
 use specforge_ops::view::ProjectView;
 use specforge_project::coverage::Status;
 use specforge_project::snapshot::Standing;
@@ -65,7 +65,9 @@ fn standing_is_the_coverage_views() {
     let view = project.view();
     for id in IDS {
         let standing = standing(&view, id);
-        let row = specforge_ops::coverage::row(&view, id).unwrap().unwrap();
+        let row = specforge_ops::read::coverage::row(&view, id)
+            .unwrap()
+            .unwrap();
         assert_eq!(standing.testable, row.testable, "{id}");
         assert_eq!(standing.exempt(), row.exempt, "{id}");
         assert_eq!(standing.counts(), row.testable && !row.exempt, "{id}");
@@ -87,8 +89,8 @@ fn coverage_is_the_coverage_rows_verdict() {
     project.record_passing(&[("done", "first")]);
     let view = project.view();
     let facts = inspect(&view, "done").unwrap();
-    let coverage = specforge_ops::inspect::coverage(&view, "done").unwrap();
-    let row = specforge_ops::coverage::row(&view, "done")
+    let coverage = specforge_ops::read::inspect::coverage(&view, "done").unwrap();
+    let row = specforge_ops::read::coverage::row(&view, "done")
         .unwrap()
         .unwrap();
     assert_eq!(coverage.verdict, row.verdict);
@@ -105,7 +107,7 @@ fn without_a_report_the_coverage_is_unrecorded() {
     let project = standings();
     let view = project.view();
     let facts = inspect(&view, "done").unwrap();
-    let coverage = specforge_ops::inspect::coverage(&view, "done").unwrap();
+    let coverage = specforge_ops::read::inspect::coverage(&view, "done").unwrap();
     assert!(!coverage.recorded);
     assert_eq!(coverage.status(), Status::Uncovered);
     assert_eq!(coverage.verdict.tests, 0);
@@ -133,7 +135,7 @@ fn an_unreadable_report_is_the_coverage_error_not_the_inspects() {
     let view = project.view();
     for (id, readable) in IDS.iter().zip(readable) {
         let facts = inspect(&view, id).expect("inspect does not fail on the report");
-        let error = specforge_ops::inspect::coverage(&view, id)
+        let error = specforge_ops::read::inspect::coverage(&view, id)
             .expect_err("the coverage is the report's error");
         assert_eq!(error.code, "E045", "{id}");
         assert_eq!(facts.standing, &readable, "{id}");
@@ -221,7 +223,7 @@ fn facts_carry_the_node_kind_entry_headline_and_obligations() {
     assert_eq!(facts.headline, Some("The system MUST log a known user in"));
     assert_eq!(facts.obligations.len(), 1);
     assert_eq!(
-        specforge_ops::inspect::obligation_text(&facts.obligations[0]),
+        specforge_ops::read::inspect::obligation_text(&facts.obligations[0]),
         "unit a known user logs in"
     );
     let fields: Vec<&str> = facts

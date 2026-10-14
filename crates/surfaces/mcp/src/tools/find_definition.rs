@@ -3,7 +3,7 @@ use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
 use serde::Serialize;
 use specforge_common::SourceSpan;
 use specforge_common::shape::Shape;
-use specforge_ops::navigate::Precision;
+use specforge_ops::read::navigate::Precision;
 
 use crate::args::Arguments;
 use crate::refusal::ArgumentOf;

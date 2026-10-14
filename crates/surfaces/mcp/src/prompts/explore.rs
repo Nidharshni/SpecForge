@@ -1,7 +1,7 @@
 //! `specforge://prompts/explore`: where to start exploring the graph. It
-//! renders the exploration (`specforge_ops::explore`).
+//! renders the exploration (`specforge_ops::read::explore`).
 
-use specforge_ops::explore::{ExplorationDocument, ExplorationRequest, explore};
+use specforge_ops::read::explore::{ExplorationDocument, ExplorationRequest, explore};
 
 use crate::args::Arguments;
 use crate::prompt::{CorePrompt, Prompted};

@@ -2,8 +2,8 @@ use crate::target::View;
 use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
 use serde::Serialize;
 use specforge_common::shape::Shape;
-use specforge_ops::plan::{AgentPlan, PlanOutcome};
-use specforge_ops::trace::{ChainDocument, Target, TraceChain};
+use specforge_ops::read::plan::{AgentPlan, PlanOutcome};
+use specforge_ops::read::trace::{ChainDocument, Target, TraceChain};
 use specforge_ops::view::ProjectView;
 
 use crate::args::Arguments;
@@ -41,7 +41,7 @@ pub struct Gap {
 }
 
 impl Gap {
-    pub(crate) fn of(gap: &specforge_ops::trace::Gap) -> Self {
+    pub(crate) fn of(gap: &specforge_ops::read::trace::Gap) -> Self {
         Gap {
             source_entity: gap.source().to_string(),
             target_entity: gap.target().to_string(),
@@ -77,7 +77,7 @@ impl CoreTool for Tool {
 
     fn call(view: ProjectView<'_>, args: Args) -> Answered<Reply> {
         if let Some(plan) = &args.plan {
-            return Ok(Reply::Plan(specforge_ops::plan::check(&view, plan)).into());
+            return Ok(Reply::Plan(specforge_ops::read::plan::check(&view, plan)).into());
         }
         let Some(entity_id) = args.entity_id.as_deref() else {
             return Err(Box::new(McpError::invalid_input(
@@ -85,10 +85,9 @@ impl CoreTool for Tool {
                 "Missing required parameter: entity_id or plan",
             )));
         };
-        let outcome =
-            specforge_ops::trace::trace(&view, Target::Entity(entity_id)).map_err(|error| {
-                Self::refused(specforge_ops::Refusal::from(error)).with_entity(entity_id)
-            })?;
+        let outcome = specforge_ops::read::trace::trace(&view, Target::Entity(entity_id)).map_err(
+            |error| Self::refused(specforge_ops::Refusal::from(error)).with_entity(entity_id),
+        )?;
         match outcome.into_chain() {
             Some(chain) => Ok(Reply::Chain(chain).into()),
             None => Err(Box::new(McpError::new(

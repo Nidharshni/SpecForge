@@ -7,14 +7,14 @@
 //! and the output the one `--format` asks for (`human`, the default, or
 //! `json`): options every extension command has, the host's, which no
 //! declared arg may take (ADR 0011). Its extensions declare the commands,
-//! and `specforge_ops::command::ExtensionCommand` derives each one's command
+//! and `specforge_ops::extension::command::ExtensionCommand` derives each one's command
 //! line (a required arg is positional, in declaration order; any other is a
 //! `--option`; every flag is a `--flag`, set or not) and the args its export
 //! receives, by the one arg rule MCP also sends them by (ADR 0017). This
 //! module renders that derivation as clap's command line, routes the
 //! command over the project's environment, compiles the project from that
 //! environment, and runs the command through
-//! `specforge_ops::command::run`; the export's stdout and stderr are printed
+//! `specforge_ops::extension::command::run`; the export's stdout and stderr are printed
 //! as they are, and its exit code is the CLI's.
 
 use crate::outcome::Exit;
@@ -25,7 +25,7 @@ use clap::parser::ValueSource;
 use clap::{Arg, ArgAction, ArgMatches, Command};
 use serde_json::{Map, Value};
 use specforge_common::ProjectRoot;
-use specforge_ops::command::{
+use specforge_ops::extension::command::{
     ArgShape, ArgValue, CommandFormat, ExtensionArg, ExtensionCommand, ExtensionCommands, RunError,
 };
 use specforge_ops::view::ProjectView;
@@ -168,7 +168,8 @@ pub fn run(argv: &[String], builtins: &[String], terminal: &Terminal) -> i32 {
     // its sources read, its graph built and checked (ADR 0011, "One
     // operation runs a command", O3).
     let project = CompiledProject::of(env);
-    let outcome = specforge_ops::command::run(&ProjectView::of(&project), command, &given, format);
+    let outcome =
+        specforge_ops::extension::command::run(&ProjectView::of(&project), command, &given, format);
     ended(outcome, format, terminal)
 }
 

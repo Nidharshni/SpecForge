@@ -1,13 +1,13 @@
 use crate::target::View;
 use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
-use specforge_ops::schema::{SchemaField, SchemaRequest};
+use specforge_ops::read::schema::{SchemaField, SchemaRequest};
 
 use crate::args::Arguments;
 use crate::refusal::ArgumentOf;
 use crate::reply::Answered;
 
 /// `specforge.schema`'s reply: the document `specforge schema` prints.
-type Reply = specforge_ops::schema::SchemaDocument;
+type Reply = specforge_ops::read::schema::SchemaDocument;
 use specforge_ops::view::ProjectView;
 
 /// `specforge.schema`'s arguments.
@@ -57,7 +57,8 @@ impl CoreTool for Tool {
             edges: args.include_edges,
             validation_rules: args.include_validation_rules,
         };
-        let outcome = specforge_ops::schema::schema(&view, &request).map_err(Self::refused)?;
+        let outcome =
+            specforge_ops::read::schema::schema(&view, &request).map_err(Self::refused)?;
         Ok(outcome.document().into())
     }
 }

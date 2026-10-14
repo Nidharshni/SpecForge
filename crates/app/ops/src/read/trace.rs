@@ -9,7 +9,7 @@ use specforge_graph::Graph;
 use specforge_registry::RegistryBuild;
 use std::collections::{BTreeMap, BTreeSet, HashSet, VecDeque};
 
-use crate::plan::PlanGap;
+use crate::read::plan::PlanGap;
 use crate::view::{EntityField, ProjectView};
 use crate::{OpError, Refusal};
 

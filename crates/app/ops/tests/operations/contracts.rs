@@ -1,6 +1,6 @@
 use specforge_common::{Diagnostic, Severity, SourceSpan, Sym};
 use specforge_graph::{Edge, Graph, Node};
-use specforge_ops::plan::PlanGapKind;
+use specforge_ops::read::plan::PlanGapKind;
 use specforge_parser::{EntityId, EntityKind, FieldMap, FieldValue, VerifyStatement};
 use specforge_test::prelude::*;
 
@@ -92,29 +92,36 @@ fn trace_contract_entity_in_graph_produces_chain() {
     // Ensures (full_chain_traversed): the full chain, both directions,
     // every hop.
     let graph = build_graph();
-    let links = |links: &[specforge_ops::trace::TraceLink]| -> Vec<(String, String, usize)> {
+    let links = |links: &[specforge_ops::read::trace::TraceLink]| -> Vec<(String, String, usize)> {
         links
             .iter()
             .map(|l| {
-                assert_eq!(l.status, specforge_ops::trace::TraceLinkStatus::Resolved);
+                assert_eq!(
+                    l.status,
+                    specforge_ops::read::trace::TraceLinkStatus::Resolved
+                );
                 (l.entity_id.clone(), l.edge_label.clone(), l.depth)
             })
             .collect()
     };
-    let missing = |chain: &specforge_ops::trace::TraceChain| -> Vec<(String, String, String)> {
-        chain
-            .missing
-            .iter()
-            .map(|m| {
-                assert_eq!(m.status, specforge_ops::trace::TraceLinkStatus::Missing);
-                (
-                    m.from.clone(),
-                    m.edge_label.clone(),
-                    m.expected_kind.clone(),
-                )
-            })
-            .collect()
-    };
+    let missing =
+        |chain: &specforge_ops::read::trace::TraceChain| -> Vec<(String, String, String)> {
+            chain
+                .missing
+                .iter()
+                .map(|m| {
+                    assert_eq!(
+                        m.status,
+                        specforge_ops::read::trace::TraceLinkStatus::Missing
+                    );
+                    (
+                        m.from.clone(),
+                        m.edge_label.clone(),
+                        m.expected_kind.clone(),
+                    )
+                })
+                .collect()
+        };
 
     let trace = crate::view_support::chain_in(&graph, crate::trace_support::build(), "b").unwrap();
     assert_eq!(trace.entity_id, "b");
@@ -172,9 +179,11 @@ fn trace_contract_entity_in_graph_produces_chain() {
 
     // The JSON carries the Graph Protocol schema_version and the gaps.
     let project = crate::view_support::Project::of_graph(graph, crate::trace_support::build());
-    let outcome =
-        specforge_ops::trace::trace(&project.view(), specforge_ops::trace::Target::Entity("c"))
-            .unwrap();
+    let outcome = specforge_ops::read::trace::trace(
+        &project.view(),
+        specforge_ops::read::trace::Target::Entity("c"),
+    )
+    .unwrap();
     let json = serde_json::to_value(&outcome).unwrap();
     assert_eq!(json["schema_version"], "1.0.0");
     assert_eq!(json["missing"][0]["status"], "missing");
@@ -215,7 +224,7 @@ fn stats_contract_graph_with_diagnostics_produces_complete_stats() {
         stats.entity_counts,
         [("behavior", 3), ("feature", 2)]
             .into_iter()
-            .map(|(kind, count)| specforge_ops::stats::KindCount {
+            .map(|(kind, count)| specforge_ops::read::stats::KindCount {
                 kind: kind.to_string(),
                 count,
             })

@@ -1,4 +1,4 @@
-//! `specforge.rename`: rename an entity across the project (`specforge_ops::rename`).
+//! `specforge.rename`: rename an entity across the project (`specforge_ops::authoring::rename`).
 
 use crate::target::{AnyProject, Project};
 use crate::tool::{CoreTool, Effect, ReplySpec, WriteHints};
@@ -10,7 +10,7 @@ use crate::containment::Containment;
 use crate::mutation::{FreshDiagnostics, Mutated, Mutation, MutationArgs, MutationReply, Written};
 use crate::refusal::ArgumentOf;
 use crate::target::ProjectRef;
-use specforge_ops::rename::RenameField;
+use specforge_ops::authoring::rename::RenameField;
 use std::path::Path;
 
 /// `specforge.rename`'s arguments.
@@ -83,7 +83,7 @@ impl CoreTool for Tool {
     type Returns = Mutation<Reply>;
 
     fn call(project: ProjectRef<'_>, args: Args) -> Mutation<Reply> {
-        use specforge_ops::rename;
+        use specforge_ops::authoring::rename;
 
         // Planned on the call's project as it is on disk (the target brought
         // the served project up to date, or compiled the project `path`

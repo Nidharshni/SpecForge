@@ -1,5 +1,5 @@
 use super::compiled_support::{built, check_document, checked, exported, specs, trace_document};
-use specforge_ops::check::CheckOptions;
+use specforge_ops::analysis::check::CheckOptions;
 use specforge_project::testing::TestProject;
 use specforge_test_macros::test as specforge_test;
 use std::collections::BTreeSet;

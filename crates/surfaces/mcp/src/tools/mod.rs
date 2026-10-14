@@ -92,14 +92,14 @@ pub(crate) fn spec_root<'v>(view: &ProjectView<'v>) -> Option<&'v std::path::Pat
     view.root().map(|_| view.env().spec_root())
 }
 
-/// The navigator over `view` (`specforge_ops::navigate`), each file's text
+/// The navigator over `view` (`specforge_ops::read::navigate`), each file's text
 /// read from disk under its spec root (with no root, no file is read). The
 /// navigation tools render its answers as JSON and nothing else (ADR 0016).
 pub(crate) fn navigator<'v>(
     view: ProjectView<'v>,
-) -> specforge_ops::navigate::Navigator<'v, impl Fn(&str) -> Option<String> + 'v> {
+) -> specforge_ops::read::navigate::Navigator<'v, impl Fn(&str) -> Option<String> + 'v> {
     let spec_root = spec_root(&view);
-    specforge_ops::navigate::Navigator::new(view, move |file| {
+    specforge_ops::read::navigate::Navigator::new(view, move |file| {
         std::fs::read_to_string(spec_root?.join(file)).ok()
     })
 }

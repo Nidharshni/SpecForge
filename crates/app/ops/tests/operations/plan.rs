@@ -1,6 +1,6 @@
 use specforge_common::{SourceSpan, Sym};
 use specforge_graph::{Edge, Graph, Node};
-use specforge_ops::plan::{AgentPlan, PlanGapKind};
+use specforge_ops::read::plan::{AgentPlan, PlanGapKind};
 use specforge_parser::{EntityId, EntityKind, FieldMap, FieldValue, VerifyStatement};
 use specforge_test::prelude::*;
 
@@ -138,7 +138,7 @@ fn testable_entity_missing_from_plan_produces_warning() {
     assert_eq!(result.gaps.len(), 1);
     assert_eq!(
         result.gaps[0].kind,
-        specforge_ops::plan::PlanGapKind::MissingPlanEntry
+        specforge_ops::read::plan::PlanGapKind::MissingPlanEntry
     );
     assert_eq!(result.gaps[0].target, "c");
     // A plan covering both behaviors warns about nothing.
@@ -288,7 +288,7 @@ fn the_plan_check_reads_no_recorded_report() {
         &serde_json::json!({"plan_id": "p", "entries": [{"entity_id": "a", "action": "implement"}]}),
     )
     .unwrap();
-    let unreported = specforge_ops::plan::check(&project.view(), &plan);
+    let unreported = specforge_ops::read::plan::check(&project.view(), &plan);
     assert_eq!(
         gap_texts(&unreported, PlanGapKind::MissingPlanEntry),
         ["testable entity 'b' (behavior) is not covered by the plan"]
@@ -299,7 +299,7 @@ fn the_plan_check_reads_no_recorded_report() {
     ] {
         std::fs::write(project.dir.path().join("specforge-report.json"), report).unwrap();
         assert_eq!(
-            specforge_ops::plan::check(&project.view(), &plan),
+            specforge_ops::read::plan::check(&project.view(), &plan),
             unreported,
             "{report}"
         );
@@ -356,7 +356,7 @@ fn an_agent_plan_is_read_against_its_schema() {
         plan,
         AgentPlan {
             plan_id: "p".into(),
-            entries: vec![specforge_ops::plan::AgentPlanEntry {
+            entries: vec![specforge_ops::read::plan::AgentPlanEntry {
                 entity_id: "a".into(),
                 action: "x".into()
             }],
@@ -409,7 +409,7 @@ fn the_plan_outcome_is_one_document() {
         .collect();
     keys.sort();
     assert_eq!(keys, ["affected_entities", "gaps", "ok"]);
-    let schema = specforge_common::shape::build::<specforge_ops::plan::PlanOutcome>();
+    let schema = specforge_common::shape::build::<specforge_ops::read::plan::PlanOutcome>();
     assert_eq!(
         specforge_common::shape::violations(&schema, &value),
         Vec::<String>::new()

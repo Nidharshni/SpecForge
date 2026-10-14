@@ -1,5 +1,5 @@
 //! The LSP's own navigation: span conversion and `use`-path definitions.
-//! What definitions and references are is `specforge_ops::navigate`'s
+//! What definitions and references are is `specforge_ops::read::navigate`'s
 //! (tested in specforge-ops); the LSP's answers are in `e2e_support`.
 
 use specforge_common::{SourceSpan, Sym};

@@ -8,8 +8,8 @@
 use std::collections::HashMap;
 
 use specforge_common::{SourceSpan, Sym};
-use specforge_ops::format;
-use specforge_ops::navigate::{
+use specforge_ops::authoring::format;
+use specforge_ops::read::navigate::{
     Direction, EntityQuery, FixQuery, MatchScope, ReferenceQuery, find_entities, outline,
 };
 use tower_lsp::jsonrpc::{Error, ErrorCode};
@@ -129,10 +129,10 @@ pub fn hover(state: &LspState, uri: &Url, position: Position) -> Option<Hover> {
     let about = match compiled.target(&key, position) {
         Some(Target::Entity { id, .. }) => {
             let view = state.view().reporting(&published);
-            specforge_ops::inspect::inspect(&view, id.as_str())
+            specforge_ops::read::inspect::inspect(&view, id.as_str())
                 .ok()
                 .map(|facts| {
-                    let coverage = specforge_ops::inspect::coverage(&view, id.as_str());
+                    let coverage = specforge_ops::read::inspect::coverage(&view, id.as_str());
                     hover::entity(&facts, &coverage, &shown, state.rebuilding())
                 })
         }
@@ -272,7 +272,7 @@ pub fn prepare_rename(
         .map(PrepareRenameResponse::Range))
 }
 
-/// The shared rename plan (`specforge_ops::rename::plan`) as one workspace
+/// The shared rename plan (`specforge_ops::authoring::rename::plan`) as one workspace
 /// edit, all or nothing: `None` when the cursor names no entity;
 /// `invalid_params` with the plan's reason when it is refused, or when an
 /// edit's file has no compiled text; `ContentModified` when the document or a
@@ -298,7 +298,11 @@ pub fn rename(
     // compiled text, planned by the shared rename (the MCP tool's rules). A
     // rename is all or nothing: one that cannot be done whole is refused
     // with why.
-    let edits = match specforge_ops::rename::plan(&compiled.navigator(), id.as_str(), new_name) {
+    let edits = match specforge_ops::authoring::rename::plan(
+        &compiled.navigator(),
+        id.as_str(),
+        new_name,
+    ) {
         Ok(plan) => plan.edits,
         Err(e) if e.error.kind == specforge_ops::OpErrorKind::EntityNotFound => return Ok(None),
         Err(e) => return Err(Error::invalid_params(e.error.message)),
@@ -371,7 +375,7 @@ pub fn code_actions(state: &LspState, uri: &Url, range: Range) -> Option<CodeAct
     (!actions.is_empty()).then_some(actions)
 }
 
-/// The document's outline (`specforge_ops::navigate::outline`, what MCP
+/// The document's outline (`specforge_ops::read::navigate::outline`, what MCP
 /// outline returns): nested symbols, methods as children, each selecting
 /// its name, for a client that declared hierarchicalDocumentSymbolSupport;
 /// flat otherwise.

@@ -225,7 +225,7 @@ fn run_validate(path: &Path, format: OutputFormat, terminal: &Terminal) -> Exit 
         }
     };
     let runtime = specforge_component::ComponentRuntime::with_user_cache();
-    let (declaration, diagnostics) = match specforge_ops::publish::declare(&runtime, &wasm) {
+    let (declaration, diagnostics) = match specforge_ops::extension::declare(&runtime, &wasm) {
         Ok(declared) => declared,
         Err(error) => {
             return Refusal::of(format).report(terminal, &error);

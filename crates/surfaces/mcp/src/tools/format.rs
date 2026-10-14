@@ -1,4 +1,4 @@
-//! `specforge.format`: format the spec files (`specforge_ops::format`).
+//! `specforge.format`: format the spec files (`specforge_ops::authoring::format`).
 
 use crate::target::{AnyProject, Project};
 use crate::tool::{CoreTool, Effect, ReplySpec, WriteHints};
@@ -13,7 +13,7 @@ use crate::mutation::{
 use crate::target::ProjectRef;
 use crate::tool::{ErrorCode, McpError};
 use specforge_ops::OpErrorKind;
-use specforge_ops::format::{self, Request};
+use specforge_ops::authoring::format::{self, Request};
 
 /// `specforge.format`'s arguments.
 #[derive(Debug, Arguments)]

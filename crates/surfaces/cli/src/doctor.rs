@@ -1,7 +1,7 @@
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use crate::terminal::{Terminal, out};
 use serde::Serialize;
-use specforge_ops::doctor::{
+use specforge_ops::analysis::doctor::{
     About, BinaryIssue, DoctorDocument, DoctorReport, Finding, FindingStatus, Part, diagnose,
 };
 use specforge_ops::extension::Status;
@@ -314,7 +314,7 @@ mod tests {
         );
         let recorded = specforge_project::coverage::RecordedCoverage::over(&graph, &env);
         let view = ProjectView::new(&graph, &env, Some(dir.path()), &recorded);
-        let report = specforge_ops::doctor::diagnose(
+        let report = specforge_ops::analysis::doctor::diagnose(
             &view,
             &specforge_ops::testing::ScriptedSolver::ready(),
         );

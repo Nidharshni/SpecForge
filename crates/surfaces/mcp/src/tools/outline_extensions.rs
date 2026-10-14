@@ -1,6 +1,8 @@
 use crate::target::View;
 use crate::tool::{CoreTool, Effect, ToolGroup};
-use specforge_ops::model::{self, DependencyDepth, OutlineDetail, OutlineFormat, OutlineOptions};
+use specforge_ops::read::model::{
+    self, DependencyDepth, OutlineDetail, OutlineFormat, OutlineOptions,
+};
 
 use crate::args::Arguments;
 use crate::reply::{Answered, Text};
@@ -10,13 +12,13 @@ use specforge_ops::view::ProjectView;
 #[derive(Debug, Arguments)]
 pub struct Args {
     /// Output format; json is meant for programs
-    #[arg(choice = specforge_ops::model::OUTLINE_FORMAT)]
+    #[arg(choice = specforge_ops::read::model::OUTLINE_FORMAT)]
     format: OutlineFormat,
     /// Detail level
-    #[arg(choice = specforge_ops::model::OUTLINE_FIELDS)]
+    #[arg(choice = specforge_ops::read::model::OUTLINE_FIELDS)]
     fields: OutlineDetail,
     /// Dependency visibility
-    #[arg(choice = specforge_ops::model::DEPS)]
+    #[arg(choice = specforge_ops::read::model::DEPS)]
     deps: DependencyDepth,
 }
 

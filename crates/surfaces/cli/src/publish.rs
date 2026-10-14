@@ -4,7 +4,7 @@ use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use crate::terminal::{Terminal, outln};
 use serde_json::json;
 use specforge_component::ComponentRuntime;
-use specforge_ops::publish::{self, PublishOutcome};
+use specforge_ops::extension::{PublishOutcome, publish};
 use specforge_ops_registry::ConfiguredRegistry;
 use std::path::PathBuf;
 
@@ -40,7 +40,7 @@ impl Args {
         };
         let registry = ConfiguredRegistry::for_project(&root, "publish");
         let runtime = ComponentRuntime::with_user_cache();
-        let report = publish::publish(extension, &registry, &runtime);
+        let report = publish(extension, &registry, &runtime);
         terminal.diagnostics(&report.warnings);
         terminal.diagnostics(&registry.reported());
         match &report.result {

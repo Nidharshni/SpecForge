@@ -1,8 +1,8 @@
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use crate::terminal::{Terminal, outln};
 use specforge_ops::OpErrorKind;
-use specforge_ops::coverage::STATUS;
-use specforge_ops::review::{Review, ReviewRequest, review};
+use specforge_ops::read::coverage::STATUS;
+use specforge_ops::read::review::{Review, ReviewRequest, review};
 use specforge_ops::view::ProjectView;
 
 // `specforge review`'s command line.
@@ -15,7 +15,7 @@ pub(crate) struct Args {
     project: crate::project::ProjectArg,
 
     /// Hops around the entity
-    #[arg(long, default_value_t = specforge_ops::review::DEFAULT_DEPTH)]
+    #[arg(long, default_value_t = specforge_ops::read::review::DEFAULT_DEPTH)]
     depth: usize,
 
     #[command(flatten)]

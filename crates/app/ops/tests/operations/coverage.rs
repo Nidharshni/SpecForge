@@ -1,5 +1,5 @@
 use specforge_extension_sdk::prelude::FieldType;
-use specforge_ops::coverage::{CoverageQuery, CoverageRow, coverage, row};
+use specforge_ops::read::coverage::{CoverageQuery, CoverageRow, coverage, row};
 use specforge_project::coverage::Status;
 use specforge_test::prelude::*;
 
@@ -118,7 +118,7 @@ fn coverage_rows_and_stats_read_one_standing() {
         );
     }
     // Stats count the same entities.
-    let stats = specforge_ops::stats::stats(&view).unwrap();
+    let stats = specforge_ops::read::stats::stats(&view).unwrap();
     assert_eq!(stats.testable_count, counted);
 }
 

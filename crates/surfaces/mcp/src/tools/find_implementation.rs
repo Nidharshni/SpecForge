@@ -2,7 +2,7 @@ use crate::target::Project;
 use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
 use serde::Serialize;
 use specforge_common::shape::Shape;
-use specforge_ops::navigate;
+use specforge_ops::read::navigate;
 
 use crate::args::Arguments;
 use crate::reply::Answered;
@@ -35,7 +35,7 @@ pub struct Implementation {
 }
 
 /// The source items the anchors manifest anchors the entity to
-/// (`specforge_ops::navigate::anchors_of_entity`), in manifest order.
+/// (`specforge_ops::read::navigate::anchors_of_entity`), in manifest order.
 pub(crate) struct Tool;
 
 impl CoreTool for Tool {

@@ -1,8 +1,8 @@
 use crate::options;
 use crate::outcome::{Exit, OutputFormat, Refusal};
 use crate::terminal::{Terminal, errln, outln};
-use specforge_ops::export::Format;
-use specforge_ops::query::{QueryRequest, query};
+use specforge_ops::read::export::Format;
+use specforge_ops::read::query::{QueryRequest, query};
 use specforge_ops::view::ProjectView;
 
 // `specforge query`'s command line.
@@ -15,7 +15,7 @@ pub(crate) struct Args {
     project: crate::project::ProjectArg,
 
     /// Number of hops from the entity (0 = entity only)
-    #[arg(long, default_value_t = specforge_ops::query::DEFAULT_DEPTH)]
+    #[arg(long, default_value_t = specforge_ops::read::query::DEFAULT_DEPTH)]
     depth: usize,
 
     /// Filter results to specific entity kinds (can be repeated)
@@ -25,8 +25,8 @@ pub(crate) struct Args {
     /// Output detail level
     #[arg(
         long,
-        value_parser = options::choice(&specforge_ops::export::AGENT_FORMAT),
-        default_value = specforge_ops::export::AGENT_FORMAT.default_name()
+        value_parser = options::choice(&specforge_ops::read::export::AGENT_FORMAT),
+        default_value = specforge_ops::read::export::AGENT_FORMAT.default_name()
     )]
     format: Format,
 

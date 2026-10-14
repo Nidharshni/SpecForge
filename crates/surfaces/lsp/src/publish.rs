@@ -110,13 +110,13 @@ impl Publication {
 /// when its data names no entity the graph holds.
 fn place_at_subjects<F: Fn(&str) -> Option<String>>(
     compiled: &Compiled,
-    nav: &specforge_ops::navigate::Navigator<'_, F>,
+    nav: &specforge_ops::read::navigate::Navigator<'_, F>,
     diagnostic: &specforge_common::Diagnostic,
 ) -> Option<(
     specforge_common::Diagnostic,
     Vec<DiagnosticRelatedInformation>,
 )> {
-    let subjects = specforge_ops::navigate::subjects(compiled.state().graph(), diagnostic);
+    let subjects = specforge_ops::read::navigate::subjects(compiled.state().graph(), diagnostic);
     let (first, others) = subjects.split_first()?;
     let name = |node: &specforge_graph::Node| {
         nav.definition(node.id.raw.as_str())

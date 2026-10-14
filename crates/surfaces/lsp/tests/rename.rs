@@ -1,5 +1,5 @@
 //! The LSP's rename (`specforge_lsp::answers::rename`): the shared plan
-//! (`specforge_ops::rename`) as a workspace edit, every position from the
+//! (`specforge_ops::authoring::rename`) as a workspace edit, every position from the
 //! parser.
 
 use specforge_test_macros::test as spec;

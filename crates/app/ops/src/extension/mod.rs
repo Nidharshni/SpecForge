@@ -1,14 +1,18 @@
-//! Extension management: the operations behind `specforge add`, `remove`,
-//! `extensions` and their MCP tools.
+//! Extensions as a project has them: what it installs and enables (`specforge add`, `update`,
+//! `remove`, one lock plan, ADR 0065), what it lists (`specforge extensions`, `providers`), what an
+//! author publishes (ADR 0045), and the commands extensions declare ([`command`], ADR 0011). The
+//! group uses only the base.
 
 mod add;
 mod candidate;
+pub mod command;
 #[cfg(test)]
 mod fixtures;
 mod inventory;
 mod list;
 mod lock_plan;
 mod peer_set;
+mod publish;
 mod remove;
 mod resolve;
 mod update;
@@ -25,6 +29,7 @@ pub use list::{
     ExtensionInfo, ExtensionListing, ExtensionsDocument, LockedExtension, ProviderEntry,
     ProviderListing, ProviderRow, ProviderStatus, ProvidersDocument, list, providers,
 };
+pub use publish::{PublishOutcome, PublishReport, declare, publish};
 pub use remove::{
     RemoveAction, RemoveDocument, RemoveField, RemoveOutcome, RemoveRequest, StrandedEntity, remove,
 };

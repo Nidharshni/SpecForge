@@ -1,6 +1,6 @@
 use specforge_common::{SourceSpan, Sym};
 use specforge_graph::{Graph, Node};
-use specforge_ops::navigate::{EntityQuery, MatchScope, find_entities};
+use specforge_ops::read::navigate::{EntityQuery, MatchScope, find_entities};
 use specforge_parser::{EntityId, EntityKind, FieldMap};
 use specforge_test_macros::test as specforge_test;
 use tower_lsp::lsp_types::{
@@ -300,12 +300,13 @@ async fn the_cli_and_the_editor_agree_on_a_nested_project() {
     // outer project's, and not the editor's tabSize 4.
     let edits = session.formatting(&uri, 4).await["result"].clone();
     assert_eq!(edits, serde_json::json!([]));
-    let outcome = specforge_ops::format::run(&specforge_ops::format::Request {
-        root: &specforge_common::ProjectRoot::of(&root).unwrap(),
-        paths: &[root.join("inner")],
-        mode: specforge_ops::format::Mode::Check,
-    })
-    .unwrap();
+    let outcome =
+        specforge_ops::authoring::format::run(&specforge_ops::authoring::format::Request {
+            root: &specforge_common::ProjectRoot::of(&root).unwrap(),
+            paths: &[root.join("inner")],
+            mode: specforge_ops::authoring::format::Mode::Check,
+        })
+        .unwrap();
     assert_eq!((outcome.checked, outcome.changes.len()), (1, 0));
 }
 
@@ -325,12 +326,13 @@ async fn lsp_format_matches_cli_format() {
     let edits = session.format(&uri).await;
     let edited = apply_edits(messy, edits.as_array().expect("an edit list"));
 
-    let outcome = specforge_ops::format::run(&specforge_ops::format::Request {
-        root: &specforge_common::ProjectRoot::of(&root).unwrap(),
-        paths: &[],
-        mode: specforge_ops::format::Mode::Check,
-    })
-    .unwrap();
+    let outcome =
+        specforge_ops::authoring::format::run(&specforge_ops::authoring::format::Request {
+            root: &specforge_common::ProjectRoot::of(&root).unwrap(),
+            paths: &[],
+            mode: specforge_ops::authoring::format::Mode::Check,
+        })
+        .unwrap();
     assert_eq!(edited, outcome.changes[0].after);
     assert!(edited.contains("\n    contract"), "{edited}");
 }
@@ -378,7 +380,7 @@ const CONVERGE: [(&str, &str); 7] = [
 #[tokio::test]
 async fn editor_formatting_reaches_the_cli_text_in_one_pass() {
     use crate::session::{Session, uri_of};
-    use specforge_ops::format::{Mode, Request, run};
+    use specforge_ops::authoring::format::{Mode, Request, run};
     let (_dir, root) = format_project(&CONVERGE);
     let outcome = run(&Request {
         root: &specforge_common::ProjectRoot::of(&root).unwrap(),
@@ -862,13 +864,13 @@ fn rename_entity_id_contract() {
     );
 
     // All or nothing: a file the rename cannot read refuses the whole.
-    let blind = specforge_ops::navigate::Navigator::new(state.view(), |file: &str| {
+    let blind = specforge_ops::read::navigate::Navigator::new(state.view(), |file: &str| {
         (file != "/p/auth.spec").then(|| "type auth_token \"auth_token\" {\n}\n".to_string())
     });
-    let refused = specforge_ops::rename::plan(&blind, "auth_token", "session_token");
+    let refused = specforge_ops::authoring::rename::plan(&blind, "auth_token", "session_token");
     assert_eq!(
         refused.unwrap_err().error.code,
-        specforge_ops::rename::UNREADABLE
+        specforge_ops::authoring::rename::UNREADABLE
     );
 }
 
@@ -998,14 +1000,18 @@ fn code_action_create_entity_stub_contract() {
             specforge_project::Environment::with_registries(invariants_field(target_kind), None);
         let recorded = specforge_project::coverage::RecordedCoverage::over(state.graph(), &env);
         let view = specforge_ops::view::ProjectView::new(state.graph(), &env, None, &recorded);
-        let nav = specforge_ops::navigate::Navigator::new(view, |_: &str| Some(text.to_string()));
-        nav.fixes(&diagnostics, &specforge_ops::navigate::FixQuery::default())
+        let nav =
+            specforge_ops::read::navigate::Navigator::new(view, |_: &str| Some(text.to_string()));
+        nav.fixes(
+            &diagnostics,
+            &specforge_ops::read::navigate::FixQuery::default(),
+        )
     };
 
     let fixes = fixes_with(Some("invariant"));
     let stub = fixes
         .iter()
-        .find(|f| f.kind == specforge_ops::navigate::FixKind::Refactor)
+        .find(|f| f.kind == specforge_ops::read::navigate::FixKind::Refactor)
         .expect("entity stub must be created with target_kind");
     assert_eq!(stub.title, "Create invariant stub for missing_inv");
     let edit = &stub.edits[0];
@@ -1022,7 +1028,7 @@ fn code_action_create_entity_stub_contract() {
     assert!(
         fixes_with(None)
             .iter()
-            .all(|f| f.kind != specforge_ops::navigate::FixKind::Refactor),
+            .all(|f| f.kind != specforge_ops::read::navigate::FixKind::Refactor),
         "no stub without target_kind"
     );
 }
@@ -1072,8 +1078,8 @@ fn code_actions_for_missing_verify_contract() {
     let env = specforge_project::Environment::with_registries(verifiable(&["behavior"], &[]), None);
     let recorded = specforge_project::coverage::RecordedCoverage::over(state.graph(), &env);
     let view = specforge_ops::view::ProjectView::new(state.graph(), &env, None, &recorded);
-    let nav = specforge_ops::navigate::Navigator::new(view, |_: &str| Some(text.to_string()));
-    let fixes = nav.fixes(&[], &specforge_ops::navigate::FixQuery::default());
+    let nav = specforge_ops::read::navigate::Navigator::new(view, |_: &str| Some(text.to_string()));
+    let fixes = nav.fixes(&[], &specforge_ops::read::navigate::FixQuery::default());
 
     assert!(
         !fixes.is_empty(),
@@ -1082,7 +1088,7 @@ fn code_actions_for_missing_verify_contract() {
     assert_eq!(fixes[0].subject, Some("my_behavior".into()));
     assert_eq!(
         fixes[0].kind,
-        specforge_ops::navigate::FixKind::QuickFix,
+        specforge_ops::read::navigate::FixKind::QuickFix,
         "must be quickfix action"
     );
     let edit = &fixes[0].edits[0];

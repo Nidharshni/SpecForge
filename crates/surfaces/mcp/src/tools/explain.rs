@@ -4,7 +4,7 @@ use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
 use crate::args::Arguments;
 use crate::refusal::ArgumentOf;
 use crate::reply::Answered;
-use specforge_ops::explain::ExplainField;
+use specforge_ops::read::explain::ExplainField;
 
 /// `specforge.explain`'s arguments.
 #[derive(Debug, Arguments)]
@@ -15,9 +15,9 @@ pub struct Args {
 
 /// `specforge.explain`'s reply: the document `specforge explain --format json` prints, a
 /// catalogued code's entry, or a retired code and the entry that replaced it.
-pub use specforge_ops::explain::Explanation as Reply;
+pub use specforge_ops::read::explain::Explanation as Reply;
 
-/// `specforge.explain`: the explain operation (`specforge_ops::explain`), as data. A code the
+/// `specforge.explain`: the explain operation (`specforge_ops::read::explain`), as data. A code the
 /// catalogue neither has nor retired is invalid input naming the `code` argument.
 pub(crate) struct Tool;
 
@@ -41,7 +41,7 @@ impl CoreTool for Tool {
     type Returns = Answered<Reply>;
 
     fn call(_: (), args: Args) -> Answered<Reply> {
-        specforge_ops::explain::explain(&args.code)
+        specforge_ops::read::explain::explain(&args.code)
             .map(Into::into)
             .map_err(|refusal| Box::new(Self::refused(refusal)))
     }

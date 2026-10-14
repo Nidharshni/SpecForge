@@ -6,7 +6,7 @@
 //! comments and verify statements that mentions the ID is not a reference,
 //! and is left alone (ADR 0016).
 
-use crate::navigate::{Direction, Navigator, Precision, ReferenceQuery};
+use crate::read::navigate::{Direction, Navigator, Precision, ReferenceQuery};
 use crate::view::EntityField;
 use crate::{OpError, OpErrorKind, Refusal};
 use std::collections::BTreeSet;

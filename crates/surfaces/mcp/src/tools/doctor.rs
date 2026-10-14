@@ -1,4 +1,4 @@
-//! `specforge.doctor`: the health report (`specforge_ops::doctor`).
+//! `specforge.doctor`: the health report (`specforge_ops::analysis::doctor`).
 
 use crate::args::NoArgs;
 use crate::reply::Answered;
@@ -8,7 +8,7 @@ use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
 
 /// `specforge.doctor`'s reply: the document `specforge doctor --format json`
 /// prints, without the user's credential health (`McpDoctorReport`).
-type Reply = specforge_ops::doctor::DoctorDocument;
+type Reply = specforge_ops::analysis::doctor::DoctorDocument;
 
 pub(crate) struct Tool;
 
@@ -29,7 +29,7 @@ impl CoreTool for Tool {
         // The same report `specforge doctor` prints (`DoctorReport::document`), as
         // the spec's McpDoctorReport. Credential health is the user's, not the
         // project's: only the CLI reports it.
-        let report = specforge_ops::doctor::diagnose(&project.view(), project.solver);
+        let report = specforge_ops::analysis::doctor::diagnose(&project.view(), project.solver);
         Ok(report.document().into())
     }
 }

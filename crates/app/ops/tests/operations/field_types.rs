@@ -4,7 +4,7 @@
 
 use super::compiled_support::{TestProject, check_document, checked, command_document, exported};
 use serde_json::{Value, json};
-use specforge_ops::check::CheckOptions;
+use specforge_ops::analysis::check::CheckOptions;
 use specforge_project::CompiledProject;
 use specforge_test_macros::test as specforge_test;
 

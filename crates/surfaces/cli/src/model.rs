@@ -1,7 +1,7 @@
 use crate::options;
 use crate::outcome::{Exit, OutputFormat, Refusal};
 use crate::terminal::{Terminal, errln, out};
-use specforge_ops::model::{FieldLevel, GroupBy, ModelFormat, ModelOptions, ModelRoot};
+use specforge_ops::read::model::{FieldLevel, GroupBy, ModelFormat, ModelOptions, ModelRoot};
 use specforge_ops::view::ProjectView;
 
 // `specforge model`'s command line.
@@ -13,24 +13,24 @@ pub(crate) struct Args {
     /// Output format
     #[arg(
         long,
-        value_parser = options::choice(&specforge_ops::model::MODEL_FORMAT),
-        default_value = specforge_ops::model::MODEL_FORMAT.default_name()
+        value_parser = options::choice(&specforge_ops::read::model::MODEL_FORMAT),
+        default_value = specforge_ops::read::model::MODEL_FORMAT.default_name()
     )]
     format: ModelFormat,
 
     /// How to group entities
     #[arg(
         long,
-        value_parser = options::choice(&specforge_ops::model::GROUP_BY),
-        default_value = specforge_ops::model::GROUP_BY.default_name()
+        value_parser = options::choice(&specforge_ops::read::model::GROUP_BY),
+        default_value = specforge_ops::read::model::GROUP_BY.default_name()
     )]
     group_by: GroupBy,
 
     /// Field detail level
     #[arg(
         long,
-        value_parser = options::choice(&specforge_ops::model::MODEL_FIELDS),
-        default_value = specforge_ops::model::MODEL_FIELDS.default_name()
+        value_parser = options::choice(&specforge_ops::read::model::MODEL_FIELDS),
+        default_value = specforge_ops::read::model::MODEL_FIELDS.default_name()
     )]
     fields: FieldLevel,
 
@@ -75,7 +75,7 @@ impl Args {
             Ok(project) => project,
             Err(error) => return Refusal::of(OutputFormat::Human).report(terminal, &error),
         };
-        match specforge_ops::model::model(&ProjectView::of(&project), &self.options()) {
+        match specforge_ops::read::model::model(&ProjectView::of(&project), &self.options()) {
             Ok(outcome) => {
                 for notice in &outcome.notices {
                     errln!(terminal, "{}", specforge_common::render_plain(notice));

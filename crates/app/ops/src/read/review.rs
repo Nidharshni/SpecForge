@@ -8,7 +8,7 @@ use serde::Serialize;
 use specforge_common::shape::Shape;
 
 use crate::Refusal;
-use crate::coverage::{CoverageQuery, CoverageRow, CoverageRowDocument, coverage};
+use crate::read::coverage::{CoverageQuery, CoverageRow, CoverageRowDocument, coverage};
 use crate::view::{EntityField, ProjectView};
 
 /// Hops around the reviewed entity when a request names none.

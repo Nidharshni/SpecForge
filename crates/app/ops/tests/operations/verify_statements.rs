@@ -1,5 +1,5 @@
 use super::compiled_support::{built, exported, exported_as, stats_of};
-use specforge_ops::export::Format;
+use specforge_ops::read::export::Format;
 use specforge_test_macros::test as specforge_test;
 
 // --- Phase 2b: Verify declarations through pipeline ---

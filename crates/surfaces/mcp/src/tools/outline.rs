@@ -3,7 +3,7 @@ use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
 use serde::Serialize;
 use specforge_common::SourceSpan;
 use specforge_common::shape::Shape;
-use specforge_ops::navigate::{OutlineEntry, outline};
+use specforge_ops::read::navigate::{OutlineEntry, outline};
 
 use crate::args::Arguments;
 use crate::containment::Containment;
@@ -84,7 +84,7 @@ impl Entry {
 
 /// `specforge.outline`: the entities a file declares, in line order, each
 /// with its method members, each selecting its name: the tree the LSP's
-/// document symbols are (`specforge_ops::navigate::outline`). `file` is a
+/// document symbols are (`specforge_ops::read::navigate::outline`). `file` is a
 /// spec file of the project, relative to its spec root, as spans name it.
 pub(crate) struct Tool;
 

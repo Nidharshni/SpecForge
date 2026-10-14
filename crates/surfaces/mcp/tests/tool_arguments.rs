@@ -18,7 +18,7 @@ fn core_tool_listing_today() {
 }
 
 /// The defaults of the read views' arguments are the operation's: the query
-/// depth and the search limit that `specforge_ops::query` holds, which the
+/// depth and the search limit that `specforge_ops::read::query` holds, which the
 /// CLI's `--depth` default reads too (plan 08 T8).
 #[test]
 fn the_read_view_defaults_are_the_operations() {
@@ -32,11 +32,11 @@ fn the_read_view_defaults_are_the_operations() {
     };
     assert_eq!(
         default_of("specforge.query", "depth"),
-        json!(specforge_ops::query::DEFAULT_DEPTH)
+        json!(specforge_ops::read::query::DEFAULT_DEPTH)
     );
     assert_eq!(
         default_of("specforge.search", "limit"),
-        json!(specforge_ops::query::DEFAULT_SEARCH_LIMIT)
+        json!(specforge_ops::read::query::DEFAULT_SEARCH_LIMIT)
     );
 }
 
@@ -560,8 +560,8 @@ mod derived {
         Arg, Argument, Arguments, EntityIds, choice_schema, input_schema, read,
     };
     use specforge_mcp::target::TargetSpec;
-    use specforge_ops::model::ModelFormat;
-    use specforge_ops::plan::AgentPlan;
+    use specforge_ops::read::model::ModelFormat;
+    use specforge_ops::read::plan::AgentPlan;
     use specforge_project::coverage::Status;
     use specforge_protocol_types::command_args::normalize_arg;
     use specforge_protocol_types::{CommandArgDescriptor, CommandArgType};
@@ -580,10 +580,10 @@ mod derived {
         /// Kinds
         kinds: Vec<String>,
         /// Format
-        #[arg(choice = specforge_ops::model::MODEL_FORMAT)]
+        #[arg(choice = specforge_ops::read::model::MODEL_FORMAT)]
         format: ModelFormat,
         /// Status
-        #[arg(choice = specforge_ops::coverage::STATUS)]
+        #[arg(choice = specforge_ops::read::coverage::STATUS)]
         status: Option<Status>,
         /// Profiles
         #[arg(names = &["a", "b"])]
@@ -622,11 +622,11 @@ mod derived {
                 ),
                 (
                     "format",
-                    choice_schema(&specforge_ops::model::MODEL_FORMAT, "Format")
+                    choice_schema(&specforge_ops::read::model::MODEL_FORMAT, "Format")
                 ),
                 (
                     "status",
-                    choice_schema(&specforge_ops::coverage::STATUS, "Status")
+                    choice_schema(&specforge_ops::read::coverage::STATUS, "Status")
                 ),
                 (
                     "profiles",
@@ -822,7 +822,7 @@ mod derived {
         /// Ids
         ids: EntityIds,
         /// A required renderer
-        #[arg(choice = specforge_ops::export::FORMAT)]
+        #[arg(choice = specforge_ops::read::export::FORMAT)]
         renderer: String,
     }
 

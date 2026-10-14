@@ -3,7 +3,7 @@
 //! from their view (ADR 0015, "Management operations").
 
 use specforge_common::Diagnostic;
-use specforge_ops::collect::{Consent, Mode, Request};
+use specforge_ops::analysis::collect::{Consent, Mode, Request};
 use specforge_ops::extension::{self, RemoveRequest, Status};
 use specforge_ops::testing::ScriptedSolver;
 use specforge_ops::view::ProjectView;
@@ -98,9 +98,9 @@ fn management_operations_read_the_project_from_their_view() {
     assert_eq!(providers.providers.len(), 1, "{providers:?}");
     assert_eq!(providers.providers[0].alias, "work");
 
-    let report = specforge_ops::doctor::diagnose(&view, &ScriptedSolver::ready());
+    let report = specforge_ops::analysis::doctor::diagnose(&view, &ScriptedSolver::ready());
     let failures: Vec<&str> = report
-        .about(specforge_ops::doctor::Part::Load)
+        .about(specforge_ops::analysis::doctor::Part::Load)
         .map(|f| f.code.as_str())
         .collect();
     assert_eq!(failures, ["E028"]);
@@ -117,7 +117,8 @@ fn management_operations_read_the_project_from_their_view() {
     assert!(listing.locked.is_empty());
     assert_eq!(listing.extensions.len(), 1);
     assert_eq!(
-        specforge_ops::doctor::diagnose(&rootless, &ScriptedSolver::ready()).installed_count,
+        specforge_ops::analysis::doctor::diagnose(&rootless, &ScriptedSolver::ready())
+            .installed_count,
         0
     );
     let refused = |result: Result<(), specforge_ops::OpError>| {
@@ -135,10 +136,10 @@ fn management_operations_read_the_project_from_their_view() {
         .map(drop)
         .map_err(specforge_ops::Refusal::into_error),
     );
-    refused(specforge_ops::infer::progress(&rootless).map(drop));
-    refused(specforge_ops::infer::gaps(&rootless).map(drop));
+    refused(specforge_ops::read::infer::progress(&rootless).map(drop));
+    refused(specforge_ops::read::infer::gaps(&rootless).map(drop));
     refused(
-        specforge_ops::collect::collect(
+        specforge_ops::analysis::collect::collect(
             &rootless,
             Request {
                 runner: None,
@@ -248,7 +249,7 @@ fn collect_at_a_root_that_is_no_project_is_no_project() {
     let bare = tempfile::TempDir::new().unwrap();
     let view = ProjectView::new(&project.graph, &env, Some(bare.path()), &recorded);
 
-    let error = specforge_ops::collect::collect(
+    let error = specforge_ops::analysis::collect::collect(
         &view,
         Request {
             runner: None,

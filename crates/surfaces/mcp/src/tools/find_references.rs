@@ -3,7 +3,9 @@ use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
 use serde::Serialize;
 use specforge_common::SourceSpan;
 use specforge_common::shape::Shape;
-use specforge_ops::navigate::{DIRECTION, Direction, Occurrence, Precision, ReferenceQuery, Role};
+use specforge_ops::read::navigate::{
+    DIRECTION, Direction, Occurrence, Precision, ReferenceQuery, Role,
+};
 
 use crate::args::Arguments;
 use crate::refusal::ArgumentOf;
@@ -17,7 +19,7 @@ pub struct Args {
     /// Entity ID
     entity_id: String,
     /// Which references
-    #[arg(choice = specforge_ops::navigate::DIRECTION)]
+    #[arg(choice = specforge_ops::read::navigate::DIRECTION)]
     direction: Direction,
     /// Also return the entity's own declaration (its name)
     include_declaration: bool,
@@ -27,7 +29,7 @@ pub struct Args {
 #[derive(Debug, Serialize, Shape)]
 pub struct Reply {
     entity_id: String,
-    #[shape(names = specforge_ops::navigate::DIRECTION)]
+    #[shape(names = specforge_ops::read::navigate::DIRECTION)]
     direction: String,
     locations: Vec<Location>,
 }

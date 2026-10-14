@@ -4,7 +4,7 @@
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use crate::terminal::{Terminal, outln};
 use specforge_diagnostics::{WRAP_WIDTH, wrap};
-use specforge_ops::explain::{Entry, Explanation, explain};
+use specforge_ops::read::explain::{Entry, Explanation, explain};
 
 // `specforge explain`'s command line.
 #[derive(clap::Args)]

@@ -5,8 +5,8 @@
 //! The plan check reads no report (plan.rs `the_plan_check_reads_no_recorded_report`).
 
 use crate::view_support::{Project, registries};
-use specforge_ops::analyze::{AnalyzeError, AnalyzeOptions, ReportSource, analyze};
-use specforge_ops::format::{Mode, Request, run};
+use specforge_ops::analysis::analyze::{AnalyzeError, AnalyzeOptions, ReportSource, analyze};
+use specforge_ops::authoring::format::{Mode, Request, run};
 use specforge_ops::{OpError, OpErrorKind};
 use specforge_test::prelude::*;
 use std::path::Path;
@@ -43,15 +43,21 @@ fn every_view(project: &Project) -> Vec<(&'static str, OpError)> {
     let view = project.view();
     vec![
         ("test_report", view.test_report().unwrap_err()),
-        ("stats", specforge_ops::stats::stats(&view).unwrap_err()),
+        (
+            "stats",
+            specforge_ops::read::stats::stats(&view).unwrap_err(),
+        ),
         (
             "coverage",
-            specforge_ops::coverage::coverage(&view, &Default::default()).unwrap_err(),
+            specforge_ops::read::coverage::coverage(&view, &Default::default()).unwrap_err(),
         ),
-        ("row", specforge_ops::coverage::row(&view, "b").unwrap_err()),
+        (
+            "row",
+            specforge_ops::read::coverage::row(&view, "b").unwrap_err(),
+        ),
         (
             "inspect",
-            specforge_ops::inspect::coverage(&view, "b").unwrap_err(),
+            specforge_ops::read::inspect::coverage(&view, "b").unwrap_err(),
         ),
         (
             "analyze",
@@ -163,7 +169,7 @@ fn analyze_calls_a_missing_named_report_file_not_found() {
 )]
 fn hooks_run_for_the_project_a_sub_path_is_in() {
     use specforge_extension_sdk::{ContributionsBuilder, ExtensionMeta};
-    use specforge_ops::migrate::{Request, run};
+    use specforge_ops::authoring::migrate::{Request, run};
     use specforge_parser::CURRENT_FORMAT_VERSION;
     use specforge_wasm::testing::InProcessRuntime;
 

@@ -2,7 +2,7 @@
 //! operations the surfaces call (ADR 0015, "Management operations").
 
 use specforge_installed::Installed;
-use specforge_ops::check::{CheckOptions, check};
+use specforge_ops::analysis::check::{CheckOptions, check};
 use specforge_project::{Environment, ExtensionLoad, LintProfile};
 use specforge_test::prelude::*;
 
@@ -116,7 +116,7 @@ fn the_density_threshold_is_the_compiled_config() {
 // --- inference sessions: `infer::session` ---
 
 use specforge_ops::OpErrorKind;
-use specforge_ops::infer::{
+use specforge_ops::read::infer::{
     self, EndStatus, Recorded, SESSION_ACTIVE, SESSION_NOT_ACTIVE, SOURCE_UNREADABLE,
     SessionStatus, SessionStep, UNKNOWN_SESSION,
 };
@@ -438,7 +438,7 @@ fn a_source_root_outside_the_root_is_refused() {
     verify = "an operation states the request field each refusal is about, and a refusal of the project or the environment is about none"
 )]
 fn a_session_refusal_is_about_its_field() {
-    use specforge_ops::infer::SessionField;
+    use specforge_ops::read::infer::SessionField;
     let project = project(None, serde_json::json!({}));
     let subject = |session_step: SessionStep<'_>| step(&project, session_step).unwrap_err().subject;
 

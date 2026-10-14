@@ -10,7 +10,7 @@ use specforge_project::coverage::{Status, Verdict};
 use specforge_project::snapshot::{ObligationRecord, Standing};
 use specforge_registry::KindRegistryEntry;
 
-use crate::navigate::{References, is_about};
+use crate::read::navigate::{References, is_about};
 use crate::view::{EntityField, ProjectView, not_found};
 use crate::{OpError, Refusal};
 

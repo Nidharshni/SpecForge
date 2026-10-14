@@ -2,7 +2,7 @@ use crate::target::View;
 use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
 use serde::Serialize;
 use specforge_common::shape::Shape;
-use specforge_ops::query::{FieldHolds, Hit, SearchRequest, search};
+use specforge_ops::read::query::{FieldHolds, Hit, SearchRequest, search};
 
 use crate::args::Arguments;
 use crate::reply::{Answer, Answered};
@@ -17,7 +17,7 @@ pub struct Args {
     /// Filter by kinds
     kinds: Vec<String>,
     /// Max results
-    #[arg(default = specforge_ops::query::DEFAULT_SEARCH_LIMIT)]
+    #[arg(default = specforge_ops::read::query::DEFAULT_SEARCH_LIMIT)]
     limit: usize,
     /// Only entities whose field of this name contains `value`; needs `value`
     field: Option<String>,
@@ -65,7 +65,7 @@ impl Found {
     }
 }
 
-/// `specforge.search`: the search read view (`specforge_ops::query::search`),
+/// `specforge.search`: the search read view (`specforge_ops::read::query::search`),
 /// the entities the query finds, ranked as the LSP's workspace symbols and
 /// completion rank them, over names and string fields. Every filter is
 /// ANDed: kinds, a field's text (`field` with `value`: one without the other

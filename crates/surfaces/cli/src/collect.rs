@@ -7,13 +7,13 @@
 //! This command runs the declared command after the user approves it for
 //! the project, then hands the report to the extension. `--no-run` and
 //! `--report` skip running and parse an existing report instead. The flow
-//! itself lives in [`specforge_ops::collect`], shared with MCP; this
+//! itself lives in [`specforge_ops::analysis::collect`], shared with MCP; this
 //! adapter only chooses the consent (a terminal prompt, `--yes`, or what
 //! was approved before) and presents the outcome.
 
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use crate::terminal::{Facts, Terminal, errln, outln};
-use specforge_ops::collect::{self, Collector, Consent, Mode, Request, RunnerOutput};
+use specforge_ops::analysis::collect::{self, Collector, Consent, Mode, Request, RunnerOutput};
 use specforge_ops::view::ProjectView;
 use std::path::{Path, PathBuf};
 

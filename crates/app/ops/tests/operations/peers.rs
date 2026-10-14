@@ -6,7 +6,7 @@ use std::path::Path;
 
 use specforge_common::Severity;
 use specforge_extension_sdk::{ContributionsBuilder, ExtensionMeta};
-use specforge_ops::doctor::{Part, diagnose};
+use specforge_ops::analysis::doctor::{Part, diagnose};
 use specforge_ops::view::ProjectView;
 use specforge_protocol_types::PeerDependency;
 use specforge_test_macros::test as specforge_test;
@@ -166,9 +166,9 @@ fn check_reports_a_cycle_among_required_peers() {
         "cycle detected in peer dependencies: @acme/a, @acme/b"
     );
 
-    let outcome = specforge_ops::check::check(
+    let outcome = specforge_ops::analysis::check::check(
         &ProjectView::of(&compiled),
-        &specforge_ops::check::CheckOptions::default(),
+        &specforge_ops::analysis::check::CheckOptions::default(),
     )
     .unwrap();
     assert!(!outcome.ok());

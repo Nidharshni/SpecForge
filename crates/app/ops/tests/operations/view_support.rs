@@ -9,9 +9,9 @@ use specforge_common::{ConfigRead, Diagnostic};
 use specforge_extension_sdk::PeerDependency;
 use specforge_extension_sdk::prelude::*;
 use specforge_graph::Graph;
-use specforge_ops::plan::{PlanGapKind, PlanOutcome};
-use specforge_ops::stats::Stats;
-use specforge_ops::trace::{Target, TraceChain};
+use specforge_ops::read::plan::{PlanGapKind, PlanOutcome};
+use specforge_ops::read::stats::Stats;
+use specforge_ops::read::trace::{Target, TraceChain};
 use specforge_ops::view::ProjectView;
 use specforge_project::coverage::RecordedCoverage;
 use specforge_project::{Environment, ExtensionLoad, Loaded, SharedRuntime};
@@ -202,16 +202,16 @@ pub fn loaded(declarations: Vec<ExtensionDeclaration>) -> ExtensionLoad {
 /// declare obligations, with no recorded report, reporting `diagnostics`.
 pub fn stats_of(graph: &Graph, testable: &[&str], diagnostics: &[Diagnostic]) -> Stats {
     let project = Project::of_graph(graph.clone(), registries(testable, &[]));
-    specforge_ops::stats::stats(&project.view().reporting(diagnostics)).unwrap()
+    specforge_ops::read::stats::stats(&project.view().reporting(diagnostics)).unwrap()
 }
 
 /// `plan` checked against `graph`, whose `testable` kinds are testable and
 /// must declare obligations.
 pub fn plan_check(graph: &Graph, testable: &[&str], plan: &serde_json::Value) -> PlanOutcome {
     let project = Project::of_graph(graph.clone(), registries(testable, &[]));
-    specforge_ops::plan::check(
+    specforge_ops::read::plan::check(
         &project.view(),
-        &specforge_ops::plan::AgentPlan::read(plan).expect("an AgentPlan"),
+        &specforge_ops::read::plan::AgentPlan::read(plan).expect("an AgentPlan"),
     )
 }
 
@@ -229,7 +229,7 @@ pub fn gap_texts(outcome: &PlanOutcome, kind: PlanGapKind) -> Vec<&str> {
 /// `registries`; `None` when the graph lacks it.
 pub fn chain_in(graph: &Graph, registries: RegistryBuild, entity_id: &str) -> Option<TraceChain> {
     let project = Project::of_graph(graph.clone(), registries);
-    specforge_ops::trace::trace(&project.view(), Target::Entity(entity_id))
+    specforge_ops::read::trace::trace(&project.view(), Target::Entity(entity_id))
         .ok()
         .map(|outcome| outcome.chains.into_iter().next().unwrap())
 }
@@ -242,7 +242,10 @@ pub fn chain(graph: &Graph, entity_id: &str) -> TraceChain {
 
 /// Every entity's chain in `graph`, with `registries`, as the trace
 /// operation returns them.
-pub fn every_chain(graph: &Graph, registries: RegistryBuild) -> specforge_ops::trace::TraceOutcome {
+pub fn every_chain(
+    graph: &Graph,
+    registries: RegistryBuild,
+) -> specforge_ops::read::trace::TraceOutcome {
     let project = Project::of_graph(graph.clone(), registries);
-    specforge_ops::trace::trace(&project.view(), Target::Every).unwrap()
+    specforge_ops::read::trace::trace(&project.view(), Target::Every).unwrap()
 }

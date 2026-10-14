@@ -10,8 +10,10 @@ use specforge_common::Diagnostic;
 use specforge_graph::Node;
 
 use crate::Refusal;
-use crate::export::{self, AGENT_FORMAT, ExportField, FORMAT, Format, Schema};
-use crate::navigate::{EntityMatch, EntityQuery, MatchScope, MatchedOn, find_entities, snippet};
+use crate::read::export::{self, AGENT_FORMAT, ExportField, FORMAT, Format, Schema};
+use crate::read::navigate::{
+    EntityMatch, EntityQuery, MatchScope, MatchedOn, find_entities, snippet,
+};
 use crate::view::ProjectView;
 
 /// Hops from the queried entity when a query names none: its direct
@@ -47,7 +49,7 @@ pub struct QueryRequest<'a> {
     /// is not an agent format.
     pub format: Option<Format>,
     /// Give every exported entity its coverage status (`coverage_status`,
-    /// a [`crate::coverage::STATUS`] name).
+    /// a [`crate::read::coverage::STATUS`] name).
     pub include_coverage: bool,
 }
 

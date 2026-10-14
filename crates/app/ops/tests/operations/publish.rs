@@ -4,7 +4,7 @@
 use std::path::{Path, PathBuf};
 
 use specforge_extension_sdk::{ContributionsBuilder, ExtensionMeta};
-use specforge_ops::publish::{PublishReport, publish};
+use specforge_ops::extension::{PublishReport, publish};
 use specforge_ops::registry::Trust;
 use specforge_ops::registry::testing::{Asked, MemoryRegistry};
 use specforge_ops::registry::{Registry, TrustPolicy, Unconfigured};
@@ -231,7 +231,9 @@ fn a_publish_uploads_the_binary_and_the_declaration_read_from_it() {
         .fetch(&name, &version, TrustPolicy::new(false, Trust::Refuse))
         .unwrap();
     assert_eq!(held.wasm, wasm);
-    let declared = specforge_ops::publish::declare(&runtime, &wasm).unwrap().0;
+    let declared = specforge_ops::extension::declare(&runtime, &wasm)
+        .unwrap()
+        .0;
     assert_eq!(held.declaration, declared);
 }
 
@@ -329,7 +331,9 @@ fn what_publish_uploads_is_what_add_installs() {
         .declaration;
     assert_eq!(
         uploaded,
-        specforge_ops::publish::declare(&runtime, &wasm).unwrap().0
+        specforge_ops::extension::declare(&runtime, &wasm)
+            .unwrap()
+            .0
     );
     assert!(
         registry

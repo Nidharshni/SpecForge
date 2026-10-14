@@ -16,7 +16,7 @@ use serde::Serialize;
 use serde_json::Value;
 use specforge_common::shape::Shape;
 
-use crate::builtin_passes::{COVERAGE_PASS, PASS_NAMES};
+use crate::analysis::builtin_passes::{COVERAGE_PASS, PASS_NAMES};
 use specforge_common::{Diagnostic, DiagnosticList, Severity, codes};
 use specforge_graph::Graph;
 use specforge_project::coverage;
@@ -437,7 +437,9 @@ pub fn analyze(
     // The proof pass runs first: its entailment verdicts feed the coverage
     // discharge funnel (a proved claim discharges `verify property`
     // obligations without executable tests).
-    let proved = options.prove.map(|solver| crate::prove::run(&base, solver));
+    let proved = options
+        .prove
+        .map(|solver| crate::analysis::prove::run(&base, solver));
     let proved_claims: std::collections::HashSet<String> = proved
         .as_ref()
         .map(|r| r.proved_claim_ids.iter().cloned().collect())
@@ -449,7 +451,7 @@ pub fn analyze(
 
     let mut passes_run: Vec<PassOutcome> = Vec::new();
     for name in &selection.builtins {
-        if let Some(r) = crate::builtin_passes::run_pass(&input, name) {
+        if let Some(r) = crate::analysis::builtin_passes::run_pass(&input, name) {
             passes_run.push(PassOutcome {
                 name: r.name.to_string(),
                 description: r.description.to_string(),

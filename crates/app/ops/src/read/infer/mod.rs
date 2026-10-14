@@ -23,9 +23,9 @@ mod lint;
 mod manifest;
 mod plan;
 mod progress;
+mod scan;
 mod session;
 
-pub use crate::scan::ScanFailure;
 pub use gaps::{
     DirectoryGaps, GapItem, Gaps, GapsDocument, ScanFailureRow, SourceItem, directory_of, gaps,
 };
@@ -46,6 +46,7 @@ pub use plan::{
 pub use progress::{
     Progress, ProgressDocument, ProgressSummary, SessionRow, UnanalyzedDirectory, progress,
 };
+pub use scan::ScanFailure;
 pub use session::{
     END_STATUS, EndStatus, Recorded, SESSION_ACTION, SESSION_ACTIVE, SESSION_NOT_ACTIVE,
     SOURCE_OUTSIDE_ROOT, SOURCE_ROOT_OUTSIDE_ROOT, SOURCE_UNREADABLE, SessionAction, SessionField,

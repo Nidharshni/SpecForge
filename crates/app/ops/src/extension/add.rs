@@ -1593,7 +1593,7 @@ mod tests {
 
     /// A registry publishing `bytes` as the package they declare.
     fn registry_publishing(bytes: &[u8]) -> MemoryRegistry {
-        let declared = crate::publish::declare(&testing::probes(), bytes)
+        let declared = crate::extension::declare(&testing::probes(), bytes)
             .unwrap()
             .0;
         MemoryRegistry::new().serving(Published::new(bytes.to_vec(), declared))
@@ -2579,7 +2579,7 @@ mod tests {
         let served = |wasm: &[u8]| {
             Published::new(
                 wasm.to_vec(),
-                crate::publish::declare(runtime, wasm).unwrap().0,
+                crate::extension::declare(runtime, wasm).unwrap().0,
             )
         };
         MemoryRegistry::new()

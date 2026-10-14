@@ -5,8 +5,8 @@
 
 use serde_json::{Value, json};
 use specforge_emitter::GraphProtocolSchema;
-use specforge_ops::export::Format;
-use specforge_ops::schema::{SchemaRequest, json_schema, schema};
+use specforge_ops::read::export::Format;
+use specforge_ops::read::schema::{SchemaRequest, json_schema, schema};
 use specforge_protocol_types::{
     EdgeTypeDescriptor, EntityKindDescriptor, ExtensionDeclaration, FieldDescriptor,
     HandshakeResponse, ValidationRuleDescriptor,
@@ -241,7 +241,7 @@ fn json_schema_refuses_dot() {
     verify = "an operation states the request field each refusal is about, and a refusal of the project or the environment is about none"
 )]
 fn schema_states_which_field_a_refusal_is_about() {
-    use specforge_ops::schema::SchemaField;
+    use specforge_ops::read::schema::SchemaField;
     let request = SchemaRequest {
         kind: Some("behaviour"),
         ..SchemaRequest::default()
@@ -257,9 +257,9 @@ mod published {
         TestProject, built, checked, exported, exported_text, exported_with, published, schema_of,
         specs,
     };
-    use specforge_ops::check::CheckOptions;
-    use specforge_ops::export::{FORMAT, Format, Request, Schema};
-    use specforge_ops::schema::{self, SchemaRequest};
+    use specforge_ops::analysis::check::CheckOptions;
+    use specforge_ops::read::export::{FORMAT, Format, Request, Schema};
+    use specforge_ops::read::schema::{self, SchemaRequest};
     use specforge_ops::view::ProjectView;
     use specforge_project::CompiledProject;
     use specforge_test_macros::test as specforge_test;

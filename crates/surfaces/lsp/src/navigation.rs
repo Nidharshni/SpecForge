@@ -1,4 +1,4 @@
-//! The LSP's adapter over `specforge_ops::navigate`: it builds the
+//! The LSP's adapter over `specforge_ops::read::navigate`: it builds the
 //! navigator over the session (open buffers first, then disk) and converts
 //! its answers, `SourceSpan`s, to LSP locations and UTF-16 ranges. What
 //! the answers are is navigation's to say (ADR 0016); `use`-path
@@ -6,7 +6,7 @@
 //! (`answers::definition`).
 
 use specforge_common::{SourceSpan, Sym, structural};
-use specforge_ops::navigate::{Fix, FixKind, Navigator, OutlineEntry};
+use specforge_ops::read::navigate::{Fix, FixKind, Navigator, OutlineEntry};
 use specforge_registry::KindRegistry;
 use std::collections::HashMap;
 use tower_lsp::lsp_types::{
@@ -402,12 +402,12 @@ mod tests {
         let fix = |files: &[&str]| Fix {
             title: "fix".into(),
             kind: FixKind::QuickFix,
-            source: specforge_ops::navigate::FixSource::ReplaceUnresolved,
+            source: specforge_ops::read::navigate::FixSource::ReplaceUnresolved,
             diagnostic_code: None,
             subject: None,
             edits: files
                 .iter()
-                .map(|file| specforge_ops::navigate::TextEdit {
+                .map(|file| specforge_ops::read::navigate::TextEdit {
                     span: SourceSpan {
                         file: Sym::new(file),
                         ..brace()

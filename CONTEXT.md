@@ -464,15 +464,15 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   project with its I017 notices, or that of a session opened for one call) (ADR 0015, ADR 0047).
 - **Read view**: an operation that only reads the project view: stats, trace, the coverage view, the
   model and outline diagrams, the versioned schema, inspect, query, list and search (the entities a
-  selection over the view returns, `specforge_ops::query`), the exploration and the review
-  (`specforge_ops::{explore, review}`), the reach of a trace (`specforge_ops::trace::reach`, the trace prompt's
-  affected and unverified entities), the plan check (`specforge_ops::plan::check`), and the inference guide and plan
-  (`specforge_ops::infer::{guide, kind_guide, inference_plan}`). Each returns a typed outcome; the CLI,
+  selection over the view returns, `specforge_ops::read::query`), the exploration and the review
+  (`specforge_ops::read::{explore, review}`), the reach of a trace (`specforge_ops::read::trace::reach`, the trace prompt's
+  affected and unverified entities), the plan check (`specforge_ops::read::plan::check`), and the inference guide and plan
+  (`specforge_ops::read::infer::{guide, kind_guide, inference_plan}`). Each returns a typed outcome; the CLI,
   MCP (its tools and its prompts) and the LSP only render it.
 - **Entity facts**: what inspect returns for one entity: its node and kind entry, headline
   statement, standing and obligations (the snapshot's own, borrowed), references in both directions,
-  and the reported diagnostics about it (`specforge_ops::inspect::EntityFacts`); its coverage is asked
-  for apart (`specforge_ops::inspect::coverage`) by the surfaces that show it. MCP `specforge.inspect`
+  and the reported diagnostics about it (`specforge_ops::read::inspect::EntityFacts`); its coverage is asked
+  for apart (`specforge_ops::read::inspect::coverage`) by the surfaces that show it. MCP `specforge.inspect`
   renders both as JSON and the LSP hover as markdown, so the two cannot disagree.
 - **Known kind**: a kind a loaded extension declares, or that an entity is written with (an
   undeclared one is E024's). A kind filter (over entities, or the model's `kinds`) knows both and
@@ -489,22 +489,22 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   `no_incoming_edges` rule for its kinds, the coverage summary's `invariant_unreferenced`. No output calls one
   an orphan: the catalog titles, product `health`'s `unreferenced_counts` and the coverage summary's
   `invariant_unreferenced` all say unreferenced.
-- **Exploration**: where to start reading a project's graph (`specforge_ops::explore`): a selection (the
+- **Exploration**: where to start reading a project's graph (`specforge_ops::read::explore`): a selection (the
   entities one entity reaches within a depth, or every entity; of one kind when given), the paths from that
   entity, the starting points (the selected connected entities that reference more than they are referenced),
   the most connected and the unconnected ones. The explore prompt and `specforge explore` render it.
-- **Review**: the coverage gaps of a neighbourhood (`specforge_ops::review`): the coverage view's rows of
+- **Review**: the coverage gaps of a neighbourhood (`specforge_ops::read::review`): the coverage view's rows of
   the entities that count toward coverage within some hops of one entity, or of the whole project, each with
   a finding when it declares no obligation or is unconnected. The review prompt and `specforge review`
   render it.
 - **Inference guide**: what an agent is told to look for to infer a kind's entities from code
-  (`specforge_ops::infer::KindGuide`): the kind's description and extension, every field the registry build
+  (`specforge_ops::read::infer::KindGuide`): the kind's description and extension, every field the registry build
   registered on it (with, for an enum, its values and its default), the extension's `inference_guide` followed by the project's own guide for the kind
   (`inference.<kind>` in `specforge.json`, under **Project-specific:**), an example entity writing each field
   the way its type is written, and the kind's entities. A project's guide is every declared kind's, its
   global conventions (`inference.global`) and its spec directory. The infer prompt, `specforge infer-guide`
   and the LSP's keyword completion render it.
-- **Inference plan**: the infer prompt's plan (`specforge_ops::infer::inference_plan`): the inference
+- **Inference plan**: the infer prompt's plan (`specforge_ops::read::infer::inference_plan`): the inference
   progress, the unanalyzed and stale files paged from a cursor, the target spec directory (the spec root by
   default) and the kind priorities: kinds with no entity first, each after the kinds its reference fields
   target.
@@ -544,19 +544,19 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   obligations are proven is the coverage rule's, over the recorded test report (ADR 0068).
 - **Stray test record**: a record of the recorded test report naming an entity the graph does not have
   (W097): `analyze` lists it apart from the passes with the closest id, never promotes it under strict,
-  and it proves nothing (`specforge_ops::analyze::StrayRecord`).
+  and it proves nothing (`specforge_ops::analysis::analyze::StrayRecord`).
 - **Inference manifest**: `<root>/specforge-infer.json`, what inference has recorded: the source
   roots, each analyzed source file (root-relative path, content hash, the entities produced) and
-  the inference sessions (`specforge_ops::infer::InferenceManifest`). One reader and one writer in
-  `specforge_ops::infer`: a file that cannot be used is E071 for every reader, never an empty
+  the inference sessions (`specforge_ops::read::infer::InferenceManifest`). One reader and one writer in
+  `specforge_ops::read::infer`: a file that cannot be used is E071 for every reader, never an empty
   manifest, and a write keeps the keys it does not define. Not a project input: the compile and the
   session never read it.
 - **Inference session**: one agent's run of inference, recorded in the manifest: started, then
   ended as completed or paused; at most one is active (`SessionStatus`). Its steps (start, mark a
-  source file analyzed, end) are one management operation, `specforge_ops::infer::session`; MCP's
+  source file analyzed, end) are one management operation, `specforge_ops::read::infer::session`; MCP's
   `specforge.infer_session` is its adapter.
 - **Anchors manifest**: `<root>/specforge-anchors.json`, which source item each entity is anchored
-  to. Navigation reads it (`specforge_ops::navigate::source_anchors`): the anchors of a source file
+  to. Navigation reads it (`specforge_ops::read::navigate::source_anchors`): the anchors of a source file
   and of an entity; E071 when it cannot be used.
 - **Obligation**: one `verify` statement on an entity. **Proven** when a passing test names its
   exact text, or a formal claim discharges it. Who owes obligations is the entity's standing.
@@ -567,7 +567,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   the coverage rule counts proven, their obligations and failing tests. A feature is **proven** when
   at least one behavior implements it and every one is proven. The host passes each entity's score
   to an extension command (`CommandInput.evidence`: none, unreadable, or recorded;
-  computed by `specforge_ops::command::run` from the project view's recorded report); `@specforge/product` aggregates it per feature
+  computed by `specforge_ops::extension::command::run` from the project view's recorded report); `@specforge/product` aggregates it per feature
   (`milestone-completion`'s `proven_count`) and its `delivery_evidence` pass reports a done feature
   that is not proven (I071). Status stays the input of every status query (ADR 0039).
 - **Lifecycle consistency**: what the product kinds' statuses claim across entities, checked by
@@ -578,10 +578,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Missing link**: an expected edge, from the registries, that a traced entity lacks
   (`MissingLink`). The only gap a trace reports.
 - **Agent plan**: what an agent intends to do, entity by entity, in the order it will do it
-  (`specforge_ops::plan::AgentPlan`, spec type `AgentPlan`: a `plan_id` and entries of `entity_id` and `action`).
+  (`specforge_ops::read::plan::AgentPlan`, spec type `AgentPlan`: a `plan_id` and entries of `entity_id` and `action`).
   Its entry order is its dependency order; the graph's edges are the dependencies. Read from a JSON object or its
   text, checked against the type's schema first (`AgentPlan::read`): a value that departs is refused naming every
-  place. The **plan check** (`specforge_ops::plan::check`) reads the graph and the entity snapshot, never the
+  place. The **plan check** (`specforge_ops::read::plan::check`) reads the graph and the entity snapshot, never the
   recorded test report; it passes (`ok`) when no entry is unresolved and none comes before what it depends on.
 - **Plan gap**: how an agent plan falls short of the graph: an unresolved entry, a missing entry for
   a testable entity with obligations, or an entry ordered before what it depends on (`PlanGap`). An
@@ -629,7 +629,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   `files_written`, the CLI's credential health on doctor), and never renames, drops or re-derives a
   key. It carries no `null`. Its spec type is the tool's `Mcp*` reply type (ADR 0052).
 - **Graph export**: the project's graph, or the subgraph of a scope, written in one export format by
-  `specforge_emitter::emit` through `specforge_ops::export::export`: graph (the Graph Protocol), context and brief (JSON
+  `specforge_emitter::emit` through `specforge_ops::read::export::export`: graph (the Graph Protocol), context and brief (JSON
   documents whose schema the emitter derives from the types that write them, published by `specforge schema
   --publish`), or DOT. It is text: the CLI prints it, MCP sends it as text or a file, an extension command receives it
   spliced in its input; only `specforge.query` reads it back, into its structured result. A node carries its coverage
@@ -658,9 +658,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Format configuration**: how one `.spec` document is laid out: inside a project, the nearest
   `.specforgefmt.toml` from the document's directory up to its own project root, else the defaults;
   outside any project, the editor's tab settings. `specforge format`, MCP `specforge.format` and the
-  LSP all format through `specforge_ops::format::document` (ADR 0021).
+  LSP all format through `specforge_ops::authoring::format::document` (ADR 0021).
 - **Formatted document**: one `.spec` text formatted with its format configuration, whole or in the
-  blocks a range touches (`specforge_ops::format::document` → `FormattedDocument`): the formatted text,
+  blocks a range touches (`specforge_ops::authoring::format::document` → `FormattedDocument`): the formatted text,
   the configuration and where it came from, what formatting reported (W141, W142), and the edits that
   turn the text into it. Applied to the text, the edits give the formatted text byte for byte; they
   may span line breaks (a blank line removed, a final newline added, CRLF made LF) and replace only
@@ -675,7 +675,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Check**: the operation that turns what a compile reported into what a surface reports: the
   diagnostic policy (lint profiles, then strict), the verdict (no error among everything reported),
   the severity filter (what is shown, never the verdict) and the opt-in build-cache record
-  (`specforge_ops::check`). `specforge check` and MCP `specforge.validate` are its adapters; watch and
+  (`specforge_ops::analysis::check`). `specforge check` and MCP `specforge.validate` are its adapters; watch and
   the LSP report a compile's diagnostics without a policy (ADR 0018).
 - **Run verdict**: whether an operation that judges the project passed, failed, or could not judge it,
   computed by the operation (`ok()`, or `verdict()` → `specforge_ops::RunVerdict` where it can be
@@ -697,18 +697,18 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Diagnostic policy**: lint profiles (a closed set: `inferred`, `pedantic`) and strict promotion
   (`specforge_project::DiagnosticPolicy`). It is the only thing that changes a diagnostic's severity
   after the diagnostic is built. A profile's diagnostics come from the check that applies it
-  (`inferred`: `specforge_ops::infer::lint`, I200/I202 or E071); the policy reads no file.
+  (`inferred`: `specforge_ops::read::infer::lint`, I200/I202 or E071); the policy reads no file.
 - **Extension command**: a CLI command an extension declares in its surfaces (with the SDK, together
   with its handler: `ContributionsBuilder::command`), answered by its `cmd__` export over the graph
   the host passes (`specforge_protocol_types::CommandInput`: args, project root, graph, the
   command format and today's date, UTC). The CLI runs it as `specforge <short> <command>`, MCP as
   the auto-promoted tool `specforge.<short>.<id>`, `short` being the declaration's (`ext_short`,
   else its name's last segment); neither knows any command (ADR 0008). One derivation serves both
-  surfaces (`specforge_ops::command::ExtensionCommand`): its CLI name, its tool name, its args'
+  surfaces (`specforge_ops::extension::command::ExtensionCommand`): its CLI name, its tool name, its args'
   command-line shapes, its input schema and the args both send, normalized by the one arg rule the
   SDK also runs (`specforge_protocol_types::command_args`): declared defaults applied by the host,
   an unset flag `false`, each value its declared type (ADR 0017). Both surfaces run it through one
-  operation over the project view (`specforge_ops::command::run`): it normalizes the given args,
+  operation over the project view (`specforge_ops::extension::command::run`): it normalizes the given args,
   sends the project root (absolute and canonical), the evidence and the date, and calls the export
   in the view's runtime; a surface only reads its arguments in and renders the output or the
   failure (`RunError`: refused args, no project, or an export that did not answer) (ADR 0011, "One
@@ -853,7 +853,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   its reply (ADR 0022 D7, ADR 0057). The CLI, the LSP and the operations keep no event.
 - **Diagnostic catalog**: the one table of diagnostic codes (`specforge_diagnostics`'s `catalog!`):
   each code's title, owner, level and explanation. It generates `CATALOG`, which the explain operation
-  (`specforge_ops::explain`: `specforge explain` and MCP `specforge.explain`, one document),
+  (`specforge_ops::read::explain`: `specforge explain` and MCP `specforge.explain`, one document),
   diagnostics JSON titles, doctor and the LSP hover read and from which
   `docs/diagnostics.md` is generated, and a **code constant** for every core code.
 - **Code constant**: a core diagnostic code as a typed value, `specforge_diagnostics::codes::W112`
@@ -876,10 +876,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Reference**: an occurrence of an entity's ID in another entity's field that resolves to it (one
   edge, written where its token is). The references *to* an entity are incoming; what an entity
   *refers to* are its outgoing references. "Find references" means incoming, with the declaration
-  only on request (`specforge_ops::navigate`).
+  only on request (`specforge_ops::read::navigate`).
 - **Navigation**: where an entity is declared, its references, entity lookup and ranking, which
   entities a diagnostic is about, and the fixes a diagnostic's data names. The LSP and MCP answer
-  from one module (`specforge_ops::navigate`) in source spans. A span is a position in the text the
+  from one module (`specforge_ops::read::navigate`) in source spans. A span is a position in the text the
   project was compiled from (`ProjectSession::source_text`), not in the buffer typed since nor the disk
   now. The LSP converts spans to UTF-16 ranges through that text's line index (a file the compile holds
   no text of has no range), MCP renders them as JSON (ADR 0016, ADR 0023).

@@ -1,9 +1,9 @@
-//! `specforge.render`: render the graph in an export format (`specforge_ops::export`).
+//! `specforge.render`: render the graph in an export format (`specforge_ops::read::export`).
 
 use crate::refusal::ArgumentOf;
 use crate::target::View;
 use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup, WriteHints};
-use specforge_ops::export::ExportField;
+use specforge_ops::read::export::ExportField;
 use std::path::Path;
 
 use serde::Serialize;
@@ -22,7 +22,7 @@ pub struct Args {
     // Required: a renderer is named, never assumed. It stays a string so
     // `call` can refuse an unknown one with `available_renderers`.
     /// Renderer to use
-    #[arg(choice = specforge_ops::export::FORMAT)]
+    #[arg(choice = specforge_ops::read::export::FORMAT)]
     format: String,
     /// Directory to write the rendering into, inside the project (relative to
     /// its root; returned inline when omitted)
@@ -35,7 +35,7 @@ pub struct Args {
 /// the files it was written to.
 #[derive(Debug, Serialize, Shape)]
 pub struct Reply {
-    #[shape(names = specforge_ops::export::FORMAT)]
+    #[shape(names = specforge_ops::read::export::FORMAT)]
     format: String,
     /// The rendering itself, when no `out_dir` was given.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -72,7 +72,7 @@ impl CoreTool for Tool {
     type Returns = Answered<Reply>;
 
     fn call(view: ProjectView<'_>, args: Args) -> Answered<Reply> {
-        use specforge_ops::export::{FORMAT, Format};
+        use specforge_ops::read::export::{FORMAT, Format};
 
         // The renderers are the export formats, named as `specforge export
         // --format` names them (ADR 0027 D8); `json` is `graph`'s alias, which
@@ -98,12 +98,12 @@ impl CoreTool for Tool {
 
         // `graph` is the full graph export: Graph Protocol 2.0 with the schema,
         // as `specforge export --format graph` writes it.
-        let request = specforge_ops::export::Request {
+        let request = specforge_ops::read::export::Request {
             format: Some(format),
             scope: args.scope.as_deref(),
-            ..specforge_ops::export::Request::default()
+            ..specforge_ops::read::export::Request::default()
         };
-        let output = specforge_ops::export::export(&view, &request).map_err(Self::refused)?;
+        let output = specforge_ops::read::export::export(&view, &request).map_err(Self::refused)?;
 
         // With out_dir the rendering lands on disk; without it, inline.
         let Some(out_dir) = args.out_dir.as_deref() else {

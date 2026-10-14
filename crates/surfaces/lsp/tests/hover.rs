@@ -2,7 +2,7 @@
 //! from disk (`specforge_lsp::answers::hover`, over a project whose
 //! extensions are declared in process), and the markdown of its parts
 //! (`specforge_lsp::hover`): an entity's facts, read by the inspect read
-//! view (`specforge_ops::inspect`); a field's help; the diagnostics under
+//! view (`specforge_ops::read::inspect`); a field's help; the diagnostics under
 //! the cursor.
 
 use specforge_common::{Severity, SourceSpan, Sym};
@@ -131,7 +131,7 @@ fn hover_shows_testability_from_the_standing() {
 
     for (id, testable) in [("login", true), ("auth", false)] {
         let state = served.state();
-        let facts = specforge_ops::inspect::inspect(&state.view(), id).unwrap();
+        let facts = specforge_ops::read::inspect::inspect(&state.view(), id).unwrap();
         assert_eq!(facts.standing.testable, testable, "{id}");
         let text = served.hover_on("main.spec", id).unwrap();
         assert_eq!(text.contains("`testable`"), testable, "{id}:\n{text}");
@@ -363,12 +363,12 @@ fn hover_shows_each_coverage_case() {
         assert_eq!(line(id).as_deref(), expected, "{id}");
         // The line agrees with the read view MCP inspect renders.
         let state = project.state();
-        let facts = specforge_ops::inspect::inspect(&state.view(), id).unwrap();
+        let facts = specforge_ops::read::inspect::inspect(&state.view(), id).unwrap();
         if let Some(expected) = expected
             && !facts.standing.exempt()
         {
-            let status = specforge_ops::coverage::STATUS.name_of(
-                specforge_ops::inspect::coverage(&state.view(), id)
+            let status = specforge_ops::read::coverage::STATUS.name_of(
+                specforge_ops::read::inspect::coverage(&state.view(), id)
                     .unwrap()
                     .status(),
             );
@@ -501,9 +501,9 @@ fn hover_lists_the_diagnostics_not_already_shown() {
     let env = Environment::empty();
     let recorded = RecordedCoverage::over(&g, &env);
     let view = ProjectView::new(&g, &env, None, &recorded).reporting(&reported);
-    let facts = specforge_ops::inspect::inspect(&view, "beta").unwrap();
+    let facts = specforge_ops::read::inspect::inspect(&view, "beta").unwrap();
 
-    let coverage = specforge_ops::inspect::coverage(&view, "beta");
+    let coverage = specforge_ops::read::inspect::coverage(&view, "beta");
     let text = specforge_lsp::hover::entity(&facts, &coverage, &[], false);
     assert!(
         text.ends_with(

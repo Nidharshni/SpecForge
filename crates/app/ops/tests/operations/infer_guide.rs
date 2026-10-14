@@ -4,7 +4,7 @@
 use serde_json::json;
 use specforge_extension_sdk::prelude::*;
 use specforge_installed::Installed;
-use specforge_ops::infer::{InferencePlanRequest, guide, inference_plan, kind_guide};
+use specforge_ops::read::infer::{InferencePlanRequest, guide, inference_plan, kind_guide};
 use specforge_ops::view::ProjectView;
 use specforge_project::Environment;
 use specforge_project::coverage::RecordedCoverage;
@@ -474,7 +474,7 @@ fn the_plan_pages_its_file_lists() {
     verify = "an operation states the request field each refusal is about, and a refusal of the project or the environment is about none"
 )]
 fn an_unknown_kind_guide_is_about_its_kind() {
-    use specforge_ops::infer::KindGuideField;
+    use specforge_ops::read::infer::KindGuideField;
     let project = project_of("", vec![extension("@t/soft", &[("behavior", None)])]);
     let refusal = kind_guide(&project.view(), "behaviour").unwrap_err();
     assert_eq!(refusal.subject, Some(KindGuideField::Kind));

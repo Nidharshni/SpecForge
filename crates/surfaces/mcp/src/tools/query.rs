@@ -3,8 +3,8 @@ use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
 use serde::Serialize;
 use serde_json::Value;
 use specforge_common::shape::{Object, Shape};
-use specforge_ops::export::Format;
-use specforge_ops::query::{QueryField, QueryRequest, query};
+use specforge_ops::read::export::Format;
+use specforge_ops::read::query::{QueryField, QueryRequest, query};
 
 use crate::args::Arguments;
 use crate::refusal::ArgumentOf;
@@ -17,12 +17,12 @@ pub struct Args {
     /// Entity ID to query
     entity_id: String,
     /// Number of hops
-    #[arg(default = specforge_ops::query::DEFAULT_DEPTH)]
+    #[arg(default = specforge_ops::read::query::DEFAULT_DEPTH)]
     depth: usize,
     /// Filter by entity kinds
     kinds: Vec<String>,
     /// Output detail level
-    #[arg(choice = specforge_ops::export::AGENT_FORMAT)]
+    #[arg(choice = specforge_ops::read::export::AGENT_FORMAT)]
     format: Format,
     /// Include coverage metadata in the response
     include_coverage: bool,
@@ -31,7 +31,7 @@ pub struct Args {
 /// `specforge.query`'s reply: the export document of the requested format
 /// (ADR 0007), its nodes carrying `coverage_status` when asked. Its schema
 /// is the emitter's derived document schemas
-/// ([`specforge_ops::query::document_schema`]); the document reaches MCP as
+/// ([`specforge_ops::read::query::document_schema`]); the document reaches MCP as
 /// the text the emitter wrote, read once into the structured result.
 #[derive(Debug, Serialize)]
 #[serde(transparent)]
@@ -39,13 +39,13 @@ pub struct Reply(Value);
 
 impl Shape for Reply {
     fn body(defs: &mut specforge_common::shape::Definitions) -> Value {
-        specforge_ops::query::document_schema(defs)
+        specforge_ops::read::query::document_schema(defs)
     }
 }
 
 impl Object for Reply {}
 
-/// `specforge.query`: the query read view (`specforge_ops::query`), the
+/// `specforge.query`: the query read view (`specforge_ops::read::query`), the
 /// document `specforge query` prints for the same arguments; an unknown
 /// kind of the filter rides in `_meta.diagnostics` (I020).
 pub(crate) struct Tool;

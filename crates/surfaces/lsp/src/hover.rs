@@ -1,12 +1,12 @@
 //! The hover's markdown: the diagnostics under the cursor, an entity's
-//! facts (the inspect read view, `specforge_ops::inspect`) and a field's
+//! facts (the inspect read view, `specforge_ops::read::inspect`) and a field's
 //! help. Rendering only: the facts come from the read view, so the hover
 //! and MCP `specforge.inspect` cannot disagree (ADR 0015, "Inspect").
 
 use crate::document::LineIndex;
 use specforge_common::Diagnostic;
 use specforge_ops::OpError;
-use specforge_ops::inspect::{EntityCoverage, EntityFacts};
+use specforge_ops::read::inspect::{EntityCoverage, EntityFacts};
 use specforge_parser::FieldValue;
 use specforge_registry::FieldRegistry;
 use std::collections::BTreeMap;
@@ -283,7 +283,7 @@ fn coverage_line(
     let verdict = &coverage.verdict;
     let mut line = format!(
         "`{}` · {}/{} obligations proven",
-        specforge_ops::coverage::STATUS.name_of(coverage.status()),
+        specforge_ops::read::coverage::STATUS.name_of(coverage.status()),
         verdict.proven,
         verdict.obligations
     );

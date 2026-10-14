@@ -5,13 +5,13 @@
 //! document's paths reads the same here as it did on stdout.
 
 use serde_json::Value;
-use specforge_ops::analyze::{AnalyzeOptions, analyze};
-use specforge_ops::check::{CheckOptions, CheckOutcome, check};
-use specforge_ops::export::{self, Format};
-use specforge_ops::query::{QueryOutcome, QueryRequest, query};
-use specforge_ops::schema::{self, SchemaRequest};
-use specforge_ops::stats::{self, Stats};
-use specforge_ops::trace::{self, Target, TraceOutcome};
+use specforge_ops::analysis::analyze::{AnalyzeOptions, analyze};
+use specforge_ops::analysis::check::{CheckOptions, CheckOutcome, check};
+use specforge_ops::read::export::{self, Format};
+use specforge_ops::read::query::{QueryOutcome, QueryRequest, query};
+use specforge_ops::read::schema::{self, SchemaRequest};
+use specforge_ops::read::stats::{self, Stats};
+use specforge_ops::read::trace::{self, Target, TraceOutcome};
 use specforge_ops::view::ProjectView;
 use specforge_project::CompiledProject;
 pub use specforge_project::testing::{TestProject, specs};
@@ -87,7 +87,7 @@ pub fn published(project: &CompiledProject, format: Format) -> Value {
 pub fn queried(
     project: &CompiledProject,
     request: &QueryRequest<'_>,
-) -> Result<QueryOutcome, specforge_ops::Refusal<specforge_ops::query::QueryField>> {
+) -> Result<QueryOutcome, specforge_ops::Refusal<specforge_ops::read::query::QueryField>> {
     query(&ProjectView::of(project), request)
 }
 
@@ -148,16 +148,16 @@ pub fn command_document(
     given: Value,
 ) -> (i32, Value) {
     let view = ProjectView::of(project);
-    let commands = specforge_ops::command::ExtensionCommands::build(view.registries());
+    let commands = specforge_ops::extension::command::ExtensionCommands::build(view.registries());
     let command = commands
         .of(short)
         .find(|command| command.id() == id)
         .unwrap_or_else(|| panic!("no command {short} {id}"));
-    let output = specforge_ops::command::run(
+    let output = specforge_ops::extension::command::run(
         &view,
         command,
         given.as_object().expect("args are an object"),
-        specforge_ops::command::CommandFormat::Json,
+        specforge_ops::extension::command::CommandFormat::Json,
     )
     .unwrap_or_else(|e| panic!("{short} {id} refused: {e:?}"));
     (output.exit_code, parse(&output.stdout))

@@ -1150,7 +1150,7 @@ mod tests {
     fn served(runtime: &InProcessRuntime, wasm: &[u8]) -> Published {
         Published::new(
             wasm.to_vec(),
-            crate::publish::declare(runtime, wasm).unwrap().0,
+            crate::extension::declare(runtime, wasm).unwrap().0,
         )
     }
 

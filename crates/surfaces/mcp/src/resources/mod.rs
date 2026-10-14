@@ -13,7 +13,7 @@ use crate::surface_call::{Found, Invocation, Surface};
 use crate::surface_table::ResourceEntry;
 use crate::target::{Call, TargetSpec};
 use crate::tool::{ErrorCode, McpError};
-use specforge_ops::export::Format;
+use specforge_ops::read::export::Format;
 use specforge_ops::view::ProjectView;
 
 /// `resources/read`: the core resources (matched first), then the extension

@@ -1,6 +1,8 @@
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal, Written};
 use crate::terminal::{Terminal, errln, outln};
-use specforge_ops::migrate::{self, MigrateDocument, MigrationStatus, Request, RollbackSummary};
+use specforge_ops::authoring::migrate::{
+    self, MigrateDocument, MigrationStatus, Request, RollbackSummary,
+};
 
 // `specforge migrate`'s command line.
 #[derive(clap::Args)]

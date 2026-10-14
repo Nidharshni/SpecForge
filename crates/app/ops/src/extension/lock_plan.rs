@@ -1772,7 +1772,7 @@ mod tests {
         let runtime = runtime();
         let registry = base_registry().serving(Published::new(
             APP_NEEDS_BASE_1.to_vec(),
-            crate::publish::declare(&runtime, APP_NEEDS_BASE_1)
+            crate::extension::declare(&runtime, APP_NEEDS_BASE_1)
                 .unwrap()
                 .0,
         ));
@@ -2032,7 +2032,7 @@ mod tests {
     fn app_registry(signer: Option<&str>) -> MemoryRegistry {
         let app = Published::new(
             APP_NEEDS_BASE_1.to_vec(),
-            crate::publish::declare(&runtime(), APP_NEEDS_BASE_1)
+            crate::extension::declare(&runtime(), APP_NEEDS_BASE_1)
                 .expect("a publishable binary")
                 .0,
         );
@@ -2229,7 +2229,7 @@ mod tests {
 
     /// `bytes` published as the package the in-process probe runtime says they declare.
     fn published_probe(bytes: &[u8]) -> Published {
-        let declared = crate::publish::declare(&crate::testing::probes(), bytes)
+        let declared = crate::extension::declare(&crate::testing::probes(), bytes)
             .unwrap()
             .0;
         Published::new(bytes.to_vec(), declared)

@@ -12,7 +12,7 @@
 
 use serde_json::{Map, Value, json};
 use specforge_ops::options::OptionTable;
-use specforge_ops::plan::AgentPlan;
+use specforge_ops::read::plan::AgentPlan;
 use specforge_protocol_types::command_args::normalize_arg;
 use specforge_protocol_types::{CommandArgDescriptor, CommandArgType};
 
@@ -304,7 +304,7 @@ impl Arg for Map<String, Value> {
     }
 }
 
-/// An agent plan (`specforge_ops::plan::AgentPlan`): listed as the type's
+/// An agent plan (`specforge_ops::read::plan::AgentPlan`): listed as the type's
 /// derived schema; read from an object, or from a string holding one's JSON
 /// (a prompt's arguments are strings, as ADR 0033 D2 reads a count from a
 /// string holding one), checked against that schema before it is decoded, so
