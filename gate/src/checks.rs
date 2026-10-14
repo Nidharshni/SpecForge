@@ -7,6 +7,7 @@ use crate::judge;
 use crate::layers;
 use crate::repo::Repo;
 use crate::run::{Ctx, Mode};
+use crate::size_cap;
 use crate::steps;
 
 /// The smallest run that reaches a check. Hook < Quick < Full; Bootstrap is the cold-clone job alone.
@@ -158,6 +159,16 @@ pub static CHECKS: &[Check] = &[
         after: &[],
         fix: "make the dependency point down (move what it uses to a lower layer) and put each crate in crates/<layer>/<name>/; an upward edge an ADR accepts is an ALLOWED entry in gate/src/layers.rs; a crate the LSP must not link is reached through the chain the message names: cut that edge",
         run: steps::layers,
+    },
+    Check {
+        name: size_cap::CHECK,
+        proves: "no tracked .rs file is over 800 lines but those gate/baseline.json lists, none past its listed size",
+        reach: Reach::Hook,
+        trigger: Trigger::Paths(&["**/*.rs", "gate/baseline.json"]),
+        compiles: false,
+        after: &[],
+        fix: "split the file along its sections, or put new code and tests in a new module (a listed file may not grow); one that shrank, moved or went: cargo gate baseline --only file-size",
+        run: steps::file_size,
     },
     Check {
         name: "links",
@@ -316,7 +327,7 @@ pub static CHECKS: &[Check] = &[
         ]),
         compiles: false,
         after: &[],
-        fix: "fix the new errors and warnings; a count that fell: cargo gate baseline, in the same commit",
+        fix: "fix the new errors and warnings; a count that fell: cargo gate baseline --only specs, in the same commit",
         run: steps::specs,
     },
     Check {

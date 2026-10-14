@@ -1,10 +1,67 @@
 {
-  ".": {
-    "W003": 1,
-    "W004": 1,
-    "W005": 1
+  "file-size": {
+    "crates/adapters/ops-registry/tests/fetch.rs": 847,
+    "crates/app/ops/tests/operations/migrate.rs": 1261,
+    "crates/app/ops/tests/operations/navigate.rs": 1751,
+    "crates/app/ops/tests/operations/query.rs": 910,
+    "crates/app/ops/tests/operations/schema.rs": 1152,
+    "crates/app/ops/tests/operations/writes.rs": 1115,
+    "crates/kernel/common/tests/present.rs": 1082,
+    "crates/kernel/parser/tests/parse_test.rs": 2605,
+    "crates/pipeline/emitter/tests/contracts.rs": 884,
+    "crates/pipeline/emitter/tests/model.rs": 1518,
+    "crates/pipeline/emitter/tests/outline.rs": 1159,
+    "crates/pipeline/emitter/tests/schema.rs": 1677,
+    "crates/pipeline/graph/tests/graph.rs": 1781,
+    "crates/pipeline/registry/tests/rules/checks.rs": 881,
+    "crates/runtime/wasm/tests/calls.rs": 839,
+    "crates/session/project/tests/changes.rs": 952,
+    "crates/session/project/tests/compile.rs": 1233,
+    "crates/session/project/tests/e2e_pipeline.rs": 989,
+    "crates/session/project/tests/product_rules.rs": 1306,
+    "crates/session/project/tests/session.rs": 3090,
+    "crates/surfaces/cli/tests/analyze.rs": 1122,
+    "crates/surfaces/cli/tests/cli.rs": 1182,
+    "crates/surfaces/cli/tests/export.rs": 844,
+    "crates/surfaces/cli/tests/extensions.rs": 2268,
+    "crates/surfaces/cli/tests/format.rs": 1025,
+    "crates/surfaces/cli/tests/init.rs": 1434,
+    "crates/surfaces/cli/tests/installed_extensions.rs": 1224,
+    "crates/surfaces/cli/tests/migrate.rs": 1633,
+    "crates/surfaces/cli/tests/navigation_parity.rs": 1330,
+    "crates/surfaces/cli/tests/parity.rs": 1783,
+    "crates/surfaces/cli/tests/read_views.rs": 1395,
+    "crates/surfaces/cli/tests/registry.rs": 1624,
+    "crates/surfaces/cli/tests/surface_parity.rs": 840,
+    "crates/surfaces/cli/tests/watch.rs": 960,
+    "crates/surfaces/lsp/tests/contracts.rs": 1255,
+    "crates/surfaces/lsp/tests/hover.rs": 805,
+    "crates/surfaces/lsp/tests/reaction.rs": 1000,
+    "crates/surfaces/lsp/tests/semantic_tokens.rs": 826,
+    "crates/surfaces/mcp/tests/call_target.rs": 1314,
+    "crates/surfaces/mcp/tests/contracts.rs": 3326,
+    "crates/surfaces/mcp/tests/lifecycle.rs": 881,
+    "crates/surfaces/mcp/tests/mutation_outcome.rs": 1153,
+    "crates/surfaces/mcp/tests/operations_mgmt.rs": 849,
+    "crates/surfaces/mcp/tests/operations_mutation.rs": 2391,
+    "crates/surfaces/mcp/tests/prompts.rs": 985,
+    "crates/surfaces/mcp/tests/subscriptions.rs": 1044,
+    "crates/surfaces/mcp/tests/surface_call.rs": 995,
+    "crates/surfaces/mcp/tests/surface_wiring.rs": 1718,
+    "crates/surfaces/mcp/tests/tool_arguments.rs": 879,
+    "crates/surfaces/mcp/tests/tools_core.rs": 2629,
+    "crates/surfaces/mcp/tests/tools_inference.rs": 822,
+    "crates/surfaces/mcp/tests/tools_navigation.rs": 899,
+    "crates/surfaces/registry-server/tests/server_contracts.rs": 1345
   },
-  "integrations/rust/spec": {
-    "W004": 7
+  "specs": {
+    ".": {
+      "W003": 1,
+      "W004": 1,
+      "W005": 1
+    },
+    "integrations/rust/spec": {
+      "W004": 7
+    }
   }
 }

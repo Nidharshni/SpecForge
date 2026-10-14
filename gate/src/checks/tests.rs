@@ -454,3 +454,32 @@ fn the_layer_check_runs_when_a_manifest_or_the_rule_changes() {
         );
     }
 }
+
+#[test]
+fn file_size_runs_in_the_hook_for_any_rust_file_or_the_baseline() {
+    for path in [
+        "crates/app/ops/src/analyze.rs",
+        "extensions/product/src/queries.rs",
+        "gate/src/steps.rs",
+        "gate/baseline.json",
+    ] {
+        assert_eq!(
+            selection(crate::size_cap::CHECK, Mode::Hook, &[path]),
+            Selection::Everything,
+            "{path}"
+        );
+    }
+    assert_eq!(
+        selection(
+            crate::size_cap::CHECK,
+            Mode::Hook,
+            &["README.md", "spec/a.spec"]
+        ),
+        Selection::Skip
+    );
+    assert!(
+        check(crate::size_cap::CHECK)
+            .proves
+            .contains(&format!("over {} lines", crate::size_cap::CAP))
+    );
+}

@@ -1,30 +1,30 @@
 //! Pure functions the checks call; each is tested on literal input.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
-use serde_json::{Map, Value};
+use serde_json::Value;
 
-/// Where the warning baseline lives; named in the verdict's messages.
-pub const BASELINE: &str = "gate/baseline.json";
+use crate::baseline::{PATH as BASELINE, WarningCounts};
 
 pub struct SpecVerdict {
     pub lines: Vec<String>,
     pub failed: bool,
-    /// With `write`: the baseline lowered to today's counts (never raised, never with an error left).
-    pub new_baseline: Option<Value>,
+    /// With `write`: the `specs` section lowered to today's counts (never raised, never with an error left).
+    pub new_baseline: Option<WarningCounts>,
 }
 
 /// The spec checks' verdict (was `gate.sh:94-137`): errors per project, and every warning code whose count differs
-/// from `baseline`. `write` lowers the baseline and refuses when a count rose or an error remains.
+/// from `baseline` (the `specs` section). `write` lowers the section and refuses when a count rose or an error remains.
 pub fn spec_verdict(
     found: &BTreeMap<String, Vec<Value>>,
-    baseline: &Value,
+    baseline: &WarningCounts,
     write: bool,
 ) -> SpecVerdict {
     let mut lines = Vec::new();
     let mut failed = false;
-    let mut counts: BTreeMap<&str, BTreeMap<String, u64>> = BTreeMap::new();
+    let mut counts = WarningCounts::new();
+    let nothing = BTreeMap::new();
     for (project, diagnostics) in found {
         fn severity(d: &Value) -> Option<&str> {
             d["severity"].as_str()
@@ -58,19 +58,15 @@ pub fn spec_verdict(
             ));
         }
         failed |= !errors.is_empty();
-        let allowed = &baseline[project.as_str()];
-        let was_of = |code: &str| allowed[code].as_u64().unwrap_or(0);
-        let mut codes: Vec<&str> = warnings.keys().map(String::as_str).collect();
-        codes.extend(
-            allowed
-                .as_object()
-                .into_iter()
-                .flat_map(|o| o.keys().map(String::as_str)),
-        );
-        codes.sort_unstable();
-        codes.dedup();
+        let allowed = baseline.get(project).unwrap_or(&nothing);
+        let codes: BTreeSet<&str> = warnings
+            .keys()
+            .chain(allowed.keys())
+            .map(String::as_str)
+            .collect();
         for code in codes {
-            let (now, was) = (warnings.get(code).copied().unwrap_or(0), was_of(code));
+            let now = warnings.get(code).copied().unwrap_or(0);
+            let was = allowed.get(code).copied().unwrap_or(0);
             if now > was {
                 lines.push(format!(
                     "  {code} rose {was} -> {now}: fix the new warnings"
@@ -78,12 +74,14 @@ pub fn spec_verdict(
                 failed = true;
             } else if now < was && !write {
                 lines.push(format!(
-                    "  {code} fell {was} -> {now}: lower it in {BASELINE} in the same commit (cargo gate baseline)"
+                    "  {code} fell {was} -> {now}: lower it in {BASELINE} in the same commit (cargo gate baseline --only specs)"
                 ));
                 failed = true;
             }
         }
-        counts.insert(project, warnings);
+        if !warnings.is_empty() {
+            counts.insert(project.clone(), warnings);
+        }
     }
     let mut new_baseline = None;
     if write {
@@ -92,18 +90,7 @@ pub fn spec_verdict(
                 "{BASELINE} not written: fix the errors and risen counts first"
             ));
         } else {
-            let object: Map<String, Value> = counts
-                .into_iter()
-                .filter(|(_, codes)| !codes.is_empty())
-                .map(|(project, codes)| {
-                    let codes: Map<String, Value> = codes
-                        .into_iter()
-                        .map(|(c, n)| (c, Value::from(n)))
-                        .collect();
-                    (project.to_string(), Value::Object(codes))
-                })
-                .collect();
-            new_baseline = Some(Value::Object(object));
+            new_baseline = Some(counts);
         }
     }
     SpecVerdict {
@@ -240,6 +227,17 @@ mod tests {
 
     use serde_json::json;
 
+    fn allowed(entries: &[(&str, &str, u64)]) -> WarningCounts {
+        let mut counts = WarningCounts::new();
+        for &(project, code, n) in entries {
+            counts
+                .entry(project.to_string())
+                .or_default()
+                .insert(code.to_string(), n);
+        }
+        counts
+    }
+
     fn found(project: &str, diagnostics: Value) -> BTreeMap<String, Vec<Value>> {
         BTreeMap::from([(project.to_string(), diagnostics.as_array().unwrap().clone())])
     }
@@ -254,7 +252,7 @@ mod tests {
     #[test]
     fn a_warning_that_rose_fails_and_one_that_fell_asks_for_the_baseline() {
         // §3.3: W003 1 -> 2 failed in gate.sh and passed in CI.
-        let baseline = json!({".": {"W003": 1}});
+        let baseline = allowed(&[(".", "W003", 1)]);
         let rose = spec_verdict(&found(".", warnings("W003", 2)), &baseline, false);
         assert!(rose.failed);
         assert!(
@@ -269,7 +267,7 @@ mod tests {
         assert!(
             fell.lines
                 .iter()
-                .any(|l| l.contains("W003 fell 1 -> 0: lower it in gate/baseline.json"))
+                .any(|l| l.contains("W003 fell 1 -> 0: lower it in gate/baseline.json in the same commit (cargo gate baseline --only specs)"))
         );
 
         let same = spec_verdict(&found(".", warnings("W003", 1)), &baseline, false);
@@ -278,7 +276,7 @@ mod tests {
         // `write` lowers a fallen count, drops a project with none, and refuses after a rise.
         let lowered = spec_verdict(&found(".", warnings("W003", 0)), &baseline, true);
         assert!(!lowered.failed);
-        assert_eq!(lowered.new_baseline, Some(json!({})));
+        assert_eq!(lowered.new_baseline, Some(WarningCounts::new()));
         let refused = spec_verdict(&found(".", warnings("W003", 2)), &baseline, true);
         assert!(refused.failed && refused.new_baseline.is_none());
         assert!(refused.lines.last().unwrap().contains("not written"));
@@ -288,7 +286,7 @@ mod tests {
     fn an_error_fails_the_spec_checks_whatever_the_baseline() {
         let error = json!([{"severity": "Error", "code": "E001", "message": "boom",
                             "span": {"file": "a.spec", "start_line": 7}}]);
-        let verdict = spec_verdict(&found("p", error), &json!({}), false);
+        let verdict = spec_verdict(&found("p", error), &WarningCounts::new(), false);
         assert!(verdict.failed);
         assert!(
             verdict.lines.contains(&"  E001 a.spec:7: boom".to_string()),
@@ -297,7 +295,7 @@ mod tests {
         );
         let written = spec_verdict(
             &found("p", json!([{"severity": "Error", "code": "E001"}])),
-            &json!({}),
+            &WarningCounts::new(),
             true,
         );
         assert!(written.failed && written.new_baseline.is_none());
