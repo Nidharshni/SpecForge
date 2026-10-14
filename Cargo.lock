@@ -2911,6 +2911,7 @@ dependencies = [
  "specforge-extension-sdk",
  "specforge-extension-sdk-macros",
  "specforge-protocol-types",
+ "specforge-repo-root",
  "specforge-test",
  "specforge-test-macros",
  "wit-bindgen 0.30.0",
@@ -3177,6 +3178,7 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+ "specforge-repo-root",
  "specforge-test",
  "specforge-test-macros",
 ]

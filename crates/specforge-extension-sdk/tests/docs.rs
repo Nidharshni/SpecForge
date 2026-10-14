@@ -1,12 +1,8 @@
 //! `docs/extension-sdk.md` names only what the SDK has.
 
-use std::path::Path;
-
 fn doc() -> String {
-    std::fs::read_to_string(
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/extension-sdk.md"),
-    )
-    .expect("the SDK doc exists")
+    std::fs::read_to_string(specforge_repo_root::repo_root().join("docs/extension-sdk.md"))
+        .expect("the SDK doc exists")
 }
 
 /// The text of every fenced ```rust block of `doc`, in order, with the line each starts after.
@@ -39,8 +35,7 @@ fn the_docs_complete_example_is_the_greet_fixture() {
         .find(|(start, _)| *start > heading)
         .expect("a rust block follows the heading");
     let fixture = std::fs::read_to_string(
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../fixtures/greet-extension/src/contributions.rs"),
+        specforge_repo_root::repo_root().join("fixtures/greet-extension/src/contributions.rs"),
     )
     .expect("the greet fixture exists");
     assert_eq!(
