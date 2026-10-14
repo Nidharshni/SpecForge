@@ -11,7 +11,7 @@ spec-format       hook       computed: a .spec file in a project's spec dir; the
                              the .spec files of every project are formatted
 grammar           hook       crates/tree-sitter-specforge/grammar.js, crates/tree-sitter-specforge/src/**
                              the committed tree-sitter artifacts are what grammar.js generates
-zero-entity       hook       crates/*/src/**, scripts/check-zero-entity-core.sh
+zero-entity       hook       crates/**/src/**, scripts/check-zero-entity-core.sh
                              the core crates name no entity kind of an extension
 links             hook       computed: a .spec file; a test file or one with a `verify =` attribute
                              every test's verify text and entity is declared by the spec (A016, static)
@@ -31,7 +31,7 @@ doctests          quick      computed: a workspace member that holds a runnable 
                              the doctests of the crates that have one pass
 published-schemas quick      **/*.spec, **/specforge.json, extensions/**, crates/specforge-emitter/**, crates/specforge-graph/**, crates/specforge-registry/**, crates/specforge-ops/tests/operations/schema.rs (after build)
                              every project's exports validate against the schema `specforge schema --publish` prints for their format
-specs             quick      **/*.spec, **/specforge.json, gate/baseline.json, extensions/**, crates/*/src/**, crates/*/Cargo.toml
+specs             quick      **/*.spec, **/specforge.json, gate/baseline.json, extensions/**, crates/**/src/**, crates/**/Cargo.toml
                              every project checks with no error and no warning above the baseline
 dogfood           full       always (after tests, guests)
                              the tests' reports leave no unknown entity (W115), failing proof (A014) or undeclared obligation (A016)
