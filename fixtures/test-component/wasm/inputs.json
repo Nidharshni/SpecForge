@@ -3,7 +3,7 @@
   "artifact_sha256": "7fef4843c5b5e7b8fec2ddb840949704c515124fe3956bb5b19461146b52e927",
   "built_with": "rustc 1.98.1 (48a229cea 2026-09-01)",
   "inputs": {
-    "Cargo.toml#workspace-inherited": "d73adcb604631f322bd0869972ea48bddc7b73ebd513d9e2d3a5e0d4a9806d7d",
+    "Cargo.toml#workspace-inherited": "e294cda7c0ad0b2bfd8c63bea79dd9c0ab5a3f9fab4ae25df24c718cf069fe30",
     "fixtures/test-component/Cargo.lock": "7cbcbb07cd6200b7dad03b7a9680a0592cf8c055339494d6bba6841539d5fa94",
     "fixtures/test-component/Cargo.toml": "8b5481aa02a6ac92ccd808336aa3b261c403ec6c9b1d86ef774117f9f2930e98",
     "fixtures/test-component/src/lib.rs": "e4bdf2e16fabc1451f6cc186da2061c86fe25af5426fcfe3bf2a9f7b4afc48ae",
