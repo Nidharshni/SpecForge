@@ -126,7 +126,7 @@ fn validate_with_a_path_while_nothing_is_served_serves_it() {
 #[test]
 fn collect_with_another_path_keeps_serving_this_one() {
     let served = project(&[], "behavior login \"Login\" {\n}\n");
-    let other = collect_project();
+    let other = within(served.path(), collect_project());
     let mut server = McpServer::new();
     initialize(&mut server, served.path());
 
@@ -151,7 +151,10 @@ fn format_with_another_path_leaves_the_served_spans() {
     // Blank lines inside each block: formatting removes them.
     let unformatted = "behavior login \"Login\" {\n\n\n\n}\n";
     let served = project(&[], unformatted);
-    let other = project(&[], "behavior other \"Other\" {\n\n\n\n}\n");
+    let other = within(
+        served.path(),
+        project(&[], "behavior other \"Other\" {\n\n\n\n}\n"),
+    );
     let mut server = McpServer::new();
     initialize(&mut server, served.path());
     let span = |server: &McpServer| {
@@ -448,9 +451,12 @@ fn a_mutation_on_another_project_does_not_reload_the_served_one() {
         ("specforge.migrate", json!({})),
     ];
     for (tool, mut arguments) in calls {
-        let other = project(
-            &["@specforge/software"],
-            "behavior alpha \"Alpha\" {\n\n\n}\n",
+        let other = within(
+            served.path(),
+            project(
+                &["@specforge/software"],
+                "behavior alpha \"Alpha\" {\n\n\n}\n",
+            ),
         );
         let mut server = McpServer::new();
         initialize(&mut server, served.path());
@@ -566,9 +572,9 @@ fn analyze_of_another_project_runs_its_extensions_in_one_runtime() {
         "__pass_audit",
         json!({"diagnostics": [{"code": "W900", "severity": "Warning", "message": "careful"}]}),
     );
-    let (mut server, ext, _served) = fake_extension::initialized(ext);
+    let (mut server, ext, served) = fake_extension::initialized(ext);
     let generation = server.state().session_generation();
-    let other = project(&[EXT], "");
+    let other = within(served.path(), project(&[EXT], ""));
     let loads = ext.handshakes();
 
     let resp = call_tool(
@@ -604,9 +610,9 @@ fn analyze_of_another_project_runs_its_extensions_in_one_runtime() {
 fn a_mutation_on_another_project_reports_what_a_fresh_compile_reports() {
     use crate::fake_extension::{self, FakeExtension};
 
-    let (mut server, ext, _served) = fake_extension::initialized(FakeExtension::new());
+    let (mut server, ext, served) = fake_extension::initialized(FakeExtension::new());
     let generation = server.state().session_generation();
-    let other = fake_extension::project();
+    let other = within(served.path(), fake_extension::project());
     fs::write(
         other.path().join("main.spec"),
         "behavior alpha \"A\" {\n}\n",
@@ -644,7 +650,7 @@ fn an_extension_added_to_another_project_is_loaded_when_it_is_brought_up_to_date
     let mut server = McpServer::new();
     initialize(&mut server, served.path());
     let generation = server.state().session_generation();
-    let other = project(&[], "behavior alpha \"A\" {\n}\n");
+    let other = within(served.path(), project(&[], "behavior alpha \"A\" {\n}\n"));
     let path = other.path().to_str().unwrap();
 
     let resp = call_tool(
@@ -831,9 +837,12 @@ fn analyze_without_a_project_is_refused() {
 )]
 fn rename_on_another_project_edits_that_project_only() {
     let served = project(&[], "behavior alpha \"A\" {\n}\n");
-    let other = project(
-        &[],
-        "behavior alpha \"B\" {\n}\nbehavior beta \"Beta\" {\n}\n",
+    let other = within(
+        served.path(),
+        project(
+            &[],
+            "behavior alpha \"B\" {\n}\nbehavior beta \"Beta\" {\n}\n",
+        ),
     );
     let mut server = McpServer::new();
     initialize(&mut server, served.path());

@@ -71,9 +71,12 @@ fn analyze_notifies_the_diagnostics_it_compiled() {
 )]
 fn validate_on_another_project_keeps_serving_this_one() {
     let served = project(&[], "behavior login \"Login\" {\n}\n");
-    let other = project(
-        &[],
-        "behavior other \"Other\" {\n  invariants [missing_one]\n}\n",
+    let other = within(
+        served.path(),
+        project(
+            &[],
+            "behavior other \"Other\" {\n  invariants [missing_one]\n}\n",
+        ),
     );
     let mut server = McpServer::new();
     initialize(&mut server, served.path());

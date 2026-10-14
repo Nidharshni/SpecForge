@@ -136,7 +136,6 @@ fn assert_refused(reply: &Value, argument: &str) {
     invariant = "mcp_served_project_consistency",
     verify = "a path an MCP request names resolves inside the served project, whatever its spelling"
 )]
-#[ignore = "fixed by T2"]
 fn format_path_outside_the_served_project_is_refused() {
     let scene = Scene::new();
     let mut verdicts = Verdicts::default();
@@ -155,7 +154,6 @@ fn format_path_outside_the_served_project_is_refused() {
     invariant = "mcp_served_project_consistency",
     verify = "a path an MCP request names resolves inside the served project, whatever its spelling"
 )]
-#[ignore = "fixed by T2"]
 fn stateless_format_path_outside_the_served_project_is_refused() {
     let scene = Scene::new();
     let mut server = McpServer::with_project_root(scene.proj());
@@ -181,7 +179,6 @@ fn stateless_format_path_outside_the_served_project_is_refused() {
     invariant = "mcp_served_project_consistency",
     verify = "a file or directory an MCP tool argument names resolves inside the call's project"
 )]
-#[ignore = "fixed by T2"]
 fn format_paths_outside_the_served_project_are_refused() {
     let scene = Scene::new();
     let mut verdicts = Verdicts::default();
@@ -201,7 +198,6 @@ fn format_paths_outside_the_served_project_are_refused() {
     invariant = "mcp_served_project_consistency",
     verify = "a path an MCP request names resolves inside the served project, whatever its spelling"
 )]
-#[ignore = "fixed by T2"]
 fn every_tool_with_a_path_refuses_one_outside_the_served_project() {
     let mut verdicts = Verdicts::default();
     for (tool, mut arguments) in path_tool_calls() {
@@ -222,7 +218,6 @@ fn every_tool_with_a_path_refuses_one_outside_the_served_project() {
     invariant = "mcp_served_project_consistency",
     verify = "a path an MCP request names resolves inside the served project, whatever its spelling"
 )]
-#[ignore = "fixed by T2"]
 fn a_path_inside_the_served_project_is_accepted() {
     let scene = Scene::new();
     let mut server = scene.serve();

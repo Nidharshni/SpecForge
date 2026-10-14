@@ -1,6 +1,7 @@
 extern crate self as specforge_mcp;
 
 pub mod args;
+pub mod containment;
 pub mod events;
 mod extension_dispatch;
 pub mod lifecycle;

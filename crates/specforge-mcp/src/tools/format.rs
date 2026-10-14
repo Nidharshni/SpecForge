@@ -2,7 +2,9 @@
 
 use crate::target::{AnyProject, Project};
 use crate::tool::{CoreTool, Effect, ReplySpec, WriteHints};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+
+use crate::containment::Containment;
 
 use crate::args::Arguments;
 use crate::mutation::{
@@ -77,12 +79,19 @@ impl CoreTool for Tool {
         let project_root = project.root;
 
         // The run `specforge format` makes. Relative paths name files under
-        // the project root.
-        let explicit: Vec<PathBuf> = args
+        // the project root, and none leaves it (ADR 0092).
+        let bound = Containment::at(project_root.dir());
+        let explicit = args
             .paths
             .iter()
-            .map(|p| project_root.dir().join(p))
-            .collect();
+            .map(|p| {
+                let named = Path::new(p);
+                bound
+                    .resolve(named)
+                    .map(|_| bound.spelled(named))
+                    .map_err(|outside| Box::new(outside.refusal("paths")))
+            })
+            .collect::<Result<Vec<PathBuf>, Box<McpError>>>()?;
         let outcome = format::run(&Request {
             root: project_root,
             paths: &explicit,

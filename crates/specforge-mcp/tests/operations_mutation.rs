@@ -984,7 +984,11 @@ fn init_requires_a_path() {
 )]
 fn init_then_validate_has_no_errors() {
     let dir = fresh_project_dir();
-    let mut server = test_server();
+    // Nothing is served and the server has no root, so no path is bounded
+    // (ADR 0092 D2): the project init creates is the one validate names.
+    let mut server = McpServer::new();
+    let reply = call(&mut server, "initialize", json!({}));
+    assert!(reply["error"].is_null(), "{reply}");
     init(
         &mut server,
         json!({"path": dir.path().to_str().unwrap(), "name": "integration",
@@ -2060,8 +2064,8 @@ fn project_with_duplicate_registry_alias() -> tempfile::TempDir {
     verify = "add_extension of a registry package reports what reading the registry configuration found"
 )]
 fn add_extension_from_a_registry_reports_a_duplicate_registry_alias() {
-    let dir = project_with_duplicate_registry_alias();
     let mut server = test_server();
+    let dir = within(server.root(), project_with_duplicate_registry_alias());
     let path = dir.path().to_str().unwrap();
 
     let resp = call_tool(
@@ -2093,8 +2097,8 @@ fn add_extension_from_a_registry_reports_a_duplicate_registry_alias() {
     verify = "an operation shows the registry configuration's diagnostics once it has asked a registry"
 )]
 fn add_extension_dry_run_shows_the_registry_configuration_it_asked() {
-    let dir = project_with_duplicate_registry_alias();
     let mut server = test_server();
+    let dir = within(server.root(), project_with_duplicate_registry_alias());
     let path = dir.path().to_str().unwrap();
 
     let resp = call_tool(
@@ -2157,11 +2161,11 @@ fn served_project(extensions: &[&str], files: &[(&str, &str)]) -> (McpServer, te
 fn remove_on_another_project_checks_that_projects_dependents() {
     // The served project enables formal, which requires software; the
     // other enables software alone.
-    let (mut server, _served) = served_project(
+    let (mut server, served) = served_project(
         &["@specforge/software", "@specforge/formal"],
         &[("main.spec", "")],
     );
-    let other = tempfile::TempDir::new().unwrap();
+    let other = within(served.path(), tempfile::TempDir::new().unwrap());
     std::fs::write(
         other.path().join("specforge.json"),
         json!({"name": "o", "version": "0.1.0", "extensions": ["@specforge/software"]}).to_string(),

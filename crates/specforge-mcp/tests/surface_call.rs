@@ -218,7 +218,7 @@ fn a_prompt_path_refusal_is_invalid_params() {
     let reply = get_prompt(
         &mut server,
         "specforge://prompts/context",
-        json!({"entity_id": "alpha", "path": "/nope"}),
+        json!({"entity_id": "alpha", "path": "nope"}),
     );
     // An argument the client named: -32602, not a server fault.
     assert_eq!(reply["error"]["code"], -32602, "{reply}");
@@ -237,7 +237,7 @@ fn a_tool_path_refusal_is_file_not_found() {
     let reply = call_tool(
         &mut server,
         "specforge.query",
-        json!({"entity_id": "alpha", "path": "/nope"}),
+        json!({"entity_id": "alpha", "path": "nope"}),
     );
     let error = tool_error(&reply);
     assert_eq!(error["code"], "file_not_found", "{error}");
@@ -859,7 +859,7 @@ fn events_per_request_kind() {
         "{names:?}"
     );
     let names = recorded(&mut server, |s| {
-        let refused = call_tool(s, "specforge.stats", json!({"path": "/nope"}));
+        let refused = call_tool(s, "specforge.stats", json!({"path": "nope"}));
         assert_eq!(tool_error(&refused)["code"], "file_not_found");
     });
     assert_eq!(names, ["mcp_tool_invoked"]);
