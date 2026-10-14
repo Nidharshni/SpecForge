@@ -84,7 +84,7 @@ fn expand(input: &DeriveInput) -> syn::Result<TokenStream2> {
                 ::std::vec![#(#declared),*]
             }
 
-            #[allow(unused_variables)]
+            #[allow(unused_variables, reason = "a struct with no fields reads nothing from `given`")]
             fn read(
                 given: &::specforge_mcp::args::Given<'_>,
             ) -> ::core::result::Result<Self, ::std::boxed::Box<::specforge_mcp::tool::McpError>> {

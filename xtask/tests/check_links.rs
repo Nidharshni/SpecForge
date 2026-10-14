@@ -1,5 +1,9 @@
 //! `check-links` on a fixture project: one declared link, one `verify` text
 //! the entity does not declare (A016), one link to an entity that is not there.
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
 
 use std::process::Command;
 

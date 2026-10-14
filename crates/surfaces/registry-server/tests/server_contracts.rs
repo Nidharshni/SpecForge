@@ -74,7 +74,7 @@ fn put_request(token: &str, name: &str, version: &str, body: Body) -> Request<Bo
         .header("authorization", format!("Bearer {}", token))
         .header("content-type", form::content_type("testboundary123"))
         .body(body)
-        .unwrap()
+        .expect("a valid request")
 }
 
 #[tokio::test]
@@ -359,10 +359,10 @@ mod ownership {
     /// The hash of the token labelled `label`.
     fn hash_of(state: &AppState, label: &str) -> String {
         auth::list_tokens(&state.database)
-            .unwrap()
+            .expect("the tokens list")
             .into_iter()
             .find(|t| t.label == label)
-            .unwrap()
+            .expect("a token carries the label")
             .token_hash
     }
 
@@ -548,9 +548,9 @@ async fn json_of(response: axum::response::Response) -> serde_json::Value {
     serde_json::from_slice(
         &axum::body::to_bytes(response.into_body(), 1_000_000)
             .await
-            .unwrap(),
+            .expect("a body"),
     )
-    .unwrap()
+    .expect("the typed JSON")
 }
 
 #[specforge_test_macros::test(
@@ -629,7 +629,7 @@ async fn description_and_keywords_come_from_the_declaration() {
 /// of another name) is answered with: the name and version checks come
 /// first, so `INVALID_NAME` and `INVALID_VERSION` are theirs.
 async fn publish_code(name: &str, version: &str) -> String {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = tempfile::tempdir().expect("a temp dir");
     let state = app_state(dir.path(), 100);
     let raw = auth::create_token(&state.database, None, "pub", Some(90), false);
     let response = app(state)
@@ -647,7 +647,7 @@ async fn publish_code(name: &str, version: &str) -> String {
         "{name}@{version}"
     );
     let body = json_of(response).await;
-    body["error"]["code"].as_str().unwrap().to_string()
+    body["error"]["code"].as_str().expect("a code").to_string()
 }
 
 /// What `publish_package` makes of a name and a version (plan 12 §3 R5): a
@@ -711,13 +711,13 @@ async fn a_read_of_a_name_that_is_not_one_is_not_found() {
 
 /// `value` reads as a `T` and writes back as the same JSON: the wire type is the body.
 fn round_trips<T: serde::Serialize + serde::de::DeserializeOwned>(value: &serde_json::Value) {
-    let typed: T = serde_json::from_value(value.clone()).unwrap();
-    assert_eq!(&serde_json::to_value(typed).unwrap(), value);
+    let typed: T = serde_json::from_value(value.clone()).expect("a typed value");
+    assert_eq!(&serde_json::to_value(typed).expect("it serializes"), value);
 }
 
 /// The sorted keys of a JSON object.
 fn keys_of(value: &serde_json::Value) -> Vec<String> {
-    let mut keys: Vec<String> = value.as_object().unwrap().keys().cloned().collect();
+    let mut keys: Vec<String> = value.as_object().expect("a map").keys().cloned().collect();
     keys.sort();
     keys
 }
@@ -730,7 +730,7 @@ async fn get_json(router: &axum::Router, uri: &str) -> (StatusCode, serde_json::
                 .method("GET")
                 .uri(uri)
                 .body(Body::empty())
-                .unwrap(),
+                .expect("a valid request"),
         )
         .await
         .unwrap();
@@ -1109,7 +1109,7 @@ fn stored(state: &AppState, name: &str, declares_entities: bool) {
             signature: None,
             manifest,
         })
-        .unwrap();
+        .expect("the package is stored");
 }
 
 #[specforge_test_macros::test(
@@ -1191,7 +1191,7 @@ fn stored_described(state: &AppState, name: &str, description: &str, keywords: &
             signature: None,
             manifest,
         })
-        .unwrap();
+        .expect("the package is stored");
 }
 
 #[specforge_test_macros::test(

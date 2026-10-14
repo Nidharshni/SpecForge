@@ -15,6 +15,10 @@
 //! ```
 //!
 //! Exit codes: 0 every selected check passed, 1 one failed or was blocked, 2 usage.
+#![expect(
+    clippy::print_stdout,
+    reason = "cargo gate prints the check list and its run on stdout"
+)]
 
 use std::process::ExitCode;
 

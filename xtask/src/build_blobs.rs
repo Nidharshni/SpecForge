@@ -13,6 +13,10 @@
 //!
 //! A blob is built in a staged workspace ([`Stage`]), so its bytes depend only on
 //! its sources and the toolchain, not on where the repository is checked out.
+#![expect(
+    clippy::print_stdout,
+    reason = "a developer tool: its report is its stdout"
+)]
 
 use gate::blob_inputs::{self, BlobRecord, WORKSPACE_INHERITED};
 use serde_json::Value;

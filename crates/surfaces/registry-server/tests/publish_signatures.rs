@@ -5,6 +5,10 @@
 //! orchestration the CLI runs), then asserts the signature survives storage,
 //! is served in metadata, and verifies offline — the registry is not needed
 //! as a trust anchor.
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
 
 use specforge_protocol_types::ExtensionDeclaration;
 use specforge_registry_client::registry_config::{RegistryConfig, RegistryCredential};

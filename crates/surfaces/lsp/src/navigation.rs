@@ -172,7 +172,10 @@ pub(crate) fn outline_to_document_symbols(
 ) -> DocumentSymbolResponse {
     let kinds = ranges.state().kind_registry();
     if hierarchical {
-        #[allow(deprecated)]
+        #[expect(
+            deprecated,
+            reason = "lsp-types marks DocumentSymbol::deprecated deprecated; a struct literal must still set it"
+        )]
         let symbols = entries
             .into_iter()
             .filter_map(|entry| {
@@ -215,7 +218,10 @@ pub(crate) fn outline_to_document_symbols(
         let Some(location) = ranges.location(&entry.block) else {
             continue;
         };
-        #[allow(deprecated)]
+        #[expect(
+            deprecated,
+            reason = "lsp-types marks SymbolInformation::deprecated deprecated; a struct literal must still set it"
+        )]
         symbols.push(SymbolInformation {
             location,
             name: entry.id.to_string(),
@@ -228,7 +234,10 @@ pub(crate) fn outline_to_document_symbols(
             let Some(location) = ranges.location(&method.block) else {
                 continue;
             };
-            #[allow(deprecated)]
+            #[expect(
+                deprecated,
+                reason = "lsp-types marks SymbolInformation::deprecated deprecated; a struct literal must still set it"
+            )]
             symbols.push(SymbolInformation {
                 location,
                 name: method.name.clone(),

@@ -112,6 +112,10 @@ async fn main() -> ExitCode {
 }
 
 /// The command, or why it could not run: what an operator reads instead of a panic.
+#[expect(
+    clippy::print_stdout,
+    reason = "`specforge-registry token` prints the token it creates or lists"
+)]
 async fn run(cli: Cli) -> Result<(), String> {
     match cli.command {
         Commands::Serve {

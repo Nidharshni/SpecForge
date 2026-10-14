@@ -3,7 +3,7 @@
 //! (ADR 0029); `specforge mcp` serves `specforge-mcp` over stdio. Extension commands are read from the loaded
 //! extensions' declarations.
 
-#![deny(clippy::print_stdout, clippy::print_stderr)]
+#![deny(clippy::print_stderr)]
 
 mod add;
 mod analyze;

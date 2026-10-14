@@ -433,7 +433,6 @@ impl Database {
 
     // --- Token management ---
 
-    #[allow(clippy::too_many_arguments)]
     pub fn insert_token(
         &self,
         token_hash: &str,

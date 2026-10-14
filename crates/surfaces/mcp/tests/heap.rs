@@ -1,6 +1,10 @@
 //! A production server keeps no event (ADR 0057): what it holds does not
 //! grow with the requests it answers. Its own test binary: the global
 //! allocator below counts the bytes the test's thread holds.
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
 
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;
@@ -23,6 +27,10 @@ fn held_by(delta: isize) {
 
 // SAFETY: every method forwards to `System` unchanged; the counter only
 // reads the sizes it is given.
+#[expect(
+    unsafe_code,
+    reason = "a counting allocator: every method forwards to System with the caller's layout and pointer unchanged"
+)]
 unsafe impl GlobalAlloc for Counting {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         let ptr = unsafe { System.alloc(layout) };

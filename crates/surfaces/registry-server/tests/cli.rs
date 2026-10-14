@@ -1,5 +1,9 @@
 //! The `specforge-registry` binary as an operator runs it: a bad data directory is an error with a
 //! message and exit 1, never a panic.
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
 
 use std::process::{Command, Output};
 
