@@ -133,8 +133,6 @@ The industry has independently converged on structured context files (CLAUDE.md,
 | ID | Title |
 |----|-------|
 | [RES-11a](../spec/research/RES-11a-spec-dsl-core-compiler.md) | Core compiler architecture |
-| [RES-11b](../spec/research/RES-11b-spec-dsl-codegen-plugins.md) | Code generation & test plugins |
-| [RES-12](../spec/research/RES-12-dsl-concept-expansion.md) | DSL concept expansion analysis |
 | [RES-13](../spec/research/RES-13-README.md) | Market landscape 2026 |
 | [RES-18](../spec/research/RES-18-ai-agent-token-economics.md) | **AI agent token economics — cost reduction analysis** |
 | [RES-19](../spec/research/RES-19-market-position-success-estimation.md) | **Market position & success estimation** |
