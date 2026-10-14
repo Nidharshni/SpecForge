@@ -2847,7 +2847,7 @@ expression: listing
       "additionalProperties": false,
       "properties": {
         "file": {
-          "description": "File path",
+          "description": "Spec file, relative to the project's spec root",
           "type": "string"
         }
       },

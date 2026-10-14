@@ -307,7 +307,6 @@ fn init_with_nothing_served_stays_inside_the_servers_root() {
     invariant = "mcp_served_project_consistency",
     verify = "a file or directory an MCP tool argument names resolves inside the call's project"
 )]
-#[ignore = "fixed by T5"]
 fn outline_of_a_file_outside_the_spec_root_is_refused() {
     let scene = Scene::new();
     let mut server = scene.serve();

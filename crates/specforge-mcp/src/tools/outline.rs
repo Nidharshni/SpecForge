@@ -6,14 +6,16 @@ use specforge_common::shape::Shape;
 use specforge_ops::navigate::{OutlineEntry, outline};
 
 use crate::args::Arguments;
+use crate::containment::Containment;
 use crate::reply::Answered;
 use crate::tool::file_not_found;
 use specforge_ops::view::ProjectView;
+use std::path::Path;
 
 /// `specforge.outline`'s arguments.
 #[derive(Debug, Arguments)]
 pub struct Args {
-    /// File path
+    /// Spec file, relative to the project's spec root
     file: String,
 }
 
@@ -99,13 +101,20 @@ impl CoreTool for Tool {
 
     fn call(view: ProjectView<'_>, args: Args) -> Answered<Reply> {
         let file = args.file.as_str();
+        // A file of the project is under its spec root, as spans name it:
+        // one that leaves it is refused before anything is read (ADR 0092).
+        let spec_root = super::spec_root(&view);
+        if let Some(spec_root) = spec_root {
+            Containment::at(spec_root)
+                .resolve(Path::new(file))
+                .map_err(|outside| Box::new(outside.refusal("file")))?;
+        }
         let entries = outline(&super::navigator(view), file);
         // A file the graph has no entity from is either empty or not there:
         // under the project's spec root. With nothing served no file is the
         // project's (the dispatcher makes the refusal the no-project one,
         // ADR 0025).
-        let on_disk =
-            super::spec_root(&view).is_some_and(|spec_root| spec_root.join(file).exists());
+        let on_disk = spec_root.is_some_and(|spec_root| spec_root.join(file).exists());
         if entries.is_empty() && !on_disk {
             return Err(file_not_found(file).into());
         }
