@@ -3,9 +3,12 @@ use std::path::Path;
 
 use crate::blob_inputs;
 use crate::change_set::{ChangeSet, Pattern};
+use crate::crate_map;
 use crate::judge;
+use crate::layers;
 use crate::repo::Repo;
 use crate::run::{Ctx, Mode};
+use crate::size_cap;
 use crate::steps;
 
 /// The smallest run that reaches a check. Hook < Quick < Full; Bootstrap is the cold-clone job alone.
@@ -130,23 +133,56 @@ pub static CHECKS: &[Check] = &[
         proves: "the committed tree-sitter artifacts are what grammar.js generates",
         reach: Reach::Hook,
         trigger: Trigger::Paths(&[
-            "crates/tree-sitter-specforge/grammar.js",
-            "crates/tree-sitter-specforge/src/**",
+            "crates/kernel/tree-sitter/grammar.js",
+            "crates/kernel/tree-sitter/src/**",
         ]),
         compiles: false,
         after: &[],
-        fix: "cd crates/tree-sitter-specforge && tree-sitter generate, then commit src/parser.c, src/grammar.json, src/node-types.json",
+        fix: "cd crates/kernel/tree-sitter && tree-sitter generate, then commit src/parser.c, src/grammar.json, src/node-types.json",
         run: steps::grammar,
     },
     Check {
         name: "zero-entity",
         proves: "the core crates name no entity kind of an extension",
         reach: Reach::Hook,
-        trigger: Trigger::Paths(&["crates/*/src/**", "scripts/check-zero-entity-core.sh"]),
+        trigger: Trigger::Paths(&["crates/**/src/**", "scripts/check-zero-entity-core.sh"]),
         compiles: false,
         after: &[],
         fix: "name the kind through the registry, or mark the line `// zero-entity-core: exempt`",
         run: steps::zero_entity,
+    },
+    Check {
+        name: "layers",
+        proves: "no crate has a normal or build dependency on a crate in a higher layer (its folder under crates/) or in none, and the LSP links no package registry client (ADR 0010)",
+        reach: Reach::Hook,
+        trigger: Trigger::Paths(&["Cargo.toml", "crates/**/Cargo.toml", layers::RULE]),
+        compiles: false,
+        after: &[],
+        fix: "make the dependency point down (move what it uses to a lower layer) and put each crate in crates/<layer>/<name>/; an upward edge an ADR accepts is an ALLOWED entry in gate/src/layers.rs; a crate the LSP must not link is reached through the chain the message names: cut that edge",
+        run: steps::layers,
+    },
+    Check {
+        name: size_cap::CHECK,
+        proves: "no tracked .rs file is over 800 lines but those gate/baseline.json lists, none past its listed size",
+        reach: Reach::Hook,
+        trigger: Trigger::Paths(&["**/*.rs", "gate/baseline.json"]),
+        compiles: false,
+        after: &[],
+        fix: "split the file along its sections, or put new code and tests in a new module (a listed file may not grow); one that shrank, moved or went: cargo gate baseline --only file-size",
+        run: steps::file_size,
+    },
+    Check {
+        name: "crate-map",
+        proves: "ARCHITECTURE.md's layer stack and crates/README.md's crate table are what the members' folders and descriptions say; every member has a description and crate docs",
+        reach: Reach::Hook,
+        trigger: Trigger::Computed(
+            "ARCHITECTURE.md, crates/README.md, the root manifest, or a member's manifest or crate root",
+            crate_map_sources,
+        ),
+        compiles: false,
+        after: &[],
+        fix: "cargo gate crate-map, then stage ARCHITECTURE.md and crates/README.md; a missing description or crate doc: write it in the crate",
+        run: steps::crate_map,
     },
     Check {
         name: "links",
@@ -160,6 +196,26 @@ pub static CHECKS: &[Check] = &[
         after: &[],
         fix: "edit the test's verify text to match the spec entity (or the spec), then re-stage",
         run: steps::links,
+    },
+    Check {
+        name: "doc-links",
+        proves: "every relative link in a tracked Markdown file names a tracked file or directory",
+        reach: Reach::Hook,
+        trigger: Trigger::Always,
+        compiles: false,
+        after: &[],
+        fix: "point the link at the path the file has now, or remove it; after a move, rg -n '<old path>' finds every link to rewrite",
+        run: steps::doc_links,
+    },
+    Check {
+        name: "root-layout",
+        proves: "the tracked top-level entries are the root list's (gate/src/root_layout.rs)",
+        reach: Reach::Hook,
+        trigger: Trigger::Always,
+        compiles: false,
+        after: &[],
+        fix: "shipped material goes in an existing folder, planning and experiments in the planning repository; a new top-level entry joins ROOT with its reason and CONTRIBUTING.md#where-things-are",
+        run: steps::root_layout,
     },
     Check {
         name: "builtins",
@@ -261,10 +317,10 @@ pub static CHECKS: &[Check] = &[
             "**/*.spec",
             "**/specforge.json",
             "extensions/**",
-            "crates/specforge-emitter/**",
-            "crates/specforge-graph/**",
-            "crates/specforge-registry/**",
-            "crates/specforge-ops/tests/operations/schema.rs",
+            "crates/pipeline/emitter/**",
+            "crates/pipeline/graph/**",
+            "crates/pipeline/registry/**",
+            "crates/app/ops/tests/operations/schema.rs",
         ]),
         compiles: false,
         after: &["build"],
@@ -280,13 +336,26 @@ pub static CHECKS: &[Check] = &[
             "**/specforge.json",
             "gate/baseline.json",
             "extensions/**",
-            "crates/*/src/**",
-            "crates/*/Cargo.toml",
+            "crates/**/src/**",
+            "crates/**/Cargo.toml",
         ]),
         compiles: false,
         after: &[],
-        fix: "fix the new errors and warnings; a count that fell: cargo gate baseline, in the same commit",
+        fix: "fix the new errors and warnings; a count that fell: cargo gate baseline --only specs, in the same commit",
         run: steps::specs,
+    },
+    Check {
+        name: "spec-modules",
+        proves: "spec/product/modules.spec models every crate: one module each, with its manifest's description and dependencies",
+        reach: Reach::Quick,
+        trigger: Trigger::Computed(
+            "spec/product/modules.spec, the root manifest or a member's manifest",
+            module_sources,
+        ),
+        compiles: false,
+        after: &[],
+        fix: "edit the module each line names in spec/product/modules.spec (or the manifest it disagrees with)",
+        run: steps::spec_modules,
     },
     Check {
         name: "dogfood",
@@ -339,15 +408,51 @@ pub fn render_list() -> String {
     out
 }
 
+/// What can change what the crate map shows: its two files, the root manifest (the member list), or a member's
+/// manifest (its description) or crate root (its doc).
+fn crate_map_sources(repo: &Repo, changes: &ChangeSet) -> Result<Selection, String> {
+    let drawn_from = |path: &str| {
+        path == crate_map::ARCHITECTURE
+            || path == crate_map::CRATES_README
+            || path == "Cargo.toml"
+            || repo.members.iter().any(|member| {
+                crate_map::manifest_of(member) == path
+                    || member.roots.iter().any(|root| root == path)
+            })
+    };
+    Ok(if changes.paths().any(drawn_from) {
+        Selection::Everything
+    } else {
+        Selection::Skip
+    })
+}
+
+/// What can change how the spec's modules should read: the module file, the member list, or a member's manifest.
+fn module_sources(repo: &Repo, changes: &ChangeSet) -> Result<Selection, String> {
+    let read = |path: &str| {
+        path == crate_map::MODULES_SPEC
+            || path == "Cargo.toml"
+            || repo
+                .members
+                .iter()
+                .any(|member| crate_map::manifest_of(member) == path)
+    };
+    Ok(if changes.paths().any(read) {
+        Selection::Everything
+    } else {
+        Selection::Skip
+    })
+}
+
 /// The `.spec` files a hook or quick run formats: those inside a project's spec directory (the set CI checks), or
 /// every project's when the formatter, the parser or the grammar changed.
 fn spec_files(repo: &Repo, changes: &ChangeSet) -> Result<Selection, String> {
     // Sources only: a `.spec` fixture under a crate's `tests/` is no project's spec.
     const FORMATTING_CODE: &[&str] = &[
-        "crates/specforge-formatter/src/**",
-        "crates/specforge-parser/src/**",
-        "crates/tree-sitter-specforge/src/**",
-        "crates/tree-sitter-specforge/grammar.js",
+        "crates/pipeline/formatter/src/**",
+        "crates/kernel/parser/src/**",
+        "crates/kernel/tree-sitter/src/**",
+        "crates/kernel/tree-sitter/grammar.js",
     ];
     if !changes.matching(FORMATTING_CODE).is_empty() {
         return Ok(Selection::Everything);

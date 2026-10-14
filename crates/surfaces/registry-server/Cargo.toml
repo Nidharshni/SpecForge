@@ -1,0 +1,46 @@
+[package]
+name = "specforge-registry-server"
+description = "The package registry server (specforge-registry): the registry contract's routes over SQLite and blob storage, publish authentication and signature checks (ADR 0044, ADR 0061)"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "specforge-registry"
+path = "src/main.rs"
+
+[dependencies]
+specforge-package = { path = "../../leaf/package" }
+specforge-protocol-types = { path = "../../leaf/protocol-types" }
+specforge-registry-wire = { path = "../../adapters/registry-wire" }
+axum = { version = "0.8.4", features = ["multipart"] }
+tokio = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+rusqlite = { version = "0.35.0", features = ["bundled"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+clap = { workspace = true }
+chrono = { version = "0.4.41", features = ["serde"] }
+rand = "0.9.1"
+hex = "0.4.3"
+parking_lot = "0.12"
+tempfile = { workspace = true, optional = true }
+
+[features]
+# The real server in process, for tests of what reaches a registry over HTTP (ADR 0044).
+testing = ["dep:tempfile"]
+
+[dev-dependencies]
+specforge-test = { workspace = true }
+specforge-test-macros = { workspace = true }
+tower = { version = "0.5", features = ["util"] }
+reqwest = { workspace = true }
+tempfile = { workspace = true }
+specforge-registry-client = { path = "../../adapters/registry-client" }
+specforge-registry-server = { path = ".", features = ["testing"] }
+serde = { workspace = true }
+
+[lints]
+workspace = true

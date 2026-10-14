@@ -921,7 +921,7 @@ decision wasm_component_runtime "All Extensions Execute as wasip2 Components" {
   decision     """
     Every extension - builtin or third-party - is a WIT-typed wasip2
     component executed through a single wasmtime component engine
-    (crates/specforge-component). The native tier is deleted; a gate test
+    (crates/runtime/component). The native tier is deleted; a gate test
     prevents its reintroduction. The guest boundary is the
     specforge:bridge world (call: name, export-name, input -> result).
     Every call gets a deterministic fuel budget and a wall-clock

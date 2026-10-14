@@ -7,5 +7,5 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-specforge-extension-sdk = { path = "../../crates/specforge-extension-sdk" }
+specforge-extension-sdk = { path = "../../crates/runtime/extension-sdk" }
 serde_json = "1.0"

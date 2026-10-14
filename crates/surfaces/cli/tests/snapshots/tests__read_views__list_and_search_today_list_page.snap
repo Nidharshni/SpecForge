@@ -1,0 +1,13 @@
+---
+source: crates/surfaces/cli/tests/read_views.rs
+expression: "normalized(result, root).to_string()"
+---
+{
+  "content": [
+    {
+      "text": "{\"entities\":[{\"id\":\"logout\",\"kind\":\"behavior\",\"title\":\"Log out\"}]}",
+      "type": "text"
+    }
+  ],
+  "isError": false
+}

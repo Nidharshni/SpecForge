@@ -13,6 +13,10 @@
 //!
 //! A blob is built in a staged workspace ([`Stage`]), so its bytes depend only on
 //! its sources and the toolchain, not on where the repository is checked out.
+#![expect(
+    clippy::print_stdout,
+    reason = "a developer tool: its report is its stdout"
+)]
 
 use gate::blob_inputs::{self, BlobRecord, WORKSPACE_INHERITED};
 use serde_json::Value;
@@ -53,23 +57,16 @@ fn main() {
             std::process::exit(2);
         }
     };
-    let root = std::env::var("CARGO_MANIFEST_DIR")
-        .map(|m| {
-            Path::new(&m)
-                .join("..")
-                .canonicalize()
-                .expect("repo root resolves")
-        })
-        .expect("CARGO_MANIFEST_DIR is set when run via cargo xtask");
+    let root = specforge_repo_root::repo_root();
 
     let mut failed = false;
     for blob in COMMITTED {
         let ok = match mode {
-            Mode::Check => check(&root, blob),
-            Mode::Verify => verify(&root, blob),
-            Mode::Missing | Mode::Force => build(&root, blob, mode == Mode::Force).is_some(),
+            Mode::Check => check(root, blob),
+            Mode::Verify => verify(root, blob),
+            Mode::Missing | Mode::Force => build(root, blob, mode == Mode::Force).is_some(),
             Mode::Install => {
-                build(&root, blob, true).is_some_and(|built| install(&root, blob, &built))
+                build(root, blob, true).is_some_and(|built| install(root, blob, &built))
             }
         };
         failed |= !ok;
@@ -151,7 +148,8 @@ impl Stage {
     /// - every staged `Cargo.toml` without its dev-dependency tables: a staged path package is a
     ///   workspace member, and its dev-dependencies would join the resolution;
     /// - a `Cargo.toml` naming the extension as the member, with the root manifest's inherited
-    ///   tables;
+    ///   tables (`[workspace.package]`, `[workspace.dependencies]` and the `[workspace.lints]` tables
+    ///   the staged crates' `[lints] workspace = true` reads);
     /// - the extension's `Cargo.lock` and the toolchain file.
     fn prepare(repo: &Path, blob: &CommittedBlob) -> Result<Stage, String> {
         let crate_dir = blob.crate_dir;
@@ -732,18 +730,18 @@ mod tests {
     /// macros, and the coverage rule (ADR 0039, 0050). A host-only module in one of them, or a new
     /// path dependency of a guest, shows here as an input outside this list.
     const GUEST_CRATES: &[&str] = &[
-        "crates/specforge-protocol-types/",
-        "crates/specforge-extension-sdk/",
-        "crates/specforge-extension-sdk-macros/",
-        "crates/specforge-coverage/",
+        "crates/leaf/protocol-types/",
+        "crates/runtime/extension-sdk/",
+        "crates/runtime/extension-sdk-macros/",
+        "crates/leaf/coverage/",
     ];
 
     #[test]
     fn a_builtin_compiles_only_its_own_sources_and_the_guest_crates() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let root = specforge_repo_root::repo_root();
         for builtin in builtins() {
             let name = builtin.crate_dir;
-            let record = BlobRecord::read(&root, name).unwrap();
+            let record = BlobRecord::read(root, name).unwrap();
             let own = format!("{name}/");
             let inputs = &record.inputs;
             for key in inputs.keys() {
@@ -768,13 +766,13 @@ mod tests {
     /// the SDK's test helpers are behind its `testing` feature (ADR 0050).
     #[test]
     fn a_builtin_compiles_no_test_code() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let root = specforge_repo_root::repo_root();
         for builtin in builtins() {
             let name = builtin.crate_dir;
-            let record = BlobRecord::read(&root, name).unwrap();
+            let record = BlobRecord::read(root, name).unwrap();
             for key in record.inputs.keys() {
                 assert_ne!(
-                    key, "crates/specforge-extension-sdk/src/testing.rs",
+                    key, "crates/runtime/extension-sdk/src/testing.rs",
                     "{name} compiles the SDK's test helpers"
                 );
                 let Ok(text) = std::fs::read_to_string(root.join(key)) else {

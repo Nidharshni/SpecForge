@@ -1,0 +1,22 @@
+[package]
+name = "specforge-coverage"
+description = "The coverage rule of @specforge/testing: which obligations a project's recorded tests prove, per entity and in summary; linked by the extension's Wasm pass and the host surfaces"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+# Pure: serde and the guest wire's `PassEntity`, so it builds for wasm32-wasip2
+# inside the testing, formal and product extensions. Keep it out of the SDK and
+# protocol-types (every blob reads those): it reads them, they never read it.
+[dependencies]
+serde = { workspace = true }
+specforge-protocol-types = { path = "../protocol-types" }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+specforge-test = { workspace = true }
+specforge-test-macros = { workspace = true }
+
+[lints]
+workspace = true

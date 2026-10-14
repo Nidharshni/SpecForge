@@ -2,6 +2,8 @@
 
 **Status:** accepted (2026-10-05). D5 applies to handshake sessions, D6's root is looked at again while nothing is served, D11 is superseded (ADR 0077).
 
+Amended by ADR 0092: a `path` that names another project must lie inside the served project (or, while none is served, the server's root); "another project" is a project nested in it.
+
 Amended by ADR 0024 (round-5 amendment): the reaches are Served and AnyProject; Unscoped and NewProject are targets of their own, and WritesAnyProject is gone.
 
 Which project an MCP call served, and whether that project was current with disk, was decided in a

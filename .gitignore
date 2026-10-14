@@ -1,6 +1,8 @@
 # Rust
 /target/
 **/target/
+# the MCP crate's `target` module (ADR 0087) is source, not build output
+!crates/surfaces/mcp/src/target/
 **/*.rs.bk
 
 # Node
@@ -13,6 +15,9 @@ node_modules/
 *.swp
 *.swo
 *~
+
+# Codex's per-machine skill copies; the project's skills are in .claude/skills/
+/.agents/
 
 # OS
 .DS_Store
@@ -28,9 +33,16 @@ tests/spec/
 
 # SpecForge: test results written by `specforge collect`, and runner reports
 /specforge-report.json
+# `specforge export --format dot > specforge-graph.dot`: regenerate it, never commit it
+/specforge-graph.dot
 .specforge/
 .claude/worktrees/
+# Claude Code's per-user settings (shared ones belong in .claude/settings.json)
+**/.claude/settings.local.json
+# docs/research holds the round reports; any other page there is local (ADR 0082)
+/docs/research/*
+!/docs/research/architecture-review-*.html
 
-# Planning notes from planning sessions: their decisions live in docs/adr/
+# Planning rounds in progress; each is committed to the planning repository (docs/agents/architecture-rounds.md)
 /.planning/
 *.snap.new

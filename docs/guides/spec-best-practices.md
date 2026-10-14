@@ -95,7 +95,7 @@ the tutorial and the [todo-app example](../../examples/todo-app/) are structured
 
 **Do:** start with one feature and its behaviors. Expand where the pain is.
 
-**Why:** [Principle 1](../../vision/principles.md) — "structure is a spectrum." You never
+**Why:** [Principle 1](../vision/principles.md) — "structure is a spectrum." You never
 need comprehensive coverage to get value. One connected behavior already beats a page of
 prose.
 
@@ -177,10 +177,10 @@ field because "there's no entity for it."
 provides.
 
 **Do instead:** use the right builtin entity, or — if the concept is genuinely new to a
-domain — author an extension. [Principle 7](../../vision/principles.md): extensions over
+domain — author an extension. [Principle 7](../vision/principles.md): extensions over
 built-ins, always.
 
 ---
 
 **See also:** [tutorial](authoring-spec-files.md) · [cookbook](spec-cookbook.md) ·
-[troubleshooting](spec-troubleshooting.md) · [vision principles](../../vision/principles.md).
+[troubleshooting](spec-troubleshooting.md) · [vision principles](../vision/principles.md).

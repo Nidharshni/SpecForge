@@ -3,7 +3,8 @@
 One round is: explore the code with `/improve-codebase-architecture`, write one plan per candidate, implement the plans
 in parallel worktrees, merge them, re-vendor, gate, open the PR. The coordinator is the session that runs the steps;
 the agents it launches follow a brief in `docs/agents/briefs/`. Plans live in `.planning/architecture-<date>/`
-(gitignored; keep a copy outside the repo).
+(gitignored); the coordinator commits the folder to the planning repository (`../SpecForge-planning/`, private)
+when the plans are written and again when the round merges.
 
 Every step has a done condition. Do not start the next step before it holds.
 
@@ -34,7 +35,9 @@ A dead agent (API error) resumes with `SendMessage`; its worktree survives.
 ## 4. Merge
 
 For each finished branch, in wave order: `git merge --no-ff`, `cargo clippy --workspace --all-targets -- -D warnings`
-and `cargo nextest run --workspace`, and `git status` shows no `*.snap.new`. Then `git worktree remove <path>`
+and `cargo nextest run --workspace`, and `git status` shows no `*.snap.new`. Then `cargo gate full --only file-size`; when it reports a listed file gone
+and a new one over the cap (the branch moved it), `cargo gate baseline --only file-size --since HEAD^1` and commit
+`chore(gate): carry file-size rows after merging <plan>`. Then `git worktree remove <path>`
 (`-f -f` only when the agent's final reply is in; a finished agent's worktree stays locked). Done when every plan is
 on the integration branch.
 
@@ -46,7 +49,7 @@ declaration diff, commit what it prints.
 ## 6. Gate
 
 `cargo gate full` is green, then the PR. A baseline that fell is lowered with `cargo gate baseline` in
-the same commit.
+the same commit (`--only specs` or `--only file-size` for one section).
 
 ## Pitfalls round 7 paid for
 

@@ -1,0 +1,8 @@
+---
+source: crates/surfaces/cli/tests/check_surfaces.rs
+expression: "normalized(&doc, dir.path())"
+---
+{
+  "exit": 1,
+  "stderr": "[E025] Error: import target not found among the project's sources: missing\n   ╭─[ main.spec:1:1 ]\n   │\n 1 │ use \"missing\"\n   │ ──────┬──────\n   │       ╰────────\n   │\n   │ Help: a use path names a project source: a .spec file under the spec root, not excluded and not under a skipped directory\n───╯\n1 error, 0 warnings, 0 infos\n  E025 (1)\n\nhint: run `specforge explain <code>` for details on any diagnostic code\n"
+}

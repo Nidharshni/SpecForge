@@ -6,3 +6,7 @@
 # narrowing `SourceSpan`'s usize coordinates or retyping its public string
 # fields — workspace-wide churn for no measurable gain.
 large-error-threshold = 153
+
+# A unit test's `unwrap` is its assertion. This covers `#[test]` functions and `#[cfg(test)]` modules, not an
+# integration-test crate's helper functions: that crate states it at its root (ADR 0089 D3).
+allow-unwrap-in-tests = true

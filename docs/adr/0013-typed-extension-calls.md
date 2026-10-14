@@ -47,7 +47,7 @@ and `PassEntityResults`.
 A typed WIT per operation (what `wit/specforge-extension.wit` sketched for worlds nothing
 implemented) was rejected: a second schema language beside serde, a rebuilt ABI for every guest
 (ADR 0004's single `call` world, ADR 0011 E), and payloads that are JSON-native. The stale WIT is
-deleted; protocol types plus golden tests (`crates/specforge-wasm/tests/wire/`) give Rust guests
+deleted; protocol types plus golden tests (`crates/runtime/wasm/tests/wire/`) give Rust guests
 compile-time checking and any other language an exact JSON contract
 (`docs/extension-protocol.md`, "Operate").
 

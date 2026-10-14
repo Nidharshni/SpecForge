@@ -1,0 +1,14 @@
+[package]
+name = "specforge-repo-root"
+description = "The SpecForge checkout's root, for the tests and build tools that read files outside their crate"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

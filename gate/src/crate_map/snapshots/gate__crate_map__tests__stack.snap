@@ -1,0 +1,14 @@
+---
+source: gate/src/crate_map/tests.rs
+expression: render_stack(&map)
+---
+| Layer | Owns | Crates |
+|---|---|---|
+| `surfaces` | The programs: the specforge CLI, the language server, the MCP server and the package registry server. Each turns its protocol into calls on the layers below. | [`cli`](crates/surfaces/cli/) |
+| `adapters` | The package registry over HTTP, from both ends: its contract, the client, and the adapter behind the operations' Registry port (ADR 0010, ADR 0044). |  |
+| `app` | The user-level operations every surface shares: a typed request in, a typed outcome or a refusal out (ADR 0015). |  |
+| `session` | A project as it lives: the environment load, the compile, and the project session kept current from the file system and the editor (ADR 0047). |  |
+| `runtime` | Extensions: the host side of the protocol, the wasmtime component runtime, the installed extensions, and the SDK guests are written with (ADR 0013, ADR 0028). |  |
+| `pipeline` | From parsed files to output: import resolution, the graph build, the Registry build and its checks, formatting, migration and the export formats. |  |
+| `kernel` | The .spec language and what every host crate shares: the grammar, the lexer and parser, the diagnostic, spans, symbols and the project root. |  |
+| `leaf` | Crates with no SpecForge dependency but the guest wire: the wire itself, the diagnostic catalog, the coverage rule, package names and the repository root. Guests build from some of them (ADR 0050). | [`wire`](crates/leaf/wire/) |

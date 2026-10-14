@@ -1,0 +1,30 @@
+---
+source: crates/session/project/tests/registry_build_snapshot.rs
+expression: "digest(&load(&runtime, &[name]))"
+---
+{
+  "check_passes": [],
+  "diagnostics": [],
+  "edges": {},
+  "ext_short": {
+    "@specforge/typescript": "typescript"
+  },
+  "extension_info": [
+    [
+      "@specforge/typescript",
+      "1.0.0"
+    ]
+  ],
+  "fields": {},
+  "graph_inputs": {
+    "absent_reference_targets": {},
+    "bidirectional_pairs": [],
+    "derived_references": [],
+    "field_forms": {},
+    "single_reference_fields": []
+  },
+  "kinds": {},
+  "manifest_surfaces": [],
+  "rules": [],
+  "surfaces": []
+}

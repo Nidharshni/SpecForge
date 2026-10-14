@@ -23,10 +23,10 @@ Run it from the main checkout, or from a worktree outside the repository directo
 It refreshes the lockfile of every committed blob's crate, rebuilds every committed blob
 (`specforge_component::committed::COMMITTED`: the nine builtins and the four fixtures) into `<crate>/wasm/` with its
 `inputs.json`, rewrites the declaration snapshots of every SDK blob in
-`crates/specforge-component/tests/declarations/`, runs `build-blobs --check` and the declarations test (with its
+`crates/runtime/component/tests/declarations/`, runs `build-blobs --check` and the declarations test (with its
 ignored tests), and prints the `git add` line that stages exactly those paths.
 
-A new committed blob is listed in `crates/specforge-component/src/committed.rs` first.
+A new committed blob is listed in `crates/runtime/component/src/committed.rs` first.
 `every_committed_wasm_is_listed` (xtask) fails for a `.wasm` file git tracks that the list does not name.
 
 ## Review

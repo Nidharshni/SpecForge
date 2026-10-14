@@ -481,6 +481,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
 
 [[package]]
+name = "core_detect"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f8f80099a98041a3d1622845c271458a2d73e688351bf3cb999266764b81d48"
+
+[[package]]
 name = "cpp_demangle"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1131,6 +1137,7 @@ dependencies = [
  "insta",
  "serde",
  "serde_json",
+ "specforge-repo-root",
  "tempfile",
 ]
 
@@ -2173,6 +2180,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "proptest"
+version = "1.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b8530004ccb15eae51c7e40009fbe317f341f804db54dc033eec1c50be28cfa0"
+dependencies = [
+ "bitflags 2.11.0",
+ "chacha20",
+ "core_detect",
+ "num-traits",
+ "rand 0.10.3",
+ "rand_xorshift",
+ "regex-syntax",
+ "unarray",
+]
+
+[[package]]
 name = "pulley-interpreter"
 version = "49.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2332,6 +2355,15 @@ name = "rand_pcg"
 version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "caa0f4137e1c0a72f4c651489402276c8e8e1cf081f3b0ba156d2cbeef09e86a"
+dependencies = [
+ "rand_core 0.10.1",
+]
+
+[[package]]
+name = "rand_xorshift"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "60aa6af80be32871323012e02e6e65f8a7cc7890931ae421d217ad8fe0df2ccf"
 dependencies = [
  "rand_core 0.10.1",
 ]
@@ -2535,9 +2567,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.23.45"
+version = "0.23.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d41d731c7d2f962d1ccc364cec258de3c0e93b38c2fb3ba97ac74513048d634"
+checksum = "48e13bd8c0e9365c43cfa5c9e8f9ad49d3c8444926c9aac819e0e4dc503c8fdf"
 dependencies = [
  "once_cell",
  "ring",
@@ -2806,6 +2838,7 @@ dependencies = [
  "specforge-registry",
  "specforge-registry-client",
  "specforge-registry-server",
+ "specforge-repo-root",
  "specforge-test",
  "specforge-test-macros",
  "specforge-wasm",
@@ -2846,6 +2879,7 @@ dependencies = [
  "specforge-diagnostics",
  "specforge-extension-sdk",
  "specforge-protocol-types",
+ "specforge-repo-root",
  "specforge-test",
  "specforge-test-macros",
  "specforge-wasm",
@@ -2870,6 +2904,7 @@ dependencies = [
 name = "specforge-diagnostics"
 version = "0.1.0"
 dependencies = [
+ "specforge-repo-root",
  "specforge-test",
  "specforge-test-macros",
 ]
@@ -2907,6 +2942,7 @@ dependencies = [
  "specforge-extension-sdk",
  "specforge-extension-sdk-macros",
  "specforge-protocol-types",
+ "specforge-repo-root",
  "specforge-test",
  "specforge-test-macros",
  "wit-bindgen 0.30.0",
@@ -2928,6 +2964,8 @@ dependencies = [
 name = "specforge-formatter"
 version = "0.1.0"
 dependencies = [
+ "proptest",
+ "regex",
  "serde_json",
  "similar",
  "specforge-common",
@@ -2990,6 +3028,7 @@ dependencies = [
  "specforge-parser",
  "specforge-project",
  "specforge-registry",
+ "specforge-repo-root",
  "specforge-resolver",
  "specforge-test",
  "specforge-test-macros",
@@ -3024,6 +3063,7 @@ dependencies = [
  "specforge-project",
  "specforge-protocol-types",
  "specforge-registry",
+ "specforge-repo-root",
  "specforge-test",
  "specforge-test-macros",
  "specforge-wasm",
@@ -3061,6 +3101,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "getrandom 0.3.4",
+ "proc-macro2",
  "serde",
  "serde_json",
  "sha2",
@@ -3081,10 +3122,12 @@ dependencies = [
  "specforge-protocol-types",
  "specforge-registry",
  "specforge-registry-client",
+ "specforge-repo-root",
  "specforge-test",
  "specforge-test-macros",
  "specforge-wasm",
  "strsim",
+ "syn 2.0.117",
  "tempfile",
 ]
 
@@ -3126,8 +3169,11 @@ version = "0.1.0"
 dependencies = [
  "criterion",
  "insta",
+ "proptest",
  "serde",
  "specforge-common",
+ "specforge-parser",
+ "specforge-repo-root",
  "specforge-test",
  "specforge-test-macros",
  "tree-sitter",
@@ -3154,6 +3200,7 @@ dependencies = [
  "specforge-project",
  "specforge-protocol-types",
  "specforge-registry",
+ "specforge-repo-root",
  "specforge-resolver",
  "specforge-test",
  "specforge-test-macros",
@@ -3168,6 +3215,7 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+ "specforge-repo-root",
  "specforge-test",
  "specforge-test-macros",
 ]
@@ -3185,6 +3233,7 @@ dependencies = [
  "specforge-graph",
  "specforge-package",
  "specforge-protocol-types",
+ "specforge-repo-root",
  "specforge-test",
  "specforge-test-macros",
  "tempfile",
@@ -3262,6 +3311,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "specforge-repo-root"
+version = "0.1.0"
+dependencies = [
+ "tempfile",
+]
+
+[[package]]
 name = "specforge-resolver"
 version = "0.1.0"
 dependencies = [
@@ -3289,6 +3345,7 @@ dependencies = [
  "serde",
  "serde_json",
  "specforge-protocol-types",
+ "specforge-repo-root",
  "specforge-test-macros",
  "tempfile",
 ]
@@ -3312,6 +3369,7 @@ dependencies = [
  "specforge-extension-sdk",
  "specforge-protocol-types",
  "specforge-registry",
+ "specforge-repo-root",
  "specforge-test",
  "specforge-test-macros",
  "specforge-wasm",
@@ -3843,6 +3901,7 @@ name = "tree-sitter-specforge"
 version = "0.1.0"
 dependencies = [
  "cc",
+ "specforge-repo-root",
  "specforge-test",
  "specforge-test-macros",
  "tree-sitter",
@@ -3860,6 +3919,12 @@ name = "typenum"
 version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "562d481066bde0658276a35467c4af00bdc6ee726305698a55b86e61d7ad82bb"
+
+[[package]]
+name = "unarray"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eaea85b334db583fe3274d12b4cd1880032beab409c0d774be044d4480ab9a94"
 
 [[package]]
 name = "unicase"
@@ -5118,6 +5183,7 @@ dependencies = [
  "specforge-installed",
  "specforge-project",
  "specforge-protocol-types",
+ "specforge-repo-root",
  "specforge-wasm",
  "strsim",
  "syn 2.0.117",

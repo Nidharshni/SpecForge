@@ -1,0 +1,26 @@
+---
+source: crates/surfaces/mcp/tests/prompt_golden.rs
+expression: "shape(&reply, dir.path())"
+---
+{
+  "error": {
+    "code": -32603,
+    "data": {
+      "code": "schema_mismatch",
+      "diagnostic": {
+        "code": "E045",
+        "column": null,
+        "file": null,
+        "line": null,
+        "message": "invalid test results [root]/specforge-report.json: key must be a string at line 1 column 2 (expected the RES-15 specforge-report.json shape)",
+        "severity": "Error",
+        "span": null,
+        "suggestion": "run `specforge collect` again to rewrite the report, or fix or remove the file",
+        "title": "Invalid test report"
+      },
+      "message": "invalid test results [root]/specforge-report.json: key must be a string at line 1 column 2 (expected the RES-15 specforge-report.json shape)",
+      "prompt": "specforge://prompts/review"
+    },
+    "message": "invalid test results [root]/specforge-report.json: key must be a string at line 1 column 2 (expected the RES-15 specforge-report.json shape)"
+  }
+}

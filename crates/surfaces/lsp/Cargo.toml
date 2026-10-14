@@ -1,0 +1,42 @@
+[package]
+name = "specforge-lsp"
+description = "The language server: open documents held in the project session, published diagnostics, navigation, completion, hover and formatting (ADR 0023, ADR 0043, ADR 0046)"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+autotests = false
+
+[[test]]
+name = "tests"
+path = "tests/main.rs"
+
+[dependencies]
+specforge-diagnostics = { path = "../../leaf/diagnostics" }
+specforge-common = { workspace = true }
+specforge-graph = { path = "../../pipeline/graph" }
+specforge-ops = { path = "../../app/ops" }
+specforge-parser = { workspace = true }
+specforge-project = { path = "../../session/project" }
+specforge-registry = { path = "../../pipeline/registry" }
+specforge-resolver = { path = "../../pipeline/resolver" }
+specforge-watch = { path = "../../session/watch", features = ["tokio"] }
+tower-lsp = { workspace = true }
+tokio = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+specforge-repo-root = { path = "../../leaf/repo-root" }
+specforge-project = { path = "../../session/project", features = ["testing"] }
+tree-sitter = { workspace = true }
+specforge-component = { path = "../../runtime/component", features = ["testing"] }
+specforge-installed = { path = "../../runtime/installed", features = ["testing"] }
+specforge-extension-sdk = { path = "../../runtime/extension-sdk" }
+specforge-wasm = { path = "../../runtime/wasm", features = ["testing"] }
+specforge-test = { workspace = true }
+specforge-test-macros = { workspace = true }
+tempfile = { workspace = true }
+tree-sitter-specforge = { workspace = true }
+
+[lints]
+workspace = true

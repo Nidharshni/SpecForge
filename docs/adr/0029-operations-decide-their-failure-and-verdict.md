@@ -88,7 +88,8 @@ nearest project, else the directory itself" on their own.
   (`project_root_of`), so MCP answers `no_project` where it answered E058 for a directory that is no project.
 - **D8a. MCP resolves a relative `out_dir` of `specforge.render` against the call's project root** as it does
   `test_results`; with no project served a relative one is invalid input on `out_dir`. `output_files` lists
-  absolute paths.
+  absolute paths. *(ADR 0092: an `out_dir`, absolute or not, must resolve inside the call's project; with no project
+  served every one is invalid input.)*
 
 ## Amendment (architecture round 6, plan 11)
 
@@ -142,4 +143,4 @@ no report and a plan is refused where it is read (ADR 0076 D3).
 - **D9a.** D9's process-level tests are the binary contract only: clap, the exit table, the streams, human
   rendering, the environment, process life, and comparisons across surfaces. A test whose assertions are all facts
   of the compiled project or of an operation's document lives in the crate that owns that behaviour (ADR 0078
-  D3). Every process test runs through `specforge-cli/tests/support::Cli`, under the project's own HOME.
+  D3). Every process test runs through `crates/surfaces/cli/tests/support::Cli`, under the project's own HOME.

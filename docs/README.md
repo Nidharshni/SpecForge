@@ -1,6 +1,6 @@
 # SpecForge Documentation
 
-This directory contains the entity model reference and design documentation for SpecForge. For a project overview, see the [root README](../README.md). For the full architecture — core + plugins, edge types, validation rules, and design principles — see [entity-model.md](entity-model.md).
+This directory contains the entity model reference and design documentation for SpecForge. For a project overview, see the [root README](../README.md). For how the code is built, see [ARCHITECTURE.md](../ARCHITECTURE.md). For the entity model — core + plugins, edge types, validation rules, and design principles — see [entity-model.md](entity-model.md).
 
 ## Entity Reference
 
@@ -133,8 +133,6 @@ The industry has independently converged on structured context files (CLAUDE.md,
 | ID | Title |
 |----|-------|
 | [RES-11a](../spec/research/RES-11a-spec-dsl-core-compiler.md) | Core compiler architecture |
-| [RES-11b](../spec/research/RES-11b-spec-dsl-codegen-plugins.md) | Code generation & test plugins |
-| [RES-12](../spec/research/RES-12-dsl-concept-expansion.md) | DSL concept expansion analysis |
 | [RES-13](../spec/research/RES-13-README.md) | Market landscape 2026 |
 | [RES-18](../spec/research/RES-18-ai-agent-token-economics.md) | **AI agent token economics — cost reduction analysis** |
 | [RES-19](../spec/research/RES-19-market-position-success-estimation.md) | **Market position & success estimation** |
@@ -143,9 +141,9 @@ The industry has independently converged on structured context files (CLAUDE.md,
 | [RES-27](../spec/research/RES-27-software-eng-entity-redesign.md) | Software engineering entity redesign |
 | [Extension Model](extension-model.md) | Extensions, providers, and generators architecture |
 
-## Business Plan
+## Vision
 
-A comprehensive business plan covering 10 areas (executive summary, financials, go-to-market, technical roadmap, pricing, product strategy, community, investment thesis, operations, strategic analysis) is available at **[business/README.md](../business/README.md)**.
+Why SpecForge exists: the [manifesto](vision/README.md), the [principles](vision/principles.md) a design decision is tested against, and the [north star](vision/north-star.md).
 
 ## Validation Codes
 

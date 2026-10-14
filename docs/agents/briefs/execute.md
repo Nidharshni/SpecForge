@@ -10,7 +10,9 @@ plan's text) and your plan, in full.
    the `verify` text exists verbatim in the spec (`cargo run -p xtask --bin check-links` checks it).
 4. After each ticket: the plan's targeted `cargo nextest run -p <crate> -E 'test(<filter>)'`, its deletion checks,
    `cargo clippy -p <crate> --all-targets -- -D warnings`, `cargo fmt --all`. CI also lints on Linux: beware
-   macOS-only `cfg` code.
+   macOS-only `cfg` code. A ticket that shrinks, splits or moves a file listed in `gate/baseline.json`'s `file-size`
+   section runs `cargo gate baseline --only file-size` and commits the file with the ticket; no ticket adds lines to a
+   listed file.
 5. Builtin blob rebuilds do not run in worktrees: a re-vendor ticket changes the source, stops before the rebuild,
    and says so.
 6. Code that moved since the plan: adapt and record the deviation. A ticket that needs another plan's missing ticket:

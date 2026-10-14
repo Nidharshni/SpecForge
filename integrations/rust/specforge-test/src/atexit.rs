@@ -6,6 +6,10 @@ static INIT: Once = Once::new();
 
 /// Ensures the atexit handler is registered exactly once.
 /// Called by TestGuard::new on first construction.
+#[expect(
+    unsafe_code,
+    reason = "libc::atexit takes a plain extern fn, and `on_exit` outlives the process's exit handlers"
+)]
 pub fn ensure_registered() {
     INIT.call_once(|| {
         // Safety: atexit is POSIX-standard. The function pointer is valid

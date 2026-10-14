@@ -525,7 +525,7 @@ JSON input, reading a JSON answer ([ADR 0013](adr/0013-typed-extension-calls.md)
 Every input and answer is a type of `specforge_protocol_types` (module
 `calls`), the same definitions the SDK re-exports, so a Rust guest built with
 the SDK cannot answer the wrong shape; a guest in another language reads the
-table below and the goldens in `crates/specforge-wasm/tests/wire/`.
+table below and the goldens in `crates/runtime/wasm/tests/wire/`.
 
 | Operation | Export | Input | Answer |
 |---|---|---|---|

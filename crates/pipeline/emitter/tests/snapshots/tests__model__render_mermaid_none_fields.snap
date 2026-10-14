@@ -1,0 +1,25 @@
+---
+source: crates/pipeline/emitter/tests/model.rs
+expression: output
+---
+erDiagram
+
+    %% @specforge/software
+
+    behavior {
+    }
+    event {
+    }
+
+    %% @specforge/product
+
+    feature {
+    }
+    journey {
+    }
+
+    %% Relationships
+
+    behavior }o--o{ feature : "BehaviorImplementsFeature"
+    behavior }o--o{ event : "Triggers"
+    journey }o--o{ feature : "JourneyExercisesFeature"

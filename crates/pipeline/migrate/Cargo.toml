@@ -1,0 +1,24 @@
+[package]
+name = "specforge-migrate"
+description = "Format-version migration of a project's .spec files: the rewrite, its backups and rollback record, and the W054 report of what it changed in the graph"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+specforge-common = { workspace = true }
+specforge-formatter = { workspace = true }
+specforge-graph = { path = "../graph" }
+specforge-parser = { workspace = true }
+
+[dev-dependencies]
+specforge-test-macros = { workspace = true }
+specforge-test = { workspace = true }
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

@@ -1,0 +1,10 @@
+---
+source: crates/surfaces/cli/tests/read_views.rs
+expression: "normalized_text(&run.stdout, root)"
+---
+Selected: 2 entities reached from login
+Starting points: login, signin
+Most connected:  login (1), signin (1)
+Unconnected:     none
+Paths from login:
+  signin  features

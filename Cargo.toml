@@ -2,39 +2,66 @@
 resolver = "3"
 exclude = ["extensions", "fixtures"]
 members = [
-    "crates/specforge-common",
-    "crates/specforge-component",
-    "crates/specforge-protocol-types",
-    "crates/specforge-package",
-    "crates/specforge-extension-sdk",
-    "crates/specforge-extension-sdk-macros",
-    "crates/tree-sitter-specforge",
-    "crates/specforge-parser",
-    "crates/specforge-resolver",
-    "crates/specforge-graph",
-    "crates/specforge-coverage",
-    "crates/specforge-diagnostics",
-    "crates/specforge-emitter",
-    "crates/specforge-watch",
-    "crates/specforge-formatter",
-    "crates/specforge-registry",
-    "crates/specforge-registry-client",
-    "crates/specforge-registry-wire",
-    "crates/specforge-wasm",
-    "crates/specforge-installed",
-    "crates/specforge-lsp",
-    "crates/specforge-mcp",
-    "crates/specforge-mcp-macros",
-    "crates/specforge-shape-macros",
-    "crates/specforge-migrate",
-    "crates/specforge-ops",
-    "crates/specforge-ops-registry",
-    "crates/specforge-project",
-    "crates/specforge-cli",
-    "crates/specforge-registry-server",
+    # leaf
+    "crates/leaf/coverage",
+    "crates/leaf/diagnostics",
+    "crates/leaf/package",
+    "crates/leaf/protocol-types",
+    "crates/leaf/repo-root",
+    # kernel
+    "crates/kernel/common",
+    "crates/kernel/parser",
+    "crates/kernel/shape-macros",
+    "crates/kernel/tree-sitter",
+    # pipeline
+    "crates/pipeline/emitter",
+    "crates/pipeline/formatter",
+    "crates/pipeline/graph",
+    "crates/pipeline/migrate",
+    "crates/pipeline/registry",
+    "crates/pipeline/resolver",
+    # runtime
+    "crates/runtime/component",
+    "crates/runtime/extension-sdk",
+    "crates/runtime/extension-sdk-macros",
+    "crates/runtime/installed",
+    "crates/runtime/wasm",
+    # session
+    "crates/session/project",
+    "crates/session/watch",
+    # app
+    "crates/app/ops",
+    # adapters
+    "crates/adapters/ops-registry",
+    "crates/adapters/registry-client",
+    "crates/adapters/registry-wire",
+    # surfaces
+    "crates/surfaces/cli",
+    "crates/surfaces/lsp",
+    "crates/surfaces/mcp",
+    "crates/surfaces/mcp-macros",
+    "crates/surfaces/registry-server",
     "xtask",
     "gate",
 ]
+
+# One lint policy for every workspace member (ADR 0089). An exception is an `#[expect(lint, reason = "...")]` on
+# the item it excuses; `#[allow]` only where an `expect` cannot hold (macro output, a module shared by several test
+# binaries, a test crate's root).
+[workspace.lints.rust]
+# Production unsafe is the tree-sitter FFI; each unsafe item says why it is sound.
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+# An `unwrap` states no invariant. `expect("...")` names the one it relies on; a fallible input returns an error.
+unwrap_used = "deny"
+# MCP and the LSP own stdout: it is their protocol stream. A binary that owns its stdout says so.
+print_stdout = "deny"
+dbg_macro = "deny"
+todo = "deny"
+unimplemented = "deny"
+# Every `#[allow]` that remains says why.
+allow_attributes_without_reason = "deny"
 
 [workspace.package]
 edition = "2024"
@@ -44,17 +71,17 @@ repository = "https://github.com/leaderiop/SpecForge"
 
 [workspace.dependencies]
 # Internal
-specforge-common = { path = "crates/specforge-common" }
-specforge-formatter = { path = "crates/specforge-formatter" }
-specforge-parser = { path = "crates/specforge-parser" }
-specforge-registry = { path = "crates/specforge-registry" }
-specforge-mcp = { path = "crates/specforge-mcp" }
-specforge-migrate = { path = "crates/specforge-migrate" }
-specforge-ops = { path = "crates/specforge-ops" }
-specforge-project = { path = "crates/specforge-project" }
-specforge-wasm = { path = "crates/specforge-wasm" }
-specforge-component = { path = "crates/specforge-component" }
-tree-sitter-specforge = { path = "crates/tree-sitter-specforge" }
+specforge-common = { path = "crates/kernel/common" }
+specforge-formatter = { path = "crates/pipeline/formatter" }
+specforge-parser = { path = "crates/kernel/parser" }
+specforge-registry = { path = "crates/pipeline/registry" }
+specforge-mcp = { path = "crates/surfaces/mcp" }
+specforge-migrate = { path = "crates/pipeline/migrate" }
+specforge-ops = { path = "crates/app/ops" }
+specforge-project = { path = "crates/session/project" }
+specforge-wasm = { path = "crates/runtime/wasm" }
+specforge-component = { path = "crates/runtime/component" }
+tree-sitter-specforge = { path = "crates/kernel/tree-sitter" }
 
 # External
 tree-sitter = "0.26.6"

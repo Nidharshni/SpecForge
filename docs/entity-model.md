@@ -511,7 +511,7 @@ The compiler enforces structural invariants. Each rule belongs to the extension 
 
 Every diagnostic code, its meaning, and the component that owns it (`core` or the
 emitting `@specforge/<name>` extension) is listed in [docs/diagnostics.md](diagnostics.md).
-That page is generated from the `specforge explain` catalog (`crates/specforge-diagnostics/src/lib.rs`),
+That page is generated from the `specforge explain` catalog (`crates/leaf/diagnostics/src/lib.rs`),
 which a test keeps in lockstep with the codes the compiler and extensions actually emit — so it is
 the only registry; run `specforge explain <CODE>` for the same text in the terminal. Codes in the
 `E900`–`E998`, `W900`–`W998` and `I900`–`I998` ranges are reserved for third-party extensions.

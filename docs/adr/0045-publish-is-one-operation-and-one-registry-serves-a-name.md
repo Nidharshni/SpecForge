@@ -101,3 +101,5 @@ D2's port also reads a version's published manifest without its binary (`Registr
 
 **Amended by ADR 0075 (architecture round 9, plan 05), D1:** a `registries` entry that can't be read refuses every
 registry operation (E067) instead of being skipped, so the scope it claims never falls to the default registry.
+
+**Amended by ADR 0086 (2026-10-14):** `publish` is `specforge_ops::extension::publish`, with `declare`.

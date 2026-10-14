@@ -1,0 +1,82 @@
+#[cfg(feature = "testing")]
+use specforge_common::ExtensionEntry;
+#[cfg(feature = "testing")]
+use specforge_wasm::WasmRuntime;
+
+/// One builtin extension: its package name, its crate under `extensions/`, the component
+/// `build-blobs` vendors into `extensions/<dir>/wasm/`, and the vendored bytes this host
+/// embeds.
+pub struct Builtin {
+    pub name: &'static str,
+    pub dir: &'static str,
+    /// Its crate, from the repository root: `extensions/<dir>`.
+    pub crate_dir: &'static str,
+    pub artifact: &'static str,
+    pub bytes: &'static [u8],
+}
+
+macro_rules! builtins {
+    ($($name:literal in $dir:literal as $artifact:literal),* $(,)?) => {
+        /// Every builtin this host embeds, in the order `init` and the listings use.
+        pub const BUILTINS: &[Builtin] = &[$(Builtin {
+            name: $name,
+            dir: $dir,
+            crate_dir: concat!("extensions/", $dir),
+            artifact: $artifact,
+            bytes: include_bytes!(concat!("../../../../extensions/", $dir, "/wasm/", $artifact)),
+        }),*];
+    };
+}
+
+builtins! {
+    "@specforge/product" in "product" as "specforge_ext_product.wasm",
+    "@specforge/software" in "software" as "specforge_ext_software.wasm",
+    "@specforge/governance" in "governance" as "specforge_ext_governance.wasm",
+    "@specforge/formal" in "formal" as "specforge_ext_formal.wasm",
+    "@specforge/testing" in "testing" as "specforge_ext_testing.wasm",
+    "@specforge/cargo-test" in "cargo-test" as "specforge_ext_cargo_test.wasm",
+    "@specforge/vitest" in "vitest" as "specforge_ext_vitest.wasm",
+    "@specforge/rust" in "rust" as "specforge_ext_rust.wasm",
+    "@specforge/typescript" in "typescript" as "specforge_ext_typescript.wasm",
+}
+
+/// (name, bytes) of every builtin, read from [`BUILTINS`]: what the extension load reads
+/// (`specforge_installed::Builtins`).
+pub const BUILTIN_EXTENSIONS: &[(&str, &[u8])] = &{
+    let mut out: [(&str, &[u8]); BUILTINS.len()] = [("", &[]); BUILTINS.len()];
+    let mut i = 0;
+    while i < BUILTINS.len() {
+        out[i] = (BUILTINS[i].name, BUILTINS[i].bytes);
+        i += 1;
+    }
+    out
+};
+
+/// Test support: puts the builtin Wasm extensions `requested`
+/// (`specforge.json` entries, read by [`ExtensionEntry`]: a legacy
+/// `name@version` names the builtin too) names into a runtime outside the
+/// extension load (`Installed::load`).
+///
+/// Other entries (installed extensions, `.wasm` files) are skipped.
+#[cfg(feature = "testing")]
+pub fn load_builtins_for(runtime: &dyn WasmRuntime, requested: &[String]) -> Result<(), String> {
+    for (name, wasm_bytes) in BUILTIN_EXTENSIONS {
+        if requested
+            .iter()
+            .any(|entry| ExtensionEntry::parse(entry) == ExtensionEntry::Named(name))
+        {
+            runtime.load(name, wasm_bytes)?;
+        }
+    }
+    Ok(())
+}
+
+/// Test support: puts all builtin Wasm extensions into a runtime outside the
+/// extension load (`Installed::load`).
+#[cfg(feature = "testing")]
+pub fn load_builtins(runtime: &dyn WasmRuntime) -> Result<(), String> {
+    for (name, wasm_bytes) in BUILTIN_EXTENSIONS {
+        runtime.load(name, wasm_bytes)?;
+    }
+    Ok(())
+}

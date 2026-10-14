@@ -1,0 +1,32 @@
+---
+source: crates/surfaces/cli/src/main.rs
+expression: command.clone().render_long_help().to_string()
+---
+Remove an installed extension
+
+Usage: specforge remove [OPTIONS] <NAME>
+
+Arguments:
+  <NAME>
+          Extension name
+
+Options:
+      --path <PATH>
+          A path inside the project (the nearest directory at or above it holding specforge.json; none: the directory itself, with the default configuration)
+          
+          [default: .]
+
+      --force
+          Force removal even if other extensions depend on it
+
+      --dry-run
+          Report what the removal would do; write nothing
+
+      --format <FORMAT>
+          Output format: human or json
+          
+          [default: human]
+          [possible values: human, json]
+
+  -h, --help
+          Print help

@@ -68,7 +68,7 @@ fn git_lines(repo: &Repo, args: &[&str]) -> Result<Vec<String>, String> {
         .collect())
 }
 
-/// A path pattern: `*` matches within one segment, `**` any number of segments (`**/*.rs`, `crates/*/src/**`).
+/// A path pattern: `*` matches within one segment, `**` any number of segments (`**/*.rs`, `crates/**/src/**`).
 pub struct Pattern<'a>(pub &'a str);
 
 impl Pattern<'_> {

@@ -1,0 +1,21 @@
+[package]
+name = "specforge-package"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "The host's reading of what an extension package is called, which version is asked for and what its declared peers require (ADR 0036, 0041, 0050)"
+
+[dependencies]
+# The declaration and its declared peers, as the guest wire carries them.
+specforge-protocol-types = { path = "../protocol-types" }
+semver = { workspace = true }
+serde = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+specforge-test = { workspace = true }
+specforge-test-macros = { workspace = true }
+
+[lints]
+workspace = true

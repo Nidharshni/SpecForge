@@ -7,6 +7,9 @@ invariant formatting_idempotency "Formatting Idempotency" {
     Applying the formatter to an already-formatted file MUST produce identical output.
     Formally: format(format(x)) == format(x) for all valid .spec inputs. Any
     violation of this invariant is a P0 bug.
+    It holds for a file with syntax errors too: the forms left unchanged
+    are written once, as they were, so a second run reads and keeps the
+    same forms (format_with_parse_errors).
   """
   risk      high
   verify property "formatting an already-formatted file produces identical output"

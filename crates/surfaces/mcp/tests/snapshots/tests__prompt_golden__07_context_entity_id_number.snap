@@ -1,0 +1,16 @@
+---
+source: crates/surfaces/mcp/tests/prompt_golden.rs
+expression: "shape(&reply, dir.path())"
+---
+{
+  "error": {
+    "code": -32602,
+    "data": {
+      "argument": "entity_id",
+      "code": "invalid_input",
+      "message": "entity_id must be a string, got 42",
+      "prompt": "specforge://prompts/context"
+    },
+    "message": "entity_id must be a string, got 42"
+  }
+}

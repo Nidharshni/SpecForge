@@ -113,7 +113,7 @@ declaration order (it was an `eprintln!` the LSP and MCP sent to stderr).
   itself.
 - The nine builtins declare with the SDK builders instead of ~7.9k lines of hand-written
   describe JSON; their exact wire answers are pinned under
-  `crates/specforge-component/tests/declarations/` (`xtask snapshot-builtins` writes them).
+  `crates/runtime/component/tests/declarations/` (`xtask snapshot-builtins` writes them).
 - `manifest.json` is no longer read anywhere; `specforge extension init|build|validate` work on
   an SDK crate and its built component.
 - The host-side code that only the mirror family fed (the manifest bridge, sidecar discovery,

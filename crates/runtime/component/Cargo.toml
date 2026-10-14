@@ -1,0 +1,43 @@
+[package]
+name = "specforge-component"
+description = "The wasmtime component-model runtime: the production adapter of the WasmRuntime port, which enforces the sandbox's limits, and the builtin blobs the host embeds (ADR 0037, ADR 0070)"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+# `builtins::load_builtins` and `load_builtins_for`: put builtins into a
+# runtime outside the extension load, for tests. `committed`: the list of every
+# committed blob and its wire answers.
+testing = ["dep:specforge-protocol-types", "dep:serde_json", "dep:specforge-repo-root"]
+
+[dependencies]
+specforge-wasm = { path = "../wasm" }
+specforge-common = { workspace = true }
+wasmtime = { version = "49.0.2", features = ["component-model", "cache"] }
+wasmtime-wasi = "49.0.2"
+specforge-protocol-types = { path = "../../leaf/protocol-types", optional = true }
+serde_json = { workspace = true, optional = true }
+specforge-repo-root = { path = "../../leaf/repo-root", optional = true }
+
+[dev-dependencies]
+specforge-repo-root = { path = "../../leaf/repo-root" }
+specforge-protocol-types = { path = "../../leaf/protocol-types" }
+specforge-component = { path = ".", features = ["testing"] }
+# The runtime contract and the SDK-declared greet served in process.
+specforge-extension-sdk = { path = "../extension-sdk" }
+specforge-diagnostics = { path = "../../leaf/diagnostics" }
+specforge-wasm = { workspace = true, features = ["testing"] }
+tempfile = { workspace = true }
+wat = "=1.261.0"
+serde_json = { workspace = true }
+specforge-test = { workspace = true }
+specforge-test-macros = { workspace = true }
+
+[[test]]
+name = "caught_signals"
+harness = false
+
+[lints]
+workspace = true

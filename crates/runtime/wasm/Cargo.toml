@@ -1,0 +1,38 @@
+[package]
+name = "specforge-wasm"
+description = "The host side of the extension protocol: the WasmRuntime port, every typed extension call and its E028 failure, the sandbox limits and the in-process test runtime (ADR 0013, ADR 0037)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+autotests = false
+
+[[test]]
+name = "tests"
+path = "tests/main.rs"
+
+[dependencies]
+specforge-protocol-types = { path = "../../leaf/protocol-types" }
+specforge-common = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+semver = { workspace = true }
+# The in-process runtime adapter (`testing`, plan 03/04).
+specforge-extension-sdk = { path = "../extension-sdk", optional = true }
+
+[features]
+# `specforge_wasm::testing::InProcessRuntime`: serve SDK-declared
+# extensions in process, for tests of the host.
+testing = ["dep:specforge-extension-sdk"]
+
+[dev-dependencies]
+specforge-repo-root = { path = "../../leaf/repo-root" }
+specforge-registry = { workspace = true }
+# Its own tests use the in-process runtime.
+specforge-wasm = { path = ".", features = ["testing"] }
+specforge-test = { workspace = true }
+specforge-test-macros = { workspace = true }
+specforge-extension-sdk = { path = "../extension-sdk" }
+
+[lints]
+workspace = true

@@ -1,0 +1,7 @@
+---
+source: crates/surfaces/cli/tests/read_views.rs
+expression: text
+---
+exit: Some(0)
+stderr: "info[I020]: unknown entity kind 'behaviour'\n  = help: did you mean 'behavior'?\n"
+nodes: ["login"]

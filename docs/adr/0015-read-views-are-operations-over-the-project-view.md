@@ -465,3 +465,5 @@ coverage; `inspect::coverage(view, entity_id) -> Result<EntityCoverage, OpError>
 show it (MCP inspect, the hover), so the context prompt reads no report. I3 holds unchanged: the standing does not
 depend on the report, the coverage carries its error, MCP fails inspect on it, the hover shows it. `ProjectCoverage`
 holds what the recorded tests prove; standings are read through `ProjectView::entities`.
+
+**Amended by ADR 0086 (2026-10-14):** the read views live under `specforge_ops::read` (`read::stats`, `read::trace`, `read::plan`, ...), the management operations under `extension` and `analysis`, and `collect` under `analysis`. Q5's refusal is `view::not_found`, and its request field is `view::EntityField`; P3's `neighbourhood` raises it from the view.

@@ -1,0 +1,67 @@
+---
+source: crates/pipeline/emitter/tests/model.rs
+expression: output
+---
+# Logical Data Model
+
+## How to read this model
+
+This document describes the **schema** of a SpecForge project — the entity kinds
+(analogous to database tables), their fields (columns), and the relationships
+(foreign keys) between them. It does NOT show actual entity instances. Entity
+kinds and fields are declared by SpecForge extensions. Relationships have
+cardinality: 1:1 (one-to-one), 1:N (one-to-many), N:1 (many-to-one), or
+N:M (many-to-many).
+
+## Extensions
+
+| Extension | Version | Entity Kinds | Edge Types |
+|-----------|---------|-------------|------------|
+| @specforge/software | 1.0.0 | 2 | 2 |
+| @specforge/product | 1.0.0 | 2 | 1 |
+
+## @specforge/software
+
+### behavior
+
+| Field | Type | Required | Contribution | Source | Description |
+|-------|------|----------|--------------|--------|-------------|
+| id | string | yes |  |  |  |
+| contract | string | yes |  |  | The contract |
+| features | reference_list(feature) | no | BehaviorImplementsFeature -> feature |  |  |
+
+**Relationships:**
+- behavior --(BehaviorImplementsFeature)--> feature [N:M]
+- behavior --(Triggers)--> event [N:M]
+
+### event
+
+| Field | Type | Required | Contribution | Source | Description |
+|-------|------|----------|--------------|--------|-------------|
+| id | string | yes |  |  |  |
+
+**Relationships:**
+- event <--(Triggers)-- behavior [N:M]
+
+## @specforge/product
+
+### feature
+
+| Field | Type | Required | Contribution | Source | Description |
+|-------|------|----------|--------------|--------|-------------|
+| id | string | yes |  |  |  |
+
+**Relationships:**
+- feature <--(BehaviorImplementsFeature)-- behavior [N:M]
+- feature <--(JourneyExercisesFeature)-- journey [N:M]
+
+### journey
+
+| Field | Type | Required | Contribution | Source | Description |
+|-------|------|----------|--------------|--------|-------------|
+| id | string | yes |  |  |  |
+
+**Relationships:**
+- journey --(JourneyExercisesFeature)--> feature [N:M]
+
+4 entity kinds, 3 edge types across 2 extensions.

@@ -13,7 +13,10 @@ fn pattern_star_stays_in_a_segment_and_double_star_crosses() {
     assert!(!matches("**/*.rs", "crates/x/src/b.spec"));
     assert!(matches("crates/*/src/**", "crates/x/src/a/b.rs"));
     assert!(!matches("crates/*/src/**", "crates/x/tests/a.rs"));
-    assert!(!matches("crates/*/src/**", "crates/x/y/src/a.rs"));
+    assert!(matches("crates/**/src/**", "crates/x/src/a.rs"));
+    assert!(matches("crates/**/src/**", "crates/layer/x/src/a/b.rs"));
+    assert!(!matches("crates/**/src/**", "crates/layer/x/tests/a.rs"));
+    assert!(matches("crates/**/Cargo.toml", "crates/layer/x/Cargo.toml"));
     assert!(matches("Cargo.toml", "Cargo.toml"));
     assert!(!matches("Cargo.toml", "gate/Cargo.toml"));
     assert!(matches("**/Cargo.lock", "Cargo.lock"));

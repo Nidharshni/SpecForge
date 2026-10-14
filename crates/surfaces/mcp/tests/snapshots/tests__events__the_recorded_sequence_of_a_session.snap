@@ -1,0 +1,213 @@
+---
+source: crates/surfaces/mcp/tests/events.rs
+expression: "json!({\"core\": core, \"surfaces\": surfaces})"
+---
+{
+  "core": [
+    {
+      "event": "mcp_initialized",
+      "payload": {
+        "auto_promoted_tools": 0,
+        "extensions_loaded": 0,
+        "prompts_registered": 5,
+        "resources_registered": 8,
+        "surface_resources_registered": 0,
+        "surface_tools_registered": 0,
+        "tools_registered": 34
+      }
+    },
+    {
+      "event": "mcp_initialization_failed",
+      "payload": {
+        "error_kind": "already_initialized",
+        "message": "Server already initialized"
+      }
+    },
+    {
+      "event": "mcp_protocol_error_handled",
+      "payload": {
+        "errorCode": -32600,
+        "errorMessage": "Server already initialized",
+        "requestMethod": "initialize"
+      }
+    },
+    {
+      "event": "mcp_subscription_created",
+      "payload": {
+        "resourceUri": "specforge://graph"
+      }
+    },
+    {
+      "event": "mcp_discovery_invoked",
+      "payload": {
+        "discoveryType": "tools",
+        "resultCount": 34
+      }
+    },
+    {
+      "event": "mcp_discovery_invoked",
+      "payload": {
+        "discoveryType": "resources",
+        "resultCount": 5
+      }
+    },
+    {
+      "event": "mcp_discovery_invoked",
+      "payload": {
+        "discoveryType": "prompts",
+        "resultCount": 5
+      }
+    },
+    {
+      "event": "mcp_resource_read",
+      "payload": {
+        "format": "application/json",
+        "resourceUri": "specforge://graph"
+      }
+    },
+    {
+      "event": "mcp_tool_invoked",
+      "payload": {
+        "category": "navigation",
+        "entityId": "alpha",
+        "params": "{\"entity_id\":\"alpha\"}",
+        "toolName": "specforge.inspect"
+      }
+    },
+    {
+      "event": "mcp_prompt_invoked",
+      "payload": {
+        "entityId": "alpha",
+        "promptName": "specforge://prompts/context"
+      }
+    },
+    {
+      "event": "mcp_tool_invoked",
+      "payload": {
+        "category": "mutation",
+        "entityId": "alpha",
+        "params": "{\"entity_id\":\"alpha\",\"new_name\":\"gamma\"}",
+        "toolName": "specforge.rename"
+      }
+    },
+    {
+      "event": "mcp_delta_notified",
+      "payload": {
+        "addedNodes": 1,
+        "modifiedNodes": 1,
+        "notificationType": "graph",
+        "removedNodes": 1,
+        "subscriberCount": 1
+      }
+    },
+    {
+      "event": "mcp_mutation_completed",
+      "payload": {
+        "entities_affected": 1,
+        "files_changed": 1,
+        "success": true,
+        "toolName": "specforge.rename"
+      }
+    },
+    {
+      "event": "mcp_protocol_error_handled",
+      "payload": {
+        "errorCode": -32601,
+        "errorMessage": "Method not found: no/such/method",
+        "requestMethod": "no/such/method"
+      }
+    },
+    {
+      "event": "mcp_request_cancelled",
+      "payload": {
+        "requestId": "7",
+        "wasInProgress": false
+      }
+    },
+    {
+      "event": "mcp_subscription_removed",
+      "payload": {
+        "resourceUri": "specforge://graph"
+      }
+    },
+    {
+      "event": "mcp_server_shutdown",
+      "payload": {
+        "pending_notifications_flushed": 2,
+        "subscriptions_released": 1,
+        "wasm_engines_released": 1
+      }
+    }
+  ],
+  "surfaces": [
+    {
+      "event": "commands_auto_promoted",
+      "payload": {
+        "conflictCount": 1,
+        "promotedCount": 1
+      }
+    },
+    {
+      "event": "mcp_initialized",
+      "payload": {
+        "auto_promoted_tools": 1,
+        "extensions_loaded": 1,
+        "prompts_registered": 5,
+        "resources_registered": 9,
+        "surface_resources_registered": 1,
+        "surface_tools_registered": 2,
+        "tools_registered": 36
+      }
+    },
+    {
+      "event": "mcp_tool_invoked",
+      "payload": {
+        "category": "core",
+        "params": "{}",
+        "toolName": "specforge.cmds.check"
+      }
+    },
+    {
+      "event": "surface_mcp_tool_dispatched",
+      "payload": {
+        "durationMs": "[ms]",
+        "extensionName": "@test/cmds",
+        "success": true,
+        "toolName": "specforge.cmds.check"
+      }
+    },
+    {
+      "event": "mcp_tool_invoked",
+      "payload": {
+        "category": "core",
+        "params": "{\"style\":\"md\"}",
+        "toolName": "specforge.cmds.report"
+      }
+    },
+    {
+      "event": "surface_command_dispatched",
+      "payload": {
+        "commandId": "report",
+        "durationMs": "[ms]",
+        "exitCode": 0,
+        "extensionName": "@test/cmds"
+      }
+    },
+    {
+      "event": "surface_mcp_resource_dispatched",
+      "payload": {
+        "durationMs": "[ms]",
+        "extensionName": "@test/cmds",
+        "mimeType": "application/json",
+        "uriTemplate": "specforge://ext/cmds/summary"
+      }
+    },
+    {
+      "event": "mcp_resource_read",
+      "payload": {
+        "format": "application/json",
+        "resourceUri": "specforge://ext/cmds/summary"
+      }
+    }
+  ]
+}

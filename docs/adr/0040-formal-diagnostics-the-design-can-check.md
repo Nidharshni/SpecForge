@@ -20,8 +20,8 @@ reported. No obligation any test proved was touched.
 
 Every built code is catalogued with owner `formal` (`docs/diagnostics.md`), and its spec
 obligations are proven by tests of the compile and the analysis in process
-(`crates/specforge-ops/tests/operations/formal_diagnostics.rs`, ADR 0078 D3;
-`crates/specforge-project/tests/builtins.rs`), plus unit tests in `extensions/formal/src/lib.rs`.
+(`crates/app/ops/tests/operations/formal_diagnostics.rs`, ADR 0078 D3;
+`crates/session/project/tests/builtins.rs`), plus unit tests in `extensions/formal/src/lib.rs`.
 
 **Declarative rules (every check).** None fires on SpecForge's own spec, which declares no
 formal entity.

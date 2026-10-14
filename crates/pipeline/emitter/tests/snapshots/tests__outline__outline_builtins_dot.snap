@@ -1,0 +1,40 @@
+---
+source: crates/pipeline/emitter/tests/outline.rs
+expression: "drawn(&manifests, opts)"
+---
+digraph extensions {
+    rankdir=TB;
+    node [shape=record, style=filled, fontname="Helvetica"];
+    edge [fontname="Helvetica", fontsize=10];
+
+    specforge_product [label="{ @specforge/product | 1.0.0 | 9 entities, 20 edges | feature, journey, deliverable, milestone, module, term, persona, channel, release }", fillcolor="#2ecc71", fontcolor="white"];
+    specforge_software [label="{ @specforge/software | 1.0.0 | 5 entities, 15 edges | behavior, invariant, event, type, port }", fillcolor="#4a90d9", fontcolor="white"];
+    specforge_governance [label="{ @specforge/governance | 1.0.0 | 3 entities, 11 edges | decision, constraint, failure_mode }", fillcolor="#e74c3c", fontcolor="white"];
+    specforge_formal [label="{ @specforge/formal | 1.0.0 | 5 entities, 10 edges | property, axiom, protocol, refinement, process }", fillcolor="#9b59b6", fontcolor="white"];
+
+    specforge_software -> specforge_product [label="optional ^1.0", style=dashed];
+    specforge_governance -> specforge_software [label="optional ^1.0", style=dashed];
+    specforge_governance -> specforge_product [label="optional ^1.0", style=dashed];
+    specforge_formal -> specforge_software [label="depends ^1.0"];
+    specforge_formal -> specforge_product [label="optional ^1.0", style=dashed];
+    specforge_software -> specforge_product [label="enhances module (+2)", style=dashed, color="#999999"];
+    specforge_software -> specforge_product [label="enhances milestone (+1)", style=dashed, color="#999999"];
+    specforge_formal -> specforge_software [label="enhances behavior (+7)", style=dashed, color="#999999"];
+    specforge_formal -> specforge_software [label="enhances event (+3)", style=dashed, color="#999999"];
+    specforge_formal -> specforge_software [label="enhances invariant (+1)", style=dashed, color="#999999"];
+    specforge_software -> specforge_product [label="BehaviorImplementsFeature", style=dotted, color="#e74c3c"];
+    specforge_governance -> specforge_software [label="DecisionProtectsInvariant", style=dotted, color="#e74c3c"];
+    specforge_governance -> specforge_software [label="ConstraintEnforcedByBehavior", style=dotted, color="#e74c3c"];
+    specforge_governance -> specforge_software [label="ConstraintConstrainsBehavior", style=dotted, color="#e74c3c"];
+    specforge_governance -> specforge_software [label="ConstraintProtectsInvariant", style=dotted, color="#e74c3c"];
+    specforge_governance -> specforge_software [label="FailureModeTargetsInvariant", style=dotted, color="#e74c3c"];
+    specforge_governance -> specforge_product [label="ConstraintGovernsFeature", style=dotted, color="#e74c3c"];
+    specforge_governance -> specforge_product [label="DecisionAffectsFeature", style=dotted, color="#e74c3c"];
+    specforge_governance -> specforge_product [label="FailureModeThreatensFeature", style=dotted, color="#e74c3c"];
+    specforge_governance -> specforge_software [label="FailureModeAffectsBehavior", style=dotted, color="#e74c3c"];
+    specforge_formal -> specforge_software [label="AxiomAssumesInvariant", style=dotted, color="#e74c3c"];
+    specforge_formal -> specforge_software [label="PropertyDependsOnInvariant", style=dotted, color="#e74c3c"];
+    specforge_formal -> specforge_software [label="BehaviorRefinesBehavior", style=dotted, color="#e74c3c"];
+    specforge_formal -> specforge_software [label="RefinementRefinesAbstract", style=dotted, color="#e74c3c"];
+    specforge_formal -> specforge_software [label="RefinementRefinesConcrete", style=dotted, color="#e74c3c"];
+}

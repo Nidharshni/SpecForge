@@ -1,0 +1,17 @@
+[package]
+name = "specforge-diagnostics"
+description = "The catalog of SpecForge diagnostic codes: titles, owners, levels and explanations"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+# No dependencies: every surface (CLI, MCP, LSP, doctor) reads it.
+
+[dev-dependencies]
+specforge-repo-root = { path = "../repo-root" }
+specforge-test = { workspace = true }
+specforge-test-macros = { workspace = true }
+
+[lints]
+workspace = true

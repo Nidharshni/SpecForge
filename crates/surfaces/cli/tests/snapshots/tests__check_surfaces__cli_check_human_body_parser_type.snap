@@ -1,0 +1,8 @@
+---
+source: crates/surfaces/cli/tests/check_surfaces.rs
+expression: "normalized(&doc, dir.path())"
+---
+{
+  "exit": 0,
+  "stderr": "[W002] Warning: type 'Money' is not referenced by any behavior, port, or type\n   ╭─[ main.spec:4:1 ]\n   │\n 4 │ ╭─▶ type Money \"Money\" {\n   ┆ ┆\n 8 │ ├─▶ }\n   │ │\n   │ ╰───────\n───╯\n\n[W004] Warning: type 'Money' is testable but declares no verify obligations\n   ╭─[ main.spec:4:1 ]\n   │\n 4 │ ╭─▶ type Money \"Money\" {\n   ┆ ┆\n 8 │ ├─▶ }\n   │ │\n   │ ╰───────\n───╯\n\n[W010] Warning: type 'Money' field 'amount' has unknown annotation '@min'\n   ╭─[ main.spec:4:1 ]\n   │\n 4 │ ╭─▶ type Money \"Money\" {\n   ┆ ┆\n 8 │ ├─▶ }\n   │ │\n   │ ╰───────\n───╯\n0 errors, 3 warnings, 0 infos\n  W002 (1)\n  W004 (1)\n  W010 (1)\n\nhint: run `specforge explain <code>` for details on any diagnostic code\n"
+}

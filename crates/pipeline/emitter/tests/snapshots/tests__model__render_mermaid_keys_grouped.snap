@@ -1,0 +1,31 @@
+---
+source: crates/pipeline/emitter/tests/model.rs
+expression: output
+---
+erDiagram
+
+    %% @specforge/software
+
+    behavior {
+        string id PK
+        string contract "The contract"
+        reference_list features FK "BehaviorImplementsFeature -> feature"
+    }
+    event {
+        string id PK
+    }
+
+    %% @specforge/product
+
+    feature {
+        string id PK
+    }
+    journey {
+        string id PK
+    }
+
+    %% Relationships
+
+    behavior }o--o{ feature : "BehaviorImplementsFeature"
+    behavior }o--o{ event : "Triggers"
+    journey }o--o{ feature : "JourneyExercisesFeature"

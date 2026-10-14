@@ -1,15 +1,9 @@
 use super::*;
-
-fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .to_path_buf()
-}
+use specforge_repo_root::repo_root;
 
 /// The builtins a change feeds; the fixtures that record their inputs are left out.
 fn fed(paths: &[&str]) -> Vec<String> {
-    let mut fed = fed_by(&root(), &ChangeSet::of(paths.iter().copied())).unwrap();
+    let mut fed = fed_by(repo_root(), &ChangeSet::of(paths.iter().copied())).unwrap();
     fed.retain(|crate_dir| crate_dir.starts_with("extensions/"));
     fed
 }
@@ -30,10 +24,10 @@ const NINE: [&str; 9] = [
 #[test]
 fn a_record_round_trips_byte_for_byte() {
     let scratch = tempfile::tempdir().unwrap();
-    for builtin in blobs(&root()).unwrap() {
-        let record = BlobRecord::read(&root(), &builtin).unwrap();
+    for builtin in blobs(repo_root()).unwrap() {
+        let record = BlobRecord::read(repo_root(), &builtin).unwrap();
         record.write(scratch.path(), &builtin).unwrap();
-        let original = std::fs::read(root().join(shown(&builtin))).unwrap();
+        let original = std::fs::read(repo_root().join(shown(&builtin))).unwrap();
         let written = std::fs::read(scratch.path().join(shown(&builtin))).unwrap();
         assert_eq!(original, written, "{builtin}");
     }
@@ -42,7 +36,7 @@ fn a_record_round_trips_byte_for_byte() {
 #[test]
 fn a_change_to_coverage_feeds_the_blobs_that_record_it() {
     assert_eq!(
-        fed(&["crates/specforge-coverage/src/lib.rs"]),
+        fed(&["crates/leaf/coverage/src/lib.rs"]),
         [
             "extensions/formal",
             "extensions/product",
@@ -53,20 +47,20 @@ fn a_change_to_coverage_feeds_the_blobs_that_record_it() {
 
 #[test]
 fn protocol_types_and_the_root_manifest_feed_all_nine() {
-    assert_eq!(fed(&["crates/specforge-protocol-types/src/lib.rs"]), NINE);
+    assert_eq!(fed(&["crates/leaf/protocol-types/src/lib.rs"]), NINE);
     assert_eq!(fed(&["Cargo.toml"]), NINE);
-    assert_eq!(fed(&["crates/specforge-extension-sdk/src/lib.rs"]), NINE);
+    assert_eq!(fed(&["crates/runtime/extension-sdk/src/lib.rs"]), NINE);
 }
 
 #[test]
 fn a_test_only_sdk_file_feeds_no_blob() {
-    assert!(fed(&["crates/specforge-extension-sdk/src/testing.rs"]).is_empty());
-    assert!(fed(&["crates/specforge-lsp/src/lib.rs"]).is_empty());
+    assert!(fed(&["crates/runtime/extension-sdk/src/testing.rs"]).is_empty());
+    assert!(fed(&["crates/surfaces/lsp/src/lib.rs"]).is_empty());
 }
 
 #[test]
 fn blobs_lists_the_recorded_blobs() {
-    let listed = blobs(&root()).unwrap();
+    let listed = blobs(repo_root()).unwrap();
     assert!(NINE.iter().all(|nine| listed.iter().any(|l| l == nine)));
     assert!(
         listed
@@ -88,6 +82,20 @@ fn inherited_tables_ignore_members_and_profiles() {
         "serde = { version = \"1\", features = [\"rc\"] }",
     );
     assert_ne!(inherited_tables(a), inherited_tables(&c));
+}
+
+#[test]
+fn inherited_tables_keep_the_lint_tables() {
+    let a = "[workspace]\nmembers = []\n[workspace.lints.rust]\nunsafe_code = \"deny\"\n\
+             [workspace.lints.clippy]\nunwrap_used = \"deny\"\n[profile.dev]\ndebug = 1\n";
+    let kept = inherited_tables(a);
+    assert!(kept.contains("unsafe_code = \"deny\""));
+    assert!(kept.contains("unwrap_used = \"deny\""));
+    assert!(!kept.contains("debug = 1"));
+    assert_ne!(
+        kept,
+        inherited_tables(&a.replace("unwrap_used = \"deny\"", "unwrap_used = \"warn\""))
+    );
 }
 
 #[test]

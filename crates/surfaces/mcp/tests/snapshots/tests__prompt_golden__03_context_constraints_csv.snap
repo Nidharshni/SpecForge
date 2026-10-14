@@ -1,0 +1,78 @@
+---
+source: crates/surfaces/mcp/tests/prompt_golden.rs
+expression: "shape(&reply, dir.path())"
+---
+{
+  "description": "Get structured context for implementing an entity",
+  "instruction": "You are implementing the entity 'alpha' (kind: behavior). Use the structured context below to guide your implementation. Respect the contract (or the guarantee, rationale or other text in its fields), satisfy verify expectations, and consider upstream/downstream dependencies.",
+  "layout": "turns",
+  "payload": {
+    "contract_text": "first",
+    "downstream_entities": [
+      "feat_login"
+    ],
+    "entity_id": "alpha",
+    "fields": {
+      "contract": "first",
+      "features": [
+        "feat_login"
+      ],
+      "verify": [
+        {
+          "description": "alpha works",
+          "kind": "unit"
+        }
+      ]
+    },
+    "kind": "behavior",
+    "structural_constraint_entities": [
+      {
+        "entity_id": "inv_session",
+        "fields": {
+          "guarantee": "sessions expire",
+          "risk": "low",
+          "verify": [
+            {
+              "description": "sessions expire",
+              "kind": "unit"
+            }
+          ]
+        },
+        "kind": "invariant",
+        "title": "Session"
+      },
+      {
+        "entity_id": "beta",
+        "fields": {
+          "contract": "second",
+          "features": [
+            "feat_login"
+          ],
+          "invariants": [
+            "inv_session"
+          ],
+          "verify": [
+            {
+              "description": "beta works",
+              "kind": "unit"
+            }
+          ]
+        },
+        "kind": "behavior",
+        "title": "Beta"
+      }
+    ],
+    "structural_constraints": [
+      "inv_session",
+      "beta"
+    ],
+    "upstream_entities": [],
+    "verify_expectations": [
+      "unit alpha works"
+    ]
+  },
+  "roles": [
+    "user",
+    "user"
+  ]
+}

@@ -9,12 +9,22 @@ rustfmt           hook       **/*.rs
                              the workspace, the nine guests and the four fixtures (the bridge component included) are rustfmt-clean
 spec-format       hook       computed: a .spec file in a project's spec dir; the formatter, parser or grammar
                              the .spec files of every project are formatted
-grammar           hook       crates/tree-sitter-specforge/grammar.js, crates/tree-sitter-specforge/src/**
+grammar           hook       crates/kernel/tree-sitter/grammar.js, crates/kernel/tree-sitter/src/**
                              the committed tree-sitter artifacts are what grammar.js generates
-zero-entity       hook       crates/*/src/**, scripts/check-zero-entity-core.sh
+zero-entity       hook       crates/**/src/**, scripts/check-zero-entity-core.sh
                              the core crates name no entity kind of an extension
+layers            hook       Cargo.toml, crates/**/Cargo.toml, gate/src/layers.rs
+                             no crate has a normal or build dependency on a crate in a higher layer (its folder under crates/) or in none, and the LSP links no package registry client (ADR 0010)
+file-size         hook       **/*.rs, gate/baseline.json
+                             no tracked .rs file is over 800 lines but those gate/baseline.json lists, none past its listed size
+crate-map         hook       computed: ARCHITECTURE.md, crates/README.md, the root manifest, or a member's manifest or crate root
+                             ARCHITECTURE.md's layer stack and crates/README.md's crate table are what the members' folders and descriptions say; every member has a description and crate docs
 links             hook       computed: a .spec file; a test file or one with a `verify =` attribute
                              every test's verify text and entity is declared by the spec (A016, static)
+doc-links         hook       always
+                             every relative link in a tracked Markdown file names a tracked file or directory
+root-layout       hook       always
+                             the tracked top-level entries are the root list's (gate/src/root_layout.rs)
 builtins          quick      computed: a file some blob's inputs.json records
                              every committed blob was built from the sources it recorded
 guests            quick      extensions/**, crates/**, integrations/rust/**, Cargo.toml
@@ -29,10 +39,12 @@ clippy            quick      crates/**, integrations/rust/**, xtask/**, gate/**,
                              the workspace is clippy-clean with warnings denied
 doctests          quick      computed: a workspace member that holds a runnable doctest (after build)
                              the doctests of the crates that have one pass
-published-schemas quick      **/*.spec, **/specforge.json, extensions/**, crates/specforge-emitter/**, crates/specforge-graph/**, crates/specforge-registry/**, crates/specforge-ops/tests/operations/schema.rs (after build)
+published-schemas quick      **/*.spec, **/specforge.json, extensions/**, crates/pipeline/emitter/**, crates/pipeline/graph/**, crates/pipeline/registry/**, crates/app/ops/tests/operations/schema.rs (after build)
                              every project's exports validate against the schema `specforge schema --publish` prints for their format
-specs             quick      **/*.spec, **/specforge.json, gate/baseline.json, extensions/**, crates/*/src/**, crates/*/Cargo.toml
+specs             quick      **/*.spec, **/specforge.json, gate/baseline.json, extensions/**, crates/**/src/**, crates/**/Cargo.toml
                              every project checks with no error and no warning above the baseline
+spec-modules      quick      computed: spec/product/modules.spec, the root manifest or a member's manifest
+                             spec/product/modules.spec models every crate: one module each, with its manifest's description and dependencies
 dogfood           full       always (after tests, guests)
                              the tests' reports leave no unknown entity (W115), failing proof (A014) or undeclared obligation (A016)
 builtins-verify   bootstrap  always

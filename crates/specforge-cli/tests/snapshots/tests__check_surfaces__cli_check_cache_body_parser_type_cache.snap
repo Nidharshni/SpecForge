@@ -1,9 +1,0 @@
----
-source: crates/specforge-cli/tests/check_surfaces.rs
-expression: "normalized(&doc, dir.path())"
----
-{
-  "cache_file": "{\n  \"format\": 1,\n  \"statuses\": {}\n}\n",
-  "exit": 0,
-  "stderr": ""
-}

@@ -1,0 +1,242 @@
+---
+source: crates/kernel/parser/tests/snapshot_tests.rs
+expression: "parse_ok(source, \"test.spec\").entities"
+---
+[
+    Entity {
+        kind: EntityKind {
+            raw: Sym("spec"),
+        },
+        id: EntityId {
+            raw: Sym("SpecForge"),
+        },
+        title: Some(
+            "SpecForge",
+        ),
+        fields: FieldMap {
+            entries: [
+                FieldEntry {
+                    key: Sym("version"),
+                    value: String(
+                        "0.1.0",
+                    ),
+                    annotations: [],
+                    value_span: Some(
+                        SourceSpan {
+                            file: Sym("test.spec"),
+                            start_line: 3,
+                            start_col: 13,
+                            end_line: 3,
+                            end_col: 20,
+                        },
+                    ),
+                },
+                FieldEntry {
+                    key: Sym("verify"),
+                    value: VerifyList(
+                        [
+                            VerifyStatement {
+                                kind: "integration",
+                                description: "project compiles",
+                            },
+                        ],
+                    ),
+                    annotations: [],
+                    value_span: None,
+                },
+            ],
+        },
+        raw_body: Some(
+            "\n    version \"0.1.0\"\n    verify integration \"project compiles\"\n",
+        ),
+        span: SourceSpan {
+            file: Sym("test.spec"),
+            start_line: 2,
+            start_col: 1,
+            end_line: 5,
+            end_col: 2,
+        },
+        methods: [],
+    },
+    Entity {
+        kind: EntityKind {
+            raw: Sym("ref"),
+        },
+        id: EntityId {
+            raw: Sym("gh.issue:42"),
+        },
+        title: Some(
+            "Support Wasm extensions",
+        ),
+        fields: FieldMap {
+            entries: [
+                FieldEntry {
+                    key: Sym("scheme"),
+                    value: String(
+                        "gh",
+                    ),
+                    annotations: [],
+                    value_span: None,
+                },
+                FieldEntry {
+                    key: Sym("ref_kind"),
+                    value: String(
+                        "issue",
+                    ),
+                    annotations: [],
+                    value_span: None,
+                },
+                FieldEntry {
+                    key: Sym("identifier"),
+                    value: String(
+                        "42",
+                    ),
+                    annotations: [],
+                    value_span: None,
+                },
+            ],
+        },
+        raw_body: None,
+        span: SourceSpan {
+            file: Sym("test.spec"),
+            start_line: 7,
+            start_col: 1,
+            end_line: 7,
+            end_col: 42,
+        },
+        methods: [],
+    },
+    Entity {
+        kind: EntityKind {
+            raw: Sym("ref"),
+        },
+        id: EntityId {
+            raw: Sym("gh.issue:99"),
+        },
+        title: Some(
+            "Performance tracking",
+        ),
+        fields: FieldMap {
+            entries: [
+                FieldEntry {
+                    key: Sym("scheme"),
+                    value: String(
+                        "gh",
+                    ),
+                    annotations: [],
+                    value_span: None,
+                },
+                FieldEntry {
+                    key: Sym("ref_kind"),
+                    value: String(
+                        "issue",
+                    ),
+                    annotations: [],
+                    value_span: None,
+                },
+                FieldEntry {
+                    key: Sym("identifier"),
+                    value: String(
+                        "99",
+                    ),
+                    annotations: [],
+                    value_span: None,
+                },
+                FieldEntry {
+                    key: Sym("priority"),
+                    value: String(
+                        "high",
+                    ),
+                    annotations: [],
+                    value_span: Some(
+                        SourceSpan {
+                            file: Sym("test.spec"),
+                            start_line: 10,
+                            start_col: 14,
+                            end_line: 10,
+                            end_col: 20,
+                        },
+                    ),
+                },
+            ],
+        },
+        raw_body: None,
+        span: SourceSpan {
+            file: Sym("test.spec"),
+            start_line: 9,
+            start_col: 1,
+            end_line: 11,
+            end_col: 2,
+        },
+        methods: [],
+    },
+    Entity {
+        kind: EntityKind {
+            raw: Sym("define"),
+        },
+        id: EntityId {
+            raw: Sym("my_custom_kind"),
+        },
+        title: None,
+        fields: FieldMap {
+            entries: [
+                FieldEntry {
+                    key: Sym("base_kind"),
+                    value: String(
+                        "entity",
+                    ),
+                    annotations: [],
+                    value_span: Some(
+                        SourceSpan {
+                            file: Sym("test.spec"),
+                            start_line: 14,
+                            start_col: 15,
+                            end_line: 14,
+                            end_col: 23,
+                        },
+                    ),
+                },
+                FieldEntry {
+                    key: Sym("testable"),
+                    value: Boolean(
+                        true,
+                    ),
+                    annotations: [],
+                    value_span: Some(
+                        SourceSpan {
+                            file: Sym("test.spec"),
+                            start_line: 15,
+                            start_col: 14,
+                            end_line: 15,
+                            end_col: 18,
+                        },
+                    ),
+                },
+                FieldEntry {
+                    key: Sym("verify"),
+                    value: VerifyList(
+                        [
+                            VerifyStatement {
+                                kind: "unit",
+                                description: "custom kind registers",
+                            },
+                        ],
+                    ),
+                    annotations: [],
+                    value_span: None,
+                },
+            ],
+        },
+        raw_body: Some(
+            "\n    base_kind \"entity\"\n    testable true\n    verify unit \"custom kind registers\"\n",
+        ),
+        span: SourceSpan {
+            file: Sym("test.spec"),
+            start_line: 13,
+            start_col: 1,
+            end_line: 17,
+            end_col: 2,
+        },
+        methods: [],
+    },
+]

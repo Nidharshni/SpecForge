@@ -1,3 +1,8 @@
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
+
 /// Verifies the report write pipeline that atexit invokes.
 #[test]
 fn atexit_writes_report_on_process_exit() {

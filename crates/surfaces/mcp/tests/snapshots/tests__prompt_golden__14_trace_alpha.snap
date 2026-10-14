@@ -1,0 +1,54 @@
+---
+source: crates/surfaces/mcp/tests/prompt_golden.rs
+expression: "shape(&reply, dir.path())"
+---
+{
+  "description": "Identify traceability gaps for a plan",
+  "instruction": "Trace the dependency chain for entity 'alpha'. The data below shows all affected entities, unverified entities in the chain, and coverage gaps. Prioritize addressing unverified entities that are on critical paths.",
+  "layout": "turns",
+  "payload": {
+    "affected_entities": [
+      "alpha",
+      "feat_login"
+    ],
+    "coverage_gaps": [
+      {
+        "gap_context": "behavior 'alpha' has no 'consumes' link to a event",
+        "missing_link_type": "missing_link",
+        "source_entity": "alpha",
+        "target_entity": "event"
+      },
+      {
+        "gap_context": "behavior 'alpha' has no 'invariants' link to a invariant",
+        "missing_link_type": "missing_link",
+        "source_entity": "alpha",
+        "target_entity": "invariant"
+      },
+      {
+        "gap_context": "behavior 'alpha' has no 'ports' link to a port",
+        "missing_link_type": "missing_link",
+        "source_entity": "alpha",
+        "target_entity": "port"
+      },
+      {
+        "gap_context": "behavior 'alpha' has no 'produces' link to a event",
+        "missing_link_type": "missing_link",
+        "source_entity": "alpha",
+        "target_entity": "event"
+      },
+      {
+        "gap_context": "behavior 'alpha' has no 'types' link to a type",
+        "missing_link_type": "missing_link",
+        "source_entity": "alpha",
+        "target_entity": "type"
+      }
+    ],
+    "unverified_entities": [
+      "alpha"
+    ]
+  },
+  "roles": [
+    "user",
+    "user"
+  ]
+}

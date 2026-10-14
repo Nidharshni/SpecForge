@@ -7,19 +7,19 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-specforge-extension-sdk = { path = "../../crates/specforge-extension-sdk" }
+specforge-extension-sdk = { path = "../../crates/runtime/extension-sdk" }
 # The coverage rule, shared with the host and the testing extension (ADR 0039).
-specforge-coverage = { path = "../../crates/specforge-coverage" }
+specforge-coverage = { path = "../../crates/leaf/coverage" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
 [dev-dependencies]
 # MockHost and call_every_command (feature `testing`): never compiled into the blob.
-specforge-extension-sdk = { path = "../../crates/specforge-extension-sdk", features = ["testing"] }
+specforge-extension-sdk = { path = "../../crates/runtime/extension-sdk", features = ["testing"] }
 # The command suites (src/tests/) call each command as the host does:
 # `ExtensionCalls::run_command` over the in-process runtime, which serves
 # this crate's own declaration through the guest's routing (ADR 0013 D8).
-specforge-wasm = { path = "../../crates/specforge-wasm", features = ["testing"] }
-specforge-protocol-types = { path = "../../crates/specforge-protocol-types" }
+specforge-wasm = { path = "../../crates/runtime/wasm", features = ["testing"] }
+specforge-protocol-types = { path = "../../crates/leaf/protocol-types" }
 # Spec links: #[specforge_test(behavior = "…", verify = "…")] (ADR 0002).
 specforge-test = { path = "../../integrations/rust/specforge-test" }

@@ -1,6 +1,6 @@
 //! What @specforge/software declares: its kinds, edges, shared fields, enhancements, validation rules, passes, feature flags, with the SDK builders.
 //! The host loads exactly this (`ContributionsBuilder::declaration`);
-//! `crates/specforge-component/tests/declarations/` pins its wire form.
+//! `crates/runtime/component/tests/declarations/` pins its wire form.
 
 use specforge_extension_sdk::prelude::*;
 

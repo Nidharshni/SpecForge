@@ -8,7 +8,7 @@
 
 ## 1. Executive Summary
 
-Language intelligence extensions (`@specforge/rust`, `@specforge/typescript`, and future per-language plugins) provide AST-powered source code analysis as a new extension contribution category called **analyzers**. They declare zero entity kinds of their own -- instead they enhance `@specforge/software` entities with source anchoring, gap analysis, test collection, and inference signals. The core compiler gains a `scanners` (or `analyzers`) contribution flag, two new host functions (`host_read_source_file`, `host_list_files`) operating in a sandboxed source-root zone, and a unified `SourceDiscoveryConfig` that replaces four duplicated hardcoded file-walk implementations. The current Rust-specific regex scanner in `specforge-common/src/inference.rs` is extracted to a deprecated fallback module and ultimately replaced by `@specforge/rust`'s Wasm exports. This design fully resolves the Principle 2 violation (zero domain knowledge in core) while maintaining backward compatibility through a four-phase migration path.
+Language intelligence extensions (`@specforge/rust`, `@specforge/typescript`, and future per-language plugins) provide AST-powered source code analysis as a new extension contribution category called **analyzers**. They declare zero entity kinds of their own -- instead they enhance `@specforge/software` entities with source anchoring, gap analysis, test collection, and inference signals. The core compiler gains a `scanners` (or `analyzers`) contribution flag, two new host functions (`host_read_source_file`, `host_list_files`) operating in a sandboxed source-root zone, and a unified `SourceDiscoveryConfig` that replaces four duplicated hardcoded file-walk implementations. The current Rust-specific regex scanner in `crates/kernel/common/src/inference.rs` is extracted to a deprecated fallback module and ultimately replaced by `@specforge/rust`'s Wasm exports. This design fully resolves the Principle 2 violation (zero domain knowledge in core) while maintaining backward compatibility through a four-phase migration path.
 
 ---
 
@@ -418,7 +418,7 @@ Lifecycle: anchors become stale when source changes, refresh when re-analyzed, o
 
 | Category | Functions | Files |
 |----------|-----------|-------|
-| **(A) Rust pub-item scanning** | `scan_rust_pub_items`, `parse_rust_pub_item`, `to_snake_case`, `is_test_or_build_file` | `specforge-common/src/inference.rs` |
+| **(A) Rust pub-item scanning** | `scan_rust_pub_items`, `parse_rust_pub_item`, `to_snake_case`, `is_test_or_build_file` | `crates/kernel/common/src/inference.rs` |
 | **(B) Source extension lists** | `is_source_file` / `is_source_extension` (13 hardcoded extensions) | 4 files (3 duplicate copies) |
 | **(C) Excluded directory lists** | `is_excluded_dir` (8 hardcoded dirs) | 4 files (3 duplicate copies) |
 
@@ -427,7 +427,7 @@ Lifecycle: anchors become stale when source changes, refresh when re-analyzed, o
 The four duplicate implementations of `discover_source_files` / `walk_source_dir` / `is_source_file` / `is_excluded_dir` collapse into one:
 
 ```rust
-// specforge-common/src/inference.rs
+// crates/kernel/common/src/inference.rs
 pub struct SourceDiscoveryConfig {
     pub source_extensions: Vec<String>,  // from analyzer_contributions
     pub excluded_dirs: HashSet<String>,  // from analyzer_contributions + specforge.json
@@ -441,10 +441,10 @@ pub fn discover_source_files(
 ```
 
 Locations replaced:
-- `crates/specforge-cli/src/infer_status.rs` (lines 129-196)
-- `crates/specforge-mcp/src/tools/infer_progress.rs` (lines 64-131)
-- `crates/specforge-mcp/src/prompts/infer.rs` (lines 349-397)
-- `crates/specforge-common/src/inference.rs:compute_gap_report` (inline filtering)
+- `crates/surfaces/cli/src/infer_status.rs` (lines 129-196)
+- `crates/surfaces/mcp/src/tools/infer_progress.rs` (lines 64-131)
+- `crates/surfaces/mcp/src/prompts/infer.rs` (lines 349-397)
+- `crates/kernel/common/src/inference.rs:compute_gap_report` (inline filtering)
 
 ### 7.3 Type Renames
 
@@ -583,7 +583,7 @@ impl LanguageScanner for RustScanner {
 |-------|------|-----|
 | **Unit** | `LanguageScanner` trait methods | Native `#[test]`, no Wasm, no C toolchain |
 | **Integration** | Wasm binary directly | `extism call plugin.wasm scan__rust --input '{...}'` |
-| **E2E** | Full `specforge check` with extension | Similar to `crates/specforge-cli/tests/extensions.rs` |
+| **E2E** | Full `specforge check` with extension | Similar to `crates/surfaces/cli/tests/extensions.rs` |
 
 **Critical principle:** Scan logic MUST be testable without Wasm compilation. The SDK ensures this by making the scanner a regular Rust trait impl.
 
@@ -640,12 +640,12 @@ SpecForge's language intelligence extensions occupy a unique niche: **bidirectio
 
 | Step | Action | Files |
 |------|--------|-------|
-| 1a | Add `SourceDiscoveryConfig` struct | `specforge-common/src/inference.rs` |
+| 1a | Add `SourceDiscoveryConfig` struct | `crates/kernel/common/src/inference.rs` |
 | 1b | Create `SourceDiscoveryConfig::hardcoded_defaults()` | Same |
 | 1c | Move shared `discover_source_files` to specforge-common | Same |
 | 1d | Delete 3 duplicate copies | `infer_status.rs`, `infer_progress.rs`, `prompts/infer.rs` |
 | 1e | Move Rust scanner to `inference/fallback_rust.rs` with `#[deprecated]` | New submodule |
-| 1f | Stop re-exporting `scan_rust_pub_items` | `specforge-common/src/lib.rs` |
+| 1f | Stop re-exporting `scan_rust_pub_items` | `crates/kernel/common/src/lib.rs` |
 
 ### Phase 2: Extension Scanner Protocol
 
@@ -675,7 +675,7 @@ SpecForge's language intelligence extensions occupy a unique niche: **bidirectio
 
 | Step | Action |
 |------|--------|
-| 4a | Delete `specforge-common/src/inference/fallback_rust.rs` |
+| 4a | Delete `crates/kernel/common/src/inference/fallback_rust.rs` |
 | 4b | Remove `hardcoded_defaults()` from `SourceDiscoveryConfig` |
 | 4c | Remove I203 deprecation diagnostic |
 | 4d | Grep codebase for `.rs"`, `"rust"`, `"Rust"` in inference paths -- zero hits required |
@@ -747,6 +747,6 @@ Projects with both Rust and TypeScript (e.g., Tauri apps) will have multiple ana
 - **RES-17:** `spec/research/RES-17-specforge-rust-plugin-design.md` -- Original Rust plugin design (test collection focus)
 - **RES-26:** `spec/research/RES-26-zero-entity-core-architecture.md` -- Zero-entity core architecture
 - **RES-27:** `spec/research/RES-27-software-eng-entity-redesign.md` -- Software entity validation
-- **Vision:** `vision/README.md`, `vision/principles.md`, `vision/north-star.md`
+- **Vision:** `docs/vision/README.md`, `docs/vision/principles.md`, `docs/vision/north-star.md`
 - **Manifest v2:** `spec/types/zero-entity-core.spec`
 - **TypeScript extension specs:** `spec/extensions/typescript/*.spec` (created by TS expert)

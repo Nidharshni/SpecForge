@@ -1214,6 +1214,6 @@ A GitHub provider extension contributing to all three surfaces:
 - **RES-11a**: Core compiler architecture. Pipeline phases 1-6.
 - **RES-16**: Test execution integration. `specforge collect` pattern.
 - `docs/extension-model.md`: User-facing extension documentation (needs update).
-- `crates/specforge-wasm/src/manifest.rs`: `ExtensionManifest` and `ExtensionContributions` types (add `surfaces` field).
-- `crates/specforge-wasm/src/host_functions.rs`: Host function dispatch (add surface-aware permission gating).
-- `crates/specforge-cli/src/main.rs`: CLI entrypoint (add dynamic command registration).
+- `crates/runtime/wasm/src/manifest.rs`: `ExtensionManifest` and `ExtensionContributions` types (add `surfaces` field).
+- `crates/runtime/wasm/src/host_functions.rs`: Host function dispatch (add surface-aware permission gating).
+- `crates/surfaces/cli/src/main.rs`: CLI entrypoint (add dynamic command registration).

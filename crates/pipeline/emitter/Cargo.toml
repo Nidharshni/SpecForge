@@ -1,0 +1,46 @@
+[package]
+name = "specforge-emitter"
+description = "Export formats: a built graph and the registries that describe it as text (Graph Protocol JSON, the agent formats, DOT, the model and outline diagrams); no compile, no Wasm runtime, no file I/O (ADR 0007)"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+autotests = false
+
+[[test]]
+name = "tests"
+path = "tests/main.rs"
+
+[dependencies]
+# Export formats only: no Wasm runtime, no compile, no I/O
+# (ADR 0004 D1-d).
+specforge-graph = { path = "../graph" }
+specforge-registry = { workspace = true }
+specforge-protocol-types = { path = "../../leaf/protocol-types" }
+specforge-diagnostics = { path = "../../leaf/diagnostics" }
+specforge-common = { path = "../../kernel/common" }
+# A node's coverage status (`Verdict::status`): pure, no I/O (ADR 0004 D1-d).
+specforge-coverage = { path = "../../leaf/coverage" }
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+
+[dev-dependencies]
+specforge-parser = { workspace = true }
+specforge-component = { path = "../../runtime/component", features = ["testing"] }
+# The outline tests read the real builtin declarations.
+specforge-wasm = { path = "../../runtime/wasm" }
+# Integration tests compile whole projects through the crate built on this one.
+specforge-project = { workspace = true, features = ["testing"] }
+criterion.workspace = true
+insta.workspace = true
+tempfile.workspace = true
+specforge-test.workspace = true
+specforge-test-macros.workspace = true
+
+[[bench]]
+name = "emit"
+harness = false
+
+[lints]
+workspace = true

@@ -1,0 +1,247 @@
+---
+source: crates/surfaces/cli/tests/read_views.rs
+expression: "normalized(value, root)"
+---
+{
+  "schema_version": "1.0.0",
+  "traces": [
+    {
+      "downstream": [],
+      "entity_id": "Payload",
+      "entity_kind": "type",
+      "missing": [],
+      "upstream": []
+    },
+    {
+      "downstream": [],
+      "entity_id": "Status",
+      "entity_kind": "type",
+      "missing": [],
+      "upstream": []
+    },
+    {
+      "downstream": [
+        {
+          "depth": 1,
+          "edge_label": "features",
+          "entity_id": "signin",
+          "entity_kind": "feature",
+          "status": "resolved"
+        }
+      ],
+      "entity_id": "login",
+      "entity_kind": "behavior",
+      "missing": [
+        {
+          "depth": 1,
+          "edge_label": "consumes",
+          "edge_type": "BehaviorConsumesEvent",
+          "expected_kind": "event",
+          "from": "login",
+          "from_kind": "behavior",
+          "required": false,
+          "status": "missing"
+        },
+        {
+          "depth": 1,
+          "edge_label": "invariants",
+          "edge_type": "BehaviorEnforcesInvariant",
+          "expected_kind": "invariant",
+          "from": "login",
+          "from_kind": "behavior",
+          "required": false,
+          "status": "missing"
+        },
+        {
+          "depth": 1,
+          "edge_label": "ports",
+          "edge_type": "BehaviorUsesPort",
+          "expected_kind": "port",
+          "from": "login",
+          "from_kind": "behavior",
+          "required": false,
+          "status": "missing"
+        },
+        {
+          "depth": 1,
+          "edge_label": "produces",
+          "edge_type": "BehaviorProducesEvent",
+          "expected_kind": "event",
+          "from": "login",
+          "from_kind": "behavior",
+          "required": false,
+          "status": "missing"
+        },
+        {
+          "depth": 1,
+          "edge_label": "types",
+          "edge_type": "BehaviorReferencesType",
+          "expected_kind": "type",
+          "from": "login",
+          "from_kind": "behavior",
+          "required": false,
+          "status": "missing"
+        }
+      ],
+      "upstream": []
+    },
+    {
+      "downstream": [],
+      "entity_id": "logout",
+      "entity_kind": "behavior",
+      "missing": [
+        {
+          "depth": 1,
+          "edge_label": "consumes",
+          "edge_type": "BehaviorConsumesEvent",
+          "expected_kind": "event",
+          "from": "logout",
+          "from_kind": "behavior",
+          "required": false,
+          "status": "missing"
+        },
+        {
+          "depth": 1,
+          "edge_label": "features",
+          "edge_type": "BehaviorImplementsFeature",
+          "expected_kind": "feature",
+          "from": "logout",
+          "from_kind": "behavior",
+          "required": false,
+          "status": "missing"
+        },
+        {
+          "depth": 1,
+          "edge_label": "invariants",
+          "edge_type": "BehaviorEnforcesInvariant",
+          "expected_kind": "invariant",
+          "from": "logout",
+          "from_kind": "behavior",
+          "required": false,
+          "status": "missing"
+        },
+        {
+          "depth": 1,
+          "edge_label": "ports",
+          "edge_type": "BehaviorUsesPort",
+          "expected_kind": "port",
+          "from": "logout",
+          "from_kind": "behavior",
+          "required": false,
+          "status": "missing"
+        },
+        {
+          "depth": 1,
+          "edge_label": "produces",
+          "edge_type": "BehaviorProducesEvent",
+          "expected_kind": "event",
+          "from": "logout",
+          "from_kind": "behavior",
+          "required": false,
+          "status": "missing"
+        },
+        {
+          "depth": 1,
+          "edge_label": "types",
+          "edge_type": "BehaviorReferencesType",
+          "expected_kind": "type",
+          "from": "logout",
+          "from_kind": "behavior",
+          "required": false,
+          "status": "missing"
+        }
+      ],
+      "upstream": []
+    },
+    {
+      "downstream": [],
+      "entity_id": "no_lost_login",
+      "entity_kind": "property",
+      "missing": [],
+      "upstream": []
+    },
+    {
+      "downstream": [],
+      "entity_id": "reset_password",
+      "entity_kind": "behavior",
+      "missing": [
+        {
+          "depth": 1,
+          "edge_label": "consumes",
+          "edge_type": "BehaviorConsumesEvent",
+          "expected_kind": "event",
+          "from": "reset_password",
+          "from_kind": "behavior",
+          "required": false,
+          "status": "missing"
+        },
+        {
+          "depth": 1,
+          "edge_label": "features",
+          "edge_type": "BehaviorImplementsFeature",
+          "expected_kind": "feature",
+          "from": "reset_password",
+          "from_kind": "behavior",
+          "required": false,
+          "status": "missing"
+        },
+        {
+          "depth": 1,
+          "edge_label": "invariants",
+          "edge_type": "BehaviorEnforcesInvariant",
+          "expected_kind": "invariant",
+          "from": "reset_password",
+          "from_kind": "behavior",
+          "required": false,
+          "status": "missing"
+        },
+        {
+          "depth": 1,
+          "edge_label": "ports",
+          "edge_type": "BehaviorUsesPort",
+          "expected_kind": "port",
+          "from": "reset_password",
+          "from_kind": "behavior",
+          "required": false,
+          "status": "missing"
+        },
+        {
+          "depth": 1,
+          "edge_label": "produces",
+          "edge_type": "BehaviorProducesEvent",
+          "expected_kind": "event",
+          "from": "reset_password",
+          "from_kind": "behavior",
+          "required": false,
+          "status": "missing"
+        },
+        {
+          "depth": 1,
+          "edge_label": "types",
+          "edge_type": "BehaviorReferencesType",
+          "expected_kind": "type",
+          "from": "reset_password",
+          "from_kind": "behavior",
+          "required": false,
+          "status": "missing"
+        }
+      ],
+      "upstream": []
+    },
+    {
+      "downstream": [],
+      "entity_id": "signin",
+      "entity_kind": "feature",
+      "missing": [],
+      "upstream": [
+        {
+          "depth": 1,
+          "edge_label": "features",
+          "entity_id": "login",
+          "entity_kind": "behavior",
+          "status": "resolved"
+        }
+      ]
+    }
+  ]
+}

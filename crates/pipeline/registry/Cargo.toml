@@ -1,0 +1,32 @@
+[package]
+name = "specforge-registry"
+description = "The Registry build: extension declarations in load order turned into kind, field and edge registries, the rule set and pass order, and the checks over a built graph's entities (ADR 0031)"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+autotests = false
+
+[[test]]
+name = "tests"
+path = "tests/main.rs"
+
+[dependencies]
+specforge-common = { workspace = true }
+specforge-diagnostics = { path = "../../leaf/diagnostics" }
+specforge-package = { path = "../../leaf/package" }
+specforge-protocol-types = { path = "../../leaf/protocol-types" }
+specforge-graph = { path = "../graph" }
+serde_json = { workspace = true }
+regex = { workspace = true }
+
+[dev-dependencies]
+specforge-repo-root = { path = "../../leaf/repo-root" }
+insta = { workspace = true }
+specforge-test = { workspace = true }
+specforge-test-macros = { workspace = true }
+specforge-extension-sdk = { path = "../../runtime/extension-sdk" }
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

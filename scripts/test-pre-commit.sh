@@ -22,22 +22,22 @@ expect() { # expect refused|accepted LABEL
     git reset -q --hard HEAD
 }
 
-touch crates/specforge-common/pending.snap.new
-git add -f crates/specforge-common/pending.snap.new
+touch crates/kernel/common/pending.snap.new
+git add -f crates/kernel/common/pending.snap.new
 expect refused "a staged .snap.new"
 
 printf 'invariant   unformatted_one   "X"   {\n guarantee "g"\n}\n' >spec/zz_unformatted.spec
 git add spec/zz_unformatted.spec
 expect refused "an unformatted .spec"
 
-f=$(grep -rl 'verify = "' crates/specforge-registry/tests | head -1)
+f=$(grep -rl 'verify = "' crates/pipeline/registry/tests | head -1)
 perl -0pi -e 's/verify = "/verify = "NOT DECLARED /' "$f"
 git add "$f"
 expect refused "a verify text the spec does not declare"
 
-echo "// touched" >>crates/specforge-common/src/lib.rs
+echo "// touched" >>crates/kernel/common/src/lib.rs
 cargo fmt --all
-git add crates/specforge-common/src/lib.rs
+git add crates/kernel/common/src/lib.rs
 expect accepted "a clean stage"
 
 printf '\nfn   unformatted_probe( )  {   }\n' >>extensions/governance/src/lib.rs
@@ -49,8 +49,8 @@ git add extensions/software/src/starter.spec
 expect accepted "a staged starter template"
 
 perl -pi -e 's#extras: \(\$\) => \[/\\s/, \$\.comment\]#extras: (\$) => [/\\s/, /;/, \$.comment]#' \
-    crates/tree-sitter-specforge/grammar.js
-git add crates/tree-sitter-specforge/grammar.js
+    crates/kernel/tree-sitter/grammar.js
+git add crates/kernel/tree-sitter/grammar.js
 expect refused "a stale grammar artifact"
 
 [ "$failures" = 0 ]

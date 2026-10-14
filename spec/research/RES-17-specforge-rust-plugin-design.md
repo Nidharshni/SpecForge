@@ -211,7 +211,7 @@ behavior detect_dangling_references "Detect Dangling References" {
   verify unit "close match produces suggestion"
   tests [
     "crates/specforge-validator/src/passes.rs::tests::check_dangling_refs",
-    "crates/specforge-cli/tests/integration_test.rs::e001_dangling_reference",
+    "crates/surfaces/cli/tests/integration_test.rs::e001_dangling_reference",
   ]
 }
 ```
@@ -250,7 +250,7 @@ The report format follows the `SpecforgeReport` schema from `spec/types/coverage
   "results": [
     {
       "entityId": "detect_dangling_references",
-      "file": "crates/specforge-cli/tests/integration_test.rs",
+      "file": "crates/surfaces/cli/tests/integration_test.rs",
       "tests": [
         { "name": "e001_dangling_reference", "status": "pass", "durationMs": 12 },
         { "name": "valid_reference_passes", "status": "pass", "durationMs": 3 }
@@ -281,7 +281,7 @@ The `.spec` file's `tests` field is the canonical mapping. All other mechanisms 
 ```spec
 behavior detect_dangling_references {
   verify unit "missing reference produces E001"
-  tests ["crates/specforge-cli/tests/integration_test.rs::e001_dangling_reference"]
+  tests ["crates/surfaces/cli/tests/integration_test.rs::e001_dangling_reference"]
 }
 ```
 
@@ -533,8 +533,8 @@ The `specforge-test` crate has **zero dependency** on the SpecForge compiler cra
 
 ```
 github.com/anthropics/specforge/
-  crates/specforge-cli/         # compiler workspace member
-  crates/specforge-parser/      # compiler workspace member
+  crates/surfaces/cli/         # compiler workspace member
+  crates/kernel/parser/      # compiler workspace member
   ...
   integrations/rust/            # NOT a workspace member
     specforge-test/Cargo.toml

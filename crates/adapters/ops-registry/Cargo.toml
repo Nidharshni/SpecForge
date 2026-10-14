@@ -1,0 +1,30 @@
+[package]
+name = "specforge-ops-registry"
+description = "Which registries a project uses, and the adapter behind specforge-ops' Registry port: the fetch policy over the registry client and the publish signed as the user (ADR 0010)"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde_json = { workspace = true }
+specforge-common = { workspace = true }
+specforge-ops = { workspace = true }
+specforge-package = { path = "../../leaf/package" }
+specforge-protocol-types = { path = "../../leaf/protocol-types" }
+specforge-registry-client = { path = "../registry-client" }
+specforge-registry-wire = { path = "../registry-wire" }
+
+[dev-dependencies]
+specforge-project = { workspace = true, features = ["testing"] }
+specforge-ops = { workspace = true, features = ["testing"] }
+hex = "0.4.3"
+specforge-registry-client = { path = "../registry-client", features = ["testing"] }
+specforge-registry-server = { path = "../../surfaces/registry-server", features = ["testing"] }
+sha2 = { workspace = true }
+specforge-test = { workspace = true }
+specforge-test-macros = { workspace = true }
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

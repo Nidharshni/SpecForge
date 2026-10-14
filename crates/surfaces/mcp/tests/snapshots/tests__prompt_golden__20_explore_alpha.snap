@@ -1,0 +1,78 @@
+---
+source: crates/surfaces/mcp/tests/prompt_golden.rs
+expression: "shape(&reply, dir.path())"
+---
+{
+  "description": "Discover exploration starting points in the graph",
+  "instruction": "Explore the spec graph using the data below. Start with high-connectivity entities to understand the core structure, then investigate unconnected entities that may need relationships. Use starting_points for top-down traversal.",
+  "layout": "turns",
+  "payload": {
+    "high_connectivity": [
+      "beta",
+      "feat_login",
+      "inv_session",
+      "alpha",
+      "delta"
+    ],
+    "matching_entities": [
+      "alpha",
+      "beta",
+      "delta",
+      "feat_login",
+      "inv_session"
+    ],
+    "notices": [],
+    "relationship_paths": [
+      {
+        "edge_types": [
+          "features"
+        ],
+        "from_entity": "alpha",
+        "path_length": 1,
+        "to_entity": "feat_login"
+      },
+      {
+        "edge_types": [
+          "features",
+          "features"
+        ],
+        "from_entity": "alpha",
+        "path_length": 2,
+        "to_entity": "beta"
+      },
+      {
+        "edge_types": [
+          "features",
+          "features",
+          "invariants"
+        ],
+        "from_entity": "alpha",
+        "path_length": 3,
+        "to_entity": "inv_session"
+      },
+      {
+        "edge_types": [
+          "features",
+          "features",
+          "invariants",
+          "invariants"
+        ],
+        "from_entity": "alpha",
+        "path_length": 4,
+        "to_entity": "delta"
+      }
+    ],
+    "starting_points": [
+      "beta",
+      "alpha",
+      "delta",
+      "feat_login",
+      "inv_session"
+    ],
+    "unconnected": []
+  },
+  "roles": [
+    "user",
+    "user"
+  ]
+}

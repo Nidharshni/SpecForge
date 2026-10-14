@@ -27,10 +27,11 @@ The `ModelIntermediate` enriches this with:
 ## Crate Locations
 
 ```
-specforge-emitter/
+crates/pipeline/emitter/
   src/
     model/
       mod.rs           -- ModelOptions, ModelRoot, export(); the IR (pub(crate)) and the format dispatch
+      build.rs         -- builds the ModelIntermediate from the schema and the declarations
       markdown.rs      -- Markdown renderer
       mermaid.rs       -- Mermaid erDiagram renderer
       dot.rs           -- DOT schema-level renderer (HTML-like labels)
@@ -39,14 +40,14 @@ specforge-emitter/
       cardinality.rs   -- Cardinality inference from field types
       filter.rs        -- the selection and the field level (private)
 
-specforge-cli/
+crates/surfaces/cli/
   src/
-    model.rs           -- CLI command handler (clap args -> ModelOptions -> ops::model::model -> stdout, notices on stderr, a refusal as error[CODE])
+    model.rs           -- CLI command handler (clap args -> ModelOptions -> ops::read::model::model -> stdout, notices on stderr, a refusal as error[CODE])
 
-specforge-mcp/
+crates/surfaces/mcp/
   src/
     tools/
-      model.rs         -- MCP tool handler (JSON args -> ModelOptions -> ops::model::model -> text, notices in _meta.diagnostics)
+      model.rs         -- MCP tool handler (JSON args -> ModelOptions -> ops::read::model::model -> text, notices in _meta.diagnostics)
 ```
 
 ## Key Types
@@ -148,4 +149,4 @@ The existing DOT format in `dot.rs` renders **instances** (actual entities and e
 
 ### With MCP
 
-The `specforge.model` MCP tool and `specforge model` call the same operation, `specforge_ops::model::model`, over the project view. It refuses a `root` no loaded extension declares (`unknown_kind`) and an `extension` the project does not load (`extension_not_found`), reports a kind of `kinds` the project does not know (I020), and draws the rest with `model::export`.
+The `specforge.model` MCP tool and `specforge model` call the same operation, `specforge_ops::read::model::model`, over the project view. It refuses a `root` no loaded extension declares (`unknown_kind`) and an `extension` the project does not load (`extension_not_found`), reports a kind of `kinds` the project does not know (I020), and draws the rest with `model::export`.

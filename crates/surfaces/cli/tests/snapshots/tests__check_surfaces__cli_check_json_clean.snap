@@ -1,0 +1,9 @@
+---
+source: crates/surfaces/cli/tests/check_surfaces.rs
+expression: "normalized(&doc, dir.path())"
+---
+{
+  "exit": 0,
+  "stderr": "",
+  "stdout": []
+}

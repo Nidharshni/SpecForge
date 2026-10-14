@@ -10,24 +10,25 @@
 //! rewrite the declaration snapshots of every SDK blob, in process; check what it
 //! did not write (`build-blobs --check` and the declarations test) and print
 //! the paths to stage.
+#![expect(
+    clippy::print_stdout,
+    reason = "a developer tool: its report is its stdout"
+)]
 
 use specforge_component::ComponentRuntime;
 use specforge_component::committed::{COMMITTED, snapshots, wire_answers};
 use specforge_wasm::runtime::WasmRuntime;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 fn main() {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .canonicalize()
-        .expect("repo root resolves");
+    let root = specforge_repo_root::repo_root();
     let env_target = std::env::var_os("CARGO_TARGET_DIR").is_some();
-    if let Err(message) = preflight(&root, env_target) {
+    if let Err(message) = preflight(root, env_target) {
         eprintln!("revendor: {message}");
         std::process::exit(1);
     }
-    if let Err(message) = run(&root) {
+    if let Err(message) = run(root) {
         eprintln!("revendor: {message}");
         std::process::exit(1);
     }
@@ -85,7 +86,7 @@ fn run(root: &Path) -> Result<(), String> {
         })
         .collect();
     println!(
-        "  git add {} crates/specforge-component/tests/declarations",
+        "  git add {} crates/runtime/component/tests/declarations",
         paths.join(" ")
     );
     if !changed.is_empty() {
@@ -201,10 +202,10 @@ mod tests {
 
     #[test]
     fn every_committed_wasm_is_listed() {
-        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+        let root = specforge_repo_root::repo_root();
         let out = Command::new("git")
             .args(["ls-files", "-z", "*.wasm"])
-            .current_dir(&root)
+            .current_dir(root)
             .output()
             .expect("git runs");
         assert!(out.status.success(), "git ls-files failed");

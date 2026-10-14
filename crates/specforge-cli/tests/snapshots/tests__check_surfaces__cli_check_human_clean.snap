@@ -1,8 +1,0 @@
----
-source: crates/specforge-cli/tests/check_surfaces.rs
-expression: "normalized(&doc, dir.path())"
----
-{
-  "exit": 0,
-  "stderr": "0 errors, 0 warnings, 0 infos\n"
-}

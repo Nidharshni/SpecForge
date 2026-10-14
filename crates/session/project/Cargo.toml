@@ -1,0 +1,54 @@
+[package]
+name = "specforge-project"
+description = "The compiled project and the project session: one environment load, one compile, kept current for watch, the LSP and MCP (ADR 0004, ADR 0047)"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+autotests = false
+
+[[test]]
+name = "tests"
+path = "tests/main.rs"
+
+[features]
+# `specforge_project::testing`: the project a test builds on disk (TestProject) and the sample sources the
+# surfaces' tests share. No production code reads it.
+testing = ["dep:tempfile", "specforge-installed/testing", "specforge-wasm/testing"]
+
+[dependencies]
+specforge-common = { workspace = true }
+specforge-component = { workspace = true }
+specforge-coverage = { path = "../../leaf/coverage" }
+specforge-diagnostics = { path = "../../leaf/diagnostics" }
+specforge-graph = { path = "../../pipeline/graph" }
+specforge-parser = { workspace = true }
+specforge-protocol-types = { path = "../../leaf/protocol-types" }
+specforge-registry = { workspace = true }
+specforge-resolver = { path = "../../pipeline/resolver" }
+specforge-wasm = { workspace = true }
+specforge-installed = { path = "../../runtime/installed" }
+tree-sitter = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tempfile = { workspace = true, optional = true }
+
+[dev-dependencies]
+specforge-repo-root = { path = "../../leaf/repo-root" }
+specforge-project = { path = ".", features = ["testing"] }
+# The builtins, loaded outside the extension load by the tests.
+specforge-component = { path = "../../runtime/component", features = ["testing"] }
+# The pipeline tests render what they compile.
+specforge-emitter = { path = "../../pipeline/emitter" }
+insta = { workspace = true }
+specforge-package = { path = "../../leaf/package" }
+# Extensions declared with the SDK, served in process.
+specforge-extension-sdk = { path = "../../runtime/extension-sdk" }
+specforge-wasm = { workspace = true, features = ["testing"] }
+specforge-installed = { path = "../../runtime/installed", features = ["testing"] }
+specforge-test = { workspace = true }
+specforge-test-macros = { workspace = true }
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

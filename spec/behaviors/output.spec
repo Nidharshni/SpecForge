@@ -333,7 +333,7 @@ behavior explore_the_graph "Explore the Graph" {
     unconnected_kept "the selected unconnected entities are listed"
   }
   contract   """
-    The exploration (specforge_ops::explore) MUST select the entities
+    The exploration (specforge_ops::read::explore) MUST select the entities
     entity_id reaches within depth hops over edges both ways (every entity
     without entity_id; unbounded without depth), of kind when given, and
     answer about that selection only: the selected entities in id order;
@@ -371,7 +371,7 @@ behavior review_coverage_gaps "Review Coverage Gaps" {
     gaps_found         "each row's missing obligations and unconnectedness are findings"
   }
   contract   """
-    The review (specforge_ops::review) MUST list the coverage view's rows
+    The review (specforge_ops::read::review) MUST list the coverage view's rows
     of the entities that count toward coverage within depth hops of
     entity_id (default one hop), or of the whole project without
     entity_id, in id order, and for each row a warning finding when it
@@ -483,7 +483,7 @@ behavior explain_diagnostic_code "Explain a Diagnostic Code" {
   }
   contract   """
     specforge explain <code> and specforge.explain MUST be one operation
-    (specforge_ops::explain) over the diagnostic catalog: the code is read
+    (specforge_ops::read::explain) over the diagnostic catalog: the code is read
     in any case with surrounding whitespace ignored; a catalogued code
     answers its code, title, owner, level, explanation and docs link; a
     retired code answers retired true and the entry of the code that

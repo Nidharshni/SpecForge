@@ -1,0 +1,106 @@
+---
+source: crates/surfaces/cli/tests/inspect_views.rs
+expression: "normalized(&result, root)"
+---
+{
+  "coverage_status": "uncovered",
+  "declared": false,
+  "diagnostics": [
+    {
+      "code": "W061",
+      "column": null,
+      "data": {
+        "kind": "reference_cycle",
+        "path": [
+          "alpha",
+          "beta",
+          "alpha"
+        ]
+      },
+      "file": null,
+      "line": null,
+      "message": "reference cycle detected: alpha -> beta -> alpha",
+      "severity": "Warning",
+      "span": null,
+      "suggestion": "break the cycle by removing or inverting one reference",
+      "title": "Reference cycle detected"
+    },
+    {
+      "code": "W020",
+      "column": 1,
+      "file": "a.spec",
+      "line": 1,
+      "message": "unrecognized field 'depends_on' on entity 'alpha' of kind 'behavior' at a.spec",
+      "severity": "Warning",
+      "span": {
+        "end_col": 2,
+        "end_line": 3,
+        "file": "a.spec",
+        "start_col": 1,
+        "start_line": 1
+      },
+      "suggestion": null,
+      "title": "Unrecognized field"
+    },
+    {
+      "code": "W006",
+      "column": 1,
+      "file": "a.spec",
+      "line": 1,
+      "message": "behavior 'alpha' has no category — agents use category for task routing",
+      "origin": "@specforge/software",
+      "severity": "Warning",
+      "span": {
+        "end_col": 2,
+        "end_line": 3,
+        "file": "a.spec",
+        "start_col": 1,
+        "start_line": 1
+      },
+      "suggestion": null,
+      "title": "Behavior missing category"
+    },
+    {
+      "code": "E006",
+      "column": 1,
+      "file": "a.spec",
+      "line": 1,
+      "message": "behavior 'alpha' is missing required field 'contract'",
+      "severity": "Error",
+      "span": {
+        "end_col": 2,
+        "end_line": 3,
+        "file": "a.spec",
+        "start_col": 1,
+        "start_line": 1
+      },
+      "suggestion": null,
+      "title": "Missing required field"
+    }
+  ],
+  "entity_id": "alpha",
+  "exempt": false,
+  "fields": {
+    "depends_on": [
+      "beta"
+    ]
+  },
+  "kind": "behavior",
+  "obligated": false,
+  "referenced_by": [
+    "beta"
+  ],
+  "refers_to": [
+    "beta"
+  ],
+  "source_extension": "@specforge/software",
+  "source_span": {
+    "end_col": 2,
+    "end_line": 3,
+    "file": "a.spec",
+    "start_col": 1,
+    "start_line": 1
+  },
+  "testable": false,
+  "title": "A"
+}

@@ -1,0 +1,13 @@
+---
+source: crates/surfaces/cli/tests/read_views.rs
+expression: "normalized(result, root).to_string()"
+---
+{
+  "content": [
+    {
+      "text": "{\"argument\":\"value\",\"code\":\"invalid_input\",\"message\":\"'field' needs 'value': the text the field must contain\",\"tool\":\"specforge.search\"}",
+      "type": "text"
+    }
+  ],
+  "isError": true
+}

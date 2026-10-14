@@ -113,7 +113,7 @@ behavior auto_promote_commands_to_mcp_tools "Auto-Promote Commands to MCP Tools"
     host refuses on the command line (an arg named path, format or help,
     or two args of one name): the one rule keeps both surfaces alike. The derived
     input_schema MUST be computed from the command's args declaration
-    alone (specforge_ops::command::ExtensionCommand): each arg's type,
+    alone (specforge_ops::extension::command::ExtensionCommand): each arg's type,
     its one_of values, its minimum, its default and its description;
     required lists the required args that are not flags, since a flag is
     false unless set; no undeclared property is accepted.

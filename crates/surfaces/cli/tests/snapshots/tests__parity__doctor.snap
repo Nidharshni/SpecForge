@@ -1,0 +1,82 @@
+---
+source: crates/surfaces/cli/tests/parity.rs
+expression: snapshot
+---
+{
+  "both": {
+    "check": {
+      "diagnostics": [],
+      "ok": true
+    },
+    "config": {
+      "extensions": [
+        "@specforge/software"
+      ],
+      "name": "demo",
+      "registries": [
+        {
+          "alias": "offline",
+          "default_registry": true,
+          "url": "http://127.0.0.1:9"
+        }
+      ],
+      "spec_root": "spec",
+      "version": "0.1.0"
+    },
+    "document": {
+      "cache_status": "ok",
+      "conflicts": [],
+      "enhancements": {
+        "milestone": [
+          {
+            "edge_types": [
+              "MilestoneIncludesBehavior"
+            ],
+            "extension": "@specforge/software",
+            "fields": [
+              "behaviors"
+            ]
+          }
+        ],
+        "module": [
+          {
+            "edge_types": [
+              "ModuleConsumesPort",
+              "ModuleDefinesPort"
+            ],
+            "extension": "@specforge/software",
+            "fields": [
+              "ports",
+              "ports_defined"
+            ]
+          }
+        ]
+      },
+      "extensions": [
+        {
+          "enhancement_count": 2,
+          "name": "@specforge/software",
+          "source": "builtin",
+          "status": "loaded",
+          "version": "1.0.0"
+        }
+      ],
+      "extensions_ok": true,
+      "findings": [],
+      "installed_count": 0,
+      "ok": true,
+      "z3_available": true
+    },
+    "files": {
+      "spec/main.spec": "behavior alpha \"Alpha\" {\n  category \"core\"\n  contract \"The system MUST work\"\n}\n"
+    },
+    "ok": true
+  },
+  "cli": {
+    "extras": {
+      "credentials": [],
+      "credentials_failures": 0
+    }
+  },
+  "mcp": {}
+}

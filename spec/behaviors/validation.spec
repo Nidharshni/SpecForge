@@ -258,3 +258,31 @@ behavior prove_declared_bounds_and_claims "Prove Declared Bounds and Claims" {
   verify unit "a solver call ends at its timeout, even when the solver leaves a child process"
   verify integration "specforge analyze --prove-timeout sets the solver's timeout and needs --prove"
 }
+
+// -- The Contracts Pass --------------------------------------------------------
+
+behavior report_entities_without_contract_obligations "Report Entities Without Contract Obligations" {
+  features   [structural_validation]
+  invariants [diagnostic_determinism]
+  category   validation
+  types      [Diagnostic]
+  requires {
+    contract_targets_declared "an extension declares which kinds are contract targets (contract_target)"
+  }
+  ensures {
+    unconstrained_reported "each entity of a contract-bearing kind that references no contract target is one A010"
+    counted                "the summary counts the contract entities, the unconstrained ones and the references"
+  }
+  contract   """
+    specforge analyze contracts runs the host's one built-in pass. A
+    contract-bearing kind is one with a reference field whose target kind an
+    extension declares a contract target. Each entity of such a kind that
+    lists no reference in any of those fields is one A010, an info, at the
+    entity's span; its suggestion names the kind's contract fields, sorted.
+    The summary counts contract_entities (entities with at least one such
+    reference), unconstrained_entities and obligation_references (the
+    non-empty contract fields). Entities are visited in ID order.
+  """
+  verify unit "an entity of a contract-bearing kind that references no contract target is A010, an info"
+  verify unit "the contracts pass's suggestion names the kind's contract fields, sorted"
+}

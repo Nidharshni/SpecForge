@@ -43,7 +43,7 @@ The first three are for answers. The fourth one is a superpower, because a
 
 SpecForge has its own little language: **`.spec` files** — recipe files with
 strict rules (`keyword name "title" { ... }`, and so on). The rules already
-exist as a parser in this repository (`crates/tree-sitter-specforge/grammar.js`).
+exist as a parser in this repository (`crates/kernel/tree-sitter/grammar.js`).
 
 Idea: translate those rules **once** into a mold file (`specforge.gbnf`) and
 hand it to vLLM. Now when a robot writes a `.spec` file, every single character

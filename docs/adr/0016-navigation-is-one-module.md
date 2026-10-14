@@ -35,7 +35,7 @@ each spec file's text (`Navigator::new(view, text_of)`, a file read once per nav
 its open buffer first, MCP the file under the spec root). Its interface is small: `definition`,
 `references` (with a direction and the declaration on request), `occurrence_at`, `find_entities`,
 `subjects`/`is_about`, `fixes`, `match_file`/`entities_of_file` and `outline`. The LSP is an adapter
-that converts spans to UTF-16 ranges (`specforge-lsp/src/navigation.rs`), MCP one that renders JSON
+that converts spans to UTF-16 ranges (`crates/surfaces/lsp/src/navigation.rs`), MCP one that renders JSON
 (`tools::navigator(&Call)` over the call's view). `specforge-graph` could not host it (it has no
 registries, which stub kinds, verify kinds and derived fields need).
 
@@ -115,3 +115,5 @@ An editor-only navigation need with no MCP counterpart (it would live in the LSP
 
 ADR 0010 is unaffected: the only new dependency of `specforge-ops` is `strsim`, which is pure, and
 `cargo tree -p specforge-lsp -e normal | rg -c "reqwest|keyring|ed25519"` finds none.
+
+**Amended by ADR 0086 (2026-10-14):** navigation is one module at `specforge_ops::read::navigate`, beside `authoring::rename`; `not_found` and `EntityField` are the project view's.

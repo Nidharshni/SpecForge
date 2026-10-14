@@ -153,7 +153,7 @@ cargo binstall --git https://github.com/leaderiop/SpecForge specforge-cli
 
 # From source (stable Rust toolchain)
 git clone https://github.com/leaderiop/SpecForge && cd SpecForge
-cargo install --path crates/specforge-cli
+cargo install --path crates/surfaces/cli
 ```
 
 Prebuilt archives for macOS, Linux and Windows are on the [Releases page](https://github.com/leaderiop/SpecForge/releases). Formal proofs (`@specforge/formal`) also need the [`z3`](https://github.com/Z3Prover/z3) solver on your `PATH`; everything else works without it.
@@ -281,9 +281,9 @@ Also planned: agents that edit the spec through typed operations, so nobody (hum
 - **[Test tracing for Rust](docs/guides/rust-test-tracing.md)** and **[for vitest](docs/guides/vitest-test-tracing.md)**: link tests to the entities they prove.
 - **[Formal verification](docs/guides/formal-verification.md)**: specs an SMT solver checks, with counterexamples at exact locations.
 - **[Quick reference](docs/quick-reference.md)**: every command, entity kind and diagnostic code on one page.
-- **[Vision](vision/README.md)**: the manifesto, [principles](vision/principles.md) and [north star](vision/north-star.md).
-- **[Architecture](ARCHITECTURE.md)** and **[Contributing](CONTRIBUTING.md)**: how SpecForge is built, and how to work on it.
-- **[Documentation hub](docs/README.md)**: entity reference, traceability chain, research, and the business plan.
+- **[Vision](docs/vision/README.md)**: the manifesto, [principles](docs/vision/principles.md) and [north star](docs/vision/north-star.md).
+- **[Architecture](ARCHITECTURE.md)**, **[the crate map](crates/README.md)** and **[Contributing](CONTRIBUTING.md)**: how SpecForge is built, what each crate owns, and how to work on it.
+- **[Documentation hub](docs/README.md)**: entity reference, traceability chain and research.
 
 ## License
 

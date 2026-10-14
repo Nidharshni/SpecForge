@@ -1,0 +1,18 @@
+[package]
+name = "specforge-shape-macros"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Derive macro for specforge-common: a type's JSON shape is derived beside its serialization (ADR 0048)"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "2", features = ["full", "parsing", "derive"] }
+quote = "1"
+proc-macro2 = "1"
+
+[lints]
+workspace = true

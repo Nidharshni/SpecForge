@@ -1,0 +1,84 @@
+---
+source: crates/surfaces/cli/tests/inspect_views.rs
+expression: "normalized(result, root)"
+---
+{
+  "contract": "The system MUST end the session on logout",
+  "coverage_status": "uncovered",
+  "declared": false,
+  "diagnostics": [
+    {
+      "code": "W001",
+      "column": 1,
+      "file": "main.spec",
+      "line": 7,
+      "message": "behavior 'logout' does not implement any feature",
+      "origin": "@specforge/software",
+      "severity": "Warning",
+      "span": {
+        "end_col": 2,
+        "end_line": 9,
+        "file": "main.spec",
+        "start_col": 1,
+        "start_line": 7
+      },
+      "suggestion": null,
+      "title": "Behavior implements no feature"
+    },
+    {
+      "code": "W004",
+      "column": 1,
+      "file": "main.spec",
+      "line": 7,
+      "message": "behavior 'logout' is testable but declares no verify obligations",
+      "origin": "@specforge/testing",
+      "severity": "Warning",
+      "span": {
+        "end_col": 2,
+        "end_line": 9,
+        "file": "main.spec",
+        "start_col": 1,
+        "start_line": 7
+      },
+      "suggestion": null,
+      "title": "Untested testable entity"
+    },
+    {
+      "code": "W006",
+      "column": 1,
+      "file": "main.spec",
+      "line": 7,
+      "message": "behavior 'logout' has no category — agents use category for task routing",
+      "origin": "@specforge/software",
+      "severity": "Warning",
+      "span": {
+        "end_col": 2,
+        "end_line": 9,
+        "file": "main.spec",
+        "start_col": 1,
+        "start_line": 7
+      },
+      "suggestion": null,
+      "title": "Behavior missing category"
+    }
+  ],
+  "entity_id": "logout",
+  "exempt": false,
+  "fields": {
+    "contract": "The system MUST end the session on logout"
+  },
+  "kind": "behavior",
+  "obligated": true,
+  "referenced_by": [],
+  "refers_to": [],
+  "source_extension": "@specforge/software",
+  "source_span": {
+    "end_col": 2,
+    "end_line": 9,
+    "file": "main.spec",
+    "start_col": 1,
+    "start_line": 7
+  },
+  "testable": true,
+  "title": "Log out"
+}

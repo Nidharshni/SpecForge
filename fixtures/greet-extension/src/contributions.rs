@@ -1,7 +1,7 @@
 //! What the greet extension declares, authored entirely with the SpecForge
 //! extension SDK. Kept apart from the component glue (`lib.rs`) so the
 //! host's tests can serve the same declarations in process
-//! (`crates/specforge-component/tests/greet_sdk.rs` includes this file) and
+//! (`crates/runtime/component/tests/greet_sdk.rs` includes this file) and
 //! check both runtimes answer alike.
 
 use specforge_extension_sdk::prelude::*;

@@ -152,7 +152,7 @@ behavior handle_text_document_change "Handle Text Document Change" {
   category   command
   ports      [LspProtocol]
   produces   [file_changed]
-  invariants [incremental_correctness, lsp_response_latency]
+  invariants [incremental_correctness, lsp_response_latency, lsp_survives_its_faults]
   requires {
     document_open "the document has been opened via didOpen and is in the open document set"
   }
@@ -240,7 +240,7 @@ behavior find_all_references "Find All References" {
     to it. The entity's own declaration (its name token) MUST be included
     when the request asks for it (includeDeclaration) and MUST NOT be
     otherwise. The LSP and MCP specforge.find_references answer from the
-    same navigation (specforge_ops::navigate).
+    same navigation (specforge_ops::read::navigate).
   """
   verify unit "find-refs returns all reference sites"
   verify unit "find-refs includes the declaration site"
@@ -624,7 +624,7 @@ behavior workspace_symbol_search "Workspace Symbol Search" {
     The LSP MUST support workspace symbol search. Typing an entity ID or
     title fragment, exactly or within the fuzzy threshold, MUST return
     matching entities across all .spec files in the workspace, ranked by
-    the shared ranking (specforge_ops::navigate, the one MCP
+    the shared ranking (specforge_ops::read::navigate, the one MCP
     specforge.search and completion use). The SymbolKind for each result
     MUST be determined by provide_extension_defined_lsp_icons.
   """
@@ -645,6 +645,7 @@ behavior shared_incremental_pipeline "Shared Incremental Pipeline" {
     zero_domain_knowledge_core,
     watch_mode_response_latency,
     lsp_extension_reload_consistency,
+    lsp_survives_its_faults,
   ]
   category   command
   types      [Graph]
@@ -969,6 +970,7 @@ behavior incremental_document_sync "Incremental Document Sync" {
   """
   verify unit "incremental change applies correctly to source buffer"
   verify unit "multiple incremental changes produce correct source"
+  verify unit "an edit at any column past its line's end applies at the line's end"
   verify integration "incremental sync reduces transfer size vs full sync"
   verify contract "Incremental Document Sync: incremental document sync holds — lsp_initialized_fired, document_open, buffer_consistent, partial_update_applied"
 }
